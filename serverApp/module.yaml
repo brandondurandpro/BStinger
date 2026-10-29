@@ -1,0 +1,8 @@
+product: jvm/app
+
+dependencies:
+  - //server
+
+settings:
+  jvm:
+    mainClass: org.example.kotlineditor.server.MainKt

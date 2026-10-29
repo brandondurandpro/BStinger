@@ -1,0 +1,30 @@
+product:
+  type: kmp/lib
+  platforms: [jvm]
+
+dependencies:
+  - //protocol: exported
+  - $compose.runtime
+  - $compose.foundation
+  - $compose.material3
+  - $compose.ui
+  - $compose.components.resources
+  - $compose.preview
+  - $libs.androidx.lifecycle.viewmodel.compose
+  - $libs.androidx.lifecycle.runtime.compose
+
+dependencies@android:
+  - $compose.uiTooling
+
+settings:
+  compose:
+    enabled: true
+    resources:
+      packageName: org.example.kotlineditor.resources
+      # Generate public accessors so other modules (and previews) can use Res.*
+      exposedAccessors: true
+
+test-dependencies@jvm:
+  - //server
+  - $compose.uiTest
+  - $compose.desktop.currentOs

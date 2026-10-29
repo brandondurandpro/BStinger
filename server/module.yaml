@@ -1,0 +1,7 @@
+product:
+  type: kmp/lib
+  platforms: [jvm]
+
+dependencies:
+  - //protocol: exported
+  - $libs.kotlinx.coroutines.core

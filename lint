@@ -1,0 +1,87 @@
+#!/bin/sh
+#
+# Static analysis with detekt, every rule enabled (including ktlint formatting), zero issue tolerated.
+#   ./lint          check the whole code base
+#   ./lint --fix    also apply the automatic corrections (formatting)
+#
+set -eu
+
+DETEKT_VERSION=2.0.0-alpha.6
+DETEKT_SHA1=543c524afee8f40330b4bf66e760cb141accb87a
+KTLINT_SHA1=3ae178f7b18c5aefea6d4c78ac3d548694ff5d5c
+REPOSITORY=https://repo1.maven.org/maven2/dev/detekt
+
+cd "$(dirname "$0")"
+tools=".detekt/$DETEKT_VERSION"
+mkdir -p "$tools"
+
+fetch() { # artifact, expected sha1, destination
+    if [ ! -f "$3" ] || [ "$(sha1sum "$3" | cut -d' ' -f1)" != "$2" ]; then
+        curl -sfL -o "$3.part" "$REPOSITORY/$1"
+        if [ "$(sha1sum "$3.part" | cut -d' ' -f1)" != "$2" ]; then
+            rm -f "$3.part"
+            echo "Checksum mismatch for $1" >&2
+            exit 1
+        fi
+        mv "$3.part" "$3"
+    fi
+}
+
+fetch "detekt-cli/$DETEKT_VERSION/detekt-cli-$DETEKT_VERSION-all.jar" "$DETEKT_SHA1" "$tools/detekt-cli.jar"
+fetch "detekt-rules-ktlint-wrapper/$DETEKT_VERSION/detekt-rules-ktlint-wrapper-$DETEKT_VERSION.jar" "$KTLINT_SHA1" "$tools/ktlint.jar"
+
+sources="protocol/src:protocol/src@jvm:server/src:server/test:serverApp/src:shared/src:shared/src@jvm:shared/test@jvm:desktopApp/src"
+
+# Fingerprint of every source file, to know when the automatic corrections stop changing anything.
+snapshot() {
+    # shellcheck disable=SC2046 # word splitting of the source list is intended
+    find $(echo "$sources" | tr ':' ' ') -name '*.kt' -exec cat {} + | sha1sum
+}
+
+detekt() {
+    java -jar "$tools/detekt-cli.jar" \
+        --input "$sources" \
+        --config detekt.yml \
+        --build-upon-default-config \
+        --all-rules \
+        --plugins "$tools/ktlint.jar" \
+        --base-path "$(pwd)" \
+        --fail-on-severity Info \
+        "$@"
+}
+
+# detekt 2.0.0-alpha.6's automatic correction sometimes corrupts a file (truncated header, U+FFFF characters
+# after a KDoc): every pass is checked and undone if it damaged anything.
+corrupted() {
+    invalid=$(printf '\357\277\277\|\357\277\275')
+    # shellcheck disable=SC2046 # word splitting of the source list is intended
+    for file in $(find $(echo "$sources" | tr ':' ' ') -name '*.kt'); do
+        # A truncated header loses the package line: it must come first, after optional @file annotations.
+        header=$(awk 'NF && !/^@file:/ { print; exit }' "$file")
+        case "$header" in package\ *) ;; *) echo "$file"; continue ;; esac
+        if LC_ALL=C grep -q "$invalid" "$file"; then echo "$file"; fi
+    done
+}
+
+if [ "${1:-}" = "--fix" ]; then
+    # ktlint corrections cascade (wrapping, then indentation): repeat until the code stops changing.
+    for _ in 1 2 3 4 5; do
+        backup=$(mktemp -d)
+        for dir in $(echo "$sources" | tr ':' ' '); do mkdir -p "$backup/$dir" && cp -R "$dir/." "$backup/$dir/"; done
+        before=$(snapshot)
+        detekt --auto-correct > /dev/null 2>&1 || true
+        damaged=$(corrupted)
+        if [ -n "$damaged" ]; then
+            for dir in $(echo "$sources" | tr ':' ' '); do cp -R "$backup/$dir/." "$dir/"; done
+            rm -rf "$backup"
+            echo "The automatic correction damaged these files; all sources were restored:" >&2
+            echo "$damaged" >&2
+            exit 1
+        fi
+        rm -rf "$backup"
+        after=$(snapshot)
+        [ "$before" = "$after" ] && break
+    done
+fi
+
+detekt

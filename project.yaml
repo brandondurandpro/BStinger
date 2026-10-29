@@ -1,0 +1,6 @@
+modules:
+  - desktopApp
+  - protocol
+  - server
+  - serverApp
+  - shared

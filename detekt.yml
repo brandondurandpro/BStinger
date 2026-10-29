@@ -1,0 +1,53 @@
+# Strictest setup: ./lint runs detekt with --all-rules (every rule, unstable ones included) plus the ktlint rule set,
+# and fails on any finding (--fail-on-severity Info). This file only adapts rules that contradict a convention
+# imposed by our tools; each exception says why. Everything else is fixed in the code.
+
+naming:
+  FunctionNaming:
+    # Compose API guidelines: @Composable functions that emit UI are PascalCase nouns. Test names are sentences.
+    ignoreAnnotated: ['Composable']
+    # Amper keeps tests in `test/` and `test@jvm/`: detekt's default test exclusions only know `test/`.
+    excludes: &tests ['**/test/**', '**/test@jvm/**']
+  FunctionNameMaxLength:
+    # Test names are full sentences (`a 200k line file opens fast ...`).
+    excludes: *tests
+  InvalidPackageDeclaration:
+    # Amper's source layout (`src/`, `src@jvm/` per module) does not mirror package names; `rootPackage` cannot
+    # express one root per module, so the rule cannot be satisfied without breaking the build layout.
+    active: false
+
+ktlint:
+  FunctionSignature:
+    # --all-rules also enables MultilineExpressionWrapping, which moves multiline bodies to their own line; the
+    # 'default' setting moves them back, forever. 'multiline' is ktlint's official style and agrees with it.
+    functionBodyExpressionWrapping: 'multiline'
+  FunctionName:
+    # Same convention as naming>FunctionNaming above (ktlint duplicates that rule).
+    ignoreAnnotated: ['Composable']
+    excludes: *tests
+
+style:
+  MultilineRawStringIndentation:
+    # ktlint's StringTemplateIndent (also enabled) aligns raw string content with the closing quotes; detekt's
+    # default asks for one more level. Both cannot hold, so detekt follows ktlint, which also auto-corrects it.
+    indentSize: 0
+  MagicNumber:
+    # Compose layouts are made of literal sizes (`12.dp`); naming each one would not make the UI clearer.
+    ignoreAnnotated: ['Composable']
+    excludes: *tests
+
+complexity:
+  TooManyFunctions:
+    excludes: *tests
+  StringLiteralDuplication:
+    excludes: *tests
+
+comments:
+  # Documentation is required for the API modules other modules build on (`protocol`, `server`); the application
+  # modules (`shared`, `desktopApp`) are not a library API.
+  UndocumentedPublicClass:
+    excludes: ['**/shared/**', '**/desktopApp/**', '**/test/**', '**/test@jvm/**']
+  UndocumentedPublicFunction:
+    excludes: ['**/shared/**', '**/desktopApp/**', '**/test/**', '**/test@jvm/**']
+  UndocumentedPublicProperty:
+    excludes: ['**/shared/**', '**/desktopApp/**', '**/test/**', '**/test@jvm/**']
