@@ -15,6 +15,7 @@ import org.example.kotlineditor.rpc.appServices
 import org.example.kotlineditor.server.EditorServer
 import org.example.kotlineditor.server.LocalServices
 import org.example.kotlineditor.state.AppState
+import org.example.kotlineditor.state.FilePreferenceStore
 import javax.swing.JOptionPane
 import javax.swing.SwingUtilities
 import javax.swing.UIManager
@@ -44,7 +45,7 @@ fun main(args: Array<String>) {
 
     application {
         val scope = rememberCoroutineScope()
-        val state = remember { AppState(client.appServices(picker), scope) }
+        val state = remember { AppState(client.appServices(picker), scope, FilePreferenceStore()) }
         Window(
             onCloseRequest = {
                 state.exit {

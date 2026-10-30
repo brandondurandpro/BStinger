@@ -20,7 +20,12 @@ private val DOCUMENT_POPUPS = setOf(PopupKind.GotoLine, PopupKind.FileStructure)
 
 /** An open project: its tree, editors, index, terminal and tool windows. See `ProjectActions.kt` for actions. */
 @Stable
-class ProjectState(val root: FileEntry, val services: AppServices, parentScope: CoroutineScope) {
+class ProjectState(
+    val root: FileEntry,
+    val services: AppServices,
+    parentScope: CoroutineScope,
+    preferences: Map<String, String> = emptyMap(),
+) {
     /** Cancelled when the project is closed, so no background work outlives it. */
     val scope = CoroutineScope(parentScope.coroutineContext + SupervisorJob(parentScope.coroutineContext[Job]))
     val name: String get() = root.name
@@ -32,13 +37,14 @@ class ProjectState(val root: FileEntry, val services: AppServices, parentScope: 
     val fileIndex = FileIndex(root, services.search, scope)
     val find = FindState()
     val terminal = TerminalState(root.path, services.terminal, scope)
-    val toolWindows = ToolWindowLayout()
+    val toolWindows = ToolWindowLayout().apply { restore(preferences) }
     val network = NetworkView(services.network)
     var popup: PopupKind? by mutableStateOf(null)
     var fileDialog: FileDialog? by mutableStateOf(null)
 
     /** "Always Select Opened File" (IntelliJ): the active file is selected and revealed in the project tree. */
-    var autoSelectOpenedFile by mutableStateOf(true)
+    var autoSelectOpenedFile by
+        mutableStateOf(preferences[PreferenceKeys.AUTO_SELECT_OPENED_FILE]?.toBooleanStrictOrNull() ?: true)
 
     /** Current Git branch (or short commit when detached), shown in the toolbar like IntelliJ's VCS widget. */
     var gitBranch: String? by mutableStateOf(null)

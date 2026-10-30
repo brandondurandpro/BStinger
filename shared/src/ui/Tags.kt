@@ -60,6 +60,8 @@ object Tags {
     const val MENU_CLOSE_TABS_LEFT = "menu.closeTabsLeft"
     const val MENU_CLOSE_TABS_RIGHT = "menu.closeTabsRight"
     const val MENU_CLOSE_ALL_TABS = "menu.closeAllTabs"
+    const val MENU_SPLIT_RIGHT = "menu.splitRight"
+    const val MENU_UNSPLIT = "menu.unsplit"
     const val MENU_COPY_TAB_PATH = "menu.copyTabPath"
     const val EDITOR = "editor"
     const val EDITOR_TEXT = "editor.text"
@@ -98,6 +100,8 @@ object Tags {
     fun treeChevron(relativePath: String) = "tree.chevron:$relativePath"
 
     fun treeGitStatus(relativePath: String, status: String) = "tree.git:$relativePath:$status"
+
+    fun pane(index: Int) = "editor.pane:$index"
 
     fun tab(relativePath: String) = "tab:$relativePath"
 

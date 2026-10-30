@@ -6,15 +6,27 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.example.kotlineditor.model.AppServices
 import org.example.kotlineditor.model.FileEntry
 import java.io.IOException
 
 /** The whole IDE: the welcome screen or the open project, plus IDE-wide settings. */
 @Stable
-class AppState(private val services: AppServices, private val scope: CoroutineScope) {
+@Suppress("TooManyFunctions")
+class AppState(
+    private val services: AppServices,
+    private val scope: CoroutineScope,
+    private val preferenceStore: PreferenceStore = InMemoryPreferenceStore(),
+) {
+    // Last preferences known: those of the open project are read live, these cover the welcome screen.
+    private var preferences: Map<String, String> = preferenceStore.load()
+
     var screen: Screen by mutableStateOf(Screen.Welcome)
         private set
 
@@ -30,7 +42,7 @@ class AppState(private val services: AppServices, private val scope: CoroutineSc
     var devtools by mutableStateOf(false)
 
     /** Editor font size in points, shared by every editor (Alt+Shift+. / Alt+Shift+, / Ctrl+wheel). */
-    var editorFontSize by mutableFloatStateOf(DEFAULT_EDITOR_FONT_SIZE)
+    var editorFontSize by mutableFloatStateOf(savedFontSize())
         private set
 
     val title: String
@@ -48,6 +60,7 @@ class AppState(private val services: AppServices, private val scope: CoroutineSc
             }
 
     init {
+        scope.launch { savePreferencesOnChange() }
         scope.launch { runCatching { services.recentProjects.load() }.onSuccess { recentProjects.addAll(it) } }
     }
 
@@ -95,7 +108,32 @@ class AppState(private val services: AppServices, private val scope: CoroutineSc
                 runCatching { services.sessions.save(it.root.path, it.session()) }
                 runCatching { it.editor.flush() }
             }
+            runCatching { preferenceStore.save(currentPreferences()) }
             onDone()
+        }
+    }
+
+    private fun savedFontSize(): Float =
+        preferences[PreferenceKeys.EDITOR_FONT_SIZE]
+            ?.toFloatOrNull()
+            ?.takeIf { it.isFinite() }
+            ?.coerceIn(MIN_EDITOR_FONT_SIZE, MAX_EDITOR_FONT_SIZE)
+            ?: DEFAULT_EDITOR_FONT_SIZE
+
+    // The open project's settings on top of the last known preferences.
+    private fun currentPreferences(): Map<String, String> {
+        val project = (screen as? Screen.Project)?.project ?: return preferences + fontSizePreference()
+        val autoSelect = PreferenceKeys.AUTO_SELECT_OPENED_FILE to project.autoSelectOpenedFile.toString()
+        return preferences + project.toolWindows.toPreferences() + autoSelect + fontSizePreference()
+    }
+
+    private fun fontSizePreference() = PreferenceKeys.EDITOR_FONT_SIZE to editorFontSize.toString()
+
+    // Writes the preferences each time one of them changes, off the UI thread.
+    private suspend fun savePreferencesOnChange() {
+        snapshotFlow { currentPreferences() }.drop(1).collect {
+            preferences = it
+            withContext(Dispatchers.IO) { runCatching { preferenceStore.save(it) } }
         }
     }
 
@@ -106,7 +144,7 @@ class AppState(private val services: AppServices, private val scope: CoroutineSc
         while (recentProjects.size > MAX_RECENT) recentProjects.removeAt(recentProjects.lastIndex)
         saveRecent()
         (screen as? Screen.Project)?.project?.let { close(it) }
-        val project = ProjectState(root, services, scope)
+        val project = ProjectState(root, services, scope, preferences)
         runCatching { services.sessions.load(root.path) }.getOrNull()?.let(project::restoreSession)
         screen = Screen.Project(project)
     }

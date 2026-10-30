@@ -20,13 +20,11 @@ import org.example.kotlineditor.state.selectedText
 private const val DOUBLE_SHIFT_MILLIS = 400L
 
 /** What IDE-wide shortcuts act on. */
-internal class IdeContext(
-    val app: AppState,
-    val project: ProjectState,
-    val editorFocus: FocusRequester,
-    val findFocus: FocusRequester,
-) {
+internal class IdeContext(val app: AppState, val project: ProjectState, val findFocus: FocusRequester) {
     val editor get() = project.editor
+
+    /** Focus target of the active pane's editor. */
+    val editorFocus: FocusRequester get() = editor.activePane.focusRequester
 
     fun openFindBar(replace: Boolean = false) {
         val document = editor.activeTab?.document ?: return
