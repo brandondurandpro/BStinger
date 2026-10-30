@@ -3,6 +3,7 @@ package org.example.kotlineditor.e2e
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
@@ -135,13 +136,29 @@ class SearchE2eTest {
     @Test
     fun `double Shift opens Go to File`() =
         runComposeUiTest {
-            launchWithProject(project)
-            onNodeWithTag(Tags.TREE).performClick()
-            onNodeWithTag(Tags.TREE).performKeyInput {
+            val app = launchWithProject(project)
+            openFromTree("src/main/kotlin/App.kt")
+            val document =
+                app.project.editor.activeTab!!
+                    .document!!
+            val text = document.text()
+            onNodeWithTag(Tags.EDITOR).performClick()
+            onNodeWithTag(Tags.EDITOR).performKeyInput {
                 pressKey(Key.ShiftLeft)
                 pressKey(Key.ShiftLeft)
             }
-            awaitTag(Tags.GOTO_FILE)
+            awaitTag(Tags.GOTO_FILE_INPUT).assertIsFocused()
+            assertEquals(text, document.text())
+        }
+
+    @Test
+    fun `Ctrl+P opens Go to File`() =
+        runComposeUiTest {
+            launchWithProject(project)
+            openFromTree("src/main/kotlin/App.kt")
+            onNodeWithTag(Tags.EDITOR).performClick()
+            onNodeWithTag(Tags.EDITOR).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.P) } }
+            awaitTag(Tags.GOTO_FILE_INPUT).assertIsFocused()
         }
 
     @Test

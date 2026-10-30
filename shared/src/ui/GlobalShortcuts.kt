@@ -63,6 +63,7 @@ private val IDE_SHORTCUTS =
     listOf(
         bind(setOf(Key.N), ctrl = true, shift = true, alt = true) { project.showPopup(PopupKind.GotoSymbol) },
         bind(setOf(Key.N), ctrl = true, shift = true) { project.showPopup(PopupKind.GotoFile) },
+        bind(setOf(Key.P), ctrl = true) { project.showPopup(PopupKind.GotoFile) },
         bind(setOf(Key.DirectionLeft), ctrl = true, alt = true) { project.navigateBack() },
         bind(setOf(Key.B), ctrl = true) { project.gotoDeclaration() },
         bind(setOf(Key.R), ctrl = true) { openFindBar(replace = true) },

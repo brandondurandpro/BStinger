@@ -103,7 +103,7 @@ internal fun EmptyEditor() {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Hint("Go to File", "Ctrl+Shift+N  or  Double Shift")
+        Hint("Go to File", "Ctrl+P  or  Ctrl+Shift+N  or  Double Shift")
         Hint("Recent Files", "Ctrl+E")
         Hint("Find in Files", "Ctrl+Shift+F")
         Hint("File Structure", "Ctrl+F12")

@@ -47,7 +47,7 @@ A lightweight IDE in the style of IntelliJ IDEA (New UI, dark theme), written wi
   IntelliJ shortcuts (`Ctrl+D`, `Ctrl+Y`, `Ctrl+/`, `Tab`/`Shift+Tab`, `Ctrl+Shift+Z`…).
 - **Saving like IntelliJ**: `Ctrl+S`, and automatic save when a tab, the project or the window is closed, or when the
   window loses focus; external changes are reloaded when it regains focus (unsaved edits are never overwritten).
-- **Navigation & search**: Go to File (`Ctrl+Shift+N` or double `Shift`, fuzzy matching), Recent Files (`Ctrl+E`),
+- **Navigation & search**: Go to File (`Ctrl+P`, `Ctrl+Shift+N` or double `Shift`, fuzzy matching), Recent Files (`Ctrl+E`),
   Find in Files (`Ctrl+Shift+F`), Find in file (`Ctrl+F`, `Enter`/`Shift+Enter`, `F3`), Go to Line (`Ctrl+G`).
 - **Status bar & toolbar**: breadcrumbs, caret position, selection size, line separator, encoding, language,
   current Git branch.
