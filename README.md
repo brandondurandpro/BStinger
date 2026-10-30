@@ -42,7 +42,8 @@ A lightweight IDE in the style of IntelliJ IDEA (New UI, dark theme), written wi
   their splitters, and dragged by their header to the left, right or bottom dock. Their buttons stay fixed in the left
   strip, so a panel never moves its button.
 - **Editor tabs**: open next to the active tab, most-recently-used activation on close, middle click to close,
-  `Ctrl+F4`, `Alt+←/→`, `Ctrl+Tab`, per-tab scroll position, modified indicator.
+  right click for *Close / Close Others / Close All to the Left or Right / Close All / Copy Path*, `Ctrl+F4`,
+  `Alt+←/→`, `Ctrl+Tab`, per-tab scroll position, modified indicator.
 - **Code editor**: virtualized rendering (only visible lines are composed, tested with 200k lines), syntax
   highlighting (Kotlin, Java, C-like, scripts), JetBrains Mono, line numbers, caret line, selection, identifier usages
   and matching brackets highlighting, auto-closing brackets/quotes, smart Home, auto-indent, undo/redo, clipboard,

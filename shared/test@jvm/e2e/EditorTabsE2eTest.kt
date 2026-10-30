@@ -19,6 +19,7 @@ import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.test.withKeyDown
 import org.example.kotlineditor.state.delete
 import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.TextClipboard
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -35,6 +36,14 @@ class EditorTabsE2eTest {
     }
 
     private fun E2eApp.tabNames() = project.editor.tabs.map { it.entry.name }
+
+    private fun androidx.compose.ui.test.ComposeUiTest.rightClick(tag: String) {
+        onNodeWithTag(tag).performMouseInput {
+            moveTo(center)
+            press(MouseButton.Secondary)
+            release(MouseButton.Secondary)
+        }
+    }
 
     @Test
     fun `double clicking a file opens it in a tab and shows its content`() =
@@ -136,6 +145,58 @@ class EditorTabsE2eTest {
             }
             awaitNoTag(Tags.tab("README.md"))
             assertEquals(listOf("build.gradle.kts"), app.tabNames())
+        }
+
+    @Test
+    fun `right clicking a tab closes the other tabs`() =
+        runComposeUiTest {
+            val app = launchWithProject(project)
+            openFromTree("README.md")
+            openFromTree("build.gradle.kts")
+            openFromTree("docs/guide.md")
+            rightClick(Tags.tab("README.md"))
+            awaitTag(Tags.TAB_MENU).assertIsDisplayed()
+            awaitTag(Tags.MENU_CLOSE_OTHER_TABS).performClick()
+            awaitNoTag(Tags.tab("build.gradle.kts"))
+            awaitNoTag(Tags.tab("docs/guide.md"))
+            assertEquals(listOf("README.md"), app.tabNames())
+            assertEquals(
+                "README.md",
+                app.project.editor.activeTab
+                    ?.entry
+                    ?.name,
+            )
+        }
+
+    @Test
+    fun `right clicking a tab closes the tabs on each side`() =
+        runComposeUiTest {
+            val app = launchWithProject(project)
+            openFromTree("README.md")
+            openFromTree("build.gradle.kts")
+            openFromTree("docs/guide.md")
+            rightClick(Tags.tab("build.gradle.kts"))
+            awaitTag(Tags.MENU_CLOSE_TABS_LEFT).performClick()
+            awaitNoTag(Tags.tab("README.md"))
+            assertEquals(listOf("build.gradle.kts", "guide.md"), app.tabNames())
+            rightClick(Tags.tab("build.gradle.kts"))
+            awaitTag(Tags.MENU_CLOSE_TABS_RIGHT).performClick()
+            awaitNoTag(Tags.tab("docs/guide.md"))
+            assertEquals(listOf("build.gradle.kts"), app.tabNames())
+        }
+
+    @Test
+    fun `right clicking a tab can close all tabs or copy its path`() =
+        runComposeUiTest {
+            launchWithProject(project)
+            openFromTree("README.md")
+            openFromTree("build.gradle.kts")
+            rightClick(Tags.tab("README.md"))
+            awaitTag(Tags.MENU_COPY_TAB_PATH).performClick()
+            assertTrue(TextClipboard.get()!!.endsWith("README.md"))
+            rightClick(Tags.tab("README.md"))
+            awaitTag(Tags.MENU_CLOSE_ALL_TABS).performClick()
+            awaitTag(Tags.EDITOR_EMPTY).assertIsDisplayed()
         }
 
     @Test

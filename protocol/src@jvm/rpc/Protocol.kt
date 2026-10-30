@@ -21,7 +21,7 @@ import java.io.IOException
  */
 object Protocol {
     /** Version announced in the handshake; client and server must speak the same one. */
-    const val VERSION = 3
+    const val VERSION = 4
 
     /** Largest accepted frame: anything bigger is treated as a corrupted stream. */
     const val MAX_FRAME = 512 * 1024 * 1024
@@ -224,6 +224,9 @@ enum class Method(
 
     /** Pushes the current branch. */
     GitPush(mutating = true),
+
+    /** Clears the screen and the scrollback of a terminal. */
+    TerminalClear(mutating = true),
 }
 
 /** Error raised by the server while executing a request. */

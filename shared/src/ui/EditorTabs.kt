@@ -20,10 +20,15 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
@@ -35,12 +40,19 @@ import androidx.compose.ui.input.pointer.PointerButton
 import androidx.compose.ui.input.pointer.PointerEvent
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.isPrimaryPressed
+import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.isTertiaryPressed
 import androidx.compose.ui.input.pointer.onPointerEvent
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import org.example.kotlineditor.state.EditorState
 import org.example.kotlineditor.state.EditorTab
+import org.example.kotlineditor.state.closeOthers
+import org.example.kotlineditor.state.closeTabsToLeft
+import org.example.kotlineditor.state.closeTabsToRight
 import org.example.kotlineditor.state.relativePath
 
 /** Editor tabs: active one underlined, close button on hover, middle click closes. */
@@ -48,6 +60,8 @@ import org.example.kotlineditor.state.relativePath
 fun EditorTabs(editor: EditorState, modifier: Modifier = Modifier) {
     val listState = rememberLazyListState()
     val active = editor.activeTab
+    val density = LocalDensity.current
+    var contextMenu by remember { mutableStateOf<Pair<String, DpOffset>?>(null) }
     LaunchedEffect(active) {
         val index = editor.tabs.indexOf(active)
         if (index >= 0 && !isFullyVisible(listState, index)) listState.animateScrollToItem(index)
@@ -66,7 +80,15 @@ fun EditorTabs(editor: EditorState, modifier: Modifier = Modifier) {
                     active = tab == active,
                     onSelect = { editor.activate(tab) },
                     onClose = { editor.close(tab) },
-                )
+                    onContextMenu = { position ->
+                        contextMenu = tab.key to
+                            with(density) { DpOffset(position.x.toDp(), position.y.toDp()) }
+                    },
+                ) {
+                    contextMenu?.takeIf { it.first == tab.key }?.let { (_, offset) ->
+                        TabContextMenu(editor, tab, offset) { contextMenu = null }
+                    }
+                }
             }
         }
         HorizontalScrollbar(
@@ -96,18 +118,29 @@ private fun tagsOf(tab: EditorTab): TabTags =
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-private fun EditorTabView(tab: EditorTab, active: Boolean, onSelect: () -> Unit, onClose: () -> Unit) {
+private fun EditorTabView(
+    tab: EditorTab,
+    active: Boolean,
+    onSelect: () -> Unit,
+    onClose: () -> Unit,
+    onContextMenu: (Offset) -> Unit,
+    menu: @Composable () -> Unit,
+) {
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
     val modified = tab.document?.isModified == true
     val tags = tagsOf(tab)
+    val press =
+        Modifier.onPointerEvent(PointerEventType.Press) { event ->
+            onTabPress(event, onSelect, onClose, onContextMenu)
+        }
     Row(
         Modifier
             .fillMaxHeight()
             .background(if (hovered && !active) IdeColors.Hover else Color.Transparent)
             .activeUnderline(active)
             .hoverable(interaction)
-            .onPointerEvent(PointerEventType.Press) { event -> onTabPress(event, onSelect, onClose) }
+            .then(press)
             .testTag(tags.tab)
             .padding(start = 10.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -121,6 +154,7 @@ private fun EditorTabView(tab: EditorTab, active: Boolean, onSelect: () -> Unit,
         ModifiedDot(tab, modified)
         CloseTabButton(hovered || active, tags.close, onClose)
         Spacer(Modifier.width(2.dp))
+        menu()
     }
 }
 
@@ -147,14 +181,79 @@ private fun CloseTabButton(visible: Boolean, closeTag: String, onClose: () -> Un
     }
 }
 
-// Middle click closes the tab, like in IntelliJ and browsers.
+// Middle click closes the tab, like in IntelliJ and browsers; right click opens its context menu.
 @OptIn(ExperimentalComposeUiApi::class)
-private fun onTabPress(event: PointerEvent, onSelect: () -> Unit, onClose: () -> Unit) {
+private fun onTabPress(
+    event: PointerEvent,
+    onSelect: () -> Unit,
+    onClose: () -> Unit,
+    onContextMenu: (Offset) -> Unit,
+) {
+    val position = event.changes.firstOrNull()?.position ?: Offset.Zero
     when {
+        event.button == PointerButton.Secondary || event.buttons.isSecondaryPressed -> onContextMenu(position)
         event.button == PointerButton.Tertiary || event.buttons.isTertiaryPressed -> onClose()
         event.buttons.isPrimaryPressed -> onSelect()
         else -> Unit
     }
+}
+
+// Context menu of a tab: close it, the others, both sides, everything, or copy its path.
+@Composable
+private fun TabContextMenu(editor: EditorState, tab: EditorTab, offset: DpOffset, onDismiss: () -> Unit) {
+    val index = editor.tabs.indexOf(tab)
+    val action = { block: () -> Unit ->
+        onDismiss()
+        block()
+    }
+    DropdownMenu(
+        expanded = true,
+        onDismissRequest = onDismiss,
+        offset = offset,
+        modifier = Modifier.testTag(Tags.TAB_MENU),
+    ) {
+        TabMenuItem("Close", Tags.MENU_CLOSE_TAB) { action { editor.close(tab) } }
+        TabMenuItem(
+            "Close Others",
+            Tags.MENU_CLOSE_OTHER_TABS,
+            enabled = editor.tabs.size > 1,
+        ) { action { editor.closeOthers(tab) } }
+        TabMenuItem(
+            "Close All to the Left",
+            Tags.MENU_CLOSE_TABS_LEFT,
+            enabled = index > 0,
+        ) { action { editor.closeTabsToLeft(tab) } }
+        TabMenuItem(
+            "Close All to the Right",
+            Tags.MENU_CLOSE_TABS_RIGHT,
+            enabled = index in 0 until editor.tabs.lastIndex,
+        ) { action { editor.closeTabsToRight(tab) } }
+        MenuSeparator()
+        TabMenuItem("Close All", Tags.MENU_CLOSE_ALL_TABS) { action { editor.closeAll() } }
+        MenuSeparator()
+        TabMenuItem("Copy Path", Tags.MENU_COPY_TAB_PATH) { action { TextClipboard.set(tab.entry.path) } }
+    }
+}
+
+@Composable
+private fun TabMenuItem(text: String, tag: String, enabled: Boolean = true, onClick: () -> Unit) {
+    DropdownMenuItem(
+        text = { Text(text, fontSize = 13.sp) },
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier.height(30.dp).testTag(tag),
+    )
+}
+
+@Composable
+private fun MenuSeparator() {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .height(1.dp)
+            .background(IdeColors.Separator),
+    )
 }
 
 private fun Modifier.activeUnderline(active: Boolean): Modifier =

@@ -9,7 +9,6 @@ import org.example.kotlineditor.rpc.Frame
 import org.example.kotlineditor.rpc.FrameKind
 import org.example.kotlineditor.rpc.WireWriter
 import org.example.kotlineditor.rpc.snapshot
-import org.example.kotlineditor.server.ghostty.GhosttyEngine
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
@@ -18,13 +17,15 @@ import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
-// Bytes read from the PTY at once; also caps how much one GhosttyEngine.feed parses.
+// Bytes read from the PTY at once; also caps how much one TerminalEngine.feed parses.
 private const val READ_BUFFER = 64 * 1024
 
 // Minimum delay between two screens: output faster than this is coalesced instead of flooding the client.
 private const val FRAME_INTERVAL_MS = 16L
 
 private const val ENDED = "This terminal has ended"
+
+private const val CTRL_L: Byte = 0x0c
 
 /**
  * A terminal of the server: a real PTY running the user's shell, and the libghostty-vt engine parsing what it
@@ -48,7 +49,7 @@ internal class ServerTerminal(
     private val state = Any()
     private val input = Any()
     private val process: PtyProcess
-    private val engine: GhosttyEngine
+    private val engine: TerminalEngine
     private val scheduler: ScheduledExecutorService =
         Executors.newSingleThreadScheduledExecutor { task ->
             Thread(task, "editor-terminal-publish-$id").apply { isDaemon = true }
@@ -86,7 +87,7 @@ internal class ServerTerminal(
                 .setWindowsAnsiColorEnabled(windows)
                 .start()
         engine =
-            GhosttyEngine(columns, rows, cellWidthPx, cellHeightPx) { bytes ->
+            TerminalEngines.create(columns, rows, cellWidthPx, cellHeightPx) { bytes ->
                 synchronized(input) {
                     runCatching {
                         process.outputStream.write(bytes)
@@ -129,6 +130,13 @@ internal class ServerTerminal(
         ensureRunning()
         engine.resize(columns, rows, cellWidthPx, cellHeightPx)
         process.setWinSize(WinSize(columns, rows))
+        refresh()
+    }
+
+    /** Clears the screen and the scrollback; a full-screen program gets Ctrl+L instead, to redraw itself. */
+    fun clear() {
+        ensureRunning()
+        if (!engine.clear()) write(byteArrayOf(CTRL_L))
         refresh()
     }
 

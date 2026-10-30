@@ -1,10 +1,12 @@
 package org.example.kotlineditor.server
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.example.kotlineditor.model.FileContent
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.ProjectFileSystem
+import java.nio.file.AccessDeniedException
 import java.nio.file.FileAlreadyExistsException
 import java.nio.file.Files
 import java.nio.file.Path
@@ -12,6 +14,27 @@ import java.nio.file.Paths
 import java.nio.file.StandardCopyOption
 import kotlin.io.path.isDirectory
 import kotlin.io.path.name
+
+// Windows refuses to replace a file another process has open without FILE_SHARE_DELETE (a virus scanner, an
+// indexer, a backup tool), usually for a few milliseconds: retry for about two seconds before giving up.
+private const val REPLACE_ATTEMPTS = 40
+private const val REPLACE_RETRY_MS = 50L
+
+private val WINDOWS = System.getProperty("os.name").startsWith("Windows", ignoreCase = true)
+
+private suspend fun replace(source: Path, target: Path) {
+    var attempt = 1
+    while (true) {
+        try {
+            Files.move(source, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+            return
+        } catch (e: AccessDeniedException) {
+            if (!WINDOWS || attempt == REPLACE_ATTEMPTS) throw e
+            attempt++
+            delay(REPLACE_RETRY_MS)
+        }
+    }
+}
 
 private val DIRECTORIES_FIRST =
     compareBy<FileEntry> { !it.isDirectory }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
@@ -58,7 +81,7 @@ class LocalFileSystem(private val maxFileSize: Long = TextFiles.DEFAULT_MAX_SIZE
             val temp = Files.createTempFile(target.parent, ".${target.name}", ".tmp")
             try {
                 Files.writeString(temp, text)
-                Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+                replace(temp, target)
             } finally {
                 Files.deleteIfExists(temp)
             }

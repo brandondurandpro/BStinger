@@ -362,6 +362,9 @@ interface TerminalProcess {
     /** Scrolls the viewport by [delta] rows, positive going up into the scrollback. */
     fun scroll(delta: Int)
 
+    /** Clears the screen and the scrollback, keeping the line being typed. */
+    fun clear()
+
     /** Stops the process and its children. */
     fun destroy()
 }
