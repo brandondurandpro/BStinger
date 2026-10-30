@@ -74,7 +74,13 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
-    container: ubuntu:${{ matrix.ubuntu }}
+    container:
+      image: ubuntu:${{ matrix.ubuntu }}
+      # An init as PID 1 reaps orphaned processes, as on a real system: tests check that killed processes are gone.
+      options: --init
+      # The image's default POSIX locale makes the JVM reject non-ASCII file names.
+      env:
+        LANG: C.UTF-8
     timeout-minutes: 45
     strategy:
       fail-fast: false
