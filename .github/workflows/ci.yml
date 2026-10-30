@@ -95,7 +95,7 @@ jobs:
           mkdir -p /tmp/.X11-unix
           chmod 1777 /tmp/.X11-unix
           weston --backend=headless-backend.so --xwayland --socket=wayland-ci \
-            --width=1600 --height=1000 --idle-time=0 &
+            --width=1600 --height=1000 --idle-time=0 > "$RUNNER_TEMP/weston.log" 2>&1 &
           echo "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR" >> "$GITHUB_ENV"
           echo "WAYLAND_DISPLAY=wayland-ci" >> "$GITHUB_ENV"
           # AWT has no Wayland backend: the app goes through XWayland, which
@@ -112,7 +112,16 @@ jobs:
       - name: Build
         run: ./kotlin build
       - name: Test
+        env:
+          JAVA_TOOL_OPTIONS: -XX:ErrorFile=${{ runner.temp }}/hs_err_%p.log
         run: ./kotlin test
+      - name: Display server and JVM crash logs
+        if: failure()
+        run: |
+          for f in "$RUNNER_TEMP"/weston.log "$RUNNER_TEMP"/hs_err_*.log; do
+            [ -f "$f" ] && { echo "::group::$f"; tail -200 "$f"; echo "::endgroup::"; }
+          done
+          true
       # The tests render off-screen, so this is what proves the desktop app
       # really starts in the session under test. A timeout (124) means it was
       # still running when killed; any other exit code is a startup failure.
