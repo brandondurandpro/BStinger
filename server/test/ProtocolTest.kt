@@ -1,5 +1,6 @@
 package org.example.kotlineditor.server
 
+import org.example.kotlineditor.model.BlameLine
 import org.example.kotlineditor.model.DiffKind
 import org.example.kotlineditor.model.DiffLine
 import org.example.kotlineditor.model.FileContent
@@ -12,6 +13,7 @@ import org.example.kotlineditor.rpc.FrameKind
 import org.example.kotlineditor.rpc.Protocol
 import org.example.kotlineditor.rpc.WireReader
 import org.example.kotlineditor.rpc.WireWriter
+import org.example.kotlineditor.rpc.blameLines
 import org.example.kotlineditor.rpc.content
 import org.example.kotlineditor.rpc.diffLines
 import org.example.kotlineditor.rpc.entries
@@ -87,6 +89,13 @@ class ProtocolTest {
             )
         val w = WireWriter().diffLines(lines)
         assertEquals(lines, WireReader(w.toByteArray()).diffLines())
+    }
+
+    @Test
+    fun `blame lines round trip`() {
+        val lines = listOf(BlameLine(0, "abc12345", "Ana", "2024-05-01"), BlameLine(1, "def67890", "Bob", "2025-01-02"))
+        val w = WireWriter().blameLines(lines)
+        assertEquals(lines, WireReader(w.toByteArray()).blameLines())
     }
 
     @Test

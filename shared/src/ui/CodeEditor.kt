@@ -52,6 +52,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
+import org.example.kotlineditor.model.GitChangeKind
 import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.Document
 import org.example.kotlineditor.state.EditorTab
@@ -92,10 +93,10 @@ fun CodeEditor(
     onZoom: (delta: Float) -> Unit = {},
     onCtrlClick: (TextPos) -> Unit = {},
 ) {
-    val metrics = rememberEditorMetrics(document.lineCount, fontSize)
     var viewportWidth by remember { mutableFloatStateOf(0f) }
     var focused by remember { mutableStateOf(false) }
     val caretOn = rememberCaretBlink(document, focused)
+    val metrics = rememberEditorMetrics(document.lineCount, fontSize, tab.blameVisible)
     val hints by remember(document) {
         derivedStateOf {
             val identifier = if (document.hasSelection) null else document.identifierAt(document.caret)
@@ -149,6 +150,15 @@ private fun EditorRows(
     caretOn: State<Boolean>,
 ) {
     val folding = document.folding
+    val changes =
+        remember(tab.lineChanges) {
+            tab.lineChanges.filter { it.kind != GitChangeKind.Deleted }.associate { it.line to it.kind }
+        }
+    val deletions =
+        remember(tab.lineChanges) {
+            tab.lineChanges.filter { it.kind == GitChangeKind.Deleted }.map { it.line }
+        }
+    val blame = remember(tab.blame) { tab.blame?.associateBy { it.line } }
     LazyColumn(Modifier.fillMaxSize(), state = tab.listState) {
         items(count = folding.rowCount(), contentType = { 0 }) { row ->
             val index = folding.lineAt(row)
@@ -164,9 +174,20 @@ private fun EditorRows(
                     folded,
                     if (folded) folding.placeholder(index, document.lines) else null,
                 )
+            val annotation = blame?.get(index)
+            val deletedAtEnd = index == document.lines.lastIndex && document.lineCount in deletions
             CodeLine(
                 source,
-                decorations(document, index, line, highlights, hints),
+                decorations(
+                    document,
+                    index,
+                    line,
+                    highlights,
+                    hints,
+                    changes[index],
+                    index in deletions || deletedAtEnd,
+                    annotation?.let { "${it.author} ${it.date}" },
+                ),
                 metrics,
                 tab.horizontalScroll,
                 caretOn,
@@ -181,6 +202,9 @@ private fun decorations(
     line: String,
     highlights: SearchHighlights?,
     hints: CaretHints,
+    change: GitChangeKind?,
+    deleted: Boolean,
+    blame: String?,
 ): LineDecorations {
     val caret = document.caret
     val selection = document.selectionRange()?.takeIf { index in it.first.line..it.second.line }
@@ -209,6 +233,9 @@ private fun decorations(
         brackets = bracketColumns?.takeIf { it.isNotEmpty() }?.toIntArray(),
         usages = word?.let { wordOccurrences(line, it) }?.map { visualColumn(line, it) }?.toIntArray(),
         usageLength = word?.length ?: 0,
+        change = change,
+        deleted = deleted,
+        blame = blame,
     )
 }
 

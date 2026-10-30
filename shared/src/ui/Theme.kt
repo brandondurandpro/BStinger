@@ -64,6 +64,8 @@ object IdeColors {
 
     val Folder = Color(0xFF9AA7B0)
     val GitAdded = Color(0xFF73BD79)
+    val GitModified = Color(0xFF4E7DD4)
+    val GitDeleted = Color(0xFF7E838B)
     val GitUntracked = Color(0xFFD1675A)
     val DiffAddedBackground = Color(0xFF294436)
     val DiffRemovedBackground = Color(0xFF4A2E30)

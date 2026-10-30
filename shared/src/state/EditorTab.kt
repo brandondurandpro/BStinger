@@ -10,8 +10,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.focus.FocusRequester
 import kotlinx.coroutines.Job
+import org.example.kotlineditor.model.BlameLine
 import org.example.kotlineditor.model.DiffLine
 import org.example.kotlineditor.model.FileEntry
+import org.example.kotlineditor.model.GitLineChange
 
 sealed interface TabStatus {
     data object Loading : TabStatus
@@ -69,10 +71,24 @@ class EditorTab(val entry: FileEntry, val relativePath: String, val isDiff: Bool
     val splitListState = LazyListState()
     val horizontalScroll = HorizontalScroll()
 
+    /** Gutter marks of the lines changed since HEAD (text tabs only). */
+    var lineChanges by mutableStateOf<List<GitLineChange>>(emptyList())
+        internal set
+
+    /** Blame annotations of the lines, `null` until loaded; shown when [blameVisible]. */
+    var blame by mutableStateOf<List<BlameLine>?>(null)
+        internal set
+
+    /** Whether the gutter shows the blame annotations of this tab. */
+    var blameVisible by mutableStateOf(false)
+        internal set
+
     /** Selection to apply once the content is loaded (opening a search result). */
     internal var pendingSelection: Pair<TextPos, TextPos>? = null
     internal var lastActivated = 0L
     internal var job: Job? = null
+    internal var changesJob: Job? = null
+    internal var blameJob: Job? = null
 }
 
 /** One editor split: its own tabs and active tab. */

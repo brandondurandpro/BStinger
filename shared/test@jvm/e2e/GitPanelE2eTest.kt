@@ -11,6 +11,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performMouseInput
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.test.withKeyDown
@@ -48,6 +49,17 @@ class GitPanelE2eTest {
         git("init", "-q")
         git("add", "-A")
         git("commit", "-q", "-m", "init")
+    }
+
+    private fun lastCommitSubject(): String {
+        val process =
+            ProcessBuilder("git", "log", "-1", "--format=%s")
+                .directory(project.root.toFile())
+                .redirectErrorStream(true)
+                .start()
+        val output = process.inputStream.bufferedReader().readText()
+        check(process.waitFor() == 0) { "git log failed: $output" }
+        return output.trim()
     }
 
     private fun ComposeUiTest.dragToolWindowHeader(window: String, target: Offset) {
@@ -243,6 +255,75 @@ class GitPanelE2eTest {
             awaitNoTag(Tags.GIT_PANEL)
             onNodeWithTag(Tags.TOOL_GIT).performClick()
             awaitTag(Tags.GIT_PANEL)
+        }
+
+    @Test
+    fun `the gutter marks the lines changed since HEAD`() =
+        runComposeUiTest {
+            commitAll()
+            project.file("README.md", "# Changed\n")
+            launchWithProject(project)
+            openFromTree("README.md")
+            // The single line replaces three lines of HEAD: modified, with the removed block before it.
+            awaitTag(Tags.changeMarker(0, "Modified"), unmerged = true)
+            awaitTag(Tags.changeMarker(0, "Deleted"), unmerged = true)
+        }
+
+    @Test
+    fun `Annotate shows the author and date of each line in the gutter`() =
+        runComposeUiTest {
+            commitAll()
+            val app = launchWithProject(project)
+            openFromTree("README.md")
+            onNodeWithTag(Tags.TOOL_GIT).performClick()
+            awaitTag(Tags.GIT_BLAME).performClick()
+            awaitTag(Tags.blame(0), unmerged = true)
+            awaitCondition {
+                app.project.editor.activeTab
+                    ?.blame
+                    ?.isNotEmpty() == true
+            }
+            val line =
+                app.project.editor.activeTab
+                    ?.blame
+                    ?.first()
+            assertEquals("Test", line?.author)
+            val date = line?.date
+            assertTrue(date != null && date.isNotEmpty(), "No blame date")
+            val tab = app.project.editor.activeTab
+            assertTrue(tab?.blameVisible == true)
+            // Clicking Annotate again hides them.
+            onNodeWithTag(Tags.GIT_BLAME).performClick()
+            awaitNoTag(Tags.blame(0))
+        }
+
+    @Test
+    fun `the Commit button stages and commits the changes`() =
+        runComposeUiTest {
+            commitAll()
+            project.file("README.md", "# Changed\n")
+            val app = launchWithProject(project)
+            onNodeWithTag(Tags.TOOL_GIT).performClick()
+            awaitTag(ItemTags.gitChange("README.md"))
+            awaitTag(Tags.GIT_COMMIT_MESSAGE).performTextInput("Update the readme")
+            onNodeWithTag(Tags.GIT_COMMIT).performClick()
+            awaitCondition { !app.project.gitBusy && app.project.gitStatus.isEmpty() }
+            assertEquals("Committed", app.project.gitMessage)
+            assertEquals("Update the readme", lastCommitSubject())
+        }
+
+    @Test
+    fun `the branch menu switches to another local branch`() =
+        runComposeUiTest {
+            commitAll()
+            git("branch", "feature")
+            val app = launchWithProject(project)
+            onNodeWithTag(Tags.TOOL_GIT).performClick()
+            awaitCondition { app.project.gitBranches.contains("feature") }
+            awaitTag(Tags.GIT_BRANCH_BUTTON).performClick()
+            awaitTag(ItemTags.gitBranch("feature")).performClick()
+            awaitCondition { app.project.gitBranch == "feature" }
+            assertEquals("Switched to feature", app.project.gitMessage)
         }
 
     @Test

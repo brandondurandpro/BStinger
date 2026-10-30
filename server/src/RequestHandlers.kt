@@ -1,6 +1,7 @@
 package org.example.kotlineditor.server
 
 import org.example.kotlineditor.rpc.Method
+import org.example.kotlineditor.rpc.blameLines
 import org.example.kotlineditor.rpc.content
 import org.example.kotlineditor.rpc.diffLines
 import org.example.kotlineditor.rpc.entries
@@ -44,5 +45,11 @@ internal fun requestHandlers(services: LocalServices): Map<Method, suspend Reque
         Method.ShellResume to { shells[args.long()]?.replay(args.long()) },
         Method.ShellDestroy to { shells.stop(args.long()) },
         Method.GitDiff to { answer.diffLines(services.git.diff(args.string(), args.string())) },
+        Method.GitBlame to { answer.blameLines(services.git.blame(args.string(), args.string())) },
+        Method.GitBranches to { answer.strings(services.git.branches(args.string())) },
+        Method.GitCheckout to { services.git.checkout(args.string(), args.string()) },
+        Method.GitCommit to { services.git.commit(args.string(), args.string()) },
+        Method.GitPull to { answer.string(services.git.pull(args.string())) },
+        Method.GitPush to { answer.string(services.git.push(args.string())) },
     )
 }

@@ -12,9 +12,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -23,13 +25,15 @@ import org.example.kotlineditor.model.GitFileStatus
 import org.example.kotlineditor.state.ProjectState
 import org.example.kotlineditor.state.ToolWindow
 import org.example.kotlineditor.state.openDiff
+import org.example.kotlineditor.state.toggleBlame
 
-/** Git tool window: changed files below the project tree, a click opens the diff of the file. */
+/** Git tool window: branch and commit actions, then the changed files; a click opens the diff of the file. */
 @Composable
 internal fun GitPanel(project: ProjectState, drag: ToolWindowDrag, modifier: Modifier = Modifier) {
     val changes = project.gitStatus.entries.sortedBy { it.key }
     Column(modifier.fillMaxSize().background(IdeColors.Editor).testTag(Tags.GIT_PANEL)) {
         ToolWindowHeader("Git", ToolWindow.Git, project, drag) {
+            BlameToggle(project)
             IconButton(project::refreshGitStatus, Modifier.testTag(Tags.GIT_REFRESH)) {
                 Label("⟳", color = IdeColors.TextSecondary)
             }
@@ -38,11 +42,39 @@ internal fun GitPanel(project: ProjectState, drag: ToolWindowDrag, modifier: Mod
                 Modifier.testTag(Tags.GIT_HIDE),
             ) { CloseIcon() }
         }
-        when {
-            !project.isGitRepository -> Message("Not a Git repository", Tags.GIT_NOT_A_REPOSITORY)
-            changes.isEmpty() -> Message("No changes", Tags.GIT_EMPTY)
-            else -> ChangeList(project, changes)
+        if (project.isGitRepository) {
+            GitActionsBar(project)
+            Box(Modifier.fillMaxWidth().height(1.dp).background(IdeColors.Border))
+            if (changes.isEmpty()) {
+                Message("No changes", Tags.GIT_EMPTY)
+            } else {
+                ChangeList(project, changes)
+            }
+        } else {
+            Message("Not a Git repository", Tags.GIT_NOT_A_REPOSITORY)
         }
+    }
+}
+
+// Toggles the blame annotations of the active editor, like "Annotate" in IntelliJ's gutter menu.
+@Composable
+private fun BlameToggle(project: ProjectState) {
+    val active = project.editor.activeTab?.blameVisible == true
+    val enabled = project.editor.activeTab?.document != null
+    Box(
+        Modifier
+            .padding(end = 2.dp)
+            .background(if (active) IdeColors.Selection else Color.Transparent, RoundedCornerShape(4.dp))
+            .clickable(enabled = enabled) { project.toggleBlame() }
+            .padding(horizontal = 5.dp, vertical = 3.dp)
+            .testTag(Tags.GIT_BLAME),
+        contentAlignment = Alignment.Center,
+    ) {
+        Label(
+            "Annotate",
+            color = if (enabled) IdeColors.TextSecondary else IdeColors.LineNumber,
+            fontSize = 11.sp,
+        )
     }
 }
 
