@@ -2,16 +2,22 @@ package org.example.kotlineditor.ui
 
 import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollbarAdapter
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -21,18 +27,76 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import org.example.kotlineditor.model.DiffKind
 import org.example.kotlineditor.model.DiffLine
 import org.example.kotlineditor.state.EditorTab
 
-private val DIFF_LINE_HEIGHT = 20.dp
+internal val DIFF_LINE_HEIGHT = 20.dp
 private val LINE_NUMBER_WIDTH = 44.dp
 
-/** Diff tab: the changes of a file since HEAD, with old and new line numbers, green additions and red removals. */
+/** Diff tab: the changes of a file since HEAD, unified or side by side, with green additions and red removals. */
 @Composable
-internal fun DiffView(tab: EditorTab, lines: List<DiffLine>, modifier: Modifier = Modifier) {
+internal fun DiffView(
+    tab: EditorTab,
+    lines: List<DiffLine>,
+    sideBySide: Boolean,
+    onToggleSideBySide: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val style = LocalCodeStyle.current
-    Box(modifier.fillMaxSize().background(IdeColors.Editor).testTag(Tags.DIFF)) {
+    Column(modifier.fillMaxSize().background(IdeColors.Editor).testTag(Tags.DIFF)) {
+        DiffToolbar(sideBySide, onToggleSideBySide)
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            if (sideBySide) {
+                SideBySideDiff(tab.splitListState, lines, style)
+            } else {
+                UnifiedDiff(tab, lines, style)
+            }
+        }
+    }
+}
+
+@Composable
+private fun DiffToolbar(sideBySide: Boolean, onToggleSideBySide: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .height(30.dp)
+            .background(IdeColors.Panel)
+            .testTag(Tags.DIFF_TOOLBAR)
+            .padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Spacer(Modifier.weight(1f))
+        DiffLayoutToggle(sideBySide, onToggleSideBySide)
+    }
+    Box(Modifier.fillMaxWidth().height(1.dp).background(IdeColors.Separator))
+}
+
+@Composable
+private fun DiffLayoutToggle(sideBySide: Boolean, onToggle: () -> Unit) {
+    val color = if (sideBySide) Color.White else IdeColors.TextSecondary
+    val background = if (sideBySide) IdeColors.Accent else Color.Transparent
+    val border = if (sideBySide) IdeColors.Accent else IdeColors.InputBorder
+    val shape = RoundedCornerShape(4.dp)
+    Row(
+        Modifier
+            .testTag(Tags.DIFF_LAYOUT_TOGGLE)
+            .background(background, shape)
+            .border(1.dp, border, shape)
+            .clickable(onClick = onToggle)
+            .padding(horizontal = 8.dp, vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SplitDiffIcon(color = color)
+        Label("Side by side", Modifier.padding(start = 4.dp), color = color, fontSize = 11.sp)
+    }
+}
+
+@Composable
+private fun UnifiedDiff(tab: EditorTab, lines: List<DiffLine>, style: TextStyle) {
+    Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize(), state = tab.listState) {
             itemsIndexed(lines, key = { index, _ -> index }) { index, line ->
                 DiffRow(index, line, style)
@@ -74,7 +138,7 @@ private fun DiffRow(index: Int, line: DiffLine, style: TextStyle) {
 }
 
 @Composable
-private fun LineNumber(number: Int) {
+internal fun LineNumber(number: Int) {
     Box(Modifier.width(LINE_NUMBER_WIDTH)) {
         BasicText(
             if (number < 0) "" else number.toString(),
@@ -90,7 +154,7 @@ private fun LineNumber(number: Int) {
     }
 }
 
-private fun backgroundOf(kind: DiffKind): Color =
+internal fun backgroundOf(kind: DiffKind): Color =
     when (kind) {
         DiffKind.Added -> IdeColors.DiffAddedBackground
         DiffKind.Removed -> IdeColors.DiffRemovedBackground
@@ -98,7 +162,7 @@ private fun backgroundOf(kind: DiffKind): Color =
         DiffKind.Context -> Color.Transparent
     }
 
-private fun textColorOf(kind: DiffKind): Color =
+internal fun textColorOf(kind: DiffKind): Color =
     when (kind) {
         DiffKind.Added -> IdeColors.GitAdded
         DiffKind.Removed -> IdeColors.GitUntracked
@@ -106,7 +170,7 @@ private fun textColorOf(kind: DiffKind): Color =
         DiffKind.Context -> IdeColors.Code
     }
 
-private fun markerOf(kind: DiffKind): String =
+internal fun markerOf(kind: DiffKind): String =
     when (kind) {
         DiffKind.Added -> "+"
         DiffKind.Removed -> "-"

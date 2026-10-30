@@ -172,6 +172,24 @@ fun SearchIcon(modifier: Modifier = Modifier, color: Color = IdeColors.TextSecon
     }
 }
 
+/** Two side-by-side panes: switches the diff viewer to the side-by-side layout. */
+@Composable
+fun SplitDiffIcon(modifier: Modifier = Modifier, color: Color = IdeColors.TextSecondary) {
+    Canvas(modifier.size(16.dp)) {
+        val s = 1.2.dp.toPx()
+        val top = size.height * 0.2f
+        val bottom = size.height * 0.8f
+        drawRoundRect(
+            color = color,
+            topLeft = Offset(size.width * 0.1f, top),
+            size = Size(size.width * 0.8f, bottom - top),
+            cornerRadius = CornerRadius(2.dp.toPx()),
+            style = Stroke(s),
+        )
+        drawLine(color, Offset(size.width / 2f, top), Offset(size.width / 2f, bottom), strokeWidth = s)
+    }
+}
+
 /** Crosshair: "select the opened file" in the project view. */
 @Composable
 fun LocateIcon(modifier: Modifier = Modifier, color: Color = IdeColors.TextSecondary) {

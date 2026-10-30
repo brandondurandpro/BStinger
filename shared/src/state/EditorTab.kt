@@ -64,6 +64,9 @@ class EditorTab(val entry: FileEntry, val relativePath: String, val isDiff: Bool
 
     /** Kept per tab so switching tabs restores the scroll position, like IntelliJ. */
     val listState = LazyListState()
+
+    /** Scroll position of the side-by-side diff layout, kept apart from the unified one. */
+    val splitListState = LazyListState()
     val horizontalScroll = HorizontalScroll()
 
     /** Selection to apply once the content is loaded (opening a search result). */
