@@ -1,6 +1,8 @@
 package org.example.kotlineditor.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,6 +22,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalWindowInfo
@@ -30,6 +34,7 @@ import kotlinx.coroutines.withContext
 import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.Dock
 import org.example.kotlineditor.state.Document
+import org.example.kotlineditor.state.EditorPane
 import org.example.kotlineditor.state.EditorTab
 import org.example.kotlineditor.state.FindState
 import org.example.kotlineditor.state.PopupKind
@@ -44,9 +49,8 @@ import org.example.kotlineditor.state.visualColumn
 
 @Composable
 fun ProjectScreen(app: AppState, project: ProjectState) {
-    val editorFocus = remember { FocusRequester() }
     val findFocus = remember { FocusRequester() }
-    val shortcuts = remember(project) { GlobalShortcuts(IdeContext(app, project, editorFocus, findFocus)) }
+    val shortcuts = remember(project) { GlobalShortcuts(IdeContext(app, project, findFocus)) }
     SyncOnWindowFocus(project)
     Column(
         Modifier
@@ -58,8 +62,8 @@ fun ProjectScreen(app: AppState, project: ProjectState) {
         Toolbar(app, project)
         Box(Modifier.fillMaxWidth().height(1.dp).background(IdeColors.Border))
         Box(Modifier.weight(1f)) {
-            ProjectBody(app, project, editorFocus, findFocus)
-            ProjectPopups(project) { closePopup(project, editorFocus) }
+            ProjectBody(app, project, findFocus)
+            ProjectPopups(project) { closePopup(project) }
             project.fileDialog?.let { dialog ->
                 FileDialogPopup(project, dialog, onClose = { project.fileDialog = null })
             }
@@ -85,7 +89,7 @@ private fun SyncOnWindowFocus(project: ProjectState) {
 }
 
 @Composable
-private fun ProjectBody(app: AppState, project: ProjectState, editorFocus: FocusRequester, findFocus: FocusRequester) {
+private fun ProjectBody(app: AppState, project: ProjectState, findFocus: FocusRequester) {
     val drag = remember { ToolWindowDrag() }
     Box(
         Modifier
@@ -99,7 +103,7 @@ private fun ProjectBody(app: AppState, project: ProjectState, editorFocus: Focus
             Column(Modifier.weight(1f).fillMaxHeight()) {
                 Row(Modifier.weight(1f).fillMaxWidth()) {
                     ToolDock(project, Dock.Left, drag)
-                    EditorArea(app, project, editorFocus, findFocus, Modifier.weight(1f))
+                    EditorArea(app, project, findFocus, Modifier.weight(1f))
                     ToolDock(project, Dock.Right, drag)
                 }
                 ToolDock(project, Dock.Bottom, drag)
@@ -123,28 +127,52 @@ private fun ProjectPopups(project: ProjectState, onClose: () -> Unit) {
     }
 }
 
-private fun closePopup(project: ProjectState, editorFocus: FocusRequester) {
+private fun closePopup(project: ProjectState) {
     project.popup = null
-    if (project.editor.activeTab?.document != null) runCatching { editorFocus.requestFocus() }
+    val editor = project.editor
+    if (editor.activeTab?.document != null) runCatching { editor.activePane.focusRequester.requestFocus() }
 }
 
 @Composable
-private fun EditorArea(
+private fun EditorArea(app: AppState, project: ProjectState, findFocus: FocusRequester, modifier: Modifier) {
+    val editor = project.editor
+    Row(modifier.fillMaxHeight().background(IdeColors.Editor)) {
+        editor.panes.forEachIndexed { index, pane ->
+            if (index > 0) VerticalDivider(Modifier.fillMaxHeight())
+            key(pane) { EditorPaneView(app, project, pane, index, findFocus, Modifier.weight(1f)) }
+        }
+    }
+}
+
+// One editor split: its tab strip and the active tab's content. Pressing anywhere in it makes it the active pane.
+@Composable
+private fun EditorPaneView(
     app: AppState,
     project: ProjectState,
-    editorFocus: FocusRequester,
+    pane: EditorPane,
+    index: Int,
     findFocus: FocusRequester,
     modifier: Modifier,
 ) {
     val editor = project.editor
-    val tab = editor.activeTab
-    Column(modifier.fillMaxHeight().background(IdeColors.Editor)) {
-        if (editor.tabs.isEmpty()) {
+    val tab = pane.activeTab
+    Column(
+        modifier
+            .fillMaxHeight()
+            .testTag(Tags.pane(index))
+            .pointerInput(pane) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    editor.activatePane(pane)
+                }
+            },
+    ) {
+        if (pane.tabs.isEmpty()) {
             EmptyEditor()
         } else {
-            EditorTabs(editor)
+            EditorTabs(editor, pane)
             Box(Modifier.fillMaxWidth().height(1.dp).background(IdeColors.Separator))
-            tab?.let { key(it) { TabContent(app, project, it, editorFocus, findFocus) } }
+            tab?.let { key(it) { TabContent(app, project, pane, it, findFocus) } }
         }
     }
 }
@@ -153,8 +181,8 @@ private fun EditorArea(
 private fun TabContent(
     app: AppState,
     project: ProjectState,
+    pane: EditorPane,
     tab: EditorTab,
-    editorFocus: FocusRequester,
     findFocus: FocusRequester,
 ) {
     when (val status = tab.status) {
@@ -167,7 +195,7 @@ private fun TabContent(
         }
 
         is TabStatus.Ready -> {
-            ReadyEditor(app, project, tab, status.document, editorFocus, findFocus)
+            ReadyEditor(app, project, pane, tab, status.document, findFocus)
         }
 
         is TabStatus.Diff -> {
@@ -186,14 +214,15 @@ private fun TabContent(
 private fun ReadyEditor(
     app: AppState,
     project: ProjectState,
+    pane: EditorPane,
     tab: EditorTab,
     document: Document,
-    editorFocus: FocusRequester,
     findFocus: FocusRequester,
 ) {
     val find = project.find
     val highlights = rememberSearchHighlights(project, document)
-    if (find.visible) {
+    val editorFocus = pane.focusRequester
+    if (find.visible && project.editor.activePane == pane) {
         FindBar(find, document, findFocus, onClose = {
             find.visible = false
             find.replaceVisible = false

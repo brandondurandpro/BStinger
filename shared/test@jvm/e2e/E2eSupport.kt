@@ -21,6 +21,8 @@ import org.example.kotlineditor.rpc.appServices
 import org.example.kotlineditor.server.EditorServer
 import org.example.kotlineditor.server.LocalServices
 import org.example.kotlineditor.state.AppState
+import org.example.kotlineditor.state.InMemoryPreferenceStore
+import org.example.kotlineditor.state.PreferenceStore
 import org.example.kotlineditor.state.ProjectState
 import org.example.kotlineditor.state.Screen
 import org.example.kotlineditor.ui.Tags
@@ -122,6 +124,7 @@ fun ComposeUiTest.launchApp(
     recent: List<String> = emptyList(),
     pick: String? = null,
     sessions: org.example.kotlineditor.model.SessionStore? = null,
+    preferences: PreferenceStore = InMemoryPreferenceStore(),
 ): E2eApp {
     TextClipboard.useSystem = false
     val data = Files.createTempDirectory("kotlin-editor-server").toFile()
@@ -145,7 +148,7 @@ fun ComposeUiTest.launchApp(
     var created: AppState? = null
     setContent {
         val scope = rememberCoroutineScope()
-        val state = remember { AppState(services, scope) }
+        val state = remember { AppState(services, scope, preferences) }
         created = state
         DisposableEffect(Unit) {
             onDispose {
@@ -162,8 +165,11 @@ fun ComposeUiTest.launchApp(
 
 /** Opens [project] through the welcome screen, as a user would, and waits for its tree. */
 @OptIn(ExperimentalTestApi::class)
-fun ComposeUiTest.launchWithProject(project: SampleProject): E2eApp {
-    val app = launchApp(pick = project.path)
+fun ComposeUiTest.launchWithProject(
+    project: SampleProject,
+    preferences: PreferenceStore = InMemoryPreferenceStore(),
+): E2eApp {
+    val app = launchApp(pick = project.path, preferences = preferences)
     onNodeWithTag(Tags.WELCOME_OPEN).performClick()
     awaitTag(Tags.treeRow("src"))
     return app

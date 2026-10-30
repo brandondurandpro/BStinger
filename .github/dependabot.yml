@@ -1,0 +1,11 @@
+# Amper builds are not supported by Dependabot, so only the workflow actions
+# are kept up to date here (their pinned SHAs included).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
