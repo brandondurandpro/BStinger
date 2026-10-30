@@ -1,0 +1,147 @@
+name: CI
+
+# Runs the strict lint and the whole test suite on every supported platform:
+# Ubuntu 20.04, 22.04 and 24.04 (under X11 and Wayland), plus Windows.
+# The 20.04 GitHub runner image was retired in April 2025, so older Ubuntu
+# versions run in their official container image on an ubuntu-24.04 runner.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  KOTLIN_CLI_NO_WELCOME_BANNER: "1"
+
+jobs:
+  lint:
+    name: Lint (detekt + ktlint)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      # detekt 2.x needs a recent JDK; runners default to an older one.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: actions/cache@v4
+        with:
+          path: .detekt
+          key: detekt-${{ hashFiles('lint', 'detekt.yml') }}
+      - run: ./lint
+
+  test-linux:
+    name: Linux ${{ matrix.ubuntu }} · ${{ matrix.session }}
+    runs-on: ubuntu-24.04
+    container: ubuntu:${{ matrix.ubuntu }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        ubuntu: ["20.04", "22.04", "24.04"]
+        session: [x11, wayland]
+    steps:
+      # Installed before checkout: the official Ubuntu image has no git, and
+      # actions/checkout needs it. The 20.04 repositories may have moved to
+      # old-releases, so the sources are switched over if the update fails.
+      - name: Install system packages
+        run: |
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update || {
+            sed -i \
+              -e 's|http://archive.ubuntu.com/ubuntu|http://old-releases.ubuntu.com/ubuntu|g' \
+              -e 's|http://security.ubuntu.com/ubuntu|http://old-releases.ubuntu.com/ubuntu|g' \
+              /etc/apt/sources.list
+            apt-get update
+          }
+          apt-get install -y --no-install-recommends \
+            ca-certificates curl git tar unzip xz-utils \
+            xvfb xauth x11-utils xwayland weston \
+            libgl1 libx11-6 libxext6 libxrender1 libxtst6 libxi6 \
+            fontconfig fonts-dejavu-core
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/JetBrains/Kotlin
+            ~/.m2/repository
+          key: linux-${{ matrix.ubuntu }}-${{ hashFiles('kotlin', 'libs.versions.toml', 'project.yaml', '**/module.yaml') }}
+      - name: Start X11 (Xvfb)
+        if: matrix.session == 'x11'
+        run: |
+          Xvfb :99 -screen 0 1600x1000x24 -nolisten tcp -ac &
+          echo "DISPLAY=:99" >> "$GITHUB_ENV"
+          for _ in $(seq 1 30); do xdpyinfo >/dev/null 2>&1 && break; sleep 1; done
+          xdpyinfo | grep -E "name of display|dimensions"
+      - name: Start Wayland (headless Weston + XWayland)
+        if: matrix.session == 'wayland'
+        run: |
+          export XDG_RUNTIME_DIR="$RUNNER_TEMP/xdg"
+          mkdir -p "$XDG_RUNTIME_DIR"
+          chmod 700 "$XDG_RUNTIME_DIR"
+          # XWayland refuses to start (and Weston then crashes) without the
+          # shared socket directory.
+          mkdir -p /tmp/.X11-unix
+          chmod 1777 /tmp/.X11-unix
+          weston --backend=headless-backend.so --xwayland --socket=wayland-ci \
+            --width=1600 --height=1000 --idle-time=0 &
+          echo "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR" >> "$GITHUB_ENV"
+          echo "WAYLAND_DISPLAY=wayland-ci" >> "$GITHUB_ENV"
+          # AWT has no Wayland backend: the app goes through XWayland, which
+          # Weston composites as a Wayland surface.
+          echo "DISPLAY=:0" >> "$GITHUB_ENV"
+          for _ in $(seq 1 30); do
+            [ -S "$XDG_RUNTIME_DIR/wayland-ci" ] && break
+            sleep 1
+          done
+          test -S "$XDG_RUNTIME_DIR/wayland-ci"
+          # Connecting an X client starts XWayland.
+          for _ in $(seq 1 30); do xdpyinfo -display :0 >/dev/null 2>&1 && break; sleep 1; done
+          xdpyinfo -display :0 | grep -E "name of display|dimensions"
+      - name: Build
+        run: ./kotlin build
+      - name: Test
+        run: ./kotlin test
+      # The tests render off-screen, so this is what proves the desktop app
+      # really starts in the session under test. A timeout (124) means it was
+      # still running when killed; any other exit code is a startup failure.
+      - name: Desktop app starts in the session
+        env:
+          SKIKO_RENDER_API: SOFTWARE
+        run: |
+          set +e
+          timeout -k 10 180 ./kotlin run -m desktopApp
+          code=$?
+          set -e
+          if [ "$code" -ne 124 ]; then
+            echo "desktopApp exited with $code before the timeout (expected 124)"
+            exit 1
+          fi
+
+  test-windows:
+    name: Windows
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/AppData/Local/JetBrains/Kotlin/cli
+            ~/.m2/repository
+          key: windows-${{ hashFiles('kotlin.bat', 'libs.versions.toml', 'project.yaml', '**/module.yaml') }}
+      - name: Build
+        shell: cmd
+        run: kotlin.bat build
+      - name: Test
+        shell: cmd
+        run: kotlin.bat test

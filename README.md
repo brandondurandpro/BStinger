@@ -84,6 +84,9 @@ server restart).
 - `./lint` – detekt with **every** rule enabled (`--all-rules`, unstable ones included) plus the ktlint rule set,
   failing on any finding; `./lint --fix` applies the automatic corrections. `detekt.yml` only adapts the few rules
   that contradict a convention of our tools, each with its reason.
+- GitHub Actions (`.github/workflows/ci.yml`) runs `./lint` and the whole suite on Ubuntu 20.04, 22.04 and 24.04
+  under X11 (Xvfb) and Wayland (headless Weston, with XWayland for AWT), plus Windows. Each Linux job also launches
+  the desktop app and checks that it stays open, which proves the session really works.
 
 The bundled JetBrains Mono font is licensed under the SIL Open Font License 1.1.
 
