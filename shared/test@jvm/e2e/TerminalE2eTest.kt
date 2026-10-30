@@ -1,8 +1,8 @@
 package org.example.kotlineditor.e2e
 
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
@@ -10,6 +10,7 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.test.withKeyDown
+import org.example.kotlineditor.model.text
 import org.example.kotlineditor.state.delete
 import org.example.kotlineditor.ui.Tags
 import kotlin.test.AfterTest
@@ -26,9 +27,22 @@ class TerminalE2eTest {
         project.delete()
     }
 
-    private fun androidx.compose.ui.test.ComposeUiTest.run(command: String) {
+    private fun ComposeUiTest.screenLines(app: E2eApp): List<String> =
+        app.project.terminal.active
+            ?.snapshot
+            ?.text()
+            ?.map { it.trimEnd() }
+            .orEmpty()
+
+    private fun ComposeUiTest.runCommand(command: String) {
+        onNodeWithTag(Tags.TERMINAL_INPUT).performClick()
         onNodeWithTag(Tags.TERMINAL_INPUT).performTextInput(command)
         onNodeWithTag(Tags.TERMINAL_INPUT).performKeyInput { pressKey(Key.Enter) }
+    }
+
+    private fun ComposeUiTest.typeKeys(keys: List<Key>) {
+        onNodeWithTag(Tags.TERMINAL_INPUT).performClick()
+        onNodeWithTag(Tags.TERMINAL_INPUT).performKeyInput { keys.forEach { pressKey(it) } }
     }
 
     @Test
@@ -38,28 +52,56 @@ class TerminalE2eTest {
             onNodeWithTag(Tags.TREE).performClick()
             onNodeWithTag(Tags.TREE).performKeyInput { withKeyDown(Key.AltLeft) { pressKey(Key.F12) } }
             awaitTag(Tags.TERMINAL_INPUT)
-            run("echo hello-terminal")
-            awaitCondition { "hello-terminal" in app.project.terminal.lines }
-            run("ls")
-            awaitCondition { "README.md" in app.project.terminal.lines }
-            assertTrue(
-                app.project.terminal.lines
-                    .contains("$ echo hello-terminal"),
-            )
+            runCommand("echo hello-terminal")
+            awaitCondition { screenLines(app).any { it == "hello-terminal" } }
+            runCommand("ls")
+            awaitCondition { screenLines(app).any { "README.md" in it } }
+            assertTrue(screenLines(app).any { "echo hello-terminal" in it })
         }
 
     @Test
-    fun `Up arrow recalls previous commands`() =
+    fun `typed keys are encoded by the server engine`() =
         runComposeUiTest {
-            launchWithProject(project)
+            val app = launchWithProject(project)
             onNodeWithTag(Tags.TOOL_TERMINAL).performClick()
             awaitTag(Tags.TERMINAL_INPUT)
-            run("echo one")
-            run("echo two")
-            onNodeWithTag(Tags.TERMINAL_INPUT).performKeyInput { pressKey(Key.DirectionUp) }
-            onNodeWithTag(Tags.TERMINAL_INPUT).assertTextEquals("echo two")
-            onNodeWithTag(Tags.TERMINAL_INPUT).performKeyInput { pressKey(Key.DirectionUp) }
-            onNodeWithTag(Tags.TERMINAL_INPUT).assertTextEquals("echo one")
+            typeKeys(
+                listOf(
+                    Key.E,
+                    Key.C,
+                    Key.H,
+                    Key.O,
+                    Key.Spacebar,
+                    Key.K,
+                    Key.E,
+                    Key.Y,
+                    Key.Minus,
+                    Key.P,
+                    Key.A,
+                    Key.T,
+                    Key.H,
+                    Key.Enter,
+                ),
+            )
+            awaitCondition { screenLines(app).any { it == "key-path" } }
+        }
+
+    @Test
+    fun `each tab runs its own shell`() =
+        runComposeUiTest {
+            val app = launchWithProject(project)
+            onNodeWithTag(Tags.TOOL_TERMINAL).performClick()
+            awaitTag(Tags.TERMINAL_INPUT)
+            runCommand("echo first-tab")
+            awaitCondition { screenLines(app).any { it == "first-tab" } }
+            onNodeWithTag(Tags.TERMINAL_NEW).performClick()
+            awaitCondition { app.project.terminal.tabs.size == 2 }
+            runCommand("echo second-tab")
+            awaitCondition { screenLines(app).any { it == "second-tab" } }
+            onNodeWithTag(Tags.terminalTab(1)).performClick()
+            awaitCondition { screenLines(app).any { it == "first-tab" } }
+            onNodeWithTag(Tags.TERMINAL_CLOSE).performClick()
+            awaitCondition { app.project.terminal.tabs.size == 1 }
         }
 
     @Test
@@ -68,32 +110,33 @@ class TerminalE2eTest {
             val app = launchWithProject(project)
             onNodeWithTag(Tags.TOOL_TERMINAL).performClick()
             awaitTag(Tags.TERMINAL_INPUT)
-            awaitCondition { app.project.terminal.running }
-            run("exit")
-            awaitCondition { "[Process finished]" in app.project.terminal.lines }
-            assertFalse(app.project.terminal.running)
-            // A new command restarts a shell.
-            run("echo again")
-            awaitCondition { "again" in app.project.terminal.lines }
+            awaitCondition {
+                app.project.terminal.active
+                    ?.running == true
+            }
+            runCommand("exit")
+            awaitCondition {
+                app.project.terminal.active
+                    ?.running == false
+            }
+            val terminalTab = app.project.terminal.active
+            assertFalse(terminalTab?.running ?: true)
             val terminal = app.project.terminal
             runOnUiThread { app.state.closeProject() }
             awaitTag(Tags.WELCOME)
-            awaitCondition { !terminal.running }
+            awaitCondition { terminal.tabs.isEmpty() }
         }
 
     @Test
-    fun `the terminal can be hidden and output cleared`() =
+    fun `the terminal can be hidden and cleared`() =
         runComposeUiTest {
             val app = launchWithProject(project)
             onNodeWithTag(Tags.TOOL_TERMINAL).performClick()
             awaitTag(Tags.TERMINAL_INPUT)
-            run("echo x")
-            awaitCondition { "x" in app.project.terminal.lines }
+            runCommand("echo marker-x")
+            awaitCondition { screenLines(app).any { it == "marker-x" } }
             onNodeWithTag(Tags.TERMINAL_CLEAR).performClick()
-            awaitCondition {
-                app.project.terminal.lines
-                    .isEmpty()
-            }
+            awaitCondition { screenLines(app).none { "marker-x" in it } }
             onNodeWithTag(Tags.TERMINAL_HIDE).performClick()
             awaitNoTag(Tags.TERMINAL)
         }

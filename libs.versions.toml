@@ -4,6 +4,8 @@ androidx-activity-compose = "1.13.0"
 androidx-lifecycle = "2.11.0"
 kotlinx-coroutines = "1.11.0"
 zstd = "1.5.6-10"
+ghostty = "0.1.237"
+pty4j21 = "0.22.2"
 
 [libraries]
 logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
@@ -13,3 +15,7 @@ androidx-lifecycle-runtime-compose = { module = "org.jetbrains.androidx.lifecycl
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinx-coroutines" }
 kotlinx-coroutines-swing = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-swing", version.ref = "kotlinx-coroutines" }
 zstd-jni = { module = "com.github.luben:zstd-jni", version.ref = "zstd" }
+# libghostty-vt: FFM bindings and the native library, generated per platform by GhosttyFX (MIT).
+# Only the bindings package is used; the JavaFX classes of the same project are not needed.
+ghostty-linux = { module = "io.github.vlaaad:ghosttyfx-linux-x86_64", version.ref = "ghostty" }
+pty4j21 = { module = "com.sshtools:pty4j21", version.ref = "pty4j21" }

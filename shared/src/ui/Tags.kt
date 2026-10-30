@@ -25,6 +25,8 @@ object Tags {
     const val DIFF = "diff"
     const val TERMINAL = "terminal"
     const val TERMINAL_INPUT = "terminal.input"
+    const val TERMINAL_NEW = "terminal.new"
+    const val TERMINAL_CLOSE = "terminal.close"
     const val TERMINAL_CLEAR = "terminal.clear"
     const val TERMINAL_HIDE = "terminal.hide"
     const val TREE = "tree"
@@ -94,6 +96,8 @@ object Tags {
     fun diffLineKind(index: Int, kind: String) = "diff.line:$index:$kind"
 
     fun toolHeader(window: String) = "tool.header:$window"
+
+    fun terminalTab(number: Int) = "terminal.tab:$number"
 
     fun dockSplitter(dock: String) = "dock.splitter:$dock"
 

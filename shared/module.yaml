@@ -28,3 +28,9 @@ test-dependencies@jvm:
   - //server
   - $compose.uiTest
   - $compose.desktop.currentOs
+
+test-settings:
+  jvm:
+    test:
+      freeJvmArgs:
+        - --enable-native-access=ALL-UNNAMED

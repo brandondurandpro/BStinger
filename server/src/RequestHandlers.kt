@@ -7,6 +7,7 @@ import org.example.kotlineditor.rpc.entries
 import org.example.kotlineditor.rpc.entry
 import org.example.kotlineditor.rpc.entryOrNull
 import org.example.kotlineditor.rpc.gitStatus
+import org.example.kotlineditor.rpc.keyEvent
 import org.example.kotlineditor.rpc.matches
 import org.example.kotlineditor.rpc.session
 import org.example.kotlineditor.rpc.strings
@@ -42,10 +43,22 @@ internal fun requestHandlers(services: LocalServices): Map<Method, suspend Reque
         Method.SessionSave to {
             services.sessions.save(args.string(), checkNotNull(args.session()) { "Missing session" })
         },
-        Method.ShellStart to { shells.start(id, args.string()) },
-        Method.ShellSend to { checkNotNull(shells[args.long()]) { "This shell has ended" }.send(args.string()) },
-        Method.ShellResume to { shells[args.long()]?.replay(args.long()) },
-        Method.ShellDestroy to { shells.stop(args.long()) },
+        Method.TerminalStart to {
+            terminals.start(id, args.string(), args.int(), args.int(), args.int(), args.int())
+        },
+        Method.TerminalWrite to { terminalOrFail().write(args.bytes()) },
+        Method.TerminalKey to { terminalOrFail().sendKey(args.keyEvent()) },
+        Method.TerminalPaste to { terminalOrFail().paste(args.string()) },
+        Method.TerminalResize to {
+            val terminal = terminalOrFail()
+            terminal.resize(args.int(), args.int(), args.int(), args.int())
+        },
+        Method.TerminalScroll to { terminalOrFail().scroll(args.int()) },
+        Method.TerminalResume to { terminals[args.long()]?.resume(args.long()) },
+        Method.TerminalDestroy to { terminals.stop(args.long()) },
         Method.GitDiff to { answer.diffLines(services.git.diff(args.string(), args.string())) },
     )
 }
+
+private fun Request.terminalOrFail(): ServerTerminal =
+    checkNotNull(terminals[args.long()]) { "This terminal has ended" }

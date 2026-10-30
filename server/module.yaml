@@ -5,3 +5,12 @@ product:
 dependencies:
   - //protocol: exported
   - $libs.kotlinx.coroutines.core
+  - $libs.pty4j21
+  - $libs.ghostty.linux
+
+# libghostty-vt and pty4j21 both use the Foreign Function & Memory API.
+test-settings:
+  jvm:
+    test:
+      freeJvmArgs:
+        - --enable-native-access=ALL-UNNAMED

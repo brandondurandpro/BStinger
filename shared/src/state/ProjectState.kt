@@ -31,7 +31,7 @@ class ProjectState(val root: FileEntry, val services: AppServices, parentScope: 
         }
     val fileIndex = FileIndex(root, services.search, scope)
     val find = FindState()
-    val terminal = TerminalState(root.path, services.shell, scope)
+    val terminal = TerminalState(root.path, services.terminal, scope)
     val toolWindows = ToolWindowLayout()
     var popup: PopupKind? by mutableStateOf(null)
     var fileDialog: FileDialog? by mutableStateOf(null)

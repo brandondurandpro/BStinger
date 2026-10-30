@@ -100,6 +100,8 @@ internal class GlobalShortcuts(private val context: IdeContext) {
 
     fun handle(event: KeyEvent): Boolean {
         val project = context.project
+        // The terminal owns the keyboard: every key is input for the shell, except the one that hides it.
+        if (project.terminal.focused && event.key != Key.F12) return false
         val closesFindBar = event.key == Key.Escape && project.find.visible && project.popup == null
         return when {
             doubleShift.isDoubleShift(event) -> {

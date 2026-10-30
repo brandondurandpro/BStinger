@@ -1,6 +1,5 @@
 package org.example.kotlineditor.state
 
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -8,79 +7,180 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.launch
-import org.example.kotlineditor.model.ShellLauncher
-import org.example.kotlineditor.model.ShellProcess
+import org.example.kotlineditor.model.TerminalKeyEvent
+import org.example.kotlineditor.model.TerminalLauncher
+import org.example.kotlineditor.model.TerminalProcess
+import org.example.kotlineditor.model.TerminalSnapshot
 
-/** The Terminal tool window: one shell per project, started the first time the window is shown. */
+// Grid used until the panel has been measured, so the shell has a sane size when it starts.
+private const val DEFAULT_COLUMNS = 80
+private const val DEFAULT_ROWS = 24
+private const val DEFAULT_CELL_WIDTH = 8
+private const val DEFAULT_CELL_HEIGHT = 16
+
+/**
+ * One terminal tab: a shell running on the server and the last screen it sent.
+ *
+ * Every snapshot is a complete screen, so the tab only keeps the latest one; the emulator owns the scrollback
+ * and re-sends the viewport when the user scrolls.
+ */
+@Stable
+class TerminalTab(
+    /** Stable id of the tab, used for its key in the UI and its test tag. */
+    val number: Int,
+    private val process: TerminalProcess,
+    scope: CoroutineScope,
+) {
+    /** The last complete screen, or `null` before the first one arrives. */
+    var snapshot by mutableStateOf<TerminalSnapshot?>(null)
+        private set
+
+    /** Title the running program set (OSC 0/2), or a fallback while it sets none. */
+    var title by mutableStateOf("Terminal $number")
+        private set
+
+    /** Whether the shell is still running. */
+    val running: Boolean get() = snapshot?.running ?: true
+
+    // Last size sent to the server, to avoid resizing on every frame.
+    private var columns = DEFAULT_COLUMNS
+    private var rows = DEFAULT_ROWS
+    private var cellWidth = DEFAULT_CELL_WIDTH
+    private var cellHeight = DEFAULT_CELL_HEIGHT
+
+    private val job: Job =
+        scope.launch {
+            process.output.collect { screen ->
+                snapshot = screen
+                if (screen.title.isNotBlank()) title = screen.title
+            }
+        }
+
+    /** Sends the characters the user typed, as if they came from the keyboard. */
+    fun write(text: String) {
+        if (text.isNotEmpty()) process.write(text.encodeToByteArray())
+    }
+
+    /** Sends a key, encoded by the terminal so that the running program gets what it expects. */
+    fun sendKey(event: TerminalKeyEvent) = process.sendKey(event)
+
+    /** Pastes [text], wrapped in bracketed-paste markers when the program asked for them. */
+    fun paste(text: String) {
+        if (text.isNotEmpty()) process.paste(text)
+    }
+
+    /** Applies the grid the panel can display; a no-op when nothing changed. */
+    fun resize(columns: Int, rows: Int, cellWidth: Int, cellHeight: Int) {
+        if (hasSize(columns, rows, cellWidth, cellHeight)) return
+        this.columns = columns
+        this.rows = rows
+        this.cellWidth = cellWidth
+        this.cellHeight = cellHeight
+        process.resize(columns, rows, cellWidth, cellHeight)
+    }
+
+    private fun hasSize(columns: Int, rows: Int, width: Int, height: Int): Boolean =
+        columns == this.columns && rows == this.rows && width == cellWidth && height == cellHeight
+
+    /** Scrolls the viewport by [delta] rows, positive going up into the scrollback. */
+    fun scroll(delta: Int) {
+        if (delta != 0) process.scroll(delta)
+    }
+
+    /** Stops the shell and the collector. */
+    fun dispose() {
+        job.cancel()
+        process.destroy()
+    }
+}
+
+/**
+ * The Terminal tool window: tabs, each with its own shell. Tabs are started the first time the window is shown
+ * and keep running while it is hidden, like IntelliJ's terminal.
+ */
 @Stable
 class TerminalState(
     private val directory: String,
-    private val launcher: ShellLauncher,
+    private val launcher: TerminalLauncher,
     private val scope: CoroutineScope,
 ) {
-    val lines = mutableStateListOf<String>()
-    val listState = LazyListState()
+    /** Tabs of the project, in display order. */
+    val tabs = mutableStateListOf<TerminalTab>()
 
-    var running by mutableStateOf(false)
+    /** Index of the visible tab. */
+    var activeIndex by mutableStateOf(0)
         private set
 
-    private var process: ShellProcess? = null
-    private var job: Job? = null
-    private val history = ArrayList<String>()
-    private var historyIndex = 0
+    /** Whether the keyboard goes to the active terminal (set by the panel). */
+    var focused by mutableStateOf(false)
 
+    /** Why the last terminal could not start, if it could not. */
+    var error by mutableStateOf<String?>(null)
+        private set
+
+    /** The visible tab, if there is one. */
+    val active: TerminalTab? get() = tabs.getOrNull(activeIndex)
+
+    private var nextNumber = 1
+
+    /** Starts the first tab the first time the window is shown. */
     fun ensureStarted() {
-        if (process != null) return
-        val started =
-            runCatching { launcher.start(directory) }.getOrElse {
-                lines += "Cannot start a shell: ${it.message}"
+        if (tabs.isEmpty()) newTab()
+    }
+
+    /** Opens a new tab and shows it. */
+    fun newTab() {
+        val process =
+            runCatching {
+                launcher.start(directory, DEFAULT_COLUMNS, DEFAULT_ROWS, DEFAULT_CELL_WIDTH, DEFAULT_CELL_HEIGHT)
+            }.getOrElse {
+                error = "Cannot start a terminal: ${it.message}"
                 return
             }
-        process = started
-        running = true
-        job =
-            scope.launch {
-                try {
-                    // Lines are appended in bursts so a chatty command does not trigger one recomposition per line.
-                    started.output.buffer(capacity = 1024).collect { line ->
-                        lines += line
-                        if (lines.size > MAX_LINES) lines.removeRange(0, lines.size - MAX_LINES)
-                    }
-                    lines += "[Process finished]"
-                } finally {
-                    running = false
-                    process = null
-                }
+        error = null
+        tabs += TerminalTab(nextNumber++, process, scope)
+        activeIndex = tabs.lastIndex
+        focused = true
+    }
+
+    /** Shows the tab at [index]. */
+    fun select(index: Int) {
+        if (index in tabs.indices) {
+            activeIndex = index
+            focused = true
+        }
+    }
+
+    /** Closes the visible tab, stopping its shell. */
+    fun closeActive() = close(activeIndex)
+
+    /** Closes the tab at [index]. */
+    fun close(index: Int) {
+        val tab = tabs.getOrNull(index) ?: return
+        tab.dispose()
+        tabs.removeAt(index)
+        activeIndex =
+            when {
+                tabs.isEmpty() -> 0
+                index < activeIndex -> activeIndex - 1
+                else -> activeIndex.coerceAtMost(tabs.lastIndex)
             }
     }
 
-    fun send(command: String) {
-        ensureStarted()
-        lines += "$ $command"
-        if (command.isNotBlank()) history += command
-        historyIndex = history.size
-        process?.send(command)
-    }
+    /** Asks the running programs to clear their screen (Ctrl+L for a shell). */
+    fun clear() = active?.write(CLEAR_SEQUENCE)
 
-    /** Up/Down in the input field walk through previous commands. */
-    fun historyStep(delta: Int): String? {
-        if (history.isEmpty()) return null
-        historyIndex = (historyIndex + delta).coerceIn(0, history.size)
-        return history.getOrNull(historyIndex) ?: ""
-    }
-
-    fun clear() = lines.clear()
-
+    /** Stops every shell; called when the project closes. */
     fun stop() {
-        job?.cancel()
-        process?.destroy()
-        process = null
-        running = false
+        tabs.forEach { it.dispose() }
+        tabs.clear()
+        activeIndex = 0
+        focused = false
     }
 
     private companion object {
-        const val MAX_LINES = 20_000
+        /** Ctrl+L, which shells and most full-screen programs treat as "clear". */
+        const val CLEAR_SEQUENCE = "\u000c"
     }
 }

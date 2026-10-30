@@ -1,15 +1,16 @@
 package org.example.kotlineditor.server
 
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.example.kotlineditor.model.ConnectionStatus
 import org.example.kotlineditor.model.FileContent
+import org.example.kotlineditor.model.text
 import org.example.kotlineditor.rpc.ClientOptions
 import org.example.kotlineditor.rpc.RemoteFileSystem
-import org.example.kotlineditor.rpc.RemoteShellLauncher
+import org.example.kotlineditor.rpc.RemoteTerminalLauncher
 import org.example.kotlineditor.rpc.RpcClient
 import java.nio.file.Files
 import kotlin.io.path.writeText
@@ -82,10 +83,13 @@ class ResilienceTest {
         }
 
     @Test
-    fun `shell output is complete, ordered and without duplicates across disconnections`() =
+    fun `terminal screens stay complete and ordered across disconnections`() =
         runBlocking {
-            val shell = RemoteShellLauncher(client).start(project.toString())
-            shell.send("i=1; while [ \$i -le 400 ]; do echo line\$i; i=\$((i+1)); sleep 0.002; done; exit")
+            val terminal = RemoteTerminalLauncher(client).start(project.toString(), 80, 120, 8, 16)
+            terminal.write(
+                "stty -echo; i=1; while [ \$i -le 400 ]; do echo line\$i; i=\$((i+1)); sleep 0.002; done; exit\n"
+                    .toByteArray(),
+            )
             val chaos =
                 launch {
                     repeat(6) {
@@ -93,9 +97,11 @@ class ResilienceTest {
                         proxy.cutAll()
                     }
                 }
-            val lines = withTimeout(30_000) { shell.output.toList() }
+            val screen = withTimeout(30_000) { terminal.output.first { snapshot -> !snapshot.running } }
             chaos.join()
-            assertEquals((1..400).map { "line$it" }, lines)
+            val lines = screen.text().map { it.trim() }.filter { it.startsWith("line") }
+            assertEquals((301..400).map { "line$it" }, lines.takeLast(100))
+            terminal.destroy()
         }
 
     @Test

@@ -1,6 +1,5 @@
 package org.example.kotlineditor.model
 
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import org.example.kotlineditor.syntax.Declaration
@@ -141,24 +140,6 @@ fun interface DirectoryPicker {
     suspend fun pickDirectory(): String?
 }
 
-/** A running shell: lines it prints, and lines sent to its standard input. */
-interface ShellProcess {
-    /** Output lines (stdout and stderr merged); completes when the shell exits. */
-    val output: Flow<String>
-
-    /** Sends one command line. */
-    fun send(line: String)
-
-    /** Stops the shell and its children. */
-    fun destroy()
-}
-
-/** Starts shells. */
-fun interface ShellLauncher {
-    /** Starts a shell whose working directory is [directory]. */
-    fun start(directory: String): ShellProcess
-}
-
 /** What is restored when a project is reopened: open files with their caret, and the active one. */
 data class ProjectSession(
     /** Open files, in tab order. */
@@ -287,7 +268,7 @@ class AppServices(
     /** Choice of a project directory. */
     val directoryPicker: DirectoryPicker,
     /** Terminal shells. */
-    val shell: ShellLauncher,
+    val terminal: TerminalLauncher,
     /** Open files of each project. */
     val sessions: SessionStore = InMemorySessionStore(),
     /** Git information. */

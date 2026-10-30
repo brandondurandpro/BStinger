@@ -44,6 +44,15 @@ class WireWriter(initialCapacity: Int = DEFAULT_CAPACITY) {
             }
         }
 
+    /** Appends a byte array, with its length. */
+    fun bytes(value: ByteArray): WireWriter =
+        apply {
+            int(value.size)
+            ensure(value.size)
+            value.copyInto(buffer, size)
+            size += value.size
+        }
+
     /** The bytes written so far. */
     fun toByteArray(): ByteArray = buffer.copyOf(size)
 
@@ -97,6 +106,15 @@ class WireReader(private val buffer: ByteArray, private var position: Int = 0) {
 
     /** Reads a string that must not be null. */
     fun string(): String = checkNotNull(stringOrNull()) { "Unexpected null string" }
+
+    /** Reads a byte array written by [WireWriter.bytes]. */
+    fun bytes(): ByteArray {
+        val length = int()
+        require(length in 0..buffer.size - position) { "Truncated byte array" }
+        val value = buffer.copyOfRange(position, position + length)
+        position += length
+        return value
+    }
 
     private fun bigEndian(bytes: Int): Long {
         var value = 0L

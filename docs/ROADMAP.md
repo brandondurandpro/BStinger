@@ -141,7 +141,8 @@ Légende de l'effort : ● petit · ●● moyen · ●●● gros.
 
 ### Exécution et terminal
 
-- **Vrai terminal (PTY)** via pty4j : programmes interactifs, couleurs ANSI, plusieurs onglets. ●●
+- ✅ **Vrai terminal (PTY)** (`Alt+F12`) : PTY `pty4j21` côté serveur, émulation `libghostty-vt`, rendu Canvas
+  Compose, onglets, couleurs ANSI, clavier Kitty, sélection et reprise après coupure. Voir `docs/TERMINAL.md`.
 - **Configurations d'exécution** (tâches Amper ou Gradle, `main`) avec sortie cliquable vers les erreurs. ●●●
 - Lanceur de tests avec arbre des résultats. ●●●
 

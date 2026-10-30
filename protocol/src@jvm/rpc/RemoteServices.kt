@@ -17,8 +17,10 @@ import org.example.kotlineditor.model.ProjectSearch
 import org.example.kotlineditor.model.ProjectSession
 import org.example.kotlineditor.model.RecentProjectsStore
 import org.example.kotlineditor.model.SessionStore
-import org.example.kotlineditor.model.ShellLauncher
-import org.example.kotlineditor.model.ShellProcess
+import org.example.kotlineditor.model.TerminalKeyEvent
+import org.example.kotlineditor.model.TerminalLauncher
+import org.example.kotlineditor.model.TerminalProcess
+import org.example.kotlineditor.model.TerminalSnapshot
 import org.example.kotlineditor.model.TextMatch
 import java.io.IOException
 
@@ -29,7 +31,7 @@ fun RpcClient.appServices(directoryPicker: DirectoryPicker): AppServices =
         search = RemoteSearch(this),
         recentProjects = RemoteRecentProjects(this),
         directoryPicker = directoryPicker,
-        shell = RemoteShellLauncher(this),
+        terminal = RemoteTerminalLauncher(this),
         sessions = RemoteSessions(this),
         git = RemoteGit(this),
         connection = status,
@@ -108,34 +110,70 @@ class RemoteSessions(private val client: RpcClient) : SessionStore {
 }
 
 /**
- * Shell running on the server. The request id of ShellStart is the id of its output stream, registered before
- * the request is sent so no output can arrive before the client listens. Commands go through a queue so they
- * reach the shell in the order they were typed.
+ * Terminal running on the server. The request id of TerminalStart is the id of its snapshot stream, registered
+ * before the request is sent so no screen can arrive before the client listens. Keys, pastes, resizes and scrolls
+ * go through a queue so they reach the terminal in the order they were typed.
  */
-class RemoteShellLauncher(private val client: RpcClient) : ShellLauncher {
-    override fun start(directory: String): ShellProcess {
+class RemoteTerminalLauncher(private val client: RpcClient) : TerminalLauncher {
+    override fun start(
+        directory: String,
+        columns: Int,
+        rows: Int,
+        cellWidthPx: Int,
+        cellHeightPx: Int,
+    ): TerminalProcess {
         val id = client.newId()
-        val output = client.openStream(id)
-        val commands = Channel<String>(Channel.UNLIMITED)
+        val screens = client.openStream(id)
+        val commands = Channel<suspend () -> Unit>(Channel.UNLIMITED)
         client.scope.launch {
             try {
-                client.call(Method.ShellStart, id = id) { string(directory) }
-                for (line in commands) client.call(Method.ShellSend) { long(id).string(line) }
-            } catch (e: IOException) {
-                output.trySend(listOf("Cannot start a shell: ${e.message}"))
+                client.call(Method.TerminalStart, id = id) {
+                    string(directory)
+                        .int(columns)
+                        .int(rows)
+                        .int(cellWidthPx)
+                        .int(cellHeightPx)
+                }
+                for (command in commands) command()
+            } catch (_: IOException) {
+                commands.close()
                 client.closeStream(id)
             }
         }
-        return object : ShellProcess {
-            override val output: Flow<String> = flow { for (batch in output) batch.forEach { emit(it) } }
+        return object : TerminalProcess {
+            override val output: Flow<TerminalSnapshot> = flow { for (snapshot in screens) emit(snapshot) }
 
-            override fun send(line: String) {
-                commands.trySend(line)
+            override fun write(bytes: ByteArray) {
+                commands.trySend { client.call(Method.TerminalWrite) { long(id).bytes(bytes) } }
+            }
+
+            override fun sendKey(event: TerminalKeyEvent) {
+                commands.trySend { client.call(Method.TerminalKey) { long(id).keyEvent(event) } }
+            }
+
+            override fun paste(text: String) {
+                commands.trySend { client.call(Method.TerminalPaste) { long(id).string(text) } }
+            }
+
+            override fun resize(columns: Int, rows: Int, cellWidthPx: Int, cellHeightPx: Int) {
+                commands.trySend {
+                    client.call(Method.TerminalResize) {
+                        long(id)
+                            .int(columns)
+                            .int(rows)
+                            .int(cellWidthPx)
+                            .int(cellHeightPx)
+                    }
+                }
+            }
+
+            override fun scroll(delta: Int) {
+                commands.trySend { client.call(Method.TerminalScroll) { long(id).int(delta) } }
             }
 
             override fun destroy() {
                 commands.close()
-                client.scope.launch { runCatching { client.call(Method.ShellDestroy) { long(id) } } }
+                client.scope.launch { runCatching { client.call(Method.TerminalDestroy) { long(id) } } }
                 client.closeStream(id)
             }
         }

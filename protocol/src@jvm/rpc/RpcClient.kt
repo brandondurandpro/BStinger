@@ -13,6 +13,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import org.example.kotlineditor.model.ConnectionStatus
+import org.example.kotlineditor.model.TerminalSnapshot
 import java.io.Closeable
 import java.io.IOException
 import java.net.InetSocketAddress
@@ -59,7 +60,7 @@ class RpcClient(host: String, port: Int, token: String, private val options: Cli
     private val mutableStatus = MutableStateFlow(ConnectionStatus.Reconnecting)
     private val connector =
         Connector(InetSocketAddress(host, port), token, options, pending, streams, mutableStatus) { id, lastSeq ->
-            scope.launch { runCatching { call(Method.ShellResume) { long(id).long(lastSeq) } } }
+            scope.launch { runCatching { call(Method.TerminalResume) { long(id).long(lastSeq) } } }
         }
 
     /** State of the link with the server. */
@@ -93,7 +94,7 @@ class RpcClient(host: String, port: Int, token: String, private val options: Cli
     }
 
     /** Registers the stream fed by the server under [id] (before the request creating it is sent). */
-    fun openStream(id: Long): Channel<List<String>> = streams.open(id)
+    fun openStream(id: Long): Channel<TerminalSnapshot> = streams.open(id)
 
     /** Stops listening to the stream [id]. */
     fun closeStream(id: Long) = streams.close(id)

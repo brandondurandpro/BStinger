@@ -180,17 +180,29 @@ enum class Method(
     /** Saves the session of a project. */
     SessionSave(mutating = true),
 
-    /** Starts a shell; the request id becomes the id of its output stream. */
-    ShellStart(mutating = true),
+    /** Starts a terminal; the request id becomes the id of its snapshot stream. */
+    TerminalStart(mutating = true),
 
-    /** Sends one command line to a shell. */
-    ShellSend(mutating = true),
+    /** Writes raw bytes to a terminal. */
+    TerminalWrite(mutating = true),
 
-    /** Replays the shell output after a given sequence number (after a reconnection). */
-    ShellResume,
+    /** Sends a key to a terminal, encoded there. */
+    TerminalKey(mutating = true),
 
-    /** Stops a shell. */
-    ShellDestroy(mutating = true),
+    /** Pastes text into a terminal. */
+    TerminalPaste(mutating = true),
+
+    /** Resizes a terminal. */
+    TerminalResize(mutating = true),
+
+    /** Scrolls the terminal viewport. */
+    TerminalScroll(mutating = true),
+
+    /** Replays the last screen of a terminal after a reconnection. */
+    TerminalResume,
+
+    /** Stops a terminal. */
+    TerminalDestroy(mutating = true),
 
     /** Differences of a file between HEAD and the working tree. */
     GitDiff,

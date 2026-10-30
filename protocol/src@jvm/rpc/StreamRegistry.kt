@@ -1,24 +1,24 @@
 package org.example.kotlineditor.rpc
 
 import kotlinx.coroutines.channels.Channel
-import java.util.TreeMap
+import org.example.kotlineditor.model.TerminalSnapshot
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Server-pushed streams (shell output). Events carry sequence numbers: they are delivered in order, exactly once,
- * whatever the network did (events arriving early are buffered, replayed ones are dropped).
+ * Server-pushed terminal screens. Each event carries the sequence number of the complete snapshot it holds:
+ * duplicates are dropped, and a snapshot that arrives after a gap simply replaces the state, because every
+ * snapshot describes the whole screen.
  */
 internal class StreamRegistry {
     private val streams = ConcurrentHashMap<Long, StreamState>()
 
-    private class StreamState(val channel: Channel<List<String>>) {
+    private class StreamState(val channel: Channel<TerminalSnapshot>) {
         var lastSeq = 0L
         var endSeq = Long.MAX_VALUE
-        val early = TreeMap<Long, List<String>>()
     }
 
-    fun open(id: Long): Channel<List<String>> {
-        val channel = Channel<List<String>>(Channel.UNLIMITED)
+    fun open(id: Long): Channel<TerminalSnapshot> {
+        val channel = Channel<TerminalSnapshot>(Channel.UNLIMITED)
         streams[id] = StreamState(channel)
         return channel
     }
@@ -36,25 +36,19 @@ internal class StreamRegistry {
     fun positions(): Map<Long, Long> = streams.mapValues { it.value.lastSeq }
 
     /** The server restarted: its streams are gone for good. */
-    fun loseAll() {
-        streams.values.forEach { it.channel.trySend(listOf("[Connection to the server lost: process ended]")) }
-        closeAll()
-    }
+    fun loseAll() = closeAll()
 
     fun onEvent(id: Long, body: ByteArray) {
         val stream = streams[id] ?: return
         val reader = WireReader(body)
         val seq = reader.long()
-        val reset = reader.bool()
-        val lines = reader.strings()
+        val snapshot = reader.snapshot()
         synchronized(stream) {
-            // A reset means the server no longer has what came before: accept the gap instead of waiting forever.
-            if (reset && seq > stream.lastSeq) {
-                stream.channel.trySend(listOf("[... output lost while disconnected ...]"))
-                stream.lastSeq = seq - 1
+            if (seq > stream.lastSeq) {
+                stream.lastSeq = seq
+                stream.channel.trySend(snapshot)
             }
-            if (seq > stream.lastSeq) stream.early[seq] = lines
-            deliverInOrder(id, stream)
+            endIfDone(id, stream)
         }
     }
 
@@ -62,20 +56,11 @@ internal class StreamRegistry {
         val stream = streams[id] ?: return
         synchronized(stream) {
             stream.endSeq = WireReader(body).long()
-            deliverInOrder(id, stream)
+            endIfDone(id, stream)
         }
     }
 
-    private fun deliverInOrder(id: Long, stream: StreamState) {
-        var next = stream.early.firstEntry()
-        while (next != null && next.key <= stream.lastSeq + 1) {
-            stream.early.pollFirstEntry()
-            if (next.key == stream.lastSeq + 1) {
-                stream.lastSeq = next.key
-                stream.channel.trySend(next.value)
-            }
-            next = stream.early.firstEntry()
-        }
+    private fun endIfDone(id: Long, stream: StreamState) {
         if (stream.lastSeq >= stream.endSeq) {
             stream.channel.close()
             streams.remove(id)

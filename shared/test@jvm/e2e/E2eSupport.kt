@@ -135,7 +135,7 @@ fun ComposeUiTest.launchApp(
             remote.search,
             remote.recentProjects,
             remote.directoryPicker,
-            remote.shell,
+            remote.terminal,
             sessions ?: remote.sessions,
             remote.git,
             remote.connection,

@@ -2,16 +2,16 @@ package org.example.kotlineditor.server
 
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.flow.takeWhile
-import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.example.kotlineditor.model.FileContent
+import org.example.kotlineditor.model.text
 import org.example.kotlineditor.rpc.RejectedException
 import org.example.kotlineditor.rpc.RemoteException
 import org.example.kotlineditor.rpc.RemoteFileSystem
 import org.example.kotlineditor.rpc.RemoteSearch
-import org.example.kotlineditor.rpc.RemoteShellLauncher
+import org.example.kotlineditor.rpc.RemoteTerminalLauncher
 import org.example.kotlineditor.rpc.RpcClient
 import java.nio.file.Files
 import kotlin.io.path.writeText
@@ -109,22 +109,27 @@ class RemoteServicesTest {
         }
 
     @Test
-    fun `a remote shell streams its output`() =
+    fun `a remote terminal streams its screen`() =
         runBlocking {
-            val shell = RemoteShellLauncher(client).start(project.toString())
-            shell.send("echo hello")
-            shell.send("exit")
-            val lines = withTimeout(10_000) { shell.output.toList() }
-            assertEquals(listOf("hello"), lines)
+            val terminal = RemoteTerminalLauncher(client).start(project.toString(), 80, 24, 8, 16)
+            terminal.write("echo hello\n".toByteArray())
+            val screen =
+                withTimeout(10_000) {
+                    terminal.output.first { snapshot -> snapshot.text().any { it.trim() == "hello" } }
+                }
+            assertTrue(screen.text().any { it.trim() == "hello" })
+            terminal.destroy()
         }
 
     @Test
-    fun `commands reach the shell in order`() =
+    fun `commands reach the terminal in order`() =
         runBlocking {
-            val shell = RemoteShellLauncher(client).start(project.toString())
-            repeat(50) { shell.send("echo $it") }
-            shell.send("exit")
-            val lines = withTimeout(10_000) { shell.output.takeWhile { true }.toList() }
-            assertEquals((0 until 50).map { it.toString() }, lines)
+            val terminal = RemoteTerminalLauncher(client).start(project.toString(), 80, 160, 8, 16)
+            repeat(50) { terminal.write("echo n$it\n".toByteArray()) }
+            terminal.write("exit\n".toByteArray())
+            val screen = withTimeout(20_000) { terminal.output.first { snapshot -> !snapshot.running } }
+            val lines = screen.text().map { it.trim() }.filter { it.startsWith("n") }
+            assertEquals((0 until 50).map { "n$it" }, lines)
+            terminal.destroy()
         }
 }
