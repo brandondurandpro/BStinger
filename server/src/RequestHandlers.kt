@@ -54,6 +54,7 @@ internal fun requestHandlers(services: LocalServices): Map<Method, suspend Reque
             terminal.resize(args.int(), args.int(), args.int(), args.int())
         },
         Method.TerminalScroll to { terminalOrFail().scroll(args.int()) },
+        Method.TerminalClear to { terminalOrFail().clear() },
         Method.TerminalResume to { terminals[args.long()]?.resume(args.long()) },
         Method.TerminalDestroy to { terminals.stop(args.long()) },
         Method.GitDiff to { answer.diffLines(services.git.diff(args.string(), args.string())) },
