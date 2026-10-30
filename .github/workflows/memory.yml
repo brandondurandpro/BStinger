@@ -1,0 +1,87 @@
+name: Memory Measurement
+
+# Mesure la consommation mémoire du serveur et de l'application desktop.
+# Se lance uniquement sur les pull requests pour permettre la comparaison
+# avant/après les changements de code.
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  KOTLIN_CLI_NO_WELCOME_BANNER: "1"
+
+jobs:
+  memory:
+    name: Memory Usage (Linux)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/JetBrains/Kotlin
+            ~/.m2/repository
+          key: memory-${{ hashFiles('kotlin', 'libs.versions.toml', 'project.yaml', '**/module.yaml') }}
+
+      - name: Install system packages
+        run: |
+          export DEBIAN_FRONTEND=noninteractive
+          sudo apt-get update
+          sudo -E apt-get install -y --no-install-recommends \
+            xvfb xauth x11-utils \
+            libgl1 libx11-6 libxext6 libxrender1 libxtst6 libxi6 \
+            fontconfig fonts-dejavu-core
+
+      - name: Build
+        run: ./kotlin build
+
+      - name: Start Xvfb
+        run: |
+          Xvfb :99 -screen 0 1600x1000x24 -nolisten tcp -ac &
+          echo "DISPLAY=:99" >> "$GITHUB_ENV"
+          for _ in $(seq 1 30); do xdpyinfo >/dev/null 2>&1 && break; sleep 1; done
+          xdpyinfo | grep -E "name of display|dimensions"
+
+      - name: Measure memory usage
+        env:
+          SKIKO_RENDER_API: SOFTWARE
+        run: |
+          chmod +x ./measure_memory.sh
+          ./measure_memory.sh 60
+
+      - name: Upload memory report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: memory-report
+          path: build/memory-report/
+          retention-days: 14
+
+      - name: Print summary
+        if: always()
+        run: |
+          echo "## Memory Usage Report" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f "build/memory-report/summary.txt" ]; then
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            cat "build/memory-report/summary.txt" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "_No memory report generated._" >> "$GITHUB_STEP_SUMMARY"
+          fi
