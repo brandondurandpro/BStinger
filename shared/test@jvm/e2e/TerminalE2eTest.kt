@@ -61,7 +61,8 @@ class TerminalE2eTest {
             awaitCondition { printed(app, "hello-terminal") }
             runCommand(if (System.getProperty("os.name").startsWith("Windows")) "dir /b" else "ls")
             awaitCondition { screenLines(app).any { "README.md" in it } }
-            assertTrue(screenLines(app).any { "echo hello-terminal" in it })
+            // Joined without spaces: after a long prompt (cmd.exe shows the whole path) the command wraps.
+            assertTrue("echohello-terminal" in screenLines(app).joinToString("").filterNot(Char::isWhitespace))
         }
 
     @Test
