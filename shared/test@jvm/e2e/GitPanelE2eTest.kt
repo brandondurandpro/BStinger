@@ -47,6 +47,10 @@ class GitPanelE2eTest {
 
     private fun commitAll() {
         git("init", "-q")
+        // The app commits and pulls without the test's -c options: a runner has no identity, and Windows converts EOLs.
+        git("config", "user.name", "Test")
+        git("config", "user.email", "test@example.com")
+        git("config", "core.autocrlf", "false")
         git("add", "-A")
         git("commit", "-q", "-m", "init")
     }

@@ -36,6 +36,10 @@ class GitClientTest {
 
     private fun commitAll() {
         git("init", "-q")
+        // The app commits and pulls without the test's -c options: a runner has no identity, and Windows converts EOLs.
+        git("config", "user.name", "Test")
+        git("config", "user.email", "test@example.com")
+        git("config", "core.autocrlf", "false")
         git("add", "-A")
         git("commit", "-q", "-m", "init")
     }
@@ -105,7 +109,7 @@ class GitClientTest {
             git("commit", "-q", "-m", "two")
             CliGitClient().push(root.toString())
             val clone = temporaryDirectory("git-clone")
-            runGit(clone, "clone", "-q", remote.toString(), ".")
+            runGit(clone, "clone", "-q", "-c", "core.autocrlf=false", remote.toString(), ".")
             assertEquals("two\n", clone.resolve("a.kt").readText())
             // The clone commits and pushes; the project then pulls that commit.
             clone.resolve("a.kt").writeText("three\n")
