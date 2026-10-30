@@ -10,10 +10,16 @@ import java.net.Socket
 
 private const val BUFFER_SIZE = 64 * 1024
 
-/** One TCP connection carrying frames; writes are serialized, reads happen on a single thread. */
-internal class Link(private val socket: Socket) : Closeable {
-    private val input = DataInputStream(BufferedInputStream(socket.getInputStream(), BUFFER_SIZE))
-    private val output = DataOutputStream(BufferedOutputStream(socket.getOutputStream(), BUFFER_SIZE))
+/**
+ * One TCP connection carrying frames; writes are serialized, reads happen on a single thread. Frames are shown to
+ * [tap] while it is active (devtools).
+ */
+internal class Link(private val socket: Socket, private val tap: NetworkTap? = null) : Closeable {
+    // Counted above the buffers: the counts are the bytes of the frames, not of the socket reads.
+    private val counted = CountingInputStream(BufferedInputStream(socket.getInputStream(), BUFFER_SIZE))
+    private val written = CountingOutputStream(BufferedOutputStream(socket.getOutputStream(), BUFFER_SIZE))
+    private val input = DataInputStream(counted)
+    private val output = DataOutputStream(written)
 
     // One codec per connection: the native contexts are not thread-safe and keep the dictionary loaded.
     private val codec = Protocol.newCodec()
@@ -22,12 +28,21 @@ internal class Link(private val socket: Socket) : Closeable {
     var lastSent = System.currentTimeMillis()
         private set
 
-    fun read(): Frame = Protocol.read(input, codec)
+    fun read(): Frame {
+        val before = counted.count
+        val frame = Protocol.read(input, codec)
+        if (tap?.active == true) tap.received(frame, (counted.count - before).toInt())
+        return frame
+    }
 
     /** Never throws: a failed write closes the socket, which makes the reader fail and the client reconnect. */
     fun send(frame: Frame) {
         try {
-            synchronized(output) { Protocol.write(output, frame, codec) }
+            synchronized(output) {
+                val before = written.count
+                Protocol.write(output, frame, codec)
+                if (tap?.active == true) tap.sent(frame, (written.count - before).toInt())
+            }
             lastSent = System.currentTimeMillis()
         } catch (ignored: IOException) {
             close() // the reading side notices the closed socket and reconnects

@@ -26,6 +26,9 @@ class AppState(private val services: AppServices, private val scope: CoroutineSc
     var error: String? by mutableStateOf(null)
         private set
 
+    /** Whether the devtools were opened (Ctrl+Alt+Shift+D) since the IDE started: shows their buttons. */
+    var devtools by mutableStateOf(false)
+
     /** Editor font size in points, shared by every editor (Alt+Shift+. / Alt+Shift+, / Ctrl+wheel). */
     var editorFontSize by mutableFloatStateOf(DEFAULT_EDITOR_FONT_SIZE)
         private set

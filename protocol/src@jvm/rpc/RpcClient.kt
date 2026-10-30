@@ -13,6 +13,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import org.example.kotlineditor.model.ConnectionStatus
+import org.example.kotlineditor.model.NetworkInspector
 import org.example.kotlineditor.model.TerminalSnapshot
 import java.io.Closeable
 import java.io.IOException
@@ -58,8 +59,20 @@ class RpcClient(host: String, port: Int, token: String, private val options: Cli
     private val pending = PendingRequests()
     private val streams = StreamRegistry()
     private val mutableStatus = MutableStateFlow(ConnectionStatus.Reconnecting)
+
+    /** Capture of the frames exchanged with the server, off until the devtools turn it on. */
+    val network = NetworkInspector()
+
     private val connector =
-        Connector(InetSocketAddress(host, port), token, options, pending, streams, mutableStatus) { id, lastSeq ->
+        Connector(
+            InetSocketAddress(host, port),
+            token,
+            options,
+            pending,
+            streams,
+            mutableStatus,
+            NetworkTap(network),
+        ) { id, lastSeq ->
             scope.launch { runCatching { call(Method.TerminalResume) { long(id).long(lastSeq) } } }
         }
 

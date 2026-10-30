@@ -94,7 +94,7 @@ private fun ProjectBody(app: AppState, project: ProjectState, editorFocus: Focus
             .onGloballyPositioned { drag.workspace = it.boundsInRoot() },
     ) {
         Row(Modifier.fillMaxSize()) {
-            ToolStrip(project)
+            ToolStrip(project, app.devtools)
             VerticalDivider(Modifier.fillMaxHeight())
             Column(Modifier.weight(1f).fillMaxHeight()) {
                 Row(Modifier.weight(1f).fillMaxWidth()) {

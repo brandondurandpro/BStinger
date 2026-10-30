@@ -139,6 +139,7 @@ fun ComposeUiTest.launchApp(
             sessions ?: remote.sessions,
             remote.git,
             remote.connection,
+            remote.network,
         )
     var created: AppState? = null
     setContent {

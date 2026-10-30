@@ -33,6 +33,7 @@ class ProjectState(val root: FileEntry, val services: AppServices, parentScope: 
     val find = FindState()
     val terminal = TerminalState(root.path, services.terminal, scope)
     val toolWindows = ToolWindowLayout()
+    val network = NetworkView(services.network)
     var popup: PopupKind? by mutableStateOf(null)
     var fileDialog: FileDialog? by mutableStateOf(null)
 
@@ -61,7 +62,7 @@ class ProjectState(val root: FileEntry, val services: AppServices, parentScope: 
         followActiveFile()
     }
 
-    /** Shows or hides a tool window (Alt+1, Alt+9, Alt+F12 or its button in the left strip). */
+    /** Shows or hides a tool window (Alt+1, Alt+9, Alt+F12, Ctrl+Alt+Shift+D or its button in the left strip). */
     fun toggleToolWindow(window: ToolWindow) {
         toolWindows.toggle(window)
         if (window == ToolWindow.Terminal && toolWindows.isVisible(window)) terminal.ensureStarted()
