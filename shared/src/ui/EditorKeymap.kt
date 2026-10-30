@@ -33,9 +33,10 @@ import org.example.kotlineditor.state.shrinkSelection
 import org.example.kotlineditor.state.toggleLineComment
 import org.example.kotlineditor.state.typeChar
 import org.example.kotlineditor.state.unfoldAt
-import java.awt.event.KeyEvent as AwtKeyEvent
 
 private const val DELETE_CHAR = 0x7f
+private const val CHAR_UNDEFINED = 0xFFFF
+private val SURROGATES = 0xD800..0xDFFF
 
 /** What an editor shortcut acts on: the document, and the page size in rows. */
 private class EditorKeys(val document: Document, val page: Int)
@@ -97,36 +98,25 @@ private val BINDINGS =
     )
 
 /** Handles a key event of the editor; returns whether it was used. [page] is the number of visible rows. */
-internal fun handleEditorKey(event: KeyEvent, document: Document, page: Int): Boolean {
-    val awt = event.nativeKeyEvent as? AwtKeyEvent
-    return when {
-        // Real AWT: printable characters arrive as KEY_TYPED (this is what makes dead keys and AltGr work).
-        awt?.id == AwtKeyEvent.KEY_TYPED -> typed(awt, document)
-
+internal fun handleEditorKey(event: KeyEvent, document: Document, page: Int): Boolean =
+    when {
         event.type != KeyEventType.KeyDown -> false
-
         shortcut(event, document, page) -> true
-
-        // Synthetic events (UI tests) carry the character on the key press itself.
-        else -> awt == null && synthetic(event, document)
+        else -> typeEvent(event, document)
     }
-}
 
 private fun shortcut(event: KeyEvent, document: Document, page: Int): Boolean =
     BINDINGS.dispatch(event, EditorKeys(document, page))
 
-private fun typed(awt: AwtKeyEvent, document: Document): Boolean {
-    val c = awt.keyChar
-    val ctrlOnly = awt.isControlDown && !awt.isAltDown
-    val accepted = c >= ' ' && c.code != DELETE_CHAR && !ctrlOnly && !awt.isMetaDown
-    if (accepted) document.typeChar(c)
-    return accepted
-}
-
-private fun synthetic(event: KeyEvent, document: Document): Boolean {
-    val modified = event.isCtrlPressed || event.isMetaPressed || event.isAltPressed
+// Printable characters arrive as KeyDown events carrying their code point. Keys without a character
+// (Shift, Ctrl, function keys, …) report CHAR_UNDEFINED and must never be inserted in the document.
+private fun typeEvent(event: KeyEvent, document: Document): Boolean {
+    // Ctrl alone and Cmd are commands; Alt (and AltGr, which reports Ctrl+Alt) can produce text.
+    val ctrlAlone = event.isCtrlPressed && !event.isAltPressed
+    val command = ctrlAlone || event.isMetaPressed
     val code = if (event.key == Key.Spacebar) ' '.code else event.utf16CodePoint
-    val accepted = !modified && code >= ' '.code && code != DELETE_CHAR
+    val printable = code >= ' '.code && code != DELETE_CHAR && code != CHAR_UNDEFINED && code !in SURROGATES
+    val accepted = !command && printable
     if (accepted) document.typeChar(Char(code))
     return accepted
 }

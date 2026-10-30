@@ -27,7 +27,7 @@ import org.example.kotlineditor.state.FileMatch
 import org.example.kotlineditor.state.ProjectState
 import org.example.kotlineditor.state.relativePath
 
-/** Go to File (Ctrl+Shift+N) or, with [recentOnly], Recent Files (Ctrl+E). */
+/** Go to File (Ctrl+P or Ctrl+Shift+N) or, with [recentOnly], Recent Files (Ctrl+E). */
 @Composable
 fun GotoFilePopup(project: ProjectState, onClose: () -> Unit, recentOnly: Boolean = false) {
     var query by remember { mutableStateOf("") }
