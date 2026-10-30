@@ -86,10 +86,13 @@ class ResilienceTest {
     fun `terminal screens stay complete and ordered across disconnections`() =
         runBlocking {
             val terminal = RemoteTerminalLauncher(client).start(project.toString(), 80, 120, 8, 16)
-            terminal.write(
-                "stty -echo; i=1; while [ \$i -le 400 ]; do echo line\$i; i=\$((i+1)); sleep 0.002; done; exit\n"
-                    .toByteArray(),
-            )
+            val script =
+                if (System.getProperty("os.name").startsWith("Windows", ignoreCase = true)) {
+                    "for /L %i in (1,1,400) do @echo line%i\rexit\r"
+                } else {
+                    "stty -echo; i=1; while [ \$i -le 400 ]; do echo line\$i; i=\$((i+1)); sleep 0.002; done; exit\r"
+                }
+            terminal.write(script.toByteArray())
             val chaos =
                 launch {
                     repeat(6) {
@@ -99,7 +102,7 @@ class ResilienceTest {
                 }
             val screen = withTimeout(30_000) { terminal.output.first { snapshot -> !snapshot.running } }
             chaos.join()
-            val lines = screen.text().map { it.trim() }.filter { it.startsWith("line") }
+            val lines = screen.text().mapNotNull { Regex("""line\d+$""").find(it.trim())?.value }
             assertEquals((301..400).map { "line$it" }, lines.takeLast(100))
             terminal.destroy()
         }

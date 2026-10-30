@@ -26,6 +26,7 @@ import org.example.kotlineditor.state.PreferenceStore
 import org.example.kotlineditor.state.ProjectState
 import org.example.kotlineditor.state.Screen
 import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.TextClipboard
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.createDirectories
@@ -125,6 +126,7 @@ fun ComposeUiTest.launchApp(
     sessions: org.example.kotlineditor.model.SessionStore? = null,
     preferences: PreferenceStore = InMemoryPreferenceStore(),
 ): E2eApp {
+    TextClipboard.useSystem = false
     val data = Files.createTempDirectory("kotlin-editor-server").toFile()
     val server = EditorServer(LocalServices(data)).start()
     val client = RpcClient("127.0.0.1", server.port, server.token)

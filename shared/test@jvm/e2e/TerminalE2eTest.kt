@@ -34,6 +34,11 @@ class TerminalE2eTest {
             ?.map { it.trimEnd() }
             .orEmpty()
 
+    // Whether a command printed [text]. The test types before the shell shows its prompt, so the output can land
+    // after one (`$ text`, `C:\project>text`); lines echoing the command itself are skipped.
+    private fun ComposeUiTest.printed(app: E2eApp, text: String): Boolean =
+        screenLines(app).any { "echo" !in it && it.endsWith(text) }
+
     private fun ComposeUiTest.runCommand(command: String) {
         onNodeWithTag(Tags.TERMINAL_INPUT).performClick()
         onNodeWithTag(Tags.TERMINAL_INPUT).performTextInput(command)
@@ -53,10 +58,16 @@ class TerminalE2eTest {
             onNodeWithTag(Tags.TREE).performKeyInput { withKeyDown(Key.AltLeft) { pressKey(Key.F12) } }
             awaitTag(Tags.TERMINAL_INPUT)
             runCommand("echo hello-terminal")
-            awaitCondition { screenLines(app).any { it == "hello-terminal" } }
-            runCommand("ls")
+            awaitCondition { printed(app, "hello-terminal") }
+            // Checked right away: ConPTY repaints the screen and may push earlier lines out of it. Joined without
+            // spaces because after a long prompt (cmd.exe shows the whole path) the command wraps.
+            val screen = screenLines(app)
+            assertTrue(
+                "echohello-terminal" in screen.joinToString("").filterNot(Char::isWhitespace),
+                screen.joinToString("\n"),
+            )
+            runCommand(if (System.getProperty("os.name").startsWith("Windows")) "dir /b" else "ls")
             awaitCondition { screenLines(app).any { "README.md" in it } }
-            assertTrue(screenLines(app).any { "echo hello-terminal" in it })
         }
 
     @Test
@@ -83,7 +94,7 @@ class TerminalE2eTest {
                     Key.Enter,
                 ),
             )
-            awaitCondition { screenLines(app).any { it == "key-path" } }
+            awaitCondition { printed(app, "key-path") }
         }
 
     @Test
@@ -93,13 +104,13 @@ class TerminalE2eTest {
             onNodeWithTag(Tags.TOOL_TERMINAL).performClick()
             awaitTag(Tags.TERMINAL_INPUT)
             runCommand("echo first-tab")
-            awaitCondition { screenLines(app).any { it == "first-tab" } }
+            awaitCondition { printed(app, "first-tab") }
             onNodeWithTag(Tags.TERMINAL_NEW).performClick()
             awaitCondition { app.project.terminal.tabs.size == 2 }
             runCommand("echo second-tab")
-            awaitCondition { screenLines(app).any { it == "second-tab" } }
+            awaitCondition { printed(app, "second-tab") }
             onNodeWithTag(Tags.terminalTab(1)).performClick()
-            awaitCondition { screenLines(app).any { it == "first-tab" } }
+            awaitCondition { printed(app, "first-tab") }
             onNodeWithTag(Tags.TERMINAL_CLOSE).performClick()
             awaitCondition { app.project.terminal.tabs.size == 1 }
         }
@@ -134,7 +145,7 @@ class TerminalE2eTest {
             onNodeWithTag(Tags.TOOL_TERMINAL).performClick()
             awaitTag(Tags.TERMINAL_INPUT)
             runCommand("echo marker-x")
-            awaitCondition { screenLines(app).any { it == "marker-x" } }
+            awaitCondition { printed(app, "marker-x") }
             onNodeWithTag(Tags.TERMINAL_CLEAR).performClick()
             awaitCondition { screenLines(app).none { "marker-x" in it } }
             onNodeWithTag(Tags.TERMINAL_HIDE).performClick()

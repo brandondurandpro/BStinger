@@ -23,6 +23,8 @@ import org.example.kotlineditor.model.TerminalAttributes
 import org.example.kotlineditor.model.TerminalCell
 import org.example.kotlineditor.model.TerminalKeyEvent
 import org.example.kotlineditor.model.TerminalSnapshot
+import org.example.kotlineditor.server.TerminalEngine
+import org.example.kotlineditor.server.TerminalEngineFactory
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 import java.lang.foreign.ValueLayout.ADDRESS
@@ -38,6 +40,17 @@ private const val KEY_OUTPUT_BUFFER = 256
 
 // The bytes an encoder returns when a key produces nothing.
 private val NO_BYTES = ByteArray(0)
+
+/** Entry point of this package, created by name by `TerminalEngines`, possibly in a class loader of its own. */
+internal class GhosttyEngineFactory : TerminalEngineFactory {
+    override fun create(
+        columns: Int,
+        rows: Int,
+        cellWidthPx: Int,
+        cellHeightPx: Int,
+        writePty: (ByteArray) -> Unit,
+    ): TerminalEngine = GhosttyEngine(columns, rows, cellWidthPx, cellHeightPx, writePty = writePty)
+}
 
 /**
  * Terminal emulator of the server: libghostty-vt parses what the PTY prints and the client draws the grid.
@@ -58,7 +71,7 @@ internal class GhosttyEngine(
     cellHeightPx: Int,
     scrollbackLines: Int = DEFAULT_SCROLLBACK_LINES,
     private val writePty: (ByteArray) -> Unit,
-) : AutoCloseable {
+) : TerminalEngine {
     private val arena = Arena.ofShared()
     private val lock = Any()
 
@@ -128,21 +141,41 @@ internal class GhosttyEngine(
     }
 
     /** Feeds what the PTY printed to the emulator, then flushes the responses it produced. */
-    fun feed(bytes: ByteArray) {
+    override fun feed(bytes: ByteArray) {
         if (bytes.isEmpty()) return
         val replies =
             synchronized(lock) {
                 checkOpen()
-                if (input.byteSize() < bytes.size) input = arena.allocate(bytes.size.toLong())
-                MemorySegment.copy(MemorySegment.ofArray(bytes), 0, input, 0, bytes.size.toLong())
-                ghostty_vt_h.ghostty_terminal_vt_write(terminal, input, bytes.size.toLong())
+                writeVt(bytes)
                 drainResponses()
             }
         replies.forEach(writePty)
     }
 
+    /**
+     * Clears the scrollback and the lines above the cursor, keeping the line being typed at the top, the way Ctrl+L
+     * does in bash. Done by the emulator itself, so it works whatever the shell (`sh` and `cmd.exe` ignore Ctrl+L).
+     * Returns `false` without clearing when a full-screen program owns the alternate screen: only it can redraw.
+     */
+    override fun clear(): Boolean =
+        synchronized(lock) {
+            checkOpen()
+            if (readTerminalNumber(ghostty_vt_h.GHOSTTY_TERMINAL_DATA_ACTIVE_SCREEN()) ==
+                ghostty_vt_h.GHOSTTY_TERMINAL_SCREEN_ALTERNATE().toLong()
+            ) {
+                return false
+            }
+            val row = readTerminalNumber(ghostty_vt_h.GHOSTTY_TERMINAL_DATA_CURSOR_Y())
+            // Scroll the lines above the cursor out of the screen, follow them with the cursor, drop the scrollback.
+            val scrollUp = if (row > 0) "\u001b[${row}S\u001b[${row}A" else ""
+            writeVt("$scrollUp\u001b[3J".toByteArray(StandardCharsets.US_ASCII))
+            GhosttyTerminalScrollViewport.tag(scrollBehavior, ghostty_vt_h.GHOSTTY_SCROLL_VIEWPORT_BOTTOM())
+            ghostty_vt_h.ghostty_terminal_scroll_viewport(terminal, scrollBehavior)
+            true
+        }
+
     /** Encodes [event] the way the running program expects it (legacy, `modifyOtherKeys` or Kitty keyboard). */
-    fun encodeKey(event: TerminalKeyEvent) {
+    override fun encodeKey(event: TerminalKeyEvent) {
         val (bytes, replies) =
             synchronized(lock) {
                 checkOpen()
@@ -153,7 +186,7 @@ internal class GhosttyEngine(
     }
 
     /** Pastes [text], letting the terminal add bracketed-paste markers or turn newlines into carriage returns. */
-    fun paste(text: String) {
+    override fun paste(text: String) {
         if (text.isEmpty()) return
         val replies =
             synchronized(lock) {
@@ -180,7 +213,7 @@ internal class GhosttyEngine(
     }
 
     /** Resizes the grid and the pixel size of a cell, reflowing the scrollback like a real terminal. */
-    fun resize(columns: Int, rows: Int, cellWidthPx: Int, cellHeightPx: Int) {
+    override fun resize(columns: Int, rows: Int, cellWidthPx: Int, cellHeightPx: Int) {
         val replies =
             synchronized(lock) {
                 checkOpen()
@@ -204,7 +237,7 @@ internal class GhosttyEngine(
     }
 
     /** Scrolls the viewport: positive goes up into the scrollback, as the model says. */
-    fun scroll(delta: Int) {
+    override fun scroll(delta: Int) {
         synchronized(lock) {
             checkOpen()
             GhosttyTerminalScrollViewport.tag(scrollBehavior, ghostty_vt_h.GHOSTTY_SCROLL_VIEWPORT_DELTA())
@@ -217,7 +250,7 @@ internal class GhosttyEngine(
     }
 
     /** Reads the whole visible screen. Complete state, so a client that missed one just takes the next. */
-    fun snapshot(running: Boolean = true, exitCode: Int? = null): TerminalSnapshot =
+    override fun snapshot(running: Boolean, exitCode: Int?): TerminalSnapshot =
         synchronized(lock) {
             checkOpen()
             check(ghostty_vt_h.ghostty_render_state_update(renderState, terminal), "render state update")
@@ -400,6 +433,20 @@ internal class GhosttyEngine(
     private fun readRenderShort(tag: Int): Int {
         check(ghostty_vt_h.ghostty_render_state_get(renderState, tag, resultSlot), "render state $tag")
         return resultSlot.get(JAVA_SHORT, 0).toInt()
+    }
+
+    // Must hold the lock.
+    private fun writeVt(bytes: ByteArray) {
+        if (input.byteSize() < bytes.size) input = arena.allocate(bytes.size.toLong())
+        MemorySegment.copy(MemorySegment.ofArray(bytes), 0, input, 0, bytes.size.toLong())
+        ghostty_vt_h.ghostty_terminal_vt_write(terminal, input, bytes.size.toLong())
+    }
+
+    // Small unsigned values (cursor row, active screen): the slot is zeroed so a narrower C type reads the same.
+    private fun readTerminalNumber(tag: Int): Long {
+        numberSlot.set(JAVA_LONG, 0, 0)
+        check(ghostty_vt_h.ghostty_terminal_get(terminal, tag, numberSlot), "terminal data $tag")
+        return numberSlot.get(JAVA_LONG, 0)
     }
 
     private fun readTotalRows(): Long {
