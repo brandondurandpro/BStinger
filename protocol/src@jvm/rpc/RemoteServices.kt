@@ -171,6 +171,10 @@ class RemoteTerminalLauncher(private val client: RpcClient) : TerminalLauncher {
                 commands.trySend { client.call(Method.TerminalScroll) { long(id).int(delta) } }
             }
 
+            override fun clear() {
+                commands.trySend { client.call(Method.TerminalClear) { long(id) } }
+            }
+
             override fun destroy() {
                 commands.close()
                 client.scope.launch { runCatching { client.call(Method.TerminalDestroy) { long(id) } } }

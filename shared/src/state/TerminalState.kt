@@ -88,6 +88,9 @@ class TerminalTab(
         if (delta != 0) process.scroll(delta)
     }
 
+    /** Clears the screen and the scrollback, keeping the line being typed. */
+    fun clear() = process.clear()
+
     /** Stops the shell and the collector. */
     fun dispose() {
         job.cancel()
@@ -168,8 +171,8 @@ class TerminalState(
             }
     }
 
-    /** Asks the running programs to clear their screen (Ctrl+L for a shell). */
-    fun clear() = active?.write(CLEAR_SEQUENCE)
+    /** Clears the screen and the scrollback of the active tab. */
+    fun clear() = active?.clear()
 
     /** Stops every shell; called when the project closes. */
     fun stop() {
@@ -177,10 +180,5 @@ class TerminalState(
         tabs.clear()
         activeIndex = 0
         focused = false
-    }
-
-    private companion object {
-        /** Ctrl+L, which shells and most full-screen programs treat as "clear". */
-        const val CLEAR_SEQUENCE = "\u000c"
     }
 }

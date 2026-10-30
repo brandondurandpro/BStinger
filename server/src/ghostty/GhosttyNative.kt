@@ -1,5 +1,6 @@
 package org.example.kotlineditor.server.ghostty
 
+import org.example.kotlineditor.server.ghosttyPlatform
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicBoolean
@@ -11,6 +12,9 @@ import java.util.zip.ZipInputStream
  * The bindings and the native library are published per platform: the artifact on the classpath carries a
  * `native/<platform>.zip` resource whose single entry is the shared library. libghostty-vt exposes no stable C
  * ABI yet, so the artifact version and this loader are pinned together in `libs.versions.toml`.
+ *
+ * The resource comes with the bindings in use: the Linux dependency, or another platform's artifact that
+ * `TerminalEngines` loaded in its own class loader.
  */
 internal object GhosttyNative {
     private val loaded = AtomicBoolean()
@@ -26,14 +30,14 @@ internal object GhosttyNative {
     }
 
     private fun load() {
-        val platform = platformId()
+        val platform = ghosttyPlatform()
         val resource = "/native/$platform.zip"
         val archive =
             ZipInputStream(
                 GhosttyNative::class.java.getResourceAsStream(resource)
                     ?: error(
-                        "No libghostty-vt for $platform: add io.github.vlaaad:ghosttyfx-$platform " +
-                            "to the server module (see docs/TERMINAL.md)",
+                        "No libghostty-vt for $platform: add ghosttyfx-$platform.jar " +
+                            "to server/resources/ghostty (see TerminalEngines)",
                     ),
             )
         val directory = Files.createTempDirectory("ghostty-vt")
@@ -53,24 +57,5 @@ internal object GhosttyNative {
                 return target
             }
         }
-    }
-
-    private fun platformId(): String {
-        val os = System.getProperty("os.name").lowercase()
-        val arch = System.getProperty("os.arch").lowercase()
-        val name =
-            when {
-                os.startsWith("linux") -> "linux"
-                os.startsWith("mac") || os.startsWith("darwin") -> "macos"
-                os.startsWith("windows") -> "windows"
-                else -> error("Unsupported operating system for libghostty-vt: $os")
-            }
-        val cpu =
-            when (arch) {
-                "x86_64", "amd64" -> "x86_64"
-                "aarch64", "arm64" -> "aarch64"
-                else -> error("Unsupported architecture for libghostty-vt: $arch")
-            }
-        return "$name-$cpu"
     }
 }
