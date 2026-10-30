@@ -18,6 +18,13 @@ object Tags {
     const val GIT_NOT_A_REPOSITORY = "git.notRepository"
     const val GIT_REFRESH = "git.refresh"
     const val GIT_HIDE = "git.hide"
+    const val GIT_BLAME = "git.blame"
+    const val GIT_COMMIT_MESSAGE = "git.commitMessage"
+    const val GIT_COMMIT = "git.commit"
+    const val GIT_BRANCH_BUTTON = "git.branchButton"
+    const val GIT_PULL = "git.pull"
+    const val GIT_PUSH = "git.push"
+    const val GIT_MESSAGE = "git.message"
     const val TOOL_PROJECT = "tool.project"
     const val TOOL_GIT = "tool.git"
     const val TOOL_TERMINAL = "tool.terminal"
@@ -102,6 +109,10 @@ object Tags {
 
     fun diffSplitCell(index: Int, side: Int) = "diff.split.cell:$index:$side"
 
+    fun changeMarker(line: Int, kind: String) = "editor.change:$line:$kind"
+
+    fun blame(line: Int) = "editor.blame:$line"
+
     fun toolHeader(window: String) = "tool.header:$window"
 
     fun terminalTab(number: Int) = "terminal.tab:$number"
@@ -122,6 +133,8 @@ object ItemTags {
     fun terminalLine(index: Int) = "terminal.line:$index"
 
     fun gitChange(relativePath: String) = "git.change:$relativePath"
+
+    fun gitBranch(name: String) = "git.branchItem:$name"
 
     fun gotoFileItem(relativePath: String) = "gotoFile.item:$relativePath"
 

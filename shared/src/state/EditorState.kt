@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CoroutineScope
+import org.example.kotlineditor.model.BlameLine
 import org.example.kotlineditor.model.DiffLine
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.ProjectFileSystem
@@ -24,8 +25,9 @@ class EditorState(
     private val relativePath: (FileEntry) -> String = { it.name },
     onSaved: () -> Unit = {},
     diffs: suspend (FileEntry) -> List<DiffLine> = { emptyList() },
+    blames: suspend (FileEntry) -> List<BlameLine> = { emptyList() },
 ) {
-    private val files = TabFiles(fileSystem, scope, onSaved, diffs)
+    private val files = TabFiles(fileSystem, scope, onSaved, diffs, blames)
 
     val panes = mutableStateListOf(EditorPane())
 
@@ -54,6 +56,19 @@ class EditorState(
     /** Recomputes every open diff tab (the Git status changed). */
     fun reloadDiffs() = allTabs.filter { it.isDiff }.forEach(files::loadDiff)
 
+    /** Recomputes the gutter change marks of the open text files (after a save, a commit, a branch switch). */
+    fun reloadChanges() = allTabs.filterNot { it.isDiff }.distinctBy { it.entry.path }.forEach(files::loadChanges)
+
+    /** Recomputes the blame annotations of the tabs where they are shown. */
+    fun reloadBlames() = allTabs.filter { it.blameVisible }.distinctBy { it.entry.path }.forEach(files::loadBlame)
+
+    /** Shows or hides the blame annotations of [tab] (Annotate in the Git panel). */
+    fun toggleBlame(tab: EditorTab?) {
+        if (tab == null || tab.document == null) return
+        tab.blameVisible = !tab.blameVisible
+        if (tab.blameVisible) files.loadBlame(tab)
+    }
+
     internal fun openIn(pane: EditorPane, entry: FileEntry, diff: Boolean = false): EditorTab {
         val key = if (diff) "diff:${entry.path}" else entry.path
         val tab =
@@ -67,7 +82,15 @@ class EditorState(
                             it.entry.path == entry.path &&
                             it.status is TabStatus.Ready
                     }
-                if (twin != null) tab.status = twin.status else files.load(tab)
+                if (twin != null) {
+                    tab.status = twin.status
+                    tab.lineChanges = twin.lineChanges
+                    tab.blame = twin.blame
+                    tab.blameVisible = twin.blameVisible
+                    if (tab.lineChanges.isEmpty()) files.loadChanges(tab)
+                } else {
+                    files.load(tab)
+                }
             }
         activate(tab)
         return tab
@@ -140,6 +163,8 @@ internal fun EditorState.paneOf(tab: EditorTab): EditorPane? = panes.firstOrNull
 
 // Stops a closed tab's background work, unless the other pane still shows the same document.
 internal fun EditorState.release(tab: EditorTab) {
+    tab.changesJob?.cancel()
+    tab.blameJob?.cancel()
     val twin = allTabs.firstOrNull { it !== tab && it.key == tab.key }
     if (twin != null && twin.job == null) twin.job = tab.job else tab.job?.cancel()
 }

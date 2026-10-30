@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import org.example.kotlineditor.model.AppServices
+import org.example.kotlineditor.model.BlameLine
 import org.example.kotlineditor.model.DiffLine
 import org.example.kotlineditor.model.DirectoryPicker
 import org.example.kotlineditor.model.FileContent
@@ -88,6 +89,24 @@ class RemoteGit(private val client: RpcClient) : GitClient {
 
     override suspend fun diff(root: String, path: String): List<DiffLine> =
         client.call(Method.GitDiff) { string(root).string(path) }.diffLines()
+
+    override suspend fun branches(root: String): List<String> =
+        client.call(Method.GitBranches) { string(root) }.strings()
+
+    override suspend fun checkout(root: String, branch: String) {
+        client.call(Method.GitCheckout) { string(root).string(branch) }
+    }
+
+    override suspend fun commit(root: String, message: String) {
+        client.call(Method.GitCommit) { string(root).string(message) }
+    }
+
+    override suspend fun pull(root: String): String = client.call(Method.GitPull) { string(root) }.string()
+
+    override suspend fun push(root: String): String = client.call(Method.GitPush) { string(root) }.string()
+
+    override suspend fun blame(root: String, path: String): List<BlameLine> =
+        client.call(Method.GitBlame) { string(root).string(path) }.blameLines()
 }
 
 /** [RecentProjectsStore] of the server. */

@@ -7,6 +7,7 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.example.kotlineditor.model.BlameLine
 import org.example.kotlineditor.model.DiffLine
 import org.example.kotlineditor.model.FileContent
 import org.example.kotlineditor.model.FileEntry
@@ -24,6 +25,7 @@ internal class TabFiles(
     private val scope: CoroutineScope,
     private val onSaved: () -> Unit,
     private val diffs: suspend (FileEntry) -> List<DiffLine>,
+    private val blames: suspend (FileEntry) -> List<BlameLine>,
 ) {
     fun load(tab: EditorTab) {
         if (tab.isDiff) loadDiff(tab) else loadText(tab)
@@ -39,6 +41,36 @@ internal class TabFiles(
                         TabStatus.Diff(diffs(tab.entry))
                     } catch (e: IOException) {
                         TabStatus.Unsupported("Cannot compute the differences: ${e.message}")
+                    }
+            }
+    }
+
+    /** Recomputes the gutter marks of a text tab (after its content changed or HEAD moved). */
+    fun loadChanges(tab: EditorTab) {
+        if (tab.isDiff) return
+        tab.changesJob?.cancel()
+        tab.changesJob =
+            scope.launch {
+                tab.lineChanges =
+                    try {
+                        lineChangesOf(diffs(tab.entry))
+                    } catch (_: IOException) {
+                        emptyList()
+                    }
+            }
+    }
+
+    /** Loads the blame annotations of a text tab; they are shown when the tab's gutter is annotated. */
+    fun loadBlame(tab: EditorTab) {
+        if (tab.isDiff) return
+        tab.blameJob?.cancel()
+        tab.blameJob =
+            scope.launch {
+                tab.blame =
+                    try {
+                        blames(tab.entry)
+                    } catch (_: IOException) {
+                        emptyList()
                     }
             }
     }
@@ -70,6 +102,7 @@ internal class TabFiles(
                             TabStatus.Unsupported("Cannot read file: ${content.message}")
                         }
                     }
+                if (tab.status is TabStatus.Ready) loadChanges(tab)
             }
     }
 

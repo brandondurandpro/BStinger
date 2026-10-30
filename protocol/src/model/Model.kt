@@ -224,6 +224,38 @@ data class DiffLine(
     val text: String,
 )
 
+/** Kind of change of a line compared to HEAD, for the gutter marks of the editor. */
+enum class GitChangeKind {
+    /** A line that does not exist in HEAD. */
+    Added,
+
+    /** A line changed since HEAD. */
+    Modified,
+
+    /** Lines removed since HEAD, anchored before the given line. */
+    Deleted,
+}
+
+/** One gutter change mark of an open file. */
+data class GitLineChange(
+    /** Zero-based line number; for [GitChangeKind.Deleted], the removal happened before it. */
+    val line: Int,
+    /** What changed on that line. */
+    val kind: GitChangeKind,
+)
+
+/** One line annotated by `git blame`. */
+data class BlameLine(
+    /** Zero-based line number. */
+    val line: Int,
+    /** Short commit hash. */
+    val commit: String,
+    /** Author name. */
+    val author: String,
+    /** Author date, `yyyy-MM-dd`. */
+    val date: String,
+)
+
 /** Git information about a project. */
 interface GitClient {
     /** Status of changed files, keyed by path relative to [root] with `/` separators; empty when not a repository. */
@@ -235,6 +267,24 @@ interface GitClient {
     /** Differences of [path] (relative to [root]) between HEAD and the working tree; empty when unchanged. */
     suspend fun diff(root: String, path: String): List<DiffLine>
 
+    /** Local branches of the repository. */
+    suspend fun branches(root: String): List<String>
+
+    /** Checks out the local branch [branch]. */
+    suspend fun checkout(root: String, branch: String)
+
+    /** Stages every change and commits it with [message]. */
+    suspend fun commit(root: String, message: String)
+
+    /** Pulls the current branch; returns what Git printed. */
+    suspend fun pull(root: String): String
+
+    /** Pushes the current branch; returns what Git printed. */
+    suspend fun push(root: String): String
+
+    /** Annotations (author and date) of each line of [path], empty when the file has no history. */
+    suspend fun blame(root: String, path: String): List<BlameLine>
+
     /** No Git support: no status, no branch, no differences. */
     object None : GitClient {
         override suspend fun status(root: String) = emptyMap<String, GitFileStatus>()
@@ -242,6 +292,18 @@ interface GitClient {
         override suspend fun branch(root: String): String? = null
 
         override suspend fun diff(root: String, path: String): List<DiffLine> = emptyList()
+
+        override suspend fun branches(root: String): List<String> = emptyList()
+
+        override suspend fun checkout(root: String, branch: String) = Unit
+
+        override suspend fun commit(root: String, message: String) = Unit
+
+        override suspend fun pull(root: String): String = ""
+
+        override suspend fun push(root: String): String = ""
+
+        override suspend fun blame(root: String, path: String): List<BlameLine> = emptyList()
     }
 }
 

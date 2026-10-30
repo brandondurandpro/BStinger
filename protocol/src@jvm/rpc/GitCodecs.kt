@@ -1,5 +1,6 @@
 package org.example.kotlineditor.rpc
 
+import org.example.kotlineditor.model.BlameLine
 import org.example.kotlineditor.model.DiffKind
 import org.example.kotlineditor.model.DiffLine
 import org.example.kotlineditor.model.GitFileStatus
@@ -28,3 +29,12 @@ fun WireWriter.diffLines(lines: List<DiffLine>): WireWriter =
 
 /** Reads the lines of a diff. */
 fun WireReader.diffLines(): List<DiffLine> = List(int()) { DiffLine(DiffKind.entries[byte()], int(), int(), string()) }
+
+/** Writes blame annotations. */
+fun WireWriter.blameLines(lines: List<BlameLine>): WireWriter =
+    int(lines.size).also {
+        lines.forEach { int(it.line).string(it.commit).string(it.author).string(it.date) }
+    }
+
+/** Reads blame annotations. */
+fun WireReader.blameLines(): List<BlameLine> = List(int()) { BlameLine(int(), string(), string(), string()) }

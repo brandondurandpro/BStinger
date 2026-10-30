@@ -134,9 +134,11 @@ Légende de l'effort : ● petit · ●● moyen · ●●● gros.
   en rouge ; les fichiers non suivis s'affichent en ajouts.
 - ✅ **Visionneuse de différences côte à côte** : bascule depuis la barre de la visionneuse, ancien et nouveau fichier
   alignés ligne à ligne.
-- **Marques de modification dans la gouttière** (lignes ajoutées, modifiées, supprimées par rapport à HEAD). ●●
-- Commit, changement de branche, pull/push depuis l'IDE. ●●●
-- **Blame** (annotations auteur et date dans la gouttière). ●●
+- ✅ **Marques de modification dans la gouttière** : lignes ajoutées (vert), modifiées (bleu) et supprimées (triangle)
+  par rapport à HEAD, à côté des numéros de ligne. ●●
+- ✅ **Commit, changement de branche, pull/push depuis l'IDE** : champ de message et bouton Commit (indexe tout),
+  menu des branches locales, boutons Pull et Push dans le panneau Git, avec le résultat ou l'erreur affiché. ●●●
+- ✅ **Blame** : bouton *Annotate* dans le panneau Git, auteur et date de chaque ligne affichés dans la gouttière. ●●
 - **Historique local** (à la IntelliJ) : instantanés automatiques des fichiers, filet de sécurité indépendant de
   Git. ●●
 

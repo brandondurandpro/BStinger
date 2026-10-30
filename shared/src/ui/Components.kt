@@ -81,11 +81,18 @@ fun IdeTextField(
 }
 
 @Composable
-fun IdeButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, primary: Boolean = false) {
+fun IdeButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    primary: Boolean = false,
+    enabled: Boolean = true,
+) {
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
     val background =
         when {
+            !enabled -> Color.Transparent
             primary && hovered -> IdeColors.AccentHover
             primary -> IdeColors.Accent
             hovered -> IdeColors.Hover
@@ -96,13 +103,21 @@ fun IdeButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, 
             .background(background, RoundedCornerShape(4.dp))
             .then(if (primary) Modifier else Modifier.border(1.dp, IdeColors.InputBorder, RoundedCornerShape(4.dp)))
             .hoverable(interaction)
-            .clickable(interaction, indication = null, onClick = onClick)
+            .clickable(interaction, indication = null, enabled = enabled, onClick = onClick)
             .pointerHoverIcon(PointerIcon.Hand)
             .heightIn(min = 28.dp)
             .padding(PaddingValues(horizontal = 14.dp, vertical = 5.dp)),
         contentAlignment = Alignment.Center,
     ) {
-        Label(text, color = if (primary) Color.White else IdeColors.Text)
+        Label(
+            text,
+            color =
+            when {
+                !enabled -> IdeColors.LineNumber
+                primary -> Color.White
+                else -> IdeColors.Text
+            },
+        )
     }
 }
 
