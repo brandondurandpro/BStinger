@@ -1,7 +1,11 @@
 package org.example.kotlineditor.e2e
 
+import androidx.compose.ui.InternalComposeUiApi
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SkikoComposeUiTest
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertTextContains
@@ -23,7 +27,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
-@OptIn(ExperimentalTestApi::class)
+@OptIn(ExperimentalTestApi::class, InternalComposeUiApi::class)
 class SearchE2eTest {
     private val project = SampleProject.standard()
 
@@ -148,6 +152,28 @@ class SearchE2eTest {
                 pressKey(Key.ShiftLeft)
             }
             awaitTag(Tags.GOTO_FILE_INPUT).assertIsFocused()
+            assertEquals(text, document.text())
+        }
+
+    @Test
+    fun `double Shift with a real key event does not type into the editor`() =
+        runComposeUiTest {
+            val app = launchWithProject(project)
+            openFromTree("src/main/kotlin/App.kt")
+            val document =
+                app.project.editor.activeTab!!
+                    .document!!
+            val text = document.text()
+            onNodeWithTag(Tags.EDITOR).performClick()
+            // Compose reports a key without a character (here Shift) with CHAR_UNDEFINED.
+            val scene = (this as SkikoComposeUiTest).scene
+            runOnUiThread {
+                repeat(2) {
+                    scene.sendKeyEvent(KeyEvent(Key.ShiftLeft, KeyEventType.KeyDown, codePoint = 0xFFFF))
+                    scene.sendKeyEvent(KeyEvent(Key.ShiftLeft, KeyEventType.KeyUp, codePoint = 0xFFFF))
+                }
+            }
+            awaitTag(Tags.GOTO_FILE_INPUT)
             assertEquals(text, document.text())
         }
 
