@@ -25,12 +25,15 @@ internal class Link(private val socket: Socket, private val tap: NetworkTap? = n
     private val codec = Protocol.newCodec()
 
     @Volatile
+    private var closed = false
+
+    @Volatile
     var lastSent = System.currentTimeMillis()
         private set
 
     fun read(): Frame {
         val before = counted.count
-        val frame = Protocol.read(input, codec)
+        val frame = closedAsIOException { Protocol.read(input, codec) }
         if (tap?.active == true) tap.received(frame, (counted.count - before).toInt())
         return frame
     }
@@ -42,7 +45,7 @@ internal class Link(private val socket: Socket, private val tap: NetworkTap? = n
                 val before = written.count
                 val tapped = tap?.takeIf { it.active }
                 tapped?.sending(frame)
-                Protocol.write(output, frame, codec)
+                closedAsIOException { Protocol.write(output, frame, codec) }
                 tapped?.sent(frame, (written.count - before).toInt())
             }
             lastSent = System.currentTimeMillis()
@@ -52,7 +55,17 @@ internal class Link(private val socket: Socket, private val tap: NetworkTap? = n
     }
 
     override fun close() {
-        runCatching { codec.close() }
+        closed = true
         runCatching { socket.close() }
+        runCatching { codec.close() }
     }
+
+    // A frame already buffered can still be decoded after close(): the closed codec then throws an
+    // IllegalStateException, which must look like the closed socket it stands for.
+    private inline fun <T> closedAsIOException(block: () -> T): T =
+        try {
+            block()
+        } catch (e: IllegalStateException) {
+            if (closed) throw IOException("Link closed", e) else throw e
+        }
 }
