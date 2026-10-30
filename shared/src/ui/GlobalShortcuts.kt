@@ -82,6 +82,10 @@ private val IDE_SHORTCUTS =
         bind(setOf(Key.One), alt = true) { project.toggleToolWindow(ToolWindow.Project) },
         bind(setOf(Key.Nine), alt = true) { project.toggleToolWindow(ToolWindow.Git) },
         bind(setOf(Key.F12), alt = true) { project.toggleToolWindow(ToolWindow.Terminal) },
+        bind(setOf(Key.D), ctrl = true, shift = true, alt = true) {
+            app.devtools = true
+            project.toggleToolWindow(ToolWindow.Network)
+        },
         bind(setOf(Key.F3)) {
             editor.activeTab?.document?.let { document ->
                 if (it.shift) {
@@ -100,7 +104,7 @@ internal class GlobalShortcuts(private val context: IdeContext) {
     fun handle(event: KeyEvent): Boolean {
         val project = context.project
         // The terminal owns the keyboard: every key is input for the shell, except the one that hides it.
-        if (project.terminal.focused && event.key != Key.F12) return false
+        if (project.terminal.focused && !escapesTerminal(event)) return false
         val closesFindBar = event.key == Key.Escape && project.find.visible && project.popup == null
         return when {
             doubleShift.isDoubleShift(event) -> {
@@ -123,6 +127,23 @@ internal class GlobalShortcuts(private val context: IdeContext) {
         }
     }
 }
+
+// Keys the terminal does not get: hiding it, and the devtools.
+private fun escapesTerminal(event: KeyEvent): Boolean =
+    when (event.key) {
+        Key.F12 -> {
+            true
+        }
+
+        Key.D -> {
+            val held = Modifiers(event)
+            held.ctrl && held.shift && held.alt
+        }
+
+        else -> {
+            false
+        }
+    }
 
 /** Detects Shift pressed twice in a row (Search Everywhere / Go to File in IntelliJ). */
 private class DoubleShift {
