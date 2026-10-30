@@ -41,6 +41,9 @@ A lightweight IDE in the style of IntelliJ IDEA (New UI, dark theme), written wi
 - **Tool windows**: *Project*, *Git* and *Terminal* can be shown/hidden (`Alt+1`, `Alt+9`, `Alt+F12`), resized with
   their splitters, and dragged by their header to the left, right or bottom dock. Their buttons stay fixed in the left
   strip, so a panel never moves its button.
+- **Network devtools** (`Ctrl+Alt+Shift+D`, hidden otherwise): every frame exchanged with the server, with its kind,
+  method, payload and wire sizes, latency, hex dump and the strings it carries. The capture only runs while the panel
+  is shown, keeps the last 2,000 frames (32 MB at most) and never keeps the token of the handshake.
 - **Editor tabs**: open next to the active tab, most-recently-used activation on close, middle click to close,
   right click for *Close / Close Others / Close All to the Left or Right / Close All / Copy Path*, `Ctrl+F4`,
   `Alt+←/→`, `Ctrl+Tab`, per-tab scroll position, modified indicator.

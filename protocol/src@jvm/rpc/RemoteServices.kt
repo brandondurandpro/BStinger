@@ -36,6 +36,7 @@ fun RpcClient.appServices(directoryPicker: DirectoryPicker): AppServices =
         sessions = RemoteSessions(this),
         git = RemoteGit(this),
         connection = status,
+        network = network,
     )
 
 /** [ProjectFileSystem] of the server. */

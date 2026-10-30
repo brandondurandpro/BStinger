@@ -83,7 +83,7 @@ class ToolWindowLayoutPreferencesTest {
             ),
         )
         // Only the order changed: Terminal first, the windows it did not name follow.
-        assertEquals(defaults + ("layout.order" to "Terminal,Project,Git"), layout.toPreferences())
+        assertEquals(defaults + ("layout.order" to "Terminal,Project,Git,Network"), layout.toPreferences())
     }
 
     @Test

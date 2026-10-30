@@ -4,8 +4,11 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 
-/** Panels around the editors; their buttons stay in the left strip wherever the panels are docked. */
-enum class ToolWindow { Project, Git, Terminal }
+/**
+ * Panels around the editors; their buttons stay in the left strip wherever the panels are docked. Network is a
+ * devtools panel: its button only appears once Ctrl+Alt+Shift+D has shown it.
+ */
+enum class ToolWindow { Project, Git, Terminal, Network }
 
 /** Where tool windows can be docked. */
 enum class Dock { Left, Right, Bottom }
@@ -26,13 +29,16 @@ class ToolWindowLayout {
             ToolWindow.Project to Dock.Left,
             ToolWindow.Git to Dock.Left,
             ToolWindow.Terminal to Dock.Bottom,
+            ToolWindow.Network to Dock.Bottom,
         )
-    private val order = mutableStateListOf(ToolWindow.Project, ToolWindow.Git, ToolWindow.Terminal)
+    private val order =
+        mutableStateListOf(ToolWindow.Project, ToolWindow.Git, ToolWindow.Terminal, ToolWindow.Network)
     private val shown =
         mutableStateMapOf(
             ToolWindow.Project to true,
             ToolWindow.Git to false,
             ToolWindow.Terminal to false,
+            ToolWindow.Network to false,
         )
     private val sizes = mutableStateMapOf(Dock.Left to 280f, Dock.Right to 280f, Dock.Bottom to 240f)
     private val weights = mutableStateMapOf<ToolWindow, Float>()

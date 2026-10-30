@@ -112,7 +112,7 @@ internal class ToolWindowDrag {
 
 /** Fixed left strip: one button per tool window, wherever the panel itself is docked. */
 @Composable
-internal fun ToolStrip(project: ProjectState) {
+internal fun ToolStrip(project: ProjectState, devtools: Boolean) {
     Column(
         Modifier.width(STRIP_WIDTH).fillMaxHeight().padding(vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -121,6 +121,11 @@ internal fun ToolStrip(project: ProjectState) {
         ToolButton(project, ToolWindow.Git, Tags.TOOL_GIT) { BranchIcon(color = IdeColors.Text) }
         Spacer(Modifier.weight(1f))
         // Bottom tool windows sit at the bottom of the strip, like in IntelliJ's New UI.
+        if (devtools) {
+            ToolButton(project, ToolWindow.Network, Tags.TOOL_NETWORK) {
+                Label("⇅", color = IdeColors.Text, fontWeight = FontWeight.Bold)
+            }
+        }
         ToolButton(project, ToolWindow.Terminal, Tags.TOOL_TERMINAL) {
             Label(">_", color = IdeColors.Text, fontWeight = FontWeight.Bold)
         }
@@ -209,6 +214,7 @@ private fun ToolWindowContent(project: ProjectState, window: ToolWindow, drag: T
         ToolWindow.Project -> ProjectPanel(project, drag, modifier)
         ToolWindow.Git -> GitPanel(project, drag, modifier)
         ToolWindow.Terminal -> TerminalPanel(project, drag, modifier)
+        ToolWindow.Network -> NetworkPanel(project, drag, modifier)
     }
 }
 

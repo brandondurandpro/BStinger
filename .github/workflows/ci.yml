@@ -74,7 +74,13 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
-    container: ubuntu:${{ matrix.ubuntu }}
+    container:
+      image: ubuntu:${{ matrix.ubuntu }}
+      # An init as PID 1 reaps orphaned processes, as on a real system: tests check that killed processes are gone.
+      options: --init
+      # The image's default POSIX locale makes the JVM reject non-ASCII file names.
+      env:
+        LANG: C.UTF-8
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -107,6 +113,11 @@ jobs:
             ~/.cache/JetBrains/Kotlin
             ~/.m2/repository
           key: linux-${{ matrix.ubuntu }}-${{ hashFiles('kotlin', 'libs.versions.toml', 'project.yaml', '**/module.yaml') }}
+      # ripgrep, downloaded and verified on first use by the server (and its tests).
+      - uses: actions/cache@v4
+        with:
+          path: ~/.kotlin-editor/tools
+          key: ripgrep-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('server/src/ripgrep/RipgrepRelease.kt') }}
       - name: Start X11 (Xvfb)
         if: matrix.session == 'x11'
         run: |
@@ -183,6 +194,11 @@ jobs:
             ~/AppData/Local/JetBrains/Kotlin/cli
             ~/.m2/repository
           key: windows-${{ hashFiles('kotlin.bat', 'libs.versions.toml', 'project.yaml', '**/module.yaml') }}
+      # ripgrep, downloaded and verified on first use by the server (and its tests).
+      - uses: actions/cache@v4
+        with:
+          path: ~/.kotlin-editor/tools
+          key: ripgrep-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('server/src/ripgrep/RipgrepRelease.kt') }}
       - name: Build
         shell: cmd
         run: kotlin.bat build

@@ -337,6 +337,8 @@ class AppServices(
     val git: GitClient = GitClient.None,
     /** State of the link with the server. */
     val connection: StateFlow<ConnectionStatus> = MutableStateFlow(ConnectionStatus.Connected),
+    /** Capture of the frames exchanged with the server (devtools), when there is a server. */
+    val network: NetworkInspector? = null,
 )
 
 /** Last segment of a path, whatever the separator. */

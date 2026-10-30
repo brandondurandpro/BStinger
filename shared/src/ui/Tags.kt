@@ -28,6 +28,17 @@ object Tags {
     const val TOOL_PROJECT = "tool.project"
     const val TOOL_GIT = "tool.git"
     const val TOOL_TERMINAL = "tool.terminal"
+    const val TOOL_NETWORK = "tool.network"
+    const val NETWORK = "network"
+    const val NETWORK_RECORD = "network.record"
+    const val NETWORK_CLEAR = "network.clear"
+    const val NETWORK_PINGS = "network.pings"
+    const val NETWORK_HIDE = "network.hide"
+    const val NETWORK_FILTER = "network.filter"
+    const val NETWORK_TOTALS = "network.totals"
+    const val NETWORK_EMPTY = "network.empty"
+    const val NETWORK_UNAVAILABLE = "network.unavailable"
+    const val NETWORK_DETAIL = "network.detail"
     const val WORKSPACE = "workspace"
     const val DIFF = "diff"
     const val DIFF_TOOLBAR = "diff.toolbar"
@@ -146,6 +157,8 @@ object ItemTags {
     fun gitChange(relativePath: String) = "git.change:$relativePath"
 
     fun gitBranch(name: String) = "git.branchItem:$name"
+
+    fun networkRecord(seq: Long) = "network.record:$seq"
 
     fun gotoFileItem(relativePath: String) = "gotoFile.item:$relativePath"
 

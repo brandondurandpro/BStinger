@@ -24,6 +24,7 @@ internal class Connector(
     private val pending: PendingRequests,
     private val streams: StreamRegistry,
     private val status: MutableStateFlow<ConnectionStatus>,
+    private val tap: NetworkTap,
     private val resume: (streamId: Long, lastSeq: Long) -> Unit,
 ) {
     val connections = AtomicLong(0)
@@ -95,7 +96,7 @@ internal class Connector(
             socket.keepAlive = true
             socket.connect(address, options.connectTimeoutMs)
             socket.soTimeout = options.deadAfterMs
-            val link = Link(socket)
+            val link = Link(socket, tap)
             handshake(link)
             return link
         } catch (failure: IOException) {
