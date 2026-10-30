@@ -18,6 +18,13 @@ object Tags {
     const val GIT_NOT_A_REPOSITORY = "git.notRepository"
     const val GIT_REFRESH = "git.refresh"
     const val GIT_HIDE = "git.hide"
+    const val GIT_BLAME = "git.blame"
+    const val GIT_COMMIT_MESSAGE = "git.commitMessage"
+    const val GIT_COMMIT = "git.commit"
+    const val GIT_BRANCH_BUTTON = "git.branchButton"
+    const val GIT_PULL = "git.pull"
+    const val GIT_PUSH = "git.push"
+    const val GIT_MESSAGE = "git.message"
     const val TOOL_PROJECT = "tool.project"
     const val TOOL_GIT = "tool.git"
     const val TOOL_TERMINAL = "tool.terminal"
@@ -34,6 +41,9 @@ object Tags {
     const val NETWORK_DETAIL = "network.detail"
     const val WORKSPACE = "workspace"
     const val DIFF = "diff"
+    const val DIFF_TOOLBAR = "diff.toolbar"
+    const val DIFF_LAYOUT_TOGGLE = "diff.layoutToggle"
+    const val DIFF_SPLIT = "diff.split"
     const val TERMINAL = "terminal"
     const val TERMINAL_INPUT = "terminal.input"
     const val TERMINAL_NEW = "terminal.new"
@@ -117,6 +127,14 @@ object Tags {
 
     fun diffLineKind(index: Int, kind: String) = "diff.line:$index:$kind"
 
+    fun diffSplitRow(index: Int) = "diff.split.row:$index"
+
+    fun diffSplitCell(index: Int, side: Int) = "diff.split.cell:$index:$side"
+
+    fun changeMarker(line: Int, kind: String) = "editor.change:$line:$kind"
+
+    fun blame(line: Int) = "editor.blame:$line"
+
     fun toolHeader(window: String) = "tool.header:$window"
 
     fun terminalTab(number: Int) = "terminal.tab:$number"
@@ -137,6 +155,8 @@ object ItemTags {
     fun terminalLine(index: Int) = "terminal.line:$index"
 
     fun gitChange(relativePath: String) = "git.change:$relativePath"
+
+    fun gitBranch(name: String) = "git.branchItem:$name"
 
     fun networkRecord(seq: Long) = "network.record:$seq"
 

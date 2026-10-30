@@ -1,5 +1,6 @@
 package org.example.kotlineditor.ui
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.text.BasicText
@@ -24,6 +26,7 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
@@ -34,6 +37,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import org.example.kotlineditor.model.GitChangeKind
 import org.example.kotlineditor.state.HorizontalScroll
 import org.example.kotlineditor.syntax.Language
 import org.example.kotlineditor.syntax.SyntaxHighlighter
@@ -51,6 +56,9 @@ class LineDecorations(
     val brackets: IntArray? = null,
     val usages: IntArray? = null,
     val usageLength: Int = 0,
+    val change: GitChangeKind? = null,
+    val deleted: Boolean = false,
+    val blame: String? = null,
 ) {
     val isCaretLine: Boolean get() = caretColumn >= 0
     val hasSelection: Boolean get() = selectionStart in 0 until selectionEnd
@@ -92,25 +100,52 @@ internal fun CodeLine(
             .semantics(mergeDescendants = true) {}
             .testTag(Tags.line(source.index)),
     ) {
-        Gutter(source, decorations.isCaretLine, metrics)
+        Gutter(source, decorations, metrics)
         LineText(source, decorations, metrics, horizontal, caretOn)
     }
 }
 
 @Composable
-private fun Gutter(source: LineSource, isCaretLine: Boolean, metrics: EditorMetrics) {
+private fun Gutter(source: LineSource, decorations: LineDecorations, metrics: EditorMetrics) {
     Box(Modifier.width(metrics.gutterWidth).fillMaxHeight()) {
+        decorations.change?.let { kind ->
+            Box(
+                Modifier
+                    .width(3.dp)
+                    .fillMaxHeight()
+                    .background(changeColor(kind))
+                    .testTag(Tags.changeMarker(source.index, kind.name)),
+            )
+        }
+        if (decorations.deleted) DeletionMarker(source.index)
         BasicText(
             text = (source.index + 1).toString(),
-            modifier = Modifier.fillMaxWidth().padding(start = 8.dp, end = 16.dp + FOLD_ZONE),
+            modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(start = 8.dp, end = 16.dp + FOLD_ZONE + metrics.blameWidth),
             style =
             metrics.codeStyle.copy(
-                color = if (isCaretLine) IdeColors.LineNumberCurrent else IdeColors.LineNumber,
+                color = if (decorations.isCaretLine) IdeColors.LineNumberCurrent else IdeColors.LineNumber,
                 textAlign = TextAlign.End,
             ),
             softWrap = false,
             maxLines = 1,
         )
+        decorations.blame?.let { blame ->
+            BasicText(
+                text = blame,
+                modifier =
+                Modifier
+                    .align(Alignment.CenterEnd)
+                    .width(metrics.blameWidth)
+                    .padding(start = 8.dp, end = FOLD_ZONE + 4.dp)
+                    .testTag(Tags.blame(source.index)),
+                style = metrics.codeStyle.copy(color = IdeColors.TextSecondary, fontSize = 10.sp),
+                softWrap = false,
+                maxLines = 1,
+            )
+        }
         if (source.foldable) {
             Chevron(
                 expanded = !source.folded,
@@ -124,6 +159,27 @@ private fun Gutter(source: LineSource, isCaretLine: Boolean, metrics: EditorMetr
         }
     }
 }
+
+@Composable
+private fun DeletionMarker(index: Int) {
+    Canvas(Modifier.size(7.dp).testTag(Tags.changeMarker(index, "Deleted"))) {
+        val path =
+            Path().apply {
+                moveTo(0f, 0f)
+                lineTo(size.width, 0f)
+                lineTo(0f, size.height)
+                close()
+            }
+        drawPath(path, IdeColors.GitDeleted)
+    }
+}
+
+private fun changeColor(kind: GitChangeKind): Color =
+    when (kind) {
+        GitChangeKind.Added -> IdeColors.GitAdded
+        GitChangeKind.Modified -> IdeColors.GitModified
+        GitChangeKind.Deleted -> IdeColors.GitDeleted
+    }
 
 @Composable
 private fun RowScope.LineText(

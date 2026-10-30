@@ -207,6 +207,24 @@ enum class Method(
     /** Differences of a file between HEAD and the working tree. */
     GitDiff,
 
+    /** Author and date of each line of a file. */
+    GitBlame,
+
+    /** Local branches of the repository. */
+    GitBranches,
+
+    /** Checks out a branch. */
+    GitCheckout(mutating = true),
+
+    /** Stages every change and commits it. */
+    GitCommit(mutating = true),
+
+    /** Pulls the current branch (fetch and merge). */
+    GitPull(mutating = true),
+
+    /** Pushes the current branch. */
+    GitPush(mutating = true),
+
     /** Clears the screen and the scrollback of a terminal. */
     TerminalClear(mutating = true),
 }

@@ -31,9 +31,14 @@ class ProjectState(
     val name: String get() = root.name
     val tree = FileTreeState(root, services.fileSystem, scope)
     val editor =
-        EditorState(services.fileSystem, scope, tree::relativePath, onSaved = { refreshGitStatus() }) { entry ->
-            services.git.diff(root.path, tree.relativePath(entry))
-        }
+        EditorState(
+            services.fileSystem,
+            scope,
+            tree::relativePath,
+            onSaved = { refreshGitStatus() },
+            diffs = { entry -> services.git.diff(root.path, tree.relativePath(entry)) },
+            blames = { entry -> services.git.blame(root.path, tree.relativePath(entry)) },
+        )
     val fileIndex = FileIndex(root, services.search, scope)
     val find = FindState()
     val terminal = TerminalState(root.path, services.terminal, scope)
@@ -45,6 +50,25 @@ class ProjectState(
     /** "Always Select Opened File" (IntelliJ): the active file is selected and revealed in the project tree. */
     var autoSelectOpenedFile by
         mutableStateOf(preferences[PreferenceKeys.AUTO_SELECT_OPENED_FILE]?.toBooleanStrictOrNull() ?: true)
+
+    /** Diff viewer layout: old and new files side by side (two panes) instead of the unified view. */
+    var diffSideBySide by mutableStateOf(false)
+
+    /** Message of the last Git action (commit, branch switch, pull, push), shown in the Git panel. */
+    var gitMessage: String? by mutableStateOf(null)
+
+    /** True when [gitMessage] reports a failure. */
+    var gitMessageIsError by mutableStateOf(false)
+
+    /** True while a Git action is running, so its buttons do not start another one. */
+    var gitBusy by mutableStateOf(false)
+
+    /** Text of the commit message field of the Git panel. */
+    var commitMessage by mutableStateOf("")
+
+    /** Local branches of the repository, for the branch menu of the Git panel. */
+    var gitBranches: List<String> by mutableStateOf(emptyList())
+        private set
 
     /** Current Git branch (or short commit when detached), shown in the toolbar like IntelliJ's VCS widget. */
     var gitBranch: String? by mutableStateOf(null)
@@ -89,6 +113,12 @@ class ProjectState(
         scope.launch {
             gitBranch = runCatching { services.git.branch(root.path) }.getOrNull()
             isGitRepository = gitBranch != null
+            gitBranches =
+                if (isGitRepository) {
+                    runCatching { services.git.branches(root.path) }.getOrDefault(emptyList())
+                } else {
+                    emptyList()
+                }
         }
         refreshGitStatus()
     }
@@ -100,6 +130,8 @@ class ProjectState(
                 runCatching { services.git.status(root.path) }.onSuccess {
                     gitStatus = it
                     editor.reloadDiffs()
+                    editor.reloadChanges()
+                    editor.reloadBlames()
                 }
             }
     }

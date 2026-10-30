@@ -39,6 +39,7 @@ private const val MIN_LINE_NUMBER_DIGITS = 3
 private const val SLACK_COLUMNS = 8
 private const val MULTI_CLICK_MILLIS = 400L
 private val GUTTER_PADDING = 28.dp
+private val BLAME_WIDTH = 170.dp
 
 /** Sizes of an editor for a font size: everything is a multiple of the (monospace) character width. */
 @Immutable
@@ -51,6 +52,7 @@ internal class EditorMetrics(
     val gutterWidth: Dp,
     val gutterPx: Float,
     val foldZonePx: Float,
+    val blameWidth: Dp,
 ) {
     fun visibleRows(listState: LazyListState): Int =
         (listState.layoutInfo.viewportSize.height / lineHeightPx).toInt().coerceAtLeast(1)
@@ -76,17 +78,18 @@ internal class EditorMetrics(
 }
 
 @Composable
-internal fun rememberEditorMetrics(lineCount: Int, fontSize: Float): EditorMetrics {
+internal fun rememberEditorMetrics(lineCount: Int, fontSize: Float, blameVisible: Boolean = false): EditorMetrics {
     val density = LocalDensity.current
     val measurer = rememberTextMeasurer()
     val baseStyle = LocalCodeStyle.current
     val digits = maxOf(MIN_LINE_NUMBER_DIGITS, lineCount.toString().length)
-    return remember(density, baseStyle, fontSize, digits) {
+    return remember(density, baseStyle, fontSize, digits, blameVisible) {
         val lineHeightUnits = (fontSize * LINE_HEIGHT_PER_POINT).roundToInt()
         val codeStyle = baseStyle.copy(fontSize = fontSize.sp, lineHeight = lineHeightUnits.sp)
         val charWidth = measurer.measure("0".repeat(MEASURED_CHARS), codeStyle).size.width / MEASURED_CHARS.toFloat()
+        val blameWidth = if (blameVisible) BLAME_WIDTH else 0.dp
         with(density) {
-            val gutterWidth = (charWidth * digits).toDp() + GUTTER_PADDING + FOLD_ZONE
+            val gutterWidth = (charWidth * digits).toDp() + GUTTER_PADDING + FOLD_ZONE + blameWidth
             EditorMetrics(
                 codeStyle = codeStyle,
                 lineHeight = lineHeightUnits.dp,
@@ -96,6 +99,7 @@ internal fun rememberEditorMetrics(lineCount: Int, fontSize: Float): EditorMetri
                 gutterWidth = gutterWidth,
                 gutterPx = gutterWidth.toPx(),
                 foldZonePx = FOLD_ZONE.toPx(),
+                blameWidth = blameWidth,
             )
         }
     }
