@@ -5,6 +5,8 @@ product:
 dependencies:
   - //protocol: exported
   - $libs.kotlinx.coroutines.core
+  # Only the JsonElement tree is used (ripgrep's --json output): no compiler plugin needed.
+  - $libs.kotlinx.serialization.json
   - $libs.pty4j21
   - $libs.ghostty.linux
 

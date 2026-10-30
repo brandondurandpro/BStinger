@@ -2,6 +2,7 @@ product: jvm/app
 
 dependencies:
   - //server
+  - $libs.kotlinx.coroutines.core
 
 settings:
   jvm:
