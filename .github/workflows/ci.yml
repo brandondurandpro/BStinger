@@ -112,9 +112,8 @@ jobs:
       - name: Build
         run: ./kotlin build
       - name: Test
-        env:
-          JAVA_TOOL_OPTIONS: -XX:ErrorFile=${{ runner.temp }}/hs_err_%p.log
-        run: ./kotlin test
+        # RUNNER_TEMP is the path inside the container; ${{ runner.temp }} is the host's.
+        run: JAVA_TOOL_OPTIONS="-XX:ErrorFile=$RUNNER_TEMP/hs_err_%p.log" ./kotlin test
       - name: Display server and JVM crash logs
         if: failure()
         run: |

@@ -23,6 +23,8 @@ import org.example.kotlineditor.model.TerminalAttributes
 import org.example.kotlineditor.model.TerminalCell
 import org.example.kotlineditor.model.TerminalKeyEvent
 import org.example.kotlineditor.model.TerminalSnapshot
+import org.example.kotlineditor.server.TerminalEngine
+import org.example.kotlineditor.server.TerminalEngineFactory
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 import java.lang.foreign.ValueLayout.ADDRESS
@@ -38,6 +40,17 @@ private const val KEY_OUTPUT_BUFFER = 256
 
 // The bytes an encoder returns when a key produces nothing.
 private val NO_BYTES = ByteArray(0)
+
+/** Entry point of this package, created by name by `TerminalEngines`, possibly in a class loader of its own. */
+internal class GhosttyEngineFactory : TerminalEngineFactory {
+    override fun create(
+        columns: Int,
+        rows: Int,
+        cellWidthPx: Int,
+        cellHeightPx: Int,
+        writePty: (ByteArray) -> Unit,
+    ): TerminalEngine = GhosttyEngine(columns, rows, cellWidthPx, cellHeightPx, writePty = writePty)
+}
 
 /**
  * Terminal emulator of the server: libghostty-vt parses what the PTY prints and the client draws the grid.
@@ -58,7 +71,7 @@ internal class GhosttyEngine(
     cellHeightPx: Int,
     scrollbackLines: Int = DEFAULT_SCROLLBACK_LINES,
     private val writePty: (ByteArray) -> Unit,
-) : AutoCloseable {
+) : TerminalEngine {
     private val arena = Arena.ofShared()
     private val lock = Any()
 
@@ -128,7 +141,7 @@ internal class GhosttyEngine(
     }
 
     /** Feeds what the PTY printed to the emulator, then flushes the responses it produced. */
-    fun feed(bytes: ByteArray) {
+    override fun feed(bytes: ByteArray) {
         if (bytes.isEmpty()) return
         val replies =
             synchronized(lock) {
@@ -144,7 +157,7 @@ internal class GhosttyEngine(
      * does in bash. Done by the emulator itself, so it works whatever the shell (`sh` and `cmd.exe` ignore Ctrl+L).
      * Returns `false` without clearing when a full-screen program owns the alternate screen: only it can redraw.
      */
-    fun clear(): Boolean =
+    override fun clear(): Boolean =
         synchronized(lock) {
             checkOpen()
             if (readTerminalNumber(ghostty_vt_h.GHOSTTY_TERMINAL_DATA_ACTIVE_SCREEN()) ==
@@ -162,7 +175,7 @@ internal class GhosttyEngine(
         }
 
     /** Encodes [event] the way the running program expects it (legacy, `modifyOtherKeys` or Kitty keyboard). */
-    fun encodeKey(event: TerminalKeyEvent) {
+    override fun encodeKey(event: TerminalKeyEvent) {
         val (bytes, replies) =
             synchronized(lock) {
                 checkOpen()
@@ -173,7 +186,7 @@ internal class GhosttyEngine(
     }
 
     /** Pastes [text], letting the terminal add bracketed-paste markers or turn newlines into carriage returns. */
-    fun paste(text: String) {
+    override fun paste(text: String) {
         if (text.isEmpty()) return
         val replies =
             synchronized(lock) {
@@ -200,7 +213,7 @@ internal class GhosttyEngine(
     }
 
     /** Resizes the grid and the pixel size of a cell, reflowing the scrollback like a real terminal. */
-    fun resize(columns: Int, rows: Int, cellWidthPx: Int, cellHeightPx: Int) {
+    override fun resize(columns: Int, rows: Int, cellWidthPx: Int, cellHeightPx: Int) {
         val replies =
             synchronized(lock) {
                 checkOpen()
@@ -224,7 +237,7 @@ internal class GhosttyEngine(
     }
 
     /** Scrolls the viewport: positive goes up into the scrollback, as the model says. */
-    fun scroll(delta: Int) {
+    override fun scroll(delta: Int) {
         synchronized(lock) {
             checkOpen()
             GhosttyTerminalScrollViewport.tag(scrollBehavior, ghostty_vt_h.GHOSTTY_SCROLL_VIEWPORT_DELTA())
@@ -237,7 +250,7 @@ internal class GhosttyEngine(
     }
 
     /** Reads the whole visible screen. Complete state, so a client that missed one just takes the next. */
-    fun snapshot(running: Boolean = true, exitCode: Int? = null): TerminalSnapshot =
+    override fun snapshot(running: Boolean, exitCode: Int?): TerminalSnapshot =
         synchronized(lock) {
             checkOpen()
             check(ghostty_vt_h.ghostty_render_state_update(renderState, terminal), "render state update")

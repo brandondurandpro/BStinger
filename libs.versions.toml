@@ -17,7 +17,8 @@ kotlinx-coroutines-swing = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-
 zstd-jni = { module = "com.github.luben:zstd-jni", version.ref = "zstd" }
 # libghostty-vt: FFM bindings and the native library, generated per platform by GhosttyFX (MIT).
 # Only the bindings package is used; the JavaFX classes of the same project are not needed.
-# Amper cannot pick a JVM dependency per OS and the per-platform bindings clash, so the Linux artifact provides the
-# bindings everywhere and the Windows library is vendored in server/resources/native: update it with this version.
+# Amper cannot pick a JVM dependency per OS and the per-platform bindings clash: the Linux artifact is the dependency,
+# the Windows one is vendored as server/resources/ghostty/ghosttyfx-windows-x86_64.jar (see TerminalEngines).
+# Update both with this version.
 ghostty-linux = { module = "io.github.vlaaad:ghosttyfx-linux-x86_64", version.ref = "ghostty" }
 pty4j21 = { module = "com.sshtools:pty4j21", version.ref = "pty4j21" }
