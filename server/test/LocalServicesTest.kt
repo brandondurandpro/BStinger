@@ -1,11 +1,15 @@
 package org.example.kotlineditor.server
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.example.kotlineditor.model.FileContent
 import org.example.kotlineditor.model.ProjectSession
 import org.example.kotlineditor.model.SessionFile
 import org.example.kotlineditor.syntax.DeclarationKind
 import java.io.File
+import java.io.FileInputStream
 import java.nio.file.Files
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -31,6 +35,25 @@ class LocalServicesTest {
         assertTrue(TextFiles.isBinary(byteArrayOf(1, 0, 2)))
         assertTrue(!TextFiles.isBinary("text".toByteArray()))
     }
+
+    @Test
+    fun `a file another process briefly holds open is still saved`() =
+        runBlocking {
+            val file = root.resolve("held.txt")
+            Files.writeString(file, "old")
+            val fs = LocalFileSystem()
+            val entry = fs.fileAt(file.toString())!!
+            // java.io opens without FILE_SHARE_DELETE on Windows, like a virus scanner: replacing the file fails.
+            val reader = FileInputStream(file.toFile())
+            val release =
+                launch(Dispatchers.IO) {
+                    delay(300)
+                    reader.close()
+                }
+            fs.write(entry, "new")
+            release.join()
+            assertEquals("new", Files.readString(file))
+        }
 
     @Test
     fun `lists, reads, writes, walks and protects against escaping the directory`() =
