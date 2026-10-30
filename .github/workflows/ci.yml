@@ -4,6 +4,10 @@ name: CI
 # Ubuntu 20.04, 22.04 and 24.04 (under X11 and Wayland), plus Windows.
 # The 20.04 GitHub runner image was retired in April 2025, so older Ubuntu
 # versions run in their official container image on an ubuntu-24.04 runner.
+#
+# A pull request that only touches documentation skips the lint and the tests.
+# Branch protection requires the single "CI passed" check, which succeeds when
+# every job either passed or was skipped, so such a pull request can merge.
 
 on:
   push:
@@ -22,18 +26,44 @@ env:
   KOTLIN_CLI_NO_WELCOME_BANNER: "1"
 
 jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-24.04
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v7
+        if: github.event_name == 'pull_request'
+        with:
+          fetch-depth: 0
+      # Pushes and manual runs always test everything.
+      - id: filter
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != pull_request ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff --name-only "$BASE...$HEAD" | tee changed.txt
+          if grep -qvE '(\.md$|^docs/)' changed.txt; then code=true; else code=false; fi
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+
   lint:
     name: Lint (detekt + ktlint)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # detekt 2.x needs a recent JDK; runners default to an older one.
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "21"
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: .detekt
           key: detekt-${{ hashFiles('lint', 'detekt.yml') }}
@@ -41,6 +71,8 @@ jobs:
 
   test-linux:
     name: Linux ${{ matrix.ubuntu }} · ${{ matrix.session }}
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
     container: ubuntu:${{ matrix.ubuntu }}
     timeout-minutes: 45
@@ -68,8 +100,8 @@ jobs:
             xvfb xauth x11-utils xwayland weston \
             libgl1 libx11-6 libxext6 libxrender1 libxtst6 libxi6 \
             fontconfig fonts-dejavu-core
-      - uses: actions/checkout@v4
-      - uses: actions/cache@v4
+      - uses: actions/checkout@v7
+      - uses: actions/cache@v6
         with:
           path: |
             ~/.cache/JetBrains/Kotlin
@@ -79,6 +111,8 @@ jobs:
         if: matrix.session == 'x11'
         run: |
           Xvfb :99 -screen 0 1600x1000x24 -nolisten tcp -ac &
+          # GITHUB_ENV only applies to the next steps: this one needs DISPLAY too.
+          export DISPLAY=:99
           echo "DISPLAY=:99" >> "$GITHUB_ENV"
           for _ in $(seq 1 30); do xdpyinfo >/dev/null 2>&1 && break; sleep 1; done
           xdpyinfo | grep -E "name of display|dimensions"
@@ -93,7 +127,7 @@ jobs:
           mkdir -p /tmp/.X11-unix
           chmod 1777 /tmp/.X11-unix
           weston --backend=headless-backend.so --xwayland --socket=wayland-ci \
-            --width=1600 --height=1000 --idle-time=0 &
+            --width=1600 --height=1000 --idle-time=0 > "$RUNNER_TEMP/weston.log" 2>&1 &
           echo "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR" >> "$GITHUB_ENV"
           echo "WAYLAND_DISPLAY=wayland-ci" >> "$GITHUB_ENV"
           # AWT has no Wayland backend: the app goes through XWayland, which
@@ -110,7 +144,15 @@ jobs:
       - name: Build
         run: ./kotlin build
       - name: Test
-        run: ./kotlin test
+        # RUNNER_TEMP is the path inside the container; ${{ runner.temp }} is the host's.
+        run: JAVA_TOOL_OPTIONS="-XX:ErrorFile=$RUNNER_TEMP/hs_err_%p.log" ./kotlin test
+      - name: Display server and JVM crash logs
+        if: failure()
+        run: |
+          for f in "$RUNNER_TEMP"/weston.log "$RUNNER_TEMP"/hs_err_*.log; do
+            [ -f "$f" ] && { echo "::group::$f"; tail -200 "$f"; echo "::endgroup::"; }
+          done
+          true
       # The tests render off-screen, so this is what proves the desktop app
       # really starts in the session under test. A timeout (124) means it was
       # still running when killed; any other exit code is a startup failure.
@@ -129,11 +171,13 @@ jobs:
 
   test-windows:
     name: Windows
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: windows-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/cache@v4
+      - uses: actions/checkout@v7
+      - uses: actions/cache@v6
         with:
           path: |
             ~/AppData/Local/JetBrains/Kotlin/cli
@@ -145,3 +189,21 @@ jobs:
       - name: Test
         shell: cmd
         run: kotlin.bat test
+
+  # The only required check: green when every job passed or was skipped.
+  ci-passed:
+    name: CI passed
+    if: always()
+    needs: [changes, lint, test-linux, test-windows]
+    runs-on: ubuntu-24.04
+    steps:
+      - env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Job results: $RESULTS"
+          for result in $RESULTS; do
+            case "$result" in
+              success | skipped) ;;
+              *) exit 1 ;;
+            esac
+          done

@@ -22,6 +22,7 @@ private val ORDERED =
         Method.TerminalPaste,
         Method.TerminalResize,
         Method.TerminalScroll,
+        Method.TerminalClear,
         Method.TerminalResume,
         Method.TerminalDestroy,
     )
