@@ -57,6 +57,8 @@ A lightweight IDE in the style of IntelliJ IDEA (New UI, dark theme), written wi
 All the logic on files runs in a **server**; the IDE is a client that only displays.
 
 - `protocol` – model shared by both sides, binary codec, and the network client (`RpcClient`).
+- `compression` – body codec: zstd level 3, with a 64 KiB dictionary for source code. The session protocol is
+  unchanged; only the frame body is compressed.
 - `server` – `EditorServer` and the local services: file system, project search (Find in Files and symbols run
   next to the files, only results travel), Git, shells, sessions and recent projects.
 - `serverApp` – standalone server for remote use:
@@ -65,8 +67,9 @@ All the logic on files runs in a **server**; the IDE is a client that only displ
   `--server host:port --token <secret>` (or `KOTLIN_EDITOR_SERVER` / `KOTLIN_EDITOR_TOKEN`) for a remote one.
 
 **Protocol.** Custom binary frames over TCP (`TCP_NODELAY`): length-prefixed, multiplexed by request id, answers in any
-order, server-pushed streams for shell output, large bodies deflated. About 70 µs per round trip on loopback, a
-200,000-line file in about 100 ms. TCP retransmits lost packets; the session layer survives broken links:
+order, server-pushed streams for shell output, bodies compressed with zstd-3 (a code dictionary on file contents).
+About 70 µs per round trip on loopback, a 200,000-line file in about 100 ms. TCP retransmits lost packets; the session
+layer survives broken links:
 
 - automatic reconnection with backoff, heartbeats (ping/pong) to detect silent dead links;
 - unanswered requests are resent after reconnecting; mutating ones are deduplicated by request id on the server,

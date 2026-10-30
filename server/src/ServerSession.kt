@@ -17,7 +17,10 @@ import java.util.concurrent.ConcurrentHashMap
 private val ORDERED = setOf(Method.ShellSend, Method.ShellDestroy, Method.ShellResume)
 
 /** One request being executed: its id, its arguments, where to write the answer, and the session's shells. */
-internal class Request(val id: Long, val args: WireReader, val answer: WireWriter, val shells: ShellRegistry)
+internal class Request(val id: Long, val args: WireReader, val answer: WireWriter, val shells: ShellRegistry) {
+    /** Set by a handler whose answer is source code, so the codec may use the code dictionary. */
+    var code = false
+}
 
 /** Shells of a session, keyed by the id of their output stream. */
 internal class ShellRegistry(private val backlog: Int, private val push: (Frame) -> Unit) {
@@ -127,7 +130,7 @@ internal class ServerSession(
         val request = Request(id, reader, WireWriter(), shells)
         return try {
             checkNotNull(handlers[method]) { "No handler for $method" }.invoke(request)
-            Frame(FrameKind.Response, id, request.answer.toByteArray())
+            Frame(FrameKind.Response, id, request.answer.toByteArray(), code = request.code)
         } catch (e: IOException) {
             failure(id, e.message ?: e::class.simpleName.orEmpty())
         } catch (e: IllegalArgumentException) {

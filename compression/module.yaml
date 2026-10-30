@@ -1,0 +1,12 @@
+product:
+  type: kmp/lib
+  platforms: [jvm]
+
+dependencies:
+  - $libs.zstd.jni
+
+test-settings:
+  jvm:
+    test:
+      freeJvmArgs:
+        - --enable-native-access=ALL-UNNAMED

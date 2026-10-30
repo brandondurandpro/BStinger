@@ -109,7 +109,14 @@ class RpcClient(host: String, port: Int, token: String, private val options: Cli
     private suspend fun exchange(method: Method, id: Long, timeoutMs: Long, args: WireWriter.() -> Unit): Frame {
         connector.rejection?.let { throw it }
         val call =
-            pending.register(Frame(FrameKind.Request, id, WireWriter().short(method.ordinal).apply(args).toByteArray()))
+            pending.register(
+                Frame(
+                    FrameKind.Request,
+                    id,
+                    WireWriter().short(method.ordinal).apply(args).toByteArray(),
+                    code = method == Method.Write || method == Method.CreateFile,
+                ),
+            )
         try {
             connector.link?.send(call.frame) // otherwise sent as soon as a connection is established
             return withTimeoutOrNull(timeoutMs) { call.result.await() }

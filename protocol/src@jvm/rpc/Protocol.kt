@@ -1,11 +1,11 @@
 package org.example.kotlineditor.rpc
 
-import java.io.ByteArrayOutputStream
+import org.example.kotlineditor.compression.BodyCodec
+import org.example.kotlineditor.compression.Dictionaries
+import org.example.kotlineditor.compression.ZstdBodyCodec
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.IOException
-import java.util.zip.Deflater
-import java.util.zip.Inflater
 
 /**
  * Kotlin Editor wire protocol: binary frames over TCP.
@@ -16,40 +16,30 @@ import java.util.zip.Inflater
  * twice), and resumes server-pushed streams from the last sequence number it received.
  *
  * Frame: `int length | byte kind | byte flags | long id | body` where `length` counts everything after itself.
- * `flags & 1` means the body is deflated (only for large bodies, which matters on slow remote links).
+ * `flags & 1` means the body is a zstd frame. When the dictionary was used, the zstd frame carries its id, so the
+ * reader knows which dictionary to load without a protocol flag.
  */
 object Protocol {
     /** Version announced in the handshake; client and server must speak the same one. */
-    const val VERSION = 1
+    const val VERSION = 3
 
     /** Largest accepted frame: anything bigger is treated as a corrupted stream. */
     const val MAX_FRAME = 512 * 1024 * 1024
-
-    /** Bodies at least this large are compressed when it saves at least [MIN_SAVING_PERCENT] percent. */
-    const val COMPRESS_THRESHOLD = 16 * 1024
 
     /** Port used by the standalone server when none is given. */
     const val DEFAULT_PORT = 7777
 
     private const val HEADER = 10
-    private const val FLAG_DEFLATED = 1
-    private const val MIN_SAVING_PERCENT = 10
-    private const val PERCENT = 100
-    private const val SIZE_PREFIX = Int.SIZE_BYTES
-    private const val CHUNK = 64 * 1024
-    private const val EXPECTED_RATIO = 3
+    private const val FLAG_COMPRESSED = 1
+
+    /** Creates the codec of one connection; contexts and dictionaries are not shared between connections. */
+    fun newCodec(): BodyCodec = ZstdBodyCodec(Dictionaries.generic, maxSize = MAX_FRAME)
 
     /** Writes and flushes [frame]; callers serialize writes to the same stream. */
-    fun write(out: DataOutputStream, frame: Frame) {
-        var body = frame.body
-        var flags = 0
-        if (body.size >= COMPRESS_THRESHOLD) {
-            val compressed = deflate(body)
-            if (compressed.size * PERCENT < body.size * (PERCENT - MIN_SAVING_PERCENT)) {
-                body = compressed
-                flags = FLAG_DEFLATED
-            }
-        }
+    fun write(out: DataOutputStream, frame: Frame, codec: BodyCodec) {
+        val compressed = codec.compress(frame.body, frame.code)
+        val body = compressed ?: frame.body
+        val flags = if (compressed != null) FLAG_COMPRESSED else 0
         out.writeInt(HEADER + body.size)
         out.writeByte(frame.kind.ordinal)
         out.writeByte(flags)
@@ -59,7 +49,7 @@ object Protocol {
     }
 
     /** Reads one frame, blocking; throws [IOException] on a closed or corrupted stream. */
-    fun read(input: DataInputStream): Frame {
+    fun read(input: DataInputStream, codec: BodyCodec): Frame {
         val length = input.readInt()
         val kind = FrameKind.entries.getOrNull(input.readUnsignedByte())
         if (length !in HEADER..MAX_FRAME || kind == null) {
@@ -69,42 +59,7 @@ object Protocol {
         val id = input.readLong()
         val body = ByteArray(length - HEADER)
         input.readFully(body)
-        return Frame(kind, id, if (flags and FLAG_DEFLATED != 0) inflate(body) else body)
-    }
-
-    private fun deflate(data: ByteArray): ByteArray {
-        val deflater = Deflater(Deflater.BEST_SPEED, true)
-        try {
-            deflater.setInput(data)
-            deflater.finish()
-            val out = ByteArrayOutputStream(data.size / EXPECTED_RATIO)
-            val chunk = ByteArray(CHUNK)
-            while (!deflater.finished()) out.write(chunk, 0, deflater.deflate(chunk))
-            return WireWriter(SIZE_PREFIX + out.size()).int(data.size).toByteArray() + out.toByteArray()
-        } finally {
-            deflater.end()
-        }
-    }
-
-    private fun inflate(data: ByteArray): ByteArray {
-        val size = WireReader(data).int()
-        val inflater = Inflater(true)
-        try {
-            if (size !in 0..MAX_FRAME) throw IOException("Corrupted compressed frame")
-            inflater.setInput(data, SIZE_PREFIX, data.size - SIZE_PREFIX)
-            val out = ByteArray(size)
-            var done = 0
-            var stalled = false
-            while (done < size && !stalled) {
-                val n = inflater.inflate(out, done, size - done)
-                stalled = n == 0 && (inflater.finished() || inflater.needsInput())
-                done += n
-            }
-            if (done != size) throw IOException("Truncated compressed frame")
-            return out
-        } finally {
-            inflater.end()
-        }
+        return Frame(kind, id, if (flags and FLAG_COMPRESSED != 0) codec.decompress(body) else body)
     }
 }
 
@@ -152,6 +107,12 @@ class Frame(
     val id: Long,
     /** Encoded payload, see [WireWriter]. */
     val body: ByteArray = EMPTY,
+    /**
+     * Whether [body] is source code: a compression hint, not part of the payload.
+     *
+     * It lets the codec try the code dictionary, which helps file contents but can hurt metadata.
+     */
+    val code: Boolean = false,
 ) {
     /** Shared empty body. */
     companion object {

@@ -1,4 +1,6 @@
 modules:
+  - benchmark
+  - compression
   - desktopApp
   - protocol
   - server

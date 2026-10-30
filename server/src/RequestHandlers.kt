@@ -19,7 +19,10 @@ internal fun requestHandlers(services: LocalServices): Map<Method, suspend Reque
     return mapOf(
         Method.ResolveDirectory to { answer.entryOrNull(fs.resolveDirectory(args.string())) },
         Method.ListDirectory to { answer.entries(fs.list(args.entry())) },
-        Method.Read to { answer.content(fs.read(args.entry())) },
+        Method.Read to {
+            answer.content(fs.read(args.entry()))
+            code = true
+        },
         Method.FileAt to { answer.entryOrNull(fs.fileAt(args.string())) },
         Method.Write to { fs.write(args.entry(), args.string()) },
         Method.CreateFile to { answer.entry(fs.createFile(args.entry(), args.string())) },

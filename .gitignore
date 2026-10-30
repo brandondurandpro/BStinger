@@ -7,3 +7,4 @@
 **/xcshareddata/WorkspaceSettings.xcsettings
 xcuserdata
 .detekt/
+benchmark/dicts-local/

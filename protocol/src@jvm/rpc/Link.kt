@@ -15,16 +15,19 @@ internal class Link(private val socket: Socket) : Closeable {
     private val input = DataInputStream(BufferedInputStream(socket.getInputStream(), BUFFER_SIZE))
     private val output = DataOutputStream(BufferedOutputStream(socket.getOutputStream(), BUFFER_SIZE))
 
+    // One codec per connection: the native contexts are not thread-safe and keep the dictionary loaded.
+    private val codec = Protocol.newCodec()
+
     @Volatile
     var lastSent = System.currentTimeMillis()
         private set
 
-    fun read(): Frame = Protocol.read(input)
+    fun read(): Frame = Protocol.read(input, codec)
 
     /** Never throws: a failed write closes the socket, which makes the reader fail and the client reconnect. */
     fun send(frame: Frame) {
         try {
-            synchronized(output) { Protocol.write(output, frame) }
+            synchronized(output) { Protocol.write(output, frame, codec) }
             lastSent = System.currentTimeMillis()
         } catch (ignored: IOException) {
             close() // the reading side notices the closed socket and reconnects
@@ -32,6 +35,7 @@ internal class Link(private val socket: Socket) : Closeable {
     }
 
     override fun close() {
+        runCatching { codec.close() }
         runCatching { socket.close() }
     }
 }

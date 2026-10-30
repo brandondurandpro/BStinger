@@ -30,7 +30,7 @@ fetch() { # artifact, expected sha1, destination
 fetch "detekt-cli/$DETEKT_VERSION/detekt-cli-$DETEKT_VERSION-all.jar" "$DETEKT_SHA1" "$tools/detekt-cli.jar"
 fetch "detekt-rules-ktlint-wrapper/$DETEKT_VERSION/detekt-rules-ktlint-wrapper-$DETEKT_VERSION.jar" "$KTLINT_SHA1" "$tools/ktlint.jar"
 
-sources="protocol/src:protocol/src@jvm:server/src:server/test:serverApp/src:shared/src:shared/src@jvm:shared/test@jvm:desktopApp/src"
+sources="protocol/src:protocol/src@jvm:compression/src@jvm:compression/test@jvm:server/src:server/test:serverApp/src:shared/src:shared/src@jvm:shared/test@jvm:desktopApp/src"
 
 # Fingerprint of every source file, to know when the automatic corrections stop changing anything.
 snapshot() {

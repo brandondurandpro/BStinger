@@ -1,5 +1,6 @@
 package org.example.kotlineditor.server
 
+import org.example.kotlineditor.compression.BodyCodec
 import org.example.kotlineditor.model.DiffKind
 import org.example.kotlineditor.model.DiffLine
 import org.example.kotlineditor.model.FileContent
@@ -93,23 +94,68 @@ class ProtocolTest {
     fun `large frames are compressed transparently`() {
         val body = WireWriter().string("abc".repeat(100_000)).toByteArray()
         val buffer = ByteArrayOutputStream()
-        Protocol.write(DataOutputStream(buffer), Frame(FrameKind.Response, 7, body))
+        Protocol.write(DataOutputStream(buffer), Frame(FrameKind.Response, 7, body), Protocol.newCodec())
         assertTrue(buffer.size() < body.size / 10, "compressed to ${buffer.size()} bytes")
-        val frame = Protocol.read(DataInputStream(ByteArrayInputStream(buffer.toByteArray())))
+        val frame = Protocol.read(DataInputStream(ByteArrayInputStream(buffer.toByteArray())), Protocol.newCodec())
         assertEquals(FrameKind.Response, frame.kind)
         assertEquals(7, frame.id)
         assertContentEquals(body, frame.body)
     }
 
     @Test
+    fun `code frames round trip`() {
+        val writer = WireWriter()
+        writer.content(FileContent.Text((1..4_000).map { "    val value$it = compute($it)" }, "\n"))
+        val body = writer.toByteArray()
+        val buffer = ByteArrayOutputStream()
+        Protocol.write(DataOutputStream(buffer), Frame(FrameKind.Response, 8, body, code = true), Protocol.newCodec())
+        assertTrue(buffer.size() < body.size / 2, "compressed to ${buffer.size()} bytes")
+        val frame = Protocol.read(DataInputStream(ByteArrayInputStream(buffer.toByteArray())), Protocol.newCodec())
+        assertContentEquals(body, frame.body)
+    }
+
+    @Test
+    fun `the code hint reaches the codec`() {
+        val codec = RecordingCodec()
+        Protocol.write(
+            DataOutputStream(ByteArrayOutputStream()),
+            Frame(FrameKind.Request, 1, ByteArray(200), code = true),
+            codec,
+        )
+        assertEquals(true, codec.lastCode)
+    }
+
+    @Test
     fun `corrupted frames are rejected`() {
         val bad = WireWriter().int(-5).toByteArray()
-        assertFailsWith<IOException> { Protocol.read(DataInputStream(ByteArrayInputStream(bad))) }
+        assertFailsWith<IOException> {
+            Protocol.read(DataInputStream(ByteArrayInputStream(bad)), Protocol.newCodec())
+        }
         val truncated = ByteArrayOutputStream()
-        Protocol.write(DataOutputStream(truncated), Frame(FrameKind.Request, 1, ByteArray(100)))
-        val cut = truncated.toByteArray().copyOf(50)
+        Protocol.write(DataOutputStream(truncated), Frame(FrameKind.Request, 1, ByteArray(100)), Protocol.newCodec())
+        val full = truncated.toByteArray()
+        val cut = full.copyOf(HEADER + (full.size - HEADER) / 2)
         assertIs<IOException>(
-            runCatching { Protocol.read(DataInputStream(ByteArrayInputStream(cut))) }.exceptionOrNull(),
+            runCatching {
+                Protocol.read(DataInputStream(ByteArrayInputStream(cut)), Protocol.newCodec())
+            }.exceptionOrNull(),
         )
+    }
+
+    private companion object {
+        /** Frame header: length, kind, flags and id. */
+        const val HEADER = 10
+    }
+
+    /** Records the compression hint instead of compressing. */
+    private class RecordingCodec : BodyCodec {
+        var lastCode: Boolean? = null
+
+        override fun compress(body: ByteArray, code: Boolean): ByteArray? {
+            lastCode = code
+            return null
+        }
+
+        override fun decompress(body: ByteArray): ByteArray = body
     }
 }

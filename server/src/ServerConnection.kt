@@ -17,17 +17,21 @@ internal class ServerConnection(private val socket: Socket) : Closeable {
     private val input = DataInputStream(BufferedInputStream(socket.getInputStream(), BUFFER_SIZE))
     private val output = DataOutputStream(BufferedOutputStream(socket.getOutputStream(), BUFFER_SIZE))
 
-    fun read(): Frame = Protocol.read(input)
+    // One codec per connection: the native contexts are not thread-safe and keep the dictionary loaded.
+    private val codec = Protocol.newCodec()
+
+    fun read(): Frame = Protocol.read(input, codec)
 
     fun send(frame: Frame) {
         try {
-            synchronized(output) { Protocol.write(output, frame) }
+            synchronized(output) { Protocol.write(output, frame, codec) }
         } catch (ignored: IOException) {
             close() // the reading thread ends; the client reconnects and retries or resumes
         }
     }
 
     override fun close() {
+        runCatching { codec.close() }
         runCatching { socket.close() }
     }
 }
