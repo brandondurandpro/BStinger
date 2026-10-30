@@ -4,6 +4,10 @@ name: CI
 # Ubuntu 20.04, 22.04 and 24.04 (under X11 and Wayland), plus Windows.
 # The 20.04 GitHub runner image was retired in April 2025, so older Ubuntu
 # versions run in their official container image on an ubuntu-24.04 runner.
+#
+# A pull request that only touches documentation skips the lint and the tests.
+# Branch protection requires the single "CI passed" check, which succeeds when
+# every job either passed or was skipped, so such a pull request can merge.
 
 on:
   push:
@@ -22,8 +26,34 @@ env:
   KOTLIN_CLI_NO_WELCOME_BANNER: "1"
 
 jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-24.04
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: github.event_name == 'pull_request'
+        with:
+          fetch-depth: 0
+      # Pushes and manual runs always test everything.
+      - id: filter
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != pull_request ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff --name-only "$BASE...$HEAD" | tee changed.txt
+          if grep -qvE '(\.md$|^docs/)' changed.txt; then code=true; else code=false; fi
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+
   lint:
     name: Lint (detekt + ktlint)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -41,6 +71,8 @@ jobs:
 
   test-linux:
     name: Linux ${{ matrix.ubuntu }} · ${{ matrix.session }}
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
     container: ubuntu:${{ matrix.ubuntu }}
     timeout-minutes: 45
@@ -139,6 +171,8 @@ jobs:
 
   test-windows:
     name: Windows
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: windows-latest
     timeout-minutes: 45
     steps:
@@ -155,3 +189,21 @@ jobs:
       - name: Test
         shell: cmd
         run: kotlin.bat test
+
+  # The only required check: green when every job passed or was skipped.
+  ci-passed:
+    name: CI passed
+    if: always()
+    needs: [changes, lint, test-linux, test-windows]
+    runs-on: ubuntu-24.04
+    steps:
+      - env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Job results: $RESULTS"
+          for result in $RESULTS; do
+            case "$result" in
+              success | skipped) ;;
+              *) exit 1 ;;
+            esac
+          done

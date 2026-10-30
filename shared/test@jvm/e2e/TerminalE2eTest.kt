@@ -59,14 +59,15 @@ class TerminalE2eTest {
             awaitTag(Tags.TERMINAL_INPUT)
             runCommand("echo hello-terminal")
             awaitCondition { printed(app, "hello-terminal") }
-            runCommand(if (System.getProperty("os.name").startsWith("Windows")) "dir /b" else "ls")
-            awaitCondition { screenLines(app).any { "README.md" in it } }
-            // Joined without spaces: after a long prompt (cmd.exe shows the whole path) the command wraps.
+            // Checked right away: ConPTY repaints the screen and may push earlier lines out of it. Joined without
+            // spaces because after a long prompt (cmd.exe shows the whole path) the command wraps.
             val screen = screenLines(app)
             assertTrue(
                 "echohello-terminal" in screen.joinToString("").filterNot(Char::isWhitespace),
                 screen.joinToString("\n"),
             )
+            runCommand(if (System.getProperty("os.name").startsWith("Windows")) "dir /b" else "ls")
+            awaitCondition { screenLines(app).any { "README.md" in it } }
         }
 
     @Test

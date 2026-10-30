@@ -7,6 +7,9 @@ name: Memory Measurement
 on:
   pull_request:
     branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
   workflow_dispatch:
 
 permissions:
