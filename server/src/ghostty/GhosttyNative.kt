@@ -11,6 +11,10 @@ import java.util.zip.ZipInputStream
  * The bindings and the native library are published per platform: the artifact on the classpath carries a
  * `native/<platform>.zip` resource whose single entry is the shared library. libghostty-vt exposes no stable C
  * ABI yet, so the artifact version and this loader are pinned together in `libs.versions.toml`.
+ *
+ * Only the Linux artifact is a dependency: the bindings of each platform have the same classes and cannot share
+ * the classpath. Its bindings also fit Windows, whose 64-bit C types are the same size, so the Windows archive of the
+ * same version is copied from `ghosttyfx-windows-x86_64` into `server/resources/native`.
  */
 internal object GhosttyNative {
     private val loaded = AtomicBoolean()

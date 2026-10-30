@@ -26,6 +26,8 @@ private const val FRAME_INTERVAL_MS = 16L
 
 private const val ENDED = "This terminal has ended"
 
+private const val CTRL_L: Byte = 0x0c
+
 /**
  * A terminal of the server: a real PTY running the user's shell, and the libghostty-vt engine parsing what it
  * prints.
@@ -129,6 +131,13 @@ internal class ServerTerminal(
         ensureRunning()
         engine.resize(columns, rows, cellWidthPx, cellHeightPx)
         process.setWinSize(WinSize(columns, rows))
+        refresh()
+    }
+
+    /** Clears the screen and the scrollback; a full-screen program gets Ctrl+L instead, to redraw itself. */
+    fun clear() {
+        ensureRunning()
+        if (!engine.clear()) write(byteArrayOf(CTRL_L))
         refresh()
     }
 

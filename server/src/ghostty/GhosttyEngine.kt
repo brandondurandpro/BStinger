@@ -133,13 +133,33 @@ internal class GhosttyEngine(
         val replies =
             synchronized(lock) {
                 checkOpen()
-                if (input.byteSize() < bytes.size) input = arena.allocate(bytes.size.toLong())
-                MemorySegment.copy(MemorySegment.ofArray(bytes), 0, input, 0, bytes.size.toLong())
-                ghostty_vt_h.ghostty_terminal_vt_write(terminal, input, bytes.size.toLong())
+                writeVt(bytes)
                 drainResponses()
             }
         replies.forEach(writePty)
     }
+
+    /**
+     * Clears the scrollback and the lines above the cursor, keeping the line being typed at the top, the way Ctrl+L
+     * does in bash. Done by the emulator itself, so it works whatever the shell (`sh` and `cmd.exe` ignore Ctrl+L).
+     * Returns `false` without clearing when a full-screen program owns the alternate screen: only it can redraw.
+     */
+    fun clear(): Boolean =
+        synchronized(lock) {
+            checkOpen()
+            if (readTerminalNumber(ghostty_vt_h.GHOSTTY_TERMINAL_DATA_ACTIVE_SCREEN()) ==
+                ghostty_vt_h.GHOSTTY_TERMINAL_SCREEN_ALTERNATE().toLong()
+            ) {
+                return false
+            }
+            val row = readTerminalNumber(ghostty_vt_h.GHOSTTY_TERMINAL_DATA_CURSOR_Y())
+            // Scroll the lines above the cursor out of the screen, follow them with the cursor, drop the scrollback.
+            val scrollUp = if (row > 0) "\u001b[${row}S\u001b[${row}A" else ""
+            writeVt("$scrollUp\u001b[3J".toByteArray(StandardCharsets.US_ASCII))
+            GhosttyTerminalScrollViewport.tag(scrollBehavior, ghostty_vt_h.GHOSTTY_SCROLL_VIEWPORT_BOTTOM())
+            ghostty_vt_h.ghostty_terminal_scroll_viewport(terminal, scrollBehavior)
+            true
+        }
 
     /** Encodes [event] the way the running program expects it (legacy, `modifyOtherKeys` or Kitty keyboard). */
     fun encodeKey(event: TerminalKeyEvent) {
@@ -400,6 +420,20 @@ internal class GhosttyEngine(
     private fun readRenderShort(tag: Int): Int {
         check(ghostty_vt_h.ghostty_render_state_get(renderState, tag, resultSlot), "render state $tag")
         return resultSlot.get(JAVA_SHORT, 0).toInt()
+    }
+
+    // Must hold the lock.
+    private fun writeVt(bytes: ByteArray) {
+        if (input.byteSize() < bytes.size) input = arena.allocate(bytes.size.toLong())
+        MemorySegment.copy(MemorySegment.ofArray(bytes), 0, input, 0, bytes.size.toLong())
+        ghostty_vt_h.ghostty_terminal_vt_write(terminal, input, bytes.size.toLong())
+    }
+
+    // Small unsigned values (cursor row, active screen): the slot is zeroed so a narrower C type reads the same.
+    private fun readTerminalNumber(tag: Int): Long {
+        numberSlot.set(JAVA_LONG, 0, 0)
+        check(ghostty_vt_h.ghostty_terminal_get(terminal, tag, numberSlot), "terminal data $tag")
+        return numberSlot.get(JAVA_LONG, 0)
     }
 
     private fun readTotalRows(): Long {

@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.example.kotlineditor.model.FileContent
+import org.example.kotlineditor.model.TerminalSnapshot
 import org.example.kotlineditor.model.text
 import org.example.kotlineditor.rpc.RejectedException
 import org.example.kotlineditor.rpc.RemoteException
@@ -74,6 +75,8 @@ class RemoteServicesTest {
             } finally {
                 intruder.close()
             }
+            // JUnit skips a test that returns a value.
+            Unit
         }
 
     @Test
@@ -112,12 +115,12 @@ class RemoteServicesTest {
     fun `a remote terminal streams its screen`() =
         runBlocking {
             val terminal = RemoteTerminalLauncher(client).start(project.toString(), 80, 24, 8, 16)
-            terminal.write("echo hello\n".toByteArray())
+            terminal.write("echo hello\r".toByteArray())
             val screen =
                 withTimeout(10_000) {
-                    terminal.output.first { snapshot -> snapshot.text().any { it.trim() == "hello" } }
+                    terminal.output.first { snapshot -> "hello" in printed(snapshot) }
                 }
-            assertTrue(screen.text().any { it.trim() == "hello" })
+            assertTrue("hello" in printed(screen))
             terminal.destroy()
         }
 
@@ -125,11 +128,19 @@ class RemoteServicesTest {
     fun `commands reach the terminal in order`() =
         runBlocking {
             val terminal = RemoteTerminalLauncher(client).start(project.toString(), 80, 160, 8, 16)
-            repeat(50) { terminal.write("echo n$it\n".toByteArray()) }
-            terminal.write("exit\n".toByteArray())
+            repeat(50) { terminal.write("echo n$it\r".toByteArray()) }
+            terminal.write("exit\r".toByteArray())
             val screen = withTimeout(20_000) { terminal.output.first { snapshot -> !snapshot.running } }
-            val lines = screen.text().map { it.trim() }.filter { it.startsWith("n") }
-            assertEquals((0 until 50).map { "n$it" }, lines)
+            assertEquals((0 until 50).map { "n$it" }, printed(screen).filter { it.matches(Regex("n\\d+")) })
             terminal.destroy()
         }
+
+    // What the commands printed, without the shell's prompt. Commands are written before the shell is ready, so the
+    // terminal echoes them early and the output lands after a prompt (`$ hello`, `C:\project>hello`); lines echoing
+    // a command are skipped. Commands end with `\r`, the Enter key: a Unix PTY turns it into `\n`, ConPTY needs it.
+    private fun printed(snapshot: TerminalSnapshot): List<String> =
+        snapshot
+            .text()
+            .filter { "echo" !in it }
+            .mapNotNull { Regex("""([\w-]+)\s*$""").find(it)?.groupValues?.get(1) }
 }

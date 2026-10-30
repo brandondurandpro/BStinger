@@ -27,13 +27,13 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # detekt 2.x needs a recent JDK; runners default to an older one.
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "21"
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: .detekt
           key: detekt-${{ hashFiles('lint', 'detekt.yml') }}
@@ -68,8 +68,8 @@ jobs:
             xvfb xauth x11-utils xwayland weston \
             libgl1 libx11-6 libxext6 libxrender1 libxtst6 libxi6 \
             fontconfig fonts-dejavu-core
-      - uses: actions/checkout@v4
-      - uses: actions/cache@v4
+      - uses: actions/checkout@v7
+      - uses: actions/cache@v6
         with:
           path: |
             ~/.cache/JetBrains/Kotlin
@@ -79,6 +79,8 @@ jobs:
         if: matrix.session == 'x11'
         run: |
           Xvfb :99 -screen 0 1600x1000x24 -nolisten tcp -ac &
+          # GITHUB_ENV only applies to the next steps: this one needs DISPLAY too.
+          export DISPLAY=:99
           echo "DISPLAY=:99" >> "$GITHUB_ENV"
           for _ in $(seq 1 30); do xdpyinfo >/dev/null 2>&1 && break; sleep 1; done
           xdpyinfo | grep -E "name of display|dimensions"
@@ -132,8 +134,8 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/cache@v4
+      - uses: actions/checkout@v7
+      - uses: actions/cache@v6
         with:
           path: |
             ~/AppData/Local/JetBrains/Kotlin/cli
