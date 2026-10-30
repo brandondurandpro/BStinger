@@ -127,7 +127,8 @@ class RemoteServicesTest {
     @Test
     fun `commands reach the terminal in order`() =
         runBlocking {
-            val terminal = RemoteTerminalLauncher(client).start(project.toString(), 80, 160, 8, 16)
+            // Tall enough for every line: cmd.exe's long prompt makes each echoed command wrap.
+            val terminal = RemoteTerminalLauncher(client).start(project.toString(), 80, 400, 8, 16)
             repeat(50) { terminal.write("echo n$it\r".toByteArray()) }
             terminal.write("exit\r".toByteArray())
             val screen = withTimeout(20_000) { terminal.output.first { snapshot -> !snapshot.running } }

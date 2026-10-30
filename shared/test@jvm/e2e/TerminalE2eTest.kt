@@ -62,7 +62,11 @@ class TerminalE2eTest {
             runCommand(if (System.getProperty("os.name").startsWith("Windows")) "dir /b" else "ls")
             awaitCondition { screenLines(app).any { "README.md" in it } }
             // Joined without spaces: after a long prompt (cmd.exe shows the whole path) the command wraps.
-            assertTrue("echohello-terminal" in screenLines(app).joinToString("").filterNot(Char::isWhitespace))
+            val screen = screenLines(app)
+            assertTrue(
+                "echohello-terminal" in screen.joinToString("").filterNot(Char::isWhitespace),
+                screen.joinToString("\n"),
+            )
         }
 
     @Test
