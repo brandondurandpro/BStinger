@@ -40,8 +40,10 @@ internal class Link(private val socket: Socket, private val tap: NetworkTap? = n
         try {
             synchronized(output) {
                 val before = written.count
+                val tapped = tap?.takeIf { it.active }
+                tapped?.sending(frame)
                 Protocol.write(output, frame, codec)
-                if (tap?.active == true) tap.sent(frame, (written.count - before).toInt())
+                tapped?.sent(frame, (written.count - before).toInt())
             }
             lastSent = System.currentTimeMillis()
         } catch (ignored: IOException) {

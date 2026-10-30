@@ -22,7 +22,8 @@ internal class NetworkTap(val inspector: NetworkInspector) {
 
     val active: Boolean get() = inspector.recording
 
-    fun sent(frame: Frame, wireSize: Int) {
+    /** Called before the frame is written: its answer can be read before the write returns. */
+    fun sending(frame: Frame) {
         val method = if (frame.kind == FrameKind.Request) methodOf(frame.body) else null
         when {
             method != null -> {
@@ -35,6 +36,10 @@ internal class NetworkTap(val inspector: NetworkInspector) {
                 requests.remove(frame.id)
             }
         }
+    }
+
+    fun sent(frame: Frame, wireSize: Int) {
+        val method = if (frame.kind == FrameKind.Request) methodOf(frame.body) else null
         inspector.record(
             Direction.Sent,
             frame.kind.name,
