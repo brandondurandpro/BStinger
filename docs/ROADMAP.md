@@ -132,8 +132,9 @@ Légende de l'effort : ● petit · ●● moyen · ●●● gros.
   clic pour ouvrir la différence du fichier dans un onglet.
 - ✅ **Visionneuse de différences** : diff unifié avec anciens/nouveaux numéros de ligne, ajouts en vert et suppressions
   en rouge ; les fichiers non suivis s'affichent en ajouts.
+- ✅ **Visionneuse de différences côte à côte** : bascule depuis la barre de la visionneuse, ancien et nouveau fichier
+  alignés ligne à ligne.
 - **Marques de modification dans la gouttière** (lignes ajoutées, modifiées, supprimées par rapport à HEAD). ●●
-- **Visionneuse de différences** côte à côte. ●●
 - Commit, changement de branche, pull/push depuis l'IDE. ●●●
 - **Blame** (annotations auteur et date dans la gouttière). ●●
 - **Historique local** (à la IntelliJ) : instantanés automatiques des fichiers, filet de sécurité indépendant de

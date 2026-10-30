@@ -7,6 +7,7 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performMouseInput
@@ -115,6 +116,30 @@ class GitPanelE2eTest {
                 app.project.editor.activeTab
                     ?.title,
             )
+        }
+
+    @Test
+    fun `the diff can be switched to a side-by-side layout and back`() =
+        runComposeUiTest {
+            commitAll()
+            project.file("README.md", "# Changed\n")
+            val app = launchWithProject(project)
+            onNodeWithTag(Tags.TOOL_GIT).performClick()
+            awaitTag(ItemTags.gitChange("README.md"))
+            onNodeWithTag(ItemTags.gitChange("README.md")).performClick()
+            awaitTag(Tags.DIFF)
+            awaitTag(Tags.diffLine(0))
+            onNodeWithTag(Tags.DIFF_LAYOUT_TOGGLE).performClick()
+            awaitTag(Tags.DIFF_SPLIT)
+            awaitTag(Tags.diffSplitRow(0))
+            // The removed line is on the left, the added one on the right.
+            onNodeWithText("# Demo").assertIsDisplayed()
+            onNodeWithText("# Changed").assertIsDisplayed()
+            assertTrue(app.project.diffSideBySide)
+            onNodeWithTag(Tags.DIFF_LAYOUT_TOGGLE).performClick()
+            awaitTag(Tags.diffLine(0))
+            awaitNoTag(Tags.DIFF_SPLIT)
+            assertTrue(!app.project.diffSideBySide)
         }
 
     @Test

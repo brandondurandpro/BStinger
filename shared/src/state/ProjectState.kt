@@ -39,6 +39,9 @@ class ProjectState(val root: FileEntry, val services: AppServices, parentScope: 
     /** "Always Select Opened File" (IntelliJ): the active file is selected and revealed in the project tree. */
     var autoSelectOpenedFile by mutableStateOf(true)
 
+    /** Diff viewer layout: old and new files side by side (two panes) instead of the unified view. */
+    var diffSideBySide by mutableStateOf(false)
+
     /** Current Git branch (or short commit when detached), shown in the toolbar like IntelliJ's VCS widget. */
     var gitBranch: String? by mutableStateOf(null)
         private set

@@ -23,6 +23,9 @@ object Tags {
     const val TOOL_TERMINAL = "tool.terminal"
     const val WORKSPACE = "workspace"
     const val DIFF = "diff"
+    const val DIFF_TOOLBAR = "diff.toolbar"
+    const val DIFF_LAYOUT_TOGGLE = "diff.layoutToggle"
+    const val DIFF_SPLIT = "diff.split"
     const val TERMINAL = "terminal"
     const val TERMINAL_INPUT = "terminal.input"
     const val TERMINAL_NEW = "terminal.new"
@@ -94,6 +97,10 @@ object Tags {
     fun diffLine(index: Int) = "diff.line:$index"
 
     fun diffLineKind(index: Int, kind: String) = "diff.line:$index:$kind"
+
+    fun diffSplitRow(index: Int) = "diff.split.row:$index"
+
+    fun diffSplitCell(index: Int, side: Int) = "diff.split.cell:$index:$side"
 
     fun toolHeader(window: String) = "tool.header:$window"
 

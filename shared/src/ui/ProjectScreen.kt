@@ -158,10 +158,27 @@ private fun TabContent(
     findFocus: FocusRequester,
 ) {
     when (val status = tab.status) {
-        TabStatus.Loading -> Box(Modifier.fillMaxSize().testTag(Tags.EDITOR_LOADING))
-        is TabStatus.Unsupported -> EditorMessage(status.message)
-        is TabStatus.Ready -> ReadyEditor(app, project, tab, status.document, editorFocus, findFocus)
-        is TabStatus.Diff -> DiffView(tab, status.lines, Modifier.fillMaxSize())
+        TabStatus.Loading -> {
+            Box(Modifier.fillMaxSize().testTag(Tags.EDITOR_LOADING))
+        }
+
+        is TabStatus.Unsupported -> {
+            EditorMessage(status.message)
+        }
+
+        is TabStatus.Ready -> {
+            ReadyEditor(app, project, tab, status.document, editorFocus, findFocus)
+        }
+
+        is TabStatus.Diff -> {
+            DiffView(
+                tab,
+                status.lines,
+                sideBySide = project.diffSideBySide,
+                onToggleSideBySide = { project.diffSideBySide = !project.diffSideBySide },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
     }
 }
 
