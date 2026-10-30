@@ -48,22 +48,25 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.example.kotlineditor.state.EditorPane
 import org.example.kotlineditor.state.EditorState
 import org.example.kotlineditor.state.EditorTab
 import org.example.kotlineditor.state.closeOthers
 import org.example.kotlineditor.state.closeTabsToLeft
 import org.example.kotlineditor.state.closeTabsToRight
 import org.example.kotlineditor.state.relativePath
+import org.example.kotlineditor.state.splitRight
+import org.example.kotlineditor.state.unsplit
 
 /** Editor tabs: active one underlined, close button on hover, middle click closes. */
 @Composable
-fun EditorTabs(editor: EditorState, modifier: Modifier = Modifier) {
+fun EditorTabs(editor: EditorState, pane: EditorPane, modifier: Modifier = Modifier) {
     val listState = rememberLazyListState()
-    val active = editor.activeTab
+    val active = pane.activeTab
     val density = LocalDensity.current
     var contextMenu by remember { mutableStateOf<Pair<String, DpOffset>?>(null) }
     LaunchedEffect(active) {
-        val index = editor.tabs.indexOf(active)
+        val index = pane.tabs.indexOf(active)
         if (index >= 0 && !isFullyVisible(listState, index)) listState.animateScrollToItem(index)
     }
     Box(
@@ -74,7 +77,7 @@ fun EditorTabs(editor: EditorState, modifier: Modifier = Modifier) {
             .testTag(Tags.TABS),
     ) {
         LazyRow(Modifier.fillMaxWidth().fillMaxHeight(), state = listState) {
-            items(editor.tabs, key = { it.key }) { tab ->
+            items(pane.tabs, key = { it.key }) { tab ->
                 EditorTabView(
                     tab,
                     active = tab == active,
@@ -86,7 +89,7 @@ fun EditorTabs(editor: EditorState, modifier: Modifier = Modifier) {
                     },
                 ) {
                     contextMenu?.takeIf { it.first == tab.key }?.let { (_, offset) ->
-                        TabContextMenu(editor, tab, offset) { contextMenu = null }
+                        TabContextMenu(editor, pane, tab, offset) { contextMenu = null }
                     }
                 }
             }
@@ -198,10 +201,16 @@ private fun onTabPress(
     }
 }
 
-// Context menu of a tab: close it, the others, both sides, everything, or copy its path.
+// Context menu of a tab: close it, the others, both sides, everything, split or unsplit, or copy its path.
 @Composable
-private fun TabContextMenu(editor: EditorState, tab: EditorTab, offset: DpOffset, onDismiss: () -> Unit) {
-    val index = editor.tabs.indexOf(tab)
+private fun TabContextMenu(
+    editor: EditorState,
+    pane: EditorPane,
+    tab: EditorTab,
+    offset: DpOffset,
+    onDismiss: () -> Unit,
+) {
+    val index = pane.tabs.indexOf(tab)
     val action = { block: () -> Unit ->
         onDismiss()
         block()
@@ -216,7 +225,7 @@ private fun TabContextMenu(editor: EditorState, tab: EditorTab, offset: DpOffset
         TabMenuItem(
             "Close Others",
             Tags.MENU_CLOSE_OTHER_TABS,
-            enabled = editor.tabs.size > 1,
+            enabled = pane.tabs.size > 1,
         ) { action { editor.closeOthers(tab) } }
         TabMenuItem(
             "Close All to the Left",
@@ -226,10 +235,23 @@ private fun TabContextMenu(editor: EditorState, tab: EditorTab, offset: DpOffset
         TabMenuItem(
             "Close All to the Right",
             Tags.MENU_CLOSE_TABS_RIGHT,
-            enabled = index in 0 until editor.tabs.lastIndex,
+            enabled = index in 0 until pane.tabs.lastIndex,
         ) { action { editor.closeTabsToRight(tab) } }
         MenuSeparator()
         TabMenuItem("Close All", Tags.MENU_CLOSE_ALL_TABS) { action { editor.closeAll() } }
+        MenuSeparator()
+        TabMenuItem("Split Right", Tags.MENU_SPLIT_RIGHT, enabled = !editor.isSplit) {
+            action {
+                editor.activate(tab)
+                editor.splitRight()
+            }
+        }
+        TabMenuItem("Unsplit", Tags.MENU_UNSPLIT, enabled = editor.isSplit) {
+            action {
+                editor.activate(tab)
+                editor.unsplit()
+            }
+        }
         MenuSeparator()
         TabMenuItem("Copy Path", Tags.MENU_COPY_TAB_PATH) { action { TextClipboard.set(tab.entry.path) } }
     }
