@@ -371,7 +371,7 @@ class TerminalE2eTest {
         }
 
     @Test
-    fun `tabs are named Local, Local (2)… and a closed tab's name is given again`() =
+    fun `tabs are named Local, Local (2) and so on, and a closed tab's name is given again`() =
         runComposeUiTest {
             val app = launchWithProject(project)
             openTabs(app, 3)
