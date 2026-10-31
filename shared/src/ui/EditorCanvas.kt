@@ -79,6 +79,7 @@ internal fun EditorCanvas(
                 .graphicsLayer()
                 .drawBehind { if (caretOn.value) drawCaret(tab, document, metrics) },
         )
+        EditorLineSemantics(tab, document, metrics)
     }
 }
 

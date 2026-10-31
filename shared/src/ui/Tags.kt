@@ -143,6 +143,9 @@ object Tags {
 
     fun line(index: Int) = "line:$index"
 
+    /** The text of a line of the editor, as wide as the text (without the gutter). */
+    fun lineText(index: Int) = "line.text:$index"
+
     fun foldMarker(line: Int) = "fold:$line"
 }
 
