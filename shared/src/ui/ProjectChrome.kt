@@ -2,6 +2,9 @@ package org.example.kotlineditor.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,8 +15,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -23,11 +28,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.example.kotlineditor.model.ConnectionStatus
+import org.example.kotlineditor.model.pathName
 import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.Document
 import org.example.kotlineditor.state.PopupKind
@@ -55,6 +67,9 @@ internal fun Toolbar(app: AppState, project: ProjectState) {
     }
 }
 
+private val MENU_MIN_WIDTH = 320.dp
+private val MENU_MAX_WIDTH = 900.dp
+
 @Composable
 private fun ProjectWidget(app: AppState, project: ProjectState) {
     var menuOpen by remember { mutableStateOf(false) }
@@ -70,23 +85,79 @@ private fun ProjectWidget(app: AppState, project: ProjectState) {
             Label(project.name, Modifier.padding(start = 8.dp), fontWeight = FontWeight.SemiBold)
             Chevron(expanded = true, Modifier.padding(start = 2.dp))
         }
-        DropdownMenu(menuOpen, onDismissRequest = { menuOpen = false }) {
-            DropdownMenuItem(
-                text = { Text("Open…", fontSize = 13.sp) },
-                onClick = {
-                    menuOpen = false
-                    app.browseForProject()
+        DropdownMenu(
+            menuOpen,
+            onDismissRequest = { menuOpen = false },
+            Modifier
+                .widthIn(min = MENU_MIN_WIDTH, max = MENU_MAX_WIDTH)
+                .testTag(Tags.PROJECT_MENU)
+                .onPreviewKeyEvent { event ->
+                    val escape = event.key == Key.Escape && event.type == KeyEventType.KeyDown
+                    if (escape) menuOpen = false
+                    escape
                 },
-                modifier = Modifier.testTag(Tags.PROJECT_OPEN_OTHER),
-            )
-            DropdownMenuItem(
-                text = { Text("Close Project", fontSize = 13.sp) },
-                onClick = {
-                    menuOpen = false
-                    app.closeProject()
-                },
-                modifier = Modifier.testTag(Tags.PROJECT_CLOSE),
-            )
+        ) {
+            ProjectMenuItems(app) { menuOpen = false }
+        }
+    }
+}
+
+@Composable
+private fun ProjectMenuItems(app: AppState, close: () -> Unit) {
+    DropdownMenuItem(
+        text = { Text("Open Project…", fontSize = 13.sp) },
+        onClick = {
+            close()
+            app.browseForProject()
+        },
+        modifier = Modifier.testTag(Tags.PROJECT_OPEN_OTHER),
+    )
+    DropdownMenuItem(
+        text = { Text("Go Homepage", fontSize = 13.sp) },
+        onClick = {
+            close()
+            app.closeProject()
+        },
+        modifier = Modifier.testTag(Tags.PROJECT_CLOSE),
+    )
+    val others = app.otherProjects
+    if (others.isNotEmpty()) {
+        HorizontalDivider(color = IdeColors.Border)
+        Label(
+            "Recent Projects",
+            Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 4.dp),
+            color = IdeColors.TextSecondary,
+            fontSize = 12.sp,
+        )
+        others.forEach { path ->
+            RecentProjectItem(path) {
+                close()
+                app.openProject(path)
+            }
+        }
+    }
+}
+
+// Not a DropdownMenuItem: Material caps those at 280 dp, which cut the paths. This row is as wide as its full path.
+@Composable
+private fun RecentProjectItem(path: String, onClick: () -> Unit) {
+    val name = pathName(path)
+    val interaction = remember { MutableInteractionSource() }
+    val hovered by interaction.collectIsHoveredAsState()
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(if (hovered) IdeColors.Hover else Color.Transparent)
+            .hoverable(interaction)
+            .clickable(interaction, indication = null, onClick = onClick)
+            .testTag(ItemTags.switchProject(path))
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        ProjectBadge(name)
+        Column(Modifier.padding(start = 10.dp)) {
+            Label(name, fontSize = 13.sp)
+            Label(path, color = IdeColors.TextSecondary, fontSize = 11.sp, maxLines = Int.MAX_VALUE)
         }
     }
 }
@@ -139,6 +210,17 @@ internal fun StatusBar(app: AppState, project: ProjectState) {
             color = IdeColors.TextSecondary,
             fontSize = 12.sp,
         )
+        app.opening?.let {
+            Label(
+                "Opening ${pathName(it)}…",
+                Modifier.testTag(Tags.STATUS_OPENING),
+                color = IdeColors.TextSecondary,
+                fontSize = 12.sp,
+            )
+        }
+        app.error?.let {
+            Label(it, Modifier.testTag(Tags.STATUS_ERROR), color = IdeColors.Error, fontSize = 12.sp)
+        }
         if (connection != ConnectionStatus.Connected) {
             Label(
                 if (connection == ConnectionStatus.Reconnecting) "Server: reconnecting…" else "Server: disconnected",
