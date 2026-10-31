@@ -6,3 +6,4 @@ modules:
   - server
   - serverApp
   - shared
+  - testkit

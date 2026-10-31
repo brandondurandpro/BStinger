@@ -48,4 +48,18 @@ class ServerConnectionE2eTest {
             app.server.close()
             awaitTag(Tags.STATUS_CONNECTION).assertTextContains("reconnecting", substring = true)
         }
+
+    @Test
+    fun `a server restarted with another token is reported as refusing the IDE, not as reconnecting forever`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, chaos = true)
+            // Reinstalled or reconfigured: same address, new secret.
+            app.process.restart(token = "another-token")
+            awaitTag(Tags.STATUS_CONNECTION)
+            awaitCondition {
+                runCatching {
+                    onNodeWithTag(Tags.STATUS_CONNECTION).assertTextContains("disconnected", substring = true)
+                }.isSuccess
+            }
+        }
 }

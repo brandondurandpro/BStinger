@@ -16,6 +16,7 @@ import androidx.compose.ui.test.printToString
 import kotlinx.coroutines.runBlocking
 import org.example.kotlineditor.App
 import org.example.kotlineditor.model.AppServices
+import org.example.kotlineditor.rpc.ClientOptions
 import org.example.kotlineditor.rpc.RpcClient
 import org.example.kotlineditor.rpc.appServices
 import org.example.kotlineditor.server.EditorServer
@@ -25,6 +26,7 @@ import org.example.kotlineditor.state.InMemoryPreferenceStore
 import org.example.kotlineditor.state.PreferenceStore
 import org.example.kotlineditor.state.ProjectState
 import org.example.kotlineditor.state.Screen
+import org.example.kotlineditor.testkit.ChaosProxy
 import org.example.kotlineditor.ui.Tags
 import org.example.kotlineditor.ui.TextClipboard
 import java.nio.file.Files
@@ -34,6 +36,9 @@ import kotlin.io.path.writeBytes
 import kotlin.io.path.writeText
 
 const val TIMEOUT = 10_000L
+
+/** Client tuning of chaos tests: a silent link is noticed within a second, reconnections are quick. */
+val CHAOS_CLIENT_OPTIONS = ClientOptions(heartbeatMs = 200, deadAfterMs = 1_000, maxBackoffMs = 200)
 
 /** A throw-away project on disk. */
 class SampleProject(val root: Path = Files.createTempDirectory("kotlin-editor-e2e")) {
@@ -94,13 +99,53 @@ class SampleProject(val root: Path = Files.createTempDirectory("kotlin-editor-e2
     }
 }
 
+/**
+ * The server process of an e2e app, which a chaos test can stop and start again on the same port and data, as when
+ * it crashes or is redeployed: its sessions (shells, cached answers) are lost, the files and stores are not.
+ */
+class ServerProcess(private val data: java.io.File) : AutoCloseable {
+    var server: EditorServer = EditorServer(LocalServices(data)).start()
+        private set
+    val port: Int = server.port
+    private var running = true
+
+    /** Kills the server: connections drop and new ones are refused until [start]. */
+    fun stop() {
+        server.close()
+        running = false
+    }
+
+    /** Starts a new server on the same port and data, presenting [token] (the same one by default). */
+    fun start(token: String = server.token) {
+        check(!running) { "The server is already running" }
+        server = EditorServer(LocalServices(data), token).start(port = port)
+        running = true
+    }
+
+    /** Stops then starts the server, like a crash followed by an automatic restart. */
+    fun restart(token: String = server.token) {
+        stop()
+        start(token)
+    }
+
+    override fun close() {
+        if (running) server.close()
+    }
+}
+
 class E2eApp(
     val state: AppState,
     val recentStore: org.example.kotlineditor.model.RecentProjectsStore,
     val picker: FakePicker,
-    val server: EditorServer,
+    val process: ServerProcess,
     val client: RpcClient,
+    private val proxy: ChaosProxy?,
 ) {
+    val server: EditorServer get() = process.server
+
+    /** The network between the UI and the server, for an app launched with `chaos = true`. */
+    val network: ChaosProxy get() = checkNotNull(proxy) { "Launch the app with chaos = true" }
+
     val recentPaths: List<String> get() = runBlocking { recentStore.load() }
 
     val project: ProjectState get() = (state.screen as Screen.Project).project
@@ -125,11 +170,20 @@ fun ComposeUiTest.launchApp(
     pick: String? = null,
     sessions: org.example.kotlineditor.model.SessionStore? = null,
     preferences: PreferenceStore = InMemoryPreferenceStore(),
+    chaos: Boolean = false,
 ): E2eApp {
     TextClipboard.useSystem = false
     val data = Files.createTempDirectory("kotlin-editor-server").toFile()
-    val server = EditorServer(LocalServices(data)).start()
-    val client = RpcClient("127.0.0.1", server.port, server.token)
+    val process = ServerProcess(data)
+    val token = process.server.token
+    // Chaos tests go through a proxy that breaks the network, and notice a dead link within a second.
+    val proxy = if (chaos) ChaosProxy(process.port) else null
+    val client =
+        if (proxy == null) {
+            RpcClient("127.0.0.1", process.port, token)
+        } else {
+            RpcClient("127.0.0.1", proxy.port, token, CHAOS_CLIENT_OPTIONS)
+        }
     Runtime.getRuntime().addShutdownHook(Thread { data.deleteRecursively() })
     runBlocking { client.awaitConnected() }
     val remote = client.appServices(FakePicker(pick))
@@ -154,14 +208,15 @@ fun ComposeUiTest.launchApp(
         DisposableEffect(Unit) {
             onDispose {
                 client.close()
-                server.close()
+                proxy?.close()
+                process.close()
             }
         }
         App(state)
     }
     waitForIdle()
     if (recent.isNotEmpty()) waitUntil(timeoutMillis = TIMEOUT) { created!!.recentProjects.size == recent.size }
-    return E2eApp(created!!, services.recentProjects, services.directoryPicker as FakePicker, server, client)
+    return E2eApp(created!!, services.recentProjects, services.directoryPicker as FakePicker, process, client, proxy)
 }
 
 /** Opens [project] through the welcome screen, as a user would, and waits for its tree. */
@@ -169,8 +224,9 @@ fun ComposeUiTest.launchApp(
 fun ComposeUiTest.launchWithProject(
     project: SampleProject,
     preferences: PreferenceStore = InMemoryPreferenceStore(),
+    chaos: Boolean = false,
 ): E2eApp {
-    val app = launchApp(pick = project.path, preferences = preferences)
+    val app = launchApp(pick = project.path, preferences = preferences, chaos = chaos)
     onNodeWithTag(Tags.WELCOME_OPEN).performClick()
     awaitTag(Tags.treeRow("src"))
     return app
@@ -234,3 +290,29 @@ fun hasTestTagPrefix(prefix: String) =
             .getOrElseNullable(androidx.compose.ui.semantics.SemanticsProperties.TestTag) { null }
             ?.startsWith(prefix) == true
     }
+
+/** Opens the context menu of the node tagged [tag]. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.rightClickOn(tag: String) {
+    onNodeWithTag(tag).performMouseInput {
+        moveTo(center)
+        press(androidx.compose.ui.test.MouseButton.Secondary)
+        release(androidx.compose.ui.test.MouseButton.Secondary)
+    }
+}
+
+/** Waits until the status bar says the server is out of reach. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.awaitReconnecting() {
+    awaitCondition {
+        onAllNodes(hasTestTag(Tags.STATUS_CONNECTION)).fetchSemanticsNodes().any { node ->
+            node.config
+                .getOrElseNullable(androidx.compose.ui.semantics.SemanticsProperties.Text) { null }
+                ?.any { "reconnecting" in it.text } == true
+        }
+    }
+}
+
+/** Waits until the status bar no longer warns about the server. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.awaitReconnected() = awaitNoTag(Tags.STATUS_CONNECTION)

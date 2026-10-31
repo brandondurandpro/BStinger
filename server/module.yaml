@@ -10,6 +10,9 @@ dependencies:
   - $libs.pty4j21
   - $libs.ghostty.linux
 
+test-dependencies:
+  - //testkit
+
 # libghostty-vt and pty4j21 both use the Foreign Function & Memory API.
 test-settings:
   jvm:

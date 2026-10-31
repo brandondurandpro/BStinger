@@ -45,6 +45,7 @@ object Tags {
     const val DIFF_LAYOUT_TOGGLE = "diff.layoutToggle"
     const val DIFF_SPLIT = "diff.split"
     const val TERMINAL = "terminal"
+    const val TERMINAL_LOST = "terminal.lost"
     const val TERMINAL_INPUT = "terminal.input"
     const val TERMINAL_NEW = "terminal.new"
     const val TERMINAL_TABS = "terminal.tabs"
