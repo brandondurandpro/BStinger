@@ -16,6 +16,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performMouseInput
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.v2.runComposeUiTest
@@ -61,7 +62,10 @@ class TerminalE2eTest {
         onNodeWithTag(Tags.TERMINAL_INPUT).performKeyInput { pressKey(Key.Enter) }
     }
 
+    // The tab is first scrolled fully into view: a click at the center of a tab half hidden by the scrolled row would
+    // land outside it.
     private fun ComposeUiTest.clickTab(number: Int, button: MouseButton) {
+        onNodeWithTag(Tags.terminalTab(number)).performScrollTo()
         onNodeWithTag(Tags.terminalTab(number)).performMouseInput {
             moveTo(center)
             press(button)
@@ -91,12 +95,26 @@ class TerminalE2eTest {
         project.terminal.active
             ?.number
 
-    // Opens the terminal with tabs 1 to [count], tab [count] being shown.
+    // Opens the terminal with tabs 1 to [count], tab [count] being shown, once every shell has drawn its prompt. The
+    // title a shell sets while starting (cmd.exe's is long) widens its tab and scrolls the row to the shown tab: a
+    // click sent meanwhile lands where the tab, its close button or its context menu no longer is.
     private fun ComposeUiTest.openTabs(app: E2eApp, count: Int) {
         onNodeWithTag(Tags.TOOL_TERMINAL).performClick()
         awaitTag(Tags.TERMINAL_INPUT)
         repeat(count - 1) { onNodeWithTag(Tags.TERMINAL_NEW).performClick() }
         awaitCondition { app.tabNumbers() == (1..count).toList() }
+        awaitCondition {
+            app.project.terminal.tabs.all { tab ->
+                tab.snapshot
+                    ?.text()
+                    ?.any { it.isNotBlank() } == true
+            }
+        }
+    }
+
+    private fun ComposeUiTest.clickTabClose(number: Int) {
+        onNodeWithTag(Tags.terminalTab(number)).performScrollTo()
+        onNodeWithTag(Tags.terminalTabClose(number)).assertIsDisplayed().performClick()
     }
 
     private fun ComposeUiTest.typeKeys(keys: List<Key>) {
@@ -165,7 +183,7 @@ class TerminalE2eTest {
             awaitCondition { printed(app, "second-tab") }
             onNodeWithTag(Tags.terminalTab(1)).performClick()
             awaitCondition { printed(app, "first-tab") }
-            onNodeWithTag(Tags.terminalTabClose(1)).performClick()
+            clickTabClose(1)
             awaitNoTag(Tags.terminalTab(1))
             assertEquals(listOf(2), app.tabNumbers())
             awaitCondition { printed(app, "second-tab") }
@@ -240,13 +258,13 @@ class TerminalE2eTest {
         runComposeUiTest {
             val app = launchWithProject(project)
             openTabs(app, 3)
-            onNodeWithTag(Tags.terminalTabClose(2)).assertIsDisplayed().performClick()
+            clickTabClose(2)
             awaitNoTag(Tags.terminalTab(2))
             assertEquals(listOf(1, 3), app.tabNumbers())
             clickTab(3, MouseButton.Tertiary)
             awaitNoTag(Tags.terminalTab(3))
             assertEquals(listOf(1), app.tabNumbers())
-            onNodeWithTag(Tags.terminalTabClose(1)).performClick()
+            clickTabClose(1)
             awaitNoTag(Tags.TERMINAL_INPUT)
             assertEquals(emptyList(), app.tabNumbers())
         }

@@ -23,6 +23,8 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 import kotlin.time.measureTime
 
+private val COMMAND_OUTPUT = Regex("""(?<!echo )(?<!\w)n\d+(?!\d)""")
+
 /** The client and the server talking over a real socket. */
 class RemoteServicesTest {
     private val data = Files.createTempDirectory("server-data")
@@ -132,7 +134,16 @@ class RemoteServicesTest {
             repeat(50) { terminal.write("echo n$it\r".toByteArray()) }
             terminal.write("exit\r".toByteArray())
             val screen = withTimeout(20_000) { terminal.output.first { snapshot -> !snapshot.running } }
-            assertEquals((0 until 50).map { "n$it" }, printed(screen).filter { it.matches(Regex("n\\d+")) })
+            // Every `nN` that is not the echo of its command. Rows are padded to the width, so joined as they are a
+            // command wrapped by the long prompt stays in one piece; and with type-ahead, ConPTY can draw an output and
+            // the echo of the next command on one row (`n9C:\project>echo n10`), which a row filter would drop.
+            val rows = screen.text()
+            val outputs = COMMAND_OUTPUT.findAll(rows.joinToString("")).map { it.value }.toList()
+            assertEquals(
+                (0 until 50).map { "n$it" },
+                outputs,
+                "screen:\n" + rows.filter { it.isNotBlank() }.joinToString("\n") { it.trimEnd() },
+            )
             terminal.destroy()
         }
 
