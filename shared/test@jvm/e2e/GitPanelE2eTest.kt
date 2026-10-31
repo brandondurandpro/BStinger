@@ -322,9 +322,8 @@ class GitPanelE2eTest {
             awaitTag(ItemTags.gitChange("README.md"))
             awaitTag(ItemTags.gitChange("notes.txt"))
             onNodeWithTag(Tags.GIT_COMMIT).assertIsNotEnabled()
-            awaitTag(Tags.GIT_OTHER_FILES)
             awaitTag(ItemTags.gitChangeCheck("README.md")).performClick()
-            awaitTag(Tags.GIT_COMMIT_FILES)
+            awaitCondition { app.project.selectedForCommit == setOf("README.md") }
             awaitTag(Tags.GIT_COMMIT_MESSAGE).performTextInput("Update the readme")
             onNodeWithTag(Tags.GIT_COMMIT).performClick()
             awaitCondition { !app.project.gitBusy && app.project.gitStatus.keys == setOf("notes.txt") }

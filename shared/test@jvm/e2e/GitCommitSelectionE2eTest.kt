@@ -32,7 +32,7 @@ class GitCommitSelectionE2eTest {
     }
 
     @Test
-    fun `ticking a change moves it into Commit and unticking brings it back`() =
+    fun `ticking a change checks it for the commit and unticking unchecks it`() =
         runComposeUiTest {
             project.commitAll()
             project.file("README.md", "# Changed\n")
@@ -40,16 +40,10 @@ class GitCommitSelectionE2eTest {
             val app = openGit()
             awaitTag(ItemTags.gitChange("README.md"))
             awaitTag(ItemTags.gitChange("notes.txt"))
-            // At first only the Other changes section lists the files.
-            awaitTag(Tags.GIT_OTHER_FILES)
-            awaitNoTag(Tags.GIT_COMMIT_FILES)
             awaitTag(ItemTags.gitChangeCheck("README.md")).performClick()
-            awaitTag(Tags.GIT_COMMIT_FILES)
-            assertEquals(setOf("README.md"), app.project.selectedForCommit)
+            awaitCondition { app.project.selectedForCommit == setOf("README.md") }
             awaitTag(ItemTags.gitChangeCheck("README.md")).performClick()
-            awaitNoTag(Tags.GIT_COMMIT_FILES)
-            awaitTag(Tags.GIT_OTHER_FILES)
-            assertEquals(0, app.project.selectedForCommit.size)
+            awaitCondition { app.project.selectedForCommit.isEmpty() }
         }
 
     @Test

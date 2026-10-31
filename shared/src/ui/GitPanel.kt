@@ -85,39 +85,14 @@ private fun Message(text: String, tag: String) {
     }
 }
 
-// The changed files, split into the ones checked for the commit and the others: the Commit section (with its
-// checkboxes ticked) comes first when it is not empty, and the Commit button commits only its files.
+// One list of the changed files with a checkbox per file: the checked ones are the files of the next commit, and
+// a click on the file name opens its diff. The checked state is read per row, so a tick recomposes only that row.
 @Composable
 private fun ChangeList(project: ProjectState, changes: List<Map.Entry<String, GitFileStatus>>) {
-    val (selected, others) = changes.partition { it.key in project.selectedForCommit }
     LazyColumn(Modifier.fillMaxSize()) {
-        if (selected.isNotEmpty()) {
-            item(key = "header:commit") { SectionHeader("Commit (${selected.size})", Tags.GIT_COMMIT_FILES) }
-            items(selected, key = { it.key }) { (path, status) ->
-                ChangeRow(project, path, status, checked = true)
-            }
+        items(changes, key = { it.key }) { (path, status) ->
+            ChangeRow(project, path, status, checked = path in project.selectedForCommit)
         }
-        if (others.isNotEmpty()) {
-            item(key = "header:other") { SectionHeader("Other changes (${others.size})", Tags.GIT_OTHER_FILES) }
-            items(others, key = { it.key }) { (path, status) ->
-                ChangeRow(project, path, status, checked = false)
-            }
-        }
-    }
-}
-
-@Composable
-private fun SectionHeader(text: String, tag: String) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .height(20.dp)
-            .background(IdeColors.Panel)
-            .testTag(tag)
-            .padding(horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Label(text, color = IdeColors.TextSecondary, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -126,10 +101,11 @@ private fun ChangeRow(project: ProjectState, path: String, status: GitFileStatus
     val name = path.substringAfterLast('/')
     val directory = path.substringBeforeLast('/', "")
     Row(Modifier.fillMaxWidth().height(24.dp), verticalAlignment = Alignment.CenterVertically) {
-        // The checkbox decides where this row sits (Commit or Other changes); the file name opens its diff.
+        // The checkbox decides what the next commit carries; the file name opens the diff.
         BranchCheckbox(
             checked,
-            Modifier.padding(start = 8.dp).testTag(ItemTags.gitChangeCheck(path)),
+            Modifier.padding(start = 9.dp).testTag(ItemTags.gitChangeCheck(path)),
+            size = 14.dp,
         ) { project.toggleCommitSelection(path) }
         Row(
             Modifier

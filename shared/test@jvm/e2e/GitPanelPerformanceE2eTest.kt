@@ -2,27 +2,21 @@ package org.example.kotlineditor.e2e
 
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.hasAnyAncestor
-import androidx.compose.ui.test.hasScrollToNodeAction
-import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.ui.ItemTags
 import org.example.kotlineditor.ui.Tags
 import kotlin.test.AfterTest
 import kotlin.test.Test
-import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 private const val CHANGES = 2_000
 private const val MAX_COMPOSED_ROWS = 120
 
 /**
- * Performance of the Git panel on [CHANGES] changes at once: opening the panel, and moving a file between the Commit
- * section and the other changes (a tick is a partition of the whole list). The list is virtualized, so the rows
- * composed stay far below the changes listed.
+ * Performance of the Git panel on [CHANGES] changes at once: opening the panel and ticking a file for the next
+ * commit (a state read per row). The list is virtualized, so the rows composed stay far below the changes listed.
  */
 @OptIn(ExperimentalTestApi::class)
 class GitPanelPerformanceE2eTest {
@@ -58,17 +52,13 @@ class GitPanelPerformanceE2eTest {
                 renderFrame()
             }
             assertTrue(composedChangeRows() < MAX_COMPOSED_ROWS, "composed rows: ${composedChangeRows()}")
-            awaitTag(Tags.GIT_OTHER_FILES)
 
+            // A tick is read per row: only the ticked row recomposes, not the list.
             measure("tick one of $CHANGES changes", budgetMillis = 2_000, budgetMegabytes = 50) {
                 onNodeWithTag(ItemTags.gitChangeCheck(name(0))).performClick()
                 awaitCondition { app.project.selectedForCommit == setOf(name(0)) }
                 renderFrame()
             }
-            // The list keeps the first visible row on screen; scrolled up, the Commit section is on top again.
-            changeList().performScrollToIndex(0)
-            awaitTag(Tags.GIT_COMMIT_FILES)
-            assertEquals(setOf(name(0)), app.project.selectedForCommit)
             assertTrue(composedCheckboxes() < MAX_COMPOSED_ROWS, "composed checkboxes: ${composedCheckboxes()}")
 
             measure("untick it again", budgetMillis = 2_000, budgetMegabytes = 50) {
@@ -76,14 +66,5 @@ class GitPanelPerformanceE2eTest {
                 awaitCondition { app.project.selectedForCommit.isEmpty() }
                 renderFrame()
             }
-            changeList().performScrollToIndex(0)
-            awaitNoTag(Tags.GIT_COMMIT_FILES)
-            awaitTag(Tags.GIT_OTHER_FILES)
         }
-
-    // The lazy column of the changes, the one scrollable node inside the Git panel.
-    private fun ComposeUiTest.changeList() =
-        onNode(
-            hasScrollToNodeAction() and hasAnyAncestor(hasTestTag(Tags.GIT_PANEL)),
-        )
 }
