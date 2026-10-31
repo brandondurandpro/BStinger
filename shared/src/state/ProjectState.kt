@@ -30,12 +30,15 @@ class ProjectState(
     val scope = CoroutineScope(parentScope.coroutineContext + SupervisorJob(parentScope.coroutineContext[Job]))
     val name: String get() = root.name
     val tree = FileTreeState(root, services.fileSystem, scope)
-    val editor =
+    val editor: EditorState =
         EditorState(
             services.fileSystem,
             scope,
             tree::relativePath,
-            onSaved = { refreshGitStatus() },
+            onSaved = { entry ->
+                editor.reloadGitOf(entry)
+                refreshGitStatus(reloadEditors = false)
+            },
             diffs = { entry -> services.git.diff(root.path, tree.relativePath(entry)) },
             blames = { entry -> services.git.blame(root.path, tree.relativePath(entry)) },
         )
@@ -87,6 +90,9 @@ class ProjectState(
 
     private var gitJob: Job? = null
 
+    // A refresh asked to reload every editor; kept when a later refresh (a save) cancels it.
+    private var editorsReloadPending = false
+
     init {
         refreshGit()
         followActiveFile()
@@ -123,15 +129,23 @@ class ProjectState(
         refreshGitStatus()
     }
 
-    fun refreshGitStatus() {
+    /**
+     * Reloads the status of every file and, when [reloadEditors], the diffs, gutter marks and blame of the open
+     * editors (HEAD may have moved). A save passes false: it reloads only the saved file (`EditorState.reloadGitOf`).
+     */
+    fun refreshGitStatus(reloadEditors: Boolean = true) {
+        editorsReloadPending = editorsReloadPending || reloadEditors
         gitJob?.cancel()
         gitJob =
             scope.launch {
                 runCatching { services.git.status(root.path) }.onSuccess {
                     gitStatus = it
-                    editor.reloadDiffs()
-                    editor.reloadChanges()
-                    editor.reloadBlames()
+                    if (editorsReloadPending) {
+                        editorsReloadPending = false
+                        editor.reloadDiffs()
+                        editor.reloadChanges()
+                        editor.reloadBlames()
+                    }
                 }
             }
     }

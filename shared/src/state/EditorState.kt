@@ -23,7 +23,7 @@ class EditorState(
     fileSystem: ProjectFileSystem,
     scope: CoroutineScope,
     private val relativePath: (FileEntry) -> String = { it.name },
-    onSaved: () -> Unit = {},
+    onSaved: (FileEntry) -> Unit = {},
     diffs: suspend (FileEntry) -> List<DiffLine> = { emptyList() },
     blames: suspend (FileEntry) -> List<BlameLine> = { emptyList() },
 ) {
@@ -61,6 +61,14 @@ class EditorState(
 
     /** Recomputes the blame annotations of the tabs where they are shown. */
     fun reloadBlames() = allTabs.filter { it.blameVisible }.distinctBy { it.entry.path }.forEach(files::loadBlame)
+
+    /** Recomputes the diff tabs, gutter marks and blame of [entry] alone (saved, the other files are unchanged). */
+    fun reloadGitOf(entry: FileEntry) {
+        val tabs = allTabs.filter { it.entry.path == entry.path }
+        tabs.filter { it.isDiff }.forEach(files::loadDiff)
+        tabs.firstOrNull { !it.isDiff }?.let(files::loadChanges)
+        tabs.firstOrNull { it.blameVisible }?.let(files::loadBlame)
+    }
 
     /** Shows or hides the blame annotations of [tab] (Annotate in the Git panel). */
     fun toggleBlame(tab: EditorTab?) {

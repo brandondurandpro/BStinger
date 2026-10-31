@@ -23,7 +23,7 @@ private const val MEGABYTE = 1024 * 1024
 internal class TabFiles(
     private val fileSystem: ProjectFileSystem,
     private val scope: CoroutineScope,
-    private val onSaved: () -> Unit,
+    private val onSaved: (FileEntry) -> Unit,
     private val diffs: suspend (FileEntry) -> List<DiffLine>,
     private val blames: suspend (FileEntry) -> List<BlameLine>,
 ) {
@@ -122,7 +122,7 @@ internal class TabFiles(
             val version = document.version
             fileSystem.write(tab.entry, document.text())
             if (document.version == version) document.markSaved()
-            onSaved()
+            onSaved(tab.entry)
         }
     }
 
