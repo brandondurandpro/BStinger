@@ -46,16 +46,11 @@ internal fun Toolbar(app: AppState, project: ProjectState) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         ProjectWidget(app, project)
-        project.gitBranch?.let { branch ->
-            Row(
-                Modifier.padding(start = 12.dp).testTag(Tags.GIT_BRANCH),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                BranchIcon()
-                Label(branch, Modifier.padding(start = 6.dp))
-            }
+        if (project.gitBranch == null) {
+            Spacer(Modifier.weight(1f))
+        } else {
+            BranchWidget(project, Modifier.weight(1f).padding(start = 12.dp))
         }
-        Spacer(Modifier.weight(1f))
         IconButton({ project.showPopup(PopupKind.GotoFile) }) { SearchIcon(color = IdeColors.Text) }
     }
 }

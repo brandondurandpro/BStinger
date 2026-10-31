@@ -8,7 +8,7 @@ import androidx.compose.runtime.mutableStateMapOf
  * Panels around the editors; their buttons stay in the left strip wherever the panels are docked. Network is a
  * devtools panel: its button only appears once Ctrl+Alt+Shift+D has shown it.
  */
-enum class ToolWindow { Project, Git, Terminal, Network }
+enum class ToolWindow { Project, Git, Branches, Terminal, Network }
 
 /** Where tool windows can be docked. */
 enum class Dock { Left, Right, Bottom }
@@ -16,6 +16,19 @@ enum class Dock { Left, Right, Bottom }
 private const val MIN_DOCK = 80f
 private const val MAX_DOCK = 1200f
 private const val MIN_WEIGHT = 0.1f
+private const val MIN_PANE = 120f
+private const val MAX_PANE = 900f
+private const val HISTORY_BRANCHES_WIDTH = 230f
+private const val HISTORY_DETAILS_WIDTH = 320f
+
+/** Side panes inside a tool window, whose width the user sets with a splitter; kept with the layout. */
+enum class Pane(val defaultWidth: Float) {
+    /** Branch list of the Branches window. */
+    HistoryBranches(HISTORY_BRANCHES_WIDTH),
+
+    /** Commit details of the Branches window. */
+    HistoryDetails(HISTORY_DETAILS_WIDTH),
+}
 
 /**
  * Layout of the tool windows: dock, order inside the dock, visibility and sizes. By default the Project and Git
@@ -28,20 +41,37 @@ class ToolWindowLayout {
         mutableStateMapOf(
             ToolWindow.Project to Dock.Left,
             ToolWindow.Git to Dock.Left,
+            ToolWindow.Branches to Dock.Bottom,
             ToolWindow.Terminal to Dock.Bottom,
             ToolWindow.Network to Dock.Bottom,
         )
     private val order =
-        mutableStateListOf(ToolWindow.Project, ToolWindow.Git, ToolWindow.Terminal, ToolWindow.Network)
+        mutableStateListOf(
+            ToolWindow.Project,
+            ToolWindow.Git,
+            ToolWindow.Branches,
+            ToolWindow.Terminal,
+            ToolWindow.Network,
+        )
     private val shown =
         mutableStateMapOf(
             ToolWindow.Project to true,
             ToolWindow.Git to false,
+            ToolWindow.Branches to false,
             ToolWindow.Terminal to false,
             ToolWindow.Network to false,
         )
     private val sizes = mutableStateMapOf(Dock.Left to 280f, Dock.Right to 280f, Dock.Bottom to 240f)
     private val weights = mutableStateMapOf<ToolWindow, Float>()
+    private val panes = mutableStateMapOf<Pane, Float>()
+
+    /** Width of [pane] inside its tool window, in dp; the default until the user drags its splitter. */
+    fun widthOf(pane: Pane): Float = panes[pane] ?: pane.defaultWidth
+
+    /** Widens [pane] by [delta] dp (negative narrows it), within the pane's limits. */
+    fun resizePane(pane: Pane, delta: Float) {
+        panes[pane] = (widthOf(pane) + delta).coerceIn(MIN_PANE, MAX_PANE)
+    }
 
     fun isVisible(window: ToolWindow): Boolean = shown[window] == true
 
@@ -92,6 +122,7 @@ class ToolWindowLayout {
                 weights[window]?.let { put("$WEIGHT_KEY.${window.name}", it.toString()) }
             }
             Dock.entries.forEach { put("$SIZE_KEY.${it.name}", sizeOf(it).toString()) }
+            panes.forEach { (pane, width) -> put("$PANE_KEY.${pane.name}", width.toString()) }
         }
 
     /** Applies what [toPreferences] saved; absent or invalid entries keep the current value. */
@@ -107,6 +138,10 @@ class ToolWindowLayout {
             val size = preferences["$SIZE_KEY.${dock.name}"]?.toFloatOrNull()
             if (size != null && size.isFinite()) sizes[dock] = size.coerceIn(MIN_DOCK, MAX_DOCK)
         }
+        Pane.entries.forEach { pane ->
+            val width = preferences["$PANE_KEY.${pane.name}"]?.toFloatOrNull()
+            if (width != null && width.isFinite()) panes[pane] = width.coerceIn(MIN_PANE, MAX_PANE)
+        }
         val names = preferences[ORDER_KEY].orEmpty().split(',')
         val saved = names.mapNotNull { name -> ToolWindow.entries.find { it.name == name } }
         val restored = (saved + order).distinct()
@@ -120,5 +155,6 @@ class ToolWindowLayout {
         const val VISIBLE_KEY = "${PreferenceKeys.LAYOUT_PREFIX}visible"
         const val WEIGHT_KEY = "${PreferenceKeys.LAYOUT_PREFIX}weight"
         const val SIZE_KEY = "${PreferenceKeys.LAYOUT_PREFIX}size"
+        const val PANE_KEY = "${PreferenceKeys.LAYOUT_PREFIX}pane"
     }
 }

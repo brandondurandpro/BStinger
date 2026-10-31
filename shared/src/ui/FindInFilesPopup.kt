@@ -111,8 +111,6 @@ private fun status(results: List<SearchHit>?, query: String): String =
 
 private fun fileCount(results: List<SearchHit>) = results.distinctBy { it.entry.path }.size
 
-private fun plural(count: Int, one: String, many: String) = "$count ${if (count == 1) one else many}"
-
 @Composable
 private fun SearchHitRow(hit: SearchHit, length: Int, selected: Boolean, onClick: () -> Unit) {
     Row(

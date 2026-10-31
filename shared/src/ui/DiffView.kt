@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -23,6 +24,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
@@ -42,11 +45,12 @@ internal fun DiffView(
     lines: List<DiffLine>,
     sideBySide: Boolean,
     onToggleSideBySide: () -> Unit,
+    onOpenFile: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val style = LocalCodeStyle.current
     Column(modifier.fillMaxSize().background(IdeColors.Editor).testTag(Tags.DIFF)) {
-        DiffToolbar(sideBySide, onToggleSideBySide)
+        DiffToolbar(sideBySide, onToggleSideBySide, onOpenFile)
         Box(Modifier.weight(1f).fillMaxWidth()) {
             if (sideBySide) {
                 SideBySideDiff(tab.splitListState, lines, style)
@@ -58,7 +62,7 @@ internal fun DiffView(
 }
 
 @Composable
-private fun DiffToolbar(sideBySide: Boolean, onToggleSideBySide: () -> Unit) {
+private fun DiffToolbar(sideBySide: Boolean, onToggleSideBySide: () -> Unit, onOpenFile: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -68,10 +72,30 @@ private fun DiffToolbar(sideBySide: Boolean, onToggleSideBySide: () -> Unit) {
             .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        OpenFileButton(onOpenFile)
         Spacer(Modifier.weight(1f))
         DiffLayoutToggle(sideBySide, onToggleSideBySide)
     }
     Box(Modifier.fillMaxWidth().height(1.dp).background(IdeColors.Separator))
+}
+
+// Opens the file itself, at its first changed line (F4, like IntelliJ's Jump to Source).
+@Composable
+private fun OpenFileButton(onOpenFile: () -> Unit) {
+    val shape = RoundedCornerShape(4.dp)
+    Row(
+        Modifier
+            .testTag(Tags.DIFF_OPEN_FILE)
+            .border(1.dp, IdeColors.InputBorder, shape)
+            .clickable(onClick = onOpenFile)
+            .pointerHoverIcon(PointerIcon.Hand)
+            .padding(horizontal = 8.dp, vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        PlainFileIcon(Modifier.size(14.dp))
+        Label("Open File", Modifier.padding(start = 4.dp), color = IdeColors.TextSecondary, fontSize = 11.sp)
+        Label("F4", Modifier.padding(start = 6.dp), color = IdeColors.LineNumber, fontSize = 10.sp)
+    }
 }
 
 @Composable

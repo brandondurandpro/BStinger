@@ -29,25 +29,35 @@ internal fun runGit(root: String, timeoutSeconds: Long, vararg args: String): St
             .apply { environment()["GIT_TERMINAL_PROMPT"] = "0" }
             .start()
     val output = StringBuilder()
-    val reader =
-        Thread {
-            runCatching {
-                process.inputStream.bufferedReader().forEachLine { line ->
-                    synchronized(output) { output.appendLine(line) }
-                }
-            }
-        }
-    reader.isDaemon = true
-    reader.start()
+    val errors = StringBuilder()
+    val readers = listOf(drain(process.inputStream, output), drain(process.errorStream, errors))
     if (!process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
         process.destroyForcibly()
         throw IOException("git ${args.firstOrNull()} timed out")
     }
-    reader.join(READER_JOIN_MILLIS)
+    readers.forEach { it.join(READER_JOIN_MILLIS) }
     val text = synchronized(output) { output.toString() }
     if (process.exitValue() != 0) {
-        val detail = text.trim().lines().lastOrNull { it.isNotBlank() } ?: "exit ${process.exitValue()}"
+        val detail = failureDetail(synchronized(errors) { errors.toString() }, text) ?: "exit ${process.exitValue()}"
         throw IOException("git ${args.firstOrNull()}: $detail")
     }
     return text
+}
+
+// Copies a stream of the process on a daemon thread, so that a full pipe never blocks Git.
+private fun drain(stream: java.io.InputStream, text: StringBuilder): Thread =
+    Thread {
+        runCatching {
+            stream.bufferedReader().forEachLine { line -> synchronized(text) { text.appendLine(line) } }
+        }
+    }.apply {
+        isDaemon = true
+        start()
+    }
+
+// Git's reason for a failure: its first `error:` or `fatal:` line (later ones are often just "Aborting"), or else
+// the last line it printed.
+private fun failureDetail(errors: String, output: String): String? {
+    val lines = (errors.lines() + output.lines()).map(String::trim).filter(String::isNotEmpty)
+    return lines.firstOrNull { it.startsWith("error:") || it.startsWith("fatal:") } ?: lines.lastOrNull()
 }

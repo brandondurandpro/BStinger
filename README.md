@@ -35,7 +35,7 @@ A lightweight IDE in the style of IntelliJ IDEA (New UI, dark theme), written wi
   togglable (`Alt+1`), *Select in Project View* (`Alt+F1`).
 - **Git panel** (`Alt+9`): changed files against `HEAD` below the project view, with IntelliJ-style status letters and
   colors; a click opens the diff of the file in a tab (green additions, red removals, old and new line numbers),
-  switchable to a side-by-side view. The editor gutter marks added, modified and removed lines, *Annotate* shows the
+  switchable to a side-by-side view; its *Open File* button (`F4`) opens the file at its first change. The editor gutter marks added, modified and removed lines, *Annotate* shows the
   blame (author and date), and the panel commits, switches branches, pulls and pushes.
   Untracked files show as additions; the panel refreshes after a save or with its refresh button.
 - **Tool windows**: *Project*, *Git* and *Terminal* can be shown/hidden (`Alt+1`, `Alt+9`, `Alt+F12`), resized with
@@ -55,8 +55,19 @@ A lightweight IDE in the style of IntelliJ IDEA (New UI, dark theme), written wi
   window loses focus; external changes are reloaded when it regains focus (unsaved edits are never overwritten).
 - **Navigation & search**: Go to File (`Ctrl+P`, `Ctrl+Shift+N` or double `Shift`, fuzzy matching), Recent Files (`Ctrl+E`),
   Find in Files (`Ctrl+Shift+F`), Find in file (`Ctrl+F`, `Enter`/`Shift+Enter`, `F3`), Go to Line (`Ctrl+G`).
-- **Status bar & toolbar**: breadcrumbs, caret position, selection size, line separator, encoding, language,
-  current Git branch.
+- **Status bar & toolbar**: breadcrumbs, caret position, selection size, line separator, encoding, language, and a
+  Git branch widget. It opens a searchable branch picker: pin one or several branches in the toolbar, read how many
+  commits each is ahead (`↑`) or behind (`↓`) its remote-tracking branch, and click a branch to check it out. Tick
+  several branches to pin, unpin or delete them at once; a shortcut cleans up the branches whose remote is gone or
+  missing. Every deletion first lists the branches it will delete, and each one can be spared.
+  The menu of a pinned branch pulls it (fast-forward only) or pushes it without checking it out, checks it out, or
+  opens the Git tool window; the toolbar shows the result.
+- **Branches tool window** (clock icon of the left strip, docked at the bottom): every local and remote branch, the
+  history of the selected one (refs, subject, author, date, hash), loaded page by page as it scrolls, and the message
+  and changed files of the selected commit (a click on a file opens the diff editor on what that commit changed in
+  it). A pinned branch's menu opens it on that branch (Show History). Its search
+  field finds the commits of the whole branch by message, author or start of the hash; splitters resize its panes,
+  and the Local and Remote sections fold.
 
 ### Architecture: client and server
 
