@@ -41,9 +41,9 @@ A lightweight IDE in the style of IntelliJ IDEA (New UI, dark theme), written wi
 - **Tool windows**: *Project*, *Git* and *Terminal* can be shown/hidden (`Alt+1`, `Alt+9`, `Alt+F12`), resized with
   their splitters, and dragged by their header to the left, right or bottom dock. Their buttons stay fixed in the left
   strip, so a panel never moves its button.
-- **Network devtools** (`Ctrl+Alt+Shift+D`, hidden otherwise): every frame exchanged with the server, with its kind,
-  method, payload and wire sizes, latency, hex dump and the strings it carries. The capture only runs while the panel
-  is shown, keeps the last 2,000 frames (32 MB at most) and never keeps the token of the handshake.
+- **Network devtools** (`Ctrl+Alt+Shift+D`, hidden otherwise): every message exchanged with the server, with its kind,
+  method, payload and wire sizes, latency, the JSON-RPC message pretty-printed and its hex dump. The capture only runs
+  while the panel is shown, keeps the last 2,000 messages (32 MB at most) and never keeps the token of the handshake.
 - **Editor tabs**: open next to the active tab, most-recently-used activation on close, middle click to close,
   right click for *Close / Close Others / Close All to the Left or Right / Close All / Copy Path*, `Ctrl+F4`,
   `Alt+←/→`, `Ctrl+Tab`, per-tab scroll position, modified indicator.
@@ -62,9 +62,9 @@ A lightweight IDE in the style of IntelliJ IDEA (New UI, dark theme), written wi
 
 All the logic on files runs in a **server**; the IDE is a client that only displays.
 
-- `protocol` – model shared by both sides, binary codec, and the network client (`RpcClient`).
+- `protocol` – model shared by both sides, JSON-RPC codecs, and the network client (`RpcClient`).
 - `compression` – body codec: zstd level 3, with a 64 KiB dictionary for source code. The session protocol is
-  unchanged; only the frame body is compressed.
+  unchanged; only the message body is compressed.
 - `server` – `EditorServer` and the local services: file system, project search (Find in Files and symbols run
   next to the files, only results travel), Git, shells, sessions and recent projects.
 - `serverApp` – standalone server for remote use:
@@ -72,8 +72,10 @@ All the logic on files runs in a **server**; the IDE is a client that only displ
 - `shared` – Compose UI and UI state; `desktopApp` – the IDE. By default it embeds a server on loopback; use
   `--server host:port --token <secret>` (or `KOTLIN_EDITOR_SERVER` / `KOTLIN_EDITOR_TOKEN`) for a remote one.
 
-**Protocol.** Custom binary frames over TCP (`TCP_NODELAY`): length-prefixed, multiplexed by request id, answers in any
-order, server-pushed streams for shell output, bodies compressed with zstd-3 (a code dictionary on file contents).
+**Protocol.** JSON-RPC 2.0 over TCP (`TCP_NODELAY`), framed like LSP (`Content-Length` header, then the JSON body):
+named params, methods such as `fs/read`, `git/status` or `terminal/start`, standard error codes, answers in any order,
+server-pushed notifications for terminal screens (lines sent as style runs), bodies compressed with zstd-3 when it pays
+(`Content-Encoding: zstd`, a code dictionary on file contents). See `protocol/src@jvm/rpc/Protocol.kt` for the mapping.
 About 70 µs per round trip on loopback, a 200,000-line file in about 100 ms. TCP retransmits lost packets; the session
 layer survives broken links:
 

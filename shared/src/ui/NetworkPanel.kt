@@ -38,8 +38,8 @@ import org.example.kotlineditor.state.ProjectState
 import org.example.kotlineditor.state.ToolWindow
 import org.example.kotlineditor.state.formatBytes
 import org.example.kotlineditor.state.hexDump
+import org.example.kotlineditor.state.messageLines
 import org.example.kotlineditor.state.summary
-import org.example.kotlineditor.state.wireStrings
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -215,7 +215,7 @@ private fun colorOf(record: NetworkRecord): Color =
 
 @Composable
 private fun FrameDetail(record: NetworkRecord, modifier: Modifier) {
-    val strings = remember(record) { wireStrings(record.body) }
+    val message = remember(record) { messageLines(record.body) }
     val hex = remember(record) { hexDump(record.body) }
     val code = LocalCodeStyle.current.copy(fontSize = 12.sp, lineHeight = 16.sp)
     LazyColumn(modifier.fillMaxHeight().padding(8.dp).testTag(Tags.NETWORK_DETAIL)) {
@@ -227,9 +227,9 @@ private fun FrameDetail(record: NetworkRecord, modifier: Modifier) {
             )
             Label(record.summary(), Modifier.padding(vertical = 4.dp), IdeColors.TextSecondary, 12.sp)
         }
-        if (strings.isNotEmpty()) {
-            item { Section("Strings") }
-            items(strings) { BasicText(it, style = code.copy(color = IdeColors.StringLiteral)) }
+        if (message.isNotEmpty()) {
+            item { Section("Message (JSON-RPC)") }
+            items(message) { BasicText(it, style = code.copy(color = IdeColors.StringLiteral), softWrap = false) }
         }
         if (hex.isNotEmpty()) {
             item { Section("Payload (hex)") }

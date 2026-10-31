@@ -4,11 +4,11 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import org.example.kotlineditor.model.NetworkInspector
 import org.example.kotlineditor.model.NetworkRecord
-import java.nio.ByteBuffer
-import java.nio.charset.CharacterCodingException
-import java.nio.charset.CodingErrorAction
 import java.util.Locale
 
 private const val HEX_BYTES_PER_LINE = 16
@@ -84,38 +84,19 @@ fun hexDump(bytes: ByteArray): List<String> =
     }
 
 /**
- * The strings of a payload: the wire format writes them as an int length followed by UTF-8, so every place where
- * a plausible length is followed by that many bytes of valid, printable UTF-8 is taken as a string.
+ * The JSON-RPC message of a payload, pretty-printed, one entry per line; a payload cut by the capture is not valid
+ * JSON and is shown as it is. Long lines (a string holding a whole file) are cut.
  */
-fun wireStrings(bytes: ByteArray): List<String> {
-    val found = mutableListOf<String>()
-    var position = 0
-    while (position + Int.SIZE_BYTES < bytes.size) {
-        val length = ByteBuffer.wrap(bytes, position, Int.SIZE_BYTES).int
-        val start = position + Int.SIZE_BYTES
-        val text = if (length in 1..bytes.size - start) decodePrintable(bytes, start, length) else null
-        if (text != null) {
-            // Blank strings (empty lines of a file) are skipped, but they are strings: the scan resumes after them.
-            if (text.isNotBlank()) found += if (text.length > MAX_STRING) text.take(MAX_STRING) + "…" else text
-            position = start + length
-        } else {
-            position++
+fun messageLines(bytes: ByteArray): List<String> {
+    if (bytes.isEmpty()) return emptyList()
+    val text = bytes.decodeToString()
+    val pretty =
+        try {
+            PRETTY.encodeToString(JsonElement.serializer(), Json.parseToJsonElement(text))
+        } catch (expected: SerializationException) {
+            text
         }
-    }
-    return found
+    return pretty.lines().map { if (it.length > MAX_STRING) it.take(MAX_STRING) + "…" else it }
 }
 
-private fun decodePrintable(bytes: ByteArray, start: Int, length: Int): String? {
-    val decoder =
-        Charsets.UTF_8
-            .newDecoder()
-            .onMalformedInput(CodingErrorAction.REPORT)
-            .onUnmappableCharacter(CodingErrorAction.REPORT)
-    val text =
-        try {
-            decoder.decode(ByteBuffer.wrap(bytes, start, length)).toString()
-        } catch (expected: CharacterCodingException) {
-            return null
-        }
-    return text.takeIf { it.all { char -> !char.isISOControl() || char in "\n\r\t" } }
-}
+private val PRETTY = Json { prettyPrint = true }

@@ -1,70 +1,90 @@
 package org.example.kotlineditor.rpc
 
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.put
 import org.example.kotlineditor.model.FileContent
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.pathName
 
-// Codecs of files and their content, shared by client and server so both sides always agree.
+// JSON of files and their content, shared by client and server so both sides always agree.
 
-private const val TEXT = 0
-private const val BINARY = 1
-private const val TOO_LARGE = 2
-private const val ERROR = 3
+private const val TEXT = "text"
+private const val BINARY = "binary"
+private const val TOO_LARGE = "tooLarge"
+private const val ERROR = "error"
 
-/** Writes an entry: only the path and the kind travel, the name is derived from the path. */
-fun WireWriter.entry(entry: FileEntry): WireWriter = string(entry.path).bool(entry.isDirectory)
+/** An entry: only the path and the kind travel, the name is derived from the path. */
+fun FileEntry.toJson(): JsonObject =
+    buildJsonObject {
+        put("path", path)
+        put("isDirectory", isDirectory)
+    }
 
-/** Reads an entry written by [WireWriter.entry]. */
-fun WireReader.entry(): FileEntry {
-    val path = string()
-    return FileEntry(path, pathName(path), bool())
+/** An optional entry, JSON null when absent. */
+fun FileEntry?.toJsonOrNull(): JsonElement = this?.toJson() ?: JsonNull
+
+/** Reads an entry written by [FileEntry.toJson]. */
+fun JsonElement.entry(): FileEntry {
+    val fields = jsonObject
+    val path = fields.string("path")
+    return FileEntry(path, pathName(path), fields.bool("isDirectory"))
 }
-
-/** Writes an optional entry. */
-fun WireWriter.entryOrNull(entry: FileEntry?): WireWriter = bool(entry != null).also { if (entry != null) entry(entry) }
 
 /** Reads an optional entry. */
-fun WireReader.entryOrNull(): FileEntry? = if (bool()) entry() else null
+fun JsonElement.entryOrNull(): FileEntry? = if (this == JsonNull) null else entry()
 
-/** Writes a list of entries. */
-fun WireWriter.entries(list: List<FileEntry>): WireWriter = int(list.size).also { list.forEach { entry(it) } }
+/** A list of entries. */
+fun List<FileEntry>.toJson(): JsonElement = JsonArray(map { it.toJson() })
 
 /** Reads a list of entries. */
-fun WireReader.entries(): List<FileEntry> = List(int()) { entry() }
+fun JsonElement.entries(): List<FileEntry> = jsonArray.map { it.entry() }
 
-/** Writes a list of strings. */
-fun WireWriter.strings(list: List<String>): WireWriter = int(list.size).also { list.forEach { string(it) } }
+/** A file content; text is sent as lines, already split by the server. */
+fun FileContent.toJson(): JsonObject =
+    buildJsonObject {
+        when (val content = this@toJson) {
+            is FileContent.Text -> {
+                put("type", TEXT)
+                put("lineSeparator", content.lineSeparator)
+                put("lines", content.lines.toJson())
+            }
 
-/** Reads a list of strings. */
-fun WireReader.strings(): List<String> = List(int()) { string() }
+            FileContent.Binary -> {
+                put("type", BINARY)
+            }
 
-/** Writes a file content; text is sent as lines, already split by the server. */
-fun WireWriter.content(content: FileContent) {
-    when (content) {
-        is FileContent.Text -> byte(TEXT).string(content.lineSeparator).strings(content.lines)
-        FileContent.Binary -> byte(BINARY)
-        is FileContent.TooLarge -> byte(TOO_LARGE).long(content.size)
-        is FileContent.Error -> byte(ERROR).string(content.message)
+            is FileContent.TooLarge -> {
+                put("type", TOO_LARGE)
+                put("size", content.size)
+            }
+
+            is FileContent.Error -> {
+                put("type", ERROR)
+                put("message", content.message)
+            }
+        }
+    }
+
+/** Reads a file content. */
+fun JsonElement.content(): FileContent {
+    val fields = jsonObject
+    return when (fields.string("type")) {
+        TEXT -> FileContent.Text(fields.field("lines").strings(), fields.string("lineSeparator"))
+        BINARY -> FileContent.Binary
+        TOO_LARGE -> FileContent.TooLarge(fields.long("size"))
+        else -> FileContent.Error(fields.string("message"))
     }
 }
 
-/** Reads a file content. */
-fun WireReader.content(): FileContent =
-    when (byte()) {
-        TEXT -> {
-            val separator = string()
-            FileContent.Text(strings(), separator)
-        }
+/** A list of strings. */
+fun List<String>.toJson(): JsonArray = JsonArray(map(::JsonPrimitive))
 
-        BINARY -> {
-            FileContent.Binary
-        }
-
-        TOO_LARGE -> {
-            FileContent.TooLarge(long())
-        }
-
-        else -> {
-            FileContent.Error(string())
-        }
-    }
+/** Reads a list of strings. */
+fun JsonElement.strings(): List<String> = jsonArray.map { it.string() }

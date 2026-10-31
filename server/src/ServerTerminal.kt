@@ -3,12 +3,13 @@ package org.example.kotlineditor.server
 import com.pty4j.PtyProcess
 import com.pty4j.PtyProcessBuilder
 import com.pty4j.WinSize
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.example.kotlineditor.model.TerminalKeyEvent
 import org.example.kotlineditor.model.TerminalSnapshot
 import org.example.kotlineditor.rpc.Frame
 import org.example.kotlineditor.rpc.FrameKind
-import org.example.kotlineditor.rpc.WireWriter
-import org.example.kotlineditor.rpc.snapshot
+import org.example.kotlineditor.rpc.toJson
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
@@ -224,7 +225,7 @@ internal class ServerTerminal(
                 lastFrame = event
                 push(event)
             }
-            val end = Frame(FrameKind.End, id, WireWriter().long(seq).toByteArray())
+            val end = Frame(FrameKind.End, id, buildJsonObject { put("seq", seq) })
             endFrame = end
             push(end)
         }
@@ -244,5 +245,12 @@ internal class ServerTerminal(
     }
 
     private fun event(seq: Long, snapshot: TerminalSnapshot): Frame =
-        Frame(FrameKind.Event, id, WireWriter().long(seq).snapshot(snapshot).toByteArray())
+        Frame(
+            FrameKind.Event,
+            id,
+            buildJsonObject {
+                put("seq", seq)
+                put("snapshot", snapshot.toJson())
+            },
+        )
 }

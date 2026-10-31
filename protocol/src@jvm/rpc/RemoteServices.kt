@@ -4,6 +4,8 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonObjectBuilder
+import kotlinx.serialization.json.put
 import org.example.kotlineditor.model.AppServices
 import org.example.kotlineditor.model.BlameLine
 import org.example.kotlineditor.model.DiffLine
@@ -25,6 +27,14 @@ import org.example.kotlineditor.model.TerminalSnapshot
 import org.example.kotlineditor.model.TextMatch
 import java.io.IOException
 
+private const val ROOT = "root"
+private const val DIRECTORY = "directory"
+private const val ENTRY = "entry"
+private const val FILE = "file"
+private const val PATH = "path"
+private const val NAME = "name"
+private const val TERMINAL = "terminal"
+
 /** Every IDE service, backed by a server. */
 fun RpcClient.appServices(directoryPicker: DirectoryPicker): AppServices =
     AppServices(
@@ -42,72 +52,120 @@ fun RpcClient.appServices(directoryPicker: DirectoryPicker): AppServices =
 /** [ProjectFileSystem] of the server. */
 class RemoteFileSystem(private val client: RpcClient) : ProjectFileSystem {
     override suspend fun resolveDirectory(path: String): FileEntry? =
-        client.call(Method.ResolveDirectory) { string(path) }.entryOrNull()
+        client.call(Method.ResolveDirectory) { put(PATH, path) }.entryOrNull()
 
     override suspend fun list(directory: FileEntry): List<FileEntry> =
-        client.call(Method.ListDirectory) { entry(directory) }.entries()
+        client.call(Method.ListDirectory) { put(DIRECTORY, directory.toJson()) }.entries()
 
-    override suspend fun read(file: FileEntry): FileContent = client.call(Method.Read) { entry(file) }.content()
+    override suspend fun read(file: FileEntry): FileContent =
+        client.call(Method.Read) { put(FILE, file.toJson()) }.content()
 
-    override suspend fun fileAt(path: String): FileEntry? = client.call(Method.FileAt) { string(path) }.entryOrNull()
+    override suspend fun fileAt(path: String): FileEntry? = client.call(Method.FileAt) { put(PATH, path) }.entryOrNull()
 
     override suspend fun write(file: FileEntry, text: String) {
-        client.call(Method.Write) { entry(file).string(text) }
+        client.call(Method.Write) {
+            put(FILE, file.toJson())
+            put("text", text)
+        }
     }
 
-    override suspend fun createFile(directory: FileEntry, name: String): FileEntry =
-        client.call(Method.CreateFile) { entry(directory).string(name) }.entry()
+    override suspend fun createFile(directory: FileEntry, name: String): FileEntry {
+        val result =
+            client.call(Method.CreateFile) {
+                put(DIRECTORY, directory.toJson())
+                put(NAME, name)
+            }
+        return result.entry()
+    }
 
-    override suspend fun createDirectory(directory: FileEntry, name: String): FileEntry =
-        client.call(Method.CreateDirectory) { entry(directory).string(name) }.entry()
+    override suspend fun createDirectory(directory: FileEntry, name: String): FileEntry {
+        val result =
+            client.call(Method.CreateDirectory) {
+                put(DIRECTORY, directory.toJson())
+                put(NAME, name)
+            }
+        return result.entry()
+    }
 
-    override suspend fun rename(entry: FileEntry, newName: String): FileEntry =
-        client.call(Method.Rename) { entry(entry).string(newName) }.entry()
+    override suspend fun rename(entry: FileEntry, newName: String): FileEntry {
+        val result =
+            client.call(Method.Rename) {
+                put(ENTRY, entry.toJson())
+                put("newName", newName)
+            }
+        return result.entry()
+    }
 
     override suspend fun delete(entry: FileEntry) {
-        client.call(Method.Delete) { entry(entry) }
+        client.call(Method.Delete) { put(ENTRY, entry.toJson()) }
     }
 }
 
 /** [ProjectSearch] of the server: only the results travel. */
 class RemoteSearch(private val client: RpcClient) : ProjectSearch {
-    override suspend fun walkFiles(root: FileEntry, limit: Int): List<FileEntry> =
-        client.call(Method.WalkFiles) { entry(root).int(limit) }.entries()
+    override suspend fun walkFiles(root: FileEntry, limit: Int): List<FileEntry> {
+        val result =
+            client.call(Method.WalkFiles) {
+                put(ROOT, root.toJson())
+                put("limit", limit)
+            }
+        return result.entries()
+    }
 
-    override suspend fun findInFiles(root: FileEntry, query: String, ignoreCase: Boolean, limit: Int): List<TextMatch> =
-        client.call(Method.FindInFiles) { entry(root).string(query).bool(ignoreCase).int(limit) }.matches()
+    override suspend fun findInFiles(root: FileEntry, query: String, ignoreCase: Boolean, limit: Int): List<TextMatch> {
+        val result =
+            client.call(Method.FindInFiles) {
+                put(ROOT, root.toJson())
+                put("query", query)
+                put("ignoreCase", ignoreCase)
+                put("limit", limit)
+            }
+        return result.matches()
+    }
 
     override suspend fun symbols(root: FileEntry): List<FileSymbol> =
-        client.call(Method.Symbols) { entry(root) }.symbols()
+        client.call(Method.Symbols) { put(ROOT, root.toJson()) }.symbols()
 }
 
 /** [GitClient] of the server. */
 class RemoteGit(private val client: RpcClient) : GitClient {
     override suspend fun status(root: String): Map<String, GitFileStatus> =
-        client.call(Method.GitStatus) { string(root) }.gitStatus()
+        client.call(Method.GitStatus) { put(ROOT, root) }.gitStatus()
 
-    override suspend fun branch(root: String): String? = client.call(Method.GitBranch) { string(root) }.stringOrNull()
+    override suspend fun branch(root: String): String? =
+        client.call(Method.GitBranch) { put(ROOT, root) }.stringOrNull()
 
     override suspend fun diff(root: String, path: String): List<DiffLine> =
-        client.call(Method.GitDiff) { string(root).string(path) }.diffLines()
+        client.call(Method.GitDiff) { file(root, path) }.diffLines()
 
     override suspend fun branches(root: String): List<String> =
-        client.call(Method.GitBranches) { string(root) }.strings()
+        client.call(Method.GitBranches) { put(ROOT, root) }.strings()
 
     override suspend fun checkout(root: String, branch: String) {
-        client.call(Method.GitCheckout) { string(root).string(branch) }
+        client.call(Method.GitCheckout) {
+            put(ROOT, root)
+            put("branch", branch)
+        }
     }
 
     override suspend fun commit(root: String, message: String) {
-        client.call(Method.GitCommit) { string(root).string(message) }
+        client.call(Method.GitCommit) {
+            put(ROOT, root)
+            put("message", message)
+        }
     }
 
-    override suspend fun pull(root: String): String = client.call(Method.GitPull) { string(root) }.string()
+    override suspend fun pull(root: String): String = client.call(Method.GitPull) { put(ROOT, root) }.string()
 
-    override suspend fun push(root: String): String = client.call(Method.GitPush) { string(root) }.string()
+    override suspend fun push(root: String): String = client.call(Method.GitPush) { put(ROOT, root) }.string()
 
     override suspend fun blame(root: String, path: String): List<BlameLine> =
-        client.call(Method.GitBlame) { string(root).string(path) }.blameLines()
+        client.call(Method.GitBlame) { file(root, path) }.blameLines()
+
+    private fun JsonObjectBuilder.file(root: String, path: String) {
+        put(ROOT, root)
+        put(PATH, path)
+    }
 }
 
 /** [RecentProjectsStore] of the server. */
@@ -115,17 +173,20 @@ class RemoteRecentProjects(private val client: RpcClient) : RecentProjectsStore 
     override suspend fun load(): List<String> = client.call(Method.RecentLoad).strings()
 
     override suspend fun save(paths: List<String>) {
-        client.call(Method.RecentSave) { strings(paths) }
+        client.call(Method.RecentSave) { put("paths", paths.toJson()) }
     }
 }
 
 /** [SessionStore] of the server. */
 class RemoteSessions(private val client: RpcClient) : SessionStore {
     override suspend fun load(projectPath: String): ProjectSession? =
-        client.call(Method.SessionLoad) { string(projectPath) }.session()
+        client.call(Method.SessionLoad) { put("project", projectPath) }.session()
 
     override suspend fun save(projectPath: String, session: ProjectSession) {
-        client.call(Method.SessionSave) { string(projectPath).session(session) }
+        client.call(Method.SessionSave) {
+            put("project", projectPath)
+            put("session", session.toJson())
+        }
     }
 }
 
@@ -148,11 +209,8 @@ class RemoteTerminalLauncher(private val client: RpcClient) : TerminalLauncher {
         client.scope.launch {
             try {
                 client.call(Method.TerminalStart, id = id) {
-                    string(directory)
-                        .int(columns)
-                        .int(rows)
-                        .int(cellWidthPx)
-                        .int(cellHeightPx)
+                    put(DIRECTORY, directory)
+                    size(columns, rows, cellWidthPx, cellHeightPx)
                 }
                 for (command in commands) command()
             } catch (_: IOException) {
@@ -164,42 +222,51 @@ class RemoteTerminalLauncher(private val client: RpcClient) : TerminalLauncher {
             override val output: Flow<TerminalSnapshot> = flow { for (snapshot in screens) emit(snapshot) }
 
             override fun write(bytes: ByteArray) {
-                commands.trySend { client.call(Method.TerminalWrite) { long(id).bytes(bytes) } }
+                command(Method.TerminalWrite) { terminalInput(bytes) }
             }
 
             override fun sendKey(event: TerminalKeyEvent) {
-                commands.trySend { client.call(Method.TerminalKey) { long(id).keyEvent(event) } }
+                command(Method.TerminalKey) { put("event", event.toJson()) }
             }
 
             override fun paste(text: String) {
-                commands.trySend { client.call(Method.TerminalPaste) { long(id).string(text) } }
+                command(Method.TerminalPaste) { put("text", text) }
             }
 
             override fun resize(columns: Int, rows: Int, cellWidthPx: Int, cellHeightPx: Int) {
-                commands.trySend {
-                    client.call(Method.TerminalResize) {
-                        long(id)
-                            .int(columns)
-                            .int(rows)
-                            .int(cellWidthPx)
-                            .int(cellHeightPx)
-                    }
-                }
+                command(Method.TerminalResize) { size(columns, rows, cellWidthPx, cellHeightPx) }
             }
 
             override fun scroll(delta: Int) {
-                commands.trySend { client.call(Method.TerminalScroll) { long(id).int(delta) } }
+                command(Method.TerminalScroll) { put("delta", delta) }
             }
 
             override fun clear() {
-                commands.trySend { client.call(Method.TerminalClear) { long(id) } }
+                command(Method.TerminalClear)
             }
 
             override fun destroy() {
                 commands.close()
-                client.scope.launch { runCatching { client.call(Method.TerminalDestroy) { long(id) } } }
+                client.scope.launch { runCatching { client.call(Method.TerminalDestroy) { put(TERMINAL, id) } } }
                 client.closeStream(id)
+            }
+
+            // Queued: commands reach the terminal in the order they were typed.
+            private fun command(method: Method, params: JsonObjectBuilder.() -> Unit = {}) {
+                commands.trySend {
+                    client.call(method) {
+                        put(TERMINAL, id)
+                        params()
+                    }
+                }
             }
         }
     }
+}
+
+private fun JsonObjectBuilder.size(columns: Int, rows: Int, cellWidthPx: Int, cellHeightPx: Int) {
+    put("columns", columns)
+    put("rows", rows)
+    put("cellWidthPx", cellWidthPx)
+    put("cellHeightPx", cellHeightPx)
 }

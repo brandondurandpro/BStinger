@@ -9,17 +9,19 @@ import org.example.kotlineditor.model.GitFileStatus
 import org.example.kotlineditor.model.ProjectSession
 import org.example.kotlineditor.model.SessionFile
 import org.example.kotlineditor.model.TextMatch
-import org.example.kotlineditor.rpc.content
-import org.example.kotlineditor.rpc.diffLines
-import org.example.kotlineditor.rpc.entries
-import org.example.kotlineditor.rpc.entry
-import org.example.kotlineditor.rpc.entryOrNull
-import org.example.kotlineditor.rpc.gitStatus
-import org.example.kotlineditor.rpc.matches
-import org.example.kotlineditor.rpc.session
-import org.example.kotlineditor.rpc.strings
-import org.example.kotlineditor.rpc.symbols
-import org.example.kotlineditor.rpc.WireWriter
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObjectBuilder
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import org.example.kotlineditor.rpc.Frame
+import org.example.kotlineditor.rpc.FrameKind
+import org.example.kotlineditor.rpc.Method
+import org.example.kotlineditor.rpc.diffJson
+import org.example.kotlineditor.rpc.matchesJson
+import org.example.kotlineditor.rpc.symbolsJson
+import org.example.kotlineditor.rpc.toJson
+import org.example.kotlineditor.rpc.toJsonOrNull
 import org.example.kotlineditor.syntax.Language
 import org.example.kotlineditor.syntax.Structure
 import java.io.IOException
@@ -36,18 +38,14 @@ class SourceFile(
     val lines: List<String>,
     val separator: String,
 ) {
-    /** Body of the Read response for this file, exactly as [content] encodes it. */
-    fun readBody(): ByteArray {
-        val writer = WireWriter()
-        writer.content(FileContent.Text(lines, separator))
-        return writer.toByteArray()
-    }
+    /** The Read response for this file, the JSON-RPC message exactly as the server sends it. */
+    fun readBody(): ByteArray = response(FileContent.Text(lines, separator).toJson())
 
     /** The Read response as a code payload: the kind a language dictionary is trained for. */
     fun payload(): Payload = Payload(entry.name, readBody(), PayloadKind.CODE)
 }
 
-/** A named body, as one frame would carry it. */
+/** A named JSON-RPC message, as one frame would carry it. */
 class Payload(
     val name: String,
     val body: ByteArray,
@@ -118,29 +116,40 @@ private fun splitLines(text: String): Pair<List<String>, String> {
 fun smallPayloads(files: List<SourceFile>, query: String): List<Payload> {
     val file = files.first()
     val root = file.entry
-    val writer = WireWriter()
-    writer.session(ProjectSession(files.take(5).map { SessionFile(it.entry.path, 0, 0) }, file.entry.path))
-    val empty = WireWriter()
-    empty.content(FileContent.Text(emptyList(), "\n"))
+    val session = ProjectSession(files.take(5).map { SessionFile(it.entry.path, 0, 0) }, file.entry.path)
     return listOf(
-        Payload("Read request", WireWriter().entry(file.entry).toByteArray()),
-        Payload("WalkFiles request", WireWriter().entry(root).int(200_000).toByteArray()),
-        Payload("FindInFiles request", WireWriter().entry(root).string(query).bool(false).int(1000).toByteArray()),
-        Payload("FileAt request", WireWriter().string(file.entry.path).toByteArray()),
-        Payload("GitBranch request", WireWriter().string(file.entry.path).toByteArray()),
-        Payload("Empty Read response", empty.toByteArray()),
-        Payload("Entry response", WireWriter().entryOrNull(file.entry).toByteArray()),
-        Payload("Branch response", WireWriter().string("main").toByteArray()),
-        Payload("Recent projects response", WireWriter().strings(files.take(10).map { it.entry.path }).toByteArray()),
-        Payload("Session response", writer.toByteArray()),
+        Payload("Read request", request(Method.Read) { put("file", file.entry.toJson()) }),
+        Payload(
+            "WalkFiles request",
+            request(Method.WalkFiles) {
+                put("root", root.toJson())
+                put("limit", 200_000)
+            },
+        ),
+        Payload(
+            "FindInFiles request",
+            request(Method.FindInFiles) {
+                put("root", root.toJson())
+                put("query", query)
+                put("ignoreCase", false)
+                put("limit", 1000)
+            },
+        ),
+        Payload("FileAt request", request(Method.FileAt) { put("path", file.entry.path) }),
+        Payload("GitBranch request", request(Method.GitBranch) { put("root", file.entry.path) }),
+        Payload("Empty Read response", response(FileContent.Text(emptyList(), "\n").toJson())),
+        Payload("Entry response", response(file.entry.toJsonOrNull())),
+        Payload("Branch response", response(JsonPrimitive("main"))),
+        Payload("Recent projects response", response(files.take(10).map { it.entry.path }.toJson())),
+        Payload("Session response", response(session.toJson())),
     )
 }
 
 /** Bodies of the project-wide queries: the largest payloads after file reads. */
 fun projectPayloads(files: List<SourceFile>, query: String, includeSymbols: Boolean): List<Payload> {
     val payloads = ArrayList<Payload>()
-    payloads += Payload("WalkFiles response", WireWriter().entries(files.map { it.entry }).toByteArray())
-    payloads += Payload("ListDirectory response", WireWriter().entries(files.take(20).map { it.entry }).toByteArray())
+    payloads += Payload("WalkFiles response", response(files.map { it.entry }.toJson()))
+    payloads += Payload("ListDirectory response", response(files.take(20).map { it.entry }.toJson()))
     payloads += Payload("FindInFiles response", matchesBody(files, query, 500))
     if (includeSymbols) payloads += Payload("Symbols response", symbolsBody(files))
     payloads += Payload("GitStatus response", gitStatusBody(files))
@@ -167,9 +176,7 @@ fun largePayload(files: List<SourceFile>, lineCount: Int = 200_000): Payload {
     while (lines.size < lineCount) {
         lines.addAll(pool.shuffled(random).take(lineCount - lines.size))
     }
-    val writer = WireWriter()
-    writer.content(FileContent.Text(lines, "\n"))
-    return Payload("Read 200k lines", writer.toByteArray(), PayloadKind.CODE)
+    return Payload("Read 200k lines", response(FileContent.Text(lines, "\n").toJson()), PayloadKind.CODE)
 }
 
 private fun matchesBody(files: List<SourceFile>, query: String, limit: Int): ByteArray {
@@ -183,7 +190,7 @@ private fun matchesBody(files: List<SourceFile>, query: String, limit: Int): Byt
             }
         }
     }
-    return WireWriter().matches(matches).toByteArray()
+    return response(matches.matchesJson())
 }
 
 private fun symbolsBody(files: List<SourceFile>): ByteArray {
@@ -192,11 +199,11 @@ private fun symbolsBody(files: List<SourceFile>): ByteArray {
         val declarations = Structure.outline(file.lines, Language.Kotlin, Structure.blockCommentStates(file.lines))
         declarations.mapTo(symbols) { FileSymbol(file.entry, it) }
     }
-    return WireWriter().symbols(symbols).toByteArray()
+    return response(symbols.symbolsJson())
 }
 
 private fun gitStatusBody(files: List<SourceFile>): ByteArray =
-    WireWriter().gitStatus(files.take(50).associate { it.entry.path to GitFileStatus.Modified }).toByteArray()
+    response(files.take(50).associate { it.entry.path to GitFileStatus.Modified }.toJson())
 
 private fun diffBody(file: SourceFile): ByteArray {
     val lines =
@@ -208,8 +215,20 @@ private fun diffBody(file: SourceFile): ByteArray {
                 else -> DiffLine(DiffKind.Context, index + 1, index + 1, text)
             }
         }
-    return WireWriter().diffLines(lines).toByteArray()
+    return response(lines.diffJson())
 }
 
 private fun shellBody(file: SourceFile): ByteArray =
-    WireWriter().long(1).bool(false).strings(file.lines.take(20)).toByteArray()
+    Frame(
+        FrameKind.Event,
+        1,
+        buildJsonObject {
+            put("seq", 1)
+            put("lines", file.lines.take(20).toJson())
+        },
+    ).body
+
+private fun request(method: Method, params: JsonObjectBuilder.() -> Unit): ByteArray =
+    Frame(FrameKind.Request, 1, buildJsonObject(params), method).body
+
+private fun response(result: JsonElement): ByteArray = Frame(FrameKind.Response, 1, result).body

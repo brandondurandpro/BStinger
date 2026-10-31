@@ -12,6 +12,10 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObjectBuilder
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.example.kotlineditor.model.ConnectionStatus
 import org.example.kotlineditor.model.NetworkInspector
 import org.example.kotlineditor.model.TerminalSnapshot
@@ -73,7 +77,14 @@ class RpcClient(host: String, port: Int, token: String, private val options: Cli
             mutableStatus,
             NetworkTap(network),
         ) { id, lastSeq ->
-            scope.launch { runCatching { call(Method.TerminalResume) { long(id).long(lastSeq) } } }
+            scope.launch {
+                runCatching {
+                    call(Method.TerminalResume) {
+                        put("terminal", id)
+                        put("lastSeq", lastSeq)
+                    }
+                }
+            }
         }
 
     /** State of the link with the server. */
@@ -94,16 +105,16 @@ class RpcClient(host: String, port: Int, token: String, private val options: Cli
         withTimeout(timeoutMs) { status.first { it == ConnectionStatus.Connected } }
     }
 
-    /** Sends [method] and waits for its answer, surviving reconnections until [timeoutMs]. */
+    /** Sends [method] with the named params built by [params], and waits for its result, surviving reconnections. */
     suspend fun call(
         method: Method,
         id: Long = newId(),
         timeoutMs: Long = options.callTimeoutMs,
-        args: WireWriter.() -> Unit = {},
-    ): WireReader {
-        val response = exchange(method, id, timeoutMs, args)
-        if (response.kind == FrameKind.Error) throw RemoteException(WireReader(response.body).string())
-        return WireReader(response.body)
+        params: JsonObjectBuilder.() -> Unit = {},
+    ): JsonElement {
+        val response = exchange(method, id, timeoutMs, params)
+        if (response.kind == FrameKind.Error) throw RemoteException(response.payload.errorMessage())
+        return response.payload
     }
 
     /** Registers the stream fed by the server under [id] (before the request creating it is sent). */
@@ -120,14 +131,20 @@ class RpcClient(host: String, port: Int, token: String, private val options: Cli
         scope.cancel()
     }
 
-    private suspend fun exchange(method: Method, id: Long, timeoutMs: Long, args: WireWriter.() -> Unit): Frame {
+    private suspend fun exchange(
+        method: Method,
+        id: Long,
+        timeoutMs: Long,
+        params: JsonObjectBuilder.() -> Unit,
+    ): Frame {
         connector.rejection?.let { throw it }
         val call =
             pending.register(
                 Frame(
                     FrameKind.Request,
                     id,
-                    WireWriter().short(method.ordinal).apply(args).toByteArray(),
+                    buildJsonObject(params),
+                    method,
                     code = method == Method.Write || method == Method.CreateFile,
                 ),
             )

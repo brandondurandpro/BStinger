@@ -11,7 +11,7 @@ import java.util.concurrent.ConcurrentHashMap
 private const val MAX_TRACKED = 10_000
 
 /**
- * Feeds a [NetworkInspector] with the frames of a client's links: names the method of each frame and measures how
+ * Feeds a [NetworkInspector] with the messages of a client's links: names the method of each frame and measures how
  * long requests wait for their answer. Shared by the successive links of a client, as requests survive reconnections.
  */
 internal class NetworkTap(val inspector: NetworkInspector) {
@@ -24,7 +24,7 @@ internal class NetworkTap(val inspector: NetworkInspector) {
 
     /** Called before the frame is written: its answer can be read before the write returns. */
     fun sending(frame: Frame) {
-        val method = if (frame.kind == FrameKind.Request) methodOf(frame.body) else null
+        val method = frame.method
         when {
             method != null -> {
                 if (requests.size >= MAX_TRACKED) requests.clear() // answers lost while not recording
@@ -39,7 +39,7 @@ internal class NetworkTap(val inspector: NetworkInspector) {
     }
 
     fun sent(frame: Frame, wireSize: Int) {
-        val method = if (frame.kind == FrameKind.Request) methodOf(frame.body) else null
+        val method = frame.method
         inspector.record(
             Direction.Sent,
             frame.kind.name,
@@ -76,9 +76,6 @@ internal class NetworkTap(val inspector: NetworkInspector) {
             }
         inspector.record(Direction.Received, frame.kind.name, frame.id, method?.name, frame.body, wireSize, latencyMs)
     }
-
-    private fun methodOf(body: ByteArray): Method? =
-        if (body.size < Short.SIZE_BYTES) null else Method.entries.getOrNull(WireReader(body).short())
 
     private companion object {
         const val NANOS_PER_MILLI = 1_000_000L

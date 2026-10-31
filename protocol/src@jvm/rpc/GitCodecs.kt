@@ -1,40 +1,63 @@
 package org.example.kotlineditor.rpc
 
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.put
 import org.example.kotlineditor.model.BlameLine
 import org.example.kotlineditor.model.DiffKind
 import org.example.kotlineditor.model.DiffLine
 import org.example.kotlineditor.model.GitFileStatus
 
-// Codecs of Git data.
+// JSON of Git data. Enums travel by name.
 
-/** Writes a Git status map. */
-fun WireWriter.gitStatus(map: Map<String, GitFileStatus>): WireWriter =
-    int(map.size).also {
-        map.forEach { (path, status) -> string(path).byte(status.ordinal) }
-    }
+/** A Git status map: `{"path": "Modified", ...}`. */
+fun Map<String, GitFileStatus>.toJson(): JsonObject = JsonObject(mapValues { JsonPrimitive(it.value.name) })
 
 /** Reads a Git status map. */
-fun WireReader.gitStatus(): Map<String, GitFileStatus> {
-    val count = int()
-    val map = HashMap<String, GitFileStatus>(count * 2)
-    repeat(count) { map[string()] = GitFileStatus.entries[byte()] }
-    return map
-}
+fun JsonElement.gitStatus(): Map<String, GitFileStatus> =
+    jsonObject.mapValues { GitFileStatus.valueOf(it.value.string()) }
 
-/** Writes the lines of a diff. */
-fun WireWriter.diffLines(lines: List<DiffLine>): WireWriter =
-    int(lines.size).also {
-        lines.forEach { byte(it.kind.ordinal).int(it.oldLine).int(it.newLine).string(it.text) }
-    }
+/** The lines of a diff. */
+fun List<DiffLine>.diffJson(): JsonArray =
+    JsonArray(
+        map {
+            buildJsonObject {
+                put("kind", it.kind.name)
+                put("oldLine", it.oldLine)
+                put("newLine", it.newLine)
+                put("text", it.text)
+            }
+        },
+    )
 
 /** Reads the lines of a diff. */
-fun WireReader.diffLines(): List<DiffLine> = List(int()) { DiffLine(DiffKind.entries[byte()], int(), int(), string()) }
-
-/** Writes blame annotations. */
-fun WireWriter.blameLines(lines: List<BlameLine>): WireWriter =
-    int(lines.size).also {
-        lines.forEach { int(it.line).string(it.commit).string(it.author).string(it.date) }
+fun JsonElement.diffLines(): List<DiffLine> =
+    jsonArray.map {
+        val line = it.jsonObject
+        DiffLine(DiffKind.valueOf(line.string("kind")), line.int("oldLine"), line.int("newLine"), line.string("text"))
     }
 
+/** Blame annotations. */
+fun List<BlameLine>.blameJson(): JsonArray =
+    JsonArray(
+        map {
+            buildJsonObject {
+                put("line", it.line)
+                put("commit", it.commit)
+                put("author", it.author)
+                put("date", it.date)
+            }
+        },
+    )
+
 /** Reads blame annotations. */
-fun WireReader.blameLines(): List<BlameLine> = List(int()) { BlameLine(int(), string(), string(), string()) }
+fun JsonElement.blameLines(): List<BlameLine> =
+    jsonArray.map {
+        val line = it.jsonObject
+        BlameLine(line.int("line"), line.string("commit"), line.string("author"), line.string("date"))
+    }
