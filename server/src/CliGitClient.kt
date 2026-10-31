@@ -104,12 +104,44 @@ class CliGitClient : GitClient {
     private fun branchExists(root: String, name: String): Boolean =
         gitOutput(root, "show-ref", VERIFY, QUIET, "refs/heads/$name") != null
 
-    override suspend fun commit(root: String, message: String) {
+    /**
+     * Commits exactly the changes of [paths] (the Git panel checks the files to commit), as they are on disk, and
+     * leaves the changes of every other file for a later commit. `commit -- <paths>` never carries a change of
+     * another file along, whatever the index holds; the `add` before it only brings the selected paths to Git, so
+     * an untracked file is known to it when the commit accepts its pathspec.
+     */
+    override suspend fun commit(root: String, message: String, paths: List<String>) {
         require(message.isNotBlank()) { "A commit message is required" }
+        require(paths.isNotEmpty()) { "No file to commit" }
         withContext(Dispatchers.IO) {
-            runGit(root, "add", "-A")
-            runGit(root, "commit", "-m", message)
+            if (paths.size > COMMIT_CHUNK_SIZE) {
+                // Too many files for one command line (Windows bounds it): stage them chunk by chunk, then commit.
+                paths.chunked(COMMIT_CHUNK_SIZE).forEach { chunk ->
+                    runGit(root, "add", "-A", "--", *chunk.toTypedArray())
+                }
+                runGit(root, "commit", "-m", message)
+            } else {
+                runGit(root, "add", "-A", "--", *paths.toTypedArray())
+                // The commit also takes the old path of a selected rename, so Git records a rename and not the old
+                // file kept plus a new one; `add` uses the user's paths only: a rename staged ahead owns none.
+                runGit(root, "commit", "-m", message, "--", *selectedPaths(root, paths).toTypedArray())
+            }
         }
+    }
+
+    // The paths to give to Git: the user selects a rename by its new path, and its old path goes with it, or Git
+    // would record the rename as the old file kept plus a new file. Copied paths (`C`, rare) are expanded alike.
+    private fun selectedPaths(root: String, paths: List<String>): List<String> {
+        val selected = LinkedHashSet(paths)
+        val statuses = gitOutput(root, "status", "--porcelain", "-uall").orEmpty()
+        statuses.forEach { line ->
+            val code = line.take(2)
+            if ('R' in code || 'C' in code) {
+                val (old, newPath) = line.substring(PATH_START).split(" -> ")
+                if (newPath.trim('"') in selected) selected += old.trim('"')
+            }
+        }
+        return selected.toList()
     }
 
     override suspend fun pull(root: String): String =
@@ -349,6 +381,7 @@ class CliGitClient : GitClient {
         const val GONE_TRACK = "[gone]"
         const val BRANCH_FIELD_COUNT = 4
         const val DELETE_CHUNK_SIZE = 50
+        const val COMMIT_CHUNK_SIZE = 500
         const val DEFAULT_REMOTE = "origin"
         const val NO_COLOR = "--no-color"
         const val VERIFY = "--verify"

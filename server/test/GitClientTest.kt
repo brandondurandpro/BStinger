@@ -59,10 +59,77 @@ class GitClientTest {
             commitAll()
             root.resolve("a.kt").writeText("two\n")
             root.resolve("b.kt").writeText("new\n")
-            CliGitClient().commit(root.toString(), "Second commit")
+            val status = CliGitClient().status(root.toString()).keys.toList()
+            CliGitClient().commit(root.toString(), "Second commit", status)
             assertTrue(CliGitClient().status(root.toString()).isEmpty())
             assertEquals("Second commit", runGit(root, "log", "-1", "--format=%s").trim())
             assertEquals("two\n", root.resolve("a.kt").readText())
+        }
+
+    @Test
+    fun `commit carries only the selected changes and leaves the others`() =
+        runBlocking {
+            root.resolve("a.kt").writeText("one\n")
+            root.resolve("b.kt").writeText("one\n")
+            commitAll()
+            root.resolve("a.kt").writeText("two\n")
+            root.resolve("b.kt").writeText("two\n")
+            CliGitClient().commit(root.toString(), "Only a", listOf("a.kt"))
+            val status = CliGitClient().status(root.toString())
+            assertEquals(mapOf("b.kt" to GitFileStatus.Modified), status)
+            assertEquals("Only a", runGit(root, "log", "-1", "--format=%s").trim())
+            assertEquals("two\n", root.resolve("a.kt").readText())
+            // The unselected change is not lost: a commit of it comes afterwards with no other side effect.
+            CliGitClient().commit(root.toString(), "Only b", listOf("b.kt"))
+            assertTrue(CliGitClient().status(root.toString()).isEmpty())
+            assertEquals(3, runGit(root, "rev-list", "--count", "HEAD").trim().toInt())
+        }
+
+    @Test
+    fun `commit records a deletion and an untracked file selected by their paths`() =
+        runBlocking {
+            root.resolve("a.kt").writeText("gone\n")
+            commitAll()
+            root.resolve("a.kt").toFile().delete()
+            root.resolve("b.kt").writeText("added\n")
+            CliGitClient().commit(root.toString(), "Some changes", listOf("a.kt", "b.kt"))
+            assertTrue(CliGitClient().status(root.toString()).isEmpty())
+            // The names are kept out of the rest: the commit carries a deletion and an addition.
+            val names = runGit(root, "show", "--name-status", "--format=").trim().lines()
+            assertEquals(
+                listOf("D" + '\t' + "a.kt", "A" + '\t' + "b.kt"),
+                names,
+            )
+        }
+
+    @Test
+    fun `a selected rename keeps its old path, which the new one alone forgets`() =
+        runBlocking {
+            root.resolve("a.kt").writeText("one\n")
+            commitAll()
+            root.resolve("a.kt").toFile().delete()
+            root.resolve("renamed.kt").writeText("one\n")
+            git("add", "-A")
+            CliGitClient().commit(root.toString(), "Renamed", listOf("renamed.kt"))
+            assertTrue(CliGitClient().status(root.toString()).isEmpty())
+            val names = runGit(root, "show", "--name-status", "--format=").trim()
+            assertTrue(names.startsWith("R100\ta.kt\trenamed.kt"), "a rename: $names")
+        }
+
+    @Test
+    fun `commit refuses an empty selection and a blank message`() =
+        runBlocking {
+            root.resolve("a.kt").writeText("one\n")
+            commitAll()
+            val client = CliGitClient()
+            val noSelection =
+                assertFailsWith<IllegalArgumentException> { client.commit(root.toString(), "Nothing", emptyList()) }
+            assertEquals("No file to commit", noSelection.message)
+            val blank =
+                assertFailsWith<IllegalArgumentException> {
+                    client.commit(root.toString(), "   ", listOf("a.kt"))
+                }
+            assertEquals("A commit message is required", blank.message)
         }
 
     @Test

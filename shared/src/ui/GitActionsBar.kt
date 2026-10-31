@@ -54,7 +54,7 @@ internal fun GitActionsBar(project: ProjectState) {
                 { project.commitChanges(project.commitMessage) },
                 Modifier.padding(start = 6.dp).testTag(Tags.GIT_COMMIT),
                 primary = true,
-                enabled = !project.gitBusy,
+                enabled = !project.gitBusy && project.selectedForCommit.isNotEmpty(),
             )
         }
         project.gitMessage?.let { message ->

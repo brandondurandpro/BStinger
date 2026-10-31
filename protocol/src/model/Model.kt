@@ -345,8 +345,12 @@ interface GitClient {
      */
     suspend fun deleteBranches(root: String, branches: List<String>)
 
-    /** Stages every change and commits it with [message]. */
-    suspend fun commit(root: String, message: String)
+    /**
+     * Commits the changes of [paths] (relative to [root]) with [message], leaving the changes of every other file
+     * for a later commit. A rename is listed by its new path, and the commit keeps its old path with it so Git
+     * records a rename; [paths] is never empty (the client refuses to commit without a selection).
+     */
+    suspend fun commit(root: String, message: String, paths: List<String>)
 
     /** Pulls the current branch; returns what Git printed. */
     suspend fun pull(root: String): String
@@ -407,7 +411,7 @@ interface GitClient {
 
         override suspend fun deleteBranches(root: String, branches: List<String>) = Unit
 
-        override suspend fun commit(root: String, message: String) = Unit
+        override suspend fun commit(root: String, message: String, paths: List<String>) = Unit
 
         override suspend fun pull(root: String): String = ""
 

@@ -257,9 +257,11 @@ class GitChaosE2eTest {
         runComposeUiTest {
             project.commitAll()
             project.file("README.md", "# Changed\n")
+            project.file("notes.txt", "other\n")
             val app = launchWithProject(project, chaos = true)
             onNodeWithTag(Tags.TOOL_GIT).performClick()
             awaitTag(ItemTags.gitChange("README.md"))
+            awaitTag(ItemTags.gitChangeCheck("README.md")).performClick()
             awaitTag(Tags.GIT_COMMIT_MESSAGE).performTextInput("Update the readme")
             // The commit is made, then the connection breaks before its answer arrives: the client sends it again.
             app.network.dropFromServer = true
@@ -267,8 +269,8 @@ class GitChaosE2eTest {
             awaitCondition { project.lastCommitSubject() == "Update the readme" }
             app.network.cutAll()
             app.network.dropFromServer = false
-            awaitCondition { !app.project.gitBusy && app.project.gitStatus.isEmpty() }
-            assertEquals("Committed", app.project.gitMessage)
+            awaitCondition { !app.project.gitBusy && app.project.gitStatus.keys == setOf("notes.txt") }
+            assertEquals("Committed 1 file", app.project.gitMessage)
             assertEquals(2, project.commitCount(), "the retried commit must not run twice")
         }
 
