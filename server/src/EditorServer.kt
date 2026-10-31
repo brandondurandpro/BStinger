@@ -19,6 +19,7 @@ import org.example.kotlineditor.rpc.rpcError
 import org.example.kotlineditor.rpc.stringOrNull
 import java.io.Closeable
 import java.io.IOException
+import java.net.BindException
 import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
@@ -38,6 +39,11 @@ class ServerOptions(
     val responseCacheSize: Int = 1024,
     /** Shell output batches kept to replay after a reconnection. */
     val streamBacklog: Int = 4096,
+    /**
+     * How long [EditorServer.start] waits for a port the previous listener has just released: a crash followed by
+     * an automatic restart can find it briefly in use, and the server should come back on the same port.
+     */
+    val bindRetryMs: Long = 2_000,
 )
 
 /**
@@ -65,14 +71,31 @@ class EditorServer(
 
     /** Binds to [host] (loopback by default: remote access must be asked for explicitly). Port 0 = any. */
     fun start(host: String = "127.0.0.1", port: Int = 0): EditorServer {
-        serverSocket =
-            ServerSocket().apply {
-                reuseAddress = true
-                bind(InetSocketAddress(host, port), BACKLOG)
-            }
+        val socket = ServerSocket()
+        socket.reuseAddress = true
+        bindWithRetry(socket, InetSocketAddress(host, port))
+        serverSocket = socket
         thread(name = "editor-server-accept", isDaemon = true) { acceptLoop() }
         scope.launch { sweepSessions() }
         return this
+    }
+
+    // A listener that was just closed can leave its port unavailable for a moment; wait instead of failing the
+    // restart. A port held by another program still fails, after the retry window.
+    private fun bindWithRetry(socket: ServerSocket, address: InetSocketAddress) {
+        val deadline = System.nanoTime() + options.bindRetryMs * 1_000_000
+        while (true) {
+            try {
+                socket.bind(address, BACKLOG)
+                return
+            } catch (inUse: BindException) {
+                if (System.nanoTime() >= deadline) {
+                    runCatching { socket.close() }
+                    throw inUse
+                }
+                Thread.sleep(BIND_RETRY_DELAY_MS)
+            }
+        }
     }
 
     override fun close() {
@@ -174,6 +197,7 @@ class EditorServer(
     /** Token generation. */
     companion object {
         private const val BACKLOG = 128
+        private const val BIND_RETRY_DELAY_MS = 20L
         private const val TOKEN_BYTES = 24
         private const val MIN_SWEEP_MS = 50L
         private const val MAX_SWEEP_MS = 10_000L
