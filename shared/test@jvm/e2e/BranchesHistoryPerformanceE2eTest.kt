@@ -1,6 +1,7 @@
 package org.example.kotlineditor.e2e
 
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onNodeWithTag
@@ -24,6 +25,8 @@ private const val BRANCHES = 1_000
 private const val SCROLL_STEPS = 50
 private const val MAX_COMPOSED_ROWS = 80
 private const val DRAG_STEPS = 30
+private const val WHEEL_STEPS = 40
+private const val WHEEL_DELTA = 100f
 
 /**
  * Performance of the Branches window on a repository of [COMMITS] commits and [BRANCHES] branches: opening it,
@@ -95,6 +98,57 @@ class BranchesHistoryPerformanceE2eTest {
         onNodeWithTag(Tags.HISTORY_SEARCH_CLEAR).performClick()
     }
 
+    private fun ComposeUiTest.visibleBranchRows(): List<String> =
+        onAllNodes(hasTestTagPrefix("history.branch:"))
+            .fetchSemanticsNodes()
+            .mapNotNull { it.config.getOrElseNullable(SemanticsProperties.TestTag) { null } }
+
+    // A wheel scroll keeps the list moving frame after frame, unlike jumping to an index. Measured net of the same
+    // input plumbing and frames without movement, like the branch picker's benchmark.
+    private fun ComposeUiTest.measureBranchWheel() {
+        val list = onNodeWithTag(Tags.HISTORY_BRANCH_LIST)
+        list.performScrollToIndex(BRANCHES / 2)
+        renderFrame()
+        val before = visibleBranchRows()
+        repeat(5) {
+            list.performMouseInput {
+                moveTo(center)
+                scroll(WHEEL_DELTA)
+            }
+            renderFrame()
+        }
+        assertTrue(visibleBranchRows() != before, "the wheel must move the branch list")
+        list.performScrollToIndex(BRANCHES / 2)
+        renderFrame()
+        val idle =
+            costOf {
+                repeat(WHEEL_STEPS) {
+                    list.performMouseInput {
+                        moveTo(center)
+                        scroll(0f)
+                    }
+                    renderFrame()
+                }
+            }
+        val wheel =
+            costOf {
+                repeat(WHEEL_STEPS) { step ->
+                    // Alternate directions so the list stays in the middle, away from its ends.
+                    list.performMouseInput {
+                        moveTo(center)
+                        scroll(if (step / 10 % 2 == 0) WHEEL_DELTA else -WHEEL_DELTA)
+                    }
+                    renderFrame()
+                }
+            }
+        report(
+            "scroll the $BRANCHES branches with the wheel ($WHEEL_STEPS frames)",
+            wheel - idle,
+            budgetMillis = 6_000,
+            budgetMegabytes = 150,
+        )
+    }
+
     private fun ComposeUiTest.measureBranchList() {
         val local = ItemTags.historySection(BranchSection.Local.name)
         measure("fold the $BRANCHES local branches", budgetMillis = 2_000, budgetMegabytes = 50) {
@@ -109,6 +163,7 @@ class BranchesHistoryPerformanceE2eTest {
         }
         val unfolded = onAllNodes(hasTestTagPrefix("history.branch:")).fetchSemanticsNodes().size
         assertTrue(unfolded < MAX_COMPOSED_ROWS, "composed branch rows after unfolding: $unfolded")
+        measureBranchWheel()
         measure("widen the branch list by dragging its splitter", budgetMillis = 2_000, budgetMegabytes = 50) {
             onNodeWithTag(Tags.HISTORY_BRANCHES_SPLITTER).performMouseInput {
                 moveTo(center)

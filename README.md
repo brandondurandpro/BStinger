@@ -67,7 +67,7 @@ A lightweight IDE in the style of IntelliJ IDEA (New UI, dark theme), written wi
   and changed files of the selected commit (a click on a file opens the diff editor on what that commit changed in
   it). A pinned branch's menu opens it on that branch (Show History). Its search
   field finds the commits of the whole branch by message, author or start of the hash; splitters resize its panes,
-  and the Local and Remote sections fold.
+  and the Local and Remote sections fold, their headers staying pinned while the branch list scrolls.
 
 ### Architecture: client and server
 

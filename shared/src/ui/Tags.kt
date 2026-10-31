@@ -56,6 +56,7 @@ object Tags {
     const val HISTORY_REFRESH = "history.refresh"
     const val HISTORY_HIDE = "history.hide"
     const val HISTORY_BRANCH_SEARCH = "history.branchSearch"
+    const val HISTORY_BRANCH_LIST = "history.branchList"
     const val HISTORY_TITLE = "history.title"
     const val HISTORY_LOADING = "history.loading"
     const val HISTORY_ERROR = "history.error"

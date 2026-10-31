@@ -162,8 +162,13 @@ private fun BranchColumn(project: ProjectState, history: BranchHistoryState, mod
         )
         val localOpen = BranchSection.Local !in history.collapsedSections
         val remoteOpen = BranchSection.Remote !in history.collapsedSections
-        LazyColumn(Modifier.fillMaxSize().padding(top = 6.dp)) {
-            item { SectionTitle(history, BranchSection.Local, shownLocals.size) }
+        LazyColumn(
+            Modifier.fillMaxSize().padding(top = 6.dp).testTag(Tags.HISTORY_BRANCH_LIST),
+        ) {
+            // The headers stay at the top of the list while its rows scroll under them, like a tree's folders.
+            stickyHeader(key = "section:${BranchSection.Local.name}") {
+                SectionTitle(history, BranchSection.Local, shownLocals.size)
+            }
             if (localOpen) {
                 items(shownLocals, key = { "local:${it.name}" }) { branch ->
                     HistoryBranchRow(branch.name, history.selectedRef == branch.name, local = branch) {
@@ -171,7 +176,9 @@ private fun BranchColumn(project: ProjectState, history: BranchHistoryState, mod
                     }
                 }
             }
-            item { SectionTitle(history, BranchSection.Remote, shownRemotes.size) }
+            stickyHeader(key = "section:${BranchSection.Remote.name}") {
+                SectionTitle(history, BranchSection.Remote, shownRemotes.size)
+            }
             if (remoteOpen) {
                 items(shownRemotes, key = { "remote:$it" }) { name ->
                     HistoryBranchRow(name, history.selectedRef == name, local = null) { history.select(name) }
@@ -188,6 +195,8 @@ private fun SectionTitle(history: BranchHistoryState, section: BranchSection, co
     Row(
         Modifier
             .fillMaxWidth()
+            // Opaque: rows scroll under the header while it is stuck to the top.
+            .background(IdeColors.Editor)
             .clickable { history.toggleSection(section) }
             .testTag(ItemTags.historySection(section.name))
             .padding(top = 6.dp, bottom = 2.dp),
