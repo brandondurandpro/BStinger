@@ -16,6 +16,9 @@ import org.example.kotlineditor.model.AppServices
 import org.example.kotlineditor.model.FileEntry
 import java.io.IOException
 
+/** How editors draw their lines: on one canvas, or as one composed row per line (being replaced). */
+enum class EditorRenderer { Canvas, Rows }
+
 /** The whole IDE: the welcome screen or the open project, plus IDE-wide settings. */
 @Stable
 @Suppress("TooManyFunctions")
@@ -40,6 +43,10 @@ class AppState(
 
     /** Whether the devtools were opened (Ctrl+Alt+Shift+D) since the IDE started: shows their buttons. */
     var devtools by mutableStateOf(false)
+
+    /** How editors draw their lines; Ctrl+Alt+Shift+R switches, while the canvas renderer replaces the rows. */
+    var editorRenderer by mutableStateOf(savedRenderer())
+        private set
 
     /** Editor font size in points, shared by every editor (Alt+Shift+. / Alt+Shift+, / Ctrl+wheel). */
     var editorFontSize by mutableFloatStateOf(savedFontSize())
@@ -70,6 +77,10 @@ class AppState(
 
     fun resetEditorZoom() {
         editorFontSize = DEFAULT_EDITOR_FONT_SIZE
+    }
+
+    fun toggleEditorRenderer() {
+        editorRenderer = if (editorRenderer == EditorRenderer.Canvas) EditorRenderer.Rows else EditorRenderer.Canvas
     }
 
     fun openProject(path: String) {
@@ -120,14 +131,21 @@ class AppState(
             ?.coerceIn(MIN_EDITOR_FONT_SIZE, MAX_EDITOR_FONT_SIZE)
             ?: DEFAULT_EDITOR_FONT_SIZE
 
+    private fun savedRenderer(): EditorRenderer =
+        EditorRenderer.entries.find { it.name == preferences[PreferenceKeys.EDITOR_RENDERER] } ?: EditorRenderer.Canvas
+
     // The open project's settings on top of the last known preferences.
     private fun currentPreferences(): Map<String, String> {
-        val project = (screen as? Screen.Project)?.project ?: return preferences + fontSizePreference()
+        val project = (screen as? Screen.Project)?.project ?: return preferences + editorPreferences()
         val autoSelect = PreferenceKeys.AUTO_SELECT_OPENED_FILE to project.autoSelectOpenedFile.toString()
-        return preferences + project.toolWindows.toPreferences() + autoSelect + fontSizePreference()
+        return preferences + project.toolWindows.toPreferences() + autoSelect + editorPreferences()
     }
 
-    private fun fontSizePreference() = PreferenceKeys.EDITOR_FONT_SIZE to editorFontSize.toString()
+    private fun editorPreferences() =
+        mapOf(
+            PreferenceKeys.EDITOR_FONT_SIZE to editorFontSize.toString(),
+            PreferenceKeys.EDITOR_RENDERER to editorRenderer.name,
+        )
 
     // Writes the preferences each time one of them changes, off the UI thread.
     private suspend fun savePreferencesOnChange() {

@@ -165,19 +165,26 @@ private fun Gutter(source: LineSource, decorations: LineDecorations, metrics: Ed
 
 @Composable
 private fun DeletionMarker(index: Int) {
-    Canvas(Modifier.size(7.dp).testTag(Tags.changeMarker(index, "Deleted"))) {
-        val path =
-            Path().apply {
-                moveTo(0f, 0f)
-                lineTo(size.width, 0f)
-                lineTo(0f, size.height)
-                close()
-            }
-        drawPath(path, IdeColors.GitDeleted)
+    Canvas(Modifier.size(DELETION_MARKER_SIZE).testTag(Tags.changeMarker(index, "Deleted"))) {
+        drawDeletionMarker(size.width)
     }
 }
 
-private fun changeColor(kind: GitChangeKind): Color =
+internal val DELETION_MARKER_SIZE = 7.dp
+
+/** Triangle in the top-left corner of the line below deleted lines. */
+internal fun DrawScope.drawDeletionMarker(side: Float) {
+    val path =
+        Path().apply {
+            moveTo(0f, 0f)
+            lineTo(side, 0f)
+            lineTo(0f, side)
+            close()
+        }
+    drawPath(path, IdeColors.GitDeleted)
+}
+
+internal fun changeColor(kind: GitChangeKind): Color =
     when (kind) {
         GitChangeKind.Added -> IdeColors.GitAdded
         GitChangeKind.Modified -> IdeColors.GitModified
@@ -222,7 +229,7 @@ private fun RowScope.LineText(
     }
 }
 
-private fun highlighted(source: LineSource): AnnotatedString {
+internal fun highlighted(source: LineSource): AnnotatedString {
     val highlighted = SyntaxHighlighter.highlight(displayText(source.text), source.language, source.startsInComment)
     val placeholder = source.placeholder ?: return highlighted
     return buildAnnotatedString {
@@ -238,18 +245,24 @@ private fun displayText(line: String) =
     org.example.kotlineditor.state
         .displayLine(line)
 
-private fun DrawScope.drawDecorations(decorations: LineDecorations, origin: Float, charWidth: Float) {
-    drawColumns(decorations.usages, decorations.usageLength, origin, charWidth) { IdeColors.IdentifierUsage }
-    drawColumns(decorations.matches, decorations.matchLength, origin, charWidth) {
+/** Usages, search matches, brackets and selection of a line [height] tall, behind its text. */
+internal fun DrawScope.drawDecorations(
+    decorations: LineDecorations,
+    origin: Float,
+    charWidth: Float,
+    height: Float = size.height,
+) {
+    drawColumns(decorations.usages, decorations.usageLength, origin, charWidth, height) { IdeColors.IdentifierUsage }
+    drawColumns(decorations.matches, decorations.matchLength, origin, charWidth, height) {
         if (it == decorations.currentMatch) IdeColors.SearchMatchCurrent else IdeColors.SearchMatch
     }
-    drawColumns(decorations.brackets, 1, origin, charWidth) { IdeColors.BracketMatch }
+    drawColumns(decorations.brackets, 1, origin, charWidth, height) { IdeColors.BracketMatch }
     if (decorations.hasSelection) {
         val start = decorations.selectionStart
         drawRect(
             IdeColors.TextSelection,
             Offset(origin + start * charWidth, 0f),
-            Size((decorations.selectionEnd - start) * charWidth, size.height),
+            Size((decorations.selectionEnd - start) * charWidth, height),
         )
     }
 }
@@ -259,7 +272,8 @@ private inline fun DrawScope.drawColumns(
     length: Int,
     origin: Float,
     charWidth: Float,
+    height: Float,
     color: (Int) -> Color,
 ) {
-    columns?.forEach { drawRect(color(it), Offset(origin + it * charWidth, 0f), Size(length * charWidth, size.height)) }
+    columns?.forEach { drawRect(color(it), Offset(origin + it * charWidth, 0f), Size(length * charWidth, height)) }
 }

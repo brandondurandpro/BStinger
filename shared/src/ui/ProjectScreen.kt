@@ -35,6 +35,7 @@ import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.Dock
 import org.example.kotlineditor.state.Document
 import org.example.kotlineditor.state.EditorPane
+import org.example.kotlineditor.state.EditorRenderer
 import org.example.kotlineditor.state.EditorTab
 import org.example.kotlineditor.state.FindState
 import org.example.kotlineditor.state.PopupKind
@@ -241,6 +242,7 @@ private fun ReadyEditor(
         fontSize = app.editorFontSize,
         onZoom = app::zoomEditor,
         onCtrlClick = project::gotoDeclaration,
+        canvas = app.editorRenderer == EditorRenderer.Canvas,
     )
 }
 

@@ -246,8 +246,8 @@ class EditorTabsE2eTest {
             awaitTag(Tags.line(1500)).assertTextContains("val line1501 = 1501")
             assertTrue(
                 app.project.editor.activeTab!!
-                    .listState
-                    .firstVisibleItemIndex in 1400..1500,
+                    .verticalScroll
+                    .firstRow in 1400..1500,
             )
         }
 
