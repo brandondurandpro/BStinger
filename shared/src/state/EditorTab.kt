@@ -71,6 +71,9 @@ class EditorTab(val entry: FileEntry, val relativePath: String, val isDiff: Bool
     val splitListState = LazyListState()
     val horizontalScroll = HorizontalScroll()
 
+    /** Vertical scroll of the editor when it draws its rows itself (kept per tab, like [listState]). */
+    val verticalScroll = VerticalScroll()
+
     /** Gutter marks of the lines changed since HEAD (text tabs only). */
     var lineChanges by mutableStateOf<List<GitLineChange>>(emptyList())
         internal set

@@ -1,7 +1,6 @@
 package org.example.kotlineditor.ui
 
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
@@ -22,6 +21,8 @@ import androidx.compose.ui.unit.sp
 import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.Document
 import org.example.kotlineditor.state.EditorTab
+import org.example.kotlineditor.state.EditorViewport
+import org.example.kotlineditor.state.HorizontalScroll
 import org.example.kotlineditor.state.TextPos
 import org.example.kotlineditor.state.columnForVisual
 import org.example.kotlineditor.state.selectWordAt
@@ -62,9 +63,6 @@ internal class EditorMetrics(
     val blameMeasurer: TextMeasurer,
     val blameStyle: TextStyle,
 ) {
-    fun visibleRows(listState: LazyListState): Int =
-        (listState.layoutInfo.viewportSize.height / lineHeightPx).toInt().coerceAtLeast(1)
-
     /** Horizontal scroll range: widest line plus some slack, minus what fits on screen. */
     fun maxHorizontalOffset(maxLineLength: Int, viewportWidth: Float): Float =
         maxOf(0f, (maxLineLength + SLACK_COLUMNS) * charWidth + paddingPx - (viewportWidth - gutterPx))
@@ -72,13 +70,12 @@ internal class EditorMetrics(
     fun isOnFoldMarker(x: Float): Boolean = x in gutterPx - foldZonePx..gutterPx
 
     /** Document position under [position] (in the editor's coordinates). */
-    fun hit(position: Offset, tab: EditorTab, document: Document): TextPos {
-        val listState = tab.listState
+    fun hit(position: Offset, viewport: EditorViewport, horizontal: HorizontalScroll, document: Document): TextPos {
         val folding = document.folding
-        val rowOffset = floor((position.y + listState.firstVisibleItemScrollOffset) / lineHeightPx).toInt()
-        val line = folding.lineAt((listState.firstVisibleItemIndex + rowOffset).coerceIn(0, folding.rowCount() - 1))
+        val rowOffset = floor((position.y + viewport.rowOffsetPx) / lineHeightPx).toInt()
+        val line = folding.lineAt((viewport.firstRow + rowOffset).coerceIn(0, folding.rowCount() - 1))
         val visual =
-            ((position.x - gutterPx - paddingPx + tab.horizontalScroll.offset) / charWidth)
+            ((position.x - gutterPx - paddingPx + horizontal.offset) / charWidth)
                 .roundToInt()
                 .coerceAtLeast(0)
         return TextPos(line, columnForVisual(document.lines[line], visual))
@@ -134,6 +131,7 @@ internal class ClickCounter {
 internal class GestureTarget(
     val document: Document,
     val tab: EditorTab,
+    val viewport: EditorViewport,
     val metrics: EditorMetrics,
     val clicks: ClickCounter,
     val focus: FocusRequester,
@@ -145,7 +143,7 @@ internal class GestureTarget(
 internal suspend fun AwaitPointerEventScope.editorGesture(target: GestureTarget) {
     val down = awaitFirstDown()
     target.focus.requestFocus()
-    val pos = target.metrics.hit(down.position, target.tab, target.document)
+    val pos = target.metrics.hit(down.position, target.viewport, target.tab.horizontalScroll, target.document)
     val modifiers = currentEvent.keyboardModifiers
     when {
         target.metrics.isOnFoldMarker(down.position.x) && target.document.folding.isFoldable(pos.line) -> {
@@ -190,7 +188,8 @@ private suspend fun AwaitPointerEventScope.drag(target: GestureTarget) {
     var change = awaitPointerEvent().changes.firstOrNull()
     while (change != null && change.pressed) {
         val p = change.position
-        target.document.moveTo(target.metrics.hit(p, target.tab, target.document), extendSelection = true)
+        val pos = target.metrics.hit(p, target.viewport, target.tab.horizontalScroll, target.document)
+        target.document.moveTo(pos, extendSelection = true)
         when {
             p.y < 0 -> target.autoScroll(-target.metrics.lineHeightPx)
             p.y > size.height -> target.autoScroll(target.metrics.lineHeightPx)

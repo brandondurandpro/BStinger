@@ -7,7 +7,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -56,7 +55,9 @@ import org.example.kotlineditor.model.GitChangeKind
 import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.Document
 import org.example.kotlineditor.state.EditorTab
+import org.example.kotlineditor.state.EditorViewport
 import org.example.kotlineditor.state.HorizontalScroll
+import org.example.kotlineditor.state.LazyListViewport
 import org.example.kotlineditor.state.TextPos
 import org.example.kotlineditor.state.identifierAt
 import org.example.kotlineditor.state.matchingBracket
@@ -105,8 +106,9 @@ fun CodeEditor(
     }
     val scope = rememberCoroutineScope()
     val clicks = remember { ClickCounter() }
+    val viewport = remember(tab) { LazyListViewport(tab.listState) }
     tab.horizontalScroll.updateRange(metrics.maxHorizontalOffset(document.maxLineLength, viewportWidth))
-    FollowCaret(tab, document, metrics) { viewportWidth }
+    FollowCaret(tab, viewport, document, metrics) { viewportWidth }
     Box(
         modifier
             .background(IdeColors.Editor)
@@ -114,7 +116,7 @@ fun CodeEditor(
             .onSizeChanged { viewportWidth = it.width.toFloat() }
             .focusRequester(focusRequester)
             .onFocusChanged { focused = it.isFocused }
-            .onKeyEvent { handleEditorKey(it, document, metrics.visibleRows(tab.listState)) }
+            .onKeyEvent { handleEditorKey(it, document, viewport.visibleRows(metrics.lineHeightPx)) }
             .focusable()
             .scrollable(tab.horizontalScroll.scrollableState, Orientation.Horizontal)
             .zoomOnCtrlWheel(onZoom),
@@ -128,8 +130,8 @@ fun CodeEditor(
                 .pointerHoverIcon(PointerIcon.Text)
                 .pointerInput(document) {
                     val target =
-                        GestureTarget(document, tab, metrics, clicks, focusRequester, onCtrlClick) { delta ->
-                            scope.launch { tab.listState.scrollBy(delta) }
+                        GestureTarget(document, tab, viewport, metrics, clicks, focusRequester, onCtrlClick) { delta ->
+                            scope.launch { viewport.scrollBy(delta) }
                         }
                     awaitEachGesture { editorGesture(target) }
                 },
@@ -291,23 +293,28 @@ private suspend fun blink(document: Document, on: MutableState<Boolean>) {
 
 // Keeps the caret on screen after keyboard moves and programmatic jumps.
 @Composable
-private fun FollowCaret(tab: EditorTab, document: Document, metrics: EditorMetrics, viewportWidth: () -> Float) {
+private fun FollowCaret(
+    tab: EditorTab,
+    viewport: EditorViewport,
+    document: Document,
+    metrics: EditorMetrics,
+    viewportWidth: () -> Float,
+) {
     LaunchedEffect(document) {
         // drop(1): coming back to a tab must restore its scroll position, not jump to the caret.
         snapshotFlow { document.caret }.drop(1).collect { caret ->
             // A search or "go to line" may land inside a folded region: unfold it, like IntelliJ.
             if (document.folding.isHidden(caret.line)) document.folding.reveal(caret.line)
-            scrollToRow(tab, metrics, document.folding.rowOf(caret.line))
+            scrollToRow(viewport, metrics, document.folding.rowOf(caret.line))
             val x = visualColumn(document.lines[caret.line], caret.column) * metrics.charWidth + metrics.paddingPx
             scrollToX(tab.horizontalScroll, metrics, x, viewportWidth() - metrics.gutterPx)
         }
     }
 }
 
-private suspend fun scrollToRow(tab: EditorTab, metrics: EditorMetrics, row: Int) {
-    val listState = tab.listState
-    val visible = metrics.visibleRows(listState)
-    val first = listState.firstVisibleItemIndex
+private suspend fun scrollToRow(viewport: EditorViewport, metrics: EditorMetrics, row: Int) {
+    val visible = viewport.visibleRows(metrics.lineHeightPx)
+    val first = viewport.firstRow
     val last = first + visible - 1
     val target =
         when {
@@ -316,7 +323,7 @@ private suspend fun scrollToRow(tab: EditorTab, metrics: EditorMetrics, row: Int
             row > last -> row - visible + 1
             else -> null
         }
-    target?.let { listState.scrollToItem(it) }
+    target?.let { viewport.scrollToRow(it) }
 }
 
 private fun scrollToX(horizontal: HorizontalScroll, metrics: EditorMetrics, x: Float, textViewport: Float) {
