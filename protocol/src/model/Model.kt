@@ -256,6 +256,25 @@ data class BlameLine(
     val date: String,
 )
 
+/** A local branch and its synchronization with the remote-tracking branch it follows. */
+data class GitBranchInfo(
+    /** Short name of the branch, as shown by `git branch` (`main`, `feature/login`). */
+    val name: String,
+    /** Whether this is the checked-out branch. */
+    val current: Boolean,
+    /** Remote-tracking branch it follows (`origin/main`), or `null` when it tracks nothing. */
+    val upstream: String?,
+    /** Commits of the branch that its upstream does not have. */
+    val ahead: Int,
+    /** Commits of the upstream that the branch does not have: how far behind the remote it is. */
+    val behind: Int,
+    /** Whether the upstream branch was deleted on the remote (Git reports it as `gone`). */
+    val upstreamGone: Boolean = false,
+) {
+    /** Whether this branch follows an upstream that still exists. */
+    val hasUpstream: Boolean get() = upstream != null && !upstreamGone
+}
+
 /** Git information about a project. */
 interface GitClient {
     /** Status of changed files, keyed by path relative to [root] with `/` separators; empty when not a repository. */
@@ -266,6 +285,9 @@ interface GitClient {
 
     /** Differences of [path] (relative to [root]) between HEAD and the working tree; empty when unchanged. */
     suspend fun diff(root: String, path: String): List<DiffLine>
+
+    /** Local branches of the repository, with their synchronization against their remote-tracking branch. */
+    suspend fun branchDetails(root: String): List<GitBranchInfo>
 
     /** Local branches of the repository. */
     suspend fun branches(root: String): List<String>
@@ -292,6 +314,8 @@ interface GitClient {
         override suspend fun branch(root: String): String? = null
 
         override suspend fun diff(root: String, path: String): List<DiffLine> = emptyList()
+
+        override suspend fun branchDetails(root: String): List<GitBranchInfo> = emptyList()
 
         override suspend fun branches(root: String): List<String> = emptyList()
 

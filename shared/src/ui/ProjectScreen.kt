@@ -59,8 +59,8 @@ fun ProjectScreen(app: AppState, project: ProjectState) {
     SyncOnWindowFocus(project)
     // Shortcuts only reach a focused component: with no file open nothing else holds the focus, so the screen takes it.
     val windowFocused = LocalWindowInfo.current.isWindowFocused
-    LaunchedEffect(hasFocus, project.popup, windowFocused) {
-        if (!hasFocus && project.popup == null) runCatching { rootFocus.requestFocus() }
+    LaunchedEffect(hasFocus, project.popup, project.branchPickerOpen, windowFocused) {
+        if (!hasFocus && project.popup == null && !project.branchPickerOpen) runCatching { rootFocus.requestFocus() }
     }
     Column(
         Modifier
@@ -77,6 +77,15 @@ fun ProjectScreen(app: AppState, project: ProjectState) {
         Box(Modifier.weight(1f)) {
             ProjectBody(app, project, findFocus)
             ProjectPopups(project) { closePopup(project) }
+            if (project.branchPickerOpen) {
+                BranchPickerPopup(project) {
+                    project.branchPickerOpen = false
+                    val pane = project.editor.activePane
+                    if (project.editor.activeTab?.document != null) {
+                        runCatching { pane.focusRequester.requestFocus() }
+                    }
+                }
+            }
             project.fileDialog?.let { dialog ->
                 FileDialogPopup(project, dialog, onClose = { project.fileDialog = null })
             }

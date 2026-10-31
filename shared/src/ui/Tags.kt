@@ -12,6 +12,12 @@ object Tags {
     const val PROJECT_CLOSE = "project.close"
     const val PROJECT_OPEN_OTHER = "project.openOther"
     const val GIT_BRANCH = "git.branch"
+    const val BRANCH_PICKER = "branch.picker"
+    const val BRANCH_SEARCH = "branch.search"
+    const val BRANCH_REFRESH = "branch.refresh"
+    const val BRANCH_EMPTY = "branch.empty"
+    const val BRANCH_NO_MATCH = "branch.noMatch"
+    const val BRANCH_SELECTION_COUNT = "branch.selectionCount"
     const val PROJECT_PANEL = "project.panel"
     const val GIT_PANEL = "git.panel"
     const val GIT_EMPTY = "git.empty"
@@ -159,6 +165,7 @@ object Tags {
 }
 
 /** Test tags of the items of lists and popups (recent projects, search results, terminal lines). */
+@Suppress("TooManyFunctions")
 object ItemTags {
     fun recentProject(path: String) = "recent:$path"
 
@@ -169,6 +176,20 @@ object ItemTags {
     fun gitChange(relativePath: String) = "git.change:$relativePath"
 
     fun gitBranch(name: String) = "git.branchItem:$name"
+
+    fun branchItem(name: String) = "branch.item:$name"
+
+    fun branchSelect(name: String) = "branch.select:$name"
+
+    fun branchSync(name: String) = "branch.sync:$name"
+
+    fun branchAhead(name: String) = "branch.ahead:$name"
+
+    fun branchBehind(name: String) = "branch.behind:$name"
+
+    fun pinnedBranch(name: String) = "branch.pinned:$name"
+
+    fun unpinnedBranch(name: String) = "branch.unpinned:$name"
 
     fun networkRecord(seq: Long) = "network.record:$seq"
 

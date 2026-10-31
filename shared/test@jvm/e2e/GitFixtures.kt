@@ -1,12 +1,17 @@
 package org.example.kotlineditor.e2e
 
+import java.nio.file.Path
+
 // Git repositories for the e2e tests, driven with the git executable.
 
 /** Runs git in the project with a test identity, and returns its output; fails if git does. */
-fun SampleProject.git(vararg args: String): String {
+fun SampleProject.git(vararg args: String): String = gitIn(root, *args)
+
+/** Runs git in [directory] with a test identity, and returns its output; fails if git does. */
+fun gitIn(directory: Path, vararg args: String): String {
     val process =
         ProcessBuilder(listOf("git", "-c", "user.name=Test", "-c", "user.email=test@example.com") + args)
-            .directory(root.toFile())
+            .directory(directory.toFile())
             .redirectErrorStream(true)
             .start()
     val output = process.inputStream.bufferedReader().readText()

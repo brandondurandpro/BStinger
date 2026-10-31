@@ -75,6 +75,51 @@ class GitClientTest {
         }
 
     @Test
+    fun `branch details report the current branch and its distance from the remote`() =
+        runBlocking {
+            val remote = temporaryDirectory("git-remote")
+            runGit(remote, "init", "-q", "--bare")
+            root.resolve("a.kt").writeText("one\n")
+            commitAll()
+            val default = git("rev-parse", "--abbrev-ref", "HEAD").trim()
+            git("remote", "add", "origin", remote.toString())
+            git("push", "-q", "-u", "origin", "HEAD")
+            git("branch", "feature")
+            // A clone advances the remote; a fetch makes the project see that it is one commit behind.
+            val clone = temporaryDirectory("git-clone")
+            runGit(clone, "clone", "-q", "-c", "core.autocrlf=false", remote.toString(), ".")
+            runGit(clone, "config", "user.name", "Test")
+            runGit(clone, "config", "user.email", "test@example.com")
+            clone.resolve("remote.kt").writeText("remote\n")
+            runGit(clone, "add", "-A")
+            runGit(clone, "commit", "-q", "-m", "remote")
+            runGit(clone, "push", "-q")
+            git("fetch", "-q")
+
+            val client = CliGitClient()
+            val behind = client.branchDetails(root.toString())
+            val main = behind.single { it.name == default }
+            assertTrue(main.current, "The checked-out branch is not current: $behind")
+            assertEquals("origin/$default", main.upstream)
+            assertEquals(0, main.ahead)
+            assertEquals(1, main.behind)
+            assertFalse(main.upstreamGone)
+            val feature = behind.single { it.name == "feature" }
+            assertFalse(feature.current)
+            assertEquals(null, feature.upstream)
+            assertEquals(0, feature.behind)
+
+            // A local commit adds one commit to push on top of the one to pull.
+            root.resolve("a.kt").writeText("two\n")
+            git("add", "-A")
+            git("commit", "-q", "-m", "local")
+            val ahead = client.branchDetails(root.toString()).single { it.name == default }
+            assertEquals(1, ahead.ahead)
+            assertEquals(1, ahead.behind)
+            assertEquals(setOf(default, "feature"), client.branches(root.toString()).toSet())
+        }
+
+    @Test
     fun `blame reports the author and the date of every line`() =
         runBlocking {
             root.resolve("a.kt").writeText("one\ntwo\n")

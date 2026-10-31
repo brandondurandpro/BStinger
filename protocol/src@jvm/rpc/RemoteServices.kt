@@ -13,6 +13,7 @@ import org.example.kotlineditor.model.DirectoryPicker
 import org.example.kotlineditor.model.FileContent
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.FileSymbol
+import org.example.kotlineditor.model.GitBranchInfo
 import org.example.kotlineditor.model.GitClient
 import org.example.kotlineditor.model.GitFileStatus
 import org.example.kotlineditor.model.ProjectFileSystem
@@ -137,6 +138,9 @@ class RemoteGit(private val client: RpcClient) : GitClient {
 
     override suspend fun diff(root: String, path: String): List<DiffLine> =
         client.call(Method.GitDiff) { file(root, path) }.diffLines()
+
+    override suspend fun branchDetails(root: String): List<GitBranchInfo> =
+        client.call(Method.GitBranchDetails) { put(ROOT, root) }.branchInfos()
 
     override suspend fun branches(root: String): List<String> =
         client.call(Method.GitBranches) { put(ROOT, root) }.strings()

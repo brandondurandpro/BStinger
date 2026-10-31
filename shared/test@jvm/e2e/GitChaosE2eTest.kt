@@ -37,6 +37,26 @@ class GitChaosE2eTest {
         }
 
     @Test
+    fun `the branch picker keeps its branches while the network is down and refreshes when it is back`() =
+        runComposeUiTest {
+            project.commitAll()
+            project.git("branch", "feature")
+            val app = launchWithProject(project, chaos = true)
+            awaitCondition { app.project.gitBranchInfos.any { it.name == "feature" } }
+            app.network.goDown()
+            awaitReconnecting()
+            onNodeWithTag(Tags.GIT_BRANCH).performClick()
+            awaitTag(Tags.BRANCH_PICKER)
+            // The last known branches stay usable; the refresh issued on opening waits for the link.
+            awaitTag(ItemTags.branchItem("feature"))
+            onNodeWithTag(Tags.BRANCH_REFRESH).performClick()
+            app.network.comeBack()
+            awaitReconnected()
+            awaitCondition { app.project.gitBranchInfos.any { it.name == "feature" } }
+            awaitTag(ItemTags.branchItem("feature"))
+        }
+
+    @Test
     fun `a commit whose answer is lost is made once`() =
         runComposeUiTest {
             project.commitAll()

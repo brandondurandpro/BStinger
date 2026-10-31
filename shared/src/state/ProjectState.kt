@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import org.example.kotlineditor.model.AppServices
 import org.example.kotlineditor.model.FileEntry
+import org.example.kotlineditor.model.GitBranchInfo
 import org.example.kotlineditor.model.GitFileStatus
 
 private val INDEXED_POPUPS = setOf(PopupKind.GotoFile, PopupKind.FindInFiles, PopupKind.GotoSymbol)
@@ -20,6 +21,7 @@ private val DOCUMENT_POPUPS = setOf(PopupKind.GotoLine, PopupKind.FileStructure)
 
 /** An open project: its tree, editors, index, terminal and tool windows. See `ProjectActions.kt` for actions. */
 @Stable
+@Suppress("TooManyFunctions")
 class ProjectState(
     val root: FileEntry,
     val services: AppServices,
@@ -73,6 +75,17 @@ class ProjectState(
     var gitBranches: List<String> by mutableStateOf(emptyList())
         private set
 
+    /** Local branches with their remote synchronization, for the branch picker of the toolbar. */
+    var gitBranchInfos: List<GitBranchInfo> by mutableStateOf(emptyList())
+        private set
+
+    /** Branches the user pinned in the toolbar (one or several); clicking a branch name still checks it out. */
+    var selectedBranches: Set<String> by mutableStateOf(emptySet())
+        private set
+
+    /** Whether the toolbar's branch picker is open. */
+    var branchPickerOpen by mutableStateOf(false)
+
     /** Current Git branch (or short commit when detached), shown in the toolbar like IntelliJ's VCS widget. */
     var gitBranch: String? by mutableStateOf(null)
         private set
@@ -116,18 +129,50 @@ class ProjectState(
 
     /** Reloads the Git branch and the status of every file. */
     fun refreshGit() {
-        scope.launch {
-            gitBranch = runCatching { services.git.branch(root.path) }.getOrNull()
-            isGitRepository = gitBranch != null
-            gitBranches =
-                if (isGitRepository) {
-                    runCatching { services.git.branches(root.path) }.getOrDefault(emptyList())
-                } else {
-                    emptyList()
-                }
-        }
+        refreshBranches()
         refreshGitStatus()
     }
+
+    /**
+     * Reloads the branches and their distance from their remote-tracking branch. A failed call (server unreachable)
+     * keeps the last list, so the branch picker still shows what it knows while the link comes back.
+     */
+    fun refreshBranches() {
+        scope.launch {
+            runCatching { services.git.branch(root.path) }.onSuccess {
+                gitBranch = it
+                isGitRepository = it != null
+            }
+            if (isGitRepository) {
+                runCatching { services.git.branchDetails(root.path) }
+                    .onSuccess(::applyBranches)
+                    .onFailure {
+                        // An older server knows the names but not their upstream: show the names at least.
+                        runCatching { services.git.branches(root.path) }
+                            .onSuccess { names -> applyBranches(names.map(::branchInfoOf)) }
+                    }
+            }
+        }
+    }
+
+    private fun applyBranches(infos: List<GitBranchInfo>) {
+        gitBranchInfos = sortedBranches(infos)
+        gitBranches = infos.map { it.name }
+        selectedBranches = selectedBranches intersect infos.mapTo(HashSet()) { it.name }
+    }
+
+    /** Pins or unpins [name] in the toolbar (the checkbox of the branch picker). */
+    fun toggleBranchSelection(name: String) {
+        selectedBranches =
+            if (name in selectedBranches) selectedBranches - name else selectedBranches + name
+    }
+
+    private fun branchInfoOf(name: String) =
+        GitBranchInfo(name = name, current = name == gitBranch, upstream = null, ahead = 0, behind = 0)
+
+    // Current branch first, then by name: the branch picker and the toolbar chips keep a stable, familiar order.
+    private fun sortedBranches(infos: List<GitBranchInfo>) =
+        infos.sortedWith(compareByDescending<GitBranchInfo> { it.current }.thenBy { it.name })
 
     /**
      * Reloads the status of every file and, when [reloadEditors], the diffs, gutter marks and blame of the open

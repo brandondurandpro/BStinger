@@ -7,6 +7,7 @@ import org.example.kotlineditor.model.GitClient
 import org.example.kotlineditor.rpc.Method
 import org.example.kotlineditor.rpc.blameJson
 import org.example.kotlineditor.rpc.bool
+import org.example.kotlineditor.rpc.branchesJson
 import org.example.kotlineditor.rpc.diffJson
 import org.example.kotlineditor.rpc.entry
 import org.example.kotlineditor.rpc.int
@@ -79,6 +80,7 @@ private fun gitHandlers(git: GitClient): Map<Method, Handler> =
         Method.GitBranch to { JsonPrimitive(git.branch(root())) },
         Method.GitDiff to { git.diff(root(), params.string(PATH)).diffJson() },
         Method.GitBlame to { git.blame(root(), params.string(PATH)).blameJson() },
+        Method.GitBranchDetails to { git.branchDetails(root()).branchesJson() },
         Method.GitBranches to { git.branches(root()).toJson() },
         Method.GitCheckout to { nothing { git.checkout(root(), params.string("branch")) } },
         Method.GitCommit to { nothing { git.commit(root(), params.string("message")) } },

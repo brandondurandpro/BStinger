@@ -299,6 +299,9 @@ enum class Method(
     /** Author and date of each line of a file. */
     GitBlame("git/blame"),
 
+    /** Local branches of the repository with their remote synchronization. */
+    GitBranchDetails("git/branchDetails"),
+
     /** Local branches of the repository. */
     GitBranches("git/branches"),
 

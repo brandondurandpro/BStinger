@@ -1,7 +1,9 @@
 package org.example.kotlineditor.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,7 +13,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
@@ -23,15 +29,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.example.kotlineditor.model.ConnectionStatus
+import org.example.kotlineditor.model.GitBranchInfo
 import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.Document
 import org.example.kotlineditor.state.PopupKind
 import org.example.kotlineditor.state.ProjectState
+import org.example.kotlineditor.state.checkoutBranch
 
 // The IDE frame around the editors: toolbar, tool window strip and panels, splitters, status bar.
 
@@ -46,17 +55,84 @@ internal fun Toolbar(app: AppState, project: ProjectState) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         ProjectWidget(app, project)
-        project.gitBranch?.let { branch ->
-            Row(
-                Modifier.padding(start = 12.dp).testTag(Tags.GIT_BRANCH),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                BranchIcon()
-                Label(branch, Modifier.padding(start = 6.dp))
-            }
+        if (project.gitBranch == null) {
+            Spacer(Modifier.weight(1f))
+        } else {
+            BranchWidget(project, Modifier.weight(1f).padding(start = 12.dp))
         }
-        Spacer(Modifier.weight(1f))
         IconButton({ project.showPopup(PopupKind.GotoFile) }) { SearchIcon(color = IdeColors.Text) }
+    }
+}
+
+@Composable
+private fun BranchWidget(project: ProjectState, modifier: Modifier = Modifier) {
+    val current = project.gitBranchInfos.firstOrNull { it.current }
+    val pinned =
+        project.selectedBranches.mapNotNull { name ->
+            project.gitBranchInfos.firstOrNull { it.name == name && it.name != project.gitBranch }
+        }
+    val background = if (project.branchPickerOpen) IdeColors.Selection else Color.Transparent
+    Row(
+        modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Row(
+            Modifier
+                .background(background, RoundedCornerShape(5.dp))
+                .clickable { project.branchPickerOpen = true }
+                .testTag(Tags.GIT_BRANCH)
+                .padding(horizontal = 6.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            BranchIcon(color = if (project.branchPickerOpen) IdeColors.Accent else IdeColors.TextSecondary)
+            Label(
+                project.gitBranch.orEmpty(),
+                Modifier.padding(start = 5.dp),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+            )
+            current?.let { BranchSyncBadge(it, compact = true, modifier = Modifier.padding(start = 6.dp)) }
+            Chevron(expanded = false, Modifier.padding(start = 2.dp))
+        }
+        Row(
+            Modifier.weight(1f, fill = false).horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            pinned.forEach { branch -> PinnedBranchChip(project, branch) }
+        }
+    }
+}
+
+@Composable
+private fun PinnedBranchChip(project: ProjectState, branch: GitBranchInfo) {
+    Row(
+        Modifier
+            .height(22.dp)
+            .background(IdeColors.Editor, RoundedCornerShape(5.dp))
+            .border(1.dp, IdeColors.Separator, RoundedCornerShape(5.dp))
+            .clickable { project.checkoutBranch(branch.name) }
+            .testTag(ItemTags.pinnedBranch(branch.name))
+            .padding(start = 6.dp, end = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Label(
+            branch.name,
+            Modifier.widthIn(max = 120.dp),
+            color = IdeColors.TextSecondary,
+            fontSize = 11.sp,
+        )
+        BranchSyncBadge(branch, compact = true, modifier = Modifier.padding(start = 4.dp))
+        Box(
+            Modifier
+                .size(18.dp)
+                .clickable { project.toggleBranchSelection(branch.name) }
+                .testTag(ItemTags.unpinnedBranch(branch.name)),
+            contentAlignment = Alignment.Center,
+        ) {
+            CloseIcon(Modifier.size(10.dp))
+        }
     }
 }
 

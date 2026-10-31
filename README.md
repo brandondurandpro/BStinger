@@ -55,8 +55,9 @@ A lightweight IDE in the style of IntelliJ IDEA (New UI, dark theme), written wi
   window loses focus; external changes are reloaded when it regains focus (unsaved edits are never overwritten).
 - **Navigation & search**: Go to File (`Ctrl+P`, `Ctrl+Shift+N` or double `Shift`, fuzzy matching), Recent Files (`Ctrl+E`),
   Find in Files (`Ctrl+Shift+F`), Find in file (`Ctrl+F`, `Enter`/`Shift+Enter`, `F3`), Go to Line (`Ctrl+G`).
-- **Status bar & toolbar**: breadcrumbs, caret position, selection size, line separator, encoding, language,
-  current Git branch.
+- **Status bar & toolbar**: breadcrumbs, caret position, selection size, line separator, encoding, language, and a
+  Git branch widget. It opens a searchable branch picker: pin one or several branches in the toolbar, read how many
+  commits each is ahead (`↑`) or behind (`↓`) its remote-tracking branch, and click a branch to check it out.
 
 ### Architecture: client and server
 

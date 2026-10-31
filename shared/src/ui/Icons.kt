@@ -1,3 +1,5 @@
+@file:Suppress("TooManyFunctions")
+
 package org.example.kotlineditor.ui
 
 import androidx.compose.foundation.Canvas
@@ -59,6 +61,27 @@ fun PlainFileIcon(modifier: Modifier) {
 @Composable
 fun Chevron(expanded: Boolean, modifier: Modifier = Modifier, color: Color = IdeColors.TextSecondary) {
     Canvas(modifier.size(16.dp).rotate(if (expanded) 90f else 0f)) { drawChevron(size.width, color) }
+}
+
+@Composable
+fun CheckIcon(modifier: Modifier = Modifier, color: Color = IdeColors.TextSecondary) {
+    Canvas(modifier.size(16.dp)) {
+        val s = 1.8.dp.toPx()
+        drawLine(
+            color,
+            Offset(size.width * 0.2f, size.height * 0.52f),
+            Offset(size.width * 0.42f, size.height * 0.74f),
+            strokeWidth = s,
+            cap = StrokeCap.Round,
+        )
+        drawLine(
+            color,
+            Offset(size.width * 0.42f, size.height * 0.74f),
+            Offset(size.width * 0.82f, size.height * 0.28f),
+            strokeWidth = s,
+            cap = StrokeCap.Round,
+        )
+    }
 }
 
 @Composable

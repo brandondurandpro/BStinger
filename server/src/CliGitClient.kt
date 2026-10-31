@@ -4,12 +4,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.example.kotlineditor.model.BlameLine
 import org.example.kotlineditor.model.DiffLine
+import org.example.kotlineditor.model.GitBranchInfo
 import org.example.kotlineditor.model.GitClient
 import org.example.kotlineditor.model.GitFileStatus
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
 /** Git through its command line; no repository or no git means no status. */
+@Suppress("TooManyFunctions")
 class CliGitClient : GitClient {
     private data class BlameVersion(val head: String?, val modified: Long, val size: Long)
 
@@ -48,14 +50,20 @@ class CliGitClient : GitClient {
             }
         }
 
-    override suspend fun branches(root: String): List<String> =
+    /**
+     * One `git for-each-ref` reads every local branch with its upstream and how far ahead or behind it is. Git reports
+     * the distance from the last fetch: the popup fetches nothing, so that opening it never touches the network.
+     */
+    override suspend fun branchDetails(root: String): List<GitBranchInfo> =
         withContext(Dispatchers.IO) {
-            runGit(root, "branch", "--format=%(refname:short)")
-                .lineSequence()
-                .map { it.trim() }
-                .filter { it.isNotEmpty() }
-                .toList()
+            gitOutput(root, "for-each-ref", "--format=$BRANCH_FORMAT", "refs/heads")
+                ?.mapNotNull(::parseBranch)
+                .orEmpty()
         }
+
+    override suspend fun branches(root: String): List<String> =
+        branchDetails(root)
+            .map { it.name }
 
     override suspend fun checkout(root: String, branch: String) {
         withContext(Dispatchers.IO) { runGit(root, "checkout", branch) }
@@ -102,6 +110,31 @@ class CliGitClient : GitClient {
         return lines.orEmpty()
     }
 
+    // One `for-each-ref` line: name, HEAD marker, upstream and its track, separated by NULs.
+    private fun parseBranch(line: String): GitBranchInfo? {
+        val fields = line.split('\u0000')
+        val name = fields[0].trim()
+        val parsed = fields.size >= BRANCH_FIELD_COUNT && name.isNotEmpty()
+        return if (parsed) {
+            val track = fields[3].trim()
+            GitBranchInfo(
+                name = name,
+                current = fields[1].trim() == HEAD_MARKER,
+                upstream = fields[2].trim().ifEmpty { null },
+                ahead = trackCount(track, AHEAD_TRACK),
+                behind = trackCount(track, BEHIND_TRACK),
+                upstreamGone = track == GONE_TRACK,
+            )
+        } else {
+            null
+        }
+    }
+
+    private fun trackCount(track: String, pattern: Regex): Int {
+        val match = pattern.find(track)
+        return match?.groupValues?.get(TRACK_COUNT_GROUP)?.toIntOrNull() ?: 0
+    }
+
     // One `git status --porcelain` line: two status letters, a space, then the path (`old -> new` for renames).
     private fun parse(line: String): Pair<String, GitFileStatus>? {
         val code = line.take(2)
@@ -123,5 +156,12 @@ class CliGitClient : GitClient {
         const val PATH_START = 3
         const val NETWORK_TIMEOUT_SECONDS = 180L
         const val MAX_CACHED_BLAMES = 32
+        const val HEAD_MARKER = "*"
+        const val GONE_TRACK = "[gone]"
+        const val BRANCH_FIELD_COUNT = 4
+        const val TRACK_COUNT_GROUP = 1
+        const val BRANCH_FORMAT = "%(refname:short)%00%(HEAD)%00%(upstream:short)%00%(upstream:track)"
+        val AHEAD_TRACK = Regex("""ahead (\d+)""")
+        val BEHIND_TRACK = Regex("""behind (\d+)""")
     }
 }
