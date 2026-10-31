@@ -27,7 +27,6 @@ CONTAINER=kotlin-editor-windows
 VERSION=2025
 
 cd "$(dirname "$0")"
-repo=$(pwd)
 dir=${WINDOWS_VM_DIR:-$HOME/.cache/kotlin-editor/windows-vm}
 shared="$dir/shared"
 run="$shared/run"
@@ -43,9 +42,11 @@ ready() { running && [ -f "$shared/runner-ready" ]; }
 
 start() {
     [ -w /dev/kvm ] || die "/dev/kvm is missing or not writable: enable virtualization and join the kvm group"
-    mkdir -p "$dir/storage" "$run"
-    # The runner is read from the shared folder at each logon: changes apply at the next start.
+    mkdir -p "$dir/storage" "$dir/oem" "$run"
+    # The runner is read from the shared folder at each logon: changes apply at the next start. The setup files are
+    # copied too, so the VM never depends on the checkout (or the worktree) it was created from.
     cp tools/windows-vm/runner.ps1 "$shared/runner.ps1"
+    cp tools/windows-vm/oem/* "$dir/oem/"
     if running; then
         echo "The VM is already running."
     else
@@ -64,7 +65,7 @@ start() {
                 -p 127.0.0.1:8006:8006 -p 127.0.0.1:3389:3389/tcp -p 127.0.0.1:3389:3389/udp \
                 -v "$dir/storage:/storage" \
                 -v "$shared:/shared" \
-                -v "$repo/tools/windows-vm/oem:/oem:ro" \
+                -v "$dir/oem:/oem:ro" \
                 --stop-timeout 120 \
                 "$IMAGE" >/dev/null
             echo "Windows is downloading and installing: this takes 20 to 60 minutes the first time."
@@ -143,7 +144,7 @@ case "${1:-}" in
     destroy)
         docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
         # The disk belongs to the container's root.
-        docker run --rm --entrypoint rm -v "$dir:/vm" "$IMAGE" -rf /vm/storage /vm/shared
+        docker run --rm --entrypoint rm -v "$dir:/vm" "$IMAGE" -rf /vm/storage /vm/shared /vm/oem
         echo "deleted"
         ;;
     *) sed -n '3,22p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
