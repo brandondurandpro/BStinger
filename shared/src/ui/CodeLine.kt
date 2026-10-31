@@ -222,7 +222,7 @@ private fun RowScope.LineText(
     }
 }
 
-private fun highlighted(source: LineSource): AnnotatedString {
+internal fun highlighted(source: LineSource): AnnotatedString {
     val highlighted = SyntaxHighlighter.highlight(displayText(source.text), source.language, source.startsInComment)
     val placeholder = source.placeholder ?: return highlighted
     return buildAnnotatedString {
