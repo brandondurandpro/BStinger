@@ -12,6 +12,9 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
+// Slow (a 600 ms round trip), but under the 1 s after which the chaos client treats a silent link as dead.
+private const val SLOW_BRANCH_LINK_MS = 300L
+
 /** Git, which runs on the server, while the network fails. */
 @OptIn(ExperimentalTestApi::class)
 class GitChaosE2eTest {
@@ -54,6 +57,44 @@ class GitChaosE2eTest {
             awaitReconnected()
             awaitCondition { app.project.gitBranchInfos.any { it.name == "feature" } }
             awaitTag(ItemTags.branchItem("feature"))
+        }
+
+    @Test
+    fun `the branch picker survives a server restart and refreshes the branches after it`() =
+        runComposeUiTest {
+            project.commitAll()
+            val app = launchWithProject(project, chaos = true)
+            awaitCondition { app.project.gitBranchInfos.isNotEmpty() }
+            onNodeWithTag(Tags.GIT_BRANCH).performClick()
+            awaitTag(Tags.BRANCH_PICKER)
+            project.git("branch", "after-restart")
+
+            // The restarted server loses its sessions; the panel must stay usable and reach the new one.
+            app.process.restart()
+            awaitReconnected()
+            awaitTag(Tags.BRANCH_PICKER)
+            onNodeWithTag(Tags.BRANCH_REFRESH).performClick()
+            awaitTag(ItemTags.branchItem("after-restart"))
+        }
+
+    @Test
+    fun `a slow link still opens the picker and refreshes its branches`() =
+        runComposeUiTest {
+            project.commitAll()
+            val default = project.git("rev-parse", "--abbrev-ref", "HEAD").trim()
+            val app = launchWithProject(project, chaos = true)
+            awaitCondition { app.project.gitBranchInfos.any { it.name == default } }
+            project.git("branch", "slow-link")
+            app.network.latencyMs = SLOW_BRANCH_LINK_MS
+
+            onNodeWithTag(Tags.GIT_BRANCH).performClick()
+            awaitTag(Tags.BRANCH_PICKER)
+            // The panel and its cached rows open without waiting for the slow round trip it triggers.
+            awaitTag(ItemTags.branchItem(default), timeout = 2_000)
+
+            // Once the refresh crosses the link, the new branch shows up under the current query.
+            onNodeWithTag(Tags.BRANCH_SEARCH).performTextInput("slow-link")
+            awaitTag(ItemTags.branchItem("slow-link"), timeout = 15_000)
         }
 
     @Test

@@ -52,23 +52,33 @@ import org.example.kotlineditor.state.checkoutBranch
 @Composable
 internal fun BranchPickerPopup(project: ProjectState, onClose: () -> Unit) {
     var query by remember { mutableStateOf("") }
+    var checkingOut by remember { mutableStateOf<String?>(null) }
+    var failure by remember { mutableStateOf<String?>(null) }
     val cursor = remember { ListCursor() }
     val focus = remember { FocusRequester() }
     val branches = project.gitBranchInfos
     val matches = remember(branches, query) { filterBranches(branches, query) }
-    LaunchedEffect(Unit) {
-        focus.requestFocus()
-        project.refreshBranches()
-    }
-    LaunchedEffect(query, branches) {
-        cursor.selected = currentIndex(matches, query)
-    }
+    BranchPickerFocus(project, query, branches, matches, cursor, focus)
     val choose = { branch: GitBranchInfo? ->
-        if (branch != null) {
+        if (branch == null || project.gitBusy || checkingOut != null) {
+            Unit
+        } else if (branch.current) {
             onClose()
-            if (!branch.current) project.checkoutBranch(branch.name)
+        } else {
+            checkingOut = branch.name
+            failure = null
+            // Keep the panel open until Git answers: a checkout can fail (local changes would be overwritten), and
+            // closing first would leave the user with no explanation outside the Git tool window.
+            project.checkoutBranch(branch.name) { checkedOut ->
+                checkingOut = null
+                if (checkedOut) {
+                    onClose()
+                } else {
+                    val reason = project.gitMessage ?: "Git command failed"
+                    failure = "Cannot check out ${branch.name}: $reason"
+                }
+            }
         }
-        Unit
     }
     PopupFrame(Tags.BRANCH_PICKER, onClose, width = 760) {
         Column {
@@ -92,9 +102,30 @@ internal fun BranchPickerPopup(project: ProjectState, onClose: () -> Unit) {
                     }
                 },
             )
+            checkingOut?.let { BranchStatusLine("Checking out $it…", tag = Tags.BRANCH_CHECKING_OUT) }
+            failure?.let { BranchStatusLine(it, isError = true, tag = Tags.BRANCH_ERROR) }
             BranchResults(project, branches, matches, query, cursor, choose)
             BranchPickerFooter(project.selectedBranches.size)
         }
+    }
+}
+
+// Focuses the search field, reloads the branches, and keeps the keyboard cursor on the current branch when unfiltered.
+@Composable
+private fun BranchPickerFocus(
+    project: ProjectState,
+    query: String,
+    branches: List<GitBranchInfo>,
+    matches: List<GitBranchInfo>,
+    cursor: ListCursor,
+    focus: FocusRequester,
+) {
+    LaunchedEffect(Unit) {
+        focus.requestFocus()
+        project.refreshBranches()
+    }
+    LaunchedEffect(query, branches) {
+        cursor.selected = currentIndex(matches, query)
     }
 }
 
@@ -188,6 +219,21 @@ private fun PickerMessage(text: String, tag: String) {
         contentAlignment = Alignment.CenterStart,
     ) {
         Label(text, color = IdeColors.TextSecondary, fontSize = 12.sp)
+    }
+}
+
+@Composable
+private fun BranchStatusLine(text: String, tag: String, isError: Boolean = false) {
+    val color = if (isError) IdeColors.Error else IdeColors.TextSecondary
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp)
+            .background(color.copy(alpha = 0.12f), RoundedCornerShape(5.dp))
+            .padding(horizontal = 8.dp, vertical = 5.dp)
+            .testTag(tag),
+    ) {
+        Label(text, color = color, fontSize = 11.sp)
     }
 }
 
@@ -296,13 +342,18 @@ private fun CurrentBranchPill() {
 internal fun BranchSyncBadge(branch: GitBranchInfo, modifier: Modifier = Modifier, compact: Boolean = false) {
     val fontSize = if (compact) 10.sp else 11.sp
     Row(
-        modifier.testTag(ItemTags.branchSync(branch.name)),
+        modifier,
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         val status = syncStatus(branch, compact)
         if (status != null) {
-            Label(status.first, color = status.second, fontSize = fontSize)
+            Label(
+                status.first,
+                Modifier.testTag(ItemTags.branchSync(branch.name)),
+                color = status.second,
+                fontSize = fontSize,
+            )
         } else {
             SyncCounts(branch, fontSize)
         }

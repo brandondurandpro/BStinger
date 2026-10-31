@@ -1,12 +1,15 @@
 package org.example.kotlineditor.e2e
 
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasScrollToNodeAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.v2.runComposeUiTest
@@ -20,6 +23,8 @@ import kotlin.test.assertTrue
 
 private const val BRANCHES = 3_000
 private const val SCROLL_STEPS = 60
+private const val WHEEL_STEPS = 40
+private const val WHEEL_DELTA = 100f
 private const val MAX_COMPOSED_ROWS = 60
 
 /**
@@ -47,6 +52,56 @@ class BranchPickerPerformanceE2eTest {
     }
 
     private fun ComposeUiTest.composedRows() = onAllNodes(hasTestTagPrefix("branch.item:")).fetchSemanticsNodes().size
+
+    private fun ComposeUiTest.visibleBranchTags(): List<String> =
+        onAllNodes(hasTestTagPrefix("branch.item:"))
+            .fetchSemanticsNodes()
+            .mapNotNull { it.config.getOrElseNullable(SemanticsProperties.TestTag) { null } }
+
+    // A wheel scroll keeps the list moving frame after frame, unlike jumping to an index. Measured net of the same
+    // input plumbing and frames without movement, as the editor's scroll benchmark does.
+    private fun ComposeUiTest.measureWheel(list: SemanticsNodeInteraction) {
+        list.performScrollToIndex(BRANCHES / 2)
+        renderFrame()
+        val before = visibleBranchTags()
+        repeat(5) {
+            list.performMouseInput {
+                moveTo(center)
+                scroll(WHEEL_DELTA)
+            }
+            renderFrame()
+        }
+        assertTrue(visibleBranchTags() != before, "the wheel must move the list")
+        list.performScrollToIndex(BRANCHES / 2)
+        renderFrame()
+        val idle =
+            costOf {
+                repeat(WHEEL_STEPS) {
+                    list.performMouseInput {
+                        moveTo(center)
+                        scroll(0f)
+                    }
+                    renderFrame()
+                }
+            }
+        val wheel =
+            costOf {
+                repeat(WHEEL_STEPS) { step ->
+                    // Alternate directions so the list stays in the middle, away from its ends.
+                    list.performMouseInput {
+                        moveTo(center)
+                        scroll(if (step / 10 % 2 == 0) WHEEL_DELTA else -WHEEL_DELTA)
+                    }
+                    renderFrame()
+                }
+            }
+        report(
+            "scroll it with the wheel ($WHEEL_STEPS frames)",
+            wheel - idle,
+            budgetMillis = 12_000,
+            budgetMegabytes = 300,
+        )
+    }
 
     @Test
     fun `a repository with thousands of branches`() =
@@ -76,6 +131,9 @@ class BranchPickerPerformanceE2eTest {
                 }
             }
             assertTrue(composedRows() < MAX_COMPOSED_ROWS, "composed branch rows after scrolling: ${composedRows()}")
+
+            measureWheel(list)
+            assertTrue(composedRows() < MAX_COMPOSED_ROWS, "composed branch rows after the wheel: ${composedRows()}")
 
             measure("search one branch among $BRANCHES", budgetMillis = 5_000, budgetMegabytes = 50) {
                 onNodeWithTag(Tags.BRANCH_SEARCH).performTextInput("branch-2999")

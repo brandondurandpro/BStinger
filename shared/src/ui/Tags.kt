@@ -17,6 +17,8 @@ object Tags {
     const val BRANCH_REFRESH = "branch.refresh"
     const val BRANCH_EMPTY = "branch.empty"
     const val BRANCH_NO_MATCH = "branch.noMatch"
+    const val BRANCH_CHECKING_OUT = "branch.checkingOut"
+    const val BRANCH_ERROR = "branch.error"
     const val BRANCH_SELECTION_COUNT = "branch.selectionCount"
     const val PROJECT_PANEL = "project.panel"
     const val GIT_PANEL = "git.panel"

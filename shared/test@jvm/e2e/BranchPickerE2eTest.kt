@@ -3,6 +3,7 @@ package org.example.kotlineditor.e2e
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithTag
@@ -62,6 +63,31 @@ class BranchPickerE2eTest {
             awaitCondition { app.project.gitBranchInfos.any { it.name == default && it.behind == 1 } }
             // At a glance, without opening anything: the toolbar shows the current branch behind by one commit.
             awaitTag(ItemTags.branchBehind(default), unmerged = true)
+        }
+
+    @Test
+    fun `a branch ahead of its remote shows the commits to push`() =
+        runComposeUiTest {
+            project.commitAll()
+            val default = project.git("rev-parse", "--abbrev-ref", "HEAD").trim()
+            val remote = temporaryDirectory("kotlin-editor-remote")
+            gitIn(remote, "init", "-q", "--bare")
+            project.git("remote", "add", "origin", remote.toString())
+            project.git("push", "-q", "-u", "origin", "HEAD")
+            project.git("checkout", "-q", "-b", "feature/ahead")
+            project.git("push", "-q", "-u", "origin", "feature/ahead")
+            project.file("ahead.txt", "not pushed yet\n")
+            project.git("add", "-A")
+            project.git("commit", "-q", "-m", "local commit")
+            project.git("checkout", "-q", default)
+
+            val app = launchWithProject(project)
+            awaitCondition { app.project.gitBranchInfos.any { it.name == "feature/ahead" && it.ahead == 1 } }
+            onNodeWithTag(Tags.GIT_BRANCH).performClick()
+            awaitTag(Tags.BRANCH_PICKER)
+            awaitTag(ItemTags.branchAhead("feature/ahead"), unmerged = true)
+            onNodeWithTag(ItemTags.branchAhead("feature/ahead"), useUnmergedTree = true)
+                .assertTextContains("↑ 1")
         }
 
     @Test
@@ -133,5 +159,77 @@ class BranchPickerE2eTest {
             // A chip checks its branch out, like its row in the picker.
             onNodeWithTag(ItemTags.pinnedBranch("feature/search-ui")).performClick()
             awaitCondition { app.project.gitBranch == "feature/search-ui" }
+        }
+
+    @Test
+    fun `a branch whose upstream was deleted on the remote says it is gone`() =
+        runComposeUiTest {
+            project.commitAll()
+            val default = project.git("rev-parse", "--abbrev-ref", "HEAD").trim()
+            val remote = temporaryDirectory("kotlin-editor-remote")
+            gitIn(remote, "init", "-q", "--bare")
+            project.git("remote", "add", "origin", remote.toString())
+            project.git("push", "-q", "-u", "origin", "HEAD")
+            project.git("checkout", "-q", "-b", "feature/old")
+            project.git("push", "-q", "-u", "origin", "feature/old")
+            project.git("checkout", "-q", default)
+            project.git("push", "-q", "origin", "--delete", "feature/old")
+            project.git("fetch", "-q", "--prune")
+
+            val app = launchWithProject(project)
+            awaitCondition { app.project.gitBranchInfos.any { it.name == "feature/old" && it.upstreamGone } }
+            onNodeWithTag(Tags.GIT_BRANCH).performClick()
+            awaitTag(Tags.BRANCH_PICKER)
+            onNodeWithTag(ItemTags.branchItem("feature/old")).assertIsDisplayed()
+            onNodeWithTag(ItemTags.branchSync("feature/old"), useUnmergedTree = true).assertTextContains("gone")
+            onAllNodesWithText("origin/feature/old no longer exists on the remote").onFirst().assertIsDisplayed()
+        }
+
+    @Test
+    fun `a checkout that would overwrite local changes explains why and keeps the current branch`() =
+        runComposeUiTest {
+            project.commitAll()
+            val default = project.git("rev-parse", "--abbrev-ref", "HEAD").trim()
+            project.git("checkout", "-q", "-b", "feature/conflict")
+            project.file("README.md", "# Readme of the branch\n")
+            project.git("add", "-A")
+            project.git("commit", "-q", "-m", "branch readme")
+            project.git("checkout", "-q", default)
+            project.file("README.md", "# Uncommitted local edit\n")
+
+            val app = launchWithProject(project)
+            awaitCondition { app.project.gitBranchInfos.any { it.name == "feature/conflict" } }
+            onNodeWithTag(Tags.GIT_BRANCH).performClick()
+            awaitTag(Tags.BRANCH_PICKER)
+            onNodeWithTag(ItemTags.branchItem("feature/conflict")).performClick()
+
+            // The panel stays open, says why, and the checkout did not happen: no silent failure behind the Git panel.
+            awaitTag(Tags.BRANCH_ERROR)
+            awaitTag(Tags.BRANCH_PICKER)
+            assertEquals(default, app.project.gitBranch)
+            assertTrue(app.project.gitMessageIsError)
+            onNodeWithTag(Tags.BRANCH_SEARCH).performClick()
+            onNodeWithTag(Tags.BRANCH_SEARCH).performKeyInput { pressKey(Key.Escape) }
+            awaitNoTag(Tags.BRANCH_PICKER)
+        }
+
+    @Test
+    fun `a branch deleted by another program disappears on refresh and is unpinned`() =
+        runComposeUiTest {
+            project.commitAll()
+            project.git("branch", "feature/gone")
+            val app = launchWithProject(project)
+            awaitCondition { app.project.gitBranchInfos.any { it.name == "feature/gone" } }
+            onNodeWithTag(Tags.GIT_BRANCH).performClick()
+            awaitTag(Tags.BRANCH_PICKER)
+            onNodeWithTag(ItemTags.branchSelect("feature/gone")).performClick()
+            awaitCondition { "feature/gone" in app.project.selectedBranches }
+
+            // Another program deletes the branch while the picker is open.
+            project.git("branch", "-D", "feature/gone")
+            onNodeWithTag(Tags.BRANCH_REFRESH).performClick()
+            awaitNoTag(ItemTags.branchItem("feature/gone"))
+            awaitNoTag(ItemTags.pinnedBranch("feature/gone"))
+            awaitCondition { "feature/gone" !in app.project.selectedBranches }
         }
 }
