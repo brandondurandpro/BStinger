@@ -14,7 +14,8 @@ Every new task, feature or fix starts on its own branch, in its own git worktree
 
 A feature, or a fix of user-visible behavior, is not done until an e2e test exercises it through the real UI.
 
-- **New feature**: add e2e tests covering its main path and its edge cases (empty input, errors, cancelling).
+- **New feature**: add e2e tests covering its main path and its edge cases (empty input, errors, cancelling), and
+  e2e performance tests (see below).
 - **Bug fix**: first write an e2e test that reproduces the bug and fails, then fix it.
 - **Changed behavior**: update the e2e tests that describe it; never delete or weaken a test just to make it pass.
 - Unit tests (`shared/test@jvm/unit`, `server/test`) are welcome for logic, protocol and server code, but they do
@@ -33,6 +34,23 @@ A feature, or a fix of user-visible behavior, is not done until an e2e test exer
 - Tests must pass on every CI platform: Linux (X11 and Wayland, where `/bin/sh` may be dash) and Windows (`cmd.exe`
   through ConPTY). Do not rely on bash, on the shell prompt, on a POSIX command or on the system clipboard (the e2e
   clipboard is kept in memory).
+
+### Writing e2e performance tests
+
+Every feature also gets e2e performance tests, which drive it through the real UI on a large input (a directory of
+thousands of files, a file of thousands of lines, a long search result…).
+
+- They live next to the e2e tests, in a `*PerformanceE2eTest` class per area, and follow the same rules.
+- Wrap each measured step in `measure(label, budgetMillis, budgetMegabytes) { … }` from `Cost.kt` (e2e): it prints
+  a `PERF` line (time and memory allocated) and fails over budget. Render the frames being measured (`waitForIdle()`
+  then `onRoot().captureToImage()`).
+- For scrolling or any per-frame work, measure the net cost like `EditorScrollBenchmark`: subtract the cost of
+  rendering unchanged frames (`costOf`, then `report`), drive the scroll state directly rather than through a
+  semantics action, and measure a scroll in progress (wheel, drag) as well as jumps.
+- Pick budgets several times what your machine measures, so that a slow CI runner passes but an algorithmic
+  regression (a linear scan per frame, a quadratic rebuild) fails. Also assert what keeps it fast when it can be
+  checked, such as the number of composed rows of a virtualized list.
+- Give the measurements before and after in the pull request of a performance change.
 
 ## Before opening a pull request
 

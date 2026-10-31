@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
@@ -17,7 +16,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -25,36 +23,13 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-@Immutable
-private data class FileBadge(val letter: String, val color: Color)
-
-private val badges =
-    mapOf(
-        "kt" to FileBadge("K", Color(0xFF8F6CF5)),
-        "kts" to FileBadge("K", Color(0xFF8F6CF5)),
-        "java" to FileBadge("J", Color(0xFFE08855)),
-        "js" to FileBadge("JS", Color(0xFFD9B43A)),
-        "ts" to FileBadge("TS", Color(0xFF3C82DC)),
-        "py" to FileBadge("Py", Color(0xFF3C82DC)),
-        "md" to FileBadge("M", Color(0xFF5E9FD5)),
-        "json" to FileBadge("{}", Color(0xFFD9B43A)),
-        "xml" to FileBadge("<>", Color(0xFFE08855)),
-        "html" to FileBadge("<>", Color(0xFFE08855)),
-        "yaml" to FileBadge("Y", Color(0xFFDB5C5C)),
-        "yml" to FileBadge("Y", Color(0xFFDB5C5C)),
-        "toml" to FileBadge("T", Color(0xFF9AA7B0)),
-        "gradle" to FileBadge("G", Color(0xFF5FB2A7)),
-        "sh" to FileBadge(">", Color(0xFF6AAB73)),
-        "bat" to FileBadge(">", Color(0xFF6AAB73)),
-    )
-
 @Composable
 fun FileIcon(name: String, isDirectory: Boolean, modifier: Modifier = Modifier, size: Dp = 16.dp) {
     if (isDirectory) {
         FolderIcon(modifier.size(size))
         return
     }
-    val badge = badges[name.substringAfterLast('.', "").lowercase()]
+    val badge = fileBadge(name)
     if (badge == null) {
         PlainFileIcon(modifier.size(size))
     } else {
@@ -65,11 +40,7 @@ fun FileIcon(name: String, isDirectory: Boolean, modifier: Modifier = Modifier, 
             BasicText(
                 badge.letter,
                 style =
-                TextStyle(
-                    color = Color.White,
-                    fontSize = if (badge.letter.length > 1) 7.sp else 9.sp,
-                    fontWeight = FontWeight.Bold,
-                ),
+                badgeStyle(badge),
             )
         }
     }
@@ -77,42 +48,12 @@ fun FileIcon(name: String, isDirectory: Boolean, modifier: Modifier = Modifier, 
 
 @Composable
 fun FolderIcon(modifier: Modifier) {
-    Canvas(modifier) {
-        val w = size.width
-        val h = size.height
-        val stroke = Stroke(width = 1.2.dp.toPx(), join = StrokeJoin.Round)
-        val path =
-            Path().apply {
-                moveTo(w * 0.08f, h * 0.22f)
-                lineTo(w * 0.40f, h * 0.22f)
-                lineTo(w * 0.50f, h * 0.34f)
-                lineTo(w * 0.92f, h * 0.34f)
-                lineTo(w * 0.92f, h * 0.82f)
-                lineTo(w * 0.08f, h * 0.82f)
-                close()
-            }
-        drawPath(path, IdeColors.Folder.copy(alpha = 0.25f))
-        drawPath(path, IdeColors.Folder, style = stroke)
-    }
+    Canvas(modifier) { drawFolderIcon() }
 }
 
 @Composable
 fun PlainFileIcon(modifier: Modifier) {
-    Canvas(modifier) {
-        val w = size.width
-        val h = size.height
-        drawRoundRect(
-            color = IdeColors.TextSecondary,
-            topLeft = Offset(w * 0.2f, h * 0.1f),
-            size = Size(w * 0.6f, h * 0.8f),
-            cornerRadius = CornerRadius(1.5.dp.toPx()),
-            style = Stroke(width = 1.2.dp.toPx()),
-        )
-        for (i in 0..2) {
-            val y = h * (0.35f + i * 0.17f)
-            drawLine(IdeColors.TextSecondary, Offset(w * 0.33f, y), Offset(w * 0.67f, y), strokeWidth = 1.dp.toPx())
-        }
-    }
+    Canvas(modifier) { drawPlainFileIcon() }
 }
 
 @Composable

@@ -166,10 +166,3 @@ class ProjectTreeE2eTest {
             awaitTag(Tags.treeRow("NEW.txt")).assertIsDisplayed()
         }
 }
-
-private fun hasTestTagPrefix(prefix: String) =
-    androidx.compose.ui.test.SemanticsMatcher("tag starts with $prefix") { node ->
-        node.config
-            .getOrElseNullable(androidx.compose.ui.semantics.SemanticsProperties.TestTag) { null }
-            ?.startsWith(prefix) == true
-    }

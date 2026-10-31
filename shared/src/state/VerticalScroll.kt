@@ -36,12 +36,19 @@ class VerticalScroll {
     /** Pixels of [firstRow] hidden above the top edge. */
     val rowOffsetPx: Float get() = (position - firstRow) * lineHeightPx
 
-    val scrollableState =
+    private val consumer =
         ScrollableState { delta ->
             val old = position
             // A positive delta scrolls forward, like a LazyListState.
             position = (position + delta / lineHeightPx).coerceIn(0f, maxPosition)
             (position - old) * lineHeightPx
+        }
+
+    /** Says when an end is reached, so that a wheel turn there neither animates nor is taken from a parent. */
+    val scrollableState: ScrollableState =
+        object : ScrollableState by consumer {
+            override val canScrollForward: Boolean get() = position < maxPosition
+            override val canScrollBackward: Boolean get() = position > 0f
         }
 
     /** Scroll offset in pixels, for the scrollbar. */

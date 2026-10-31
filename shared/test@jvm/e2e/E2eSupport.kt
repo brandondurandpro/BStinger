@@ -226,3 +226,11 @@ fun ComposeUiTest.awaitEditorReady() {
 
 /** Lines joined with `\n`, to write multi-line file contents without escapes. */
 fun textOf(vararg lines: String): String = lines.joinToString("\n")
+
+/** Matches the nodes whose test tag starts with [prefix]. */
+fun hasTestTagPrefix(prefix: String) =
+    androidx.compose.ui.test.SemanticsMatcher("tag starts with $prefix") { node ->
+        node.config
+            .getOrElseNullable(androidx.compose.ui.semantics.SemanticsProperties.TestTag) { null }
+            ?.startsWith(prefix) == true
+    }
