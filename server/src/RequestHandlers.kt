@@ -86,6 +86,11 @@ private fun gitHandlers(git: GitClient): Map<Method, Handler> =
         Method.GitLog to {
             git.log(root(), params.string("ref"), params.int("skip"), params.int(LIMIT)).commitsJson()
         },
+        Method.GitSearchLog to {
+            git
+                .searchLog(root(), params.string("ref"), params.string("query"), params.int("skip"), params.int(LIMIT))
+                .commitsJson()
+        },
         Method.GitCommitDetails to { git.commitDetails(root(), params.string("hash")).toJson() },
         Method.GitBranchDetails to { git.branchDetails(root()).branchesJson() },
         Method.GitBranches to { git.branches(root()).toJson() },

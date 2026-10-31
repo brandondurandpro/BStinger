@@ -375,6 +375,12 @@ interface GitClient {
     /** Commits reachable from [ref], newest first: [limit] of them after skipping [skip]; empty past the end. */
     suspend fun log(root: String, ref: String, skip: Int, limit: Int): List<GitCommit>
 
+    /**
+     * Commits reachable from [ref] whose message or author contains [query] (ignoring case), or whose hash starts
+     * with it, newest first: [limit] of them after skipping the first [skip] matches; empty past the last one.
+     */
+    suspend fun searchLog(root: String, ref: String, query: String, skip: Int, limit: Int): List<GitCommit>
+
     /** The complete message and the changed files of commit [hash]. */
     suspend fun commitDetails(root: String, hash: String): GitCommitDetails
 
@@ -410,6 +416,9 @@ interface GitClient {
         override suspend fun remoteBranches(root: String): List<String> = emptyList()
 
         override suspend fun log(root: String, ref: String, skip: Int, limit: Int): List<GitCommit> = emptyList()
+
+        override suspend fun searchLog(root: String, ref: String, query: String, skip: Int, limit: Int) =
+            emptyList<GitCommit>()
 
         override suspend fun commitDetails(root: String, hash: String) = GitCommitDetails(hash, "", emptyList())
     }

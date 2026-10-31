@@ -175,6 +175,13 @@ class CliGitClient : GitClient {
             output.split(RECORD_SEPARATOR).mapNotNull(::parseCommit)
         }
 
+    override suspend fun searchLog(root: String, ref: String, query: String, skip: Int, limit: Int): List<GitCommit> =
+        withContext(Dispatchers.IO) {
+            require(limit in 1..MAX_LOG_PAGE) { "A page holds 1 to $MAX_LOG_PAGE commits" }
+            require(!ref.startsWith("-")) { "Not a ref: $ref" }
+            searchCommits(root, ref, query, skip.coerceAtLeast(0), limit)
+        }
+
     override suspend fun commitDetails(root: String, hash: String): GitCommitDetails =
         withContext(Dispatchers.IO) {
             require(hash.matches(HASH)) { "Not a commit hash: $hash" }

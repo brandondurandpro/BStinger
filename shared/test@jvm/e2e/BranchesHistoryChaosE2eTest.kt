@@ -4,6 +4,7 @@ import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.ui.ItemTags
 import org.example.kotlineditor.ui.Tags
@@ -93,5 +94,47 @@ class BranchesHistoryChaosE2eTest {
             awaitTag(Tags.BRANCHES_PANEL)
             onNodeWithTag(Tags.HISTORY_REFRESH).performClick()
             awaitTag(ItemTags.historyCommit(hashOf("HEAD")))
+        }
+
+    @Test
+    fun `on a slow link the results of an older search never replace the newer one`() =
+        runComposeUiTest {
+            twoBranches()
+            val app = launchWithProject(project, chaos = true)
+            openBranches(app)
+            onNodeWithTag(ItemTags.historyBranch("first")).performClick()
+            awaitTag(ItemTags.historyCommit(hashOf("first")))
+            app.network.latencyMs = SLOW_LINK_MS
+
+            onNodeWithTag(Tags.HISTORY_SEARCH).performTextInput("only")
+            awaitCondition { app.project.history.appliedQuery == "only" }
+            // A second search before the first one answered: its results are the only ones shown.
+            onNodeWithTag(Tags.HISTORY_SEARCH).performTextInput(" on first")
+            awaitCondition(timeout = 15_000) {
+                app.project.history.appliedQuery == "only on first" && app.project.history.complete
+            }
+            val history = app.project.history
+            val subjects = history.commits.map { it.subject }
+            assertEquals(listOf("only on first"), subjects)
+            awaitNoTag(ItemTags.historyCommit(hashOf("HEAD")))
+        }
+
+    @Test
+    fun `a search typed while the network is down runs once it is back`() =
+        runComposeUiTest {
+            twoBranches()
+            val app = launchWithProject(project, chaos = true)
+            openBranches(app)
+            onNodeWithTag(ItemTags.historyBranch("second")).performClick()
+            awaitTag(ItemTags.historyCommit(hashOf("second")))
+            app.network.goDown()
+            awaitReconnecting()
+            onNodeWithTag(Tags.HISTORY_SEARCH).performTextInput("init")
+            awaitTag(Tags.HISTORY_LOADING)
+            app.network.comeBack()
+            awaitReconnected()
+            awaitTag(ItemTags.historyCommit(hashOf("second~1")))
+            awaitNoTag(ItemTags.historyCommit(hashOf("second")))
+            awaitNoTag(Tags.HISTORY_LOADING)
         }
 }

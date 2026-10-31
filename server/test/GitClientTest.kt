@@ -280,6 +280,48 @@ class GitClientTest {
         }
 
     @Test
+    fun `the history search matches the message, its body, the author or the start of the hash`() =
+        runBlocking {
+            root.resolve("a.kt").writeText("one\n")
+            commitAll()
+            git("-c", "user.name=Alice Martin", "commit", "-q", "--allow-empty", "-m", "Fix the LOGIN form")
+            git("commit", "-q", "--allow-empty", "-m", "Refactor", "-m", "The body mentions [regex] chars.*")
+            git("commit", "-q", "--allow-empty", "-m", "Unrelated")
+            val client = CliGitClient()
+            val root = root.toString()
+
+            fun subjects(query: String) =
+                runBlocking {
+                    client.searchLog(root, "HEAD", query, 0, 10).map { it.subject }
+                }
+
+            assertEquals(listOf("Fix the LOGIN form"), subjects("login"))
+            assertEquals(listOf("Fix the LOGIN form"), subjects("alice"))
+            // Taken literally: no regular expression, no glob.
+            assertEquals(listOf("Refactor"), subjects("[regex] chars.*"))
+            val unrelated = client.log(root, "HEAD", 0, 1).single()
+            assertEquals(listOf("Unrelated"), subjects(unrelated.hash.take(10)))
+            assertEquals(emptyList(), subjects("nothing like this"))
+            assertEquals(4, subjects("").size)
+        }
+
+    @Test
+    fun `the history search pages through the matches only, and stops reading once a page is full`() =
+        runBlocking {
+            root.resolve("a.kt").writeText("one\n")
+            commitAll()
+            repeat(30) { git("commit", "-q", "--allow-empty", "-m", if (it % 3 == 0) "match $it" else "other $it") }
+            val client = CliGitClient()
+            val first = client.searchLog(root.toString(), "HEAD", "match", 0, 4).map { it.subject }
+            assertEquals(listOf("match 27", "match 24", "match 21", "match 18"), first)
+            val rest = client.searchLog(root.toString(), "HEAD", "match", 4, 10).map { it.subject }
+            assertEquals(listOf("match 15", "match 12", "match 9", "match 6", "match 3", "match 0"), rest)
+            assertTrue(client.searchLog(root.toString(), "HEAD", "match", 10, 4).isEmpty())
+            assertFailsWith<IOException> { client.searchLog(root.toString(), "no-such-branch", "match", 0, 4) }
+            Unit
+        }
+
+    @Test
     fun `commit details list the message and the changed files, renames included`() =
         runBlocking {
             root.resolve("old name.kt").writeText(

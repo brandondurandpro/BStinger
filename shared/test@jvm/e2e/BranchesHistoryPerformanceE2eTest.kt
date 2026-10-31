@@ -7,12 +7,14 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.state.BranchSection
 import org.example.kotlineditor.ui.ItemTags
 import org.example.kotlineditor.ui.Tags
 import kotlin.test.AfterTest
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 private const val COMMITS = 5_000
@@ -68,6 +70,54 @@ class BranchesHistoryPerformanceE2eTest {
     private fun ComposeUiTest.composedCommitRows() =
         onAllNodes(hasTestTagPrefix("history.commit:")).fetchSemanticsNodes().size
 
+    private fun ComposeUiTest.measureSearch(app: E2eApp) {
+        // The oldest commit only: the search reads the whole history before it can answer.
+        measure("search the oldest of $COMMITS commits", budgetMillis = 5_000, budgetMegabytes = 50) {
+            onNodeWithTag(Tags.HISTORY_SEARCH).performTextInput("commit 0 of the long history")
+            awaitCondition(timeout = 20_000) {
+                val history = app.project.history
+                history.appliedQuery.isNotEmpty() && history.complete
+            }
+            renderFrame()
+        }
+        assertEquals(1, app.project.history.commits.size)
+        measure("search the $COMMITS commits, every one matching", budgetMillis = 5_000, budgetMegabytes = 100) {
+            onNodeWithTag(Tags.HISTORY_SEARCH_CLEAR).performClick()
+            onNodeWithTag(Tags.HISTORY_SEARCH).performTextInput("long history")
+            awaitCondition(timeout = 20_000) {
+                app.project.history.appliedQuery == "long history" && !app.project.history.loading
+            }
+            renderFrame()
+        }
+        assertTrue(composedCommitRows() < MAX_COMPOSED_ROWS, "composed rows after search: ${composedCommitRows()}")
+        onNodeWithTag(Tags.HISTORY_SEARCH_CLEAR).performClick()
+    }
+
+    private fun ComposeUiTest.measureBranchList() {
+        val local = ItemTags.historySection(BranchSection.Local.name)
+        measure("fold the $BRANCHES local branches", budgetMillis = 2_000, budgetMegabytes = 50) {
+            onNodeWithTag(local).performClick()
+            awaitNoTag(ItemTags.historyBranch("history/branch-0000"))
+            renderFrame()
+        }
+        measure("unfold the $BRANCHES local branches", budgetMillis = 2_000, budgetMegabytes = 50) {
+            onNodeWithTag(local).performClick()
+            awaitTag(ItemTags.historyBranch("history/branch-0000"))
+            renderFrame()
+        }
+        val unfolded = onAllNodes(hasTestTagPrefix("history.branch:")).fetchSemanticsNodes().size
+        assertTrue(unfolded < MAX_COMPOSED_ROWS, "composed branch rows after unfolding: $unfolded")
+        measure("widen the branch list by dragging its splitter", budgetMillis = 2_000, budgetMegabytes = 50) {
+            onNodeWithTag(Tags.HISTORY_BRANCHES_SPLITTER).performMouseInput {
+                moveTo(center)
+                press()
+                repeat(DRAG_STEPS) { moveBy(Offset(4f, 0f)) }
+                release()
+            }
+            renderFrame()
+        }
+    }
+
     @Test
     fun `a history of thousands of commits`() =
         runComposeUiTest {
@@ -106,27 +156,7 @@ class BranchesHistoryPerformanceE2eTest {
             val branchRows = onAllNodes(hasTestTagPrefix("history.branch:")).fetchSemanticsNodes().size
             assertTrue(branchRows < MAX_COMPOSED_ROWS, "composed branch rows: $branchRows")
 
-            val local = ItemTags.historySection(BranchSection.Local.name)
-            measure("fold the $BRANCHES local branches", budgetMillis = 2_000, budgetMegabytes = 50) {
-                onNodeWithTag(local).performClick()
-                awaitNoTag(ItemTags.historyBranch("history/branch-0000"))
-                renderFrame()
-            }
-            measure("unfold the $BRANCHES local branches", budgetMillis = 2_000, budgetMegabytes = 50) {
-                onNodeWithTag(local).performClick()
-                awaitTag(ItemTags.historyBranch("history/branch-0000"))
-                renderFrame()
-            }
-            val unfolded = onAllNodes(hasTestTagPrefix("history.branch:")).fetchSemanticsNodes().size
-            assertTrue(unfolded < MAX_COMPOSED_ROWS, "composed branch rows after unfolding: $unfolded")
-            measure("widen the branch list by dragging its splitter", budgetMillis = 2_000, budgetMegabytes = 50) {
-                onNodeWithTag(Tags.HISTORY_BRANCHES_SPLITTER).performMouseInput {
-                    moveTo(center)
-                    press()
-                    repeat(DRAG_STEPS) { moveBy(Offset(4f, 0f)) }
-                    release()
-                }
-                renderFrame()
-            }
+            measureSearch(app)
+            measureBranchList()
         }
 }

@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import org.example.kotlineditor.model.GitClient
@@ -14,6 +15,9 @@ import org.example.kotlineditor.model.GitCommitDetails
 
 /** Commits loaded per request: a screen and a half, so that scrolling asks for the next page before the end. */
 const val HISTORY_PAGE = 100
+
+/** Pause in typing after which the history search runs. */
+const val SEARCH_DELAY_MS = 250L
 
 /**
  * The Branches tool window: every local and remote branch, the history of the selected one, loaded page by page as
@@ -57,6 +61,17 @@ class BranchHistoryState(private val root: String, private val git: GitClient, p
     /** Filter of the branch list. */
     var branchQuery by mutableStateOf("")
 
+    /**
+     * Search of the history (message, author or start of the hash): the server filters the whole history, not only
+     * the loaded pages. Empty shows every commit.
+     */
+    var commitQuery by mutableStateOf("")
+        private set
+
+    /** The search the loaded commits answer: [commitQuery] once the history reloaded for it. */
+    var appliedQuery by mutableStateOf("")
+        private set
+
     /** Sections of the branch list the user folded (local, remote); their rows are not shown, nor composed. */
     var collapsedSections: Set<BranchSection> by mutableStateOf(emptySet())
         private set
@@ -64,7 +79,19 @@ class BranchHistoryState(private val root: String, private val git: GitClient, p
     // Incremented by every selection or reload: an answer of an older generation is dropped.
     private var generation = 0
     private var pageJob: Job? = null
+    private var searchJob: Job? = null
     private var detailsJob: Job? = null
+
+    /** Types in the search field: the history reloads once typing pauses, so each key does not cost a request. */
+    fun search(query: String) {
+        commitQuery = query
+        searchJob?.cancel()
+        searchJob =
+            scope.launch {
+                delay(SEARCH_DELAY_MS)
+                reload()
+            }
+    }
 
     /** Folds or unfolds [section] of the branch list (a click on its header). */
     fun toggleSection(section: BranchSection) {
@@ -92,6 +119,7 @@ class BranchHistoryState(private val root: String, private val git: GitClient, p
         scope.launch { runCatching { git.remoteBranches(root) }.onSuccess { remoteBranches = it } }
         generation++
         pageJob?.cancel()
+        appliedQuery = commitQuery.trim()
         commits = emptyList()
         complete = false
         error = null
@@ -107,9 +135,18 @@ class BranchHistoryState(private val root: String, private val git: GitClient, p
         loading = true
         val skip = commits.size
         val asked = generation
+        // Pages of one list all answer the same search, even when the field changes before the reload.
+        val query = appliedQuery
         pageJob =
             scope.launch {
-                val page = runCatching { git.log(root, ref, skip, HISTORY_PAGE) }
+                val page =
+                    runCatching {
+                        if (query.isEmpty()) {
+                            git.log(root, ref, skip, HISTORY_PAGE)
+                        } else {
+                            git.searchLog(root, ref, query, skip, HISTORY_PAGE)
+                        }
+                    }
                 ensureActive()
                 // A newer selection or reload replaced this request: its answer is out of date.
                 if (asked == generation) applyPage(ref, page)

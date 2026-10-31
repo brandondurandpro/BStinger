@@ -210,6 +210,18 @@ class RemoteGit(private val client: RpcClient) : GitClient {
         return page.commits()
     }
 
+    override suspend fun searchLog(root: String, ref: String, query: String, skip: Int, limit: Int): List<GitCommit> {
+        val page =
+            client.call(Method.GitSearchLog) {
+                put(ROOT, root)
+                put("ref", ref)
+                put("query", query)
+                put("skip", skip)
+                put(LIMIT, limit)
+            }
+        return page.commits()
+    }
+
     override suspend fun commitDetails(root: String, hash: String): GitCommitDetails {
         val details =
             client.call(Method.GitCommitDetails) {

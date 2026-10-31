@@ -305,6 +305,9 @@ enum class Method(
     /** A page of the commits of a branch. */
     GitLog("git/log"),
 
+    /** A page of the commits of a branch that match a search. */
+    GitSearchLog("git/searchLog"),
+
     /** Message and changed files of a commit. */
     GitCommitDetails("git/commitDetails"),
 

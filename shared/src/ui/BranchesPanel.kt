@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -31,9 +32,19 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.example.kotlineditor.model.GitBranchInfo
@@ -81,7 +92,10 @@ internal fun BranchesPanel(project: ProjectState, drag: ToolWindowDrag, modifier
             IconButton(
                 { project.toolWindows.setVisible(ToolWindow.Branches, false) },
                 Modifier.testTag(Tags.HISTORY_HIDE),
-            ) { CloseIcon() }
+            ) {
+                // Like the terminal: the window is only hidden, its state is kept.
+                MinimizeIcon()
+            }
         }
         if (!project.isGitRepository) {
             Box(Modifier.fillMaxSize().padding(12.dp)) {
@@ -199,23 +213,61 @@ private fun HistoryBranchRow(name: String, selected: Boolean, local: GitBranchIn
 @Composable
 private fun CommitColumn(history: BranchHistoryState, modifier: Modifier) {
     val listState = rememberLazyListState()
-    LaunchedEffect(history.selectedRef) { listState.scrollToItem(0) }
+    LaunchedEffect(history.selectedRef, history.appliedQuery) { listState.scrollToItem(0) }
     LoadMoreWhenNearEnd(history, listState)
     val commits = history.commits
+    val highlight = history.appliedQuery
     Column(modifier) {
-        Label(
-            history.selectedRef?.let { "History of $it" } ?: "Select a branch",
-            Modifier.padding(horizontal = 10.dp, vertical = 6.dp).testTag(Tags.HISTORY_TITLE),
-            color = IdeColors.TextSecondary,
-            fontSize = 11.sp,
-        )
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Label(
+                history.selectedRef?.let { "History of $it" } ?: "Select a branch",
+                Modifier.weight(1f).testTag(Tags.HISTORY_TITLE),
+                color = IdeColors.TextSecondary,
+                fontSize = 11.sp,
+            )
+            CommitSearchField(history, Modifier.width(280.dp))
+        }
         LazyColumn(Modifier.fillMaxSize(), state = listState) {
             items(commits, key = { it.hash }) { commit ->
-                CommitRow(commit, history.selectedCommit?.hash == commit.hash) { history.selectCommit(commit) }
+                CommitRow(commit, highlight, history.selectedCommit?.hash == commit.hash) {
+                    history.selectCommit(commit)
+                }
             }
             item { HistoryFooter(history) }
         }
     }
+}
+
+// Searches the whole history of the branch (message, author, start of the hash); Escape clears the search.
+@Composable
+private fun CommitSearchField(history: BranchHistoryState, modifier: Modifier) {
+    IdeTextField(
+        history.commitQuery,
+        history::search,
+        modifier
+            .testTag(Tags.HISTORY_SEARCH)
+            .onPreviewKeyEvent { event ->
+                val escape = event.type == KeyEventType.KeyDown && event.key == Key.Escape
+                val clear = escape && history.commitQuery.isNotEmpty()
+                if (clear) history.search("")
+                clear
+            },
+        placeholder = "Search message, author, hash",
+        leading = { SearchIcon(color = IdeColors.TextSecondary) },
+        trailing = {
+            if (history.commitQuery.isNotEmpty()) {
+                Box(
+                    Modifier.size(18.dp).clickable { history.search("") }.testTag(Tags.HISTORY_SEARCH_CLEAR),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CloseIcon(Modifier.size(10.dp))
+                }
+            }
+        },
+    )
 }
 
 // Asks for the next page when the last loaded rows come into view. Keyed by the number of loaded commits: still near
@@ -244,8 +296,17 @@ private fun HistoryFooter(history: BranchHistoryState) {
             FooterText("Loading commits…", Tags.HISTORY_LOADING, IdeColors.TextSecondary)
         }
 
+        history.complete && history.commits.isEmpty() && history.appliedQuery.isNotEmpty() -> {
+            FooterText("No commit matches \"${history.appliedQuery}\"", Tags.HISTORY_NO_MATCH, IdeColors.TextSecondary)
+        }
+
         history.complete && history.commits.isEmpty() && history.selectedRef != null -> {
             FooterText("No commit", Tags.HISTORY_EMPTY, IdeColors.TextSecondary)
+        }
+
+        history.complete && history.appliedQuery.isNotEmpty() -> {
+            val found = plural(history.commits.size, "commit matches", "commits match")
+            FooterText("$found \"${history.appliedQuery}\"", Tags.HISTORY_END, IdeColors.LineNumber)
         }
 
         history.complete -> {
@@ -260,7 +321,7 @@ private fun FooterText(text: String, tag: String, color: Color) {
 }
 
 @Composable
-private fun CommitRow(commit: GitCommit, selected: Boolean, onClick: () -> Unit) {
+private fun CommitRow(commit: GitCommit, highlight: String, selected: Boolean, onClick: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -276,11 +337,32 @@ private fun CommitRow(commit: GitCommit, selected: Boolean, onClick: () -> Unit)
         if (commit.refs.size > MAX_REF_PILLS) {
             Label("+${commit.refs.size - MAX_REF_PILLS}", color = IdeColors.TextSecondary, fontSize = 10.sp)
         }
-        Label(commit.subject, Modifier.weight(1f), fontSize = 12.sp)
-        Label(commit.author, Modifier.width(120.dp), color = IdeColors.TextSecondary, fontSize = 11.sp)
+        HighlightedText(commit.subject, highlight, IdeColors.Text, 12.sp, Modifier.weight(1f))
+        HighlightedText(commit.author, highlight, IdeColors.TextSecondary, 11.sp, Modifier.width(120.dp))
         Label(commitDate(commit.time), Modifier.width(110.dp), color = IdeColors.TextSecondary, fontSize = 11.sp)
-        Label(commit.shortHash, Modifier.width(64.dp), color = IdeColors.LineNumber, fontSize = 11.sp)
+        HighlightedText(commit.shortHash, highlight, IdeColors.LineNumber, 11.sp, Modifier.width(64.dp))
     }
+}
+
+// [text] with the first occurrence of the search emphasized, so the reason a commit matched is visible.
+@Composable
+private fun HighlightedText(text: String, query: String, color: Color, fontSize: TextUnit, modifier: Modifier) {
+    val start = if (query.isEmpty()) -1 else text.indexOf(query, ignoreCase = true)
+    val annotated =
+        buildAnnotatedString {
+            append(text)
+            if (start >= 0) {
+                val style = SpanStyle(background = IdeColors.SearchMatch, color = IdeColors.Text)
+                addStyle(style, start, start + query.length)
+            }
+        }
+    BasicText(
+        annotated,
+        modifier,
+        style = TextStyle(color = color, fontSize = fontSize),
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
 }
 
 @Composable
