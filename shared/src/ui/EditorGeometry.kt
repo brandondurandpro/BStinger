@@ -13,6 +13,7 @@ import androidx.compose.ui.input.pointer.isCtrlPressed
 import androidx.compose.ui.input.pointer.isMetaPressed
 import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
@@ -40,6 +41,10 @@ private const val SLACK_COLUMNS = 8
 private const val MULTI_CLICK_MILLIS = 400L
 private val GUTTER_PADDING = 28.dp
 private val BLAME_WIDTH = 170.dp
+private val BLAME_FONT_SIZE = 10.sp
+
+// Consecutive lines of a commit share their annotation: a small cache lays out each one once.
+private const val BLAME_LAYOUT_CACHE = 64
 
 /** Sizes of an editor for a font size: everything is a multiple of the (monospace) character width. */
 @Immutable
@@ -53,6 +58,9 @@ internal class EditorMetrics(
     val gutterPx: Float,
     val foldZonePx: Float,
     val blameWidth: Dp,
+    /** Lays out the blame annotations, drawn in the gutter rather than composed as one text per line. */
+    val blameMeasurer: TextMeasurer,
+    val blameStyle: TextStyle,
 ) {
     fun visibleRows(listState: LazyListState): Int =
         (listState.layoutInfo.viewportSize.height / lineHeightPx).toInt().coerceAtLeast(1)
@@ -81,6 +89,7 @@ internal class EditorMetrics(
 internal fun rememberEditorMetrics(lineCount: Int, fontSize: Float, blameVisible: Boolean = false): EditorMetrics {
     val density = LocalDensity.current
     val measurer = rememberTextMeasurer()
+    val blameMeasurer = rememberTextMeasurer(BLAME_LAYOUT_CACHE)
     val baseStyle = LocalCodeStyle.current
     val digits = maxOf(MIN_LINE_NUMBER_DIGITS, lineCount.toString().length)
     return remember(density, baseStyle, fontSize, digits, blameVisible) {
@@ -100,6 +109,8 @@ internal fun rememberEditorMetrics(lineCount: Int, fontSize: Float, blameVisible
                 gutterPx = gutterWidth.toPx(),
                 foldZonePx = FOLD_ZONE.toPx(),
                 blameWidth = blameWidth,
+                blameMeasurer = blameMeasurer,
+                blameStyle = codeStyle.copy(color = IdeColors.TextSecondary, fontSize = BLAME_FONT_SIZE),
             )
         }
     }
