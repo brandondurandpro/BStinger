@@ -7,6 +7,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runInterruptible
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.put
 import org.example.kotlineditor.model.ConnectionStatus
 import java.io.IOException
 import java.net.InetSocketAddress
@@ -109,26 +112,26 @@ internal class Connector(
         link.send(
             Frame(
                 FrameKind.Hello,
-                0,
-                WireWriter()
-                    .int(Protocol.VERSION)
-                    .string(token)
-                    .string(sessionId)
-                    .toByteArray(),
+                Protocol.HELLO_ID,
+                buildJsonObject {
+                    put("version", Protocol.VERSION)
+                    put("token", token)
+                    put("session", sessionId)
+                },
             ),
         )
         val answer = link.read()
-        val reader = WireReader(answer.body)
         when (answer.kind) {
             FrameKind.Welcome -> {
-                val id = reader.string()
-                val resumed = reader.bool()
+                val welcome = answer.payload.jsonObject
+                val id = welcome.string("session")
+                val resumed = welcome.bool("resumed")
                 if (!resumed && sessionId != null) streams.loseAll()
                 sessionId = id
             }
 
             FrameKind.Reject -> {
-                throw RejectedException(reader.string())
+                throw RejectedException(answer.payload.errorMessage())
             }
 
             else -> {
@@ -159,8 +162,8 @@ internal class Connector(
     private fun dispatch(link: Link, frame: Frame) {
         when (frame.kind) {
             FrameKind.Response, FrameKind.Error -> pending.complete(frame)
-            FrameKind.Event -> streams.onEvent(frame.id, frame.body)
-            FrameKind.End -> streams.onEnd(frame.id, frame.body)
+            FrameKind.Event -> streams.onEvent(frame.id, frame.payload)
+            FrameKind.End -> streams.onEnd(frame.id, frame.payload)
             FrameKind.Ping -> link.send(Frame(FrameKind.Pong, 0))
             else -> Unit // Pong: receiving it was the point
         }

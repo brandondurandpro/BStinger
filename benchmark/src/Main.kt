@@ -243,7 +243,7 @@ private fun runSet(set: PayloadSet, codecs: List<Codec>, iterations: Int): List<
     return codecs.map { codec ->
         codec.use {
             val encoded = set.payloads.map { payload -> codec.encode(payload.body, payload.kind) }
-            val wire = set.payloads.indices.sumOf { index -> FRAME_HEADER + encoded[index].data.size.toLong() }
+            val wire = set.payloads.indices.sumOf { index -> frameHeader(encoded[index]) + encoded[index].data.size.toLong() }
             val compressed = encoded.count { it.compressed }
             repeat(5) { for (payload in set.payloads) codec.decode(codec.encode(payload.body, payload.kind)) }
             val encodeTimes = LongArray(iterations)
@@ -267,7 +267,7 @@ private fun sizeOnly(set: PayloadSet, codecs: List<Codec>): List<BenchResult> {
     return codecs.map { codec ->
         codec.use {
             val encoded = set.payloads.map { payload -> codec.encode(payload.body, payload.kind) }
-            val wire = set.payloads.indices.sumOf { index -> FRAME_HEADER + encoded[index].data.size.toLong() }
+            val wire = set.payloads.indices.sumOf { index -> frameHeader(encoded[index]) + encoded[index].data.size.toLong() }
             BenchResult(codec.name, raw, wire, encoded.count { it.compressed }, 0.0, 0.0, set.payloads.size)
         }
     }

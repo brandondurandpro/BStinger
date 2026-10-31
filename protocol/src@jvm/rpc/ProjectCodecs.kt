@@ -1,5 +1,13 @@
 package org.example.kotlineditor.rpc
 
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.put
 import org.example.kotlineditor.model.FileSymbol
 import org.example.kotlineditor.model.ProjectSession
 import org.example.kotlineditor.model.SessionFile
@@ -7,52 +15,102 @@ import org.example.kotlineditor.model.TextMatch
 import org.example.kotlineditor.syntax.Declaration
 import org.example.kotlineditor.syntax.DeclarationKind
 
-// Codecs of project-wide data (search results, symbols, Git status, sessions).
+// JSON of project-wide data (search results, symbols, sessions).
 
-/** Writes Find in Files results. */
-fun WireWriter.matches(list: List<TextMatch>): WireWriter =
-    int(list.size).also {
-        list.forEach { entry(it.entry).int(it.line).int(it.column).string(it.lineText) }
-    }
+private const val FILE = "file"
+private const val LINE = "line"
+private const val COLUMN = "column"
+
+/** Find in Files results. */
+fun List<TextMatch>.matchesJson(): JsonArray =
+    JsonArray(
+        map {
+            buildJsonObject {
+                put(FILE, it.entry.toJson())
+                put(LINE, it.line)
+                put(COLUMN, it.column)
+                put("text", it.lineText)
+            }
+        },
+    )
 
 /** Reads Find in Files results. */
-fun WireReader.matches(): List<TextMatch> = List(int()) { TextMatch(entry(), int(), int(), string()) }
+fun JsonElement.matches(): List<TextMatch> =
+    jsonArray.map {
+        val match = it.jsonObject
+        TextMatch(match.field(FILE).entry(), match.int(LINE), match.int(COLUMN), match.string("text"))
+    }
 
-/** Writes one declaration. */
-fun WireWriter.declaration(d: Declaration): WireWriter =
-    string(d.name)
-        .byte(d.kind.ordinal)
-        .int(d.line)
-        .int(d.column)
-        .int(d.depth)
+/** One declaration. */
+fun Declaration.toJson(): JsonObject =
+    buildJsonObject {
+        put("name", name)
+        put("kind", kind.name)
+        put(LINE, line)
+        put(COLUMN, column)
+        put("depth", depth)
+    }
 
 /** Reads one declaration. */
-fun WireReader.declaration(): Declaration = Declaration(string(), DeclarationKind.entries[byte()], int(), int(), int())
-
-/** Writes the declarations of a project. */
-fun WireWriter.symbols(list: List<FileSymbol>): WireWriter =
-    int(list.size).also {
-        list.forEach { entry(it.entry).declaration(it.declaration) }
-    }
-
-/** Reads the declarations of a project. */
-fun WireReader.symbols(): List<FileSymbol> = List(int()) { FileSymbol(entry(), declaration()) }
-
-/** Writes an optional project session. */
-fun WireWriter.session(session: ProjectSession?) {
-    bool(session != null)
-    if (session != null) {
-        string(session.activeFile)
-        int(session.openFiles.size)
-        session.openFiles.forEach { string(it.path).int(it.line).int(it.column) }
-    }
+fun JsonElement.declaration(): Declaration {
+    val d = jsonObject
+    return Declaration(
+        d.string("name"),
+        DeclarationKind.valueOf(d.string("kind")),
+        d.int(LINE),
+        d.int(COLUMN),
+        d.int("depth"),
+    )
 }
 
-/** Reads an optional project session. */
-fun WireReader.session(): ProjectSession? =
-    if (bool()) {
-        val active = stringOrNull()
-        ProjectSession(List(int()) { SessionFile(string(), int(), int()) }, active)
-    } else {
-        null
+/** The declarations of a project. */
+fun List<FileSymbol>.symbolsJson(): JsonArray =
+    JsonArray(
+        map {
+            buildJsonObject {
+                put(FILE, it.entry.toJson())
+                put("declaration", it.declaration.toJson())
+            }
+        },
+    )
+
+/** Reads the declarations of a project. */
+fun JsonElement.symbols(): List<FileSymbol> =
+    jsonArray.map {
+        val symbol = it.jsonObject
+        FileSymbol(symbol.field(FILE).entry(), symbol.field("declaration").declaration())
     }
+
+/** An optional project session, JSON null when absent. */
+fun ProjectSession?.toJson(): JsonElement =
+    if (this == null) {
+        JsonNull
+    } else {
+        buildJsonObject {
+            put("activeFile", activeFile)
+            put(
+                "openFiles",
+                JsonArray(
+                    openFiles.map {
+                        buildJsonObject {
+                            put("path", it.path)
+                            put(LINE, it.line)
+                            put(COLUMN, it.column)
+                        }
+                    },
+                ),
+            )
+        }
+    }
+
+/** Reads an optional project session. */
+fun JsonElement.session(): ProjectSession? {
+    if (this == JsonNull) return null
+    val session = jsonObject
+    val files =
+        session.field("openFiles").jsonArray.map {
+            val file = it.jsonObject
+            SessionFile(file.string("path"), file.int(LINE), file.int(COLUMN))
+        }
+    return ProjectSession(files, session.stringOrNull("activeFile"))
+}

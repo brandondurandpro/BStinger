@@ -3,14 +3,14 @@ package org.example.kotlineditor.benchmark
 import com.github.luben.zstd.Zstd
 import com.github.luben.zstd.ZstdCompressCtx
 import com.github.luben.zstd.ZstdDecompressCtx
-import org.example.kotlineditor.rpc.WireReader
-import org.example.kotlineditor.rpc.WireWriter
 import java.io.ByteArrayOutputStream
+import java.nio.ByteBuffer
 import java.util.zip.Deflater
 import java.util.zip.Inflater
 
-/** Bytes of a frame outside its body: length, kind, flags, id. */
-const val FRAME_HEADER = 10
+/** Bytes of a message outside its body: the `Content-Length` (and `Content-Encoding`) headers and the empty line. */
+fun frameHeader(encoded: Encoded): Int =
+    "Content-Length: ${encoded.data.size}\r\n\r\n".length + if (encoded.compressed) "Content-Encoding: zstd\r\n".length else 0
 
 /** Same threshold as the deflate codec the protocol used before zstd. */
 const val DEFLATE_THRESHOLD = 16 * 1024
@@ -80,14 +80,14 @@ class CurrentDeflate : Codec {
             val out = ByteArrayOutputStream(data.size / EXPECTED_RATIO)
             val chunk = ByteArray(CHUNK)
             while (!deflater.finished()) out.write(chunk, 0, deflater.deflate(chunk))
-            return WireWriter(SIZE_PREFIX + out.size()).int(data.size).toByteArray() + out.toByteArray()
+            return ByteBuffer.allocate(SIZE_PREFIX).putInt(data.size).array() + out.toByteArray()
         } finally {
             deflater.end()
         }
     }
 
     private fun inflate(data: ByteArray): ByteArray {
-        val size = WireReader(data).int()
+        val size = ByteBuffer.wrap(data).int
         val inflater = Inflater(true)
         try {
             inflater.setInput(data, SIZE_PREFIX, data.size - SIZE_PREFIX)

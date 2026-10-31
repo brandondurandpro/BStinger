@@ -4,6 +4,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
@@ -60,6 +61,10 @@ class NetworkPanelE2eTest {
             awaitTag(Tags.NETWORK_DETAIL)
             val view = app.project.network
             awaitCondition { view.selected?.seq == response.seq }
+            // The detail shows the JSON-RPC message, pretty-printed.
+            awaitCondition {
+                onAllNodesWithText(""""jsonrpc": "2.0",""", substring = true).fetchSemanticsNodes().isNotEmpty()
+            }
             onNodeWithTag(Tags.NETWORK_TOTALS).assertTextContains("frames", substring = true)
 
             // The filter keeps the matching frames only.

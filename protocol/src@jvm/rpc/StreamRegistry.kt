@@ -1,6 +1,8 @@
 package org.example.kotlineditor.rpc
 
 import kotlinx.coroutines.channels.Channel
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.jsonObject
 import org.example.kotlineditor.model.TerminalSnapshot
 import java.util.concurrent.ConcurrentHashMap
 
@@ -38,11 +40,11 @@ internal class StreamRegistry {
     /** The server restarted: its streams are gone for good. */
     fun loseAll() = closeAll()
 
-    fun onEvent(id: Long, body: ByteArray) {
+    fun onEvent(id: Long, payload: JsonElement) {
         val stream = streams[id] ?: return
-        val reader = WireReader(body)
-        val seq = reader.long()
-        val snapshot = reader.snapshot()
+        val event = payload.jsonObject
+        val seq = event.long("seq")
+        val snapshot = event.field("snapshot").snapshot()
         synchronized(stream) {
             if (seq > stream.lastSeq) {
                 stream.lastSeq = seq
@@ -52,10 +54,10 @@ internal class StreamRegistry {
         }
     }
 
-    fun onEnd(id: Long, body: ByteArray) {
+    fun onEnd(id: Long, payload: JsonElement) {
         val stream = streams[id] ?: return
         synchronized(stream) {
-            stream.endSeq = WireReader(body).long()
+            stream.endSeq = payload.jsonObject.long("seq")
             endIfDone(id, stream)
         }
     }

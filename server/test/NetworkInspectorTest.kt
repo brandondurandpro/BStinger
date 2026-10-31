@@ -14,8 +14,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
-private const val FRAME_OVERHEAD = 14
-
 /** The devtools capture of a client talking to a real server. */
 class NetworkInspectorTest {
     private val data = Files.createTempDirectory("server-data")
@@ -58,8 +56,8 @@ class NetworkInspectorTest {
             assertEquals("Read", response.method)
             assertNotNull(response.latencyMs)
             assertTrue(response.body.decodeToString().contains("hello network"))
-            // Small payloads are not compressed: the wire adds the length prefix and the 10-byte header.
-            assertEquals(request.size + FRAME_OVERHEAD, request.wireSize)
+            // Small messages are not compressed: the wire only adds the Content-Length header.
+            assertEquals(request.size + "Content-Length: ${request.size}\r\n\r\n".length, request.wireSize)
             val totals = client.network.totals.value
             assertEquals(records.size.toLong(), totals.frames)
             assertEquals(records.filter { it.direction == Direction.Sent }.sumOf { it.size.toLong() }, totals.sentBytes)

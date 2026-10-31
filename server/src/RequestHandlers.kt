@@ -1,72 +1,134 @@
 package org.example.kotlineditor.server
 
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
+import org.example.kotlineditor.model.GitClient
 import org.example.kotlineditor.rpc.Method
-import org.example.kotlineditor.rpc.blameLines
-import org.example.kotlineditor.rpc.content
-import org.example.kotlineditor.rpc.diffLines
-import org.example.kotlineditor.rpc.entries
+import org.example.kotlineditor.rpc.blameJson
+import org.example.kotlineditor.rpc.bool
+import org.example.kotlineditor.rpc.diffJson
 import org.example.kotlineditor.rpc.entry
-import org.example.kotlineditor.rpc.entryOrNull
-import org.example.kotlineditor.rpc.gitStatus
+import org.example.kotlineditor.rpc.int
 import org.example.kotlineditor.rpc.keyEvent
-import org.example.kotlineditor.rpc.matches
+import org.example.kotlineditor.rpc.long
+import org.example.kotlineditor.rpc.matchesJson
+import org.example.kotlineditor.rpc.read
 import org.example.kotlineditor.rpc.session
+import org.example.kotlineditor.rpc.string
 import org.example.kotlineditor.rpc.strings
-import org.example.kotlineditor.rpc.symbols
+import org.example.kotlineditor.rpc.symbolsJson
+import org.example.kotlineditor.rpc.terminalInput
+import org.example.kotlineditor.rpc.toJson
+import org.example.kotlineditor.rpc.toJsonOrNull
 
-/** Implementation of each [Method]: decode the arguments, call the local services, encode the answer. */
-internal fun requestHandlers(services: LocalServices): Map<Method, suspend Request.() -> Unit> {
+private typealias Handler = suspend Request.() -> JsonElement
+
+private const val PATH = "path"
+private const val DIRECTORY = "directory"
+private const val NAME = "name"
+private const val ROOT = "root"
+private const val LIMIT = "limit"
+private const val TERMINAL = "terminal"
+
+/** Implementation of each [Method]: read the named params, call the local services, return the JSON result. */
+internal fun requestHandlers(services: LocalServices): Map<Method, Handler> =
+    fileHandlers(services) + searchHandlers(services) + gitHandlers(services.git) + terminalHandlers()
+
+private fun fileHandlers(services: LocalServices): Map<Method, Handler> {
     val fs = services.fileSystem
-    val search = services.search
     return mapOf(
-        Method.ResolveDirectory to { answer.entryOrNull(fs.resolveDirectory(args.string())) },
-        Method.ListDirectory to { answer.entries(fs.list(args.entry())) },
+        Method.ResolveDirectory to { fs.resolveDirectory(params.string(PATH)).toJsonOrNull() },
+        Method.ListDirectory to { fs.list(entry(DIRECTORY)).toJson() },
         Method.Read to {
-            answer.content(fs.read(args.entry()))
             code = true
+            fs.read(entry("file")).toJson()
         },
-        Method.FileAt to { answer.entryOrNull(fs.fileAt(args.string())) },
-        Method.Write to { fs.write(args.entry(), args.string()) },
-        Method.CreateFile to { answer.entry(fs.createFile(args.entry(), args.string())) },
-        Method.CreateDirectory to { answer.entry(fs.createDirectory(args.entry(), args.string())) },
-        Method.Rename to { answer.entry(fs.rename(args.entry(), args.string())) },
-        Method.Delete to { fs.delete(args.entry()) },
-        Method.WalkFiles to { answer.entries(search.walkFiles(args.entry(), args.int())) },
-        Method.FindInFiles to {
-            answer.matches(search.findInFiles(args.entry(), args.string(), args.bool(), args.int()))
-        },
-        Method.Symbols to { answer.symbols(search.symbols(args.entry())) },
-        Method.GitStatus to { answer.gitStatus(services.git.status(args.string())) },
-        Method.GitBranch to { answer.string(services.git.branch(args.string())) },
-        Method.RecentLoad to { answer.strings(services.recentProjects.load()) },
-        Method.RecentSave to { services.recentProjects.save(args.strings()) },
-        Method.SessionLoad to { answer.session(services.sessions.load(args.string())) },
+        Method.FileAt to { fs.fileAt(params.string(PATH)).toJsonOrNull() },
+        Method.Write to { nothing { fs.write(entry("file"), params.string("text")) } },
+        Method.CreateFile to { fs.createFile(entry(DIRECTORY), params.string(NAME)).toJson() },
+        Method.CreateDirectory to { fs.createDirectory(entry(DIRECTORY), params.string(NAME)).toJson() },
+        Method.Rename to { fs.rename(entry("entry"), params.string("newName")).toJson() },
+        Method.Delete to { nothing { fs.delete(entry("entry")) } },
+        Method.RecentLoad to { services.recentProjects.load().toJson() },
+        Method.RecentSave to { nothing { services.recentProjects.save(params.read("paths") { it.strings() }) } },
+        Method.SessionLoad to { services.sessions.load(params.string("project")).toJson() },
         Method.SessionSave to {
-            services.sessions.save(args.string(), checkNotNull(args.session()) { "Missing session" })
+            val session = checkNotNull(params.read("session") { it.session() }) { "Missing session" }
+            nothing { services.sessions.save(params.string("project"), session) }
         },
-        Method.TerminalStart to {
-            terminals.start(id, args.string(), args.int(), args.int(), args.int(), args.int())
-        },
-        Method.TerminalWrite to { terminalOrFail().write(args.bytes()) },
-        Method.TerminalKey to { terminalOrFail().sendKey(args.keyEvent()) },
-        Method.TerminalPaste to { terminalOrFail().paste(args.string()) },
-        Method.TerminalResize to {
-            val terminal = terminalOrFail()
-            terminal.resize(args.int(), args.int(), args.int(), args.int())
-        },
-        Method.TerminalScroll to { terminalOrFail().scroll(args.int()) },
-        Method.TerminalClear to { terminalOrFail().clear() },
-        Method.TerminalResume to { terminals[args.long()]?.resume(args.long()) },
-        Method.TerminalDestroy to { terminals.stop(args.long()) },
-        Method.GitDiff to { answer.diffLines(services.git.diff(args.string(), args.string())) },
-        Method.GitBlame to { answer.blameLines(services.git.blame(args.string(), args.string())) },
-        Method.GitBranches to { answer.strings(services.git.branches(args.string())) },
-        Method.GitCheckout to { services.git.checkout(args.string(), args.string()) },
-        Method.GitCommit to { services.git.commit(args.string(), args.string()) },
-        Method.GitPull to { answer.string(services.git.pull(args.string())) },
-        Method.GitPush to { answer.string(services.git.push(args.string())) },
     )
 }
 
+private fun searchHandlers(services: LocalServices): Map<Method, Handler> {
+    val search = services.search
+    return mapOf(
+        Method.WalkFiles to { search.walkFiles(entry(ROOT), params.int(LIMIT)).toJson() },
+        Method.FindInFiles to {
+            search
+                .findInFiles(entry(ROOT), params.string("query"), params.bool("ignoreCase"), params.int(LIMIT))
+                .matchesJson()
+        },
+        Method.Symbols to { search.symbols(entry(ROOT)).symbolsJson() },
+    )
+}
+
+private fun gitHandlers(git: GitClient): Map<Method, Handler> =
+    mapOf(
+        Method.GitStatus to { git.status(root()).toJson() },
+        Method.GitBranch to { JsonPrimitive(git.branch(root())) },
+        Method.GitDiff to { git.diff(root(), params.string(PATH)).diffJson() },
+        Method.GitBlame to { git.blame(root(), params.string(PATH)).blameJson() },
+        Method.GitBranches to { git.branches(root()).toJson() },
+        Method.GitCheckout to { nothing { git.checkout(root(), params.string("branch")) } },
+        Method.GitCommit to { nothing { git.commit(root(), params.string("message")) } },
+        Method.GitPull to { JsonPrimitive(git.pull(root())) },
+        Method.GitPush to { JsonPrimitive(git.push(root())) },
+    )
+
+private fun terminalHandlers(): Map<Method, Handler> =
+    mapOf(
+        Method.TerminalStart to {
+            nothing {
+                terminals.start(
+                    id,
+                    params.string(DIRECTORY),
+                    params.int("columns"),
+                    params.int("rows"),
+                    params.int("cellWidthPx"),
+                    params.int("cellHeightPx"),
+                )
+            }
+        },
+        Method.TerminalWrite to { nothing { terminalOrFail().write(params.terminalInput()) } },
+        Method.TerminalKey to { nothing { terminalOrFail().sendKey(params.read("event") { it.keyEvent() }) } },
+        Method.TerminalPaste to { nothing { terminalOrFail().paste(params.string("text")) } },
+        Method.TerminalResize to {
+            val terminal = terminalOrFail()
+            nothing {
+                terminal.resize(
+                    params.int("columns"),
+                    params.int("rows"),
+                    params.int("cellWidthPx"),
+                    params.int("cellHeightPx"),
+                )
+            }
+        },
+        Method.TerminalScroll to { nothing { terminalOrFail().scroll(params.int("delta")) } },
+        Method.TerminalClear to { nothing { terminalOrFail().clear() } },
+        Method.TerminalResume to { nothing { terminals[params.long(TERMINAL)]?.resume(params.long("lastSeq")) } },
+        Method.TerminalDestroy to { nothing { terminals.stop(params.long(TERMINAL)) } },
+    )
+
+// A method that returns nothing answers with a null result.
+private inline fun nothing(block: () -> Unit): JsonElement {
+    block()
+    return JsonNull
+}
+
+private fun Request.entry(name: String) = params.read(name) { it.entry() }
+
+private fun Request.root() = params.string(ROOT)
+
 private fun Request.terminalOrFail(): ServerTerminal =
-    checkNotNull(terminals[args.long()]) { "This terminal has ended" }
+    checkNotNull(terminals[params.long(TERMINAL)]) { "This terminal has ended" }

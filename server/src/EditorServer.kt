@@ -7,11 +7,16 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.example.kotlineditor.rpc.Frame
 import org.example.kotlineditor.rpc.FrameKind
+import org.example.kotlineditor.rpc.InvalidMessageException
 import org.example.kotlineditor.rpc.Protocol
-import org.example.kotlineditor.rpc.WireReader
-import org.example.kotlineditor.rpc.WireWriter
+import org.example.kotlineditor.rpc.int
+import org.example.kotlineditor.rpc.params
+import org.example.kotlineditor.rpc.rpcError
+import org.example.kotlineditor.rpc.stringOrNull
 import java.io.Closeable
 import java.io.IOException
 import java.net.InetSocketAddress
@@ -37,7 +42,7 @@ class ServerOptions(
 
 /**
  * The Kotlin Editor server: all file system, search, Git and shell logic runs here; clients only display.
- * One thread per connection reads frames; requests run concurrently on coroutines and answer in any order.
+ * One thread per connection reads messages; requests run concurrently on coroutines and answer in any order.
  */
 class EditorServer(
     services: LocalServices = LocalServices(),
@@ -98,7 +103,17 @@ class EditorServer(
         var session: ServerSession? = null
         try {
             session = handshake(connection)
-            while (session != null && !closed) session.onFrame(connection, connection.read())
+            while (session != null && !closed) {
+                val frame =
+                    try {
+                        connection.read()
+                    } catch (invalid: InvalidMessageException) {
+                        val error = rpcError(invalid.code, invalid.message.orEmpty())
+                        connection.send(Frame(FrameKind.Error, invalid.id, error))
+                        continue
+                    }
+                session.onFrame(connection, frame)
+            }
         } catch (expected: IOException) {
             // Connection lost or idle: the session survives for a grace period.
         } finally {
@@ -109,19 +124,20 @@ class EditorServer(
 
     private fun handshake(connection: ServerConnection): ServerSession? {
         val hello = connection.read()
-        val reader = WireReader(hello.body)
         val isHello = hello.kind == FrameKind.Hello
-        val version = if (isHello) reader.int() else -1
-        val presented = if (isHello) reader.string() else ""
-        val previous = if (isHello) reader.stringOrNull() else null
+        // Malformed params are rejected like a missing hello, never thrown out of the connection thread.
+        val params = if (isHello) runCatching { hello.payload.params() }.getOrNull() else null
+        val version = params?.let { runCatching { it.int("version") }.getOrNull() } ?: -1
+        val presented = params?.let { runCatching { it.stringOrNull("token") }.getOrNull() }.orEmpty()
+        val previous = params?.let { runCatching { it.stringOrNull("session") }.getOrNull() }
         val reason =
             when {
-                !isHello -> "Expected a Hello frame"
+                params == null -> "Expected a connection/hello request with named params"
                 version != Protocol.VERSION -> "Unsupported protocol version $version (expected ${Protocol.VERSION})"
                 !MessageDigest.isEqual(presented.encodeToByteArray(), token.encodeToByteArray()) -> "Invalid token"
                 else -> null
             }
-        reason?.let { connection.send(Frame(FrameKind.Reject, 0, WireWriter().string(it).toByteArray())) }
+        reason?.let { connection.send(Frame(FrameKind.Reject, Protocol.HELLO_ID, rpcError(Protocol.REJECTED, it))) }
         return if (reason != null) null else join(connection, previous)
     }
 
@@ -135,8 +151,12 @@ class EditorServer(
                 options,
             ).also { sessions[it.id] = it }
         session.attach(connection)
-        val welcome = WireWriter().string(session.id).bool(existing != null).toByteArray()
-        connection.send(Frame(FrameKind.Welcome, 0, welcome))
+        val welcome =
+            buildJsonObject {
+                put("session", session.id)
+                put("resumed", existing != null)
+            }
+        connection.send(Frame(FrameKind.Welcome, Protocol.HELLO_ID, welcome))
         return session
     }
 

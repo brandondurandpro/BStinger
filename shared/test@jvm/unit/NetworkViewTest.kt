@@ -2,38 +2,28 @@ package org.example.kotlineditor.unit
 
 import org.example.kotlineditor.model.Direction
 import org.example.kotlineditor.model.NetworkRecord
-import org.example.kotlineditor.rpc.WireWriter
 import org.example.kotlineditor.state.NetworkView
 import org.example.kotlineditor.state.formatBytes
 import org.example.kotlineditor.state.hexDump
-import org.example.kotlineditor.state.wireStrings
+import org.example.kotlineditor.state.messageLines
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-private val CODE =
-    """
-    fun main() {
-        println("é")
-    }
-    """.trimIndent()
+private const val CODE = "fun main() {\n    println('é')\n}"
 
 class NetworkViewTest {
     private fun record(seq: Long, kind: String, method: String? = null) =
         NetworkRecord(seq, 0, Direction.Sent, kind, seq, method, 0, 14, ByteArray(0))
 
     @Test
-    fun `the strings of a wire payload are found between the other fields`() {
-        val body =
-            WireWriter()
-                .short(2)
-                .string("/home/me/project/App.kt")
-                .long(42)
-                .bool(true)
-                .string(CODE)
-                .bytes(byteArrayOf(0, 1, 2, -1))
-                .toByteArray()
-        assertEquals(listOf("/home/me/project/App.kt", CODE), wireStrings(body))
-        assertEquals(emptyList(), wireStrings(ByteArray(0)))
+    fun `a JSON-RPC payload is pretty-printed, a cut one is shown as it is`() {
+        val body = """{"jsonrpc":"2.0","id":3,"result":{"text":"$CODE"}}""".replace("\n", "\\n").encodeToByteArray()
+        assertEquals(
+            listOf("{", """    "jsonrpc": "2.0",""", """    "id": 3,""", """    "result": {"""),
+            messageLines(body).take(4),
+        )
+        assertEquals(listOf("""{"jsonrpc":"2.0"""), messageLines(body.copyOf(15)))
+        assertEquals(emptyList(), messageLines(ByteArray(0)))
     }
 
     @Test
