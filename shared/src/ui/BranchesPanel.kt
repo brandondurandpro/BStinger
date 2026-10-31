@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -162,13 +163,14 @@ private fun BranchColumn(project: ProjectState, history: BranchHistoryState, mod
         )
         val localOpen = BranchSection.Local !in history.collapsedSections
         val remoteOpen = BranchSection.Remote !in history.collapsedSections
+        val hasLocals = localOpen && shownLocals.isNotEmpty()
+        val hasRemotes = remoteOpen && shownRemotes.isNotEmpty()
         LazyColumn(
             Modifier.fillMaxSize().padding(top = 6.dp).testTag(Tags.HISTORY_BRANCH_LIST),
         ) {
-            // The headers stay at the top of the list while its rows scroll under them, like a tree's folders.
-            stickyHeader(key = "section:${BranchSection.Local.name}") {
-                SectionTitle(history, BranchSection.Local, shownLocals.size)
-            }
+            // The headers stay at the top of the list while their rows scroll under them, like a tree's folders.
+            // A section without rows is a plain item: two adjacent sticky headers would push each other out.
+            branchHeader(history, BranchSection.Local, shownLocals.size, sticky = hasLocals)
             if (localOpen) {
                 items(shownLocals, key = { "local:${it.name}" }) { branch ->
                     HistoryBranchRow(branch.name, history.selectedRef == branch.name, local = branch) {
@@ -176,15 +178,28 @@ private fun BranchColumn(project: ProjectState, history: BranchHistoryState, mod
                     }
                 }
             }
-            stickyHeader(key = "section:${BranchSection.Remote.name}") {
-                SectionTitle(history, BranchSection.Remote, shownRemotes.size)
-            }
+            branchHeader(history, BranchSection.Remote, shownRemotes.size, sticky = hasRemotes)
             if (remoteOpen) {
                 items(shownRemotes, key = { "remote:$it" }) { name ->
                     HistoryBranchRow(name, history.selectedRef == name, local = null) { history.select(name) }
                 }
             }
         }
+    }
+}
+
+// Header of a section of the branch list: sticky while the section has rows to scroll under it.
+private fun LazyListScope.branchHeader(
+    history: BranchHistoryState,
+    section: BranchSection,
+    count: Int,
+    sticky: Boolean,
+) {
+    val key = "section:${section.name}"
+    if (sticky) {
+        stickyHeader(key = key) { SectionTitle(history, section, count) }
+    } else {
+        item(key = key) { SectionTitle(history, section, count) }
     }
 }
 

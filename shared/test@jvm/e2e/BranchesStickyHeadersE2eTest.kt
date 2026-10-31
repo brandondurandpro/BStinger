@@ -2,6 +2,7 @@ package org.example.kotlineditor.e2e
 
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.onNodeWithTag
@@ -114,16 +115,70 @@ class BranchesStickyHeadersE2eTest {
 
             // One local and one remote branch left: the list no longer scrolls, the header is back in place.
             onNodeWithTag(Tags.HISTORY_BRANCH_SEARCH).performTextInput("local-003")
-            awaitCondition { !exists(ItemTags.historyBranch("local-020")) }
+            awaitCondition { app.project.history.branchQuery == "local-003" }
             waitForIdle()
+            onNodeWithTag(local).assertTextContains("1", substring = true)
             assertSameTop(top, local)
 
             // A filter that matches nothing keeps both headers, with no rows under them.
             onNodeWithTag(Tags.HISTORY_BRANCH_SEARCH).performTextInput("nothing matches this")
-            awaitCondition { !exists(ItemTags.historyBranch("local-000")) }
-            awaitTag(local)
-            awaitTag(ItemTags.historySection(BranchSection.Remote.name))
+            awaitCondition {
+                app.project.history.branchQuery
+                    .endsWith("nothing matches this")
+            }
             waitForIdle()
+            awaitTag(local).assertTextContains("0", substring = true)
+            awaitTag(ItemTags.historySection(BranchSection.Remote.name))
             assertSameTop(top, local)
+        }
+
+    @Test
+    fun `a folded local section keeps its header at the top until the remote one replaces it`() =
+        runComposeUiTest {
+            repository()
+            val app = launchWithProject(project)
+            openBranches(app)
+            val local = ItemTags.historySection(BranchSection.Local.name)
+            val remote = ItemTags.historySection(BranchSection.Remote.name)
+            val top = topOf(local)
+            val list = onNodeWithTag(Tags.HISTORY_BRANCH_LIST)
+
+            onNodeWithTag(local).performClick()
+            awaitNoTag(ItemTags.historyBranch("local-000"))
+            assertSameTop(top, local)
+
+            // With no local rows to hold it, the folded header scrolls away and the remote one takes the top.
+            list.performScrollToIndex(1 + LOCALS / 2)
+            waitForIdle()
+            assertSameTop(top, remote)
+            assertTrue(!exists(local) || topOf(local).value < top.value, "the folded local header should be pushed out")
+            assertTrue(!exists(ItemTags.historyBranch("local-000")), "the local section must stay folded")
+        }
+
+    @Test
+    fun `a filtered list still pins its headers while it scrolls`() =
+        runComposeUiTest {
+            repository()
+            val app = launchWithProject(project)
+            openBranches(app)
+            val local = ItemTags.historySection(BranchSection.Local.name)
+            val remote = ItemTags.historySection(BranchSection.Remote.name)
+            val top = topOf(local)
+            val list = onNodeWithTag(Tags.HISTORY_BRANCH_LIST)
+
+            onNodeWithTag(Tags.HISTORY_BRANCH_SEARCH).performTextInput("local-00")
+            awaitCondition { app.project.history.branchQuery == "local-00" }
+            waitForIdle()
+            onNodeWithTag(local).assertTextContains("10", substring = true)
+
+            // Ten local and ten remote branches left: still taller than the list, so it scrolls.
+            list.performScrollToIndex(10)
+            waitForIdle()
+            assertTrue(!exists(ItemTags.historyBranch("local-000")), "the filtered local branches must have scrolled")
+            assertSameTop(top, local)
+
+            list.performScrollToIndex(11 + 5)
+            waitForIdle()
+            assertSameTop(top, remote)
         }
 }
