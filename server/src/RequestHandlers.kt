@@ -18,6 +18,7 @@ import org.example.kotlineditor.rpc.matchesJson
 import org.example.kotlineditor.rpc.read
 import org.example.kotlineditor.rpc.session
 import org.example.kotlineditor.rpc.string
+import org.example.kotlineditor.rpc.stringOrNull
 import org.example.kotlineditor.rpc.strings
 import org.example.kotlineditor.rpc.symbolsJson
 import org.example.kotlineditor.rpc.terminalInput
@@ -90,6 +91,11 @@ private fun gitHandlers(git: GitClient): Map<Method, Handler> =
             git
                 .searchLog(root(), params.string("ref"), params.string("query"), params.int("skip"), params.int(LIMIT))
                 .commitsJson()
+        },
+        Method.GitCommitDiff to {
+            git
+                .commitDiff(root(), params.string("hash"), params.string(PATH), params.stringOrNull("oldPath"))
+                .diffJson()
         },
         Method.GitCommitDetails to { git.commitDetails(root(), params.string("hash")).toJson() },
         Method.GitBranchDetails to { git.branchDetails(root()).branchesJson() },

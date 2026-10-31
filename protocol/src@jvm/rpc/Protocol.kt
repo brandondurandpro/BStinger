@@ -311,6 +311,9 @@ enum class Method(
     /** Message and changed files of a commit. */
     GitCommitDetails("git/commitDetails"),
 
+    /** What a commit changed in one file. */
+    GitCommitDiff("git/commitDiff"),
+
     /** Local branches of the repository with their remote synchronization. */
     GitBranchDetails("git/branchDetails"),
 

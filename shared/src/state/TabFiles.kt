@@ -26,6 +26,7 @@ internal class TabFiles(
     private val onSaved: (FileEntry) -> Unit,
     private val diffs: suspend (FileEntry) -> List<DiffLine>,
     private val blames: suspend (FileEntry) -> List<BlameLine>,
+    private val commitDiffs: suspend (FileEntry, CommitDiffTarget) -> List<DiffLine>,
 ) {
     fun load(tab: EditorTab) {
         if (tab.isDiff) loadDiff(tab) else loadText(tab)
@@ -38,7 +39,8 @@ internal class TabFiles(
             scope.launch {
                 tab.status =
                     try {
-                        TabStatus.Diff(diffs(tab.entry))
+                        val commit = tab.commit
+                        TabStatus.Diff(if (commit == null) diffs(tab.entry) else commitDiffs(tab.entry, commit))
                     } catch (e: IOException) {
                         TabStatus.Unsupported("Cannot compute the differences: ${e.message}")
                     }

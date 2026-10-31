@@ -37,6 +37,8 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.SpanStyle
@@ -50,11 +52,13 @@ import androidx.compose.ui.unit.sp
 import org.example.kotlineditor.model.GitBranchInfo
 import org.example.kotlineditor.model.GitCommit
 import org.example.kotlineditor.model.GitCommitDetails
+import org.example.kotlineditor.model.GitCommitFile
 import org.example.kotlineditor.state.BranchHistoryState
 import org.example.kotlineditor.state.BranchSection
 import org.example.kotlineditor.state.Pane
 import org.example.kotlineditor.state.ProjectState
 import org.example.kotlineditor.state.ToolWindow
+import org.example.kotlineditor.state.openCommitDiff
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -133,7 +137,9 @@ private fun HistoryColumns(project: ProjectState, history: BranchHistoryState) {
                 SplitterBox(horizontalBar = false, tag = Tags.HISTORY_DETAILS_SPLITTER) { delta ->
                     layout.resizePane(Pane.HistoryDetails, -with(density) { delta.toDp().value })
                 }
-                CommitDetailsColumn(commit, history.details, Modifier.width(detailsWidth.dp).fillMaxHeight())
+                CommitDetailsColumn(commit, history.details, Modifier.width(detailsWidth.dp).fillMaxHeight()) { file ->
+                    project.openCommitDiff(commit, file)
+                }
             }
         }
     }
@@ -378,7 +384,12 @@ private fun RefPill(ref: String) {
 }
 
 @Composable
-private fun CommitDetailsColumn(commit: GitCommit, details: GitCommitDetails?, modifier: Modifier) {
+private fun CommitDetailsColumn(
+    commit: GitCommit,
+    details: GitCommitDetails?,
+    modifier: Modifier,
+    onOpenFile: (GitCommitFile) -> Unit,
+) {
     Column(modifier.padding(10.dp).testTag(Tags.HISTORY_DETAILS)) {
         val message = details?.message ?: commit.subject
         Column(Modifier.heightIn(max = 160.dp).verticalScroll(rememberScrollState())) {
@@ -403,8 +414,14 @@ private fun CommitDetailsColumn(commit: GitCommit, details: GitCommitDetails?, m
             )
             LazyColumn(Modifier.fillMaxSize()) {
                 items(details.files, key = { it.path }) { file ->
+                    // A click opens the diff editor on what this commit changed in the file.
                     Row(
-                        Modifier.fillMaxWidth().padding(vertical = 2.dp).testTag(ItemTags.historyFile(file.path)),
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { onOpenFile(file) }
+                            .pointerHoverIcon(PointerIcon.Hand)
+                            .testTag(ItemTags.historyFile(file.path))
+                            .padding(vertical = 2.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         FileIcon(file.path.substringAfterLast('/'), isDirectory = false)

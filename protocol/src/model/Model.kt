@@ -384,6 +384,12 @@ interface GitClient {
     /** The complete message and the changed files of commit [hash]. */
     suspend fun commitDetails(root: String, hash: String): GitCommitDetails
 
+    /**
+     * What commit [hash] changed in [path], compared with its first parent (with nothing for a first commit);
+     * [oldPath] is the former path of a renamed file.
+     */
+    suspend fun commitDiff(root: String, hash: String, path: String, oldPath: String? = null): List<DiffLine>
+
     /** No Git support: no status, no branch, no differences. */
     @Suppress("TooManyFunctions")
     object None : GitClient {
@@ -421,6 +427,9 @@ interface GitClient {
             emptyList<GitCommit>()
 
         override suspend fun commitDetails(root: String, hash: String) = GitCommitDetails(hash, "", emptyList())
+
+        override suspend fun commitDiff(root: String, hash: String, path: String, oldPath: String?) =
+            emptyList<DiffLine>()
     }
 }
 

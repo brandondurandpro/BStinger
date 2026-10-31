@@ -166,6 +166,10 @@ object Tags {
 
     fun diffTabClose(relativePath: String) = "tab.diff.close:$relativePath"
 
+    fun commitDiffTab(hash: String, relativePath: String) = "tab.commitDiff:$hash:$relativePath"
+
+    fun commitDiffTabClose(hash: String, relativePath: String) = "tab.commitDiff.close:$hash:$relativePath"
+
     fun diffLine(index: Int) = "diff.line:$index"
 
     fun diffLineKind(index: Int, kind: String) = "diff.line:$index:$kind"

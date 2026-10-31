@@ -64,7 +64,8 @@ A lightweight IDE in the style of IntelliJ IDEA (New UI, dark theme), written wi
   opens the Git tool window; the toolbar shows the result.
 - **Branches tool window** (clock icon of the left strip, docked at the bottom): every local and remote branch, the
   history of the selected one (refs, subject, author, date, hash), loaded page by page as it scrolls, and the message
-  and changed files of the selected commit. A pinned branch's menu opens it on that branch (Show History). Its search
+  and changed files of the selected commit (a click on a file opens the diff editor on what that commit changed in
+  it). A pinned branch's menu opens it on that branch (Show History). Its search
   field finds the commits of the whole branch by message, author or start of the hash; splitters resize its panes,
   and the Local and Remote sections fold.
 

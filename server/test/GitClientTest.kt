@@ -1,6 +1,7 @@
 package org.example.kotlineditor.server
 
 import kotlinx.coroutines.runBlocking
+import org.example.kotlineditor.model.DiffKind
 import org.example.kotlineditor.model.GitFileStatus
 import java.io.IOException
 import java.nio.file.Files
@@ -46,6 +47,8 @@ class GitClientTest {
         git("add", "-A")
         git("commit", "-q", "-m", "init")
     }
+
+    private fun lines(vararg text: String) = text.joinToString("\n", postfix = "\n")
 
     private fun temporaryDirectory(prefix: String): Path = Files.createTempDirectory(prefix).also { extra.add(it) }
 
@@ -354,6 +357,61 @@ class GitClientTest {
             assertEquals(GitFileStatus.Added, byPath.getValue("added.kt").status)
             assertFailsWith<IllegalArgumentException> { client.commitDetails(root.toString(), "--help") }
             Unit
+        }
+
+    @Test
+    fun `a commit diff shows what the commit changed in one file, renames and first commits included`() =
+        runBlocking {
+            root.resolve("a.kt").writeText(lines("one", "two", "three"))
+            root.resolve("b.kt").writeText(lines("b"))
+            commitAll()
+            val client = CliGitClient()
+            val root = root.toString()
+            val first = client.log(root, "HEAD", 0, 1).single()
+            // The first commit, compared with nothing: every line is added.
+            val created = client.commitDiff(root, first.hash, "a.kt")
+            assertEquals(listOf("one", "two", "three"), created.filter { it.kind == DiffKind.Added }.map { it.text })
+
+            git("mv", "a.kt", "renamed.kt")
+            this@GitClientTest.root.resolve("renamed.kt").writeText(lines("one", "TWO", "three"))
+            git("rm", "-q", "b.kt")
+            git("add", "-A")
+            git("commit", "-q", "-m", "rename and edit")
+            val head = client.log(root, "HEAD", 0, 1).single()
+            // Only the changed line of the renamed file, not the whole file removed and added again.
+            val renamed = client.commitDiff(root, head.hash, "renamed.kt", oldPath = "a.kt")
+            assertEquals(listOf("two"), renamed.filter { it.kind == DiffKind.Removed }.map { it.text })
+            assertEquals(listOf("TWO"), renamed.filter { it.kind == DiffKind.Added }.map { it.text })
+            val deleted = client.commitDiff(root, head.hash, "b.kt")
+            assertEquals(listOf("b"), deleted.filter { it.kind == DiffKind.Removed }.map { it.text })
+            assertTrue(deleted.none { it.kind == DiffKind.Added })
+            // A file the commit did not touch has no difference.
+            assertTrue(client.commitDiff(root, first.hash, "not-there.kt").isEmpty())
+            assertFailsWith<IllegalArgumentException> { client.commitDiff(root, "--output=x", "a.kt") }
+            Unit
+        }
+
+    @Test
+    fun `a merge commit diff compares it with its first parent`() =
+        runBlocking {
+            root.resolve("a.kt").writeText("base\n")
+            commitAll()
+            val default = git("rev-parse", "--abbrev-ref", "HEAD").trim()
+            git("checkout", "-q", "-b", "feature")
+            root.resolve("feature.kt").writeText("from the feature\n")
+            git("add", "-A")
+            git("commit", "-q", "-m", "feature")
+            git("checkout", "-q", default)
+            root.resolve("a.kt").writeText("main\n")
+            git("commit", "-q", "-am", "main")
+            git("merge", "-q", "--no-edit", "feature")
+            val client = CliGitClient()
+            val merge = client.log(root.toString(), "HEAD", 0, 1).single()
+            assertEquals(2, merge.parents.size)
+            // The merge brought the feature's file to the first parent, and left a.kt as it was there.
+            val brought = client.commitDiff(root.toString(), merge.hash, "feature.kt")
+            assertEquals(listOf("from the feature"), brought.filter { it.kind == DiffKind.Added }.map { it.text })
+            assertTrue(client.commitDiff(root.toString(), merge.hash, "a.kt").isEmpty())
         }
 
     @Test

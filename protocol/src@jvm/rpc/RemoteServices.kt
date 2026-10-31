@@ -4,7 +4,9 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObjectBuilder
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.put
 import org.example.kotlineditor.model.AppServices
 import org.example.kotlineditor.model.BlameLine
@@ -220,6 +222,17 @@ class RemoteGit(private val client: RpcClient) : GitClient {
                 put(LIMIT, limit)
             }
         return page.commits()
+    }
+
+    override suspend fun commitDiff(root: String, hash: String, path: String, oldPath: String?): List<DiffLine> {
+        val diff =
+            client.call(Method.GitCommitDiff) {
+                put(ROOT, root)
+                put("hash", hash)
+                put(PATH, path)
+                put("oldPath", oldPath?.let(::JsonPrimitive) ?: JsonNull)
+            }
+        return diff.diffLines()
     }
 
     override suspend fun commitDetails(root: String, hash: String): GitCommitDetails {

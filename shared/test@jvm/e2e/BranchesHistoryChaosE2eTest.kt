@@ -6,6 +6,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.v2.runComposeUiTest
+import org.example.kotlineditor.state.TabStatus
 import org.example.kotlineditor.ui.ItemTags
 import org.example.kotlineditor.ui.Tags
 import kotlin.test.AfterTest
@@ -136,5 +137,36 @@ class BranchesHistoryChaosE2eTest {
             awaitTag(ItemTags.historyCommit(hashOf("second~1")))
             awaitNoTag(ItemTags.historyCommit(hashOf("second")))
             awaitNoTag(Tags.HISTORY_LOADING)
+        }
+
+    @Test
+    fun `a commit diff opened while the network is down loads once it is back`() =
+        runComposeUiTest {
+            twoBranches()
+            project.file("README.md", textOf("# Changed on second", ""))
+            project.git("checkout", "-q", "second")
+            project.git("commit", "-q", "-am", "edit the readme")
+            val edit = hashOf("HEAD")
+            project.git("checkout", "-q", "-")
+            val app = launchWithProject(project, chaos = true)
+            openBranches(app)
+            onNodeWithTag(ItemTags.historyBranch("second")).performClick()
+            awaitTag(ItemTags.historyCommit(edit)).performClick()
+            awaitTag(ItemTags.historyFile("README.md"))
+
+            app.network.goDown()
+            awaitReconnecting()
+            onNodeWithTag(ItemTags.historyFile("README.md")).performClick()
+            awaitTag(Tags.commitDiffTab(edit, "README.md"))
+            // Nothing pretends to be loaded while the link is down.
+            val editor = app.project.editor
+            assertTrue(editor.activeTab?.status !is TabStatus.Diff)
+            app.network.comeBack()
+            awaitReconnected()
+            awaitCondition {
+                val diff = editor.activeTab?.status as? TabStatus.Diff
+                diff != null && diff.lines.isNotEmpty()
+            }
+            awaitTag(Tags.DIFF)
         }
 }

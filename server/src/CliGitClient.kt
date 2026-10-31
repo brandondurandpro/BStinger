@@ -45,8 +45,8 @@ class CliGitClient : GitClient {
             val tracked = gitOutput(root, "ls-files", "--error-unmatch", "--", path) != null
             if (tracked) {
                 val output =
-                    gitOutput(root, "diff", "--no-color", "--no-ext-diff", "-U3", "HEAD", "--", path)
-                        ?: gitOutput(root, "diff", "--no-color", "--no-ext-diff", "-U3", "--cached", "--", path)
+                    gitOutput(root, "diff", NO_COLOR, "--no-ext-diff", "-U3", "HEAD", "--", path)
+                        ?: gitOutput(root, "diff", NO_COLOR, "--no-ext-diff", "-U3", "--cached", "--", path)
                 UnifiedDiff().parse(output.orEmpty())
             } else {
                 val lines = runCatching { File(root, path).readLines() }.getOrDefault(emptyList())
@@ -102,7 +102,7 @@ class CliGitClient : GitClient {
     }
 
     private fun branchExists(root: String, name: String): Boolean =
-        gitOutput(root, "show-ref", "--verify", "--quiet", "refs/heads/$name") != null
+        gitOutput(root, "show-ref", VERIFY, QUIET, "refs/heads/$name") != null
 
     override suspend fun commit(root: String, message: String) {
         require(message.isNotBlank()) { "A commit message is required" }
@@ -191,6 +191,20 @@ class CliGitClient : GitClient {
             GitCommitDetails(hash, message, parseNameStatus(raw))
         }
 
+    // diff-tree compares two trees: the first parent's and the commit's (a merge shows what it brought to its first
+    // parent); a first commit, with `--root`, is compared with nothing. Both paths of a rename are given, so that
+    // `-M` sees the rename and shows only the lines that changed.
+    override suspend fun commitDiff(root: String, hash: String, path: String, oldPath: String?): List<DiffLine> =
+        withContext(Dispatchers.IO) {
+            require(hash.matches(HASH)) { "Not a commit hash: $hash" }
+            val paths = listOfNotNull(oldPath, path).distinct()
+            val parent = gitOutput(root, "rev-parse", VERIFY, QUIET, "$hash^1")?.firstOrNull()?.trim()
+            val range = if (parent == null) listOf("--root", hash) else listOf(parent, hash)
+            val options = listOf("-p", "-M", "--no-commit-id", NO_COLOR, "-U3")
+            val args = listOf("diff-tree") + options + range + "--" + paths
+            UnifiedDiff().parse(runGit(root, *args.toTypedArray()).lines())
+        }
+
     private fun parseCommit(record: String): GitCommit? {
         val fields = record.trimStart('\n').split('\u0000')
         if (fields.size < COMMIT_FIELD_COUNT || fields[0].isBlank()) return null
@@ -238,7 +252,7 @@ class CliGitClient : GitClient {
         }
 
     private fun requireLocalBranch(root: String, branch: String) {
-        if (gitOutput(root, "show-ref", "--verify", "--quiet", "refs/heads/$branch") == null) {
+        if (gitOutput(root, "show-ref", VERIFY, QUIET, "refs/heads/$branch") == null) {
             throw IOException("No local branch $branch")
         }
     }
@@ -336,6 +350,9 @@ class CliGitClient : GitClient {
         const val BRANCH_FIELD_COUNT = 4
         const val DELETE_CHUNK_SIZE = 50
         const val DEFAULT_REMOTE = "origin"
+        const val NO_COLOR = "--no-color"
+        const val VERIFY = "--verify"
+        const val QUIET = "--quiet"
         const val FOR_EACH_REF = "for-each-ref"
         const val MAX_LOG_PAGE = 1000
         const val RECORD_SEPARATOR = '\u001e'

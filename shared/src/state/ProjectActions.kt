@@ -7,6 +7,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.example.kotlineditor.model.FileContent
 import org.example.kotlineditor.model.FileEntry
+import org.example.kotlineditor.model.GitCommit
+import org.example.kotlineditor.model.GitCommitFile
 import org.example.kotlineditor.model.pathName
 import org.example.kotlineditor.syntax.Structure
 import java.io.IOException
@@ -23,6 +25,10 @@ fun ProjectState.entryAt(relativePath: String): FileEntry =
 
 /** Opens the diff tab of the file at [relativePath] (a click on a Git panel change). */
 fun ProjectState.openDiff(relativePath: String) = editor.openDiff(entryAt(relativePath))
+
+/** Opens the diff of [file] in [commit] (a click on a changed file in the Branches window). */
+fun ProjectState.openCommitDiff(commit: GitCommit, file: GitCommitFile) =
+    editor.openCommitDiff(entryAt(file.path), CommitDiffTarget(commit.hash, commit.shortHash, file.oldPath))
 
 /** Opens [entry] at [start]..[end], remembering where we came from. */
 fun ProjectState.navigate(entry: FileEntry, start: TextPos, end: TextPos = start) {

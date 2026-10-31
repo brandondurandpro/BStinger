@@ -52,12 +52,35 @@ class HorizontalScroll {
     }
 }
 
-@Stable
-class EditorTab(val entry: FileEntry, val relativePath: String, val isDiff: Boolean = false) {
-    /** Identity of the tab: a file can be open both as text and as a diff. */
-    val key: String get() = if (isDiff) "diff:${entry.path}" else entry.path
+/** Identity of a tab showing [entry] as text, as its uncommitted diff, or as the diff of [commit]. */
+internal fun tabKey(entry: FileEntry, isDiff: Boolean, commit: CommitDiffTarget?): String =
+    when {
+        commit != null -> "diff@${commit.hash}:${entry.path}"
+        isDiff -> "diff:${entry.path}"
+        else -> entry.path
+    }
 
-    val title: String get() = if (isDiff) "Diff: ${entry.name}" else entry.name
+/** The commit a diff tab shows, instead of the working tree's changes: [oldPath] is the former path of a rename. */
+data class CommitDiffTarget(val hash: String, val shortHash: String, val oldPath: String? = null)
+
+@Stable
+class EditorTab(
+    val entry: FileEntry,
+    val relativePath: String,
+    val isDiff: Boolean = false,
+    /** For a diff tab, the commit whose change it shows; null for the uncommitted changes. */
+    val commit: CommitDiffTarget? = null,
+) {
+    /** Identity of the tab: a file can be open as text, as its uncommitted diff, and as the diff of each commit. */
+    val key: String get() = tabKey(entry, isDiff, commit)
+
+    val title: String
+        get() =
+            when {
+                commit != null -> "${entry.name} @ ${commit.shortHash}"
+                isDiff -> "Diff: ${entry.name}"
+                else -> entry.name
+            }
 
     var status: TabStatus by mutableStateOf(TabStatus.Loading)
         internal set

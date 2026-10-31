@@ -42,6 +42,9 @@ class ProjectState(
                 refreshGitStatus(reloadEditors = false)
             },
             diffs = { entry -> services.git.diff(root.path, tree.relativePath(entry)) },
+            commitDiffs = { entry, commit ->
+                services.git.commitDiff(root.path, commit.hash, tree.relativePath(entry), commit.oldPath)
+            },
             blames = { entry -> services.git.blame(root.path, tree.relativePath(entry)) },
         )
     val fileIndex = FileIndex(root, services.search, scope)

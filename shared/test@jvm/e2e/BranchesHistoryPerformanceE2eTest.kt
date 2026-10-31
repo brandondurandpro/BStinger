@@ -9,7 +9,9 @@ import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.v2.runComposeUiTest
+import org.example.kotlineditor.model.DiffKind
 import org.example.kotlineditor.state.BranchSection
+import org.example.kotlineditor.state.TabStatus
 import org.example.kotlineditor.ui.ItemTags
 import org.example.kotlineditor.ui.Tags
 import kotlin.test.AfterTest
@@ -158,5 +160,40 @@ class BranchesHistoryPerformanceE2eTest {
 
             measureSearch(app)
             measureBranchList()
+        }
+
+    // A file of [count] lines; with [changed], every tenth line differs.
+    private fun bigFile(count: Int, changed: Boolean): String =
+        (0 until count).joinToString("\n", postfix = "\n") { index ->
+            if (changed && index % 10 == 0) "changed $index" else "line $index"
+        }
+
+    @Test
+    fun `the diff of a commit that rewrote a file of thousands of lines`() =
+        runComposeUiTest {
+            project.commitAll()
+            val lines = 20_000
+            project.file("big.txt", bigFile(lines, changed = false))
+            project.git("add", "-A")
+            project.git("commit", "-q", "-m", "big file")
+            // Every tenth line changes: thousands of hunks.
+            project.file("big.txt", bigFile(lines, changed = true))
+            project.git("commit", "-q", "-am", "rewrite")
+            val head = project.git("rev-parse", "HEAD").trim()
+            val app = launchWithProject(project)
+            awaitCondition { app.project.gitBranch != null }
+            onNodeWithTag(Tags.TOOL_BRANCHES).performClick()
+            awaitTag(ItemTags.historyCommit(head)).performClick()
+            awaitTag(ItemTags.historyFile("big.txt"))
+
+            val editor = app.project.editor
+            measure("open the diff of a commit that changed 2000 lines", budgetMillis = 8_000, budgetMegabytes = 300) {
+                onNodeWithTag(ItemTags.historyFile("big.txt")).performClick()
+                awaitCondition(timeout = 20_000) { editor.activeTab?.status is TabStatus.Diff }
+                awaitTag(Tags.DIFF)
+                renderFrame()
+            }
+            val diff = (editor.activeTab!!.status as TabStatus.Diff).lines
+            assertEquals(lines / 10, diff.count { it.kind == DiffKind.Added })
         }
 }
