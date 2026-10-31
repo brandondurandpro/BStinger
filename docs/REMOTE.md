@@ -6,12 +6,17 @@ work happens next to the sources; only the editor state and the results travel.
 ## Using it
 
 1. Open **Remote Development** on the welcome screen.
-2. Enter the host, optionally the user, port and identity file, and the project directory on the host.
+2. Enter the host, optionally the user, port and identity file. Leave the project directory empty to browse it.
 3. **Connect**.
 
 The first connection installs the matching server under `~/.kotlin-editor/server` on the host, starts a per-user
 daemon and opens an SSH tunnel. Later connections reuse the daemon; the SSH link is supervised and restarted when
 the network comes back.
+
+If no project directory was given, a folder browser opens in the **SSH user's home**. Click a folder to list its
+subfolders, use **Up** and **Home**, type an absolute path (or `~`) in the path field, and **Open** the folder
+shown. The project view's *Open…* menu starts the same browser in the current project. Nothing is written on the
+host while browsing.
 
 Authentication is key or `ssh-agent` only: the client runs OpenSSH in batch mode, so it never asks for a password.
 `~/.ssh/config`, `ProxyJump`, known hosts and hardware keys therefore work as with `ssh` itself.
@@ -84,8 +89,10 @@ IDE ── RpcClient ── 127.0.0.1:<local port> ── ssh -N -L ── 127.0
 
 ## Tests
 
-`RemoteDevelopmentE2eTest`, `RemoteDevelopmentChaosE2eTest` and `RemoteDevelopmentPerformanceE2eTest` run a real
-Apache MINA SSH server on the test machine, point its `HOME` at a temporary directory and connect the real OpenSSH
-client to it. They cover install/daemon/tunnel, editing and saving, cancellation and validation, disconnecting,
-tunnel restarts, a changed host key, and a 5,000-line file on a 200-file project. `RemoteTransportTest` covers the
-token surviving a daemon restart and strict host-key checking.
+`RemoteDevelopmentE2eTest`, `RemoteDevelopmentChaosE2eTest`, `RemoteFolderPickerE2eTest` and
+`RemoteDevelopmentPerformanceE2eTest` run a real Apache MINA SSH server on the test machine, point its `HOME` at a
+temporary directory and connect the real OpenSSH client to it. They cover install/daemon/tunnel, editing and saving,
+cancellation and validation, disconnecting, tunnel restarts, a changed host key, the folder browser (SSH home,
+click-through navigation, path errors, opening the chosen folder), a listing that completes after a reconnection,
+1,000 folders, and a 5,000-line file on a 200-file project. `RemoteTransportTest` covers the token surviving a
+daemon restart and strict host-key checking.

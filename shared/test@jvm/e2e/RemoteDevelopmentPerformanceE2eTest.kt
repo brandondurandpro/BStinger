@@ -1,7 +1,12 @@
 package org.example.kotlineditor.e2e
 
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performClick
+import org.example.kotlineditor.ui.ItemTags
 import org.example.kotlineditor.ui.Tags
+import java.nio.file.Files
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -48,4 +53,27 @@ class RemoteDevelopmentPerformanceE2eTest {
                 renderFrame()
             }
         }
+
+    @Test
+    fun `listing a thousand remote folders stays interactive`() {
+        if (!RemoteTestEnvironment.available) return
+        val many = Files.createTempDirectory(RemoteTestEnvironment.home, "many-")
+        try {
+            repeat(1_000) { Files.createDirectory(many.resolve("dir$it")) }
+            remoteUiTest {
+                launchApp()
+                connectRemoteTo(RemoteTestEnvironment, null)
+                awaitTag(Tags.FOLDER_PICKER, timeout = 60_000)
+                measure("list 1000 remote folders", budgetMillis = 10_000, budgetMegabytes = 256) {
+                    onNodeWithTag(ItemTags.folderEntry(many.toString())).performClick()
+                    awaitTag(Tags.FOLDER_PICKER_COUNT)
+                    onNodeWithTag(Tags.FOLDER_PICKER_COUNT)
+                        .assertTextContains("1000 folders", substring = true)
+                    renderFrame()
+                }
+            }
+        } finally {
+            many.toFile().deleteRecursively()
+        }
+    }
 }

@@ -40,7 +40,8 @@ fun RemoteDialog(app: AppState, dialog: RemoteDialogState) {
 private fun DialogHeader() {
     Label("Remote Development", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
     Label(
-        "Run the server on another machine over SSH. The server is installed once, then reused.",
+        "Run the server on another machine over SSH. The server is installed once, then reused. " +
+            "Leave the project empty to browse the host.",
         color = IdeColors.TextSecondary,
         fontSize = 12.sp,
         modifier = Modifier.padding(top = 4.dp, bottom = 12.dp),
@@ -108,7 +109,7 @@ private fun ProjectField(dialog: RemoteDialogState, onConnect: () -> Unit, onCha
             dialog.projectPath,
             { onChange(dialog.copy(projectPath = it)) },
             Modifier.fillMaxWidth().testTag(Tags.REMOTE_PROJECT),
-            placeholder = "/home/me/project",
+            placeholder = "Leave empty to browse the host",
             onSubmit = onConnect,
         )
     }

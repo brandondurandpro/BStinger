@@ -7,6 +7,7 @@ import androidx.compose.runtime.key
 import androidx.compose.ui.Modifier
 import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.Screen
+import org.example.kotlineditor.ui.FolderPickerDialog
 import org.example.kotlineditor.ui.IdeTheme
 import org.example.kotlineditor.ui.ProjectScreen
 import org.example.kotlineditor.ui.RemoteDialog
@@ -21,6 +22,7 @@ fun App(state: AppState) {
                 is Screen.Project -> key(screen.project) { ProjectScreen(state, screen.project) }
             }
             state.remoteDialog?.let { RemoteDialog(state, it) }
+            state.folderPicker?.let { FolderPickerDialog(state, it) }
         }
     }
 }

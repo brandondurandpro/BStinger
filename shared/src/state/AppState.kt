@@ -50,6 +50,10 @@ class AppState(
     var remoteDialog: RemoteDialogState? by mutableStateOf(null)
         private set
 
+    /** The remote folder picker, when open. */
+    var folderPicker: FolderPickerState? by mutableStateOf(null)
+        private set
+
     /** What the remote connection is doing, while it is being established. */
     var remoteStatus: String? by mutableStateOf(null)
         private set
@@ -64,6 +68,9 @@ class AppState(
 
     /** `user@host` of the remote session, or null when the server is local. */
     val remoteLabel: String? get() = remoteSession?.label
+
+    /** Home directory of the SSH user, or null when the server is local. */
+    val remoteHome: String? get() = remoteSession?.home
 
     /** Why the remote SSH tunnel refuses to connect, or null. */
     val remoteFailure: StateFlow<String?> get() = remoteSession?.failure ?: noRemoteFailure
@@ -165,6 +172,7 @@ class AppState(
     fun dispose() {
         remoteJob?.cancel()
         remoteJob = null
+        closeFolderPicker()
         remoteSession?.close()
         remoteSession = null
     }
@@ -176,6 +184,7 @@ class AppState(
         remoteJob = null
         remoteDialog = null
         remoteStatus = null
+        closeFolderPicker()
         scope.launch {
             (screen as? Screen.Project)?.project?.let { saveAndDispose(it) }
             remoteSession?.close()
@@ -197,7 +206,7 @@ class AppState(
         screen = Screen.Welcome
         // Load before opening the project, so its own addition to the list is not overwritten by the load.
         loadRecentsNow()
-        target.projectPath?.let(::openProject)
+        if (target.projectPath != null) openProject(target.projectPath) else browseForProject()
     }
 
     private fun reloadRecents() {
@@ -233,8 +242,28 @@ class AppState(
         }
     }
 
+    /**
+     * Opens a project: the native chooser for the local server, or the remote folder browser (starting in the SSH
+     * user's home, or in the open project) for a remote one.
+     */
     fun browseForProject() {
-        scope.launch { services.directoryPicker.pickDirectory()?.let(::openProject) }
+        if (isRemote) {
+            closeFolderPicker()
+            val start = (screen as? Screen.Project)?.project?.root?.path ?: remoteHome ?: "/"
+            folderPicker = FolderPickerState(services.fileSystem, scope, start, remoteHome)
+        } else {
+            scope.launch { services.directoryPicker.pickDirectory()?.let(::openProject) }
+        }
+    }
+
+    fun closeFolderPicker() {
+        folderPicker?.dispose()
+        folderPicker = null
+    }
+
+    fun openPickedFolder(path: String) {
+        closeFolderPicker()
+        openProject(path)
     }
 
     fun removeRecent(path: String) {
@@ -249,6 +278,7 @@ class AppState(
 
     /** Saves everything, stops the remote session, then calls [onDone] (used when the window is closed). */
     fun exit(onDone: () -> Unit) {
+        closeFolderPicker()
         scope.launch {
             (screen as? Screen.Project)?.project?.let { saveAndDispose(it) }
             runCatching { preferenceStore.save(currentPreferences()) }

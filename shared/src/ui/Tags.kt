@@ -20,6 +20,16 @@ object Tags {
     const val REMOTE_ERROR = "remote.error"
     const val REMOTE_DISCONNECT = "remote.disconnect"
     const val STATUS_REMOTE = "status.remote"
+    const val FOLDER_PICKER = "folder.picker"
+    const val FOLDER_PICKER_PATH = "folder.picker.path"
+    const val FOLDER_PICKER_UP = "folder.picker.up"
+    const val FOLDER_PICKER_HOME = "folder.picker.home"
+    const val FOLDER_PICKER_OPEN = "folder.picker.open"
+    const val FOLDER_PICKER_CANCEL = "folder.picker.cancel"
+    const val FOLDER_PICKER_ERROR = "folder.picker.error"
+    const val FOLDER_PICKER_EMPTY = "folder.picker.empty"
+    const val FOLDER_PICKER_COUNT = "folder.picker.count"
+    const val FOLDER_PICKER_LOADING = "folder.picker.loading"
     const val PROJECT = "project"
     const val PROJECT_WIDGET = "project.widget"
     const val PROJECT_CLOSE = "project.close"
@@ -222,6 +232,8 @@ object ItemTags {
     fun recentProject(path: String) = "recent:$path"
 
     fun recentRemove(path: String) = "recent.remove:$path"
+
+    fun folderEntry(path: String) = "folder.picker.entry:$path"
 
     fun terminalLine(index: Int) = "terminal.line:$index"
 

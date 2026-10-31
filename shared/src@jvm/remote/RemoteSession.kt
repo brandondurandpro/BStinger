@@ -17,16 +17,20 @@ import org.example.kotlineditor.state.RemoteFactory
  */
 class RemoteSession(
     val target: SshTarget,
-    val remote: RemoteTarget,
+    val host: RemoteHost,
     val server: RemoteServerInfo,
     val tunnel: RemoteTunnel,
     val client: RpcClient,
     /** Menus and pickers that ask for a path, answered by the server. */
     val directoryPicker: DirectoryPicker,
 ) : RemoteConnection {
+    val remote: RemoteTarget get() = host.target
+
     override val services: AppServices by lazy { client.appServices(directoryPicker) }
 
     override val label: String get() = target.destination
+
+    override val home: String get() = host.home
 
     override val failure get() = tunnel.failure
 
@@ -52,11 +56,11 @@ class RemoteSession(
             val ssh = SshClient(target)
             val installer = RemoteInstaller(ssh)
             onProgress("Checking ${target.destination}")
-            val remote = installer.detectTarget()
-            onProgress("Preparing the server on ${remote.id}")
+            val host = installer.detectHost()
+            onProgress("Preparing the server on ${host.target.id}")
             val server =
                 try {
-                    installer.ensureServer(remote, onProgress)
+                    installer.ensureServer(host.target, onProgress)
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (e: Exception) {
@@ -74,7 +78,7 @@ class RemoteSession(
                     client.awaitConnected()
                     currentCoroutineContext().ensureActive()
                     onProgress("Connected")
-                    return RemoteSession(target, remote, server, tunnel, client, directoryPicker)
+                    return RemoteSession(target, host, server, tunnel, client, directoryPicker)
                 } catch (e: Exception) {
                     client.close()
                     throw e

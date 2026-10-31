@@ -15,6 +15,9 @@ interface RemoteConnection {
     /** `user@host`, shown in the status bar. */
     val label: String
 
+    /** Home directory of the SSH user on the host; folder browsing starts there. */
+    val home: String
+
     /** Why the SSH tunnel cannot be established any more, or null while it is healthy. */
     val failure: StateFlow<String?>
 

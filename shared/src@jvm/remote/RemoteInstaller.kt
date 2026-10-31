@@ -7,6 +7,9 @@ import java.util.Properties
 /** A server running on the remote host, reachable on its loopback through the SSH tunnel. */
 data class RemoteServerInfo(val host: String, val port: Int, val token: String, val pid: Long)
 
+/** What the remote machine is, and the home directory of the SSH user (where folder browsing starts). */
+data class RemoteHost(val target: RemoteTarget, val home: String)
+
 /**
  * Installs the server bundle on the remote host and keeps its per-user daemon alive.
  *
@@ -20,8 +23,8 @@ data class RemoteServerInfo(val host: String, val port: Int, val token: String, 
  */
 @Suppress("StringShouldBeRawString") // the SSH commands mix $HOME, quotes and Kotlin interpolation
 class RemoteInstaller(private val ssh: SshClient, private val version: String = Protocol.APP_VERSION) {
-    /** Operating system and CPU of the remote host. */
-    fun detectTarget(): RemoteTarget {
+    /** Operating system, CPU and SSH home directory of the remote host. */
+    fun detectHost(): RemoteHost {
         val unix =
             ssh.exec(
                 "printf '%s\\n' \"\$(uname -s)\" \"\$(uname -m)\" \"\$HOME\"",
@@ -31,7 +34,11 @@ class RemoteInstaller(private val ssh: SshClient, private val version: String = 
             val lines = unix.output.lines().map { it.trim() }
             val os = lines.getOrNull(0)?.let(RemoteTarget::osOf)
             val arch = lines.getOrNull(1)?.let(RemoteTarget::archOf)
-            if (os != null && arch != null) return RemoteTarget(os, arch)
+            if (os != null && arch != null) {
+                val reported = lines.getOrNull(2)?.trim().orEmpty()
+                val home = if (reported.startsWith("/")) reported else "/"
+                return RemoteHost(RemoteTarget(os, arch), home)
+            }
         }
         // Windows OpenSSH runs cmd.exe by default, where uname does not exist.
         val windows =
@@ -44,7 +51,12 @@ class RemoteInstaller(private val ssh: SshClient, private val version: String = 
         if (windows.code == 0) {
             val lines = windows.output.lines().map { it.trim() }
             val arch = lines.getOrNull(0)?.let(RemoteTarget::archOf)
-            if (arch != null) return RemoteTarget(RemoteTarget.WINDOWS, arch)
+            if (arch != null) {
+                return RemoteHost(
+                    RemoteTarget(RemoteTarget.WINDOWS, arch),
+                    lines.getOrNull(2)?.ifBlank { "/" } ?: "/",
+                )
+            }
         }
         throw RemoteException(
             "Cannot determine the remote operating system. uname said: ${unix.error.ifBlank { unix.output }}",
