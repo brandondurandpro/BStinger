@@ -11,6 +11,7 @@ object Tags {
     const val PROJECT_WIDGET = "project.widget"
     const val PROJECT_CLOSE = "project.close"
     const val PROJECT_OPEN_OTHER = "project.openOther"
+    const val PROJECT_MENU = "project.menu"
     const val GIT_BRANCH = "git.branch"
     const val PROJECT_PANEL = "project.panel"
     const val GIT_PANEL = "git.panel"
@@ -84,6 +85,8 @@ object Tags {
     const val STATUS_CARET = "status.caret"
     const val STATUS_PATH = "status.path"
     const val STATUS_CONNECTION = "status.connection"
+    const val STATUS_OPENING = "status.opening"
+    const val STATUS_ERROR = "status.error"
     const val GOTO_FILE = "gotoFile"
     const val RECENT_FILES = "recentFiles"
     const val GOTO_FILE_INPUT = "gotoFile.input"
@@ -163,6 +166,9 @@ object ItemTags {
     fun recentProject(path: String) = "recent:$path"
 
     fun recentRemove(path: String) = "recent.remove:$path"
+
+    /** A recent project in the menu of the toolbar's project name, which switches to it. */
+    fun switchProject(path: String) = "project.switch:$path"
 
     fun terminalLine(index: Int) = "terminal.line:$index"
 

@@ -27,6 +27,7 @@ import org.example.kotlineditor.state.PreferenceStore
 import org.example.kotlineditor.state.ProjectState
 import org.example.kotlineditor.state.Screen
 import org.example.kotlineditor.testkit.ChaosProxy
+import org.example.kotlineditor.ui.ItemTags
 import org.example.kotlineditor.ui.Tags
 import org.example.kotlineditor.ui.TextClipboard
 import java.nio.file.Files
@@ -316,3 +317,19 @@ fun ComposeUiTest.awaitReconnecting() {
 /** Waits until the status bar no longer warns about the server. */
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.awaitReconnected() = awaitNoTag(Tags.STATUS_CONNECTION)
+
+/** Opens [path] from the list of recent projects of the welcome screen, and waits for its tree. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.openRecentFromWelcome(path: String) {
+    awaitTag(ItemTags.recentProject(path)).performClick()
+    awaitTag(Tags.PROJECT)
+    awaitCondition { onAllNodes(hasTestTagPrefix("tree:")).fetchSemanticsNodes().isNotEmpty() }
+}
+
+/** Clicks the project name in the toolbar, then [path] among the recent projects of its menu. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.switchProjectTo(path: String) {
+    onNodeWithTag(Tags.PROJECT_WIDGET).performClick()
+    awaitTag(ItemTags.switchProject(path)).performClick()
+    awaitNoTag(Tags.PROJECT_MENU)
+}
