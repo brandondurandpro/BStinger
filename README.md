@@ -35,7 +35,7 @@ A lightweight IDE in the style of IntelliJ IDEA (New UI, dark theme), written wi
   togglable (`Alt+1`), *Select in Project View* (`Alt+F1`).
 - **Git panel** (`Alt+9`): changed files against `HEAD` below the project view, with IntelliJ-style status letters and
   colors; a click opens the diff of the file in a tab (green additions, red removals, old and new line numbers),
-  switchable to a side-by-side view. The editor gutter marks added, modified and removed lines, *Annotate* shows the
+  switchable to a side-by-side view; its *Open File* button (`F4`) opens the file at its first change. The editor gutter marks added, modified and removed lines, *Annotate* shows the
   blame (author and date), and the panel commits, switches branches, pulls and pushes.
   Untracked files show as additions; the panel refreshes after a save or with its refresh button.
 - **Tool windows**: *Project*, *Git* and *Terminal* can be shown/hidden (`Alt+1`, `Alt+9`, `Alt+F12`), resized with

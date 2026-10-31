@@ -271,4 +271,28 @@ class GitChaosE2eTest {
             assertEquals("Committed", app.project.gitMessage)
             assertEquals(2, project.commitCount(), "the retried commit must not run twice")
         }
+
+    @Test
+    fun `Open File from a diff while the network is down shows the file once it is back`() =
+        runComposeUiTest {
+            project.commitAll()
+            project.file("README.md", "# Changed\n")
+            val app = launchWithProject(project, chaos = true)
+            onNodeWithTag(Tags.TOOL_GIT).performClick()
+            awaitTag(ItemTags.gitChange("README.md")).performClick()
+            awaitTag(Tags.DIFF_OPEN_FILE)
+            app.network.goDown()
+            awaitReconnecting()
+            onNodeWithTag(Tags.DIFF_OPEN_FILE).performClick()
+            awaitTag(Tags.tab("README.md"))
+            // No content is made up while the file cannot be read.
+            val editor = app.project.editor
+            assertEquals(null, editor.activeTab?.document)
+            app.network.comeBack()
+            awaitReconnected()
+            awaitCondition {
+                val document = editor.activeTab?.document
+                document != null && document.lines.firstOrNull() == "# Changed"
+            }
+        }
 }

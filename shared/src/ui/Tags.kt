@@ -82,6 +82,7 @@ object Tags {
     const val WORKSPACE = "workspace"
     const val DIFF = "diff"
     const val DIFF_TOOLBAR = "diff.toolbar"
+    const val DIFF_OPEN_FILE = "diff.openFile"
     const val DIFF_LAYOUT_TOGGLE = "diff.layoutToggle"
     const val DIFF_SPLIT = "diff.split"
     const val TERMINAL = "terminal"

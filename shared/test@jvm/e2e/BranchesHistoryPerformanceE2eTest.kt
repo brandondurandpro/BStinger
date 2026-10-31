@@ -195,5 +195,13 @@ class BranchesHistoryPerformanceE2eTest {
             }
             val diff = (editor.activeTab!!.status as TabStatus.Diff).lines
             assertEquals(lines / 10, diff.count { it.kind == DiffKind.Added })
+
+            measure("open the file of $lines lines from its diff", budgetMillis = 5_000, budgetMegabytes = 200) {
+                onNodeWithTag(Tags.DIFF_OPEN_FILE).performClick()
+                awaitCondition(timeout = 20_000) { editor.activeTab?.document != null }
+                renderFrame()
+            }
+            val document = editor.activeTab!!.document!!
+            assertEquals(lines, document.lines.size - 1)
         }
 }

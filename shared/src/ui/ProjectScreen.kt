@@ -46,6 +46,7 @@ import org.example.kotlineditor.state.TabStatus
 import org.example.kotlineditor.state.TextPos
 import org.example.kotlineditor.state.findAll
 import org.example.kotlineditor.state.gotoDeclaration
+import org.example.kotlineditor.state.openFileOfDiff
 import org.example.kotlineditor.state.saveAll
 import org.example.kotlineditor.state.synchronize
 import org.example.kotlineditor.state.visualColumn
@@ -226,6 +227,7 @@ private fun TabContent(
                 status.lines,
                 sideBySide = project.diffSideBySide,
                 onToggleSideBySide = { project.diffSideBySide = !project.diffSideBySide },
+                onOpenFile = { project.openFileOfDiff(tab) },
                 modifier = Modifier.fillMaxSize(),
             )
         }
