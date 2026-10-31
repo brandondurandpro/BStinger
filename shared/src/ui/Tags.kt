@@ -142,6 +142,10 @@ object Tags {
 
     fun terminalTab(number: Int) = "terminal.tab:$number"
 
+    fun terminalTabName(number: Int) = "terminal.tab.name:$number"
+
+    fun terminalTabTooltip(number: Int) = "terminal.tab.tooltip:$number"
+
     fun terminalTabClose(number: Int) = "terminal.tab.close:$number"
 
     fun dockSplitter(dock: String) = "dock.splitter:$dock"

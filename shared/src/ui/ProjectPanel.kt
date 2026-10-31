@@ -3,11 +3,9 @@ package org.example.kotlineditor.ui
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.TooltipArea
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,7 +18,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import org.example.kotlineditor.state.ProjectState
 import org.example.kotlineditor.state.ToolWindow
 
@@ -54,17 +51,5 @@ private fun AutoSelectToggle(project: ProjectState) {
         ) {
             LocateIcon(color = if (on) IdeColors.Text else IdeColors.TextSecondary)
         }
-    }
-}
-
-@Composable
-private fun Tooltip(text: String) {
-    Box(
-        Modifier
-            .background(IdeColors.Popup, RoundedCornerShape(4.dp))
-            .border(1.dp, IdeColors.Separator, RoundedCornerShape(4.dp))
-            .padding(6.dp),
-    ) {
-        Label(text, fontSize = 12.sp)
     }
 }
