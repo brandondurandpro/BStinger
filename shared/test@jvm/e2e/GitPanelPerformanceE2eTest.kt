@@ -73,4 +73,28 @@ class GitPanelPerformanceE2eTest {
                 renderFrame()
             }
         }
+
+    /**
+     * Latency of a tick as the user feels it, on the short list of a few changes: from the click to the row
+     * recomposed and the frame drawn. There is no animation of ours beyond the ripple of the click.
+     */
+    @Test
+    fun `a tick on a short list is immediate`() =
+        runComposeUiTest {
+            project.commitAll()
+            project.file("README.md", "# Changed\n")
+            project.file("build.gradle.kts", "moved\n")
+            project.file("notes.txt", "new\n")
+            val app = launchWithProject(project)
+            onNodeWithTag(Tags.TOOL_GIT).performClick()
+            awaitTag(ItemTags.gitChangeCheck("README.md"))
+
+            measure("tick one of 3 changes, frame drawn", budgetMillis = 200, budgetMegabytes = 10) {
+                onNodeWithTag(ItemTags.gitChangeCheck("README.md")).performClick()
+                awaitCondition { app.project.selectedForCommit == setOf("README.md") }
+                onNodeWithTag(ItemTags.gitChangeCheck("README.md")).performClick()
+                awaitCondition { app.project.selectedForCommit.isEmpty() }
+                renderFrame()
+            }
+        }
 }

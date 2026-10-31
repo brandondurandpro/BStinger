@@ -366,13 +366,15 @@ private fun BranchName(branch: GitBranchInfo, query: String, modifier: Modifier 
 
 @Composable
 internal fun BranchCheckbox(checked: Boolean, modifier: Modifier = Modifier, size: Dp = 18.dp, onClick: () -> Unit) {
+    // No ripple: a checkbox flips state, and a fading rectangle over it reads as a slow tick.
+    val interaction = remember { MutableInteractionSource() }
     val shape = RoundedCornerShape(4.dp)
     Box(
         modifier
             .size(size)
             .background(if (checked) IdeColors.Accent else Color.Transparent, shape)
             .border(1.dp, if (checked) IdeColors.Accent else IdeColors.InputBorder, shape)
-            .clickable(onClick = onClick),
+            .clickable(interaction, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         if (checked) CheckIcon(Modifier.size(size * 2 / 3), color = Color.White)
