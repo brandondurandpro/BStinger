@@ -115,6 +115,54 @@ class CliGitClient : GitClient {
     override suspend fun push(root: String): String =
         withContext(Dispatchers.IO) { runGit(root, NETWORK_TIMEOUT_SECONDS, "push") }
 
+    // `--porcelain` would hide the summary the IDE shows; Git prints it on stderr, so the output is often empty.
+    override suspend fun pushBranch(root: String, branch: String): String =
+        withContext(Dispatchers.IO) {
+            requireLocalBranch(root, branch)
+            val upstream = upstreamOf(root, branch)
+            if (upstream == null) {
+                val refspec = "refs/heads/$branch:refs/heads/$branch"
+                runGit(root, NETWORK_TIMEOUT_SECONDS, "push", "-u", DEFAULT_REMOTE, refspec)
+            } else {
+                runGit(root, NETWORK_TIMEOUT_SECONDS, "push", upstream.remote, "refs/heads/$branch:${upstream.ref}")
+            }
+        }
+
+    // Fetching into the branch updates it only by fast-forward (no `+`), and Git refuses to touch a branch that is
+    // checked out, here or in another worktree: the current branch goes through a real pull.
+    override suspend fun pullBranch(root: String, branch: String): String =
+        withContext(Dispatchers.IO) {
+            requireLocalBranch(root, branch)
+            val current = gitOutput(root, "symbolic-ref", "--short", "-q", "HEAD")?.firstOrNull()?.trim()
+            if (current == branch) {
+                runGit(root, NETWORK_TIMEOUT_SECONDS, "pull", "--ff-only")
+            } else {
+                val upstream = upstreamOf(root, branch) ?: throw IOException("$branch tracks no remote branch")
+                runGit(root, NETWORK_TIMEOUT_SECONDS, "fetch", upstream.remote, "${upstream.ref}:refs/heads/$branch")
+            }
+        }
+
+    private fun requireLocalBranch(root: String, branch: String) {
+        if (gitOutput(root, "show-ref", "--verify", "--quiet", "refs/heads/$branch") == null) {
+            throw IOException("No local branch $branch")
+        }
+    }
+
+    // Remote and remote ref (`refs/heads/main`) that [branch] tracks, or null when it tracks none.
+    private fun upstreamOf(root: String, branch: String): Upstream? {
+        val line =
+            gitOutput(
+                root,
+                "for-each-ref",
+                "--format=%(upstream:remotename)%00%(upstream:remoteref)",
+                "refs/heads/$branch",
+            )?.firstOrNull()
+        val (remote, ref) = line?.split('\u0000')?.takeIf { it.size == 2 } ?: return null
+        return if (remote.isBlank() || ref.isBlank()) null else Upstream(remote, ref)
+    }
+
+    private data class Upstream(val remote: String, val ref: String)
+
     /**
      * Kept until HEAD or the file changes: blaming a large file takes git hundreds of milliseconds, and the editor
      * asks again every time the window regains focus.
@@ -192,6 +240,7 @@ class CliGitClient : GitClient {
         const val GONE_TRACK = "[gone]"
         const val BRANCH_FIELD_COUNT = 4
         const val DELETE_CHUNK_SIZE = 50
+        const val DEFAULT_REMOTE = "origin"
         const val TRACK_COUNT_GROUP = 1
         const val BRANCH_FORMAT = "%(refname:short)%00%(HEAD)%00%(upstream:short)%00%(upstream:track)"
         val AHEAD_TRACK = Regex("""ahead (\d+)""")

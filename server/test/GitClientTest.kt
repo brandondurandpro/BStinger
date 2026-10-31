@@ -162,6 +162,98 @@ class GitClientTest {
             assertTrue("busy" in left && "free" !in left, "Branches left: $left")
         }
 
+    // The project tracks a bare remote on its default branch, and a clone that can advance the remote.
+    private fun projectWithRemote(): Pair<String, Path> {
+        val remote = temporaryDirectory("git-remote")
+        runGit(remote, "init", "-q", "--bare")
+        root.resolve("a.kt").writeText("one\n")
+        commitAll()
+        val default = git("rev-parse", "--abbrev-ref", "HEAD").trim()
+        git("remote", "add", "origin", remote.toString())
+        git("push", "-q", "-u", "origin", "HEAD")
+        return default to remote
+    }
+
+    private fun cloneOf(remote: Path): Path {
+        val clone = temporaryDirectory("git-clone")
+        runGit(clone, "clone", "-q", "-c", "core.autocrlf=false", remote.toString(), ".")
+        runGit(clone, "config", "user.name", "Test")
+        runGit(clone, "config", "user.email", "test@example.com")
+        return clone
+    }
+
+    @Test
+    fun `a branch that is not checked out is pushed, and one without upstream gets one on origin`() =
+        runBlocking {
+            val (default, remote) = projectWithRemote()
+            git("checkout", "-q", "-b", "feature")
+            git("push", "-q", "-u", "origin", "feature")
+            root.resolve("b.kt").writeText("feature\n")
+            git("add", "-A")
+            git("commit", "-q", "-m", "feature work")
+            git("branch", "fresh")
+            git("checkout", "-q", default)
+            val client = CliGitClient()
+
+            client.pushBranch(root.toString(), "feature")
+            assertEquals(git("rev-parse", "feature").trim(), runGit(remote, "rev-parse", "feature").trim())
+            // Pushing again changes nothing and is not an error: a retry after a lost answer is safe.
+            client.pushBranch(root.toString(), "feature")
+
+            client.pushBranch(root.toString(), "fresh")
+            assertEquals("origin/fresh", git("rev-parse", "--abbrev-ref", "fresh@{upstream}").trim())
+            assertEquals(default, client.branch(root.toString()))
+        }
+
+    @Test
+    fun `a branch that is not checked out is fast-forwarded, and a diverged one is refused`() =
+        runBlocking {
+            val (default, remote) = projectWithRemote()
+            git("branch", "feature")
+            git("push", "-q", "-u", "origin", "feature")
+            git("branch", "local-only")
+            val clone = cloneOf(remote)
+            runGit(clone, "checkout", "-q", "feature")
+            clone.resolve("remote.kt").writeText("remote\n")
+            runGit(clone, "add", "-A")
+            runGit(clone, "commit", "-q", "-m", "remote work")
+            runGit(clone, "push", "-q")
+            val client = CliGitClient()
+
+            client.pullBranch(root.toString(), "feature")
+            assertEquals(runGit(remote, "rev-parse", "feature").trim(), git("rev-parse", "feature").trim())
+            assertEquals(default, client.branch(root.toString()))
+            assertFalse(root.resolve("remote.kt").toFile().exists(), "the working tree must not change")
+            client.pullBranch(root.toString(), "feature")
+
+            // A local commit on top of an older remote commit: the branches diverged, nothing is merged.
+            runGit(clone, "commit", "-q", "--allow-empty", "-m", "more remote work")
+            runGit(clone, "push", "-q")
+            git("checkout", "-q", "feature")
+            git("commit", "-q", "--allow-empty", "-m", "local work")
+            git("checkout", "-q", default)
+            val before = git("rev-parse", "feature").trim()
+            assertFailsWith<IOException> { client.pullBranch(root.toString(), "feature") }
+            assertEquals(before, git("rev-parse", "feature").trim())
+
+            val error = assertFailsWith<IOException> { client.pullBranch(root.toString(), "local-only") }
+            assertTrue("no remote" in error.message.orEmpty(), "${error.message}")
+        }
+
+    @Test
+    fun `pulling the current branch through pullBranch updates the working tree`() =
+        runBlocking {
+            val (default, remote) = projectWithRemote()
+            val clone = cloneOf(remote)
+            clone.resolve("remote.kt").writeText("remote\n")
+            runGit(clone, "add", "-A")
+            runGit(clone, "commit", "-q", "-m", "remote work")
+            runGit(clone, "push", "-q")
+
+            CliGitClient().pullBranch(root.toString(), default)
+            assertEquals("remote\n", root.resolve("remote.kt").readText())
+        }
+
     @Test
     fun `blame reports the author and the date of every line`() =
         runBlocking {

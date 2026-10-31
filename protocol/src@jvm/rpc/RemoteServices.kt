@@ -29,6 +29,7 @@ import org.example.kotlineditor.model.TextMatch
 import java.io.IOException
 
 private const val ROOT = "root"
+private const val BRANCH = "branch"
 private const val DIRECTORY = "directory"
 private const val ENTRY = "entry"
 private const val FILE = "file"
@@ -149,7 +150,7 @@ class RemoteGit(private val client: RpcClient) : GitClient {
     override suspend fun checkout(root: String, branch: String) {
         client.call(Method.GitCheckout) {
             put(ROOT, root)
-            put("branch", branch)
+            put(BRANCH, branch)
         }
     }
 
@@ -170,6 +171,24 @@ class RemoteGit(private val client: RpcClient) : GitClient {
     override suspend fun pull(root: String): String = client.call(Method.GitPull) { put(ROOT, root) }.string()
 
     override suspend fun push(root: String): String = client.call(Method.GitPush) { put(ROOT, root) }.string()
+
+    override suspend fun pushBranch(root: String, branch: String): String {
+        val output =
+            client.call(Method.GitPushBranch) {
+                put(ROOT, root)
+                put(BRANCH, branch)
+            }
+        return output.string()
+    }
+
+    override suspend fun pullBranch(root: String, branch: String): String {
+        val output =
+            client.call(Method.GitPullBranch) {
+                put(ROOT, root)
+                put(BRANCH, branch)
+            }
+        return output.string()
+    }
 
     override suspend fun blame(root: String, path: String): List<BlameLine> =
         client.call(Method.GitBlame) { file(root, path) }.blameLines()

@@ -90,6 +90,9 @@ class ProjectState(
     var pickedBranches: Set<String> by mutableStateOf(emptySet())
         private set
 
+    /** The last pull or push of a pinned branch, shown next to the toolbar chips; null once dismissed. */
+    var branchSync: BranchSync? by mutableStateOf(null)
+
     /** Whether the toolbar's branch picker is open. */
     var branchPickerOpen by mutableStateOf(false)
 
@@ -123,6 +126,11 @@ class ProjectState(
         toolWindows.toggle(window)
         if (window == ToolWindow.Terminal && toolWindows.isVisible(window)) terminal.ensureStarted()
         if (window == ToolWindow.Git && toolWindows.isVisible(window)) refreshGitStatus()
+    }
+
+    /** Shows [window] if it is hidden (a pinned branch's Show Changes opens the Git tool window). */
+    fun showToolWindow(window: ToolWindow) {
+        if (!toolWindows.isVisible(window)) toggleToolWindow(window)
     }
 
     fun showPopup(kind: PopupKind) {

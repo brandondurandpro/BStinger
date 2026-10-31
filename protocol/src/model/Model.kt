@@ -276,7 +276,7 @@ data class GitBranchInfo(
 }
 
 /** Git information about a project. */
-@Suppress("ComplexInterface") // one function per Git operation the IDE offers
+@Suppress("ComplexInterface", "TooManyFunctions") // one function per Git operation the IDE offers
 interface GitClient {
     /** Status of changed files, keyed by path relative to [root] with `/` separators; empty when not a repository. */
     suspend fun status(root: String): Map<String, GitFileStatus>
@@ -311,10 +311,23 @@ interface GitClient {
     /** Pushes the current branch; returns what Git printed. */
     suspend fun push(root: String): String
 
+    /**
+     * Pushes [branch] to the remote branch it tracks, or to a new branch of the same name on `origin` (which it then
+     * tracks) when it tracks none. Works for any local branch, without checking it out; returns what Git printed.
+     */
+    suspend fun pushBranch(root: String, branch: String): String
+
+    /**
+     * Brings [branch] up to date with the remote branch it tracks without checking it out: a fast-forward only,
+     * refused when the branches diverged. The current branch is pulled like [pull]. Returns what Git printed.
+     */
+    suspend fun pullBranch(root: String, branch: String): String
+
     /** Annotations (author and date) of each line of [path], empty when the file has no history. */
     suspend fun blame(root: String, path: String): List<BlameLine>
 
     /** No Git support: no status, no branch, no differences. */
+    @Suppress("TooManyFunctions")
     object None : GitClient {
         override suspend fun status(root: String) = emptyMap<String, GitFileStatus>()
 
@@ -335,6 +348,10 @@ interface GitClient {
         override suspend fun pull(root: String): String = ""
 
         override suspend fun push(root: String): String = ""
+
+        override suspend fun pushBranch(root: String, branch: String): String = ""
+
+        override suspend fun pullBranch(root: String, branch: String): String = ""
 
         override suspend fun blame(root: String, path: String): List<BlameLine> = emptyList()
     }

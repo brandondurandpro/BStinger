@@ -60,6 +60,8 @@ A lightweight IDE in the style of IntelliJ IDEA (New UI, dark theme), written wi
   commits each is ahead (`↑`) or behind (`↓`) its remote-tracking branch, and click a branch to check it out. Tick
   several branches to pin, unpin or delete them at once; a shortcut cleans up the branches whose remote is gone or
   missing. Every deletion first lists the branches it will delete, and each one can be spared.
+  The menu of a pinned branch pulls it (fast-forward only) or pushes it without checking it out, checks it out, or
+  opens the Git tool window; the toolbar shows the result.
 
 ### Architecture: client and server
 

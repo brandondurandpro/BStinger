@@ -320,6 +320,12 @@ enum class Method(
     /** Pushes the current branch. */
     GitPush("git/push", mutating = true),
 
+    /** Pushes a local branch, current or not. */
+    GitPushBranch("git/pushBranch", mutating = true),
+
+    /** Fast-forwards a local branch, current or not, to the remote branch it tracks. */
+    GitPullBranch("git/pullBranch", mutating = true),
+
     /** Clears the screen and the scrollback of a terminal. */
     TerminalClear("terminal/clear", mutating = true),
 }

@@ -1,5 +1,6 @@
 package org.example.kotlineditor.e2e
 
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
@@ -9,12 +10,15 @@ import androidx.compose.ui.test.hasScrollToNodeAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.ui.ItemTags
 import org.example.kotlineditor.ui.Tags
+import java.nio.file.Files
 import kotlin.io.path.createDirectories
 import kotlin.io.path.writeText
 import kotlin.test.AfterTest
@@ -151,6 +155,48 @@ class BranchPickerPerformanceE2eTest {
             assertTrue(localBranchCount() == 1, "branches left: ${localBranchCount()}")
             // Only the current branch, which cannot be deleted, stays pinned.
             awaitCondition { app.project.selectedBranches.size == 1 }
+        }
+
+    @Test
+    fun `the menu and a push of a pinned branch with thousands of branches pinned`() =
+        runComposeUiTest {
+            project.commitAll()
+            createBranches()
+            val remote = Files.createTempDirectory("kotlin-editor-remote")
+            try {
+                gitIn(remote, "init", "-q", "--bare")
+                project.git("remote", "add", "origin", remote.toString())
+                val app = launchWithProject(project)
+                awaitCondition { app.project.gitBranchInfos.size > BRANCHES }
+                onNodeWithTag(Tags.GIT_BRANCH).performClick()
+                awaitTag(Tags.BRANCH_PICKER)
+                onNodeWithTag(Tags.BRANCH_SELECT_ALL).performClick()
+                onNodeWithTag(Tags.BRANCH_PIN_PICKED).performClick()
+                awaitNoTag(Tags.BRANCH_PICK_COUNT)
+                onNodeWithTag(Tags.BRANCH_SEARCH).performClick()
+                onNodeWithTag(Tags.BRANCH_SEARCH).performKeyInput { pressKey(Key.Escape) }
+                awaitNoTag(Tags.BRANCH_PICKER)
+                val first = "monitored/branch-0000"
+                awaitTag(ItemTags.pinnedBranch(first))
+
+                measure("open the menu of a pinned branch", budgetMillis = 2_000, budgetMegabytes = 50) {
+                    onNodeWithTag(ItemTags.pinnedBranchMenu(first)).performClick()
+                    awaitTag(ItemTags.branchMenuPush(first))
+                    renderFrame()
+                }
+                // The push itself is one Git process; what is measured is the refresh of $BRANCHES branches after it.
+                measure("push a pinned branch, then refresh", budgetMillis = 10_000, budgetMegabytes = 150) {
+                    onNodeWithTag(ItemTags.branchMenuPush(first)).performClick()
+                    awaitCondition(timeout = 20_000) { app.project.branchSync?.running == false }
+                    awaitCondition { app.project.gitBranchInfos.any { it.name == first && it.hasUpstream } }
+                    renderFrame()
+                }
+                assertEquals(false, app.project.branchSync?.isError, app.project.branchSync?.text)
+                val chips = onAllNodes(hasTestTagPrefix("branch.pinned:")).fetchSemanticsNodes().size
+                assertTrue(chips < MAX_COMPOSED_ROWS, "composed toolbar chips: $chips")
+            } finally {
+                remote.toFile().deleteRecursively()
+            }
         }
 
     @Test

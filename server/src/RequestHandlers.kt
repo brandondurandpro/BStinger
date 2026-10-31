@@ -29,6 +29,7 @@ private const val PATH = "path"
 private const val DIRECTORY = "directory"
 private const val NAME = "name"
 private const val ROOT = "root"
+private const val BRANCH = "branch"
 private const val LIMIT = "limit"
 private const val TERMINAL = "terminal"
 
@@ -82,13 +83,15 @@ private fun gitHandlers(git: GitClient): Map<Method, Handler> =
         Method.GitBlame to { git.blame(root(), params.string(PATH)).blameJson() },
         Method.GitBranchDetails to { git.branchDetails(root()).branchesJson() },
         Method.GitBranches to { git.branches(root()).toJson() },
-        Method.GitCheckout to { nothing { git.checkout(root(), params.string("branch")) } },
+        Method.GitCheckout to { nothing { git.checkout(root(), params.string(BRANCH)) } },
         Method.GitDeleteBranches to {
             nothing { git.deleteBranches(root(), params.read("branches") { it.strings() }) }
         },
         Method.GitCommit to { nothing { git.commit(root(), params.string("message")) } },
         Method.GitPull to { JsonPrimitive(git.pull(root())) },
         Method.GitPush to { JsonPrimitive(git.push(root())) },
+        Method.GitPushBranch to { JsonPrimitive(git.pushBranch(root(), params.string(BRANCH))) },
+        Method.GitPullBranch to { JsonPrimitive(git.pullBranch(root(), params.string(BRANCH))) },
     )
 
 private fun terminalHandlers(): Map<Method, Handler> =

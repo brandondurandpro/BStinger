@@ -34,6 +34,8 @@ object Tags {
     const val BRANCH_DELETE_CANCEL = "branch.deleteCancel"
     const val BRANCH_DELETING = "branch.deleting"
     const val BRANCH_DONE = "branch.done"
+    const val BRANCH_SYNC_STATUS = "branch.syncStatus"
+    const val BRANCH_SYNC_DISMISS = "branch.syncDismiss"
     const val PROJECT_PANEL = "project.panel"
     const val GIT_PANEL = "git.panel"
     const val GIT_EMPTY = "git.empty"
@@ -208,6 +210,18 @@ object ItemTags {
     fun branchToDelete(name: String) = "branch.toDelete:$name"
 
     fun branchToDeleteCheck(name: String) = "branch.toDeleteCheck:$name"
+
+    fun pinnedBranchMenu(name: String) = "branch.pinnedMenu:$name"
+
+    fun branchMenuCheckout(name: String) = "branch.menu.checkout:$name"
+
+    fun branchMenuPull(name: String) = "branch.menu.pull:$name"
+
+    fun branchMenuPush(name: String) = "branch.menu.push:$name"
+
+    fun branchMenuChanges(name: String) = "branch.menu.changes:$name"
+
+    fun branchMenuUnpin(name: String) = "branch.menu.unpin:$name"
 
     fun pinnedBranch(name: String) = "branch.pinned:$name"
 

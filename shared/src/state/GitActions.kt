@@ -65,6 +65,55 @@ fun ProjectState.deleteBranches(branches: Collection<String>, onDone: (Boolean) 
     }
 }
 
+/** A pull or push of one branch from the toolbar: running, then its result. */
+data class BranchSync(
+    val branch: String,
+    val action: Action,
+    val running: Boolean,
+    val message: String? = null,
+    val isError: Boolean = false,
+) {
+    enum class Action(val running: String, val done: String) {
+        Pull("Pulling", "Pulled"),
+        Push("Pushing", "Pushed"),
+    }
+
+    /** What the toolbar says: the action in progress, or its result. */
+    val text: String
+        get() =
+            when {
+                running -> "${action.running} $branch…"
+                isError -> "Cannot ${action.name.lowercase()} $branch: $message"
+                else -> "${action.done} $branch"
+            }
+}
+
+/**
+ * Pulls (fast-forward) or pushes a pinned branch without checking it out, from its chip in the toolbar. The current
+ * branch is pulled for real, and its open files reloaded. [branchSync] follows the operation.
+ */
+fun ProjectState.syncBranch(branch: String, action: BranchSync.Action) {
+    if (gitBusy) return
+    branchSync = BranchSync(branch, action, running = true)
+    scope.launch {
+        val current = branch == gitBranch
+        val done =
+            gitOperation(reloadFiles = current && action == BranchSync.Action.Pull) {
+                when (action) {
+                    BranchSync.Action.Pull -> services.git.pullBranch(root.path, branch)
+                    BranchSync.Action.Push -> services.git.pushBranch(root.path, branch)
+                }.ifBlank { "${action.done} $branch" }
+            }
+        branchSync =
+            if (done) {
+                BranchSync(branch, action, running = false)
+            } else {
+                val reason = gitMessage ?: "Git command failed"
+                BranchSync(branch, action, running = false, message = reason, isError = true)
+            }
+    }
+}
+
 /** Pulls the current branch (Git panel's Pull button). */
 fun ProjectState.pull() =
     scope.launch {
