@@ -7,30 +7,68 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.example.kotlineditor.model.AppServices
 import org.example.kotlineditor.model.FileEntry
+import org.example.kotlineditor.remote.SshTarget
 import java.io.IOException
 
 /** The whole IDE: the welcome screen or the open project, plus IDE-wide settings. */
 @Stable
 @Suppress("TooManyFunctions")
 class AppState(
-    private val services: AppServices,
+    initialServices: AppServices,
     private val scope: CoroutineScope,
     private val preferenceStore: PreferenceStore = InMemoryPreferenceStore(),
+    /** Services of the local server, restored when a remote session ends; null when the IDE started remotely. */
+    private val localServices: AppServices? = initialServices,
+    /** Creates SSH sessions; null in previews and tests that do not exercise remote development. */
+    private val remoteFactory: RemoteFactory? = null,
 ) {
     // Last preferences known: those of the open project are read live, these cover the welcome screen.
     private var preferences: Map<String, String> = preferenceStore.load()
+
+    /** Services of the server currently shown: the embedded one, or a remote one. */
+    var services: AppServices = initialServices
+        private set
 
     var screen: Screen by mutableStateOf(Screen.Welcome)
         private set
 
     val recentProjects = mutableStateListOf<String>()
+
+    /** The "Remote Development" dialog, when open. */
+    var remoteDialog: RemoteDialogState? by mutableStateOf(null)
+        private set
+
+    /** What the remote connection is doing, while it is being established. */
+    var remoteStatus: String? by mutableStateOf(null)
+        private set
+
+    private var remoteSession: RemoteConnection? = null
+    private var remoteJob: Job? = null
+
+    private var lastRemote: SshTarget? by mutableStateOf(RemotePreferenceKeys.read(preferences))
+
+    /** Whether the IDE shows a project on a remote server. */
+    val isRemote: Boolean get() = remoteSession != null
+
+    /** `user@host` of the remote session, or null when the server is local. */
+    val remoteLabel: String? get() = remoteSession?.label
+
+    /** Why the remote SSH tunnel refuses to connect, or null. */
+    val remoteFailure: StateFlow<String?> get() = remoteSession?.failure ?: noRemoteFailure
+
+    private val noRemoteFailure = MutableStateFlow<String?>(null)
 
     /** The link with the server (reconnecting after a network failure, ...). */
     val connection get() = services.connection
@@ -61,7 +99,115 @@ class AppState(
 
     init {
         scope.launch { savePreferencesOnChange() }
-        scope.launch { runCatching { services.recentProjects.load() }.onSuccess { recentProjects.addAll(it) } }
+        reloadRecents()
+    }
+
+    /** Opens the "Remote Development" dialog, prefilled with the last connection. */
+    fun openRemoteDialog() {
+        remoteDialog = RemoteDialogState.from(lastRemote)
+    }
+
+    /** Updates the dialog while the user types. */
+    fun updateRemoteDialog(dialog: RemoteDialogState) {
+        remoteDialog = dialog
+    }
+
+    /** Closes the dialog and cancels a connection in progress. */
+    fun dismissRemoteDialog() {
+        remoteJob?.cancel()
+        remoteJob = null
+        remoteDialog = null
+        remoteStatus = null
+    }
+
+    /**
+     * Installs the server on [target], opens the SSH tunnel and switches the IDE to it. The project, when given,
+     * opens once the connection is ready; otherwise the remote welcome screen shows its recent projects.
+     */
+    @Suppress("TooGenericExceptionCaught") // every failure of the SSH flow belongs in the dialog
+    fun connectRemote(dialog: RemoteDialogState) {
+        val factory =
+            remoteFactory ?: run {
+                remoteDialog = dialog.copy(error = "Remote development is not available in this build")
+                return
+            }
+        val target =
+            dialog.toSshTarget().getOrElse {
+                remoteDialog = dialog.copy(error = it.message)
+                return
+            }
+        remoteJob?.cancel()
+        remoteDialog = dialog.copy(connecting = true, error = null)
+        remoteStatus = "Checking ${target.destination}"
+        remoteJob =
+            scope.launch {
+                try {
+                    val session =
+                        withContext(Dispatchers.IO) {
+                            factory.connect(target) { step -> scope.launch { remoteStatus = step } }
+                        }
+                    // Cancelled while a blocking SSH command was running: do not leak the tunnel.
+                    if (isActive) {
+                        switchTo(session, target)
+                    } else {
+                        session.close()
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (e: Exception) {
+                    remoteStatus = null
+                    remoteDialog = dialog.copy(error = e.message ?: "Cannot connect to ${target.destination}")
+                }
+            }
+    }
+
+    /** Releases the remote tunnel when the IDE window goes away without [exit] (tests and previews). */
+    fun dispose() {
+        remoteJob?.cancel()
+        remoteJob = null
+        remoteSession?.close()
+        remoteSession = null
+    }
+
+    /** Saves the open project, stops the remote session (its daemon keeps running) and shows the local server. */
+    fun disconnectRemote() {
+        val local = localServices ?: return
+        remoteJob?.cancel()
+        remoteJob = null
+        remoteDialog = null
+        remoteStatus = null
+        scope.launch {
+            (screen as? Screen.Project)?.project?.let { saveAndDispose(it) }
+            remoteSession?.close()
+            remoteSession = null
+            services = local
+            screen = Screen.Welcome
+            reloadRecents()
+        }
+    }
+
+    private suspend fun switchTo(session: RemoteConnection, target: SshTarget) {
+        (screen as? Screen.Project)?.project?.let { saveAndDispose(it) }
+        remoteSession?.close()
+        remoteSession = session
+        services = session.services
+        lastRemote = target
+        remoteDialog = null
+        remoteStatus = null
+        screen = Screen.Welcome
+        // Load before opening the project, so its own addition to the list is not overwritten by the load.
+        loadRecentsNow()
+        target.projectPath?.let(::openProject)
+    }
+
+    private fun reloadRecents() {
+        scope.launch { loadRecentsNow() }
+    }
+
+    private suspend fun loadRecentsNow() {
+        val paths = runCatching { services.recentProjects.load() }.getOrDefault(emptyList())
+        recentProjects.clear()
+        recentProjects.addAll(paths)
     }
 
     fun zoomEditor(delta: Float) {
@@ -101,14 +247,13 @@ class AppState(
         screen = Screen.Welcome
     }
 
-    /** Saves everything, then calls [onDone] (used when the window is closed). */
+    /** Saves everything, stops the remote session, then calls [onDone] (used when the window is closed). */
     fun exit(onDone: () -> Unit) {
         scope.launch {
-            (screen as? Screen.Project)?.project?.let {
-                runCatching { services.sessions.save(it.root.path, it.session()) }
-                runCatching { it.editor.flush() }
-            }
+            (screen as? Screen.Project)?.project?.let { saveAndDispose(it) }
             runCatching { preferenceStore.save(currentPreferences()) }
+            remoteSession?.close()
+            remoteSession = null
             onDone()
         }
     }
@@ -122,10 +267,18 @@ class AppState(
 
     // The open project's settings on top of the last known preferences.
     private fun currentPreferences(): Map<String, String> {
-        val project = (screen as? Screen.Project)?.project ?: return preferences + fontSizePreference()
-        val autoSelect = PreferenceKeys.AUTO_SELECT_OPENED_FILE to project.autoSelectOpenedFile.toString()
-        return preferences + project.toolWindows.toPreferences() + autoSelect + fontSizePreference()
+        val project = (screen as? Screen.Project)?.project
+        val projectPreferences =
+            if (project == null) {
+                emptyMap()
+            } else {
+                project.toolWindows.toPreferences() +
+                    (PreferenceKeys.AUTO_SELECT_OPENED_FILE to project.autoSelectOpenedFile.toString())
+            }
+        return preferences + projectPreferences + fontSizePreference() + remotePreferences()
     }
+
+    private fun remotePreferences(): Map<String, String> = lastRemote?.let(RemotePreferenceKeys::write).orEmpty()
 
     private fun fontSizePreference() = PreferenceKeys.EDITOR_FONT_SIZE to editorFontSize.toString()
 
@@ -143,7 +296,7 @@ class AppState(
         recentProjects.add(0, root.path)
         while (recentProjects.size > MAX_RECENT) recentProjects.removeAt(recentProjects.lastIndex)
         saveRecent()
-        (screen as? Screen.Project)?.project?.let { close(it) }
+        (screen as? Screen.Project)?.project?.let { saveAndDispose(it) }
         val project = ProjectState(root, services, scope, preferences)
         runCatching { services.sessions.load(root.path) }.getOrNull()?.let(project::restoreSession)
         screen = Screen.Project(project)
@@ -151,16 +304,20 @@ class AppState(
 
     private fun saveRecent() {
         val recent = recentProjects.toList()
-        scope.launch { runCatching { services.recentProjects.save(recent) } }
+        val store = services.recentProjects
+        scope.launch { runCatching { store.save(recent) } }
     }
 
     private fun close(project: ProjectState) {
+        scope.launch { saveAndDispose(project) }
+    }
+
+    // Saves through the project's own services: the IDE may switch to another server right after.
+    private suspend fun saveAndDispose(project: ProjectState) {
         val session = project.session()
-        scope.launch {
-            runCatching { services.sessions.save(project.root.path, session) }
-            runCatching { project.editor.flush() }
-            project.dispose()
-        }
+        runCatching { project.services.sessions.save(project.root.path, session) }
+        runCatching { project.editor.flush() }
+        project.dispose()
     }
 
     companion object {

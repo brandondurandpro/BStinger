@@ -7,8 +7,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
-import kotlinx.coroutines.suspendCancellableCoroutine
-import org.example.kotlineditor.model.DirectoryPicker
+import org.example.kotlineditor.remote.JvmRemoteFactory
+import org.example.kotlineditor.remote.ServerPathPicker
 import org.example.kotlineditor.rpc.Protocol
 import org.example.kotlineditor.rpc.RpcClient
 import org.example.kotlineditor.rpc.appServices
@@ -16,14 +16,12 @@ import org.example.kotlineditor.server.EditorServer
 import org.example.kotlineditor.server.LocalServices
 import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.FilePreferenceStore
-import javax.swing.JOptionPane
-import javax.swing.SwingUtilities
 import javax.swing.UIManager
-import kotlin.coroutines.resume
 
 /**
  * The IDE is a client of the Kotlin Editor server. By default the server is embedded (started on loopback with a
  * random token); `--server host:port --token secret` (or KOTLIN_EDITOR_SERVER / KOTLIN_EDITOR_TOKEN) uses a remote one.
+ * Remote Development from the welcome screen installs and tunnels to a server on another machine.
  */
 fun main(args: Array<String>) {
     fun option(name: String) = args.indexOf("--$name").takeIf { it >= 0 }?.let { args.getOrNull(it + 1) }
@@ -41,11 +39,14 @@ fun main(args: Array<String>) {
             RpcClient(host, port, option("token") ?: System.getenv("KOTLIN_EDITOR_TOKEN").orEmpty())
         }
     // A remote project lives on the server's disk: ask for its path instead of browsing the local disk.
-    val picker = if (embedded != null) SwingDirectoryPicker() else ServerPathPrompt(remote!!)
+    val picker = if (embedded != null) SwingDirectoryPicker() else ServerPathPicker(remote!!)
+    val services = client.appServices(picker)
+    // Only an embedded server can be returned to when the remote session ends.
+    val localServices = services.takeIf { embedded != null }
 
     application {
         val scope = rememberCoroutineScope()
-        val state = remember { AppState(client.appServices(picker), scope, FilePreferenceStore()) }
+        val state = remember { AppState(services, scope, FilePreferenceStore(), localServices, JvmRemoteFactory) }
         Window(
             onCloseRequest = {
                 state.exit {
@@ -60,20 +61,4 @@ fun main(args: Array<String>) {
             App(state)
         }
     }
-}
-
-private class ServerPathPrompt(private val server: String) : DirectoryPicker {
-    override suspend fun pickDirectory(): String? =
-        suspendCancellableCoroutine { continuation ->
-            SwingUtilities.invokeLater {
-                val path =
-                    JOptionPane.showInputDialog(
-                        null,
-                        "Project directory on $server:",
-                        "Open Project",
-                        JOptionPane.PLAIN_MESSAGE,
-                    )
-                continuation.resume(path?.trim()?.takeIf { it.isNotEmpty() })
-            }
-        }
 }

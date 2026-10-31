@@ -121,6 +121,7 @@ private fun Hint(action: String, shortcut: String) {
 @Composable
 internal fun StatusBar(app: AppState, project: ProjectState) {
     val connection by app.connection.collectAsState()
+    val remoteFailure by app.remoteFailure.collectAsState()
     val tab = project.editor.activeTab
     Row(
         Modifier
@@ -139,7 +140,22 @@ internal fun StatusBar(app: AppState, project: ProjectState) {
             color = IdeColors.TextSecondary,
             fontSize = 12.sp,
         )
-        if (connection != ConnectionStatus.Connected) {
+        app.remoteLabel?.let {
+            Label(
+                "Remote: $it",
+                Modifier.testTag(Tags.STATUS_REMOTE),
+                color = IdeColors.TextSecondary,
+                fontSize = 12.sp,
+            )
+        }
+        if (remoteFailure != null) {
+            Label(
+                "SSH: $remoteFailure",
+                Modifier.testTag(Tags.STATUS_CONNECTION),
+                color = IdeColors.Error,
+                fontSize = 12.sp,
+            )
+        } else if (connection != ConnectionStatus.Connected) {
             Label(
                 if (connection == ConnectionStatus.Reconnecting) "Server: reconnecting…" else "Server: disconnected",
                 Modifier.testTag(Tags.STATUS_CONNECTION),

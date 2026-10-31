@@ -16,6 +16,7 @@ import androidx.compose.ui.test.printToString
 import kotlinx.coroutines.runBlocking
 import org.example.kotlineditor.App
 import org.example.kotlineditor.model.AppServices
+import org.example.kotlineditor.remote.JvmRemoteFactory
 import org.example.kotlineditor.rpc.ClientOptions
 import org.example.kotlineditor.rpc.RpcClient
 import org.example.kotlineditor.rpc.appServices
@@ -203,10 +204,11 @@ fun ComposeUiTest.launchApp(
     var created: AppState? = null
     setContent {
         val scope = rememberCoroutineScope()
-        val state = remember { AppState(services, scope, preferences) }
+        val state = remember { AppState(services, scope, preferences, remoteFactory = JvmRemoteFactory) }
         created = state
         DisposableEffect(Unit) {
             onDispose {
+                created?.dispose()
                 client.close()
                 proxy?.close()
                 process.close()
@@ -316,3 +318,15 @@ fun ComposeUiTest.awaitReconnecting() {
 /** Waits until the status bar no longer warns about the server. */
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.awaitReconnected() = awaitNoTag(Tags.STATUS_CONNECTION)
+
+/** Waits until the status bar's connection message contains [text]. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.awaitStatusContains(text: String, timeout: Long = TIMEOUT) {
+    awaitCondition(timeout) {
+        onAllNodes(hasTestTag(Tags.STATUS_CONNECTION)).fetchSemanticsNodes().any { node ->
+            node.config
+                .getOrElseNullable(androidx.compose.ui.semantics.SemanticsProperties.Text) { null }
+                ?.any { text in it.text } == true
+        }
+    }
+}

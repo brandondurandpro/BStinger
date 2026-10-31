@@ -29,6 +29,9 @@ test-dependencies@jvm:
   - //testkit
   - $compose.uiTest
   - $compose.desktop.currentOs
+  # A real SSH server for the remote development end-to-end tests; the client is the system OpenSSH.
+  - $libs.sshd.core
+  - $libs.sshd.sftp
 
 test-settings:
   jvm:

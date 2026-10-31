@@ -1,0 +1,51 @@
+package org.example.kotlineditor.e2e
+
+import androidx.compose.ui.test.ExperimentalTestApi
+import org.example.kotlineditor.ui.Tags
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+
+/** Remote development on a project big enough for a per-file or per-tree slowdown to show. */
+@OptIn(ExperimentalTestApi::class)
+class RemoteDevelopmentPerformanceE2eTest {
+    private val project =
+        SampleProject().apply {
+            val big = (1..5_000).joinToString("\n") { """val line$it = ${'"'}remote $it${'"'}""" }
+            file("big.txt", big)
+            file("src/main/kotlin/App.kt", SampleProject.APP_KT)
+            repeat(200) {
+                file("src/main/kotlin/File$it.kt", """package demo${'\n'}${'\n'}class File$it${'\n'}""")
+            }
+        }
+
+    @BeforeTest
+    fun prepare() {
+        RemoteTestEnvironment.prepare()
+    }
+
+    @AfterTest
+    fun cleanup() {
+        project.delete()
+    }
+
+    @Test
+    fun `connecting and opening a large remote file over SSH stays interactive`() =
+        remoteUiTest {
+            launchApp()
+
+            measure("remote connect and project tree", budgetMillis = 60_000) {
+                connectRemoteTo(RemoteTestEnvironment, project.path)
+                awaitTag(Tags.treeRow("src"), timeout = 60_000)
+                renderFrame()
+            }
+            measure("open a 5000-line remote file", budgetMillis = 15_000, budgetMegabytes = 512) {
+                openFromTree("big.txt")
+                renderFrame()
+            }
+            measure("open another remote file after the first", budgetMillis = 10_000, budgetMegabytes = 256) {
+                openFromTree("src/main/kotlin/App.kt")
+                renderFrame()
+            }
+        }
+}
