@@ -64,14 +64,14 @@ class EditorTab(val entry: FileEntry, val relativePath: String, val isDiff: Bool
 
     val document: Document? get() = (status as? TabStatus.Ready)?.document
 
-    /** Kept per tab so switching tabs restores the scroll position, like IntelliJ. */
+    /** Scroll position of the unified diff layout (diff tabs). */
     val listState = LazyListState()
 
     /** Scroll position of the side-by-side diff layout, kept apart from the unified one. */
     val splitListState = LazyListState()
     val horizontalScroll = HorizontalScroll()
 
-    /** Vertical scroll of the editor when it draws its rows itself (kept per tab, like [listState]). */
+    /** Kept per tab so switching tabs restores the scroll position, like IntelliJ. */
     val verticalScroll = VerticalScroll()
 
     /** Gutter marks of the lines changed since HEAD (text tabs only). */

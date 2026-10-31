@@ -8,7 +8,6 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
@@ -49,13 +48,11 @@ import org.example.kotlineditor.model.GitChangeKind
 import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.Document
 import org.example.kotlineditor.state.EditorTab
-import org.example.kotlineditor.state.EditorViewport
 import org.example.kotlineditor.state.HorizontalScroll
-import org.example.kotlineditor.state.LazyListViewport
 import org.example.kotlineditor.state.TextPos
+import org.example.kotlineditor.state.VerticalScroll
 import org.example.kotlineditor.state.identifierAt
 import org.example.kotlineditor.state.matchingBracket
-import org.example.kotlineditor.state.placeholder
 import org.example.kotlineditor.state.reveal
 import org.example.kotlineditor.state.visualColumn
 import org.example.kotlineditor.state.wordOccurrences
@@ -87,7 +84,6 @@ fun CodeEditor(
     fontSize: Float = AppState.DEFAULT_EDITOR_FONT_SIZE,
     onZoom: (delta: Float) -> Unit = {},
     onCtrlClick: (TextPos) -> Unit = {},
-    canvas: Boolean = true,
 ) {
     var viewportWidth by remember { mutableFloatStateOf(0f) }
     var viewportHeight by remember { mutableFloatStateOf(0f) }
@@ -102,11 +98,9 @@ fun CodeEditor(
     }
     val scope = rememberCoroutineScope()
     val clicks = remember { ClickCounter() }
-    val viewport: EditorViewport = if (canvas) tab.verticalScroll else remember(tab) { LazyListViewport(tab.listState) }
-    if (canvas) {
-        val rows = document.folding.rowCount()
-        SideEffect { tab.verticalScroll.updateLayout(rows, viewportHeight, metrics.lineHeightPx) }
-    }
+    val viewport = tab.verticalScroll
+    val rows = document.folding.rowCount()
+    SideEffect { viewport.updateLayout(rows, viewportHeight, metrics.lineHeightPx) }
     tab.horizontalScroll.updateRange(metrics.maxHorizontalOffset(document.maxLineLength, viewportWidth))
     FollowCaret(tab, viewport, document, metrics) { viewportWidth }
     val onSize: (IntSize) -> Unit = {
@@ -123,7 +117,8 @@ fun CodeEditor(
             .onKeyEvent { handleEditorKey(it, document, viewport.visibleRows(metrics.lineHeightPx)) }
             .focusable()
             .scrollable(tab.horizontalScroll.scrollableState, Orientation.Horizontal)
-            .verticalScrollWhen(canvas, tab)
+            // reverseDirection: the wheel and drags give negative deltas going down, as for any vertical list.
+            .scrollable(viewport.scrollableState, Orientation.Vertical, reverseDirection = true)
             .zoomOnCtrlWheel(onZoom),
     ) {
         // Text cursor and mouse selection only over the text: the scrollbars are siblings drawn on top, so pressing
@@ -141,69 +136,9 @@ fun CodeEditor(
                     awaitEachGesture { editorGesture(target) }
                 },
         ) {
-            if (canvas) {
-                EditorCanvas(tab, document, metrics, highlights, hints, caretOn)
-            } else {
-                EditorRows(tab, document, metrics, highlights, hints, caretOn)
-            }
+            EditorCanvas(tab, document, metrics, highlights, hints, caretOn)
         }
-        EditorScrollbars(tab, metrics, canvas) { viewportWidth }
-    }
-}
-
-@Composable
-private fun EditorRows(
-    tab: EditorTab,
-    document: Document,
-    metrics: EditorMetrics,
-    highlights: SearchHighlights?,
-    hints: CaretHints,
-    caretOn: State<Boolean>,
-) {
-    val folding = document.folding
-    val changes =
-        remember(tab.lineChanges) {
-            tab.lineChanges.filter { it.kind != GitChangeKind.Deleted }.associate { it.line to it.kind }
-        }
-    val deletions =
-        remember(tab.lineChanges) {
-            tab.lineChanges.filter { it.kind == GitChangeKind.Deleted }.map { it.line }
-        }
-    val blame = remember(tab.blame) { tab.blame?.associateBy { it.line } }
-    LazyColumn(Modifier.fillMaxSize(), state = tab.listState) {
-        items(count = folding.rowCount(), contentType = { 0 }) { row ->
-            val index = folding.lineAt(row)
-            val line = document.lines[index]
-            val folded = folding.isFolded(index)
-            val source =
-                LineSource(
-                    index,
-                    line,
-                    document.language,
-                    document.commentStates?.getOrNull(index) == true,
-                    folding.isFoldable(index),
-                    folded,
-                    if (folded) folding.placeholder(index, document.lines) else null,
-                )
-            val annotation = blame?.get(index)
-            val deletedAtEnd = index == document.lines.lastIndex && document.lineCount in deletions
-            CodeLine(
-                source,
-                decorations(
-                    document,
-                    index,
-                    line,
-                    highlights,
-                    hints,
-                    changes[index],
-                    index in deletions || deletedAtEnd,
-                    annotation?.let { "${it.author} ${it.date}" },
-                ),
-                metrics,
-                tab.horizontalScroll,
-                caretOn,
-            )
-        }
+        EditorScrollbars(tab, metrics) { viewportWidth }
     }
 }
 
@@ -290,7 +225,7 @@ private suspend fun blink(document: Document, on: MutableState<Boolean>) {
 @Composable
 private fun FollowCaret(
     tab: EditorTab,
-    viewport: EditorViewport,
+    viewport: VerticalScroll,
     document: Document,
     metrics: EditorMetrics,
     viewportWidth: () -> Float,
@@ -307,7 +242,7 @@ private fun FollowCaret(
     }
 }
 
-private suspend fun scrollToRow(viewport: EditorViewport, metrics: EditorMetrics, row: Int) {
+private suspend fun scrollToRow(viewport: VerticalScroll, metrics: EditorMetrics, row: Int) {
     val visible = viewport.visibleRows(metrics.lineHeightPx)
     val first = viewport.firstRow
     val last = first + visible - 1

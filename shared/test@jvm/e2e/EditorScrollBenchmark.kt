@@ -12,10 +12,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.example.kotlineditor.model.BlameLine
-import org.example.kotlineditor.state.EditorRenderer
 import org.example.kotlineditor.state.EditorTab
-import org.example.kotlineditor.state.EditorViewport
-import org.example.kotlineditor.state.LazyListViewport
 import org.example.kotlineditor.state.VerticalScroll
 import java.lang.management.ManagementFactory
 import kotlin.test.AfterTest
@@ -32,10 +29,11 @@ private const val BYTES_PER_MB = 1_048_576
 private const val NANOS_PER_MILLI = 1_000_000
 
 /**
- * Scrolls a 9,500-line file with blame annotations through both renderers and prints the memory allocated and the
- * time taken by the scroll (each step is rendered; the cost of rendering an unchanged frame is subtracted). The
- * canvas is measured twice: jumping from row to row, and as during a wheel or drag scroll, when its semantics
- * nodes wait for the end of the scroll. Skipped unless run with `-Deditor.benchmark=true`, e.g.
+ * Scrolls a 9,500-line file with blame annotations and prints the memory allocated and the time taken by the scroll
+ * (each step is rendered; the cost of rendering an unchanged frame is subtracted), jumping from row to row and as
+ * during a wheel or drag scroll, when the semantics nodes of the lines wait for the end of the scroll. When the
+ * canvas replaced the composed rows (58 MB, 1710 ms), it measured 31 MB / 1086 ms and 7 MB / 842 ms. Skipped
+ * unless run with `-Deditor.benchmark=true`, e.g.
  * `JAVA_TOOL_OPTIONS=-Deditor.benchmark=true ./kotlin test -m shared --include-classes='*EditorScrollBenchmark'`.
  */
 @OptIn(ExperimentalTestApi::class)
@@ -50,14 +48,13 @@ class EditorScrollBenchmark {
         project.delete()
     }
 
-    private enum class Case(val renderer: EditorRenderer, val label: String) {
-        Rows(EditorRenderer.Rows, "composed rows"),
-        CanvasJumps(EditorRenderer.Canvas, "canvas, jumps"),
-        CanvasScroll(EditorRenderer.Canvas, "canvas, user scroll"),
+    private enum class Case(val label: String) {
+        Jumps("jumps"),
+        UserScroll("user scroll"),
     }
 
     @Test
-    fun `scrolling with the canvas and with the composed rows`() {
+    fun `scrolling a large annotated file`() {
         if (System.getProperty("editor.benchmark") != "true") return
         runComposeUiTest {
             val text = (0 until LINES).joinToString("\n") { "    val value$it = listOf($it, \"t$it\") // $it" }
@@ -72,11 +69,8 @@ class EditorScrollBenchmark {
             }
             val results = linkedMapOf<Case, Measure>()
             for (case in Case.entries) {
-                runOnIdle { if (app.state.editorRenderer != case.renderer) app.state.toggleEditorRenderer() }
-                waitForIdle()
-                val canvas = case.renderer == EditorRenderer.Canvas
-                val viewport = if (canvas) tab.verticalScroll else LazyListViewport(tab.listState)
-                val userScroll = case == Case.CanvasScroll
+                val viewport = tab.verticalScroll
+                val userScroll = case == Case.UserScroll
                 scroll(tab, viewport, moving = true, userScroll) // warm-up
                 val rounds =
                     List(ROUNDS) {
@@ -98,14 +92,14 @@ class EditorScrollBenchmark {
     // Bytes allocated and nanoseconds spent, each step rendered; [userScroll] keeps a scroll in progress meanwhile.
     private fun ComposeUiTest.scroll(
         tab: EditorTab,
-        viewport: EditorViewport,
+        viewport: VerticalScroll,
         moving: Boolean,
         userScroll: Boolean,
     ): Measure {
         runBlocking { viewport.scrollToRow(0) }
         waitForIdle()
         val held = CoroutineScope(Dispatchers.Unconfined)
-        if (userScroll) held.launch { (viewport as VerticalScroll).scrollableState.scroll { awaitCancellation() } }
+        if (userScroll) held.launch { viewport.scrollableState.scroll { awaitCancellation() } }
         val bytes = allocated
         val start = System.nanoTime()
         repeat(STEPS) { step ->

@@ -12,7 +12,6 @@ import androidx.compose.ui.input.pointer.isCtrlPressed
 import androidx.compose.ui.input.pointer.isMetaPressed
 import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
@@ -21,9 +20,9 @@ import androidx.compose.ui.unit.sp
 import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.Document
 import org.example.kotlineditor.state.EditorTab
-import org.example.kotlineditor.state.EditorViewport
 import org.example.kotlineditor.state.HorizontalScroll
 import org.example.kotlineditor.state.TextPos
+import org.example.kotlineditor.state.VerticalScroll
 import org.example.kotlineditor.state.columnForVisual
 import org.example.kotlineditor.state.selectWordAt
 import org.example.kotlineditor.state.toggle
@@ -44,9 +43,6 @@ private val GUTTER_PADDING = 28.dp
 private val BLAME_WIDTH = 170.dp
 private val BLAME_FONT_SIZE = 10.sp
 
-// Consecutive lines of a commit share their annotation: a small cache lays out each one once.
-private const val BLAME_LAYOUT_CACHE = 64
-
 /** Sizes of an editor for a font size: everything is a multiple of the (monospace) character width. */
 @Immutable
 internal class EditorMetrics(
@@ -59,8 +55,6 @@ internal class EditorMetrics(
     val gutterPx: Float,
     val foldZonePx: Float,
     val blameWidth: Dp,
-    /** Lays out the blame annotations, drawn in the gutter rather than composed as one text per line. */
-    val blameMeasurer: TextMeasurer,
     val blameStyle: TextStyle,
 ) {
     /** Horizontal scroll range: widest line plus some slack, minus what fits on screen. */
@@ -70,7 +64,7 @@ internal class EditorMetrics(
     fun isOnFoldMarker(x: Float): Boolean = x in gutterPx - foldZonePx..gutterPx
 
     /** Document position under [position] (in the editor's coordinates). */
-    fun hit(position: Offset, viewport: EditorViewport, horizontal: HorizontalScroll, document: Document): TextPos {
+    fun hit(position: Offset, viewport: VerticalScroll, horizontal: HorizontalScroll, document: Document): TextPos {
         val folding = document.folding
         val rowOffset = floor((position.y + viewport.rowOffsetPx) / lineHeightPx).toInt()
         val line = folding.lineAt((viewport.firstRow + rowOffset).coerceIn(0, folding.rowCount() - 1))
@@ -86,7 +80,6 @@ internal class EditorMetrics(
 internal fun rememberEditorMetrics(lineCount: Int, fontSize: Float, blameVisible: Boolean = false): EditorMetrics {
     val density = LocalDensity.current
     val measurer = rememberTextMeasurer()
-    val blameMeasurer = rememberTextMeasurer(BLAME_LAYOUT_CACHE)
     val baseStyle = LocalCodeStyle.current
     val digits = maxOf(MIN_LINE_NUMBER_DIGITS, lineCount.toString().length)
     return remember(density, baseStyle, fontSize, digits, blameVisible) {
@@ -106,7 +99,6 @@ internal fun rememberEditorMetrics(lineCount: Int, fontSize: Float, blameVisible
                 gutterPx = gutterWidth.toPx(),
                 foldZonePx = FOLD_ZONE.toPx(),
                 blameWidth = blameWidth,
-                blameMeasurer = blameMeasurer,
                 blameStyle = codeStyle.copy(color = IdeColors.TextSecondary, fontSize = BLAME_FONT_SIZE),
             )
         }
@@ -131,7 +123,7 @@ internal class ClickCounter {
 internal class GestureTarget(
     val document: Document,
     val tab: EditorTab,
-    val viewport: EditorViewport,
+    val viewport: VerticalScroll,
     val metrics: EditorMetrics,
     val clicks: ClickCounter,
     val focus: FocusRequester,
