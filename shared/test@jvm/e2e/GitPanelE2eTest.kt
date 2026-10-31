@@ -36,37 +36,6 @@ class GitPanelE2eTest {
         project.delete()
     }
 
-    private fun git(vararg args: String) {
-        val process =
-            ProcessBuilder(listOf("git", "-c", "user.name=Test", "-c", "user.email=test@example.com") + args)
-                .directory(project.root.toFile())
-                .redirectErrorStream(true)
-                .start()
-        val output = process.inputStream.bufferedReader().readText()
-        check(process.waitFor() == 0) { "git ${args.joinToString(" ")} failed: $output" }
-    }
-
-    private fun commitAll() {
-        git("init", "-q")
-        // The app commits and pulls without the test's -c options: a runner has no identity, and Windows converts EOLs.
-        git("config", "user.name", "Test")
-        git("config", "user.email", "test@example.com")
-        git("config", "core.autocrlf", "false")
-        git("add", "-A")
-        git("commit", "-q", "-m", "init")
-    }
-
-    private fun lastCommitSubject(): String {
-        val process =
-            ProcessBuilder("git", "log", "-1", "--format=%s")
-                .directory(project.root.toFile())
-                .redirectErrorStream(true)
-                .start()
-        val output = process.inputStream.bufferedReader().readText()
-        check(process.waitFor() == 0) { "git log failed: $output" }
-        return output.trim()
-    }
-
     private fun ComposeUiTest.dragToolWindowHeader(window: String, target: Offset) {
         val header = onNodeWithTag(Tags.toolHeader(window))
         val delta = target - header.centerInRoot()
@@ -87,7 +56,7 @@ class GitPanelE2eTest {
     @Test
     fun `Alt+9 opens the Git panel below the project panel and lists the changes`() =
         runComposeUiTest {
-            commitAll()
+            project.commitAll()
             project.file("README.md", "# Changed\n")
             launchWithProject(project)
             onNodeWithTag(Tags.TREE).performClick()
@@ -103,7 +72,7 @@ class GitPanelE2eTest {
     @Test
     fun `clicking a change opens a diff tab with removed and added lines`() =
         runComposeUiTest {
-            commitAll()
+            project.commitAll()
             project.file("README.md", "# Changed\n")
             val app = launchWithProject(project)
             onNodeWithTag(Tags.TOOL_GIT).performClick()
@@ -138,7 +107,7 @@ class GitPanelE2eTest {
     @Test
     fun `the diff can be switched to a side-by-side layout and back`() =
         runComposeUiTest {
-            commitAll()
+            project.commitAll()
             project.file("README.md", "# Changed\n")
             val app = launchWithProject(project)
             onNodeWithTag(Tags.TOOL_GIT).performClick()
@@ -162,7 +131,7 @@ class GitPanelE2eTest {
     @Test
     fun `untracked files can be opened as a diff of additions`() =
         runComposeUiTest {
-            commitAll()
+            project.commitAll()
             project.file("notes.txt", "first\nsecond\n")
             val app = launchWithProject(project)
             onNodeWithTag(Tags.TOOL_GIT).performClick()
@@ -244,7 +213,7 @@ class GitPanelE2eTest {
     @Test
     fun `a repository without changes says so`() =
         runComposeUiTest {
-            commitAll()
+            project.commitAll()
             launchWithProject(project)
             onNodeWithTag(Tags.TOOL_GIT).performClick()
             awaitTag(Tags.GIT_EMPTY)
@@ -265,7 +234,7 @@ class GitPanelE2eTest {
     @Test
     fun `the gutter marks the lines changed since HEAD`() =
         runComposeUiTest {
-            commitAll()
+            project.commitAll()
             project.file("README.md", "# Changed\n")
             launchWithProject(project)
             openFromTree("README.md")
@@ -277,7 +246,7 @@ class GitPanelE2eTest {
     @Test
     fun `saving a file recomputes the gutter marks of that file only`() =
         runComposeUiTest {
-            commitAll()
+            project.commitAll()
             val app = launchWithProject(project)
             val network = app.client.network
 
@@ -316,7 +285,7 @@ class GitPanelE2eTest {
     @Test
     fun `Annotate shows the author and date of each line in the gutter`() =
         runComposeUiTest {
-            commitAll()
+            project.commitAll()
             val app = launchWithProject(project)
             openFromTree("README.md")
             onNodeWithTag(Tags.TOOL_GIT).performClick()
@@ -344,7 +313,7 @@ class GitPanelE2eTest {
     @Test
     fun `the Commit button stages and commits the changes`() =
         runComposeUiTest {
-            commitAll()
+            project.commitAll()
             project.file("README.md", "# Changed\n")
             val app = launchWithProject(project)
             onNodeWithTag(Tags.TOOL_GIT).performClick()
@@ -353,14 +322,14 @@ class GitPanelE2eTest {
             onNodeWithTag(Tags.GIT_COMMIT).performClick()
             awaitCondition { !app.project.gitBusy && app.project.gitStatus.isEmpty() }
             assertEquals("Committed", app.project.gitMessage)
-            assertEquals("Update the readme", lastCommitSubject())
+            assertEquals("Update the readme", project.lastCommitSubject())
         }
 
     @Test
     fun `the branch menu switches to another local branch`() =
         runComposeUiTest {
-            commitAll()
-            git("branch", "feature")
+            project.commitAll()
+            project.git("branch", "feature")
             val app = launchWithProject(project)
             onNodeWithTag(Tags.TOOL_GIT).performClick()
             awaitCondition { app.project.gitBranches.contains("feature") }
@@ -373,7 +342,7 @@ class GitPanelE2eTest {
     @Test
     fun `a diff tab is not restored in the session`() =
         runComposeUiTest {
-            commitAll()
+            project.commitAll()
             project.file("README.md", "# Changed\n")
             val app = launchWithProject(project)
             onNodeWithTag(Tags.TOOL_GIT).performClick()

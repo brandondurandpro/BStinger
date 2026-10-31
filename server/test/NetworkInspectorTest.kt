@@ -4,6 +4,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.example.kotlineditor.model.Direction
 import org.example.kotlineditor.model.NetworkInspector
+import org.example.kotlineditor.rpc.Protocol
 import org.example.kotlineditor.rpc.RemoteFileSystem
 import org.example.kotlineditor.rpc.RpcClient
 import java.nio.file.Files
@@ -13,6 +14,8 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+
+private const val CRLF = "\r\n"
 
 /** The devtools capture of a client talking to a real server. */
 class NetworkInspectorTest {
@@ -56,8 +59,16 @@ class NetworkInspectorTest {
             assertEquals("Read", response.method)
             assertNotNull(response.latencyMs)
             assertTrue(response.body.decodeToString().contains("hello network"))
-            // Small messages are not compressed: the wire only adds the Content-Length header.
-            assertEquals(request.size + "Content-Length: ${request.size}\r\n\r\n".length, request.wireSize)
+            // The wire adds the headers to the message, compressed when zstd saves enough: whether it does depends on
+            // the length of the temporary path, so the expected size comes from the same codec.
+            val compressed = Protocol.newCodec().use { it.compress(request.body, code = false) }
+            val expected =
+                if (compressed == null) {
+                    request.size + "Content-Length: ${request.size}$CRLF$CRLF".length
+                } else {
+                    compressed.size + "Content-Length: ${compressed.size}${CRLF}Content-Encoding: zstd$CRLF$CRLF".length
+                }
+            assertEquals(expected, request.wireSize)
             val totals = client.network.totals.value
             assertEquals(records.size.toLong(), totals.frames)
             assertEquals(records.filter { it.direction == Direction.Sent }.sumOf { it.size.toLong() }, totals.sentBytes)

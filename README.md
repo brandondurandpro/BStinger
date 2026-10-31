@@ -98,6 +98,12 @@ server restart).
 - GitHub Actions (`.github/workflows/ci.yml`) runs `./lint` and the whole suite on Ubuntu 20.04, 22.04 and 24.04
   under X11 (Xvfb) and Wayland (headless Weston, with XWayland for AWT), plus Windows. Each Linux job also launches
   the desktop app and checks that it stays open, which proves the session really works.
+- `./windows-vm` – the Windows job on your machine, without waiting for GitHub: `./windows-vm start` boots a local
+  Windows Server 2025 VM (the image of `windows-latest`, evaluation edition) in Docker with KVM, through
+  [dockur/windows](https://github.com/dockur/windows); the first start downloads and installs Windows (20 to 60
+  minutes), the next ones take a minute. `./windows-vm test [args]` then runs `kotlin.bat test [args]` on the current
+  working tree, uncommitted files included, checked out with CRLF line endings as on the CI, and exits with the
+  tests' result. The desktop is on http://127.0.0.1:8006; `./windows-vm stop` keeps the disk, `destroy` deletes it.
 
 The bundled JetBrains Mono font is licensed under the SIL Open Font License 1.1.
 
