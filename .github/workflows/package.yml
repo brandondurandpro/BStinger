@@ -165,7 +165,9 @@ jobs:
             compgen -G "dist/$pattern" > /dev/null || { echo "Missing dist/$pattern"; exit 1; }
           done
           if [ "$OS" = Linux ]; then
-            tar -tzf dist/kotlin-editor-[0-9]*.tar.gz | grep -q 'lib/app/app.aot$' || { echo "No AOT cache"; exit 1; }
+            # Listed to a file first: grep -q stops at the first match, and tar then fails to write (pipefail).
+            tar -tzf dist/kotlin-editor-[0-9]*.tar.gz > "$RUNNER_TEMP/files.txt"
+            grep -q 'lib/app/app.aot$' "$RUNNER_TEMP/files.txt" || { echo "No AOT cache"; exit 1; }
           fi
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
