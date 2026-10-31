@@ -46,7 +46,8 @@ internal fun BoxScope.EditorScrollbars(
 
 // The canvas scrolls itself with the wheel; the LazyColumn handles its own.
 internal fun Modifier.verticalScrollWhen(canvas: Boolean, tab: EditorTab) =
-    if (canvas) scrollable(tab.verticalScroll.scrollableState, Orientation.Vertical) else this
+    // reverseDirection: the wheel and drags give negative deltas going down, like for a LazyColumn.
+    if (canvas) scrollable(tab.verticalScroll.scrollableState, Orientation.Vertical, reverseDirection = true) else this
 
 private class HorizontalScrollAdapter(private val state: HorizontalScroll, private val viewport: () -> Float) :
     ScrollbarAdapter {

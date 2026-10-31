@@ -265,7 +265,7 @@ class EditingE2eTest {
                 release()
             }
             waitForIdle()
-            assertTrue(tab.listState.firstVisibleItemIndex > 100, "scrolled to ${tab.listState.firstVisibleItemIndex}")
+            assertTrue(tab.verticalScroll.firstRow > 100, "scrolled to ${tab.verticalScroll.firstRow}")
             assertFalse(doc.hasSelection, "selected: ${doc.selectionRange()}")
             assertEquals(caret, doc.caret)
         }

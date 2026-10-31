@@ -87,7 +87,7 @@ fun CodeEditor(
     fontSize: Float = AppState.DEFAULT_EDITOR_FONT_SIZE,
     onZoom: (delta: Float) -> Unit = {},
     onCtrlClick: (TextPos) -> Unit = {},
-    canvas: Boolean = false,
+    canvas: Boolean = true,
 ) {
     var viewportWidth by remember { mutableFloatStateOf(0f) }
     var viewportHeight by remember { mutableFloatStateOf(0f) }
