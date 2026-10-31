@@ -14,8 +14,8 @@ Every new task, feature or fix starts on its own branch, in its own git worktree
 
 A feature, or a fix of user-visible behavior, is not done until an e2e test exercises it through the real UI.
 
-- **New feature**: add e2e tests covering its main path and its edge cases (empty input, errors, cancelling), and
-  e2e performance tests (see below).
+- **New feature**: add e2e tests covering its main path and its edge cases (empty input, errors, cancelling),
+  e2e performance tests and, when it talks to the server, e2e chaos tests (see below).
 - **Bug fix**: first write an e2e test that reproduces the bug and fails, then fix it.
 - **Changed behavior**: update the e2e tests that describe it; never delete or weaken a test just to make it pass.
 - Unit tests (`shared/test@jvm/unit`, `server/test`) are welcome for logic, protocol and server code, but they do
@@ -52,6 +52,29 @@ thousands of files, a file of thousands of lines, a long search result…).
   regression (a linear scan per frame, a quadratic rebuild) fails. Also assert what keeps it fast when it can be
   checked, such as the number of composed rows of a virtualized list.
 - Give the measurements before and after in the pull request of a performance change.
+
+### Writing e2e chaos tests
+
+The IDE is a client of a server that may be remote: every feature that talks to the server also gets e2e chaos
+tests, which check what the user sees when the network or the server fails.
+
+- They live next to the e2e tests, in a `*ChaosE2eTest` class per area (`ServerConnectionE2eTest` for the
+  connection itself), and follow the same rules.
+- Launch with `launchWithProject(project, chaos = true)`: the UI then reaches the server through a `ChaosProxy`
+  (`testkit` module), `app.network`, and notices a dead link within a second. `app.process` stops, starts and
+  restarts the server on the same port and data.
+- Only test failures that really happen, and that the feature can meet:
+  - the network goes down for a while, then comes back (`goDown`, `comeBack`): Wi-Fi off, VPN reconnecting;
+  - the link goes silent without closing (`blackHole`): laptop sleep, NAT or Wi-Fi dropped silently;
+  - the connection breaks after the server ran a request but before its answer arrived (`dropFromServer`, then
+    `cutAll`): the retry must not run a mutation twice;
+  - a slow link (`latencyMs`): the UI must stay responsive and late answers must not override newer ones;
+  - the server restarts (`app.process.restart()`), losing its sessions (shells), or comes back with another token;
+  - another program changes the disk under the IDE (a file deleted while listed or open).
+- Do not invent failures the protocol rules out (bytes lost or reordered on a live TCP connection, corrupted
+  frames): they are covered by the server's tests, not by the UI.
+- Assert what the user sees and what ends up on disk: the status bar (`awaitReconnecting`, `awaitReconnected`), the
+  data (written once, nothing lost), and that nothing stays stuck loading or pretends to work.
 
 ## Before opening a pull request
 

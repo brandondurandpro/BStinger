@@ -1,4 +1,4 @@
-package org.example.kotlineditor.server
+package org.example.kotlineditor.testkit
 
 import java.io.Closeable
 import java.io.IOException
@@ -13,20 +13,37 @@ import kotlin.concurrent.thread
 private const val BUFFER_SIZE = 16 * 1024
 
 /**
- * TCP proxy that injects network failures between a client and the server: abrupt disconnections, answers lost
- * in flight, and "black holes" (the link stays open but nothing goes through, like a dead Wi-Fi or NAT).
+ * TCP proxy that injects the network failures a remote IDE meets, between a client and the server:
+ * - [cutAll]: the connections break (Wi-Fi switch, VPN reconnect, server process killed);
+ * - [goDown] / [comeBack]: the server cannot be reached at all for a while (network down, server restarting);
+ * - [blackHole]: the link stays open but nothing goes through (laptop sleep, NAT or Wi-Fi gone silently);
+ * - [dropFromServer]: requests reach the server but its answers are lost on the way back (follow it with [cutAll]:
+ *   on a live TCP connection nothing is lost, an answer is lost because the connection breaks);
+ * - [cutOnNextServerData]: the next bytes from the server cut the connection instead of being delivered;
+ * - [latencyMs]: every chunk is delayed, like a slow remote link.
  */
 class ChaosProxy(private val targetPort: Int) : Closeable {
     private val server = ServerSocket().apply { bind(InetSocketAddress("127.0.0.1", 0)) }
     private val links = CopyOnWriteArrayList<Pair<Socket, Socket>>()
 
+    /** Port the client connects to instead of the server's. */
     val port: Int get() = server.localPort
 
     /** While true, bytes are swallowed in both directions without closing anything. */
     @Volatile var blackHole = false
 
+    /** While true, bytes from the server are swallowed; the client's still reach the server. */
+    @Volatile var dropFromServer = false
+
     /** When set, the next bytes coming from the server cut the connection instead of being delivered. */
     @Volatile var cutOnNextServerData = false
+
+    /** Delay added to every chunk forwarded, in each direction. */
+    @Volatile var latencyMs = 0L
+
+    /** While true, connections are refused, as when the server's machine cannot be reached. */
+    @Volatile var down = false
+        private set
 
     @Volatile var connectionsAccepted = 0
         private set
@@ -43,7 +60,7 @@ class ChaosProxy(private val targetPort: Int) : Closeable {
     }
 
     private fun connect(client: Socket) {
-        val upstream = runCatching { Socket("127.0.0.1", targetPort) }.getOrNull()
+        val upstream = if (down) null else runCatching { Socket("127.0.0.1", targetPort) }.getOrNull()
         if (upstream == null) {
             client.close() // server down: refuse like the real network would
         } else {
@@ -66,7 +83,8 @@ class ChaosProxy(private val targetPort: Int) : Closeable {
                     val cut = fromServer && cutOnNextServerData
                     if (cut) cutOnNextServerData = false
                     open = n >= 0 && !cut
-                    if (open && !blackHole) {
+                    if (open && !blackHole && !(fromServer && dropFromServer)) {
+                        latencyMs.takeIf { it > 0 }?.let(Thread::sleep)
                         output.write(buffer, 0, n)
                         output.flush()
                     }
@@ -87,6 +105,17 @@ class ChaosProxy(private val targetPort: Int) : Closeable {
 
     /** Cuts every connection, as a network failure would. */
     fun cutAll() = links.forEach(::close)
+
+    /** Cuts every connection and refuses new ones until [comeBack]. */
+    fun goDown() {
+        down = true
+        cutAll()
+    }
+
+    /** Lets connections through again after [goDown]. */
+    fun comeBack() {
+        down = false
+    }
 
     override fun close() {
         server.close()

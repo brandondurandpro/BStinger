@@ -26,6 +26,7 @@ settings:
 
 test-dependencies@jvm:
   - //server
+  - //testkit
   - $compose.uiTest
   - $compose.desktop.currentOs
 
