@@ -64,6 +64,24 @@ class RemoteFolderPickerE2eTest {
         }
 
     @Test
+    fun `typing a folder path opens it without pressing Enter`() =
+        remoteUiTest {
+            val project = checkNotNull(demo)
+            launchApp()
+            connectRemoteTo(RemoteTestEnvironment, null)
+            awaitTag(Tags.FOLDER_PICKER, timeout = 60_000)
+
+            onNodeWithTag(Tags.FOLDER_PICKER_PATH).performClick()
+            onNodeWithTag(Tags.FOLDER_PICKER_PATH).performTextClearance()
+            onNodeWithTag(Tags.FOLDER_PICKER_PATH).performTextInput(project.toString())
+            // No Enter: the debounced check must list the folder's subfolders by itself.
+            awaitTag(ItemTags.folderEntry(project.resolve("src").toString()), timeout = 15_000)
+            onNodeWithTag(Tags.FOLDER_PICKER_PATH).assertTextContains(project.toString(), substring = true)
+            onNodeWithTag(Tags.FOLDER_PICKER_OPEN).performClick()
+            awaitTag(Tags.treeRow("README.md"), timeout = 60_000)
+        }
+
+    @Test
     fun `a path that does not exist is reported, then a good path recovers`() =
         remoteUiTest {
             val workspace = checkNotNull(root)

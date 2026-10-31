@@ -13,6 +13,7 @@ import kotlin.io.path.writeText
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -79,6 +80,33 @@ class FolderPickerStateTest {
     }
 
     @Test
+    fun `typing a path checks it after a debounce, without pressing Enter`() {
+        if (isWindows()) return
+        runBlocking {
+            val state = picker(CoroutineScope(coroutineContext))
+            awaitLoaded(state)
+
+            state.editPath("~/a")
+            assertTrue(state.checking, "the typed path is being checked")
+            assertEquals(root.toString(), state.current?.path, "the current folder stays until the check completes")
+            awaitPath(state, root.resolve("a").toString())
+            assertFalse(state.checking)
+
+            // Typing must not be rewritten under the caret; a trailing slash still selects the folder.
+            state.editPath("~/a/")
+            awaitPath(state, root.resolve("a").toString())
+            assertEquals("~/a/", state.path)
+            assertTrue(state.canChoose)
+
+            // Two quick edits: only the last path may win.
+            state.editPath("~/a")
+            state.editPath("~")
+            awaitPath(state, root.toString())
+            assertEquals(root.toString(), state.current?.path)
+        }
+    }
+
+    @Test
     fun `a file instead of a folder is reported and cannot be opened`() {
         if (isWindows()) return
         runBlocking {
@@ -97,21 +125,20 @@ class FolderPickerStateTest {
     private suspend fun awaitLoaded(state: FolderPickerState) {
         withTimeout(5_000) {
             while (state.current == null && state.error == null) delay(5)
+            while (state.loading || state.checking) delay(5)
         }
-        while (state.loading) delay(5)
     }
 
     private suspend fun awaitPath(state: FolderPickerState, path: String) {
         withTimeout(5_000) {
-            while (state.current?.path != path || state.loading) delay(5)
+            while (state.current?.path != path || state.loading || state.checking) delay(5)
         }
     }
 
     private suspend fun awaitError(state: FolderPickerState) {
         withTimeout(5_000) {
-            while (state.error == null) delay(5)
+            while (state.error == null || state.loading || state.checking) delay(5)
         }
-        while (state.loading) delay(5)
     }
 
     private fun isWindows(): Boolean = System.getProperty("os.name").lowercase().contains("win")

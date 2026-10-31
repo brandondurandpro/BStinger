@@ -15,8 +15,9 @@ the network comes back.
 
 If no project directory was given, a folder browser opens in the **SSH user's home**. Click a folder to list its
 subfolders, use **Up** and **Home**, type an absolute path (or `~`) in the path field, and **Open** the folder
-shown. The project view's *Open…* menu starts the same browser in the current project. Nothing is written on the
-host while browsing.
+shown. The path is checked as you type, with a 250 ms debounce, so pausing on a valid folder updates the list
+without pressing Enter; Enter checks immediately. The project view's *Open…* menu starts the same browser in the
+current project. Nothing is written on the host while browsing.
 
 Authentication is key or `ssh-agent` only: the client runs OpenSSH in batch mode, so it never asks for a password.
 `~/.ssh/config`, `ProxyJump`, known hosts and hardware keys therefore work as with `ssh` itself.
@@ -93,6 +94,7 @@ IDE ── RpcClient ── 127.0.0.1:<local port> ── ssh -N -L ── 127.0
 `RemoteDevelopmentPerformanceE2eTest` run a real Apache MINA SSH server on the test machine, point its `HOME` at a
 temporary directory and connect the real OpenSSH client to it. They cover install/daemon/tunnel, editing and saving,
 cancellation and validation, disconnecting, tunnel restarts, a changed host key, the folder browser (SSH home,
-click-through navigation, path errors, opening the chosen folder), a listing that completes after a reconnection,
+click-through navigation, live path check with debounce, path errors, opening the chosen folder), a listing that
+completes after a reconnection,
 1,000 folders, and a 5,000-line file on a 200-file project. `RemoteTransportTest` covers the token surviving a
 daemon restart and strict host-key checking.

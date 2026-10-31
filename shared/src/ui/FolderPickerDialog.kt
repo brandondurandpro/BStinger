@@ -105,20 +105,33 @@ private fun NavigationRow(state: FolderPickerState, onClose: () -> Unit) {
 private fun FolderList(state: FolderPickerState) {
     val listState = rememberLazyListState()
     LaunchedEffect(state.current?.path) { runCatching { listState.scrollToItem(0) } }
-    if (state.loading) {
-        Label(
-            "Loading…",
-            color = IdeColors.TextSecondary,
-            fontSize = 12.sp,
-            modifier = Modifier.padding(top = 8.dp).testTag(Tags.FOLDER_PICKER_LOADING),
-        )
-    } else if (state.current != null) {
-        Label(
-            if (state.entries.size == 1) "1 folder" else "${state.entries.size} folders",
-            color = IdeColors.TextSecondary,
-            fontSize = 11.sp,
-            modifier = Modifier.padding(top = 8.dp).testTag(Tags.FOLDER_PICKER_COUNT),
-        )
+    when {
+        state.loading -> {
+            Label(
+                "Loading…",
+                color = IdeColors.TextSecondary,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(top = 8.dp).testTag(Tags.FOLDER_PICKER_LOADING),
+            )
+        }
+
+        state.checking -> {
+            Label(
+                "Checking…",
+                color = IdeColors.TextSecondary,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(top = 8.dp).testTag(Tags.FOLDER_PICKER_CHECKING),
+            )
+        }
+
+        state.current != null -> {
+            Label(
+                if (state.entries.size == 1) "1 folder" else "${state.entries.size} folders",
+                color = IdeColors.TextSecondary,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(top = 8.dp).testTag(Tags.FOLDER_PICKER_COUNT),
+            )
+        }
     }
     Box(Modifier.fillMaxWidth().heightIn(max = 320.dp)) {
         LazyColumn(Modifier.fillMaxWidth().heightIn(max = 320.dp), state = listState) {

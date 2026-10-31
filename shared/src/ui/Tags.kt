@@ -30,6 +30,7 @@ object Tags {
     const val FOLDER_PICKER_EMPTY = "folder.picker.empty"
     const val FOLDER_PICKER_COUNT = "folder.picker.count"
     const val FOLDER_PICKER_LOADING = "folder.picker.loading"
+    const val FOLDER_PICKER_CHECKING = "folder.picker.checking"
     const val PROJECT = "project"
     const val PROJECT_WIDGET = "project.widget"
     const val PROJECT_CLOSE = "project.close"
