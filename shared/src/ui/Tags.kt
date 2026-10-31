@@ -47,8 +47,8 @@ object Tags {
     const val TERMINAL = "terminal"
     const val TERMINAL_INPUT = "terminal.input"
     const val TERMINAL_NEW = "terminal.new"
-    const val TERMINAL_CLOSE = "terminal.close"
-    const val TERMINAL_CLEAR = "terminal.clear"
+    const val TERMINAL_TABS = "terminal.tabs"
+    const val TERMINAL_TAB_MENU = "terminal.tab.menu"
     const val TERMINAL_HIDE = "terminal.hide"
     const val TREE = "tree"
     const val TREE_MENU = "tree.menu"
@@ -138,6 +138,8 @@ object Tags {
     fun toolHeader(window: String) = "tool.header:$window"
 
     fun terminalTab(number: Int) = "terminal.tab:$number"
+
+    fun terminalTabClose(number: Int) = "terminal.tab.close:$number"
 
     fun dockSplitter(dock: String) = "dock.splitter:$dock"
 

@@ -282,6 +282,7 @@ internal fun ToolWindowHeader(
     project: ProjectState,
     drag: ToolWindowDrag,
     modifier: Modifier = Modifier,
+    middle: (@Composable RowScope.() -> Unit)? = null,
     trailing: @Composable RowScope.() -> Unit = {},
 ) {
     var origin by remember { mutableStateOf(Offset.Zero) }
@@ -321,7 +322,12 @@ internal fun ToolWindowHeader(
         header.testTag(Tags.toolHeader(window.name)).padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Label(title, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+        if (middle == null) {
+            Label(title, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+        } else {
+            Label(title, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(end = 8.dp))
+            middle()
+        }
         trailing()
     }
 }
