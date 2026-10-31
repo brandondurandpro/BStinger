@@ -182,11 +182,13 @@ internal class ServerTerminal(
     private fun read(stream: InputStream) {
         val buffer = ByteArray(READ_BUFFER)
         while (true) {
+            // The end of the output: EOF on Unix, but ConPTY may fail the read instead ("ReadFile stdin failed",
+            // error 0) once the shell exited by itself. Either way finish() then reports the exit code.
             val length =
                 try {
                     stream.read(buffer)
-                } catch (e: IOException) {
-                    if (destroyed) -1 else throw e
+                } catch (expected: IOException) {
+                    -1
                 }
             if (length < 0) return
             if (length == 0) continue
