@@ -4,6 +4,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
@@ -61,7 +62,7 @@ class SearchChaosE2eTest {
             awaitTag(ItemTags.findInFilesItem("docs/guide.md", 1))
             awaitCondition {
                 runCatching {
-                    onNodeWithTag(Tags.FIND_IN_FILES_COUNT).assertTextContains("1 matches in 1 files")
+                    onNodeWithTag(Tags.FIND_IN_FILES_COUNT).assertTextEquals("1 match in 1 file")
                 }.isSuccess
             }
             awaitNoTag(ItemTags.findInFilesItem("src/main/kotlin/App.kt", 7))
