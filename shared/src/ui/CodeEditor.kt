@@ -1,27 +1,20 @@
 package org.example.kotlineditor.ui
 
 import androidx.compose.animation.core.withInfiniteAnimationFrameMillis
-import androidx.compose.foundation.HorizontalScrollbar
-import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.text.BasicText
-import androidx.compose.foundation.v2.ScrollbarAdapter
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -49,6 +42,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.IntSize
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import org.example.kotlineditor.model.GitChangeKind
@@ -77,7 +71,7 @@ class SearchHighlights(val byLine: Map<Int, IntArray>, val length: Int, val curr
 
 /** Hints computed once per caret move and painted on the visible lines. */
 @Immutable
-private class CaretHints(val identifier: String?, val brackets: Pair<TextPos, TextPos>?)
+internal class CaretHints(val identifier: String?, val brackets: Pair<TextPos, TextPos>?)
 
 /**
  * Virtualized code editor: only visible rows are composed, horizontal scrolling is read in the layout phase, and
@@ -93,8 +87,10 @@ fun CodeEditor(
     fontSize: Float = AppState.DEFAULT_EDITOR_FONT_SIZE,
     onZoom: (delta: Float) -> Unit = {},
     onCtrlClick: (TextPos) -> Unit = {},
+    canvas: Boolean = false,
 ) {
     var viewportWidth by remember { mutableFloatStateOf(0f) }
+    var viewportHeight by remember { mutableFloatStateOf(0f) }
     var focused by remember { mutableStateOf(false) }
     val caretOn = rememberCaretBlink(document, focused)
     val metrics = rememberEditorMetrics(document.lineCount, fontSize, tab.blameVisible)
@@ -106,19 +102,28 @@ fun CodeEditor(
     }
     val scope = rememberCoroutineScope()
     val clicks = remember { ClickCounter() }
-    val viewport = remember(tab) { LazyListViewport(tab.listState) }
+    val viewport: EditorViewport = if (canvas) tab.verticalScroll else remember(tab) { LazyListViewport(tab.listState) }
+    if (canvas) {
+        val rows = document.folding.rowCount()
+        SideEffect { tab.verticalScroll.updateLayout(rows, viewportHeight, metrics.lineHeightPx) }
+    }
     tab.horizontalScroll.updateRange(metrics.maxHorizontalOffset(document.maxLineLength, viewportWidth))
     FollowCaret(tab, viewport, document, metrics) { viewportWidth }
+    val onSize: (IntSize) -> Unit = {
+        viewportWidth = it.width.toFloat()
+        viewportHeight = it.height.toFloat()
+    }
     Box(
         modifier
             .background(IdeColors.Editor)
             .testTag(Tags.EDITOR)
-            .onSizeChanged { viewportWidth = it.width.toFloat() }
+            .onSizeChanged(onSize)
             .focusRequester(focusRequester)
             .onFocusChanged { focused = it.isFocused }
             .onKeyEvent { handleEditorKey(it, document, viewport.visibleRows(metrics.lineHeightPx)) }
             .focusable()
             .scrollable(tab.horizontalScroll.scrollableState, Orientation.Horizontal)
+            .verticalScrollWhen(canvas, tab)
             .zoomOnCtrlWheel(onZoom),
     ) {
         // Text cursor and mouse selection only over the text: the scrollbars are siblings drawn on top, so pressing
@@ -136,9 +141,13 @@ fun CodeEditor(
                     awaitEachGesture { editorGesture(target) }
                 },
         ) {
-            EditorRows(tab, document, metrics, highlights, hints, caretOn)
+            if (canvas) {
+                EditorCanvas(tab, document, metrics, highlights, hints, caretOn)
+            } else {
+                EditorRows(tab, document, metrics, highlights, hints, caretOn)
+            }
         }
-        EditorScrollbars(tab, metrics) { viewportWidth }
+        EditorScrollbars(tab, metrics, canvas) { viewportWidth }
     }
 }
 
@@ -198,7 +207,7 @@ private fun EditorRows(
     }
 }
 
-private fun decorations(
+internal fun decorations(
     document: Document,
     index: Int,
     line: String,
@@ -238,20 +247,6 @@ private fun decorations(
         change = change,
         deleted = deleted,
         blame = blame,
-    )
-}
-
-@Composable
-private fun BoxScope.EditorScrollbars(tab: EditorTab, metrics: EditorMetrics, viewportWidth: () -> Float) {
-    VerticalScrollbar(
-        rememberScrollbarAdapter(tab.listState),
-        Modifier.align(Alignment.CenterEnd).fillMaxHeight().testTag(Tags.EDITOR_VERTICAL_SCROLLBAR),
-    )
-    HorizontalScrollbar(
-        remember(
-            tab.horizontalScroll,
-        ) { HorizontalScrollAdapter(tab.horizontalScroll) { viewportWidth() - metrics.gutterPx } },
-        Modifier.align(Alignment.BottomStart).padding(start = metrics.gutterWidth).fillMaxWidth(),
     )
 }
 
@@ -339,15 +334,6 @@ private fun scrollToX(horizontal: HorizontalScroll, metrics: EditorMetrics, x: F
             }
         }
     }
-}
-
-private class HorizontalScrollAdapter(private val state: HorizontalScroll, private val viewport: () -> Float) :
-    ScrollbarAdapter {
-    override val scrollOffset: Double get() = state.offset.toDouble()
-    override val contentSize: Double get() = state.maxOffset + viewportSize
-    override val viewportSize: Double get() = viewport().toDouble().coerceAtLeast(0.0)
-
-    override suspend fun scrollTo(scrollOffset: Double) = state.scrollTo(scrollOffset.toFloat())
 }
 
 /** Text shown when a tab cannot display its content. */

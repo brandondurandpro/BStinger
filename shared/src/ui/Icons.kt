@@ -117,17 +117,7 @@ fun PlainFileIcon(modifier: Modifier) {
 
 @Composable
 fun Chevron(expanded: Boolean, modifier: Modifier = Modifier, color: Color = IdeColors.TextSecondary) {
-    Canvas(modifier.size(16.dp).rotate(if (expanded) 90f else 0f)) {
-        val w = size.width
-        val h = size.height
-        val path =
-            Path().apply {
-                moveTo(w * 0.40f, h * 0.28f)
-                lineTo(w * 0.62f, h * 0.50f)
-                lineTo(w * 0.40f, h * 0.72f)
-            }
-        drawPath(path, color, style = Stroke(width = 1.3.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
-    }
+    Canvas(modifier.size(16.dp).rotate(if (expanded) 90f else 0f)) { drawChevron(size.width, color) }
 }
 
 @Composable
