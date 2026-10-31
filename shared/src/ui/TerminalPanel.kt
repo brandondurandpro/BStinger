@@ -88,6 +88,13 @@ internal fun TerminalPanel(project: ProjectState, drag: ToolWindowDrag, modifier
                 MinimizeIcon()
             }
         }
+        if (terminal.active?.lost == true) {
+            Label(
+                "This shell is gone: the server restarted. Open a new tab with +.",
+                Modifier.padding(horizontal = 12.dp, vertical = 4.dp).testTag(Tags.TERMINAL_LOST),
+                color = IdeColors.Error,
+            )
+        }
         terminal.error?.let {
             Label(it, Modifier.padding(horizontal = 12.dp, vertical = 4.dp), color = IdeColors.Error)
         }

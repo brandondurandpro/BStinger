@@ -9,6 +9,7 @@ import androidx.compose.ui.test.SkikoComposeUiTest
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
@@ -263,6 +264,27 @@ class SearchE2eTest {
                     .caret
                     .line,
             )
+        }
+
+    @Test
+    fun `Find in Files counts its matches and files in correct English`() =
+        runComposeUiTest {
+            launchWithProject(project)
+            onNodeWithTag(Tags.TREE).performClick()
+            onNodeWithTag(
+                Tags.TREE,
+            ).performKeyInput { withKeyDown(Key.CtrlLeft) { withKeyDown(Key.ShiftLeft) { pressKey(Key.F) } } }
+            val input = awaitTag(Tags.FIND_IN_FILES_INPUT)
+            val count = onNodeWithTag(Tags.FIND_IN_FILES_COUNT)
+            input.performTextInput("Hello from")
+            awaitCondition { runCatching { count.assertTextEquals("1 match in 1 file") }.isSuccess }
+            input.performTextClearance()
+            // "Guide" and "guide", both in docs/guide.md.
+            input.performTextInput("guide")
+            awaitCondition { runCatching { count.assertTextEquals("2 matches in 1 file") }.isSuccess }
+            input.performTextClearance()
+            input.performTextInput("no-such-text-anywhere")
+            awaitCondition { runCatching { count.assertTextEquals("No matches") }.isSuccess }
         }
 
     @Test

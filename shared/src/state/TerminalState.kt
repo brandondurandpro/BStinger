@@ -45,8 +45,15 @@ class TerminalTab(
     var title by mutableStateOf(name)
         private set
 
+    /**
+     * Whether the server lost the shell instead of the shell exiting: its screens stopped while it was running, as
+     * when the server restarts. The tab then only shows its last screen; typing there would go nowhere.
+     */
+    var lost by mutableStateOf(false)
+        private set
+
     /** Whether the shell is still running. */
-    val running: Boolean get() = snapshot?.running ?: true
+    val running: Boolean get() = !lost && snapshot?.running ?: true
 
     // Last size sent to the server, to avoid resizing on every frame.
     private var columns = DEFAULT_COLUMNS
@@ -60,6 +67,8 @@ class TerminalTab(
                 snapshot = screen
                 if (screen.title.isNotBlank()) title = screen.title
             }
+            // An exiting shell sends a last screen saying it stopped; a lost one just stops sending.
+            if (snapshot?.running != false) lost = true
         }
 
     /** Sends the characters the user typed, as if they came from the keyboard. */

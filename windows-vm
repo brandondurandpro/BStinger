@@ -1,0 +1,151 @@
+#!/bin/sh
+#
+# Runs the tests on a local Windows VM, like the Windows CI job, without waiting for GitHub.
+#
+#   ./windows-vm start            start the VM (the first time: download and install Windows, 20-60 min)
+#   ./windows-vm test [args...]   run `kotlin.bat test [args...]` on the current working tree, uncommitted files
+#                                 included; exits with the tests' exit code (e.g. ./windows-vm test -m server)
+#   ./windows-vm status           whether the VM runs and its test runner is ready
+#   ./windows-vm stop             shut Windows down (the disk is kept: the next start takes a minute)
+#   ./windows-vm destroy          delete the VM and its disk
+#
+# Windows Server 2025 (the image of GitHub's windows-latest, evaluation edition) runs in QEMU/KVM through the
+# dockur/windows container. A runner started in the auto-logged-in desktop session, like the CI's, checks out the
+# working tree with Git for Windows (CRLF line endings, as in CI) and runs the tests; the build directory is kept
+# between runs. Watch the desktop on http://127.0.0.1:8006 (or RDP on 127.0.0.1:3389, user Docker / admin).
+#
+# Needs Docker and KVM (/dev/kvm). Settings, through the environment:
+#   WINDOWS_VM_DIR      where the disk and the shared folder live (default ~/.cache/kotlin-editor/windows-vm)
+#   WINDOWS_VM_RAM      memory of the VM (default 8G)
+#   WINDOWS_VM_CPUS     cores of the VM (default 6)
+#   WINDOWS_VM_TIMEOUT  minutes a test run may take (default 60)
+#
+set -eu
+
+IMAGE=docker.io/dockurr/windows:6.06
+CONTAINER=kotlin-editor-windows
+VERSION=2025
+
+cd "$(dirname "$0")"
+dir=${WINDOWS_VM_DIR:-$HOME/.cache/kotlin-editor/windows-vm}
+shared="$dir/shared"
+run="$shared/run"
+
+die() {
+    echo "windows-vm: $*" >&2
+    exit 1
+}
+
+running() { [ "$(docker inspect -f '{{.State.Running}}' "$CONTAINER" 2>/dev/null)" = true ]; }
+
+ready() { running && [ -f "$shared/runner-ready" ]; }
+
+start() {
+    [ -w /dev/kvm ] || die "/dev/kvm is missing or not writable: enable virtualization and join the kvm group"
+    mkdir -p "$dir/storage" "$dir/oem" "$run"
+    # The runner is read from the shared folder at each logon: changes apply at the next start. The setup files are
+    # copied too, so the VM never depends on the checkout (or the worktree) it was created from.
+    cp tools/windows-vm/runner.ps1 "$shared/runner.ps1"
+    cp tools/windows-vm/oem/* "$dir/oem/"
+    if running; then
+        echo "The VM is already running."
+    else
+        rm -f "$shared/runner-ready"
+        if docker inspect "$CONTAINER" >/dev/null 2>&1; then
+            docker start "$CONTAINER" >/dev/null
+        else
+            echo "Creating the VM ($VERSION, ${WINDOWS_VM_RAM:-8G}, ${WINDOWS_VM_CPUS:-6} cores) in $dir"
+            docker run -d --name "$CONTAINER" \
+                -e VERSION="$VERSION" \
+                -e RAM_SIZE="${WINDOWS_VM_RAM:-8G}" \
+                -e CPU_CORES="${WINDOWS_VM_CPUS:-6}" \
+                -e DISK_SIZE=96G \
+                -e LANGUAGE=English \
+                --device=/dev/kvm --device=/dev/net/tun --cap-add NET_ADMIN \
+                -p 127.0.0.1:8006:8006 -p 127.0.0.1:3389:3389/tcp -p 127.0.0.1:3389:3389/udp \
+                -v "$dir/storage:/storage" \
+                -v "$shared:/shared" \
+                -v "$dir/oem:/oem:ro" \
+                --stop-timeout 120 \
+                "$IMAGE" >/dev/null
+            echo "Windows is downloading and installing: this takes 20 to 60 minutes the first time."
+        fi
+    fi
+    echo "Desktop: http://127.0.0.1:8006"
+    printf "Waiting for the test runner"
+    waited=0
+    until ready; do
+        running || die "the container stopped: docker logs $CONTAINER"
+        [ $waited -lt 7200 ] || die "the runner is still not ready after 2 hours: look at http://127.0.0.1:8006"
+        sleep 10
+        waited=$((waited + 10))
+        [ $((waited % 60)) -eq 0 ] && printf "."
+    done
+    echo " ready."
+}
+
+# The working tree as a commit (uncommitted and untracked files included, ignored ones not), without touching
+# the index, the branch or the stash: a temporary index builds the tree.
+snapshot() {
+    index=$(mktemp)
+    trap 'rm -f "$index"' EXIT
+    GIT_INDEX_FILE=$index git read-tree HEAD
+    GIT_INDEX_FILE=$index git add -A
+    tree=$(GIT_INDEX_FILE=$index git write-tree)
+    commit=$(git commit-tree "$tree" -p HEAD -m "windows-vm snapshot")
+    git update-ref refs/windows-vm/snapshot "$commit"
+    git bundle create "$run/snapshot.bundle.part" refs/windows-vm/snapshot 2>/dev/null
+    git update-ref -d refs/windows-vm/snapshot
+    mv "$run/snapshot.bundle.part" "$run/snapshot.bundle"
+    echo "Snapshot $(git rev-parse --short HEAD)$(git diff --quiet HEAD && echo '' || echo ' + local changes')"
+}
+
+# Each run has its own id, so the result of an earlier run is never taken for this one.
+test_() {
+    ready || die "the VM is not ready: ./windows-vm start"
+    snapshot
+    id=$(date +%s)-$$
+    printf '%s\n%s\n' "$id" "$*" > "$run/request.part"
+    mv "$run/request.part" "$run/request"
+    waited=0
+    until [ -f "$run/$id.log" ]; do
+        [ $waited -lt 120 ] || die "the runner did not pick the request up: look at http://127.0.0.1:8006"
+        sleep 1
+        waited=$((waited + 1))
+    done
+    tail -n +1 -f "$run/$id.log" &
+    tail=$!
+    limit=$((${WINDOWS_VM_TIMEOUT:-60} * 60))
+    waited=0
+    until [ -f "$run/$id.exit" ]; do
+        if [ $waited -ge $limit ]; then
+            kill $tail
+            die "no result after ${WINDOWS_VM_TIMEOUT:-60} minutes"
+        fi
+        sleep 2
+        waited=$((waited + 2))
+    done
+    sleep 1 # the last lines of the log
+    kill $tail
+    code=$(tr -dc 0-9 < "$run/$id.exit")
+    echo "windows-vm: kotlin.bat test $* exited with ${code:-?}"
+    exit "${code:-1}"
+}
+
+case "${1:-}" in
+    start) start ;;
+    test) shift; test_ "$@" ;;
+    status)
+        if ready; then echo "running, runner ready"
+        elif running; then echo "running, runner not ready (installing or starting)"
+        else echo "stopped"; fi
+        ;;
+    stop) running && docker stop "$CONTAINER" >/dev/null; echo "stopped" ;;
+    destroy)
+        docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+        # The disk belongs to the container's root.
+        docker run --rm --entrypoint rm -v "$dir:/vm" "$IMAGE" -rf /vm/storage /vm/shared /vm/oem
+        echo "deleted"
+        ;;
+    *) sed -n '3,22p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+esac

@@ -12,6 +12,7 @@ import org.example.kotlineditor.rpc.ClientOptions
 import org.example.kotlineditor.rpc.RemoteFileSystem
 import org.example.kotlineditor.rpc.RemoteTerminalLauncher
 import org.example.kotlineditor.rpc.RpcClient
+import org.example.kotlineditor.testkit.ChaosProxy
 import java.nio.file.Files
 import kotlin.io.path.writeText
 import kotlin.test.AfterTest
