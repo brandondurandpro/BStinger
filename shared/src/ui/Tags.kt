@@ -107,6 +107,8 @@ object Tags {
 
     fun treeRow(relativePath: String) = "tree:$relativePath"
 
+    fun treeSticky(relativePath: String) = "tree.sticky:$relativePath"
+
     fun treeChevron(relativePath: String) = "tree.chevron:$relativePath"
 
     fun treeGitStatus(relativePath: String, status: String) = "tree.git:$relativePath:$status"

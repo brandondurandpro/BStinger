@@ -28,6 +28,9 @@ class FileTreeState(val root: FileEntry, private val fileSystem: ProjectFileSyst
 
     var selectedPath: String? by mutableStateOf(root.path)
 
+    /** Vertical scroll of the tree, in rows; kept while the project view is hidden. */
+    val scroll = VerticalScroll()
+
     val rows: List<TreeRow> by derivedStateOf { buildRows() }
 
     init {

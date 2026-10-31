@@ -143,7 +143,7 @@ private fun LineNode(
 
 // The first row on screen, left as it was while a scroll is in progress.
 @Composable
-private fun rememberSettledFirstRow(scroll: VerticalScroll): Int {
+internal fun rememberSettledFirstRow(scroll: VerticalScroll): Int {
     var settled by remember(scroll) { mutableIntStateOf(scroll.firstRow) }
     LaunchedEffect(scroll) {
         snapshotFlow { if (scroll.scrollableState.isScrollInProgress) null else scroll.firstRow }

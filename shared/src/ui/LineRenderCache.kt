@@ -49,7 +49,7 @@ internal class LineRenderCache(
         blames.getOrPut(text) { measurer.measure(text, blameStyle, softWrap = false, maxLines = 1) }
 }
 
-private class LruMap<K, V>(private val capacity: Int) : LinkedHashMap<K, V>(capacity, LOAD_FACTOR, true) {
+internal class LruMap<K, V>(private val capacity: Int) : LinkedHashMap<K, V>(capacity, LOAD_FACTOR, true) {
     override fun removeEldestEntry(eldest: MutableMap.MutableEntry<K, V>): Boolean = size > capacity
 
     private companion object {

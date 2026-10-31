@@ -39,7 +39,7 @@ private class HorizontalScrollAdapter(private val state: HorizontalScroll, priva
     override suspend fun scrollTo(scrollOffset: Double) = state.scrollTo(scrollOffset.toFloat())
 }
 
-private class VerticalScrollAdapter(private val state: VerticalScroll) : ScrollbarAdapter {
+internal class VerticalScrollAdapter(private val state: VerticalScroll) : ScrollbarAdapter {
     override val scrollOffset: Double get() = state.offsetPx.toDouble()
     override val contentSize: Double get() = state.contentHeightPx.toDouble()
     override val viewportSize: Double get() = state.viewportHeightPx.toDouble()
