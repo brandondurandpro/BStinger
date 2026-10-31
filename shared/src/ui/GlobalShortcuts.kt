@@ -82,7 +82,6 @@ private val IDE_SHORTCUTS =
         bind(setOf(Key.One), alt = true) { project.toggleToolWindow(ToolWindow.Project) },
         bind(setOf(Key.Nine), alt = true) { project.toggleToolWindow(ToolWindow.Git) },
         bind(setOf(Key.F12), alt = true) { project.toggleToolWindow(ToolWindow.Terminal) },
-        bind(setOf(Key.R), ctrl = true, shift = true, alt = true) { app.toggleEditorRenderer() },
         bind(setOf(Key.D), ctrl = true, shift = true, alt = true) {
             app.devtools = true
             project.toggleToolWindow(ToolWindow.Network)

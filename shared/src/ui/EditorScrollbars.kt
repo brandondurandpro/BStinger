@@ -2,13 +2,10 @@ package org.example.kotlineditor.ui
 
 import androidx.compose.foundation.HorizontalScrollbar
 import androidx.compose.foundation.VerticalScrollbar
-import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.v2.ScrollbarAdapter
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -20,20 +17,9 @@ import org.example.kotlineditor.state.HorizontalScroll
 import org.example.kotlineditor.state.VerticalScroll
 
 @Composable
-internal fun BoxScope.EditorScrollbars(
-    tab: EditorTab,
-    metrics: EditorMetrics,
-    canvas: Boolean,
-    viewportWidth: () -> Float,
-) {
-    val adapter =
-        if (canvas) {
-            remember(tab) { VerticalScrollAdapter(tab.verticalScroll) }
-        } else {
-            rememberScrollbarAdapter(tab.listState)
-        }
+internal fun BoxScope.EditorScrollbars(tab: EditorTab, metrics: EditorMetrics, viewportWidth: () -> Float) {
     VerticalScrollbar(
-        adapter,
+        remember(tab) { VerticalScrollAdapter(tab.verticalScroll) },
         Modifier.align(Alignment.CenterEnd).fillMaxHeight().testTag(Tags.EDITOR_VERTICAL_SCROLLBAR),
     )
     HorizontalScrollbar(
@@ -43,11 +29,6 @@ internal fun BoxScope.EditorScrollbars(
         Modifier.align(Alignment.BottomStart).padding(start = metrics.gutterWidth).fillMaxWidth(),
     )
 }
-
-// The canvas scrolls itself with the wheel; the LazyColumn handles its own.
-internal fun Modifier.verticalScrollWhen(canvas: Boolean, tab: EditorTab) =
-    // reverseDirection: the wheel and drags give negative deltas going down, like for a LazyColumn.
-    if (canvas) scrollable(tab.verticalScroll.scrollableState, Orientation.Vertical, reverseDirection = true) else this
 
 private class HorizontalScrollAdapter(private val state: HorizontalScroll, private val viewport: () -> Float) :
     ScrollbarAdapter {

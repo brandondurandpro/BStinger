@@ -248,6 +248,26 @@ class EditingE2eTest {
         }
 
     @Test
+    fun `the mouse wheel scrolls the editor`() =
+        runComposeUiTest {
+            project.file("Long.kt", (1..2000).joinToString("\n") { "val v$it = $it" })
+            val app = launchWithProject(project)
+            openFromTree("Long.kt")
+            awaitTag(Tags.line(0))
+            onNodeWithTag(Tags.EDITOR).performMouseInput {
+                moveTo(center)
+                scroll(20f)
+            }
+            val tab = app.project.editor.activeTab!!
+            val scroll = tab.verticalScroll
+            awaitCondition { scroll.firstRow > 0 }
+            mainClock.advanceTimeBy(WHEEL_ANIMATION_MILLIS)
+            waitForIdle()
+            awaitTag(Tags.line(scroll.firstRow))
+            awaitNoTag(Tags.line(0))
+        }
+
+    @Test
     fun `dragging the scrollbar scrolls without selecting text or moving the caret`() =
         runComposeUiTest {
             project.file("Long.kt", (1..2000).joinToString("\n") { "val v$it = $it" })
@@ -271,6 +291,7 @@ class EditingE2eTest {
         }
 
     companion object {
+        private const val WHEEL_ANIMATION_MILLIS = 1000L
         private val LETTERS =
             listOf(
                 Key.A, Key.B, Key.C, Key.D, Key.E, Key.F, Key.G, Key.H, Key.I, Key.J, Key.K, Key.L, Key.M,
