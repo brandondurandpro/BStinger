@@ -105,8 +105,13 @@ private fun status(results: List<SearchHit>?, query: String): String =
     when {
         results == null -> "Searching…"
         query.isEmpty() -> ""
-        else -> "${results.size} matches in ${results.distinctBy { it.entry.path }.size} files"
+        results.isEmpty() -> "No matches"
+        else -> "${plural(results.size, "match", "matches")} in ${plural(fileCount(results), "file", "files")}"
     }
+
+private fun fileCount(results: List<SearchHit>) = results.distinctBy { it.entry.path }.size
+
+private fun plural(count: Int, one: String, many: String) = "$count ${if (count == 1) one else many}"
 
 @Composable
 private fun SearchHitRow(hit: SearchHit, length: Int, selected: Boolean, onClick: () -> Unit) {
