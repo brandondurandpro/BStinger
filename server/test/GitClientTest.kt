@@ -87,6 +87,25 @@ class GitClientTest {
         }
 
     @Test
+    fun `blame follows the edits of the file and the new commits`() =
+        runBlocking {
+            root.resolve("a.kt").writeText("one\n")
+            commitAll()
+            val git = CliGitClient()
+            val first = git.blame(root.toString(), "a.kt").single().commit
+            assertEquals(first, git.blame(root.toString(), "a.kt").single().commit)
+
+            root.resolve("a.kt").writeText("one\ntwo\n")
+            val edited = git.blame(root.toString(), "a.kt")
+            assertEquals(listOf(first, "00000000"), edited.map { it.commit })
+
+            git("commit", "-q", "-am", "two")
+            val committed = git.blame(root.toString(), "a.kt")
+            assertEquals(first, committed[0].commit)
+            assertTrue(committed[1].commit != "00000000" && committed[1].commit != first, "Commits: $committed")
+        }
+
+    @Test
     fun `an untracked file has no blame`() =
         runBlocking {
             root.resolve("tracked.kt").writeText("x\n")

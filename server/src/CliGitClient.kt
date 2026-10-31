@@ -7,9 +7,16 @@ import org.example.kotlineditor.model.DiffLine
 import org.example.kotlineditor.model.GitClient
 import org.example.kotlineditor.model.GitFileStatus
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 
 /** Git through its command line; no repository or no git means no status. */
 class CliGitClient : GitClient {
+    private data class BlameVersion(val head: String?, val modified: Long, val size: Long)
+
+    private class CachedBlame(val version: BlameVersion, val lines: List<BlameLine>)
+
+    private val blames = ConcurrentHashMap<String, CachedBlame>()
+
     override suspend fun status(root: String): Map<String, GitFileStatus> =
         withContext(Dispatchers.IO) {
             gitOutput(root, "status", "--porcelain", "-uall")?.mapNotNull(::parse)?.toMap().orEmpty()
@@ -68,16 +75,32 @@ class CliGitClient : GitClient {
     override suspend fun push(root: String): String =
         withContext(Dispatchers.IO) { runGit(root, NETWORK_TIMEOUT_SECONDS, "push") }
 
+    /**
+     * Kept until HEAD or the file changes: blaming a large file takes git hundreds of milliseconds, and the editor
+     * asks again every time the window regains focus.
+     */
     override suspend fun blame(root: String, path: String): List<BlameLine> =
         withContext(Dispatchers.IO) {
             if (gitOutput(root, "ls-files", "--error-unmatch", "--", path) == null) {
                 emptyList()
             } else {
-                runCatching { runGit(root, "blame", "--line-porcelain", "--", path) }
-                    .map(::parseBlame)
-                    .getOrDefault(emptyList())
+                val file = File(root, path)
+                val head = gitOutput(root, "rev-parse", "HEAD")?.firstOrNull()
+                val version = BlameVersion(head, file.lastModified(), file.length())
+                val cached = blames[file.absolutePath]?.takeIf { it.version == version }
+                cached?.lines ?: freshBlame(root, path, file.absolutePath, version)
             }
         }
+
+    // A failure gives no annotation and is not cached.
+    private fun freshBlame(root: String, path: String, key: String, version: BlameVersion): List<BlameLine> {
+        val lines = runCatching { parseBlame(runGit(root, "blame", "--line-porcelain", "--", path)) }.getOrNull()
+        if (lines != null) {
+            if (blames.size >= MAX_CACHED_BLAMES) blames.clear()
+            blames[key] = CachedBlame(version, lines)
+        }
+        return lines.orEmpty()
+    }
 
     // One `git status --porcelain` line: two status letters, a space, then the path (`old -> new` for renames).
     private fun parse(line: String): Pair<String, GitFileStatus>? {
@@ -99,5 +122,6 @@ class CliGitClient : GitClient {
         const val BRANCH_REF = "ref: refs/heads/"
         const val PATH_START = 3
         const val NETWORK_TIMEOUT_SECONDS = 180L
+        const val MAX_CACHED_BLAMES = 32
     }
 }
