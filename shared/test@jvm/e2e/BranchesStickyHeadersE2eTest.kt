@@ -52,6 +52,8 @@ class BranchesStickyHeadersE2eTest {
         onNodeWithTag(Tags.TOOL_BRANCHES).performClick()
         awaitTag(Tags.BRANCHES_PANEL)
         awaitTag(ItemTags.historyBranch("local-000"))
+        // The remote branches are loaded by their own request; wait for them before scrolling to their section.
+        awaitCondition { app.project.history.remoteBranches.size > LOCALS }
     }
 
     private fun ComposeUiTest.topOf(tag: String): Dp = onNodeWithTag(tag).getBoundsInRoot().top
