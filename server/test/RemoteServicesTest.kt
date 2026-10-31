@@ -15,6 +15,7 @@ import org.example.kotlineditor.rpc.RemoteSearch
 import org.example.kotlineditor.rpc.RemoteTerminalLauncher
 import org.example.kotlineditor.rpc.RpcClient
 import java.nio.file.Files
+import kotlin.io.path.readLines
 import kotlin.io.path.writeText
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -23,7 +24,8 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 import kotlin.time.measureTime
 
-private val COMMAND_OUTPUT = Regex("""(?<!echo )(?<!\w)n\d+(?!\d)""")
+private const val COMMANDS = 50
+private const val ORDER_FILE = "order.txt"
 
 /** The client and the server talking over a real socket. */
 class RemoteServicesTest {
@@ -129,21 +131,17 @@ class RemoteServicesTest {
     @Test
     fun `commands reach the terminal in order`() =
         runBlocking {
-            // Tall enough for every line: cmd.exe's long prompt makes each echoed command wrap.
-            val terminal = RemoteTerminalLauncher(client).start(project.toString(), 80, 400, 8, 16)
-            repeat(50) { terminal.write("echo n$it\r".toByteArray()) }
+            val terminal = RemoteTerminalLauncher(client).start(project.toString(), 80, 24, 8, 16)
+            // Each command appends its number to a file, read once the shell has exited. The screen cannot tell the
+            // order: commands typed ahead are echoed while an earlier one runs, and that echo, the prompts and the
+            // outputs share rows, an output being sometimes overwritten (`echo n45` / `n46` / `# n46` on CI).
+            repeat(COMMANDS) { terminal.write("echo n$it >> $ORDER_FILE\r".toByteArray()) }
             terminal.write("exit\r".toByteArray())
-            val screen = withTimeout(20_000) { terminal.output.first { snapshot -> !snapshot.running } }
-            // Every `nN` that is not the echo of its command. Rows are padded to the width, so joined as they are a
-            // command wrapped by the long prompt stays in one piece; and with type-ahead, ConPTY can draw an output and
-            // the echo of the next command on one row (`n9C:\project>echo n10`), which a row filter would drop.
-            val rows = screen.text()
-            val outputs = COMMAND_OUTPUT.findAll(rows.joinToString("")).map { it.value }.toList()
-            assertEquals(
-                (0 until 50).map { "n$it" },
-                outputs,
-                "screen:\n" + rows.filter { it.isNotBlank() }.joinToString("\n") { it.trimEnd() },
-            )
+            withTimeout(20_000) { terminal.output.first { snapshot -> !snapshot.running } }
+            // cmd.exe keeps the space before `>>`.
+            val lines = project.resolve(ORDER_FILE).readLines()
+            val executed = lines.map(String::trim).filter(String::isNotEmpty)
+            assertEquals((0 until COMMANDS).map { "n$it" }, executed)
             terminal.destroy()
         }
 
