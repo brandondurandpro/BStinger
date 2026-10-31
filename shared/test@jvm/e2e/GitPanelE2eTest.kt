@@ -16,6 +16,7 @@ import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.test.withKeyDown
 import org.example.kotlineditor.model.DiffKind
+import org.example.kotlineditor.model.Direction
 import org.example.kotlineditor.state.Dock
 import org.example.kotlineditor.state.TabStatus
 import org.example.kotlineditor.state.ToolWindow
@@ -271,6 +272,45 @@ class GitPanelE2eTest {
             // The single line replaces three lines of HEAD: modified, with the removed block before it.
             awaitTag(Tags.changeMarker(0, "Modified"), unmerged = true)
             awaitTag(Tags.changeMarker(0, "Deleted"), unmerged = true)
+        }
+
+    @Test
+    fun `saving a file recomputes the gutter marks of that file only`() =
+        runComposeUiTest {
+            commitAll()
+            val app = launchWithProject(project)
+            val network = app.client.network
+
+            fun diffs(direction: Direction) =
+                network.snapshot().count { it.direction == direction && it.method == "GitDiff" }
+
+            onNodeWithTag(Tags.TREE).performClick()
+            onNodeWithTag(Tags.TREE).performKeyInput {
+                withKeyDown(Key.CtrlLeft) {
+                    withKeyDown(Key.ShiftLeft) { withKeyDown(Key.AltLeft) { pressKey(Key.D) } }
+                }
+            }
+            awaitCondition { network.recording }
+            openFromTree("README.md")
+            openFromTree("src/main/kotlin/App.kt")
+            openFromTree("build.gradle.kts")
+            awaitCondition { diffs(Direction.Received) == 3 }
+            network.clear()
+
+            onNodeWithTag(Tags.EDITOR).performClick()
+            onNodeWithTag(Tags.EDITOR).performKeyInput {
+                pressKey(Key.X)
+                withKeyDown(Key.CtrlLeft) { pressKey(Key.S) }
+            }
+            awaitCondition { app.project.gitStatus["build.gradle.kts"] != null }
+            awaitCondition {
+                app.project.editor.activeTab
+                    ?.lineChanges
+                    ?.isNotEmpty() == true
+            }
+            waitForIdle()
+            // Three files are open, but only the saved one changed: its diff is the only one asked again.
+            assertEquals(1, diffs(Direction.Sent))
         }
 
     @Test
