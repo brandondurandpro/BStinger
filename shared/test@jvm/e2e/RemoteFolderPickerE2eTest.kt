@@ -1,6 +1,8 @@
 package org.example.kotlineditor.e2e
 
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
@@ -77,6 +79,40 @@ class RemoteFolderPickerE2eTest {
             // No Enter: the debounced check must list the folder's subfolders by itself.
             awaitTag(ItemTags.folderEntry(project.resolve("src").toString()), timeout = 15_000)
             onNodeWithTag(Tags.FOLDER_PICKER_PATH).assertTextContains(project.toString(), substring = true)
+            onNodeWithTag(Tags.FOLDER_PICKER_OPEN).performClick()
+            awaitTag(Tags.treeRow("README.md"), timeout = 60_000)
+        }
+
+    @Test
+    fun `a path typed in chunks is checked once and recovers without Enter`() =
+        remoteUiTest {
+            val project = checkNotNull(demo)
+            launchApp()
+            connectRemoteTo(RemoteTestEnvironment, null)
+            awaitTag(Tags.FOLDER_PICKER, timeout = 60_000)
+
+            typeFolderPathInChunks("/does", "/not", "/exist")
+            awaitTag(Tags.FOLDER_PICKER_ERROR).assertTextContains("Directory not found", substring = true)
+
+            val path = project.toString()
+            typeFolderPathInChunks(path.dropLast(5), path.takeLast(5))
+            awaitTag(ItemTags.folderEntry(project.resolve("src").toString()), timeout = 15_000)
+            awaitNoTag(Tags.FOLDER_PICKER_ERROR)
+        }
+
+    @Test
+    fun `Open is disabled while the typed path is checked and the text is kept`() =
+        remoteUiTest {
+            val project = checkNotNull(demo)
+            launchApp()
+            connectRemoteTo(RemoteTestEnvironment, null)
+            awaitTag(Tags.FOLDER_PICKER, timeout = 60_000)
+
+            replaceFolderPath("$project/")
+            onNodeWithTag(Tags.FOLDER_PICKER_OPEN).assertIsNotEnabled()
+            awaitTag(ItemTags.folderEntry(project.resolve("src").toString()), timeout = 15_000)
+            onNodeWithTag(Tags.FOLDER_PICKER_PATH).assertTextContains("$project/", substring = true)
+            onNodeWithTag(Tags.FOLDER_PICKER_OPEN).assertIsEnabled()
             onNodeWithTag(Tags.FOLDER_PICKER_OPEN).performClick()
             awaitTag(Tags.treeRow("README.md"), timeout = 60_000)
         }

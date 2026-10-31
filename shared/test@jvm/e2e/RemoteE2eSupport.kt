@@ -16,6 +16,22 @@ fun remoteUiTest(block: ComposeUiTest.() -> Unit) {
     runComposeUiTest { block() }
 }
 
+/** Replaces the folder-picker path in one edit (one debounce). */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.replaceFolderPath(text: String) {
+    onNodeWithTag(Tags.FOLDER_PICKER_PATH).performClick()
+    onNodeWithTag(Tags.FOLDER_PICKER_PATH).performTextClearance()
+    if (text.isNotEmpty()) onNodeWithTag(Tags.FOLDER_PICKER_PATH).performTextInput(text)
+}
+
+/** Replaces the folder-picker path with several quick edits, as a user typing would produce. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.typeFolderPathInChunks(vararg chunks: String) {
+    onNodeWithTag(Tags.FOLDER_PICKER_PATH).performClick()
+    onNodeWithTag(Tags.FOLDER_PICKER_PATH).performTextClearance()
+    chunks.forEach { onNodeWithTag(Tags.FOLDER_PICKER_PATH).performTextInput(it) }
+}
+
 /** Fills the Remote Development dialog for the fake SSH server of [RemoteTestEnvironment]. */
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.connectRemoteTo(

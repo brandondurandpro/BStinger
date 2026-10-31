@@ -89,4 +89,28 @@ class RemoteDevelopmentChaosE2eTest {
             folder.toFile().deleteRecursively()
         }
     }
+
+    @Test
+    fun `a typed path is checked when the SSH link comes back`() {
+        if (!RemoteTestEnvironment.available) return
+        val folder = Files.createTempDirectory(RemoteTestEnvironment.home, "typed-after-chaos-")
+        try {
+            remoteUiTest {
+                launchApp()
+                connectRemoteTo(RemoteTestEnvironment, null)
+                awaitTag(Tags.FOLDER_PICKER, timeout = 60_000)
+
+                RemoteTestEnvironment.ssh.stop()
+                val path = folder.toString()
+                typeFolderPathInChunks(path.dropLast(4), path.takeLast(4))
+                RemoteTestEnvironment.ssh.start()
+
+                awaitTag(Tags.FOLDER_PICKER_EMPTY, timeout = 30_000)
+                onNodeWithTag(Tags.FOLDER_PICKER_PATH)
+                    .assertTextContains(path, substring = true)
+            }
+        } finally {
+            folder.toFile().deleteRecursively()
+        }
+    }
 }

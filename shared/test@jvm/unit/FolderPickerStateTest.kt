@@ -88,9 +88,11 @@ class FolderPickerStateTest {
 
             state.editPath("~/a")
             assertTrue(state.checking, "the typed path is being checked")
+            assertFalse(state.canChoose, "Open waits for the check")
             assertEquals(root.toString(), state.current?.path, "the current folder stays until the check completes")
             awaitPath(state, root.resolve("a").toString())
             assertFalse(state.checking)
+            assertTrue(state.canChoose)
 
             // Typing must not be rewritten under the caret; a trailing slash still selects the folder.
             state.editPath("~/a/")

@@ -3,8 +3,6 @@ package org.example.kotlineditor.e2e
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.performClick
-import org.example.kotlineditor.ui.ItemTags
 import org.example.kotlineditor.ui.Tags
 import java.nio.file.Files
 import kotlin.test.AfterTest
@@ -64,8 +62,8 @@ class RemoteDevelopmentPerformanceE2eTest {
                 launchApp()
                 connectRemoteTo(RemoteTestEnvironment, null)
                 awaitTag(Tags.FOLDER_PICKER, timeout = 60_000)
-                measure("list 1000 remote folders", budgetMillis = 10_000, budgetMegabytes = 256) {
-                    onNodeWithTag(ItemTags.folderEntry(many.toString())).performClick()
+                measure("type and list 1000 remote folders", budgetMillis = 10_000, budgetMegabytes = 256) {
+                    replaceFolderPath(many.toString())
                     awaitTag(Tags.FOLDER_PICKER_COUNT)
                     onNodeWithTag(Tags.FOLDER_PICKER_COUNT)
                         .assertTextContains("1000 folders", substring = true)
