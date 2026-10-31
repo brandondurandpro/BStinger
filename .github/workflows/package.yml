@@ -1,0 +1,200 @@
+name: Package
+
+# Builds the deliverables of the IDE on each platform it runs on, with the
+# `packaging` plugin (packaging/): each one carries its own Java runtime, so
+# nothing has to be installed first.
+#
+#   platform     desktop app (embeds the server)       server, for remote use
+#   linux-*      .deb, .AppImage, .tar.gz (AOT cache)   .tar.gz
+#   windows-x64  .zip
+#   macos-*      .dmg
+#
+# The jars carry native libraries of the OS they are built on (Skiko for the UI,
+# libghostty-vt and pty4j for the terminal), so each platform is built on its own
+# runner rather than cross-built from Linux. A remote server is a Linux machine:
+# the server alone is only packaged for Linux.
+#
+# A pushed tag v1.2.3 also attaches everything, with SHA256SUMS.txt, to a draft
+# GitHub release, to review before publishing it. Manual runs, and pull requests
+# that change the packaging, only keep the files as workflow artifacts.
+
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+    paths:
+      - .github/workflows/package.yml
+      - packaging/**
+      - desktopApp/module.yaml
+      - desktopApp/packaging/**
+      - serverApp/module.yaml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  KOTLIN_CLI_NO_WELCOME_BANNER: "1"
+  # https://github.com/AppImage/type2-runtime/releases/tag/20251108
+  APPIMAGE_RUNTIME_RELEASE: "20251108"
+  APPIMAGE_RUNTIME_SHA256_X86_64: 2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d
+  APPIMAGE_RUNTIME_SHA256_AARCH64: 00cbdfcf917cc6c0ff6d3347d59e0ca1f7f45a6df1a428a0d6d8a78664d87444
+
+jobs:
+  package:
+    name: Package ${{ matrix.platform }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The oldest supported Ubuntu, so that the packages run on systems with an old glibc.
+          - platform: linux-x64
+            runner: ubuntu-22.04
+          - platform: linux-arm64
+            runner: ubuntu-22.04-arm
+          - platform: windows-x64
+            runner: windows-latest
+          - platform: macos-arm64
+            runner: macos-15
+          - platform: macos-x64
+            runner: macos-15-intel
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # jpackage, and the runtime it bundles: the code targets Java 25. The plugin finds it with JAVA_HOME.
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cache/JetBrains/Kotlin
+            ~/AppData/Local/JetBrains/Kotlin
+            ~/Library/Caches/JetBrains/Kotlin
+            ~/.m2/repository
+          key: package-${{ matrix.platform }}-${{ hashFiles('kotlin', 'kotlin.bat', 'libs.versions.toml', 'project.yaml', '**/module.yaml') }}
+
+      # APP_VERSION: numbers only, as jpackage wants, and the first one cannot be 0 on macOS.
+      # APP_VERSION_LABEL: the version in the file names.
+      - name: Compute the version
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ "$REF_TYPE" = tag ]; then
+            label="${REF_NAME#v}"
+          else
+            label="1.0.${GITHUB_RUN_NUMBER}"
+          fi
+          # 1.2.3-rc1 -> 1.2.3
+          numeric="$(printf '%s' "$label" | sed -E 's/^([0-9]+(\.[0-9]+){0,2}).*/\1/')"
+          echo "APP_VERSION=$numeric" >> "$GITHUB_ENV"
+          echo "APP_VERSION_LABEL=$label" >> "$GITHUB_ENV"
+
+      # fakeroot for the .deb, squashfs-tools for the AppImage, and a display (Xvfb) for the
+      # training run of the AOT cache.
+      - name: Prepare Linux packaging
+        if: runner.os == 'Linux'
+        env:
+          ARCH: ${{ runner.arch }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            fakeroot squashfs-tools xvfb xauth x11-utils \
+            libgl1 libx11-6 libxext6 libxrender1 libxtst6 libxi6 fontconfig fonts-dejavu-core
+          case "$ARCH" in
+            X64) arch=x86_64; sha="$APPIMAGE_RUNTIME_SHA256_X86_64" ;;
+            ARM64) arch=aarch64; sha="$APPIMAGE_RUNTIME_SHA256_AARCH64" ;;
+            *) echo "Unsupported architecture $ARCH"; exit 1 ;;
+          esac
+          runtime="$RUNNER_TEMP/appimage-runtime-$arch"
+          curl -sfL -o "$runtime" \
+            "https://github.com/AppImage/type2-runtime/releases/download/$APPIMAGE_RUNTIME_RELEASE/runtime-$arch"
+          echo "$sha  $runtime" | sha256sum -c
+          echo "APPIMAGE_RUNTIME=$runtime" >> "$GITHUB_ENV"
+          Xvfb :99 -screen 0 1600x1000x24 -nolisten tcp -ac &
+          export DISPLAY=:99
+          echo "DISPLAY=:99" >> "$GITHUB_ENV"
+          for _ in $(seq 1 30); do xdpyinfo >/dev/null 2>&1 && break; sleep 1; done
+          xdpyinfo | grep -E "name of display|dimensions"
+
+      - name: Package the desktop app
+        if: runner.os != 'Windows'
+        run: ./kotlin task :desktopApp:package@packaging
+
+      - name: Package the desktop app
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: kotlin.bat task :desktopApp:package@packaging
+
+      - name: Package the server
+        if: runner.os == 'Linux'
+        run: ./kotlin task :serverApp:package@packaging
+
+      - name: Collect the deliverables
+        run: |
+          mkdir -p dist
+          cp build/tasks/_desktopApp_package@packaging/deliverables/* dist/
+          if [ -d build/tasks/_serverApp_package@packaging/deliverables ]; then
+            cp build/tasks/_serverApp_package@packaging/deliverables/* dist/
+          fi
+          ls -la dist
+
+      # Each platform must produce all its formats: a missing tool only prints a message in the plugin.
+      - name: Check the deliverables
+        env:
+          OS: ${{ runner.os }}
+        run: |
+          case "$OS" in
+            Linux) expected="kotlin-editor-[0-9]*.deb kotlin-editor-[0-9]*.AppImage kotlin-editor-[0-9]*.tar.gz kotlin-editor-server-*.tar.gz" ;;
+            Windows) expected="kotlin-editor-*.zip" ;;
+            macOS) expected="kotlin-editor-*.dmg" ;;
+          esac
+          for pattern in $expected; do
+            compgen -G "dist/$pattern" > /dev/null || { echo "Missing dist/$pattern"; exit 1; }
+          done
+          if [ "$OS" = Linux ]; then
+            tar -tzf dist/kotlin-editor-[0-9]*.tar.gz | grep -q 'lib/app/app.aot$' || { echo "No AOT cache"; exit 1; }
+          fi
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: kotlin-editor-${{ matrix.platform }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: Draft the GitHub release
+    if: github.ref_type == 'tag'
+    needs: package
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: dist
+          pattern: kotlin-editor-*
+          merge-multiple: true
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum * > SHA256SUMS.txt
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" dist/* \
+            --repo "$GITHUB_REPOSITORY" --draft --generate-notes --title "$TAG"

@@ -12,3 +12,14 @@ settings:
   compose: enabled
   jvm:
     mainClass: org.example.kotlineditor.MainKt
+
+plugins:
+  packaging:
+    enabled: true
+    name: kotlin-editor
+    displayName: Kotlin Editor
+    mainClass: org.example.kotlineditor.MainKt
+    description: Kotlin Editor
+    vendor: Kotlin Editor
+    appImage: true
+    aot: true

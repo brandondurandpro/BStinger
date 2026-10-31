@@ -2,8 +2,12 @@ modules:
   - benchmark
   - compression
   - desktopApp
+  - packaging
   - protocol
   - server
   - serverApp
   - shared
   - testkit
+
+plugins:
+  - ./packaging
