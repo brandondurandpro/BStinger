@@ -43,6 +43,7 @@ object Tags {
     const val GIT_REFRESH = "git.refresh"
     const val GIT_HIDE = "git.hide"
     const val GIT_BLAME = "git.blame"
+    const val GIT_SELECT_ALL = "git.selectAll"
     const val GIT_COMMIT_MESSAGE = "git.commitMessage"
     const val GIT_COMMIT = "git.commit"
     const val GIT_BRANCH_BUTTON = "git.branchButton"

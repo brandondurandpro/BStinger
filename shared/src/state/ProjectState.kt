@@ -136,6 +136,11 @@ class ProjectState(
         selectedForCommit = if (path in selectedForCommit) selectedForCommit - path else selectedForCommit + path
     }
 
+    /** Ticks every change of the status for the next commit (the master checkbox), or unticks them all. */
+    fun toggleAllCommitSelection() {
+        selectedForCommit = if (selectedForCommit.size == gitStatus.size) emptySet() else gitStatus.keys
+    }
+
     /** Shows or hides a tool window (Alt+1, Alt+9, Alt+F12, Ctrl+Alt+Shift+D or its button in the left strip). */
     fun toggleToolWindow(window: ToolWindow) {
         toolWindows.toggle(window)

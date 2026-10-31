@@ -66,5 +66,11 @@ class GitPanelPerformanceE2eTest {
                 awaitCondition { app.project.selectedForCommit.isEmpty() }
                 renderFrame()
             }
+
+            measure("tick all of $CHANGES changes at once", budgetMillis = 2_000, budgetMegabytes = 50) {
+                onNodeWithTag(Tags.GIT_SELECT_ALL).performClick()
+                awaitCondition { app.project.selectedForCommit.size == CHANGES }
+                renderFrame()
+            }
         }
 }

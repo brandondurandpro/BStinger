@@ -120,6 +120,25 @@ class GitCommitSelectionE2eTest {
         }
 
     @Test
+    fun `the master checkbox checks every change, and unticks them all once checked`() =
+        runComposeUiTest {
+            project.commitAll()
+            project.file("README.md", "# Changed\n")
+            project.file("build.gradle.kts", "moved\n")
+            project.file("notes.txt", "new\n")
+            val app = openGit()
+            // One row is ticked first: the master checkbox then ticks only what is left.
+            awaitTag(ItemTags.gitChangeCheck("README.md")).performClick()
+            awaitCondition { app.project.selectedForCommit == setOf("README.md") }
+            awaitTag(Tags.GIT_SELECT_ALL).performClick()
+            awaitCondition {
+                app.project.selectedForCommit == setOf("README.md", "build.gradle.kts", "notes.txt")
+            }
+            awaitTag(Tags.GIT_SELECT_ALL).performClick()
+            awaitCondition { app.project.selectedForCommit.isEmpty() }
+        }
+
+    @Test
     fun `the Commit button stays disabled while nothing is checked, and the message is kept`() =
         runComposeUiTest {
             project.commitAll()
