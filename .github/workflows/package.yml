@@ -5,7 +5,7 @@ name: Package
 # nothing has to be installed first.
 #
 #   platform     desktop app (embeds the server)       server, for remote use
-#   linux-*      .deb, .AppImage, .tar.gz (AOT cache)   .tar.gz
+#   linux-*      .deb, .rpm, .AppImage, .tar.gz (AOT)   .tar.gz
 #   windows-x64  .zip
 #   macos-*      .dmg
 #
@@ -14,20 +14,12 @@ name: Package
 # runner rather than cross-built from Linux. A remote server is a Linux machine:
 # the server alone is only packaged for Linux.
 #
-# A pushed tag v1.2.3 also attaches everything, with SHA256SUMS.txt, to a draft
-# GitHub release, to review before publishing it. Manual runs, and pull requests
-# that change the packaging, only keep the files as workflow artifacts.
+# Only run by hand (Actions > Package > Run workflow). Run from a branch, it keeps
+# the files as workflow artifacts. Run from a tag v1.2.3 ("Use workflow from"), it
+# also attaches them, with SHA256SUMS.txt, to a draft GitHub release, to review
+# before publishing it.
 
 on:
-  push:
-    tags: ["v*"]
-  pull_request:
-    paths:
-      - .github/workflows/package.yml
-      - packaging/**
-      - desktopApp/module.yaml
-      - desktopApp/packaging/**
-      - serverApp/module.yaml
   workflow_dispatch:
 
 permissions:
