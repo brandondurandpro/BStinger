@@ -88,6 +88,10 @@ class DiffOpenFileE2eTest {
             awaitTag(ItemTags.historyCommit(commit)).performClick()
             awaitTag(ItemTags.historyFile("README.md")).performClick()
             awaitTag(Tags.commitDiffTab(commit, "README.md"))
+            awaitTag(Tags.DIFF)
+            // Minimized, the Branches window leaves the diff the whole height (the Windows runners' screen is small).
+            onNodeWithTag(Tags.HISTORY_HIDE).performClick()
+            awaitNoTag(Tags.BRANCHES_PANEL)
 
             onNodeWithTag(Tags.DIFF_OPEN_FILE).performClick()
             awaitCaretIn(app, "README.md", line = 3)

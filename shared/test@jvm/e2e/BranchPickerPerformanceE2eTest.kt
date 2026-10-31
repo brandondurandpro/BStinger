@@ -147,9 +147,12 @@ class BranchPickerPerformanceE2eTest {
             }
             assertTrue(composedDeletionRows() < MAX_COMPOSED_ROWS, "composed rows to delete: ${composedDeletionRows()}")
 
-            measure("delete $BRANCHES branches", budgetMillis = 15_000, budgetMegabytes = 150) {
+            // Git's own work dominates: 0.6 s on Linux, 14 s on the Windows runners (a lock file and a config rewrite
+            // per branch on a slow disk). The frames rendered meanwhile allocate in proportion to that time, so this
+            // step has no memory budget; the UI's own cost is measured by the steps above.
+            measure("delete $BRANCHES branches", budgetMillis = 45_000) {
                 onNodeWithTag(Tags.BRANCH_DELETE_CONFIRM).performClick()
-                awaitTag(Tags.BRANCH_DONE, timeout = 30_000)
+                awaitTag(Tags.BRANCH_DONE, timeout = 60_000)
                 renderFrame()
             }
             assertTrue(localBranchCount() == 1, "branches left: ${localBranchCount()}")

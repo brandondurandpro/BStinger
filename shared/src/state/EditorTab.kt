@@ -52,13 +52,19 @@ class HorizontalScroll {
     }
 }
 
-/** Identity of a tab showing [entry] as text, as its uncommitted diff, or as the diff of [commit]. */
-internal fun tabKey(entry: FileEntry, isDiff: Boolean, commit: CommitDiffTarget?): String =
-    when {
-        commit != null -> "diff@${commit.hash}:${entry.path}"
-        isDiff -> "diff:${entry.path}"
-        else -> entry.path
+/**
+ * Identity of a tab showing [entry] as text, as its uncommitted diff, or as the diff of [commit]. The path is taken
+ * with `/` separators: on Windows the tree lists `C:\p\a.kt` while a path rebuilt from Git (a diff, a commit) is
+ * `C:\p/a.kt`, and both must open the same tab.
+ */
+internal fun tabKey(entry: FileEntry, isDiff: Boolean, commit: CommitDiffTarget?): String {
+    val path = entry.path.replace('\\', '/')
+    return when {
+        commit != null -> "diff@${commit.hash}:$path"
+        isDiff -> "diff:$path"
+        else -> path
     }
+}
 
 /** The commit a diff tab shows, instead of the working tree's changes: [oldPath] is the former path of a rename. */
 data class CommitDiffTarget(val hash: String, val shortHash: String, val oldPath: String? = null)
