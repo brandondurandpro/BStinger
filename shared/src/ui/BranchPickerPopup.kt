@@ -32,6 +32,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
@@ -47,67 +48,114 @@ import org.example.kotlineditor.state.checkoutBranch
 
 /**
  * The branch picker of the toolbar: search every local branch, pin one or several in the toolbar, and see how far
- * each branch is ahead or behind the remote-tracking branch it follows. A click checks the branch out.
+ * each branch is ahead or behind the remote-tracking branch it follows. A click checks the branch out; the
+ * checkboxes tick several branches to pin, unpin or delete them at once (see `BranchBulkActions.kt`).
  */
 @Composable
 internal fun BranchPickerPopup(project: ProjectState, onClose: () -> Unit) {
     var query by remember { mutableStateOf("") }
-    var checkingOut by remember { mutableStateOf<String?>(null) }
-    var failure by remember { mutableStateOf<String?>(null) }
+    val status = remember { BranchPickerStatus() }
     val cursor = remember { ListCursor() }
     val focus = remember { FocusRequester() }
     val branches = project.gitBranchInfos
     val matches = remember(branches, query) { filterBranches(branches, query) }
-    BranchPickerFocus(project, query, branches, matches, cursor, focus)
-    val choose = { branch: GitBranchInfo? ->
-        if (branch == null || project.gitBusy || checkingOut != null) {
-            Unit
-        } else if (branch.current) {
-            onClose()
-        } else {
-            checkingOut = branch.name
-            failure = null
-            // Keep the panel open until Git answers: a checkout can fail (local changes would be overwritten), and
-            // closing first would leave the user with no explanation outside the Git tool window.
-            project.checkoutBranch(branch.name) { checkedOut ->
-                checkingOut = null
-                if (checkedOut) {
-                    onClose()
-                } else {
-                    val reason = project.gitMessage ?: "Git command failed"
-                    failure = "Cannot check out ${branch.name}: $reason"
+    BranchPickerFocus(project, query, branches, matches, cursor, focus, searching = status.deletion == null)
+    val choose = { branch: GitBranchInfo? -> status.checkout(project, branch, onClose) }
+    PopupFrame(Tags.BRANCH_PICKER, onClose, width = 760) {
+        Column {
+            BranchPickerHeader(project, branches.size, onClose)
+            val request = status.deletion
+            if (request != null) {
+                BranchDeleteDialog(project, request, onCancel = { status.deletion = null }) { message ->
+                    status.deletion = null
+                    status.done = message
+                }
+            } else {
+                BranchSearchField(query, { query = it }, matches.size, focus, onClose, cursor) {
+                    choose(matches.getOrNull(cursor.selected))
+                }
+                BranchPickerStatusLines(status)
+                BranchBulkBar(
+                    project,
+                    matches,
+                    onDelete = { status.deletion = BranchDeletion.ofPicked(project) },
+                    onCleanup = { status.deletion = BranchDeletion.ofWithoutRemote(project) },
+                )
+                BranchResults(project, branches, matches, query, cursor, choose)
+                BranchPickerFooter(project.selectedBranches.size)
+            }
+        }
+    }
+}
+
+// What the picker is doing: a checkout in progress or failed, the last deletion, the deletion being confirmed.
+private class BranchPickerStatus {
+    var checkingOut by mutableStateOf<String?>(null)
+    var failure by mutableStateOf<String?>(null)
+    var done by mutableStateOf<String?>(null)
+    var deletion by mutableStateOf<BranchDeletion?>(null)
+
+    fun checkout(project: ProjectState, branch: GitBranchInfo?, onClose: () -> Unit) {
+        when {
+            branch == null || project.gitBusy || checkingOut != null -> {
+                Unit
+            }
+
+            branch.current -> {
+                onClose()
+            }
+
+            else -> {
+                checkingOut = branch.name
+                failure = null
+                done = null
+                // Keep the panel open until Git answers: a checkout can fail (local changes would be overwritten),
+                // and closing first would leave the user with no explanation outside the Git tool window.
+                project.checkoutBranch(branch.name) { checkedOut ->
+                    checkingOut = null
+                    if (checkedOut) {
+                        onClose()
+                    } else {
+                        failure = "Cannot check out ${branch.name}: ${project.gitMessage ?: "Git command failed"}"
+                    }
                 }
             }
         }
     }
-    PopupFrame(Tags.BRANCH_PICKER, onClose, width = 760) {
-        Column {
-            BranchPickerHeader(project, branches.size, onClose)
-            IdeTextField(
-                query,
-                { query = it },
-                Modifier
-                    .fillMaxWidth()
-                    .padding(top = 10.dp)
-                    .testTag(Tags.BRANCH_SEARCH)
-                    .focusRequester(focus)
-                    .popupKeys({ choose(matches.getOrNull(cursor.selected)) }, onClose) {
-                        cursor.move(it, matches.size)
-                    },
-                placeholder = "Search branches…",
-                leading = { SearchIcon(color = IdeColors.TextSecondary) },
-                trailing = {
-                    if (query.isNotEmpty()) {
-                        Label("${matches.size}", color = IdeColors.TextSecondary, fontSize = 11.sp)
-                    }
-                },
-            )
-            checkingOut?.let { BranchStatusLine("Checking out $it…", tag = Tags.BRANCH_CHECKING_OUT) }
-            failure?.let { BranchStatusLine(it, isError = true, tag = Tags.BRANCH_ERROR) }
-            BranchResults(project, branches, matches, query, cursor, choose)
-            BranchPickerFooter(project.selectedBranches.size)
-        }
-    }
+}
+
+@Composable
+private fun BranchPickerStatusLines(status: BranchPickerStatus) {
+    status.checkingOut?.let { BranchStatusLine("Checking out $it…", tag = Tags.BRANCH_CHECKING_OUT) }
+    status.failure?.let { BranchStatusLine(it, isError = true, tag = Tags.BRANCH_ERROR) }
+    status.done?.let { BranchStatusLine(it, tag = Tags.BRANCH_DONE) }
+}
+
+@Composable
+private fun BranchSearchField(
+    query: String,
+    onQuery: (String) -> Unit,
+    matchCount: Int,
+    focus: FocusRequester,
+    onClose: () -> Unit,
+    cursor: ListCursor,
+    onEnter: () -> Unit,
+) {
+    IdeTextField(
+        query,
+        onQuery,
+        Modifier
+            .fillMaxWidth()
+            .padding(top = 10.dp)
+            .testTag(Tags.BRANCH_SEARCH)
+            .focusRequester(focus)
+            .popupKeys(onEnter, onClose) { cursor.move(it, matchCount) },
+        placeholder = "Search branches…",
+        leading = { SearchIcon(color = IdeColors.TextSecondary) },
+        trailing = {
+            if (query.isNotEmpty()) Label("$matchCount", color = IdeColors.TextSecondary, fontSize = 11.sp)
+        },
+    )
 }
 
 // Focuses the search field, reloads the branches, and keeps the keyboard cursor on the current branch when unfiltered.
@@ -119,11 +167,11 @@ private fun BranchPickerFocus(
     matches: List<GitBranchInfo>,
     cursor: ListCursor,
     focus: FocusRequester,
+    searching: Boolean,
 ) {
-    LaunchedEffect(Unit) {
-        focus.requestFocus()
-        project.refreshBranches()
-    }
+    LaunchedEffect(Unit) { project.refreshBranches() }
+    // Back from the deletion dialog, the keyboard goes to the search field again.
+    LaunchedEffect(searching) { if (searching) focus.requestFocus() }
     LaunchedEffect(query, branches) {
         cursor.selected = currentIndex(matches, query)
     }
@@ -198,7 +246,7 @@ private fun BranchPickerHeader(project: ProjectState, count: Int, onClose: () ->
                     .background(IdeColors.Accent.copy(alpha = 0.18f), RoundedCornerShape(10.dp))
                     .padding(horizontal = 8.dp, vertical = 3.dp),
             ) {
-                Label("$pinned selected", color = IdeColors.Accent, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                Label("$pinned pinned", color = IdeColors.Accent, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
             }
         }
         IconButton({ project.refreshBranches() }, Modifier.testTag(Tags.BRANCH_REFRESH)) {
@@ -223,7 +271,7 @@ private fun PickerMessage(text: String, tag: String) {
 }
 
 @Composable
-private fun BranchStatusLine(text: String, tag: String, isError: Boolean = false) {
+internal fun BranchStatusLine(text: String, tag: String, isError: Boolean = false) {
     val color = if (isError) IdeColors.Error else IdeColors.TextSecondary
     Box(
         Modifier
@@ -231,6 +279,7 @@ private fun BranchStatusLine(text: String, tag: String, isError: Boolean = false
             .padding(top = 8.dp)
             .background(color.copy(alpha = 0.12f), RoundedCornerShape(5.dp))
             .padding(horizontal = 8.dp, vertical = 5.dp)
+            .semantics(mergeDescendants = true) {}
             .testTag(tag),
     ) {
         Label(text, color = color, fontSize = 11.sp)
@@ -258,8 +307,8 @@ private fun BranchRow(
             .padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        BranchCheckbox(branch.name in project.selectedBranches, Modifier.testTag(ItemTags.branchSelect(branch.name))) {
-            project.toggleBranchSelection(branch.name)
+        BranchCheckbox(branch.name in project.pickedBranches, Modifier.testTag(ItemTags.branchSelect(branch.name))) {
+            project.toggleBranchPick(branch.name)
         }
         BranchIcon(
             Modifier.padding(start = 10.dp),
@@ -267,6 +316,13 @@ private fun BranchRow(
         )
         BranchName(branch, query, Modifier.weight(1f).padding(start = 8.dp))
         BranchSyncBadge(branch, modifier = Modifier.padding(start = 10.dp))
+        val pinned = branch.name in project.selectedBranches
+        IconButton(
+            { project.toggleBranchSelection(branch.name) },
+            Modifier.padding(start = 8.dp).testTag(ItemTags.branchPin(branch.name)),
+        ) {
+            PinIcon(pinned, color = if (pinned) IdeColors.Accent else IdeColors.TextSecondary)
+        }
         if (!branch.current) {
             Label(
                 "Checkout",
@@ -308,7 +364,7 @@ private fun BranchName(branch: GitBranchInfo, query: String, modifier: Modifier 
 }
 
 @Composable
-private fun BranchCheckbox(checked: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+internal fun BranchCheckbox(checked: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val shape = RoundedCornerShape(4.dp)
     Box(
         modifier
@@ -403,7 +459,7 @@ private fun BranchPickerFooter(selectedCount: Int) {
         Spacer(Modifier.weight(1f))
         Label(
             if (selectedCount == 0) {
-                "Select branches to pin them in the toolbar"
+                "Pin branches to keep them in the toolbar"
             } else {
                 "${plural(selectedCount, "branch", "branches")} pinned in the toolbar"
             },
@@ -414,7 +470,7 @@ private fun BranchPickerFooter(selectedCount: Int) {
     }
 }
 
-private fun plural(count: Int, one: String, many: String) = "$count ${if (count == 1) one else many}"
+internal fun plural(count: Int, one: String, many: String) = "$count ${if (count == 1) one else many}"
 
 private fun remoteSummary(behind: Int, ahead: Int): String =
     when {
@@ -423,7 +479,7 @@ private fun remoteSummary(behind: Int, ahead: Int): String =
         else -> "$ahead ahead of ${if (ahead == 1) "its" else "their"} remote"
     }
 
-private fun upstreamText(branch: GitBranchInfo): String =
+internal fun upstreamText(branch: GitBranchInfo): String =
     when {
         branch.upstreamGone -> "${branch.upstream} no longer exists on the remote"
         branch.upstream != null -> "tracks ${branch.upstream}"

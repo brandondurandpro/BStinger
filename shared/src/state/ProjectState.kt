@@ -83,6 +83,13 @@ class ProjectState(
     var selectedBranches: Set<String> by mutableStateOf(emptySet())
         private set
 
+    /**
+     * Branches ticked in the picker for a bulk action (pin, delete), as opposed to [selectedBranches], which stay
+     * pinned in the toolbar. Kept while the query changes, and pruned when a branch disappears.
+     */
+    var pickedBranches: Set<String> by mutableStateOf(emptySet())
+        private set
+
     /** Whether the toolbar's branch picker is open. */
     var branchPickerOpen by mutableStateOf(false)
 
@@ -158,14 +165,51 @@ class ProjectState(
     private fun applyBranches(infos: List<GitBranchInfo>) {
         gitBranchInfos = sortedBranches(infos)
         gitBranches = infos.map { it.name }
-        selectedBranches = selectedBranches intersect infos.mapTo(HashSet()) { it.name }
+        val names = infos.mapTo(HashSet()) { it.name }
+        selectedBranches = selectedBranches intersect names
+        pickedBranches = pickedBranches intersect names
     }
 
-    /** Pins or unpins [name] in the toolbar (the checkbox of the branch picker). */
+    /** Pins or unpins [name] in the toolbar. */
     fun toggleBranchSelection(name: String) {
         selectedBranches =
             if (name in selectedBranches) selectedBranches - name else selectedBranches + name
     }
+
+    /** Ticks or unticks [name] for a bulk action (the checkbox of the branch picker). */
+    fun toggleBranchPick(name: String) {
+        pickedBranches = if (name in pickedBranches) pickedBranches - name else pickedBranches + name
+    }
+
+    fun clearBranchPicks() {
+        pickedBranches = emptySet()
+    }
+
+    /** Ticks every branch of [names] (the picker's Select all, which ticks the branches the query shows). */
+    fun pickBranches(names: Collection<String>) {
+        pickedBranches = pickedBranches + names
+    }
+
+    // Branches just deleted: they leave the toolbar and the picks at once, before the refresh lists the others.
+    internal fun forgetBranches(names: Set<String>) {
+        selectedBranches = selectedBranches - names
+        pickedBranches = pickedBranches - names
+        gitBranchInfos = gitBranchInfos.filter { it.name !in names }
+        gitBranches = gitBranches.filter { it !in names }
+    }
+
+    /** Pins every ticked branch in the toolbar. */
+    fun pinPickedBranches() {
+        selectedBranches = selectedBranches + pickedBranches
+    }
+
+    /** Removes every ticked branch from the toolbar chips. */
+    fun unpinPickedBranches() {
+        selectedBranches = selectedBranches - pickedBranches
+    }
+
+    /** Local branches whose remote is missing or gone, other than the current one: the cleanup shortcut's target. */
+    fun branchesWithoutRemote(): List<GitBranchInfo> = gitBranchInfos.filter { !it.current && !it.hasUpstream }
 
     private fun branchInfoOf(name: String) =
         GitBranchInfo(name = name, current = name == gitBranch, upstream = null, ahead = 0, behind = 0)

@@ -95,6 +95,32 @@ fun CloseIcon(modifier: Modifier = Modifier, color: Color = IdeColors.TextSecond
     }
 }
 
+/** Push pin, filled when [pinned]: pins a branch in the toolbar. */
+@Composable
+fun PinIcon(pinned: Boolean, modifier: Modifier = Modifier, color: Color = IdeColors.TextSecondary) {
+    Canvas(modifier.size(16.dp)) {
+        val s = 1.2.dp.toPx()
+        val head =
+            Path().apply {
+                moveTo(size.width * 0.34f, size.height * 0.18f)
+                lineTo(size.width * 0.66f, size.height * 0.18f)
+                lineTo(size.width * 0.60f, size.height * 0.42f)
+                lineTo(size.width * 0.74f, size.height * 0.58f)
+                lineTo(size.width * 0.26f, size.height * 0.58f)
+                lineTo(size.width * 0.40f, size.height * 0.42f)
+                close()
+            }
+        if (pinned) drawPath(head, color) else drawPath(head, color, style = Stroke(s))
+        drawLine(
+            color,
+            Offset(size.width * 0.5f, size.height * 0.58f),
+            Offset(size.width * 0.5f, size.height * 0.86f),
+            strokeWidth = s,
+            cap = StrokeCap.Round,
+        )
+    }
+}
+
 @Composable
 fun ArrowIcon(up: Boolean, modifier: Modifier = Modifier, color: Color = IdeColors.TextSecondary) {
     Canvas(modifier.size(16.dp)) {

@@ -42,6 +42,29 @@ suspend fun ProjectState.checkout(branch: String): Boolean {
     }
 }
 
+/**
+ * Deletes the local branches the user confirmed, even when they are not merged. A failure leaves [gitMessage] with
+ * Git's reason and keeps every pin and pick; on success the deleted branches leave both the toolbar and the picker.
+ */
+fun ProjectState.deleteBranches(branches: Collection<String>, onDone: (Boolean) -> Unit = {}) {
+    val names = branches.toSet()
+    if (names.isEmpty()) {
+        onDone(true)
+        return
+    }
+    scope.launch {
+        val deleted =
+            gitOperation {
+                services.git.deleteBranches(root.path, names.toList())
+                val noun = if (names.size == 1) "branch" else "branches"
+                "${names.size} $noun deleted"
+            }
+        // A partial failure still deleted the other branches: reload the list so that it shows only what is left.
+        if (deleted) forgetBranches(names) else refreshBranches()
+        onDone(deleted)
+    }
+}
+
 /** Pulls the current branch (Git panel's Pull button). */
 fun ProjectState.pull() =
     scope.launch {

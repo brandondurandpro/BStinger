@@ -19,6 +19,7 @@ import kotlin.io.path.createDirectories
 import kotlin.io.path.writeText
 import kotlin.test.AfterTest
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 private const val BRANCHES = 3_000
@@ -102,6 +103,55 @@ class BranchPickerPerformanceE2eTest {
             budgetMegabytes = 300,
         )
     }
+
+    private fun localBranchCount(): Int =
+        project.git("for-each-ref", "--format=%(refname:short)", "refs/heads").lines().count { it.isNotBlank() }
+
+    private fun ComposeUiTest.composedDeletionRows() =
+        onAllNodes(hasTestTagPrefix("branch.toDelete:")).fetchSemanticsNodes().size
+
+    @Test
+    fun `bulk actions on thousands of branches`() =
+        runComposeUiTest {
+            project.commitAll()
+            createBranches()
+            val app = launchWithProject(project)
+            awaitCondition { app.project.gitBranchInfos.size > BRANCHES }
+            onNodeWithTag(Tags.GIT_BRANCH).performClick()
+            awaitTag(Tags.BRANCH_PICKER)
+            awaitTag(ItemTags.branchItem("monitored/branch-0000"))
+
+            measure("tick all $BRANCHES branches", budgetMillis = 3_000, budgetMegabytes = 100) {
+                onNodeWithTag(Tags.BRANCH_SELECT_ALL).performClick()
+                awaitTag(Tags.BRANCH_PICK_COUNT)
+                renderFrame()
+            }
+            measure("pin $BRANCHES ticked branches in the toolbar", budgetMillis = 5_000, budgetMegabytes = 200) {
+                onNodeWithTag(Tags.BRANCH_PIN_PICKED).performClick()
+                awaitNoTag(Tags.BRANCH_PICK_COUNT)
+                renderFrame()
+            }
+            // Select all ticked the current branch too.
+            assertEquals(BRANCHES + 1, app.project.selectedBranches.size)
+            val chips = onAllNodes(hasTestTagPrefix("branch.pinned:")).fetchSemanticsNodes().size
+            assertTrue(chips < MAX_COMPOSED_ROWS, "composed toolbar chips: $chips")
+
+            measure("open the cleanup of $BRANCHES branches", budgetMillis = 3_000, budgetMegabytes = 100) {
+                onNodeWithTag(Tags.BRANCH_CLEANUP).performClick()
+                awaitTag(ItemTags.branchToDelete("monitored/branch-0000"))
+                renderFrame()
+            }
+            assertTrue(composedDeletionRows() < MAX_COMPOSED_ROWS, "composed rows to delete: ${composedDeletionRows()}")
+
+            measure("delete $BRANCHES branches", budgetMillis = 15_000, budgetMegabytes = 150) {
+                onNodeWithTag(Tags.BRANCH_DELETE_CONFIRM).performClick()
+                awaitTag(Tags.BRANCH_DONE, timeout = 30_000)
+                renderFrame()
+            }
+            assertTrue(localBranchCount() == 1, "branches left: ${localBranchCount()}")
+            // Only the current branch, which cannot be deleted, stays pinned.
+            awaitCondition { app.project.selectedBranches.size == 1 }
+        }
 
     @Test
     fun `a repository with thousands of branches`() =

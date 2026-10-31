@@ -129,6 +129,7 @@ class RemoteSearch(private val client: RpcClient) : ProjectSearch {
 }
 
 /** [GitClient] of the server. */
+@Suppress("TooManyFunctions") // one per Git operation of the protocol
 class RemoteGit(private val client: RpcClient) : GitClient {
     override suspend fun status(root: String): Map<String, GitFileStatus> =
         client.call(Method.GitStatus) { put(ROOT, root) }.gitStatus()
@@ -149,6 +150,13 @@ class RemoteGit(private val client: RpcClient) : GitClient {
         client.call(Method.GitCheckout) {
             put(ROOT, root)
             put("branch", branch)
+        }
+    }
+
+    override suspend fun deleteBranches(root: String, branches: List<String>) {
+        client.call(Method.GitDeleteBranches) {
+            put(ROOT, root)
+            put("branches", branches.toJson())
         }
     }
 

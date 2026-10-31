@@ -308,6 +308,9 @@ enum class Method(
     /** Checks out a branch. */
     GitCheckout("git/checkout", mutating = true),
 
+    /** Deletes local branches, even when they are not merged. */
+    GitDeleteBranches("git/deleteBranches", mutating = true),
+
     /** Stages every change and commits it. */
     GitCommit("git/commit", mutating = true),
 

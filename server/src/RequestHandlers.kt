@@ -83,6 +83,9 @@ private fun gitHandlers(git: GitClient): Map<Method, Handler> =
         Method.GitBranchDetails to { git.branchDetails(root()).branchesJson() },
         Method.GitBranches to { git.branches(root()).toJson() },
         Method.GitCheckout to { nothing { git.checkout(root(), params.string("branch")) } },
+        Method.GitDeleteBranches to {
+            nothing { git.deleteBranches(root(), params.read("branches") { it.strings() }) }
+        },
         Method.GitCommit to { nothing { git.commit(root(), params.string("message")) } },
         Method.GitPull to { JsonPrimitive(git.pull(root())) },
         Method.GitPush to { JsonPrimitive(git.push(root())) },

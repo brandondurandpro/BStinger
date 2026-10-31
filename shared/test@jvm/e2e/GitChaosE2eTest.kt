@@ -1,6 +1,8 @@
 package org.example.kotlineditor.e2e
 
+import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
@@ -11,6 +13,7 @@ import org.example.kotlineditor.ui.Tags
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 
 // Slow (a 600 ms round trip), but under the 1 s after which the chaos client treats a silent link as dead.
 private const val SLOW_BRANCH_LINK_MS = 300L
@@ -95,6 +98,83 @@ class GitChaosE2eTest {
             // Once the refresh crosses the link, the new branch shows up under the current query.
             onNodeWithTag(Tags.BRANCH_SEARCH).performTextInput("slow-link")
             awaitTag(ItemTags.branchItem("slow-link"), timeout = 15_000)
+        }
+
+    private fun localBranches(): Set<String> =
+        project
+            .git("for-each-ref", "--format=%(refname:short)", "refs/heads")
+            .lines()
+            .map(String::trim)
+            .filter(String::isNotEmpty)
+            .toSet()
+
+    // Opens the cleanup dialog of the branch picker on the branches `a` and `b`, which have no remote.
+    private fun ComposeUiTest.openCleanup(app: E2eApp) {
+        awaitCondition { app.project.gitBranchInfos.count { it.name == "a" || it.name == "b" } == 2 }
+        onNodeWithTag(Tags.GIT_BRANCH).performClick()
+        awaitTag(Tags.BRANCH_PICKER)
+        onNodeWithTag(Tags.BRANCH_CLEANUP).performClick()
+        awaitTag(ItemTags.branchToDelete("a"))
+        awaitTag(ItemTags.branchToDelete("b"))
+    }
+
+    @Test
+    fun `a branch deletion whose answer is lost deletes once and reports success`() =
+        runComposeUiTest {
+            project.commitAll()
+            val default = project.git("rev-parse", "--abbrev-ref", "HEAD").trim()
+            listOf("a", "b").forEach { project.git("branch", it) }
+            val app = launchWithProject(project, chaos = true)
+            openCleanup(app)
+            // The branches are deleted, then the connection breaks before the answer: the client sends it again, and
+            // the server finds them already gone, which is not an error.
+            app.network.dropFromServer = true
+            onNodeWithTag(Tags.BRANCH_DELETE_CONFIRM).performClick()
+            awaitCondition { localBranches() == setOf(default) }
+            app.network.cutAll()
+            app.network.dropFromServer = false
+            awaitTag(Tags.BRANCH_DONE)
+            awaitNoTag(Tags.BRANCH_ERROR)
+            assertEquals("2 branches deleted", app.project.gitMessage)
+            assertFalse(app.project.gitMessageIsError)
+            awaitNoTag(ItemTags.branchItem("a"))
+        }
+
+    @Test
+    fun `a branch deletion confirmed while the network is down says so and deletes once it is back`() =
+        runComposeUiTest {
+            project.commitAll()
+            val default = project.git("rev-parse", "--abbrev-ref", "HEAD").trim()
+            listOf("a", "b").forEach { project.git("branch", it) }
+            val app = launchWithProject(project, chaos = true)
+            openCleanup(app)
+            app.network.goDown()
+            awaitReconnecting()
+            onNodeWithTag(Tags.BRANCH_DELETE_CONFIRM).performClick()
+            // Nothing pretends to be done: the dialog says it is deleting, and the disk still has the branches.
+            awaitTag(Tags.BRANCH_DELETING)
+            onNodeWithTag(Tags.BRANCH_DELETE_CONFIRM).assertIsNotEnabled()
+            assertEquals(setOf(default, "a", "b"), localBranches())
+            app.network.comeBack()
+            awaitReconnected()
+            awaitTag(Tags.BRANCH_DONE)
+            assertEquals(setOf(default), localBranches())
+        }
+
+    @Test
+    fun `the deletion dialog survives a server restart and deletes on the new server`() =
+        runComposeUiTest {
+            project.commitAll()
+            val default = project.git("rev-parse", "--abbrev-ref", "HEAD").trim()
+            listOf("a", "b").forEach { project.git("branch", it) }
+            val app = launchWithProject(project, chaos = true)
+            openCleanup(app)
+            app.process.restart()
+            awaitReconnected()
+            awaitTag(Tags.BRANCH_DELETE_DIALOG)
+            onNodeWithTag(Tags.BRANCH_DELETE_CONFIRM).performClick()
+            awaitTag(Tags.BRANCH_DONE)
+            assertEquals(setOf(default), localBranches())
         }
 
     @Test

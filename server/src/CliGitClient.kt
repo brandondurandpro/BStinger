@@ -8,6 +8,7 @@ import org.example.kotlineditor.model.GitBranchInfo
 import org.example.kotlineditor.model.GitClient
 import org.example.kotlineditor.model.GitFileStatus
 import java.io.File
+import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 
 /** Git through its command line; no repository or no git means no status. */
@@ -68,6 +69,37 @@ class CliGitClient : GitClient {
     override suspend fun checkout(root: String, branch: String) {
         withContext(Dispatchers.IO) { runGit(root, "checkout", branch) }
     }
+
+    /**
+     * Deletes the branches in chunks (one Git process per chunk, within the command-line limit of Windows). A chunk
+     * with a branch Git refuses (checked out in another worktree) is retried one by one, so the others still go; a
+     * branch that another program already deleted counts as deleted, which makes a retry after a lost answer safe.
+     */
+    override suspend fun deleteBranches(root: String, branches: List<String>) {
+        withContext(Dispatchers.IO) {
+            require(branches.isNotEmpty()) { "No branch to delete" }
+            val names = branches.filter { it.isNotBlank() }.distinct()
+            val current = gitOutput(root, "symbolic-ref", "--short", "-q", "HEAD")?.firstOrNull()?.trim()
+            require(current == null || current !in names) { "Cannot delete the current branch: $current" }
+            val failures = mutableListOf<String>()
+            names.chunked(DELETE_CHUNK_SIZE).forEach { chunk -> deleteChunk(root, chunk, failures) }
+            if (failures.isNotEmpty()) throw IOException(failures.joinToString("; "))
+        }
+    }
+
+    private fun deleteChunk(root: String, chunk: List<String>, failures: MutableList<String>) {
+        val error = runCatching { runGit(root, "branch", "-D", "--", *chunk.toTypedArray()) }.exceptionOrNull()
+        if (error == null) return
+        chunk.forEach { name ->
+            val failure = runCatching { runGit(root, "branch", "-D", "--", name) }.exceptionOrNull()
+            if (failure != null && branchExists(root, name)) {
+                failures += failure.message ?: "git branch: cannot delete $name"
+            }
+        }
+    }
+
+    private fun branchExists(root: String, name: String): Boolean =
+        gitOutput(root, "show-ref", "--verify", "--quiet", "refs/heads/$name") != null
 
     override suspend fun commit(root: String, message: String) {
         require(message.isNotBlank()) { "A commit message is required" }
@@ -159,6 +191,7 @@ class CliGitClient : GitClient {
         const val HEAD_MARKER = "*"
         const val GONE_TRACK = "[gone]"
         const val BRANCH_FIELD_COUNT = 4
+        const val DELETE_CHUNK_SIZE = 50
         const val TRACK_COUNT_GROUP = 1
         const val BRANCH_FORMAT = "%(refname:short)%00%(HEAD)%00%(upstream:short)%00%(upstream:track)"
         val AHEAD_TRACK = Regex("""ahead (\d+)""")

@@ -3,7 +3,6 @@ package org.example.kotlineditor.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,7 +15,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -67,10 +67,10 @@ internal fun Toolbar(app: AppState, project: ProjectState) {
 @Composable
 private fun BranchWidget(project: ProjectState, modifier: Modifier = Modifier) {
     val current = project.gitBranchInfos.firstOrNull { it.current }
-    val pinned =
-        project.selectedBranches.mapNotNull { name ->
-            project.gitBranchInfos.firstOrNull { it.name == name && it.name != project.gitBranch }
-        }
+    val infos = project.gitBranchInfos
+    val selected = project.selectedBranches
+    // In the picker's order, without the current branch; computed once per change, not per frame.
+    val pinned = remember(infos, selected) { infos.filter { it.name in selected && !it.current } }
     val background = if (project.branchPickerOpen) IdeColors.Selection else Color.Transparent
     Row(
         modifier,
@@ -95,12 +95,13 @@ private fun BranchWidget(project: ProjectState, modifier: Modifier = Modifier) {
             current?.let { BranchSyncBadge(it, compact = true, modifier = Modifier.padding(start = 6.dp)) }
             Chevron(expanded = false, Modifier.padding(start = 2.dp))
         }
-        Row(
-            Modifier.weight(1f, fill = false).horizontalScroll(rememberScrollState()),
+        // Lazy: "Select all" then "Pin" can pin thousands of branches, and only the visible chips are composed.
+        LazyRow(
+            Modifier.weight(1f, fill = false),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            pinned.forEach { branch -> PinnedBranchChip(project, branch) }
+            items(pinned, key = { it.name }) { branch -> PinnedBranchChip(project, branch) }
         }
     }
 }

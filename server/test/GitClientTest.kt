@@ -1,6 +1,7 @@
 package org.example.kotlineditor.server
 
 import kotlinx.coroutines.runBlocking
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.readText
@@ -8,6 +9,7 @@ import kotlin.io.path.writeText
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -117,6 +119,47 @@ class GitClientTest {
             assertEquals(1, ahead.ahead)
             assertEquals(1, ahead.behind)
             assertEquals(setOf(default, "feature"), client.branches(root.toString()).toSet())
+        }
+
+    @Test
+    fun `deleting branches removes unmerged ones and refuses the current branch`() =
+        runBlocking {
+            root.resolve("a.kt").writeText("one\n")
+            commitAll()
+            val default = git("rev-parse", "--abbrev-ref", "HEAD").trim()
+            git("checkout", "-q", "-b", "unmerged")
+            root.resolve("a.kt").writeText("two\n")
+            git("commit", "-q", "-am", "only on unmerged")
+            git("checkout", "-q", default)
+            git("branch", "merged")
+            val client = CliGitClient()
+
+            client.deleteBranches(root.toString(), listOf("unmerged", "merged"))
+            assertEquals(listOf(default), client.branches(root.toString()))
+
+            // A retry after a lost answer finds the branches already gone: that is not an error.
+            client.deleteBranches(root.toString(), listOf("unmerged", "merged"))
+            assertFailsWith<IllegalArgumentException> { client.deleteBranches(root.toString(), listOf(default)) }
+            assertEquals(listOf(default), client.branches(root.toString()))
+        }
+
+    @Test
+    fun `a branch checked out in another worktree is kept and the others are deleted`() =
+        runBlocking {
+            root.resolve("a.kt").writeText("one\n")
+            commitAll()
+            git("branch", "busy")
+            git("branch", "free")
+            val worktree = temporaryDirectory("git-worktree")
+            worktree.toFile().delete()
+            git("worktree", "add", "-q", worktree.toString(), "busy")
+            val client = CliGitClient()
+
+            val error = assertFailsWith<IOException> { client.deleteBranches(root.toString(), listOf("busy", "free")) }
+            assertTrue("busy" in error.message.orEmpty(), "The error does not name the kept branch: ${error.message}")
+            val left = client.branches(root.toString())
+            git("worktree", "remove", "--force", worktree.toString())
+            assertTrue("busy" in left && "free" !in left, "Branches left: $left")
         }
 
     @Test

@@ -136,8 +136,8 @@ class BranchPickerE2eTest {
             onNodeWithTag(Tags.GIT_BRANCH).performClick()
             awaitTag(Tags.BRANCH_PICKER)
 
-            onNodeWithTag(ItemTags.branchSelect("feature/login")).performClick()
-            onNodeWithTag(ItemTags.branchSelect("feature/search-ui")).performClick()
+            onNodeWithTag(ItemTags.branchPin("feature/login")).performClick()
+            onNodeWithTag(ItemTags.branchPin("feature/search-ui")).performClick()
             awaitCondition {
                 app.project.selectedBranches == setOf("feature/login", "feature/search-ui")
             }
@@ -222,8 +222,10 @@ class BranchPickerE2eTest {
             awaitCondition { app.project.gitBranchInfos.any { it.name == "feature/gone" } }
             onNodeWithTag(Tags.GIT_BRANCH).performClick()
             awaitTag(Tags.BRANCH_PICKER)
+            onNodeWithTag(ItemTags.branchPin("feature/gone")).performClick()
             onNodeWithTag(ItemTags.branchSelect("feature/gone")).performClick()
             awaitCondition { "feature/gone" in app.project.selectedBranches }
+            awaitCondition { "feature/gone" in app.project.pickedBranches }
 
             // Another program deletes the branch while the picker is open.
             project.git("branch", "-D", "feature/gone")
@@ -231,5 +233,6 @@ class BranchPickerE2eTest {
             awaitNoTag(ItemTags.branchItem("feature/gone"))
             awaitNoTag(ItemTags.pinnedBranch("feature/gone"))
             awaitCondition { "feature/gone" !in app.project.selectedBranches }
+            awaitCondition { "feature/gone" !in app.project.pickedBranches }
         }
 }

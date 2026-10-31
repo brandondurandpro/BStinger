@@ -20,6 +20,20 @@ object Tags {
     const val BRANCH_CHECKING_OUT = "branch.checkingOut"
     const val BRANCH_ERROR = "branch.error"
     const val BRANCH_SELECTION_COUNT = "branch.selectionCount"
+    const val BRANCH_BULK_BAR = "branch.bulkBar"
+    const val BRANCH_PICK_COUNT = "branch.pickCount"
+    const val BRANCH_SELECT_ALL = "branch.selectAll"
+    const val BRANCH_CLEAR_PICKS = "branch.clearPicks"
+    const val BRANCH_PIN_PICKED = "branch.pinPicked"
+    const val BRANCH_UNPIN_PICKED = "branch.unpinPicked"
+    const val BRANCH_DELETE_PICKED = "branch.deletePicked"
+    const val BRANCH_CLEANUP = "branch.cleanup"
+    const val BRANCH_DELETE_DIALOG = "branch.deleteDialog"
+    const val BRANCH_DELETE_SUMMARY = "branch.deleteSummary"
+    const val BRANCH_DELETE_CONFIRM = "branch.deleteConfirm"
+    const val BRANCH_DELETE_CANCEL = "branch.deleteCancel"
+    const val BRANCH_DELETING = "branch.deleting"
+    const val BRANCH_DONE = "branch.done"
     const val PROJECT_PANEL = "project.panel"
     const val GIT_PANEL = "git.panel"
     const val GIT_EMPTY = "git.empty"
@@ -188,6 +202,12 @@ object ItemTags {
     fun branchAhead(name: String) = "branch.ahead:$name"
 
     fun branchBehind(name: String) = "branch.behind:$name"
+
+    fun branchPin(name: String) = "branch.pin:$name"
+
+    fun branchToDelete(name: String) = "branch.toDelete:$name"
+
+    fun branchToDeleteCheck(name: String) = "branch.toDeleteCheck:$name"
 
     fun pinnedBranch(name: String) = "branch.pinned:$name"
 

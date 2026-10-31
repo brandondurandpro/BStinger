@@ -276,6 +276,7 @@ data class GitBranchInfo(
 }
 
 /** Git information about a project. */
+@Suppress("ComplexInterface") // one function per Git operation the IDE offers
 interface GitClient {
     /** Status of changed files, keyed by path relative to [root] with `/` separators; empty when not a repository. */
     suspend fun status(root: String): Map<String, GitFileStatus>
@@ -294,6 +295,12 @@ interface GitClient {
 
     /** Checks out the local branch [branch]. */
     suspend fun checkout(root: String, branch: String)
+
+    /**
+     * Deletes the local branches [branches], even when they are not merged. The current branch is refused, and a
+     * branch that another program already deleted is not an error: deleting is retried safely after a lost answer.
+     */
+    suspend fun deleteBranches(root: String, branches: List<String>)
 
     /** Stages every change and commits it with [message]. */
     suspend fun commit(root: String, message: String)
@@ -320,6 +327,8 @@ interface GitClient {
         override suspend fun branches(root: String): List<String> = emptyList()
 
         override suspend fun checkout(root: String, branch: String) = Unit
+
+        override suspend fun deleteBranches(root: String, branches: List<String>) = Unit
 
         override suspend fun commit(root: String, message: String) = Unit
 
