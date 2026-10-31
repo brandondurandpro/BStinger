@@ -6,7 +6,7 @@ import androidx.compose.ui.text.TextStyle
 import org.example.kotlineditor.syntax.Language
 
 private const val LINE_CAPACITY = 2048
-private const val NUMBER_CAPACITY = 512
+private const val BLAME_CAPACITY = 256
 
 /**
  * Highlighted and laid out lines of an editor drawing its rows itself, kept by content: scrolling back to lines
@@ -15,6 +15,7 @@ private const val NUMBER_CAPACITY = 512
 internal class LineRenderCache(
     private val measurer: TextMeasurer,
     private val style: TextStyle,
+    private val blameStyle: TextStyle = style,
     lineCapacity: Int = LINE_CAPACITY,
 ) {
     private data class LineKey(
@@ -25,7 +26,12 @@ internal class LineRenderCache(
     )
 
     private val lines = LruMap<LineKey, TextLayoutResult>(lineCapacity)
-    private val numbers = LruMap<Int, TextLayoutResult>(NUMBER_CAPACITY)
+
+    // As many numbers as lines: scrolling back over the same lines must not lay them out again.
+    private val numbers = LruMap<Int, TextLayoutResult>(lineCapacity)
+
+    // Consecutive lines of a commit share their annotation.
+    private val blames = LruMap<String, TextLayoutResult>(BLAME_CAPACITY)
 
     val size: Int get() = lines.size
 
@@ -37,6 +43,10 @@ internal class LineRenderCache(
     /** Line number [number] (one-based), without color: the caret line draws it brighter. */
     fun number(number: Int): TextLayoutResult =
         numbers.getOrPut(number) { measurer.measure(number.toString(), style, softWrap = false, maxLines = 1) }
+
+    /** Blame annotation ("author date") of a line. */
+    fun blame(text: String): TextLayoutResult =
+        blames.getOrPut(text) { measurer.measure(text, blameStyle, softWrap = false, maxLines = 1) }
 }
 
 private class LruMap<K, V>(private val capacity: Int) : LinkedHashMap<K, V>(capacity, LOAD_FACTOR, true) {

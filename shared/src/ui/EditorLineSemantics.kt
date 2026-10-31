@@ -7,8 +7,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
@@ -20,6 +26,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import org.example.kotlineditor.model.GitChangeKind
 import org.example.kotlineditor.state.Document
@@ -33,18 +40,18 @@ import kotlin.math.roundToInt
 /**
  * What the canvas draws, as semantics: an invisible node per visible line with its text, and its gutter marks, for
  * accessibility and UI tests. Nothing here is drawn, laid out as text, or takes pointer input (clicks reach the
- * editor's gesture handler). Only the lines entering the screen are composed; scrolling within a line only moves
- * them, in the layout phase.
+ * editor's gesture handler). Only the lines entering the screen are composed, and not while the user scrolls
+ * (wheel, drag, fling): the nodes then just follow the content, in the layout phase, and the set of lines catches up
+ * once the scroll ends. Composing them on every frame of a scroll would cost far more than drawing the lines.
  */
 @Composable
-internal fun EditorLineSemantics(tab: EditorTab, document: Document, metrics: EditorMetrics) {
+internal fun EditorLineSemantics(tab: EditorTab, document: Document, metrics: EditorMetrics, marks: GutterMarks) {
     val scroll = tab.verticalScroll
     val folding = document.folding
     val scope = rememberCoroutineScope()
-    val first = scroll.firstRow
+    val first = rememberSettledFirstRow(scroll)
     val count = ceil(scroll.viewportHeightPx / metrics.lineHeightPx).toInt() + 1
     val last = minOf(folding.rowCount(), first + count)
-    val changes = tab.lineChanges
     val lastLine = document.lines.lastIndex
     Box(
         Modifier
@@ -60,12 +67,13 @@ internal fun EditorLineSemantics(tab: EditorTab, document: Document, metrics: Ed
             val index = folding.lineAt(row)
             key(index) {
                 // A deletion after the last line is marked on the last line.
-                val marks =
-                    changes.filter {
-                        val afterLastLine = index == lastLine && it.line == document.lineCount
-                        it.line == index || afterLastLine
-                    }
-                LineNode(row, index, tab, document, metrics, marks.map { it.kind })
+                val deletedAtEnd = index == lastLine && document.lineCount in marks.deleted
+                val kinds =
+                    listOfNotNull(
+                        marks.changed[index],
+                        GitChangeKind.Deleted.takeIf { index in marks.deleted || deletedAtEnd },
+                    )
+                LineNode(row, index, tab, document, metrics, kinds, marks.blame?.containsKey(index) == true)
             }
         }
     }
@@ -79,6 +87,7 @@ private fun LineNode(
     document: Document,
     metrics: EditorMetrics,
     changes: List<GitChangeKind>,
+    annotated: Boolean,
 ) {
     val scroll = tab.verticalScroll
     val folding = document.folding
@@ -105,7 +114,7 @@ private fun LineNode(
                 }
             Box(marker.testTag(Tags.changeMarker(index, kind.name)))
         }
-        if (tab.blameVisible && tab.blame?.any { it.line == index } == true) {
+        if (tab.blameVisible && annotated) {
             Box(
                 Modifier
                     .offset(x = gutter - metrics.blameWidth)
@@ -130,6 +139,18 @@ private fun LineNode(
                 .testTag(Tags.lineText(index)),
         )
     }
+}
+
+// The first row on screen, left as it was while a scroll is in progress.
+@Composable
+private fun rememberSettledFirstRow(scroll: VerticalScroll): Int {
+    var settled by remember(scroll) { mutableIntStateOf(scroll.firstRow) }
+    LaunchedEffect(scroll) {
+        snapshotFlow { if (scroll.scrollableState.isScrollInProgress) null else scroll.firstRow }
+            .filterNotNull()
+            .collect { settled = it }
+    }
+    return settled
 }
 
 private fun rowTop(row: Int, scroll: VerticalScroll, metrics: EditorMetrics): Int =

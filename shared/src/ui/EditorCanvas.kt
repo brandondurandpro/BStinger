@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
@@ -43,7 +44,7 @@ private val BLAME_END = 4.dp
 private const val EXPANDED_CHEVRON_DEGREES = 90f
 
 /** Git marks and blame of the lines, indexed once per change rather than per drawn line. */
-private class GutterMarks(changes: List<GitLineChange>, blame: List<BlameLine>?) {
+internal class GutterMarks(changes: List<GitLineChange>, blame: List<BlameLine>?) {
     val changed = changes.filter { it.kind != GitChangeKind.Deleted }.associate { it.line to it.kind }
     val deleted = changes.filter { it.kind == GitChangeKind.Deleted }.map { it.line }.toSet()
     val blame = blame?.associate { it.line to "${it.author} ${it.date}" }
@@ -64,7 +65,8 @@ internal fun EditorCanvas(
     caretOn: State<Boolean>,
 ) {
     val measurer = rememberTextMeasurer(cacheSize = 0)
-    val cache = remember(measurer, metrics.codeStyle) { LineRenderCache(measurer, metrics.codeStyle) }
+    val cache =
+        remember(measurer, metrics.codeStyle) { LineRenderCache(measurer, metrics.codeStyle, metrics.blameStyle) }
     val marks = remember(tab.lineChanges, tab.blame) { GutterMarks(tab.lineChanges, tab.blame) }
     Box(Modifier.fillMaxSize()) {
         Spacer(
@@ -79,7 +81,7 @@ internal fun EditorCanvas(
                 .graphicsLayer()
                 .drawBehind { if (caretOn.value) drawCaret(tab, document, metrics) },
         )
-        EditorLineSemantics(tab, document, metrics)
+        EditorLineSemantics(tab, document, metrics, marks)
     }
 }
 
@@ -163,7 +165,7 @@ private fun DrawScope.drawGutter(
     val numberRight = metrics.gutterPx - (LINE_NUMBER_END + FOLD_ZONE + metrics.blameWidth).toPx()
     val numberColor = if (decorations.isCaretLine) IdeColors.LineNumberCurrent else IdeColors.LineNumber
     drawText(number, color = numberColor, topLeft = Offset(numberRight - number.size.width, 0f))
-    decorations.blame?.let { drawBlameAnnotation(it, metrics) }
+    decorations.blame?.let { drawBlameAnnotation(cache.blame(it), metrics) }
     if (foldable) {
         val side = CHEVRON_SIZE.toPx()
         val left = metrics.gutterPx - CHEVRON_END_PADDING.toPx() - side
@@ -174,11 +176,10 @@ private fun DrawScope.drawGutter(
     }
 }
 
-private fun DrawScope.drawBlameAnnotation(text: String, metrics: EditorMetrics) {
+private fun DrawScope.drawBlameAnnotation(layout: TextLayoutResult, metrics: EditorMetrics) {
     val left = (metrics.gutterPx - metrics.blameWidth.toPx()).roundToInt() + BLAME_START.roundToPx().toFloat()
     val right = metrics.gutterPx - (FOLD_ZONE + BLAME_END).toPx()
     if (right <= left) return
-    val layout = metrics.blameMeasurer.measure(text, metrics.blameStyle, softWrap = false, maxLines = 1)
     clipRect(left = left, top = 0f, right = right, bottom = metrics.lineHeightPx) {
         drawText(layout, topLeft = Offset(left, (metrics.lineHeightPx - layout.size.height) / 2))
     }
