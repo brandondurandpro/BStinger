@@ -131,12 +131,14 @@ fun Label(
     color: Color = IdeColors.Text,
     fontSize: TextUnit = 13.sp,
     fontWeight: FontWeight? = null,
+    maxLines: Int = 1,
+    overflow: TextOverflow = TextOverflow.Ellipsis,
 ) {
     BasicText(
         text = text,
         modifier = modifier,
         style = TextStyle(color = color, fontSize = fontSize, fontWeight = fontWeight),
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
+        maxLines = maxLines,
+        overflow = overflow,
     )
 }

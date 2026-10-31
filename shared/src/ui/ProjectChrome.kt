@@ -73,7 +73,7 @@ internal fun Toolbar(app: AppState, project: ProjectState) {
 }
 
 private val MENU_MIN_WIDTH = 320.dp
-private val MENU_MAX_WIDTH = 1200.dp
+private val MENU_MAX_WIDTH = 900.dp
 
 @Composable
 private fun ProjectWidget(app: AppState, project: ProjectState) {
@@ -162,7 +162,7 @@ private fun RecentProjectItem(path: String, onClick: () -> Unit) {
         ProjectBadge(name)
         Column(Modifier.padding(start = 10.dp)) {
             Label(name, fontSize = 13.sp)
-            Label(path, color = IdeColors.TextSecondary, fontSize = 11.sp)
+            Label(path, color = IdeColors.TextSecondary, fontSize = 11.sp, maxLines = Int.MAX_VALUE)
         }
     }
 }
