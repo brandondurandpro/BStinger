@@ -1,11 +1,14 @@
 package org.example.kotlineditor.e2e
 
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.v2.runComposeUiTest
+import org.example.kotlineditor.state.BranchSection
 import org.example.kotlineditor.ui.ItemTags
 import org.example.kotlineditor.ui.Tags
 import kotlin.test.AfterTest
@@ -16,6 +19,7 @@ private const val COMMITS = 5_000
 private const val BRANCHES = 1_000
 private const val SCROLL_STEPS = 50
 private const val MAX_COMPOSED_ROWS = 80
+private const val DRAG_STEPS = 30
 
 /**
  * Performance of the Branches window on a repository of [COMMITS] commits and [BRANCHES] branches: opening it,
@@ -101,5 +105,28 @@ class BranchesHistoryPerformanceE2eTest {
             }
             val branchRows = onAllNodes(hasTestTagPrefix("history.branch:")).fetchSemanticsNodes().size
             assertTrue(branchRows < MAX_COMPOSED_ROWS, "composed branch rows: $branchRows")
+
+            val local = ItemTags.historySection(BranchSection.Local.name)
+            measure("fold the $BRANCHES local branches", budgetMillis = 2_000, budgetMegabytes = 50) {
+                onNodeWithTag(local).performClick()
+                awaitNoTag(ItemTags.historyBranch("history/branch-0000"))
+                renderFrame()
+            }
+            measure("unfold the $BRANCHES local branches", budgetMillis = 2_000, budgetMegabytes = 50) {
+                onNodeWithTag(local).performClick()
+                awaitTag(ItemTags.historyBranch("history/branch-0000"))
+                renderFrame()
+            }
+            val unfolded = onAllNodes(hasTestTagPrefix("history.branch:")).fetchSemanticsNodes().size
+            assertTrue(unfolded < MAX_COMPOSED_ROWS, "composed branch rows after unfolding: $unfolded")
+            measure("widen the branch list by dragging its splitter", budgetMillis = 2_000, budgetMegabytes = 50) {
+                onNodeWithTag(Tags.HISTORY_BRANCHES_SPLITTER).performMouseInput {
+                    moveTo(center)
+                    press()
+                    repeat(DRAG_STEPS) { moveBy(Offset(4f, 0f)) }
+                    release()
+                }
+                renderFrame()
+            }
         }
 }

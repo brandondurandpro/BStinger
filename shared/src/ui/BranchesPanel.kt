@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -29,6 +31,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -37,6 +40,8 @@ import org.example.kotlineditor.model.GitBranchInfo
 import org.example.kotlineditor.model.GitCommit
 import org.example.kotlineditor.model.GitCommitDetails
 import org.example.kotlineditor.state.BranchHistoryState
+import org.example.kotlineditor.state.BranchSection
+import org.example.kotlineditor.state.Pane
 import org.example.kotlineditor.state.ProjectState
 import org.example.kotlineditor.state.ToolWindow
 import java.time.Instant
@@ -48,6 +53,9 @@ private val COMMIT_DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZo
 // Rows left before the end of the loaded commits when the next page is asked for.
 private const val PREFETCH_ROWS = 30
 private const val MAX_REF_PILLS = 3
+
+// Width the commit list keeps however wide the side panes were dragged, in dp.
+private const val MIN_COMMITS_WIDTH = 200f
 
 /**
  * Branches tool window, like IntelliJ's Git log: the local and remote branches on the left, the history of the
@@ -80,14 +88,38 @@ internal fun BranchesPanel(project: ProjectState, drag: ToolWindowDrag, modifier
                 Label("Not a Git repository", color = IdeColors.TextSecondary)
             }
         } else {
-            Row(Modifier.fillMaxSize()) {
-                BranchColumn(project, history, Modifier.width(230.dp).fillMaxHeight())
-                VerticalDivider(Modifier.fillMaxHeight())
-                CommitColumn(history, Modifier.weight(1f).fillMaxHeight())
-                history.selectedCommit?.let { commit ->
-                    VerticalDivider(Modifier.fillMaxHeight())
-                    CommitDetailsColumn(commit, history.details, Modifier.width(320.dp).fillMaxHeight())
+            HistoryColumns(project, history)
+        }
+    }
+}
+
+// Branches | commits | details, separated by splitters. The side panes keep the width the user dragged them to
+// (saved with the layout), but never leave the commits less than MIN_COMMITS_WIDTH: a narrow window shrinks them.
+@Composable
+private fun HistoryColumns(project: ProjectState, history: BranchHistoryState) {
+    val layout = project.toolWindows
+    val density = LocalDensity.current
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val commit = history.selectedCommit
+        val splitters = if (commit == null) 1 else 2
+        val available = maxWidth.value - MIN_COMMITS_WIDTH - splitters * SPLITTER_SIZE.value
+        val wantedBranches = layout.widthOf(Pane.HistoryBranches)
+        val wantedDetails = if (commit == null) 0f else layout.widthOf(Pane.HistoryDetails)
+        val scale = if (wantedBranches + wantedDetails > available) available / (wantedBranches + wantedDetails) else 1f
+        val branchesWidth = (wantedBranches * scale).coerceAtLeast(0f)
+        val detailsWidth = (wantedDetails * scale).coerceAtLeast(0f)
+        Row(Modifier.fillMaxSize()) {
+            BranchColumn(project, history, Modifier.width(branchesWidth.dp).fillMaxHeight())
+            SplitterBox(horizontalBar = false, tag = Tags.HISTORY_BRANCHES_SPLITTER) { delta ->
+                layout.resizePane(Pane.HistoryBranches, with(density) { delta.toDp().value })
+            }
+            CommitColumn(history, Modifier.weight(1f).fillMaxHeight())
+            if (commit != null) {
+                // Dragging this splitter to the left widens the details, on its right.
+                SplitterBox(horizontalBar = false, tag = Tags.HISTORY_DETAILS_SPLITTER) { delta ->
+                    layout.resizePane(Pane.HistoryDetails, -with(density) { delta.toDp().value })
                 }
+                CommitDetailsColumn(commit, history.details, Modifier.width(detailsWidth.dp).fillMaxHeight())
             }
         }
     }
@@ -108,25 +140,41 @@ private fun BranchColumn(project: ProjectState, history: BranchHistoryState, mod
             placeholder = "Filter branches",
             leading = { SearchIcon(color = IdeColors.TextSecondary) },
         )
+        val localOpen = BranchSection.Local !in history.collapsedSections
+        val remoteOpen = BranchSection.Remote !in history.collapsedSections
         LazyColumn(Modifier.fillMaxSize().padding(top = 6.dp)) {
-            item { SectionTitle("Local", shownLocals.size) }
-            items(shownLocals, key = { "local:${it.name}" }) { branch ->
-                HistoryBranchRow(branch.name, history.selectedRef == branch.name, local = branch) {
-                    history.select(branch.name)
+            item { SectionTitle(history, BranchSection.Local, shownLocals.size) }
+            if (localOpen) {
+                items(shownLocals, key = { "local:${it.name}" }) { branch ->
+                    HistoryBranchRow(branch.name, history.selectedRef == branch.name, local = branch) {
+                        history.select(branch.name)
+                    }
                 }
             }
-            item { SectionTitle("Remote", shownRemotes.size) }
-            items(shownRemotes, key = { "remote:$it" }) { name ->
-                HistoryBranchRow(name, history.selectedRef == name, local = null) { history.select(name) }
+            item { SectionTitle(history, BranchSection.Remote, shownRemotes.size) }
+            if (remoteOpen) {
+                items(shownRemotes, key = { "remote:$it" }) { name ->
+                    HistoryBranchRow(name, history.selectedRef == name, local = null) { history.select(name) }
+                }
             }
         }
     }
 }
 
+// Header of a section of the branch list; a click folds or unfolds it, like a tree node.
 @Composable
-private fun SectionTitle(title: String, count: Int) {
-    Row(Modifier.fillMaxWidth().padding(start = 4.dp, top = 6.dp, bottom = 2.dp)) {
-        Label(title, color = IdeColors.TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+private fun SectionTitle(history: BranchHistoryState, section: BranchSection, count: Int) {
+    val open = section !in history.collapsedSections
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable { history.toggleSection(section) }
+            .testTag(ItemTags.historySection(section.name))
+            .padding(top = 6.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Chevron(expanded = open, Modifier.size(14.dp))
+        Label(section.title, color = IdeColors.TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
         Label("  $count", color = IdeColors.LineNumber, fontSize = 11.sp)
     }
 }

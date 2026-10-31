@@ -49,7 +49,7 @@ import java.awt.Cursor
 
 private val STRIP_WIDTH = 40.dp
 private val HEADER_HEIGHT = 34.dp
-private val SPLITTER_SIZE = 5.dp
+internal val SPLITTER_SIZE = 5.dp
 
 private const val DOCK_EDGE_FRACTION = 0.25f
 private const val BOTTOM_DOCK_START = 0.65f
@@ -248,7 +248,7 @@ private fun dockResizeSplitter(project: ProjectState, dock: Dock) {
 }
 
 @Composable
-private fun SplitterBox(horizontalBar: Boolean, tag: String?, onDrag: (Float) -> Unit) {
+internal fun SplitterBox(horizontalBar: Boolean, tag: String?, onDrag: (Float) -> Unit) {
     val size =
         if (horizontalBar) {
             Modifier.fillMaxWidth().height(SPLITTER_SIZE)

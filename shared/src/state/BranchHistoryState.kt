@@ -57,14 +57,25 @@ class BranchHistoryState(private val root: String, private val git: GitClient, p
     /** Filter of the branch list. */
     var branchQuery by mutableStateOf("")
 
+    /** Sections of the branch list the user folded (local, remote); their rows are not shown, nor composed. */
+    var collapsedSections: Set<BranchSection> by mutableStateOf(emptySet())
+        private set
+
     // Incremented by every selection or reload: an answer of an older generation is dropped.
     private var generation = 0
     private var pageJob: Job? = null
     private var detailsJob: Job? = null
 
+    /** Folds or unfolds [section] of the branch list (a click on its header). */
+    fun toggleSection(section: BranchSection) {
+        collapsedSections =
+            if (section in collapsedSections) collapsedSections - section else collapsedSections + section
+    }
+
     /** Shows the history of [ref] from its newest commit (a click on a branch, Show History of a pinned branch). */
     fun select(ref: String) {
         selectedRef = ref
+        clearCommit()
         reload()
     }
 
@@ -73,7 +84,10 @@ class BranchHistoryState(private val root: String, private val git: GitClient, p
         if (selectedRef == null && ref != null) select(ref)
     }
 
-    /** Reloads the remote branches and the first page of the selected branch (the window's refresh button). */
+    /**
+     * Reloads the remote branches and the first page of the selected branch (the window's refresh button, or the
+     * window shown again), keeping the selected commit.
+     */
     fun reload() {
         scope.launch { runCatching { git.remoteBranches(root) }.onSuccess { remoteBranches = it } }
         generation++
@@ -82,7 +96,7 @@ class BranchHistoryState(private val root: String, private val git: GitClient, p
         complete = false
         error = null
         loading = false
-        clearCommit()
+        // The selected commit stays shown: reopening the window or refreshing it does not lose what the user reads.
         loadMore()
     }
 
@@ -133,4 +147,10 @@ class BranchHistoryState(private val root: String, private val git: GitClient, p
         selectedCommit = null
         details = null
     }
+}
+
+/** Sections of the branch list of the Branches window. */
+enum class BranchSection(val title: String) {
+    Local("Local"),
+    Remote("Remote"),
 }

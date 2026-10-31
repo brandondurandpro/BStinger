@@ -62,6 +62,8 @@ object Tags {
     const val HISTORY_EMPTY = "history.empty"
     const val HISTORY_END = "history.end"
     const val HISTORY_DETAILS = "history.details"
+    const val HISTORY_BRANCHES_SPLITTER = "history.branchesSplitter"
+    const val HISTORY_DETAILS_SPLITTER = "history.detailsSplitter"
     const val TOOL_TERMINAL = "tool.terminal"
     const val TOOL_NETWORK = "tool.network"
     const val NETWORK = "network"
@@ -223,6 +225,8 @@ object ItemTags {
     fun branchToDeleteCheck(name: String) = "branch.toDeleteCheck:$name"
 
     fun historyBranch(name: String) = "history.branch:$name"
+
+    fun historySection(name: String) = "history.section:$name"
 
     fun historyCommit(hash: String) = "history.commit:$hash"
 
