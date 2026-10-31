@@ -1,6 +1,7 @@
 package org.example.kotlineditor.server
 
 import kotlinx.coroutines.runBlocking
+import org.example.kotlineditor.model.GitFileStatus
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
@@ -252,6 +253,76 @@ class GitClientTest {
 
             CliGitClient().pullBranch(root.toString(), default)
             assertEquals("remote\n", root.resolve("remote.kt").readText())
+        }
+
+    @Test
+    fun `the log pages through the commits of a branch, newest first, with their refs`() =
+        runBlocking {
+            val (default, _) = projectWithRemote()
+            repeat(5) { git("commit", "-q", "--allow-empty", "-m", "commit $it\twith a tab, a | and été") }
+            git("tag", "v1")
+            git("branch", "feature")
+            val client = CliGitClient()
+
+            val first = client.log(root.toString(), default, skip = 0, limit = 4)
+            assertEquals(listOf(4, 3, 2, 1).map { "commit $it\twith a tab, a | and été" }, first.map { it.subject })
+            assertTrue(first[0].refs.containsAll(listOf("tag: v1", default, "feature")), "${first[0].refs}")
+            assertEquals(listOf(first[1].hash), first[0].parents)
+            assertEquals("Test", first[0].author)
+            assertTrue(first[0].time > 0)
+            val second = client.log(root.toString(), default, skip = 4, limit = 4)
+            assertEquals(listOf("commit 0\twith a tab, a | and été", "init"), second.map { it.subject })
+            assertTrue(second.last().parents.isEmpty())
+            assertTrue("origin/$default" in second.last().refs)
+            assertTrue(client.log(root.toString(), default, skip = 6, limit = 4).isEmpty())
+            // The remote branch was pushed before the five commits.
+            assertEquals(listOf("init"), client.log(root.toString(), "origin/$default", 0, 10).map { it.subject })
+        }
+
+    @Test
+    fun `commit details list the message and the changed files, renames included`() =
+        runBlocking {
+            root.resolve("old name.kt").writeText(
+                """
+                val a = 1
+                val b = 2
+                val c = 3
+
+                """.trimIndent(),
+            )
+            root.resolve("gone.kt").writeText("gone\n")
+            commitAll()
+            val client = CliGitClient()
+            val initial = client.log(root.toString(), "HEAD", 0, 1).single()
+            val initialFiles = client.commitDetails(root.toString(), initial.hash).files
+            assertEquals(setOf("gone.kt", "old name.kt"), initialFiles.map { it.path }.toSet())
+
+            git("mv", "old name.kt", "new name.kt")
+            git("rm", "-q", "gone.kt")
+            root.resolve("added.kt").writeText("added\n")
+            git("add", "-A")
+            git("commit", "-q", "-m", "Rework\n\nThe body explains why.")
+            val head = client.log(root.toString(), "HEAD", 0, 1).single()
+            val details = client.commitDetails(root.toString(), head.hash)
+            assertEquals("Rework\n\nThe body explains why.", details.message)
+            val byPath = details.files.associateBy { it.path }
+            assertEquals(GitFileStatus.Renamed, byPath.getValue("new name.kt").status)
+            assertEquals("old name.kt", byPath.getValue("new name.kt").oldPath)
+            assertEquals(GitFileStatus.Deleted, byPath.getValue("gone.kt").status)
+            assertEquals(GitFileStatus.Added, byPath.getValue("added.kt").status)
+            assertFailsWith<IllegalArgumentException> { client.commitDetails(root.toString(), "--help") }
+            Unit
+        }
+
+    @Test
+    fun `remote branches are listed without the remote's HEAD`() =
+        runBlocking {
+            val (default, _) = projectWithRemote()
+            git("push", "-q", "origin", "HEAD:feature")
+            git("remote", "set-head", "origin", default)
+            git("fetch", "-q")
+            val remotes = CliGitClient().remoteBranches(root.toString())
+            assertEquals(listOf("origin/$default", "origin/feature").sorted(), remotes)
         }
 
     @Test

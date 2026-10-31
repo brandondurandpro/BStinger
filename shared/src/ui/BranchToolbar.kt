@@ -180,6 +180,7 @@ private fun PinnedBranchMenu(project: ProjectState, branch: GitBranchInfo) {
             item("Show Changes", ItemTags.branchMenuChanges(branch.name), true) {
                 project.showToolWindow(ToolWindow.Git)
             }
+            item("Show History", ItemTags.branchMenuHistory(branch.name), true) { project.showHistory(branch.name) }
             item("Unpin", ItemTags.branchMenuUnpin(branch.name), true) { project.toggleBranchSelection(branch.name) }
         }
     }

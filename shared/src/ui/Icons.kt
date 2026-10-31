@@ -95,6 +95,26 @@ fun CloseIcon(modifier: Modifier = Modifier, color: Color = IdeColors.TextSecond
     }
 }
 
+/** Clock with a backward arrow: the history of the branches (Branches tool window). */
+@Composable
+fun HistoryIcon(modifier: Modifier = Modifier, color: Color = IdeColors.TextSecondary) {
+    Canvas(modifier.size(16.dp)) {
+        val s = 1.2.dp.toPx()
+        val w = size.width
+        val c = Offset(w * 0.54f, size.height * 0.52f)
+        val r = w * 0.34f
+        val box = Size(r * 2, r * 2)
+        drawArc(color, 200f, 300f, useCenter = false, topLeft = Offset(c.x - r, c.y - r), size = box, style = Stroke(s))
+        // Arrow head at the open end of the circle, pointing back in time.
+        val corner = Offset(w * 0.20f, size.height * 0.46f)
+        drawLine(color, Offset(corner.x, size.height * 0.30f), corner, s, StrokeCap.Round)
+        drawLine(color, corner, Offset(w * 0.36f, corner.y), s, StrokeCap.Round)
+        // Hands.
+        drawLine(color, c, Offset(c.x, c.y - r * 0.6f), s, StrokeCap.Round)
+        drawLine(color, c, Offset(c.x + r * 0.45f, c.y), s, StrokeCap.Round)
+    }
+}
+
 /** Push pin, filled when [pinned]: pins a branch in the toolbar. */
 @Composable
 fun PinIcon(pinned: Boolean, modifier: Modifier = Modifier, color: Color = IdeColors.TextSecondary) {

@@ -48,6 +48,9 @@ class ProjectState(
     val find = FindState()
     val terminal = TerminalState(root.path, services.terminal, scope)
     val toolWindows = ToolWindowLayout().apply { restore(preferences) }
+
+    /** The Branches tool window: branches and the history of the selected one. */
+    val history = BranchHistoryState(root.path, services.git, scope)
     val network = NetworkView(services.network)
     var popup: PopupKind? by mutableStateOf(null)
     var fileDialog: FileDialog? by mutableStateOf(null)
@@ -126,6 +129,20 @@ class ProjectState(
         toolWindows.toggle(window)
         if (window == ToolWindow.Terminal && toolWindows.isVisible(window)) terminal.ensureStarted()
         if (window == ToolWindow.Git && toolWindows.isVisible(window)) refreshGitStatus()
+        if (window == ToolWindow.Branches && toolWindows.isVisible(window)) openHistory()
+    }
+
+    /** Opens the Branches tool window on the history of [ref], or of the current branch. */
+    fun showHistory(ref: String? = null) {
+        showToolWindow(ToolWindow.Branches)
+        if (ref != null && ref != history.selectedRef) history.select(ref)
+    }
+
+    // Shown again: the branches and the history may have changed meanwhile. The first time, the panel itself selects
+    // the current branch once it is known (`BranchesPanel`).
+    private fun openHistory() {
+        refreshBranches()
+        if (history.selectedRef != null) history.reload()
     }
 
     /** Shows [window] if it is hidden (a pinned branch's Show Changes opens the Git tool window). */

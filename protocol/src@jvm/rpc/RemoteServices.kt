@@ -15,6 +15,8 @@ import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.FileSymbol
 import org.example.kotlineditor.model.GitBranchInfo
 import org.example.kotlineditor.model.GitClient
+import org.example.kotlineditor.model.GitCommit
+import org.example.kotlineditor.model.GitCommitDetails
 import org.example.kotlineditor.model.GitFileStatus
 import org.example.kotlineditor.model.ProjectFileSystem
 import org.example.kotlineditor.model.ProjectSearch
@@ -29,6 +31,7 @@ import org.example.kotlineditor.model.TextMatch
 import java.io.IOException
 
 private const val ROOT = "root"
+private const val LIMIT = "limit"
 private const val BRANCH = "branch"
 private const val DIRECTORY = "directory"
 private const val ENTRY = "entry"
@@ -109,7 +112,7 @@ class RemoteSearch(private val client: RpcClient) : ProjectSearch {
         val result =
             client.call(Method.WalkFiles) {
                 put(ROOT, root.toJson())
-                put("limit", limit)
+                put(LIMIT, limit)
             }
         return result.entries()
     }
@@ -120,7 +123,7 @@ class RemoteSearch(private val client: RpcClient) : ProjectSearch {
                 put(ROOT, root.toJson())
                 put("query", query)
                 put("ignoreCase", ignoreCase)
-                put("limit", limit)
+                put(LIMIT, limit)
             }
         return result.matches()
     }
@@ -192,6 +195,29 @@ class RemoteGit(private val client: RpcClient) : GitClient {
 
     override suspend fun blame(root: String, path: String): List<BlameLine> =
         client.call(Method.GitBlame) { file(root, path) }.blameLines()
+
+    override suspend fun remoteBranches(root: String): List<String> =
+        client.call(Method.GitRemoteBranches) { put(ROOT, root) }.strings()
+
+    override suspend fun log(root: String, ref: String, skip: Int, limit: Int): List<GitCommit> {
+        val page =
+            client.call(Method.GitLog) {
+                put(ROOT, root)
+                put("ref", ref)
+                put("skip", skip)
+                put(LIMIT, limit)
+            }
+        return page.commits()
+    }
+
+    override suspend fun commitDetails(root: String, hash: String): GitCommitDetails {
+        val details =
+            client.call(Method.GitCommitDetails) {
+                put(ROOT, root)
+                put("hash", hash)
+            }
+        return details.commitDetails()
+    }
 
     private fun JsonObjectBuilder.file(root: String, path: String) {
         put(ROOT, root)

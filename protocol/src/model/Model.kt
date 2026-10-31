@@ -256,6 +256,49 @@ data class BlameLine(
     val date: String,
 )
 
+/** A commit of the history of a branch (the Branches tool window). */
+data class GitCommit(
+    /** Full hash. */
+    val hash: String,
+    /** Full hashes of its parents: several for a merge, none for a root commit. */
+    val parents: List<String>,
+    /** Author name. */
+    val author: String,
+    /** Author date, in seconds since the epoch. */
+    val time: Long,
+    /** First line of the message. */
+    val subject: String,
+    /** Branches and tags pointing at it (`main`, `origin/main`, `tag: v1`), `HEAD` excluded. */
+    val refs: List<String> = emptyList(),
+) {
+    /** Abbreviated hash shown in lists. */
+    val shortHash: String get() = hash.take(SHORT_HASH)
+
+    private companion object {
+        const val SHORT_HASH = 8
+    }
+}
+
+/** A file changed by a commit, compared with its first parent. */
+data class GitCommitFile(
+    /** Path relative to the root, with `/` separators. */
+    val path: String,
+    /** How the commit changed it. */
+    val status: GitFileStatus,
+    /** Former path of a renamed file. */
+    val oldPath: String? = null,
+)
+
+/** What a commit changed: its complete message and its files. */
+data class GitCommitDetails(
+    /** Full hash of the commit. */
+    val hash: String,
+    /** Complete message, subject and body. */
+    val message: String,
+    /** Files changed, compared with the first parent. */
+    val files: List<GitCommitFile>,
+)
+
 /** A local branch and its synchronization with the remote-tracking branch it follows. */
 data class GitBranchInfo(
     /** Short name of the branch, as shown by `git branch` (`main`, `feature/login`). */
@@ -326,6 +369,15 @@ interface GitClient {
     /** Annotations (author and date) of each line of [path], empty when the file has no history. */
     suspend fun blame(root: String, path: String): List<BlameLine>
 
+    /** Remote-tracking branches (`origin/main`), without the remotes' `HEAD`. */
+    suspend fun remoteBranches(root: String): List<String>
+
+    /** Commits reachable from [ref], newest first: [limit] of them after skipping [skip]; empty past the end. */
+    suspend fun log(root: String, ref: String, skip: Int, limit: Int): List<GitCommit>
+
+    /** The complete message and the changed files of commit [hash]. */
+    suspend fun commitDetails(root: String, hash: String): GitCommitDetails
+
     /** No Git support: no status, no branch, no differences. */
     @Suppress("TooManyFunctions")
     object None : GitClient {
@@ -354,6 +406,12 @@ interface GitClient {
         override suspend fun pullBranch(root: String, branch: String): String = ""
 
         override suspend fun blame(root: String, path: String): List<BlameLine> = emptyList()
+
+        override suspend fun remoteBranches(root: String): List<String> = emptyList()
+
+        override suspend fun log(root: String, ref: String, skip: Int, limit: Int): List<GitCommit> = emptyList()
+
+        override suspend fun commitDetails(root: String, hash: String) = GitCommitDetails(hash, "", emptyList())
     }
 }
 

@@ -51,6 +51,17 @@ object Tags {
     const val GIT_MESSAGE = "git.message"
     const val TOOL_PROJECT = "tool.project"
     const val TOOL_GIT = "tool.git"
+    const val TOOL_BRANCHES = "tool.branches"
+    const val BRANCHES_PANEL = "branches.panel"
+    const val HISTORY_REFRESH = "history.refresh"
+    const val HISTORY_HIDE = "history.hide"
+    const val HISTORY_BRANCH_SEARCH = "history.branchSearch"
+    const val HISTORY_TITLE = "history.title"
+    const val HISTORY_LOADING = "history.loading"
+    const val HISTORY_ERROR = "history.error"
+    const val HISTORY_EMPTY = "history.empty"
+    const val HISTORY_END = "history.end"
+    const val HISTORY_DETAILS = "history.details"
     const val TOOL_TERMINAL = "tool.terminal"
     const val TOOL_NETWORK = "tool.network"
     const val NETWORK = "network"
@@ -210,6 +221,14 @@ object ItemTags {
     fun branchToDelete(name: String) = "branch.toDelete:$name"
 
     fun branchToDeleteCheck(name: String) = "branch.toDeleteCheck:$name"
+
+    fun historyBranch(name: String) = "history.branch:$name"
+
+    fun historyCommit(hash: String) = "history.commit:$hash"
+
+    fun historyFile(path: String) = "history.file:$path"
+
+    fun branchMenuHistory(name: String) = "branch.menu.history:$name"
 
     fun pinnedBranchMenu(name: String) = "branch.pinnedMenu:$name"
 

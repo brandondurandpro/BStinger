@@ -299,6 +299,15 @@ enum class Method(
     /** Author and date of each line of a file. */
     GitBlame("git/blame"),
 
+    /** Remote-tracking branches. */
+    GitRemoteBranches("git/remoteBranches"),
+
+    /** A page of the commits of a branch. */
+    GitLog("git/log"),
+
+    /** Message and changed files of a commit. */
+    GitCommitDetails("git/commitDetails"),
+
     /** Local branches of the repository with their remote synchronization. */
     GitBranchDetails("git/branchDetails"),
 

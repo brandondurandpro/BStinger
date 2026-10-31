@@ -6,6 +6,9 @@ import org.example.kotlineditor.model.BlameLine
 import org.example.kotlineditor.model.DiffLine
 import org.example.kotlineditor.model.GitBranchInfo
 import org.example.kotlineditor.model.GitClient
+import org.example.kotlineditor.model.GitCommit
+import org.example.kotlineditor.model.GitCommitDetails
+import org.example.kotlineditor.model.GitCommitFile
 import org.example.kotlineditor.model.GitFileStatus
 import java.io.File
 import java.io.IOException
@@ -57,7 +60,7 @@ class CliGitClient : GitClient {
      */
     override suspend fun branchDetails(root: String): List<GitBranchInfo> =
         withContext(Dispatchers.IO) {
-            gitOutput(root, "for-each-ref", "--format=$BRANCH_FORMAT", "refs/heads")
+            gitOutput(root, FOR_EACH_REF, "--format=$BRANCH_FORMAT", "refs/heads")
                 ?.mapNotNull(::parseBranch)
                 .orEmpty()
         }
@@ -142,6 +145,91 @@ class CliGitClient : GitClient {
             }
         }
 
+    override suspend fun remoteBranches(root: String): List<String> =
+        withContext(Dispatchers.IO) {
+            gitOutput(root, FOR_EACH_REF, "--format=%(refname:short)%00%(symref)", "refs/remotes")
+                .orEmpty()
+                .map { it.split('\u0000') }
+                // `origin/HEAD` is a symbolic ref to the remote's default branch, not a branch.
+                .filter { it.size == 2 && it[1].isEmpty() && it[0].isNotBlank() }
+                .map { it[0] }
+                .sorted()
+        }
+
+    // One record per commit, its fields separated by NUL and the records by RS (0x1e): subjects can hold anything
+    // but those. `--` keeps a ref named like a file from being read as a path.
+    override suspend fun log(root: String, ref: String, skip: Int, limit: Int): List<GitCommit> =
+        withContext(Dispatchers.IO) {
+            require(limit in 1..MAX_LOG_PAGE) { "A page holds 1 to $MAX_LOG_PAGE commits" }
+            require(!ref.startsWith("-")) { "Not a ref: $ref" }
+            val output =
+                runGit(
+                    root,
+                    "log",
+                    "--format=%H%x00%P%x00%an%x00%at%x00%D%x00%s%x1e",
+                    "--skip=${skip.coerceAtLeast(0)}",
+                    "--max-count=$limit",
+                    ref,
+                    "--",
+                )
+            output.split(RECORD_SEPARATOR).mapNotNull(::parseCommit)
+        }
+
+    override suspend fun commitDetails(root: String, hash: String): GitCommitDetails =
+        withContext(Dispatchers.IO) {
+            require(hash.matches(HASH)) { "Not a commit hash: $hash" }
+            val message = runGit(root, "log", "-1", "--format=%B", hash).trimEnd()
+            // `-z`: paths as they are (no quoting of spaces or accents); `--root` lists the files of a first commit.
+            val raw = runGit(root, "diff-tree", "--no-commit-id", "-r", "-M", "--root", "--name-status", "-z", hash)
+            GitCommitDetails(hash, message, parseNameStatus(raw))
+        }
+
+    private fun parseCommit(record: String): GitCommit? {
+        val fields = record.trimStart('\n').split('\u0000')
+        if (fields.size < COMMIT_FIELD_COUNT || fields[0].isBlank()) return null
+        val refs =
+            fields[COMMIT_REFS_FIELD]
+                .split(", ")
+                .map { it.removePrefix("HEAD -> ") }
+                .filter { it.isNotBlank() && it != "HEAD" }
+        return GitCommit(
+            hash = fields[0],
+            parents = fields[1].split(' ').filter(String::isNotBlank),
+            author = fields[2],
+            time = fields[COMMIT_TIME_FIELD].toLongOrNull() ?: 0,
+            subject = fields.drop(COMMIT_SUBJECT_FIELD).joinToString("\u0000"),
+            refs = refs,
+        )
+    }
+
+    // `-z --name-status`: a status, then its path; a rename or copy (R100, C75) has the old path, then the new one.
+    private fun parseNameStatus(raw: String): List<GitCommitFile> {
+        val parts = raw.split('\u0000').filter { it.isNotEmpty() }
+        val files = ArrayList<GitCommitFile>()
+        var index = 0
+        while (index < parts.size) {
+            val code = parts[index]
+            val renamed = code.startsWith("R") || code.startsWith("C")
+            if (renamed && index + 2 <= parts.lastIndex) {
+                files += GitCommitFile(parts[index + 2], GitFileStatus.Renamed, oldPath = parts[index + 1])
+                index += RENAME_PARTS
+            } else if (index + 1 <= parts.lastIndex) {
+                files += GitCommitFile(parts[index + 1], commitFileStatus(code))
+                index += 2
+            } else {
+                break
+            }
+        }
+        return files
+    }
+
+    private fun commitFileStatus(code: String): GitFileStatus =
+        when (code.first()) {
+            'A' -> GitFileStatus.Added
+            'D' -> GitFileStatus.Deleted
+            else -> GitFileStatus.Modified
+        }
+
     private fun requireLocalBranch(root: String, branch: String) {
         if (gitOutput(root, "show-ref", "--verify", "--quiet", "refs/heads/$branch") == null) {
             throw IOException("No local branch $branch")
@@ -153,7 +241,7 @@ class CliGitClient : GitClient {
         val line =
             gitOutput(
                 root,
-                "for-each-ref",
+                FOR_EACH_REF,
                 "--format=%(upstream:remotename)%00%(upstream:remoteref)",
                 "refs/heads/$branch",
             )?.firstOrNull()
@@ -241,6 +329,15 @@ class CliGitClient : GitClient {
         const val BRANCH_FIELD_COUNT = 4
         const val DELETE_CHUNK_SIZE = 50
         const val DEFAULT_REMOTE = "origin"
+        const val FOR_EACH_REF = "for-each-ref"
+        const val MAX_LOG_PAGE = 1000
+        const val RECORD_SEPARATOR = '\u001e'
+        const val COMMIT_FIELD_COUNT = 6
+        const val COMMIT_TIME_FIELD = 3
+        const val COMMIT_REFS_FIELD = 4
+        const val COMMIT_SUBJECT_FIELD = 5
+        const val RENAME_PARTS = 3
+        val HASH = Regex("[0-9a-f]{7,64}")
         const val TRACK_COUNT_GROUP = 1
         const val BRANCH_FORMAT = "%(refname:short)%00%(HEAD)%00%(upstream:short)%00%(upstream:track)"
         val AHEAD_TRACK = Regex("""ahead (\d+)""")

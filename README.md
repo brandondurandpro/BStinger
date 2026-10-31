@@ -62,6 +62,9 @@ A lightweight IDE in the style of IntelliJ IDEA (New UI, dark theme), written wi
   missing. Every deletion first lists the branches it will delete, and each one can be spared.
   The menu of a pinned branch pulls it (fast-forward only) or pushes it without checking it out, checks it out, or
   opens the Git tool window; the toolbar shows the result.
+- **Branches tool window** (clock icon of the left strip, docked at the bottom): every local and remote branch, the
+  history of the selected one (refs, subject, author, date, hash), loaded page by page as it scrolls, and the message
+  and changed files of the selected commit. A pinned branch's menu opens it on that branch (Show History).
 
 ### Architecture: client and server
 

@@ -82,8 +82,9 @@ class ToolWindowLayoutPreferencesTest {
                 "layout.order" to "Bogus,,Terminal",
             ),
         )
-        // Only the order changed: Terminal first, the windows it did not name follow.
-        assertEquals(defaults + ("layout.order" to "Terminal,Project,Git,Network"), layout.toPreferences())
+        // Only the order changed: Terminal first, the windows it did not name follow (Branches too, so a layout
+        // saved before that window existed still gets it).
+        assertEquals(defaults + ("layout.order" to "Terminal,Project,Git,Branches,Network"), layout.toPreferences())
     }
 
     @Test

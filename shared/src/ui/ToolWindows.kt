@@ -119,6 +119,7 @@ internal fun ToolStrip(project: ProjectState, devtools: Boolean) {
     ) {
         ToolButton(project, ToolWindow.Project, Tags.TOOL_PROJECT) { FolderIcon(Modifier.size(18.dp)) }
         ToolButton(project, ToolWindow.Git, Tags.TOOL_GIT) { BranchIcon(color = IdeColors.Text) }
+        ToolButton(project, ToolWindow.Branches, Tags.TOOL_BRANCHES) { HistoryIcon(color = IdeColors.Text) }
         Spacer(Modifier.weight(1f))
         // Bottom tool windows sit at the bottom of the strip, like in IntelliJ's New UI.
         if (devtools) {
@@ -213,6 +214,7 @@ private fun ToolWindowContent(project: ProjectState, window: ToolWindow, drag: T
     when (window) {
         ToolWindow.Project -> ProjectPanel(project, drag, modifier)
         ToolWindow.Git -> GitPanel(project, drag, modifier)
+        ToolWindow.Branches -> BranchesPanel(project, drag, modifier)
         ToolWindow.Terminal -> TerminalPanel(project, drag, modifier)
         ToolWindow.Network -> NetworkPanel(project, drag, modifier)
     }
