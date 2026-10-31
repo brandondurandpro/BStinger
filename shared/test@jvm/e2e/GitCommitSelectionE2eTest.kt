@@ -1,0 +1,142 @@
+package org.example.kotlineditor.e2e
+
+import androidx.compose.ui.test.ComposeUiTest
+import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.v2.runComposeUiTest
+import org.example.kotlineditor.ui.ItemTags
+import org.example.kotlineditor.ui.Tags
+import java.nio.file.Files
+import kotlin.test.AfterTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+
+/** The two sections of the Git panel (checked for the commit, other changes) and what the Commit button does. */
+@OptIn(ExperimentalTestApi::class)
+class GitCommitSelectionE2eTest {
+    private val project = SampleProject.standard()
+
+    @AfterTest
+    fun cleanup() {
+        project.delete()
+    }
+
+    private fun ComposeUiTest.openGit(): E2eApp {
+        val app = launchWithProject(project)
+        onNodeWithTag(Tags.TOOL_GIT).performClick()
+        awaitTag(Tags.GIT_PANEL)
+        return app
+    }
+
+    @Test
+    fun `ticking a change moves it into Commit and unticking brings it back`() =
+        runComposeUiTest {
+            project.commitAll()
+            project.file("README.md", "# Changed\n")
+            project.file("notes.txt", "new\n")
+            val app = openGit()
+            awaitTag(ItemTags.gitChange("README.md"))
+            awaitTag(ItemTags.gitChange("notes.txt"))
+            // At first only the Other changes section lists the files.
+            awaitTag(Tags.GIT_OTHER_FILES)
+            awaitNoTag(Tags.GIT_COMMIT_FILES)
+            awaitTag(ItemTags.gitChangeCheck("README.md")).performClick()
+            awaitTag(Tags.GIT_COMMIT_FILES)
+            assertEquals(setOf("README.md"), app.project.selectedForCommit)
+            awaitTag(ItemTags.gitChangeCheck("README.md")).performClick()
+            awaitNoTag(Tags.GIT_COMMIT_FILES)
+            awaitTag(Tags.GIT_OTHER_FILES)
+            assertEquals(0, app.project.selectedForCommit.size)
+        }
+
+    @Test
+    fun `the checked changes are committed together and the others stay`() =
+        runComposeUiTest {
+            project.commitAll()
+            project.file("README.md", "# Changed\n")
+            project.file("build.gradle.kts", "moved\n")
+            project.file("notes.txt", "new\n")
+            val app = openGit()
+            awaitTag(ItemTags.gitChangeCheck("README.md")).performClick()
+            awaitTag(ItemTags.gitChangeCheck("notes.txt")).performClick()
+            assertEquals(setOf("README.md", "notes.txt"), app.project.selectedForCommit)
+            awaitTag(Tags.GIT_COMMIT_MESSAGE).performTextInput("Two files")
+            onNodeWithTag(Tags.GIT_COMMIT).performClick()
+            awaitCondition { !app.project.gitBusy && app.project.gitStatus.keys == setOf("build.gradle.kts") }
+            assertEquals("Committed 2 files", app.project.gitMessage)
+            assertEquals("Two files", project.lastCommitSubject())
+            assertEquals(0, app.project.selectedForCommit.size)
+        }
+
+    @Test
+    fun `the selection survives a blank message and a commit whose file changed meanwhile`() =
+        runComposeUiTest {
+            project.commitAll()
+            project.file("README.md", "# Changed\n")
+            val app = openGit()
+            awaitTag(ItemTags.gitChangeCheck("README.md")).performClick()
+            // A blank message fails, and the checked file stays checked for the next try.
+            onNodeWithTag(Tags.GIT_COMMIT).performClick()
+            awaitTag(Tags.GIT_MESSAGE)
+            assertEquals("A commit message is required", app.project.gitMessage)
+            assertEquals(setOf("README.md"), app.project.selectedForCommit)
+            // The same selection then commits without ticking again.
+            awaitTag(Tags.GIT_COMMIT_MESSAGE).performTextInput("Update the readme")
+            onNodeWithTag(Tags.GIT_COMMIT).performClick()
+            awaitCondition { !app.project.gitBusy && app.project.gitStatus.isEmpty() }
+            assertEquals("Update the readme", project.lastCommitSubject())
+        }
+
+    @Test
+    fun `files that leave the status are unchecked by the next refresh`() =
+        runComposeUiTest {
+            project.commitAll()
+            project.file("README.md", "# Changed\n")
+            project.file("notes.txt", "new\n")
+            val app = openGit()
+            awaitTag(ItemTags.gitChangeCheck("README.md")).performClick()
+            awaitTag(ItemTags.gitChangeCheck("notes.txt")).performClick()
+            assertEquals(setOf("README.md", "notes.txt"), app.project.selectedForCommit)
+            // Another program reverts the file on disk; the refresh of the panel drops it from the selection.
+            project.git("checkout", "--", "README.md")
+            onNodeWithTag(Tags.GIT_REFRESH).performClick()
+            awaitCondition { app.project.selectedForCommit == setOf("notes.txt") }
+            awaitCondition { app.project.gitStatus.keys == setOf("notes.txt") }
+        }
+
+    @Test
+    fun `a deleted file and an untracked file can be checked and committed`() =
+        runComposeUiTest {
+            project.commitAll()
+            Files.delete(project.root.resolve("README.md"))
+            project.file("notes.txt", "new\n")
+            val app = openGit()
+            awaitTag(ItemTags.gitChangeCheck("README.md")).performClick()
+            awaitTag(ItemTags.gitChangeCheck("notes.txt")).performClick()
+            awaitTag(Tags.GIT_COMMIT_MESSAGE).performTextInput("Reshape the project")
+            onNodeWithTag(Tags.GIT_COMMIT).performClick()
+            awaitCondition { !app.project.gitBusy && app.project.gitStatus.isEmpty() }
+            assertEquals("Reshape the project", project.lastCommitSubject())
+            // The committed files carry the deletion and the addition, nothing of another file.
+            val names = project.git("show", "--name-status", "--format=").trim().lines()
+            assertEquals(listOf("D" + '\t' + "README.md", "A" + '\t' + "notes.txt"), names)
+        }
+
+    @Test
+    fun `the Commit button stays disabled while nothing is checked, and the message is kept`() =
+        runComposeUiTest {
+            project.commitAll()
+            project.file("README.md", "# Changed\n")
+            val app = openGit()
+            awaitTag(ItemTags.gitChange("README.md"))
+            awaitTag(Tags.GIT_COMMIT_MESSAGE).performTextInput("Update the readme")
+            onNodeWithTag(Tags.GIT_COMMIT).assertIsNotEnabled()
+            awaitNoTag(Tags.GIT_MESSAGE)
+            awaitTag(ItemTags.gitChangeCheck("README.md")).performClick()
+            awaitCondition { app.project.selectedForCommit == setOf("README.md") }
+            assertEquals("Update the readme", app.project.commitMessage)
+        }
+}

@@ -5,18 +5,25 @@ import java.io.IOException
 
 private const val MAX_MESSAGE_LENGTH = 300
 
-/** Commits every change of the project with [message] (the Git panel's Commit button). */
+/**
+ * Commits the changes the user checked in the Git panel ([selectedForCommit]) with [message]; the other changes stay
+ * behind. The panel keeps the selection while the status changes, so a path that left it is simply not committed.
+ */
 fun ProjectState.commitChanges(message: String) {
+    val paths = selectedForCommit
     if (message.isBlank()) {
         gitMessage = "A commit message is required"
         gitMessageIsError = true
         return
     }
+    // The Commit button is disabled then; the guard keeps another caller (a shortcut) from committing everything.
+    if (paths.isEmpty()) return
     scope.launch {
         gitOperation {
-            services.git.commit(root.path, message.trim())
+            services.git.commit(root.path, message.trim(), paths.toList())
             commitMessage = ""
-            "Committed"
+            val noun = if (paths.size == 1) "file" else "files"
+            "Committed ${paths.size} $noun"
         }
     }
 }

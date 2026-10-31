@@ -27,7 +27,7 @@ import org.example.kotlineditor.state.ToolWindow
 import org.example.kotlineditor.state.openDiff
 import org.example.kotlineditor.state.toggleBlame
 
-/** Git tool window: branch and commit actions, then the changed files; a click opens the diff of the file. */
+/** Git tool window: branch and commit actions, then the changed files split into the checked ones and the others. */
 @Composable
 internal fun GitPanel(project: ProjectState, drag: ToolWindowDrag, modifier: Modifier = Modifier) {
     val changes = project.gitStatus.entries.sortedBy { it.key }
@@ -85,44 +85,77 @@ private fun Message(text: String, tag: String) {
     }
 }
 
+// The changed files, split into the ones checked for the commit and the others: the Commit section (with its
+// checkboxes ticked) comes first when it is not empty, and the Commit button commits only its files.
 @Composable
 private fun ChangeList(project: ProjectState, changes: List<Map.Entry<String, GitFileStatus>>) {
+    val (selected, others) = changes.partition { it.key in project.selectedForCommit }
     LazyColumn(Modifier.fillMaxSize()) {
-        items(changes, key = { it.key }) { (path, status) ->
-            ChangeRow(project, path, status)
+        if (selected.isNotEmpty()) {
+            item(key = "header:commit") { SectionHeader("Commit (${selected.size})", Tags.GIT_COMMIT_FILES) }
+            items(selected, key = { it.key }) { (path, status) ->
+                ChangeRow(project, path, status, checked = true)
+            }
+        }
+        if (others.isNotEmpty()) {
+            item(key = "header:other") { SectionHeader("Other changes (${others.size})", Tags.GIT_OTHER_FILES) }
+            items(others, key = { it.key }) { (path, status) ->
+                ChangeRow(project, path, status, checked = false)
+            }
         }
     }
 }
 
 @Composable
-private fun ChangeRow(project: ProjectState, path: String, status: GitFileStatus) {
-    val name = path.substringAfterLast('/')
-    val directory = path.substringBeforeLast('/', "")
+private fun SectionHeader(text: String, tag: String) {
     Row(
         Modifier
             .fillMaxWidth()
-            .height(24.dp)
-            .clickable { project.openDiff(path) }
-            .testTag(ItemTags.gitChange(path))
+            .height(20.dp)
+            .background(IdeColors.Panel)
+            .testTag(tag)
             .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Label(
-            vcsStatusLetter(status),
-            Modifier.width(16.dp),
-            color = gitColor(status),
-            fontWeight = FontWeight.Bold,
-            fontSize = 12.sp,
-        )
-        FileIcon(name, isDirectory = false)
-        Label(name, Modifier.padding(start = 6.dp), color = gitColor(status))
-        if (directory.isNotEmpty()) {
+        Label(text, color = IdeColors.TextSecondary, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+@Composable
+private fun ChangeRow(project: ProjectState, path: String, status: GitFileStatus, checked: Boolean) {
+    val name = path.substringAfterLast('/')
+    val directory = path.substringBeforeLast('/', "")
+    Row(Modifier.fillMaxWidth().height(24.dp), verticalAlignment = Alignment.CenterVertically) {
+        // The checkbox decides where this row sits (Commit or Other changes); the file name opens its diff.
+        BranchCheckbox(
+            checked,
+            Modifier.padding(start = 8.dp).testTag(ItemTags.gitChangeCheck(path)),
+        ) { project.toggleCommitSelection(path) }
+        Row(
+            Modifier
+                .weight(1f)
+                .clickable { project.openDiff(path) }
+                .testTag(ItemTags.gitChange(path))
+                .padding(horizontal = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Label(
-                directory,
-                Modifier.weight(1f).padding(start = 6.dp),
-                color = IdeColors.TextSecondary,
-                fontSize = 11.sp,
+                vcsStatusLetter(status),
+                Modifier.width(16.dp),
+                color = gitColor(status),
+                fontWeight = FontWeight.Bold,
+                fontSize = 12.sp,
             )
+            FileIcon(name, isDirectory = false)
+            Label(name, Modifier.padding(start = 6.dp), color = gitColor(status))
+            if (directory.isNotEmpty()) {
+                Label(
+                    directory,
+                    Modifier.weight(1f).padding(start = 6.dp),
+                    color = IdeColors.TextSecondary,
+                    fontSize = 11.sp,
+                )
+            }
         }
     }
 }

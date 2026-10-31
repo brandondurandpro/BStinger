@@ -45,6 +45,8 @@ object Tags {
     const val GIT_BLAME = "git.blame"
     const val GIT_COMMIT_MESSAGE = "git.commitMessage"
     const val GIT_COMMIT = "git.commit"
+    const val GIT_COMMIT_FILES = "git.commitFiles"
+    const val GIT_OTHER_FILES = "git.otherFiles"
     const val GIT_BRANCH_BUTTON = "git.branchButton"
     const val GIT_PULL = "git.pull"
     const val GIT_PUSH = "git.push"
@@ -213,6 +215,8 @@ object ItemTags {
     fun terminalLine(index: Int) = "terminal.line:$index"
 
     fun gitChange(relativePath: String) = "git.change:$relativePath"
+
+    fun gitChangeCheck(relativePath: String) = "git.change.check:$relativePath"
 
     fun gitBranch(name: String) = "git.branchItem:$name"
 

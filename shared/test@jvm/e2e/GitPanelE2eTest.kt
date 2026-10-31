@@ -5,6 +5,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -311,17 +312,23 @@ class GitPanelE2eTest {
         }
 
     @Test
-    fun `the Commit button stages and commits the changes`() =
+    fun `the Commit button carries only the checked changes`() =
         runComposeUiTest {
             project.commitAll()
             project.file("README.md", "# Changed\n")
+            project.file("notes.txt", "new\n")
             val app = launchWithProject(project)
             onNodeWithTag(Tags.TOOL_GIT).performClick()
             awaitTag(ItemTags.gitChange("README.md"))
+            awaitTag(ItemTags.gitChange("notes.txt"))
+            onNodeWithTag(Tags.GIT_COMMIT).assertIsNotEnabled()
+            awaitTag(Tags.GIT_OTHER_FILES)
+            awaitTag(ItemTags.gitChangeCheck("README.md")).performClick()
+            awaitTag(Tags.GIT_COMMIT_FILES)
             awaitTag(Tags.GIT_COMMIT_MESSAGE).performTextInput("Update the readme")
             onNodeWithTag(Tags.GIT_COMMIT).performClick()
-            awaitCondition { !app.project.gitBusy && app.project.gitStatus.isEmpty() }
-            assertEquals("Committed", app.project.gitMessage)
+            awaitCondition { !app.project.gitBusy && app.project.gitStatus.keys == setOf("notes.txt") }
+            assertEquals("Committed 1 file", app.project.gitMessage)
             assertEquals("Update the readme", project.lastCommitSubject())
         }
 
