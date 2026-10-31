@@ -1,6 +1,7 @@
 package org.example.kotlineditor.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
@@ -20,6 +21,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -51,13 +54,23 @@ import org.example.kotlineditor.state.visualColumn
 fun ProjectScreen(app: AppState, project: ProjectState) {
     val findFocus = remember { FocusRequester() }
     val shortcuts = remember(project) { GlobalShortcuts(IdeContext(app, project, findFocus)) }
+    val rootFocus = remember { FocusRequester() }
+    var hasFocus by remember { mutableStateOf(false) }
     SyncOnWindowFocus(project)
+    // Shortcuts only reach a focused component: with no file open nothing else holds the focus, so the screen takes it.
+    val windowFocused = LocalWindowInfo.current.isWindowFocused
+    LaunchedEffect(hasFocus, project.popup, windowFocused) {
+        if (!hasFocus && project.popup == null) runCatching { rootFocus.requestFocus() }
+    }
     Column(
         Modifier
             .fillMaxSize()
             .background(IdeColors.Panel)
             .testTag(Tags.PROJECT)
-            .onPreviewKeyEvent(shortcuts::handle),
+            .onPreviewKeyEvent(shortcuts::handle)
+            .focusRequester(rootFocus)
+            .onFocusChanged { hasFocus = it.hasFocus }
+            .focusable(),
     ) {
         Toolbar(app, project)
         Box(Modifier.fillMaxWidth().height(1.dp).background(IdeColors.Border))

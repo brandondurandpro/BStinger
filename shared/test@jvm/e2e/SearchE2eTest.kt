@@ -188,6 +188,56 @@ class SearchE2eTest {
         }
 
     @Test
+    fun `Ctrl+P opens Go to File when no file is open`() =
+        runComposeUiTest {
+            launchWithProject(project)
+            awaitTag(Tags.EDITOR_EMPTY)
+            onNodeWithTag(Tags.PROJECT).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.P) } }
+            awaitTag(Tags.GOTO_FILE_INPUT).assertIsFocused()
+        }
+
+    @Test
+    fun `Ctrl+Shift+F opens Find in Files when no file is open`() =
+        runComposeUiTest {
+            launchWithProject(project)
+            awaitTag(Tags.EDITOR_EMPTY)
+            onNodeWithTag(Tags.PROJECT).performKeyInput {
+                withKeyDown(Key.CtrlLeft) { withKeyDown(Key.ShiftLeft) { pressKey(Key.F) } }
+            }
+            awaitTag(Tags.FIND_IN_FILES_INPUT).assertIsFocused()
+        }
+
+    @Test
+    fun `Ctrl+P still works after closing the last tab`() =
+        runComposeUiTest {
+            launchWithProject(project)
+            openFromTree("src/main/kotlin/App.kt")
+            onNodeWithTag(Tags.EDITOR).performClick()
+            onNodeWithTag(Tags.EDITOR).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.F4) } }
+            awaitTag(Tags.EDITOR_EMPTY)
+            onNodeWithTag(Tags.PROJECT).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.P) } }
+            awaitTag(Tags.GOTO_FILE_INPUT).assertIsFocused()
+        }
+
+    @Test
+    fun `search shortcuts still work after dismissing a popup when no file is open`() =
+        runComposeUiTest {
+            val app = launchWithProject(project)
+            awaitTag(Tags.EDITOR_EMPTY)
+            onNodeWithTag(Tags.PROJECT).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.P) } }
+            awaitTag(Tags.GOTO_FILE_INPUT).performKeyInput { pressKey(Key.Escape) }
+            awaitNoTag(Tags.GOTO_FILE)
+            onNodeWithTag(Tags.PROJECT).performKeyInput {
+                withKeyDown(Key.CtrlLeft) { withKeyDown(Key.ShiftLeft) { pressKey(Key.F) } }
+            }
+            awaitTag(Tags.FIND_IN_FILES_INPUT).performKeyInput { pressKey(Key.Escape) }
+            awaitNoTag(Tags.FIND_IN_FILES)
+            onNodeWithTag(Tags.PROJECT).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.P) } }
+            awaitTag(Tags.GOTO_FILE_INPUT).assertIsFocused()
+            assertNull(app.project.editor.activeTab)
+        }
+
+    @Test
     fun `Find in Files lists matches across the project and opens the selected one at its line`() =
         runComposeUiTest {
             val app = launchWithProject(project)
