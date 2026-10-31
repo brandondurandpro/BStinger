@@ -101,7 +101,7 @@ fun EditorTabs(editor: EditorState, pane: EditorPane, modifier: Modifier = Modif
     }
 }
 
-private fun isFullyVisible(listState: LazyListState, index: Int): Boolean {
+internal fun isFullyVisible(listState: LazyListState, index: Int): Boolean {
     val info = listState.layoutInfo
     return info.visibleItemsInfo.any {
         it.index == index &&
@@ -186,7 +186,7 @@ private fun CloseTabButton(visible: Boolean, closeTag: String, onClose: () -> Un
 
 // Middle click closes the tab, like in IntelliJ and browsers; right click opens its context menu.
 @OptIn(ExperimentalComposeUiApi::class)
-private fun onTabPress(
+internal fun onTabPress(
     event: PointerEvent,
     onSelect: () -> Unit,
     onClose: () -> Unit,
@@ -258,7 +258,7 @@ private fun TabContextMenu(
 }
 
 @Composable
-private fun TabMenuItem(text: String, tag: String, enabled: Boolean = true, onClick: () -> Unit) {
+internal fun TabMenuItem(text: String, tag: String, enabled: Boolean = true, onClick: () -> Unit) {
     DropdownMenuItem(
         text = { Text(text, fontSize = 13.sp) },
         onClick = onClick,
@@ -268,7 +268,7 @@ private fun TabMenuItem(text: String, tag: String, enabled: Boolean = true, onCl
 }
 
 @Composable
-private fun MenuSeparator() {
+internal fun MenuSeparator() {
     Box(
         Modifier
             .fillMaxWidth()

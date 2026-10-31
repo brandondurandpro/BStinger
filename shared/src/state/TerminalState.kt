@@ -88,9 +88,6 @@ class TerminalTab(
         if (delta != 0) process.scroll(delta)
     }
 
-    /** Clears the screen and the scrollback, keeping the line being typed. */
-    fun clear() = process.clear()
-
     /** Stops the shell and the collector. */
     fun dispose() {
         job.cancel()
@@ -171,14 +168,26 @@ class TerminalState(
             }
     }
 
-    /** Clears the screen and the scrollback of the active tab. */
-    fun clear() = active?.clear()
+    /** Closes the tabs whose index matches [closes], keeping the one at [index] and showing it. */
+    fun closeAround(index: Int, closes: (Int) -> Boolean) {
+        val kept = tabs.getOrNull(index) ?: return
+        val closed = tabs.filterIndexed { i, _ -> closes(i) }
+        closed.forEach { it.dispose() }
+        tabs.removeAll(closed)
+        activeIndex = tabs.indexOf(kept)
+        focused = true
+    }
 
-    /** Stops every shell; called when the project closes. */
-    fun stop() {
+    /** Closes every tab, stopping their shells. */
+    fun closeAll() {
         tabs.forEach { it.dispose() }
         tabs.clear()
         activeIndex = 0
+    }
+
+    /** Stops every shell; called when the project closes. */
+    fun stop() {
+        closeAll()
         focused = false
     }
 }
