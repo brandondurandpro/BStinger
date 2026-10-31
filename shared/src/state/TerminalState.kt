@@ -29,6 +29,8 @@ private const val DEFAULT_CELL_HEIGHT = 16
 class TerminalTab(
     /** Stable id of the tab, used for its key in the UI and its test tag. */
     val number: Int,
+    /** Short name shown on the tab, like IntelliJ's: "Local", then "Local (2)" and so on. */
+    val name: String,
     private val process: TerminalProcess,
     scope: CoroutineScope,
 ) {
@@ -36,8 +38,11 @@ class TerminalTab(
     var snapshot by mutableStateOf<TerminalSnapshot?>(null)
         private set
 
-    /** Title the running program set (OSC 0/2), or a fallback while it sets none. */
-    var title by mutableStateOf("Terminal $number")
+    /**
+     * Title the running program set (OSC 0/2), such as `user@host: ~/project` or `C:\Windows\system32\cmd.exe`, or
+     * the [name] while it sets none. Too long for the tab, it is shown in the tab's tooltip.
+     */
+    var title by mutableStateOf(name)
         private set
 
     /** Whether the shell is still running. */
@@ -139,9 +144,15 @@ class TerminalState(
                 return
             }
         error = null
-        tabs += TerminalTab(nextNumber++, process, scope)
+        tabs += TerminalTab(nextNumber++, nextName(), process, scope)
         activeIndex = tabs.lastIndex
         focused = true
+    }
+
+    // The first free name: "Local", then "Local (2)", "Local (3)"…; a closed tab's name is given again.
+    private fun nextName(): String {
+        val taken = tabs.map { it.name }.toSet()
+        return generateSequence(1) { it + 1 }.map(::tabName).first { it !in taken }
     }
 
     /** Shows the tab at [index]. */
@@ -191,3 +202,6 @@ class TerminalState(
         focused = false
     }
 }
+
+/** Name of the [index]-th terminal tab (one-based), as IntelliJ names its local terminals. */
+fun tabName(index: Int): String = if (index == 1) "Local" else "Local ($index)"

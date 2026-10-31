@@ -9,9 +9,11 @@ import androidx.compose.ui.test.ScrollWheel
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
@@ -73,7 +75,7 @@ class TerminalE2eTest {
         }
     }
 
-    // Scrolls the tabs until [reached]; more than once if needed, as the titles the shells set late widen them.
+    // Scrolls the tabs until [reached]; more than once if needed, as a scroll can end short of it.
     private fun ComposeUiTest.scrollTabsUntil(delta: Float, wheel: ScrollWheel, reached: () -> Boolean) {
         repeat(SCROLL_ATTEMPTS) {
             onNodeWithTag(Tags.TERMINAL_TABS).performMouseInput {
@@ -95,9 +97,8 @@ class TerminalE2eTest {
         project.terminal.active
             ?.number
 
-    // Opens the terminal with tabs 1 to [count], tab [count] being shown, once every shell has drawn its prompt. The
-    // title a shell sets while starting (cmd.exe's is long) widens its tab and scrolls the row to the shown tab: a
-    // click sent meanwhile lands where the tab, its close button or its context menu no longer is.
+    // Opens the terminal with tabs 1 to [count], tab [count] being shown, once every shell has drawn its prompt, so
+    // that the row of tabs no longer moves when a click is sent.
     private fun ComposeUiTest.openTabs(app: E2eApp, count: Int) {
         onNodeWithTag(Tags.TOOL_TERMINAL).performClick()
         awaitTag(Tags.TERMINAL_INPUT)
@@ -230,7 +231,7 @@ class TerminalE2eTest {
     fun `with many tabs the new tab button stays reachable and the tab row scrolls`() =
         runComposeUiTest {
             val app = launchWithProject(project)
-            // Tabs are opened until they overflow (their width depends on the title the shell sets); each one
+            // Tabs are opened until they overflow (their width depends on the panel's); each one
             // opened is scrolled into view, and the button that opens them stays reachable.
             openTabs(app, 1)
             var last = 1
@@ -367,5 +368,37 @@ class TerminalE2eTest {
             onNodeWithTag(Tags.TOOL_TERMINAL).performClick()
             awaitTag(Tags.TERMINAL_INPUT)
             assertTrue(printed(app, "marker-x"))
+        }
+
+    @Test
+    fun `tabs are named Local, Local (2)… and a closed tab's name is given again`() =
+        runComposeUiTest {
+            val app = launchWithProject(project)
+            openTabs(app, 3)
+            onNodeWithTag(Tags.terminalTabName(1)).assertTextEquals("Local")
+            onNodeWithTag(Tags.terminalTabName(2)).assertTextEquals("Local (2)")
+            onNodeWithTag(Tags.terminalTabName(3)).assertTextEquals("Local (3)")
+            clickTabClose(2)
+            awaitNoTag(Tags.terminalTab(2))
+            onNodeWithTag(Tags.TERMINAL_NEW).performClick()
+            awaitTag(Tags.terminalTabName(4)).assertTextEquals("Local (2)")
+            val tabs = app.project.terminal.tabs
+            val names = tabs.map { it.name }
+            assertEquals(listOf("Local", "Local (3)", "Local (2)"), names)
+        }
+
+    @Test
+    fun `the tab keeps its short name whatever title the shell sets, and shows that title on hover`() =
+        runComposeUiTest {
+            val app = launchWithProject(project)
+            openTabs(app, 1)
+            val tabs = app.project.terminal.tabs
+            val tab = tabs.single()
+            // Shells set long titles (user@host: directory, the path of cmd.exe), or none at all (dash).
+            onNodeWithTag(Tags.terminalTabName(1)).assertTextEquals("Local")
+            onNodeWithTag(Tags.terminalTab(1)).performMouseInput { moveTo(center) }
+            awaitTag(Tags.terminalTabTooltip(1))
+            onNode(hasAnyAncestor(hasTestTag(Tags.terminalTabTooltip(1))) and hasText(tab.title)).assertIsDisplayed()
+            onNodeWithTag(Tags.terminalTabName(1)).assertTextEquals("Local")
         }
 }
