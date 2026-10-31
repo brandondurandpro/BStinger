@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
@@ -120,6 +121,7 @@ private fun TerminalView(terminal: TerminalState, modifier: Modifier) {
     TerminalLifecycle(tab, terminal, focus, metrics, size)
     Canvas(
         modifier
+            .graphicsLayer()
             .onSizeChanged { size = it }
             .focusRequester(focus)
             .onFocusChanged { terminal.focused = it.isFocused }

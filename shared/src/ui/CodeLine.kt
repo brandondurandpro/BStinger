@@ -33,11 +33,11 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import org.example.kotlineditor.model.GitChangeKind
 import org.example.kotlineditor.state.HorizontalScroll
 import org.example.kotlineditor.syntax.Language
@@ -75,6 +75,11 @@ class LineSource(
     val folded: Boolean,
     val placeholder: String?,
 )
+
+private fun DrawScope.drawBlame(text: String, metrics: EditorMetrics) {
+    val layout = metrics.blameMeasurer.measure(text, metrics.blameStyle, softWrap = false, maxLines = 1)
+    drawText(layout, topLeft = Offset(0f, (size.height - layout.size.height) / 2))
+}
 
 @Composable
 internal fun CodeLine(
@@ -133,17 +138,15 @@ private fun Gutter(source: LineSource, decorations: LineDecorations, metrics: Ed
             maxLines = 1,
         )
         decorations.blame?.let { blame ->
-            BasicText(
-                text = blame,
-                modifier =
+            Box(
                 Modifier
                     .align(Alignment.CenterEnd)
                     .width(metrics.blameWidth)
+                    .fillMaxHeight()
                     .padding(start = 8.dp, end = FOLD_ZONE + 4.dp)
+                    .clipToBounds()
+                    .drawBehind { drawBlame(blame, metrics) }
                     .testTag(Tags.blame(source.index)),
-                style = metrics.codeStyle.copy(color = IdeColors.TextSecondary, fontSize = 10.sp),
-                softWrap = false,
-                maxLines = 1,
             )
         }
         if (source.foldable) {
