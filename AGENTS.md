@@ -42,8 +42,9 @@ thousands of files, a file of thousands of lines, a long search result…).
 
 - They live next to the e2e tests, in a `*PerformanceE2eTest` class per area, and follow the same rules.
 - Wrap each measured step in `measure(label, budgetMillis, budgetMegabytes) { … }` from `Cost.kt` (e2e): it prints
-  a `PERF` line (time and memory allocated) and fails over budget. Render the frames being measured (`waitForIdle()`
-  then `onRoot().captureToImage()`).
+  a `PERF` line (time and memory allocated) and fails over budget. Render the frames being measured with `renderFrame()`
+  (`waitForIdle()` draws the frame; `captureToImage()` draws nothing more and leaks native memory until a GC:
+  thousands of them got the CI runners killed).
 - For scrolling or any per-frame work, measure the net cost like `EditorScrollBenchmark`: subtract the cost of
   rendering unchanged frames (`costOf`, then `report`), drive the scroll state directly rather than through a
   semantics action, and measure a scroll in progress (wheel, drag) as well as jumps.

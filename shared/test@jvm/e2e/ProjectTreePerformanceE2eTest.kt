@@ -3,12 +3,10 @@ package org.example.kotlineditor.e2e
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasScrollToNodeAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performScrollToIndex
@@ -60,11 +58,6 @@ class ProjectTreePerformanceE2eTest {
 
     private fun ComposeUiTest.composedRows() = onAllNodes(hasTestTagPrefix("tree:")).fetchSemanticsNodes().size
 
-    private fun ComposeUiTest.render() {
-        waitForIdle()
-        onRoot().captureToImage()
-    }
-
     // Net cost of STEPS rendered steps of ROWS_PER_STEP rows from [from]; [userScroll] keeps a scroll in progress.
     private fun ComposeUiTest.scrollCost(scroll: VerticalScroll, from: Int, userScroll: Boolean): Cost {
         fun pass(moving: Boolean): Cost {
@@ -76,7 +69,7 @@ class ProjectTreePerformanceE2eTest {
                 costOf {
                     repeat(STEPS) { step ->
                         if (moving) runBlocking { scroll.scrollToRow(from + step * ROWS_PER_STEP) }
-                        render()
+                        renderFrame()
                     }
                 }
             held.cancel()
@@ -98,7 +91,7 @@ class ProjectTreePerformanceE2eTest {
             measure("expand a directory of $FILES files", budgetMillis = 5_000) {
                 onNodeWithTag(Tags.treeChevron("huge")).performClick()
                 awaitTag(Tags.treeRow(name(0)))
-                render()
+                renderFrame()
             }
             assertTrue(tree.rows.size > FILES)
             assertTrue(composedRows() < MAX_COMPOSED_ROWS, "composed rows: ${composedRows()}")
@@ -111,7 +104,7 @@ class ProjectTreePerformanceE2eTest {
             measure("scroll it top to bottom in $SCROLL_STEPS frames", budgetMillis = 15_000, budgetMegabytes = 400) {
                 repeat(SCROLL_STEPS) { step ->
                     list.performScrollToIndex(1 + step * (FILES / SCROLL_STEPS))
-                    render()
+                    renderFrame()
                 }
             }
             assertTrue(composedRows() < MAX_COMPOSED_ROWS, "composed rows after scrolling: ${composedRows()}")
@@ -124,22 +117,22 @@ class ProjectTreePerformanceE2eTest {
             measure("move the selection $KEY_PRESSES rows up", budgetMillis = 10_000) {
                 repeat(KEY_PRESSES) {
                     onNodeWithTag(Tags.TREE).performKeyInput { pressKey(Key.DirectionUp) }
-                    render()
+                    renderFrame()
                 }
             }
             awaitCondition { tree.selectedPath == project.root.resolve(name(start - KEY_PRESSES)).toString() }
 
             list.performScrollToIndex(0)
-            render()
+            renderFrame()
             measure("collapse it", budgetMillis = 2_000) {
                 onNodeWithTag(Tags.treeChevron("huge")).performClick()
                 awaitNoTag(Tags.treeRow(name(0)))
-                render()
+                renderFrame()
             }
             measure("expand it again (already listed)", budgetMillis = 2_000) {
                 onNodeWithTag(Tags.treeChevron("huge")).performClick()
                 awaitTag(Tags.treeRow(name(0)))
-                render()
+                renderFrame()
             }
         }
 }

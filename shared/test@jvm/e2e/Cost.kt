@@ -1,5 +1,7 @@
 package org.example.kotlineditor.e2e
 
+import androidx.compose.ui.test.ComposeUiTest
+import androidx.compose.ui.test.ExperimentalTestApi
 import java.lang.management.ManagementFactory
 import kotlin.test.assertTrue
 
@@ -45,3 +47,13 @@ fun report(label: String, cost: Cost, budgetMillis: Long, budgetMegabytes: Long 
 /** Runs [block] and [report]s its cost. */
 fun measure(label: String, budgetMillis: Long, budgetMegabytes: Long = NO_BUDGET, block: () -> Unit): Cost =
     report(label, costOf(block), budgetMillis, budgetMegabytes)
+
+/**
+ * Renders the current frame, as a measured step should: [ComposeUiTest.waitForIdle] composes, lays out and draws it.
+ * Do not add `captureToImage()`: it draws nothing more (it replays the recorded layers) but allocates a native surface
+ * per call that only a garbage collection frees, and a few thousand of them got the Linux CI runners killed.
+ */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.renderFrame() {
+    waitForIdle()
+}
