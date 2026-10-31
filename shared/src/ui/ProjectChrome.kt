@@ -73,7 +73,7 @@ internal fun Toolbar(app: AppState, project: ProjectState) {
 }
 
 private val MENU_MIN_WIDTH = 320.dp
-private val MENU_MAX_WIDTH = 900.dp
+private val MENU_MAX_WIDTH = 1200.dp
 
 @Composable
 private fun ProjectWidget(app: AppState, project: ProjectState) {

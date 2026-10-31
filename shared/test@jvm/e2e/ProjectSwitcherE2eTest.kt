@@ -70,7 +70,9 @@ class ProjectSwitcherE2eTest {
     fun `the menu is wide enough to show a long project path in full`() =
         runComposeUiTest {
             val base = Files.createTempDirectory("kotlin-editor-e2e")
-            val nested = "a-rather-long-directory-name/with-another-long-level/and-yet-another-one/deep-project"
+            val nested =
+                "a-rather-long-directory-name/with-another-long-level/and-yet-another-one/" +
+                    "another-level-here/and-one-more-level/deep-project"
             val deep = SampleProject(base.resolve(nested).createDirectories()).apply { file("Deep.kt", "class Deep") }
             try {
                 launchApp(recent = listOf(project.path, deep.path))
