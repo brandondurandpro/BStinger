@@ -1,7 +1,9 @@
 package org.example.kotlineditor.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.HorizontalScrollbar
+import androidx.compose.foundation.TooltipArea
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
@@ -106,8 +108,7 @@ private fun TerminalTabs(terminal: TerminalState, modifier: Modifier) {
     val density = LocalDensity.current
     val listState = rememberLazyListState()
     var contextMenu by remember { mutableStateOf<Pair<Int, DpOffset>?>(null) }
-    // Also when the active tab's title changes: the shell sets it late, and a longer one can push the tab out.
-    LaunchedEffect(terminal.activeIndex, terminal.tabs.size, terminal.active?.title) {
+    LaunchedEffect(terminal.activeIndex, terminal.tabs.size) {
         val index = terminal.activeIndex
         if (index in terminal.tabs.indices && !isFullyVisible(listState, index)) listState.animateScrollToItem(index)
     }
@@ -157,7 +158,7 @@ private fun Modifier.wheelScrollsHorizontally(listState: LazyListState): Modifie
 private val WHEEL_STEP = 48.dp
 
 // Left click shows the tab, middle click closes it and right click opens its context menu, like editor tabs.
-@OptIn(ExperimentalComposeUiApi::class)
+@OptIn(ExperimentalComposeUiApi::class, ExperimentalFoundationApi::class)
 @Composable
 private fun TerminalTabChip(
     tab: TerminalTab,
@@ -175,20 +176,27 @@ private fun TerminalTabChip(
             // The tabs sit in the panel's header: a press on one must not start dragging the panel.
             event.changes.forEach { it.consume() }
         }
-    Row(
-        Modifier
-            .padding(end = 4.dp)
-            .background(background, shape)
-            .then(press)
-            .padding(start = 8.dp, end = 2.dp, top = 1.dp, bottom = 1.dp)
-            .testTag(Tags.terminalTab(tab.number)),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Label(tab.title, color = if (active) IdeColors.Text else IdeColors.TextSecondary)
-        IconButton(onClose, Modifier.padding(start = 4.dp).size(18.dp).testTag(Tags.terminalTabClose(tab.number))) {
-            CloseIcon()
+    // The tab shows a short name; what the shell says about itself (user, host, directory, command) is in the tooltip.
+    TooltipArea(tooltip = { Tooltip(tab.title, Modifier.testTag(Tags.terminalTabTooltip(tab.number))) }) {
+        Row(
+            Modifier
+                .padding(end = 4.dp)
+                .background(background, shape)
+                .then(press)
+                .padding(start = 8.dp, end = 2.dp, top = 1.dp, bottom = 1.dp)
+                .testTag(Tags.terminalTab(tab.number)),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Label(
+                tab.name,
+                Modifier.testTag(Tags.terminalTabName(tab.number)),
+                color = if (active) IdeColors.Text else IdeColors.TextSecondary,
+            )
+            IconButton(onClose, Modifier.padding(start = 4.dp).size(18.dp).testTag(Tags.terminalTabClose(tab.number))) {
+                CloseIcon()
+            }
+            menu()
         }
-        menu()
     }
 }
 

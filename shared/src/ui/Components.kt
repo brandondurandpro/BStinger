@@ -142,3 +142,16 @@ fun IconButton(onClick: () -> Unit, modifier: Modifier = Modifier, content: @Com
 fun VerticalDivider(modifier: Modifier = Modifier, color: Color = IdeColors.Border) {
     Box(modifier.width(1.dp).background(color))
 }
+
+/** Small popup text shown by a TooltipArea. */
+@Composable
+fun Tooltip(text: String, modifier: Modifier = Modifier) {
+    Box(
+        modifier
+            .background(IdeColors.Popup, RoundedCornerShape(4.dp))
+            .border(1.dp, IdeColors.Separator, RoundedCornerShape(4.dp))
+            .padding(6.dp),
+    ) {
+        Label(text, fontSize = 12.sp)
+    }
+}
