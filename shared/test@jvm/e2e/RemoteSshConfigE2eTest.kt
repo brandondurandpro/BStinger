@@ -2,6 +2,7 @@ package org.example.kotlineditor.e2e
 
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextClearance
@@ -17,6 +18,7 @@ import kotlin.io.path.writeText
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlin.test.assertTrue
 
 /** The remote dialog's catalog: hosts from ~/.ssh/config and remote folders already opened. */
 @OptIn(ExperimentalTestApi::class)
@@ -83,6 +85,20 @@ class RemoteSshConfigE2eTest {
         }
 
     @Test
+    fun `the manual form is hidden until New host is clicked`() =
+        remoteUiTest {
+            launchApp()
+            onNodeWithTag(Tags.WELCOME_REMOTE).performClick()
+            awaitTag(Tags.REMOTE_DIALOG)
+            awaitCondition { onAllNodes(hasTestTag(Tags.REMOTE_HOST)).fetchSemanticsNodes().isEmpty() }
+
+            onNodeWithTag(Tags.REMOTE_NEW_HOST).performClick()
+            awaitTag(Tags.REMOTE_HOST)
+            onNodeWithTag(Tags.REMOTE_NEW_HOST).performClick()
+            awaitCondition { onAllNodes(hasTestTag(Tags.REMOTE_HOST)).fetchSemanticsNodes().isEmpty() }
+        }
+
+    @Test
     fun `a chosen remote folder is saved and searchable after a restart`() {
         if (!RemoteTestEnvironment.available) return
         val project = checkNotNull(demo)
@@ -117,4 +133,64 @@ class RemoteSshConfigE2eTest {
             onNodeWithTag(Tags.REMOTE_CONFIG).assertTextContains("test-remote", substring = true)
         }
     }
+
+    @Test
+    fun `hosts can be tagged, searched by tag and tags survive a restart`() {
+        if (!RemoteTestEnvironment.available) return
+        val preferences = InMemoryPreferenceStore()
+        remoteUiTest {
+            launchApp(preferences = preferences)
+            onNodeWithTag(Tags.WELCOME_REMOTE).performClick()
+            awaitTag(Tags.REMOTE_DIALOG)
+            awaitTag(ItemTags.sshHost("test-remote"), timeout = 30_000)
+            onNodeWithTag(ItemTags.sshHost("test-remote")).performClick()
+            awaitTag(Tags.REMOTE_TAGS)
+            onNodeWithTag(Tags.REMOTE_TAGS).performTextInput("production, dev")
+
+            awaitTag(ItemTags.remoteTag("test-remote", "production"))
+            awaitTag(ItemTags.remoteTag("test-remote", "dev"))
+            onNodeWithTag(Tags.REMOTE_SEARCH).performTextInput("production")
+            awaitTag(ItemTags.sshHost("test-remote"))
+            awaitCondition {
+                preferences.load()[RemotePreferenceKeys.TAGS].orEmpty().contains("test-remote")
+            }
+        }
+
+        remoteUiTest {
+            launchApp(preferences = preferences)
+            onNodeWithTag(Tags.WELCOME_REMOTE).performClick()
+            awaitTag(Tags.REMOTE_DIALOG)
+            awaitTag(ItemTags.remoteTag("test-remote", "production"), timeout = 30_000)
+
+            onNodeWithTag(ItemTags.remoteTag("test-remote", "production")).performClick()
+            onNodeWithTag(Tags.REMOTE_SEARCH).assertTextContains("production", substring = true)
+            awaitTag(ItemTags.sshHost("test-remote"))
+        }
+    }
+
+    @Test
+    fun `recent folders are listed above the ssh config hosts`() =
+        remoteUiTest {
+            val project = checkNotNull(demo)
+            launchApp()
+            onNodeWithTag(Tags.WELCOME_REMOTE).performClick()
+            awaitTag(Tags.REMOTE_DIALOG)
+            awaitTag(ItemTags.sshHost("test-remote"), timeout = 30_000)
+            onNodeWithTag(ItemTags.sshHost("test-remote")).performClick()
+            onNodeWithTag(Tags.REMOTE_PROJECT).performTextInput(project.toString())
+            onNodeWithTag(Tags.REMOTE_CONNECT).performClick()
+            awaitTag(Tags.treeRow("README.md"), timeout = 60_000)
+
+            onNodeWithTag(Tags.PROJECT_WIDGET).performClick()
+            onNodeWithTag(Tags.PROJECT_CLOSE).performClick()
+            awaitTag(Tags.WELCOME)
+            onNodeWithTag(Tags.WELCOME_REMOTE).performClick()
+            awaitTag(Tags.REMOTE_DIALOG)
+            val saved = ItemTags.remoteWorkspace("test-remote", project.toString())
+            awaitTag(saved, timeout = 30_000)
+
+            val folder = onNodeWithTag(saved).fetchSemanticsNode().boundsInRoot.top
+            val host = onNodeWithTag(ItemTags.sshHost("test-remote")).fetchSemanticsNode().boundsInRoot.top
+            assertTrue(folder < host, "recent folders must come before the SSH config hosts")
+        }
 }

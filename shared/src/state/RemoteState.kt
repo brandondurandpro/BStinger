@@ -13,6 +13,10 @@ data class RemoteDialogState(
     val alias: String = "",
     /** Filter of the SSH host and remote-folder list. */
     val hostSearch: String = "",
+    /** Whether the manual "new host" form is shown instead of the host and folder lists. */
+    val manual: Boolean = false,
+    /** Comma-separated tags of the selected host, shown as chips in the lists. */
+    val tags: String = "",
     val connecting: Boolean = false,
     val error: String? = null,
 ) {
@@ -72,6 +76,7 @@ object RemotePreferenceKeys {
     const val PROJECT = "remote.project"
     const val ALIAS = "remote.alias"
     const val WORKSPACES = "remote.workspaces"
+    const val TAGS = "remote.tags"
 
     fun read(preferences: Map<String, String>): SshTarget? {
         val host = preferences[HOST]?.takeIf { it.isNotBlank() } ?: return null

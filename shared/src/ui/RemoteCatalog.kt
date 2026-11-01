@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -33,16 +34,22 @@ import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.RemoteDialogState
 import org.example.kotlineditor.state.RemoteWorkspace
 
-/** SSH config hosts and already-opened remote folders, searchable from the remote dialog. */
+/**
+ * Recent remote folders and `~/.ssh/config` hosts, searchable; rows carry the user's tags as chips, and clicking
+ * a chip filters by it.
+ */
 @Suppress("CognitiveComplexMethod") // filtering, loading and two sections in one compact panel
 @Composable
 internal fun RemoteCatalog(app: AppState, dialog: RemoteDialogState, onChange: (RemoteDialogState) -> Unit) {
     val query = dialog.hostSearch
-    val hosts = remember(app.sshHosts, query) { app.sshHosts.filter { matches(query, it.searchText) } }
     val workspaces =
-        remember(app.remoteWorkspaces.toList(), query) {
-            app.remoteWorkspaces.filter { matches(query, it.searchText) }
+        app.remoteWorkspaces.filter {
+            matches(
+                query,
+                it.searchText + " " + app.tagsFor(it.target.tagKey).joinToString(" "),
+            )
         }
+    val hosts = app.sshHosts.filter { matches(query, it.searchText + " " + app.tagsFor(it.alias).joinToString(" ")) }
     val empty = hosts.isEmpty() && workspaces.isEmpty()
     // Do not show a skeleton that changes height while ssh -G resolves the config.
     if (app.sshHostsLoading && empty) return
@@ -52,38 +59,27 @@ internal fun RemoteCatalog(app: AppState, dialog: RemoteDialogState, onChange: (
             query,
             { onChange(dialog.copy(hostSearch = it)) },
             Modifier.fillMaxWidth().testTag(Tags.REMOTE_SEARCH),
-            placeholder = "Search SSH hosts and recent folders",
+            placeholder = "Search recent folders, SSH hosts and tags",
             leading = { SearchIcon() },
         )
-        if (app.sshHostsLoading) {
-            Label(
-                "Loading ~/.ssh/config…",
-                color = IdeColors.TextSecondary,
-                fontSize = 11.sp,
-                modifier = Modifier.padding(top = 6.dp).testTag(Tags.REMOTE_HOSTS_LOADING),
-            )
-        }
-        if (!app.sshHostsLoading && empty && query.isNotBlank()) {
-            Label(
-                "No matching host or folder",
-                color = IdeColors.TextSecondary,
-                fontSize = 11.sp,
-                modifier = Modifier.padding(top = 6.dp),
-            )
-        }
+        CatalogStatus(app, empty, query)
         val listState = rememberLazyListState()
-        Box(Modifier.fillMaxWidth().heightIn(max = 170.dp).testTag(Tags.REMOTE_CATALOG)) {
-            LazyColumn(Modifier.fillMaxWidth().heightIn(max = 170.dp), state = listState) {
-                if (hosts.isNotEmpty()) {
-                    item { SectionHeader("~/.ssh/config") }
-                    items(hosts, key = { "h:${it.alias}" }) { host ->
-                        SshHostRow(host) { app.selectSshHost(host) }
-                    }
-                }
+        Box(Modifier.fillMaxWidth().heightIn(max = 190.dp).testTag(Tags.REMOTE_CATALOG)) {
+            LazyColumn(Modifier.fillMaxWidth().heightIn(max = 190.dp), state = listState) {
                 if (workspaces.isNotEmpty()) {
                     item { SectionHeader("Recent folders") }
                     items(workspaces, key = { "w:${it.key}" }) { workspace ->
-                        WorkspaceRow(workspace) { app.selectRemoteWorkspace(workspace) }
+                        WorkspaceRow(app, workspace, onTagClick = { tag ->
+                            onChange(dialog.copy(hostSearch = tag))
+                        }) { app.selectRemoteWorkspace(workspace) }
+                    }
+                }
+                if (hosts.isNotEmpty()) {
+                    item { SectionHeader("~/.ssh/config") }
+                    items(hosts, key = { "h:${it.alias}" }) { host ->
+                        SshHostRow(app, host, onTagClick = { tag ->
+                            onChange(dialog.copy(hostSearch = tag))
+                        }) { app.selectSshHost(host) }
                     }
                 }
             }
@@ -92,6 +88,26 @@ internal fun RemoteCatalog(app: AppState, dialog: RemoteDialogState, onChange: (
                 Modifier.align(Alignment.CenterEnd).fillMaxHeight(),
             )
         }
+    }
+}
+
+@Composable
+private fun CatalogStatus(app: AppState, empty: Boolean, query: String) {
+    if (app.sshHostsLoading) {
+        Label(
+            "Loading ~/.ssh/config…",
+            color = IdeColors.TextSecondary,
+            fontSize = 11.sp,
+            modifier = Modifier.padding(top = 6.dp).testTag(Tags.REMOTE_HOSTS_LOADING),
+        )
+    }
+    if (!app.sshHostsLoading && empty && query.isNotBlank()) {
+        Label(
+            "No matching host or folder",
+            color = IdeColors.TextSecondary,
+            fontSize = 11.sp,
+            modifier = Modifier.padding(top = 6.dp),
+        )
     }
 }
 
@@ -106,24 +122,72 @@ private fun SectionHeader(text: String) {
 }
 
 @Composable
-private fun SshHostRow(host: SshConfigHost, onClick: () -> Unit) {
+private fun SshHostRow(app: AppState, host: SshConfigHost, onTagClick: (String) -> Unit, onClick: () -> Unit) {
+    val tags = app.tagsFor(host.alias)
     CatalogRow(ItemTags.sshHost(host.alias), onClick) {
         Column {
-            Label(host.alias, fontWeight = FontWeight.SemiBold)
-            Label(host.summary, color = IdeColors.TextSecondary, fontSize = 11.sp)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Label(host.alias, fontWeight = FontWeight.SemiBold)
+                tags.forEach { tag -> TagChip(tag, ItemTags.remoteTag(host.alias, tag), onTagClick) }
+            }
+            if (host.summary.isNotBlank()) {
+                Label(host.summary, color = IdeColors.TextSecondary, fontSize = 11.sp)
+            }
         }
     }
 }
 
 @Composable
-private fun WorkspaceRow(workspace: RemoteWorkspace, onClick: () -> Unit) {
+private fun WorkspaceRow(
+    app: AppState,
+    workspace: RemoteWorkspace,
+    onTagClick: (String) -> Unit,
+    onClick: () -> Unit,
+) {
+    val tags = app.tagsFor(workspace.target.tagKey)
     CatalogRow(ItemTags.remoteWorkspace(workspace.label, workspace.path), onClick) {
         Column {
             Label(workspace.path, fontSize = 12.sp)
-            Label(workspace.label, color = IdeColors.TextSecondary, fontSize = 11.sp)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Label(workspace.label, color = IdeColors.TextSecondary, fontSize = 11.sp)
+                tags.forEach { tag -> TagChip(tag, ItemTags.remoteTag(workspace.target.tagKey, tag), onTagClick) }
+            }
         }
     }
 }
+
+@Composable
+private fun TagChip(tag: String, tagForTest: String, onClick: (String) -> Unit) {
+    val color = tagColor(tag)
+    Box(
+        Modifier
+            .background(color.copy(alpha = 0.16f), RoundedCornerShape(50))
+            .testTag(tagForTest)
+            .padding(horizontal = 7.dp, vertical = 1.dp)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = { onClick(tag) },
+            ),
+    ) {
+        Label(tag, color = color, fontSize = 10.sp)
+    }
+}
+
+private fun tagColor(tag: String): Color =
+    when (tag.lowercase()) {
+        "prod", "production" -> IdeColors.Error
+        "staging", "stg" -> IdeColors.GitModified
+        "test", "qa" -> IdeColors.GitUntracked
+        "dev", "development" -> IdeColors.GitAdded
+        else -> IdeColors.TextSecondary
+    }
 
 @Composable
 private fun CatalogRow(tag: String, onClick: () -> Unit, content: @Composable () -> Unit) {

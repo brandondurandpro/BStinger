@@ -35,6 +35,10 @@ data class SshTarget(
     /** Whether ssh should resolve the connection details from `~/.ssh/config`. */
     val usesSshConfig: Boolean get() = alias != null
 
+    /** Identity of this host for user tags: the alias, or host, port and user for a manual target. */
+    val tagKey: String
+        get() = alias ?: "$host:$port:${user.orEmpty()}"
+
     companion object {
         const val MAX_PORT = 65_535
     }

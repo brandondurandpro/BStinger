@@ -10,9 +10,14 @@ work happens next to the sources; only the editor state and the results travel.
    Leave the project directory empty to browse it.
 3. **Connect**.
 
-The dialog searches both the SSH config hosts and the remote folders already opened. Picking a host uses its
-alias, so user, port, identity file and `ProxyJump` all come from `~/.ssh/config`; the user, port and key fields
-stay editable for a manual override. Picking a folder fills its host and path, ready to connect again.
+The dialog is a **pick view**: the remote folders already opened first, then the `~/.ssh/config` host catalog, and
+a search field above both. Picking a host uses its alias, so user, port, identity file and `ProxyJump` all come
+from `~/.ssh/config`; picking a folder fills its host and path, ready to connect again. The manual form is hidden
+behind a **New host…** button, which also collapses back to the pick view.
+
+Hosts can be **tagged** (production, dev, test…): enter comma-separated tags on the selected host, or click a
+tag chip on another row to filter the lists by it. Tags live in the client's preferences and survive restarts.
+
 
 The first connection installs the matching server under `~/.kotlin-editor/server` on the host, starts a per-user
 daemon and opens an SSH tunnel. Later connections reuse the daemon; the SSH link is supervised and restarted when
@@ -35,8 +40,9 @@ use the same `HostName`, `User`, `Port`, `IdentityFile` and `ProxyJump` as a nor
 alias does not copy secrets: the config remains the source of truth.
 
 Every remote folder successfully opened is saved on the client in the preference store (at most 50, newest first,
-no token or key). The dialog's search field filters both the SSH hosts and those recent folders by alias, host,
-user or path; selecting a folder fills its host and project path.
+no token or key), and the dialog's search field filters both the SSH hosts and those recent folders by alias,
+host, user, tag or path; selecting a folder fills its host and project path. Tags (at most 8 per host) are saved
+the same way.
 
 ## Prerequisites
 
@@ -105,6 +111,8 @@ IDE ── RpcClient ── 127.0.0.1:<local port> ── ssh -N -L ── 127.0
   config is re-read when the dialog opens.
 - Saved folders belong to the client profile (`~/.kotlin-editor` preferences), not to the remote host; they are
   not synchronised between machines.
+- Tags are local to this IDE profile and are not written to `~/.ssh/config`; they are keyed by alias, so a host
+  entered manually shares tags only if it is not an alias.
 - The daemon is started per user, not through systemd/launchd. A reboot requires reconnecting from the IDE.
 
 ## Tests
@@ -116,5 +124,6 @@ cancellation and validation, disconnecting, tunnel restarts, a changed host key,
 click-through navigation, live path check with debounce, path errors, opening the chosen folder), a listing that
 completes after a reconnection,
 1,000 folders, the `~/.ssh/config` catalog (including aliases, includes and search), saved folders surviving a
-restart, and a 5,000-line file on a 200-file project. `RemoteTransportTest` covers the token surviving a daemon
-restart and strict host-key checking.
+restart, the pick view (manual form hidden behind "New host…", recent folders before the hosts) and host tags
+(editing, search by tag, chips after a restart), and a 5,000-line file on a 200-file project.
+`RemoteTransportTest` covers the token surviving a daemon restart and strict host-key checking.

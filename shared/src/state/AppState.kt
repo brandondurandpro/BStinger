@@ -4,6 +4,7 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -66,6 +67,8 @@ class AppState(
     /** Remote folders already opened, newest first, searchable from the remote dialog. */
     val remoteWorkspaces = mutableStateListOf<RemoteWorkspace>()
 
+    private val hostTags = mutableStateMapOf<String, List<String>>()
+
     /** What the remote connection is doing, while it is being established. */
     var remoteStatus: String? by mutableStateOf(null)
         private set
@@ -120,13 +123,21 @@ class AppState(
         remoteWorkspaces.addAll(
             RemoteWorkspaceCodec.decode(preferences[RemotePreferenceKeys.WORKSPACES].orEmpty()),
         )
+        hostTags.putAll(HostTagsCodec.decode(preferences[RemotePreferenceKeys.TAGS].orEmpty()))
         scope.launch { savePreferencesOnChange() }
         reloadRecents()
     }
 
     /** Opens the "Remote Development" dialog, prefilled with the last connection and the SSH catalog. */
     fun openRemoteDialog() {
-        remoteDialog = RemoteDialogState.from(lastRemote)
+        val previousTarget = lastRemote
+        val prefilled = RemoteDialogState.from(previousTarget)
+        remoteDialog =
+            if (previousTarget == null) {
+                prefilled
+            } else {
+                prefilled.copy(tags = tagsFor(previousTarget.tagKey).joinToString(", "))
+            }
         loadSshHosts()
     }
 
@@ -154,6 +165,8 @@ class AppState(
                 port = host.port.toString(),
                 identityFile = "",
                 projectPath = "",
+                tags = tagsFor(host.alias).joinToString(", "),
+                manual = false,
                 error = null,
             )
     }
@@ -169,8 +182,49 @@ class AppState(
                 port = workspace.target.port.toString(),
                 identityFile = workspace.target.identityFile.orEmpty(),
                 projectPath = workspace.path,
+                tags = tagsFor(workspace.target.tagKey).joinToString(", "),
+                manual = false,
                 error = null,
             )
+    }
+
+    /** Tags of a host, by alias or by host:port:user. */
+    fun tagsFor(key: String): List<String> = hostTags[key].orEmpty()
+
+    /** The tags field changed: kept in the dialog, and saved right away for a `~/.ssh/config` alias. */
+    fun editRemoteTags(text: String) {
+        val dialog = remoteDialog ?: return
+        remoteDialog = dialog.copy(tags = text)
+        val alias = dialog.alias.trim()
+        if (alias.isNotEmpty()) saveTags(alias, text)
+    }
+
+    /** Shows the manual form to add a host that is not in `~/.ssh/config`. */
+    fun addRemoteHost() {
+        val dialog = remoteDialog ?: return
+        remoteDialog =
+            dialog.copy(
+                manual = true,
+                host = "",
+                user = "",
+                port = "22",
+                identityFile = "",
+                projectPath = "",
+                alias = "",
+                tags = "",
+                error = null,
+            )
+    }
+
+    /** Back to the lists; whatever was typed stays selected so it can still be connected. */
+    fun chooseRemoteHost() {
+        val dialog = remoteDialog ?: return
+        remoteDialog = dialog.copy(manual = false, error = null)
+    }
+
+    private fun saveTags(key: String, text: String) {
+        val tags = parseTags(text)
+        if (tags.isEmpty()) hostTags.remove(key) else hostTags[key] = tags
     }
 
     /** Updates the dialog while the user types. */
@@ -202,6 +256,8 @@ class AppState(
                 remoteDialog = dialog.copy(error = it.message)
                 return
             }
+        // A manual host's tags are saved when the target is confirmed; alias tags are saved as they are typed.
+        saveTags(target.tagKey, dialog.tags)
         remoteJob?.cancel()
         remoteDialog = dialog.copy(connecting = true, error = null)
         remoteStatus = "Checking ${target.destination}"
@@ -369,7 +425,8 @@ class AppState(
 
     private fun remotePreferences(): Map<String, String> =
         lastRemote?.let(RemotePreferenceKeys::write).orEmpty() +
-            (RemotePreferenceKeys.WORKSPACES to RemoteWorkspaceCodec.encode(remoteWorkspaces))
+            (RemotePreferenceKeys.WORKSPACES to RemoteWorkspaceCodec.encode(remoteWorkspaces)) +
+            (RemotePreferenceKeys.TAGS to HostTagsCodec.encode(hostTags))
 
     private fun fontSizePreference() = PreferenceKeys.EDITOR_FONT_SIZE to editorFontSize.toString()
 

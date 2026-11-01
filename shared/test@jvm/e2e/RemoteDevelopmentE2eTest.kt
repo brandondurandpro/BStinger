@@ -69,6 +69,8 @@ class RemoteDevelopmentE2eTest {
             val app = launchApp()
             onNodeWithTag(Tags.WELCOME_REMOTE).performClick()
             awaitTag(Tags.REMOTE_DIALOG)
+            onNodeWithTag(Tags.REMOTE_NEW_HOST).performClick()
+            awaitTag(Tags.REMOTE_HOST)
             onNodeWithTag(Tags.REMOTE_HOST).performTextClearance()
             onNodeWithTag(Tags.REMOTE_CONNECT).performClick()
             awaitTag(Tags.REMOTE_ERROR).assertTextContains("Enter a host", substring = true)

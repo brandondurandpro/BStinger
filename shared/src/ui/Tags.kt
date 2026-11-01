@@ -23,6 +23,9 @@ object Tags {
     const val REMOTE_CATALOG = "remote.catalog"
     const val REMOTE_CONFIG = "remote.config"
     const val REMOTE_HOSTS_LOADING = "remote.hostsLoading"
+    const val REMOTE_NEW_HOST = "remote.newHost"
+    const val REMOTE_TAGS = "remote.tags"
+    const val REMOTE_SELECTED = "remote.selected"
     const val STATUS_REMOTE = "status.remote"
     const val FOLDER_PICKER = "folder.picker"
     const val FOLDER_PICKER_PATH = "folder.picker.path"
@@ -243,6 +246,8 @@ object ItemTags {
     fun sshHost(alias: String) = "remote.host:$alias"
 
     fun remoteWorkspace(destination: String, path: String) = "remote.workspace:$destination:$path"
+
+    fun remoteTag(hostKey: String, tag: String) = "remote.tag:$hostKey:$tag"
 
     fun terminalLine(index: Int) = "terminal.line:$index"
 

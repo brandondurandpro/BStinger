@@ -75,8 +75,9 @@ class RemoteDevelopmentChaosE2eTest {
                 launchApp()
                 connectRemoteTo(RemoteTestEnvironment, null)
                 awaitTag(Tags.FOLDER_PICKER, timeout = 60_000)
+                awaitTag(ItemTags.folderEntry(folder.toString()))
 
-                // The listing request is sent while the link is down; it must complete after the reconnection.
+                // The click's listing request is sent while the link is down; it must finish after the reconnect.
                 RemoteTestEnvironment.ssh.stop()
                 onNodeWithTag(ItemTags.folderEntry(folder.toString())).performClick()
                 RemoteTestEnvironment.ssh.start()

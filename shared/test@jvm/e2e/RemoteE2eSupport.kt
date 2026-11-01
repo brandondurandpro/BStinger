@@ -43,6 +43,9 @@ fun ComposeUiTest.connectRemoteTo(
 ) {
     onNodeWithTag(Tags.WELCOME_REMOTE).performClick()
     awaitTag(Tags.REMOTE_DIALOG)
+    // The pick view hides the manual form; adding a host happens through its button.
+    onNodeWithTag(Tags.REMOTE_NEW_HOST).performClick()
+    awaitTag(Tags.REMOTE_HOST)
     if (host.isNotEmpty()) {
         onNodeWithTag(Tags.REMOTE_HOST).performTextInput(host)
     }
