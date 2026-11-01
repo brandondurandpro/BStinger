@@ -23,7 +23,7 @@ $lines = @(
     'git checkout -q -f --detach FETCH_HEAD || exit /b 1'
     'git clean -q -fd'
     'echo Testing %JOB_COMMIT% on %COMPUTERNAME%'
-    'call kotlin.bat test %JOB_ARGS%'
+    'call run-tests.bat %JOB_ARGS%'
     'exit /b %errorlevel%'
 )
 [IO.File]::WriteAllText($job, ($lines -join "`r`n") + "`r`n")

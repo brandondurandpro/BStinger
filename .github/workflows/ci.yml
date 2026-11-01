@@ -163,7 +163,7 @@ jobs:
         run: ./kotlin build
       - name: Test
         # RUNNER_TEMP is the path inside the container; ${{ runner.temp }} is the host's.
-        run: JAVA_TOOL_OPTIONS="-XX:ErrorFile=$RUNNER_TEMP/hs_err_%p.log" ./kotlin test
+        run: JAVA_TOOL_OPTIONS="-XX:ErrorFile=$RUNNER_TEMP/hs_err_%p.log" ./run-tests
       - name: Display server and JVM crash logs
         if: failure()
         run: |
@@ -211,7 +211,7 @@ jobs:
         run: kotlin.bat build
       - name: Test
         shell: cmd
-        run: kotlin.bat test
+        run: run-tests.bat
 
   # The only required check: green when every job passed or was skipped.
   ci-passed:

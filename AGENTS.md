@@ -15,7 +15,8 @@ Every new task, feature or fix starts on its own branch, in its own git worktree
 Use `./kotlin` (`kotlin.bat` on Windows); it downloads the toolchain on first use.
 
 - Desktop app: `./kotlin run -m desktopApp` (embeds a server on loopback).
-- All tests: `./kotlin test`; one module: `./kotlin test -m shared`.
+- All tests: `./run-tests` (`run-tests.bat`), which runs the UI modules one at a time, as the CI does (see the
+  script); `./kotlin test` runs them all at once. One module: `./kotlin test -m shared`.
 - One test class: `./kotlin test -m shared --include-classes='*EditorTabsE2eTest'`; one test: `--include-test=<fqn>.method`.
 - Lint: `./lint`.
 
@@ -108,7 +109,7 @@ tests, which check what the user sees when the network or the server fails.
 ## Before opening a pull request
 
 - `./lint` (detekt + ktlint) passes.
-- `./kotlin test` passes; `./kotlin test -m <module>` runs a single module while iterating.
+- `./run-tests` passes; `./kotlin test -m <module>` runs a single module while iterating.
 - `./ci` passes when the change can behave differently on another platform (see above).
 - `main` only accepts squash or rebase merges, once the Lint, Linux and Windows CI checks are green.
 

@@ -63,7 +63,7 @@ crash_logs() {
 }
 
 ./kotlin build || { crash_logs; exit 1; }
-JAVA_TOOL_OPTIONS="-XX:ErrorFile=$tmp/hs_err_%p.log" ./kotlin test "$@" || { crash_logs; exit 1; }
+JAVA_TOOL_OPTIONS="-XX:ErrorFile=$tmp/hs_err_%p.log" ./run-tests "$@" || { crash_logs; exit 1; }
 
 # The tests render off-screen, so this is what proves the desktop app really starts in the session under test. A
 # timeout (124) means it was still running when killed; any other exit code is a startup failure.
