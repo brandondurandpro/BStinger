@@ -299,11 +299,32 @@ enum class Method(
     /** Author and date of each line of a file. */
     GitBlame("git/blame"),
 
+    /** Remote-tracking branches. */
+    GitRemoteBranches("git/remoteBranches"),
+
+    /** A page of the commits of a branch. */
+    GitLog("git/log"),
+
+    /** A page of the commits of a branch that match a search. */
+    GitSearchLog("git/searchLog"),
+
+    /** Message and changed files of a commit. */
+    GitCommitDetails("git/commitDetails"),
+
+    /** What a commit changed in one file. */
+    GitCommitDiff("git/commitDiff"),
+
+    /** Local branches of the repository with their remote synchronization. */
+    GitBranchDetails("git/branchDetails"),
+
     /** Local branches of the repository. */
     GitBranches("git/branches"),
 
     /** Checks out a branch. */
     GitCheckout("git/checkout", mutating = true),
+
+    /** Deletes local branches, even when they are not merged. */
+    GitDeleteBranches("git/deleteBranches", mutating = true),
 
     /** Stages every change and commits it. */
     GitCommit("git/commit", mutating = true),
@@ -313,6 +334,12 @@ enum class Method(
 
     /** Pushes the current branch. */
     GitPush("git/push", mutating = true),
+
+    /** Pushes a local branch, current or not. */
+    GitPushBranch("git/pushBranch", mutating = true),
+
+    /** Fast-forwards a local branch, current or not, to the remote branch it tracks. */
+    GitPullBranch("git/pullBranch", mutating = true),
 
     /** Worktree of a branch, created on first use; asking again returns the same one. */
     GitWorktree("git/worktree", mutating = true),

@@ -1,3 +1,5 @@
+@file:Suppress("TooManyFunctions")
+
 package org.example.kotlineditor.ui
 
 import androidx.compose.foundation.Canvas
@@ -62,6 +64,27 @@ fun Chevron(expanded: Boolean, modifier: Modifier = Modifier, color: Color = Ide
 }
 
 @Composable
+fun CheckIcon(modifier: Modifier = Modifier, color: Color = IdeColors.TextSecondary) {
+    Canvas(modifier.size(16.dp)) {
+        val s = 1.8.dp.toPx()
+        drawLine(
+            color,
+            Offset(size.width * 0.2f, size.height * 0.52f),
+            Offset(size.width * 0.42f, size.height * 0.74f),
+            strokeWidth = s,
+            cap = StrokeCap.Round,
+        )
+        drawLine(
+            color,
+            Offset(size.width * 0.42f, size.height * 0.74f),
+            Offset(size.width * 0.82f, size.height * 0.28f),
+            strokeWidth = s,
+            cap = StrokeCap.Round,
+        )
+    }
+}
+
+@Composable
 fun CloseIcon(modifier: Modifier = Modifier, color: Color = IdeColors.TextSecondary) {
     Canvas(modifier.size(16.dp)) {
         val a = size.width * 0.32f
@@ -69,6 +92,52 @@ fun CloseIcon(modifier: Modifier = Modifier, color: Color = IdeColors.TextSecond
         val s = 1.2.dp.toPx()
         drawLine(color, Offset(a, a), Offset(b, b), strokeWidth = s, cap = StrokeCap.Round)
         drawLine(color, Offset(b, a), Offset(a, b), strokeWidth = s, cap = StrokeCap.Round)
+    }
+}
+
+/** Clock with a backward arrow: the history of the branches (Branches tool window). */
+@Composable
+fun HistoryIcon(modifier: Modifier = Modifier, color: Color = IdeColors.TextSecondary) {
+    Canvas(modifier.size(16.dp)) {
+        val s = 1.2.dp.toPx()
+        val w = size.width
+        val c = Offset(w * 0.54f, size.height * 0.52f)
+        val r = w * 0.34f
+        val box = Size(r * 2, r * 2)
+        drawArc(color, 200f, 300f, useCenter = false, topLeft = Offset(c.x - r, c.y - r), size = box, style = Stroke(s))
+        // Arrow head at the open end of the circle, pointing back in time.
+        val corner = Offset(w * 0.20f, size.height * 0.46f)
+        drawLine(color, Offset(corner.x, size.height * 0.30f), corner, s, StrokeCap.Round)
+        drawLine(color, corner, Offset(w * 0.36f, corner.y), s, StrokeCap.Round)
+        // Hands.
+        drawLine(color, c, Offset(c.x, c.y - r * 0.6f), s, StrokeCap.Round)
+        drawLine(color, c, Offset(c.x + r * 0.45f, c.y), s, StrokeCap.Round)
+    }
+}
+
+/** Push pin, filled when [pinned]: pins a branch in the toolbar. */
+@Composable
+fun PinIcon(pinned: Boolean, modifier: Modifier = Modifier, color: Color = IdeColors.TextSecondary) {
+    Canvas(modifier.size(16.dp)) {
+        val s = 1.2.dp.toPx()
+        val head =
+            Path().apply {
+                moveTo(size.width * 0.34f, size.height * 0.18f)
+                lineTo(size.width * 0.66f, size.height * 0.18f)
+                lineTo(size.width * 0.60f, size.height * 0.42f)
+                lineTo(size.width * 0.74f, size.height * 0.58f)
+                lineTo(size.width * 0.26f, size.height * 0.58f)
+                lineTo(size.width * 0.40f, size.height * 0.42f)
+                close()
+            }
+        if (pinned) drawPath(head, color) else drawPath(head, color, style = Stroke(s))
+        drawLine(
+            color,
+            Offset(size.width * 0.5f, size.height * 0.58f),
+            Offset(size.width * 0.5f, size.height * 0.86f),
+            strokeWidth = s,
+            cap = StrokeCap.Round,
+        )
     }
 }
 

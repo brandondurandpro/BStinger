@@ -112,12 +112,25 @@ internal fun isFullyVisible(listState: LazyListState, index: Int): Boolean {
 
 private class TabTags(val tab: String, val close: String)
 
-private fun tagsOf(tab: EditorTab): TabTags =
-    if (tab.isDiff) {
-        TabTags(Tags.diffTab(tab.relativePath), Tags.diffTabClose(tab.relativePath))
-    } else {
-        TabTags(Tags.tab(tab.relativePath), Tags.tabClose(tab.relativePath))
+private fun tagsOf(tab: EditorTab): TabTags {
+    val commit = tab.commit
+    return when {
+        commit != null -> {
+            TabTags(
+                Tags.commitDiffTab(commit.hash, tab.relativePath),
+                Tags.commitDiffTabClose(commit.hash, tab.relativePath),
+            )
+        }
+
+        tab.isDiff -> {
+            TabTags(Tags.diffTab(tab.relativePath), Tags.diffTabClose(tab.relativePath))
+        }
+
+        else -> {
+            TabTags(Tags.tab(tab.relativePath), Tags.tabClose(tab.relativePath))
+        }
     }
+}
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable

@@ -7,6 +7,8 @@ import org.example.kotlineditor.model.GitClient
 import org.example.kotlineditor.rpc.Method
 import org.example.kotlineditor.rpc.blameJson
 import org.example.kotlineditor.rpc.bool
+import org.example.kotlineditor.rpc.branchesJson
+import org.example.kotlineditor.rpc.commitsJson
 import org.example.kotlineditor.rpc.diffJson
 import org.example.kotlineditor.rpc.entry
 import org.example.kotlineditor.rpc.int
@@ -16,6 +18,7 @@ import org.example.kotlineditor.rpc.matchesJson
 import org.example.kotlineditor.rpc.read
 import org.example.kotlineditor.rpc.session
 import org.example.kotlineditor.rpc.string
+import org.example.kotlineditor.rpc.stringOrNull
 import org.example.kotlineditor.rpc.strings
 import org.example.kotlineditor.rpc.symbolsJson
 import org.example.kotlineditor.rpc.terminalInput
@@ -28,6 +31,7 @@ private const val PATH = "path"
 private const val DIRECTORY = "directory"
 private const val NAME = "name"
 private const val ROOT = "root"
+private const val BRANCH = "branch"
 private const val LIMIT = "limit"
 private const val TERMINAL = "terminal"
 
@@ -79,11 +83,36 @@ private fun gitHandlers(git: GitClient): Map<Method, Handler> =
         Method.GitBranch to { JsonPrimitive(git.branch(root())) },
         Method.GitDiff to { git.diff(root(), params.string(PATH)).diffJson() },
         Method.GitBlame to { git.blame(root(), params.string(PATH)).blameJson() },
+        Method.GitRemoteBranches to { git.remoteBranches(root()).toJson() },
+        Method.GitLog to {
+            git.log(root(), params.string("ref"), params.int("skip"), params.int(LIMIT)).commitsJson()
+        },
+        Method.GitSearchLog to {
+            git
+                .searchLog(root(), params.string("ref"), params.string("query"), params.int("skip"), params.int(LIMIT))
+                .commitsJson()
+        },
+        Method.GitCommitDiff to {
+            git
+                .commitDiff(root(), params.string("hash"), params.string(PATH), params.stringOrNull("oldPath"))
+                .diffJson()
+        },
+        Method.GitCommitDetails to { git.commitDetails(root(), params.string("hash")).toJson() },
+        Method.GitBranchDetails to { git.branchDetails(root()).branchesJson() },
         Method.GitBranches to { git.branches(root()).toJson() },
-        Method.GitCheckout to { nothing { git.checkout(root(), params.string("branch")) } },
-        Method.GitCommit to { nothing { git.commit(root(), params.string("message")) } },
+        Method.GitCheckout to { nothing { git.checkout(root(), params.string(BRANCH)) } },
+        Method.GitDeleteBranches to {
+            nothing { git.deleteBranches(root(), params.read("branches") { it.strings() }) }
+        },
+        Method.GitCommit to {
+            nothing {
+                git.commit(root(), params.string("message"), params.read("paths") { it.strings() })
+            }
+        },
         Method.GitPull to { JsonPrimitive(git.pull(root())) },
         Method.GitPush to { JsonPrimitive(git.push(root())) },
+        Method.GitPushBranch to { JsonPrimitive(git.pushBranch(root(), params.string(BRANCH))) },
+        Method.GitPullBranch to { JsonPrimitive(git.pullBranch(root(), params.string(BRANCH))) },
         Method.GitWorktree to { JsonPrimitive(git.worktree(root(), params.string("branch"))) },
         Method.GitRemoveWorktree to { nothing { git.removeWorktree(root(), params.string(PATH)) } },
     )

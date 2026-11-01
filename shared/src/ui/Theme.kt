@@ -67,6 +67,10 @@ object IdeColors {
     val GitModified = Color(0xFF4E7DD4)
     val GitDeleted = Color(0xFF7E838B)
     val GitUntracked = Color(0xFFD1675A)
+
+    /** Commits to push (`↑`) and to pull (`↓`). */
+    val GitAhead = Color(0xFF73BD79)
+    val GitBehind = Color(0xFFE0A458)
     val DiffAddedBackground = Color(0xFF294436)
     val DiffRemovedBackground = Color(0xFF4A2E30)
     val DiffHunkBackground = Color(0xFF252A33)
@@ -131,12 +135,14 @@ fun Label(
     color: Color = IdeColors.Text,
     fontSize: TextUnit = 13.sp,
     fontWeight: FontWeight? = null,
+    maxLines: Int = 1,
+    overflow: TextOverflow = TextOverflow.Ellipsis,
 ) {
     BasicText(
         text = text,
         modifier = modifier,
         style = TextStyle(color = color, fontSize = fontSize, fontWeight = fontWeight),
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
+        maxLines = maxLines,
+        overflow = overflow,
     )
 }

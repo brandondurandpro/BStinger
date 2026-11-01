@@ -50,7 +50,7 @@ import java.awt.Cursor
 
 private val STRIP_WIDTH = 40.dp
 private val HEADER_HEIGHT = 34.dp
-private val SPLITTER_SIZE = 5.dp
+internal val SPLITTER_SIZE = 5.dp
 
 private const val DOCK_EDGE_FRACTION = 0.25f
 private const val BOTTOM_DOCK_START = 0.65f
@@ -130,6 +130,7 @@ internal fun ToolStrip(project: ProjectState?, devtools: Boolean, top: @Composab
 private fun ColumnScope.ToolButtons(project: ProjectState, devtools: Boolean) {
     ToolButton(project, ToolWindow.Project, Tags.TOOL_PROJECT) { FolderIcon(Modifier.size(18.dp)) }
     ToolButton(project, ToolWindow.Git, Tags.TOOL_GIT) { BranchIcon(color = IdeColors.Text) }
+    ToolButton(project, ToolWindow.Branches, Tags.TOOL_BRANCHES) { HistoryIcon(color = IdeColors.Text) }
     Spacer(Modifier.weight(1f))
     // Bottom tool windows sit at the bottom of the strip, like in IntelliJ's New UI.
     if (devtools) {
@@ -223,6 +224,7 @@ private fun ToolWindowContent(project: ProjectState, window: ToolWindow, drag: T
     when (window) {
         ToolWindow.Project -> ProjectPanel(project, drag, modifier)
         ToolWindow.Git -> GitPanel(project, drag, modifier)
+        ToolWindow.Branches -> BranchesPanel(project, drag, modifier)
         ToolWindow.Terminal -> TerminalPanel(project, drag, modifier)
         ToolWindow.Network -> NetworkPanel(project, drag, modifier)
     }
@@ -256,7 +258,7 @@ private fun dockResizeSplitter(project: ProjectState, dock: Dock) {
 }
 
 @Composable
-private fun SplitterBox(horizontalBar: Boolean, tag: String?, onDrag: (Float) -> Unit) {
+internal fun SplitterBox(horizontalBar: Boolean, tag: String?, onDrag: (Float) -> Unit) {
     val size =
         if (horizontalBar) {
             Modifier.fillMaxWidth().height(SPLITTER_SIZE)

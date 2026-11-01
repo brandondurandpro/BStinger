@@ -256,6 +256,68 @@ data class BlameLine(
     val date: String,
 )
 
+/** A commit of the history of a branch (the Branches tool window). */
+data class GitCommit(
+    /** Full hash. */
+    val hash: String,
+    /** Full hashes of its parents: several for a merge, none for a root commit. */
+    val parents: List<String>,
+    /** Author name. */
+    val author: String,
+    /** Author date, in seconds since the epoch. */
+    val time: Long,
+    /** First line of the message. */
+    val subject: String,
+    /** Branches and tags pointing at it (`main`, `origin/main`, `tag: v1`), `HEAD` excluded. */
+    val refs: List<String> = emptyList(),
+) {
+    /** Abbreviated hash shown in lists. */
+    val shortHash: String get() = hash.take(SHORT_HASH)
+
+    private companion object {
+        const val SHORT_HASH = 8
+    }
+}
+
+/** A file changed by a commit, compared with its first parent. */
+data class GitCommitFile(
+    /** Path relative to the root, with `/` separators. */
+    val path: String,
+    /** How the commit changed it. */
+    val status: GitFileStatus,
+    /** Former path of a renamed file. */
+    val oldPath: String? = null,
+)
+
+/** What a commit changed: its complete message and its files. */
+data class GitCommitDetails(
+    /** Full hash of the commit. */
+    val hash: String,
+    /** Complete message, subject and body. */
+    val message: String,
+    /** Files changed, compared with the first parent. */
+    val files: List<GitCommitFile>,
+)
+
+/** A local branch and its synchronization with the remote-tracking branch it follows. */
+data class GitBranchInfo(
+    /** Short name of the branch, as shown by `git branch` (`main`, `feature/login`). */
+    val name: String,
+    /** Whether this is the checked-out branch. */
+    val current: Boolean,
+    /** Remote-tracking branch it follows (`origin/main`), or `null` when it tracks nothing. */
+    val upstream: String?,
+    /** Commits of the branch that its upstream does not have. */
+    val ahead: Int,
+    /** Commits of the upstream that the branch does not have: how far behind the remote it is. */
+    val behind: Int,
+    /** Whether the upstream branch was deleted on the remote (Git reports it as `gone`). */
+    val upstreamGone: Boolean = false,
+) {
+    /** Whether this branch follows an upstream that still exists. */
+    val hasUpstream: Boolean get() = upstream != null && !upstreamGone
+}
+
 /** Worktrees of a repository: the branches the agent works on, each checked out in a directory of its own. */
 interface WorktreeClient {
     /**
@@ -269,6 +331,7 @@ interface WorktreeClient {
 }
 
 /** Git information about a project. */
+@Suppress("ComplexInterface", "TooManyFunctions") // one function per Git operation the IDE offers
 interface GitClient : WorktreeClient {
     /** Status of changed files, keyed by path relative to [root] with `/` separators; empty when not a repository. */
     suspend fun status(root: String): Map<String, GitFileStatus>
@@ -279,14 +342,27 @@ interface GitClient : WorktreeClient {
     /** Differences of [path] (relative to [root]) between HEAD and the working tree; empty when unchanged. */
     suspend fun diff(root: String, path: String): List<DiffLine>
 
+    /** Local branches of the repository, with their synchronization against their remote-tracking branch. */
+    suspend fun branchDetails(root: String): List<GitBranchInfo>
+
     /** Local branches of the repository. */
     suspend fun branches(root: String): List<String>
 
     /** Checks out the local branch [branch]. */
     suspend fun checkout(root: String, branch: String)
 
-    /** Stages every change and commits it with [message]. */
-    suspend fun commit(root: String, message: String)
+    /**
+     * Deletes the local branches [branches], even when they are not merged. The current branch is refused, and a
+     * branch that another program already deleted is not an error: deleting is retried safely after a lost answer.
+     */
+    suspend fun deleteBranches(root: String, branches: List<String>)
+
+    /**
+     * Commits the changes of [paths] (relative to [root]) with [message], leaving the changes of every other file
+     * for a later commit. A rename is listed by its new path, and the commit keeps its old path with it so Git
+     * records a rename; [paths] is never empty (the client refuses to commit without a selection).
+     */
+    suspend fun commit(root: String, message: String, paths: List<String>)
 
     /** Pulls the current branch; returns what Git printed. */
     suspend fun pull(root: String): String
@@ -294,10 +370,44 @@ interface GitClient : WorktreeClient {
     /** Pushes the current branch; returns what Git printed. */
     suspend fun push(root: String): String
 
+    /**
+     * Pushes [branch] to the remote branch it tracks, or to a new branch of the same name on `origin` (which it then
+     * tracks) when it tracks none. Works for any local branch, without checking it out; returns what Git printed.
+     */
+    suspend fun pushBranch(root: String, branch: String): String
+
+    /**
+     * Brings [branch] up to date with the remote branch it tracks without checking it out: a fast-forward only,
+     * refused when the branches diverged. The current branch is pulled like [pull]. Returns what Git printed.
+     */
+    suspend fun pullBranch(root: String, branch: String): String
+
     /** Annotations (author and date) of each line of [path], empty when the file has no history. */
     suspend fun blame(root: String, path: String): List<BlameLine>
 
+    /** Remote-tracking branches (`origin/main`), without the remotes' `HEAD`. */
+    suspend fun remoteBranches(root: String): List<String>
+
+    /** Commits reachable from [ref], newest first: [limit] of them after skipping [skip]; empty past the end. */
+    suspend fun log(root: String, ref: String, skip: Int, limit: Int): List<GitCommit>
+
+    /**
+     * Commits reachable from [ref] whose message or author contains [query] (ignoring case), or whose hash starts
+     * with it, newest first: [limit] of them after skipping the first [skip] matches; empty past the last one.
+     */
+    suspend fun searchLog(root: String, ref: String, query: String, skip: Int, limit: Int): List<GitCommit>
+
+    /** The complete message and the changed files of commit [hash]. */
+    suspend fun commitDetails(root: String, hash: String): GitCommitDetails
+
+    /**
+     * What commit [hash] changed in [path], compared with its first parent (with nothing for a first commit);
+     * [oldPath] is the former path of a renamed file.
+     */
+    suspend fun commitDiff(root: String, hash: String, path: String, oldPath: String? = null): List<DiffLine>
+
     /** No Git support: no status, no branch, no differences. */
+    @Suppress("TooManyFunctions")
     object None : GitClient {
         override suspend fun status(root: String) = emptyMap<String, GitFileStatus>()
 
@@ -305,17 +415,37 @@ interface GitClient : WorktreeClient {
 
         override suspend fun diff(root: String, path: String): List<DiffLine> = emptyList()
 
+        override suspend fun branchDetails(root: String): List<GitBranchInfo> = emptyList()
+
         override suspend fun branches(root: String): List<String> = emptyList()
 
         override suspend fun checkout(root: String, branch: String) = Unit
 
-        override suspend fun commit(root: String, message: String) = Unit
+        override suspend fun deleteBranches(root: String, branches: List<String>) = Unit
+
+        override suspend fun commit(root: String, message: String, paths: List<String>) = Unit
 
         override suspend fun pull(root: String): String = ""
 
         override suspend fun push(root: String): String = ""
 
+        override suspend fun pushBranch(root: String, branch: String): String = ""
+
+        override suspend fun pullBranch(root: String, branch: String): String = ""
+
         override suspend fun blame(root: String, path: String): List<BlameLine> = emptyList()
+
+        override suspend fun remoteBranches(root: String): List<String> = emptyList()
+
+        override suspend fun log(root: String, ref: String, skip: Int, limit: Int): List<GitCommit> = emptyList()
+
+        override suspend fun searchLog(root: String, ref: String, query: String, skip: Int, limit: Int) =
+            emptyList<GitCommit>()
+
+        override suspend fun commitDetails(root: String, hash: String) = GitCommitDetails(hash, "", emptyList())
+
+        override suspend fun commitDiff(root: String, hash: String, path: String, oldPath: String?) =
+            emptyList<DiffLine>()
 
         override suspend fun worktree(root: String, branch: String): String =
             throw UnsupportedOperationException("Git is not available")

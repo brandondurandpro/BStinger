@@ -26,8 +26,9 @@ class EditorState(
     onSaved: (FileEntry) -> Unit = {},
     diffs: suspend (FileEntry) -> List<DiffLine> = { emptyList() },
     blames: suspend (FileEntry) -> List<BlameLine> = { emptyList() },
+    commitDiffs: suspend (FileEntry, CommitDiffTarget) -> List<DiffLine> = { _, _ -> emptyList() },
 ) {
-    private val files = TabFiles(fileSystem, scope, onSaved, diffs, blames)
+    private val files = TabFiles(fileSystem, scope, onSaved, diffs, blames, commitDiffs)
 
     val panes = mutableStateListOf(EditorPane())
 
@@ -53,8 +54,12 @@ class EditorState(
     /** Opens (or activates) the diff tab of [entry]. */
     fun openDiff(entry: FileEntry): EditorTab = openIn(activePane, entry, diff = true)
 
+    /** Opens what [commit] changed in [entry] (a file of a commit in the Branches window). */
+    fun openCommitDiff(entry: FileEntry, commit: CommitDiffTarget): EditorTab =
+        openIn(activePane, entry, diff = true, commit = commit)
+
     /** Recomputes every open diff tab (the Git status changed). */
-    fun reloadDiffs() = allTabs.filter { it.isDiff }.forEach(files::loadDiff)
+    fun reloadDiffs() = allTabs.filter { it.isDiff && it.commit == null }.forEach(files::loadDiff)
 
     /** Recomputes the gutter change marks of the open text files (after a save, a commit, a branch switch). */
     fun reloadChanges() = allTabs.filterNot { it.isDiff }.distinctBy { it.entry.path }.forEach(files::loadChanges)
@@ -65,7 +70,8 @@ class EditorState(
     /** Recomputes the diff tabs, gutter marks and blame of [entry] alone (saved, the other files are unchanged). */
     fun reloadGitOf(entry: FileEntry) {
         val tabs = allTabs.filter { it.entry.path == entry.path }
-        tabs.filter { it.isDiff }.forEach(files::loadDiff)
+        // A commit's diff never changes: only the uncommitted one is recomputed.
+        tabs.filter { it.isDiff && it.commit == null }.forEach(files::loadDiff)
         tabs.firstOrNull { !it.isDiff }?.let(files::loadChanges)
         tabs.firstOrNull { it.blameVisible }?.let(files::loadBlame)
     }
@@ -77,17 +83,22 @@ class EditorState(
         if (tab.blameVisible) files.loadBlame(tab)
     }
 
-    internal fun openIn(pane: EditorPane, entry: FileEntry, diff: Boolean = false): EditorTab {
-        val key = if (diff) "diff:${entry.path}" else entry.path
+    internal fun openIn(
+        pane: EditorPane,
+        entry: FileEntry,
+        diff: Boolean = false,
+        commit: CommitDiffTarget? = null,
+    ): EditorTab {
+        val key = tabKey(entry, diff, commit)
         val tab =
-            pane.tabs.firstOrNull { it.key == key } ?: EditorTab(entry, relativePath(entry), diff).also { tab ->
+            pane.tabs.firstOrNull { it.key == key } ?: EditorTab(entry, relativePath(entry), diff, commit).also { tab ->
                 val insertAt = pane.activeTab?.let { pane.tabs.indexOf(it) + 1 } ?: pane.tabs.size
                 pane.tabs.add(insertAt, tab)
                 // Same file already open in the other pane: share its content instead of reading it again.
                 val twin =
                     allTabs.firstOrNull {
                         it !== tab &&
-                            it.entry.path == entry.path &&
+                            it.key == key &&
                             it.status is TabStatus.Ready
                     }
                 if (twin != null) {

@@ -119,6 +119,7 @@ private fun AgentBody(
 @Composable
 private fun WorkspacePopups(workspace: ProjectState) {
     ProjectPopups(workspace) { closePopup(workspace) }
+    if (workspace.branchPickerOpen) BranchPicker(workspace)
     workspace.fileDialog?.let { dialog ->
         FileDialogPopup(workspace, dialog, onClose = { workspace.fileDialog = null })
     }

@@ -12,6 +12,7 @@ import org.example.kotlineditor.state.ProjectState
 import org.example.kotlineditor.state.ToolWindow
 import org.example.kotlineditor.state.gotoDeclaration
 import org.example.kotlineditor.state.navigateBack
+import org.example.kotlineditor.state.openFileOfDiff
 import org.example.kotlineditor.state.saveAll
 import org.example.kotlineditor.state.selectNext
 import org.example.kotlineditor.state.selectPrevious
@@ -89,6 +90,8 @@ private val IDE_SHORTCUTS =
         bind(setOf(Key.F1), alt = true) { revealActiveFile() },
         bind(setOf(Key.S), ctrl = true) { editor.saveAll() },
         bind(setOf(Key.F4), ctrl = true) { editor.activeTab?.let(editor::close) },
+        // Jump to Source: from a diff tab, the file itself.
+        bind(setOf(Key.F4), shift = false) { editor.activeTab?.let(project::openFileOfDiff) },
         bind(setOf(Key.Tab), ctrl = true) { if (it.shift) editor.selectPrevious() else editor.selectNext() },
         bind(setOf(Key.DirectionLeft), alt = true) { editor.selectPrevious() },
         bind(setOf(Key.DirectionRight), alt = true) { editor.selectNext() },

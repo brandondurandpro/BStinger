@@ -5,8 +5,12 @@ package org.example.kotlineditor.state
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.example.kotlineditor.model.DiffKind
+import org.example.kotlineditor.model.DiffLine
 import org.example.kotlineditor.model.FileContent
 import org.example.kotlineditor.model.FileEntry
+import org.example.kotlineditor.model.GitCommit
+import org.example.kotlineditor.model.GitCommitFile
 import org.example.kotlineditor.model.pathName
 import org.example.kotlineditor.syntax.Structure
 import java.io.IOException
@@ -23,6 +27,35 @@ fun ProjectState.entryAt(relativePath: String): FileEntry =
 
 /** Opens the diff tab of the file at [relativePath] (a click on a Git panel change). */
 fun ProjectState.openDiff(relativePath: String) = editor.openDiff(entryAt(relativePath))
+
+/**
+ * Opens the file of the diff [tab] (its Open File button, F4), at the first line the diff changed. The line numbers
+ * of a commit's diff are those of that commit's version, which the current file may have moved since.
+ */
+fun ProjectState.openFileOfDiff(tab: EditorTab) {
+    if (!tab.isDiff) return
+    val lines = (tab.status as? TabStatus.Diff)?.lines.orEmpty()
+    navigate(tab.entry, TextPos(firstChangedLine(lines), 0))
+}
+
+// Zero-based line of the first change in the new version: an added line, or where removed lines used to be.
+internal fun firstChangedLine(lines: List<DiffLine>): Int {
+    val first = lines.indexOfFirst { it.kind == DiffKind.Added || it.kind == DiffKind.Removed }
+    if (first < 0) return 0
+    val after = lines.drop(first).firstOrNull { it.newLine > 0 }
+    val before = lines.take(first).lastOrNull { it.newLine > 0 }
+    val newLine =
+        when {
+            after != null -> after.newLine
+            before != null -> before.newLine + 1
+            else -> 1
+        }
+    return (newLine - 1).coerceAtLeast(0)
+}
+
+/** Opens the diff of [file] in [commit] (a click on a changed file in the Branches window). */
+fun ProjectState.openCommitDiff(commit: GitCommit, file: GitCommitFile) =
+    editor.openCommitDiff(entryAt(file.path), CommitDiffTarget(commit.hash, commit.shortHash, file.oldPath))
 
 /** Opens [entry] at [start]..[end], remembering where we came from. */
 fun ProjectState.navigate(entry: FileEntry, start: TextPos, end: TextPos = start) {
