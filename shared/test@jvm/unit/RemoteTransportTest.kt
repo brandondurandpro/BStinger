@@ -5,10 +5,12 @@ import org.example.kotlineditor.e2e.RemoteTestEnvironment
 import org.example.kotlineditor.e2e.SampleProject
 import org.example.kotlineditor.e2e.remoteEnvironment
 import org.example.kotlineditor.model.FileContent
+import org.example.kotlineditor.remote.RemoteBundles
 import org.example.kotlineditor.remote.RemoteException
 import org.example.kotlineditor.remote.RemoteSession
 import org.example.kotlineditor.remote.ServerPathPicker
 import org.example.kotlineditor.remote.SshTarget
+import org.example.kotlineditor.remote.explainSshError
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -110,4 +112,32 @@ class RemoteTransportTest {
             identityFile = environment.ssh.identity.toString(),
             projectPath = project.path,
         )
+
+    @Test
+    fun `ssh errors say how to trust a host that is not known yet`() {
+        val unknown = explainSshError("Host key verification failed.")
+        assertTrue("known_hosts" in unknown, unknown)
+        assertTrue(unknown.startsWith("Host key verification failed."), "ssh's own words come first")
+
+        val changed = "@@@ WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED! @@@\nHost key verification failed."
+        assertEquals(changed, explainSshError(changed), "a changed key is a warning, not a step to follow")
+        assertEquals("Permission denied (publickey).", explainSshError("Permission denied (publickey)."))
+    }
+
+    @Test
+    fun `a bundle is identified by its bytes, not by its version number`() {
+        val first = Files.createTempFile("bundle", ".tar.gz")
+        val second = Files.createTempFile("bundle", ".tar.gz")
+        try {
+            Files.writeString(first, "one")
+            Files.writeString(second, "two")
+            val id = RemoteBundles.buildId(first.toFile())
+            assertEquals(16, id.length)
+            assertEquals(id, RemoteBundles.buildId(first.toFile()))
+            assertTrue(id != RemoteBundles.buildId(second.toFile()))
+        } finally {
+            Files.deleteIfExists(first)
+            Files.deleteIfExists(second)
+        }
+    }
 }

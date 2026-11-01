@@ -2,6 +2,8 @@ package org.example.kotlineditor.remote
 
 import java.io.File
 import java.io.IOException
+import java.security.MessageDigest
+import java.util.concurrent.ConcurrentHashMap
 
 /** A failure of the remote flow worth showing to the user as is. */
 class RemoteException(message: String, cause: Throwable? = null) : IOException(message, cause)
@@ -14,6 +16,11 @@ class RemoteException(message: String, cause: Throwable? = null) : IOException(m
  * `-Dkotlin.editor.remote.bundle=/path/to/server-linux-x86_64.tar.gz` at a local build.
  */
 object RemoteBundles {
+    private const val BUFFER_SIZE = 64 * 1024
+    private const val BUILD_ID_LENGTH = 16
+
+    private val buildIds = ConcurrentHashMap<Triple<String, Long, Long>, String>()
+
     fun find(target: RemoteTarget): File {
         val name = "server-${target.id}.tar.gz"
         val base = applicationDirectory()
@@ -31,6 +38,27 @@ object RemoteBundles {
                     "${File(base, "remote/$name")} or set -Dkotlin.editor.remote.bundle. Tried:\n" +
                     candidates.joinToString("\n") { "  $it" },
             )
+    }
+
+    /**
+     * Identity of [bundle]: the start of its SHA-256. The remote side installs and runs a bundle by this id, so a
+     * rebuilt server is installed even when [org.example.kotlineditor.rpc.Protocol.APP_VERSION] did not change.
+     * Hashed once per file version, as connecting and reconnecting ask for it.
+     */
+    fun buildId(bundle: File): String {
+        val key = Triple(bundle.absolutePath, bundle.length(), bundle.lastModified())
+        return buildIds.getOrPut(key) {
+            val digest = MessageDigest.getInstance("SHA-256")
+            bundle.inputStream().use { input ->
+                val buffer = ByteArray(BUFFER_SIZE)
+                while (true) {
+                    val read = input.read(buffer)
+                    if (read < 0) break
+                    digest.update(buffer, 0, read)
+                }
+            }
+            digest.digest().joinToString("") { "%02x".format(it) }.take(BUILD_ID_LENGTH)
+        }
     }
 
     private fun applicationDirectory(): File =

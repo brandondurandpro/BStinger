@@ -96,14 +96,26 @@ at one with `-Dkotlin.editor.remote.bundle=/path/to/server-linux-x86_64.tar.gz`.
 IDE ── RpcClient ── 127.0.0.1:<local port> ── ssh -N -L ── 127.0.0.1:<server port> ── daemon
 ```
 
-- `RemoteInstaller` detects the host (`uname`), uploads the bundle for that target if its `VERSION` differs, unpacks
-  it, starts `start.sh` and reads the daemon's `state.properties`.
-- `start.sh` is idempotent: it reuses a live daemon, otherwise it generates the token once and starts the server
-  detached (`setsid`/`nohup`). The daemon keeps running across IDE restarts.
+- `RemoteInstaller` detects the host (`uname`) and identifies the local bundle by the start of its SHA-256 (its
+  *build id*), not by `VERSION`: a rebuilt server with the same version number is still installed. When the host's
+  `BUILD` file differs, it uploads the bundle and unpacks it through a staging directory of its own (a cancelled
+  install or another IDE installing at the same time cannot mix files), then starts `start.sh` and reads the
+  daemon's `state.properties`, which reports the daemon's build id and protocol.
+- Every remote command runs in `sh -c '…'`, whatever the user's login shell (bash, zsh, fish, csh). Cancelling a
+  connection kills the running `ssh`, so an abandoned upload does not keep going in the background.
+- `start.sh` is idempotent and holds a lock while it runs (two IDE windows connecting together start one daemon):
+  it reuses a live daemon of the same build, replaces the daemon of another build, checks that the pid of the state
+  file really is the daemon (pids are reused after a reboot), generates the token once and starts the server
+  detached (`setsid`/`nohup`). A JVM that dies while starting is reported at once with the end of `server.log`. The
+  daemon keeps running across IDE restarts.
 - `RemoteTunnel` runs one `ssh -N -L` and restarts it with backoff when it dies. The daemon never stopped, so the
   protocol client reconnects and resumes its sessions and terminal streams. The remote daemon keeps a disconnected
   session (its shells, its pending answers) for 30 minutes, so a sleeping laptop or a long VPN outage does not kill
   its terminals.
+- The daemon listens on a port chosen when it starts. If it dies (a crash, a reboot of the host) while the SSH link
+  is fine, the client keeps reconnecting to nothing: after a second of reconnection the session runs the installer
+  again, which restarts the daemon, and points the tunnel at its new port. The client reconnects on the same local
+  port without noticing; the shells of the dead daemon are lost, as with any server restart.
 - SSH compression is disabled: the protocol already compresses bodies with zstd. One SSH connection carries the
   tunnel, and the forwarded port uses `TCP_NODELAY` on both ends.
 
@@ -117,14 +129,16 @@ IDE ── RpcClient ── 127.0.0.1:<local port> ── ssh -N -L ── 127.0
   not synchronised between machines.
 - Tags are local to this IDE profile and are not written to `~/.ssh/config`; they are keyed by alias, so a host
   entered manually shares tags only if it is not an alias.
-- The daemon is started per user, not through systemd/launchd. A reboot requires reconnecting from the IDE.
+- The daemon is started per user, not through systemd/launchd. After a reboot of the host, the IDE starts it again
+  as soon as SSH is back.
 
 ## Tests
 
 `RemoteDevelopmentE2eTest`, `RemoteDevelopmentChaosE2eTest`, `RemoteFolderPickerE2eTest` and
 `RemoteDevelopmentPerformanceE2eTest` run a real Apache MINA SSH server on the test machine, point its `HOME` at a
 temporary directory and connect the real OpenSSH client to it. They cover install/daemon/tunnel, editing and saving,
-cancellation and validation, disconnecting, tunnel restarts, a changed host key, the folder browser (SSH home,
+cancellation (which stops `ssh`) and validation, disconnecting, tunnel restarts, a changed or unknown host key, a
+daemon killed and restarted on another port, a rebuilt bundle replacing the running daemon, the folder browser (SSH home,
 click-through navigation, live path check with debounce, path errors, opening the chosen folder), a listing that
 completes after a reconnection,
 1,000 folders, the `~/.ssh/config` catalog (including aliases, includes and search), saved folders surviving a

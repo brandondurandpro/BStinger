@@ -1,19 +1,37 @@
 package org.example.kotlineditor.remote
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import org.example.kotlineditor.model.AppServices
+import org.example.kotlineditor.model.ConnectionStatus
 import org.example.kotlineditor.model.DirectoryPicker
 import org.example.kotlineditor.rpc.ClientOptions
 import org.example.kotlineditor.rpc.RpcClient
 import org.example.kotlineditor.rpc.appServices
 import org.example.kotlineditor.state.RemoteConnection
 import org.example.kotlineditor.state.RemoteFactory
+import kotlin.math.min
 
 /**
  * A live remote development session: the SSH tunnel, the client plugged into it and the app services to hand to
  * the IDE. Closing it stops the tunnel; the daemon on the host keeps running for the next session.
+ *
+ * The daemon listens on a port chosen when it starts. When it dies (a crash, the host rebooted) the SSH link may be
+ * fine while the client cannot reach anything: after [RECOVERY_DELAY_MS] of reconnection, the session runs the
+ * installer again, which restarts the daemon if needed, and points the tunnel at the port it listens on now.
  */
 class RemoteSession(
     val target: SshTarget,
@@ -23,7 +41,11 @@ class RemoteSession(
     val client: RpcClient,
     /** Menus and pickers that ask for a path, answered by the server. */
     val directoryPicker: DirectoryPicker,
+    private val installer: RemoteInstaller,
 ) : RemoteConnection {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val daemonFailure = MutableStateFlow<String?>(null)
+
     val remote: RemoteTarget get() = host.target
 
     override val services: AppServices by lazy { client.appServices(directoryPicker) }
@@ -32,14 +54,62 @@ class RemoteSession(
 
     override val home: String get() = host.home
 
-    override val failure get() = tunnel.failure
+    override val failure: StateFlow<String?> =
+        combine(tunnel.failure, daemonFailure) { ssh, daemon -> ssh ?: daemon }
+            .stateIn(scope, SharingStarted.Eagerly, null)
+
+    init {
+        scope.launch { recoverDaemon() }
+    }
 
     override fun close() {
+        scope.cancel()
         client.close()
         tunnel.close()
     }
 
+    private suspend fun recoverDaemon() {
+        client.status.collectLatest { status ->
+            if (status == ConnectionStatus.Reconnecting) keepDaemonReachable()
+        }
+    }
+
+    // Runs until the client is connected again (collectLatest then cancels it).
+    private suspend fun keepDaemonReachable() {
+        // A dropped SSH link comes back by itself: only look at the daemon once that had a chance.
+        delay(RECOVERY_DELAY_MS)
+        var backoff = RECOVERY_DELAY_MS
+        while (true) {
+            if (tunnel.state.value != TunnelState.Failed) checkDaemon()
+            delay(backoff)
+            backoff = min(backoff * 2, MAX_RECOVERY_BACKOFF_MS)
+        }
+    }
+
+    @Suppress("TooGenericExceptionCaught") // any failure of a recovery attempt is retried
+    private suspend fun checkDaemon() {
+        try {
+            val running = installer.ensureServer(host.target)
+            // The token lives in a file the daemon keeps; a new one means the host was reset.
+            daemonFailure.value =
+                if (running.token != server.token) {
+                    "The server on ${target.destination} has a new token: disconnect and connect again"
+                } else {
+                    null
+                }
+            tunnel.retarget(running.port)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            // Unreachable for now (the network is down too): the next attempt will tell.
+        }
+    }
+
     companion object {
+        /** How long the client reconnects before the session checks that the daemon is still running. */
+        const val RECOVERY_DELAY_MS = 1_000L
+        private const val MAX_RECOVERY_BACKOFF_MS = 10_000L
+
         /**
          * Installs the server if needed, opens the tunnel and waits for the protocol handshake.
          *
@@ -78,7 +148,7 @@ class RemoteSession(
                     client.awaitConnected()
                     currentCoroutineContext().ensureActive()
                     onProgress("Connected")
-                    return RemoteSession(target, host, server, tunnel, client, directoryPicker)
+                    return RemoteSession(target, host, server, tunnel, client, directoryPicker, installer)
                 } catch (e: Exception) {
                     client.close()
                     throw e

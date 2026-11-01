@@ -1,5 +1,7 @@
 package org.example.kotlineditor.remote
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runInterruptible
 import java.io.File
 import java.io.IOException
 import java.util.concurrent.TimeUnit
@@ -15,9 +17,29 @@ data class SshResult(val code: Int, val output: String, val error: String)
 
 /** Fails with the command's error stream when it did not succeed. */
 fun SshResult.requireSuccess(what: String): SshResult {
+    if (code == SSH_FAILURE) throw SshException("$what failed", explainSshError(error.ifBlank { output }))
     if (code != 0) throw SshException("$what failed (exit code $code)", error.ifBlank { output })
     return this
 }
+
+/** Exit code of ssh itself (connection, authentication or host key failure), as opposed to the remote command's. */
+const val SSH_FAILURE = 255
+
+/**
+ * What ssh said, with the step to take when the host simply is not known yet: batch mode cannot ask the user to
+ * accept a new host key, so the first connection to a host must be made once in a terminal.
+ */
+fun explainSshError(error: String): String =
+    if (error.contains("REMOTE HOST IDENTIFICATION HAS CHANGED", ignoreCase = true)) {
+        error
+    } else if (UNKNOWN_HOST.any { error.contains(it, ignoreCase = true) }) {
+        "$error\nThe host is not in known_hosts yet: connect once with ssh in a terminal to check and accept its " +
+            "key, then try again."
+    } else {
+        error
+    }
+
+private val UNKNOWN_HOST = listOf("Host key verification failed", "host key is known")
 
 /**
  * Runs the OpenSSH client, so remote development inherits the user's `~/.ssh/config`, agent, ProxyJump, known
@@ -29,9 +51,20 @@ class SshClient(private val target: SshTarget) {
     private val knownHosts: String? = System.getProperty("kotlin.editor.ssh.knownHosts")
     private val configFile: String? = System.getProperty("kotlin.editor.ssh.config")
 
-    /** Runs [command] on the remote shell and returns its output; [stdin] is its standard input. */
-    fun exec(command: String, stdin: File? = null, timeoutMs: Long = 30_000): SshResult =
-        run(executable, listOf(executable) + arguments() + target.destination + " " + command, stdin, timeoutMs)
+    /**
+     * Runs [command] on the remote shell and returns its output; [stdin] is its standard input. Cancelling the
+     * caller kills the ssh process, so an abandoned upload or install does not keep running in the background.
+     */
+    suspend fun exec(command: String, stdin: File? = null, timeoutMs: Long = 30_000): SshResult =
+        runInterruptible(Dispatchers.IO) {
+            run(executable, listOf(executable) + arguments() + target.destination + posix(command), stdin, timeoutMs)
+        }
+
+    /** Runs [command] as is in the login shell (cmd.exe or PowerShell on a Windows host). */
+    suspend fun execRaw(command: String, timeoutMs: Long = 30_000): SshResult =
+        runInterruptible(Dispatchers.IO) {
+            run(executable, listOf(executable) + arguments() + target.destination + command, null, timeoutMs)
+        }
 
     /** Starts `ssh -N -L`, which forwards a local port to the server's loopback port. */
     fun forward(localPort: Int, remotePort: Int): ForwardProcess {
@@ -51,6 +84,14 @@ class SshClient(private val target: SshTarget) {
                 .redirectErrorStream(false)
                 .start()
         return ForwardProcess(process)
+    }
+
+    // ssh hands the command to the user's login shell, which may be fish or csh: the POSIX commands of the
+    // installer run in sh instead. Single quotes mean the same in all of them as long as the command has no
+    // quote or backslash of its own.
+    private fun posix(command: String): String {
+        require('\'' !in command && '\\' !in command) { "Remote commands must not contain quotes or backslashes" }
+        return "sh -c '$command'"
     }
 
     private fun arguments(): List<String> =
@@ -83,7 +124,7 @@ class SshClient(private val target: SshTarget) {
             knownHosts?.let { addAll(listOf("-o", "UserKnownHostsFile=$it")) }
         }
 
-    @Suppress("SwallowedException") // the exit code and error stream describe the failure better
+    @Suppress("SwallowedException", "ThrowsCount") // the exit code and error stream describe the failure better
     private fun run(command: String, args: List<String>, stdin: File?, timeoutMs: Long): SshResult {
         val process =
             try {
@@ -95,23 +136,41 @@ class SshClient(private val target: SshTarget) {
         val error = StringBuilder()
         val outThread = pump(process.inputStream, output)
         val errThread = pump(process.errorStream, error)
+        // The input is written by its own thread: a blocked pipe write cannot be interrupted, waitFor can.
+        val inThread = feed(process, stdin)
         try {
-            if (stdin != null) {
-                stdin.inputStream().use { input -> process.outputStream.use { input.copyTo(it) } }
-            } else {
-                process.outputStream.close()
+            if (!process.waitFor(timeoutMs, TimeUnit.MILLISECONDS)) {
+                process.destroyForcibly()
+                throw SshException("$command timed out after ${timeoutMs}ms", error.toString().trim())
             }
-        } catch (_: IOException) {
-            // The command exited before reading its input: its exit code and error stream say why.
-        }
-        if (!process.waitFor(timeoutMs, TimeUnit.MILLISECONDS)) {
+        } catch (interrupted: InterruptedException) {
             process.destroyForcibly()
-            throw SshException("$command timed out after ${timeoutMs}ms", error.toString().trim())
+            throw interrupted
         }
+        inThread.join(STREAM_JOIN_MS)
         outThread.join(STREAM_JOIN_MS)
         errThread.join(STREAM_JOIN_MS)
         return SshResult(process.exitValue(), output.toString(), error.toString().trim())
     }
+
+    private fun feed(process: Process, stdin: File?): Thread =
+        Thread(
+            {
+                try {
+                    if (stdin != null) {
+                        stdin.inputStream().use { input -> process.outputStream.use { input.copyTo(it) } }
+                    } else {
+                        process.outputStream.close()
+                    }
+                } catch (_: IOException) {
+                    // The command exited (or was killed) before reading its input: its exit code says why.
+                }
+            },
+            "ssh-input",
+        ).apply {
+            isDaemon = true
+            start()
+        }
 
     private fun pump(input: java.io.InputStream, sink: StringBuilder): Thread =
         Thread(
@@ -168,9 +227,14 @@ class ForwardProcess(private val process: Process) {
     fun awaitExit(timeoutMs: Long): Int? =
         if (process.waitFor(timeoutMs, TimeUnit.MILLISECONDS)) process.exitValue() else null
 
+    /** Stops ssh without blocking the caller (the UI thread when the IDE disconnects or exits). */
     fun close() {
+        if (!process.isAlive) return
         process.destroy()
-        if (!process.waitFor(2, TimeUnit.SECONDS)) process.destroyForcibly()
+        Thread({ if (!process.waitFor(2, TimeUnit.SECONDS)) process.destroyForcibly() }, "ssh-tunnel-stop").apply {
+            isDaemon = true
+            start()
+        }
     }
 
     /** Waits for ssh's last words, so [isFatal] can read them after the process exited. */

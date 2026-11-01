@@ -14,6 +14,8 @@ import java.nio.file.Files
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 
 /** What the user sees when the SSH link to a remote server breaks. */
 @OptIn(ExperimentalTestApi::class)
@@ -52,6 +54,35 @@ class RemoteDevelopmentChaosE2eTest {
                 withKeyDown(Key.CtrlLeft) { pressKey(Key.S) }
             }
             awaitCondition { project.read("docs/guide.md").startsWith("qGuide") }
+        }
+
+    @Test
+    fun `the editor keeps working after the remote daemon dies and comes back on another port`() =
+        remoteUiTest {
+            launchApp()
+            connectRemoteTo(RemoteTestEnvironment, project.path)
+            awaitTag(Tags.treeRow("src"), timeout = 60_000)
+            val firstPid = RemoteTestEnvironment.daemonPid()
+            val firstPort = RemoteTestEnvironment.daemonPort()
+
+            // A crash: the SSH link is fine, but nothing listens on the forwarded port any more.
+            RemoteTestEnvironment.killDaemon()
+            awaitReconnecting()
+            awaitNoTag(Tags.STATUS_CONNECTION, timeout = 60_000)
+            val secondPid = RemoteTestEnvironment.daemonPid()
+            assertNotEquals(firstPid, secondPid, "the session should have started a new daemon")
+            val secondPort = RemoteTestEnvironment.daemonPort()
+            println("daemon restarted: pid $firstPid -> $secondPid, port $firstPort -> $secondPort")
+
+            openFromTree("docs/guide.md")
+            onNodeWithTag(Tags.EDITOR).performClick()
+            onNodeWithTag(Tags.EDITOR).performKeyInput {
+                withKeyDown(Key.CtrlLeft) { pressKey(Key.MoveHome) }
+                pressKey(Key.Q)
+                withKeyDown(Key.CtrlLeft) { pressKey(Key.S) }
+            }
+            awaitCondition { project.read("docs/guide.md").startsWith("qGuide") }
+            assertFalse(project.read("docs/guide.md").startsWith("qq"), "the edit must be written once")
         }
 
     @Test

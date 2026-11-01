@@ -17,10 +17,11 @@ import kotlin.system.exitProcess
  * ```
  * ./kotlin run -m serverApp -- --host 127.0.0.1 --port 0 --token-file token --state-file state.properties
  * ```
- * `--version` prints the version used to identify remote server bundles. `--data-dir` moves recent projects and
- * sessions (useful for tests and for several accounts on one machine). `--session-grace` is how many seconds a
- * disconnected session keeps its shells and pending answers; remote daemons use a long one so a sleeping laptop
- * does not lose its terminals.
+ * `--version` prints the version used to identify remote server bundles; `--build` is the id of the installed
+ * bundle, copied to the state file so a client can tell whether the running daemon is the bundle it installed.
+ * `--data-dir` moves recent projects and sessions (useful for tests and for several accounts on one machine).
+ * `--session-grace` is how many seconds a disconnected session keeps its shells and pending answers; remote daemons
+ * use a long one so a sleeping laptop does not lose its terminals.
  */
 object ServerMain {
     /** Entry point of the standalone server: parses the options, listens and waits until the process is stopped. */
@@ -47,7 +48,7 @@ object ServerMain {
                 token = token,
                 options = ServerOptions(sessionGraceMs = options.sessionGraceSeconds * 1_000),
             ).start(options.host, options.port)
-        options.stateFile?.let { state -> ServerState.write(state, server, options.host, token) }
+        options.stateFile?.let { state -> ServerState.write(state, server, options.host, token, build = options.build) }
         println("Kotlin Editor server ${Protocol.APP_VERSION} listening on ${options.host}:${server.port}")
         if (options.stateFile == null) {
             println("Connect with: --server ${options.host}:${server.port} --token $token")
@@ -96,6 +97,8 @@ object ServerMain {
         val version: Boolean,
         /** How long a disconnected session (its shells, its answers) waits for the client to come back. */
         val sessionGraceSeconds: Long,
+        /** Id of the remote bundle this daemon runs from, or null for a server started by hand. */
+        val build: String? = null,
     ) {
         companion object {
             fun from(args: Array<String>): LaunchOptions {
@@ -111,6 +114,7 @@ object ServerMain {
                     ripgrep = option("ripgrep")?.let { RipgrepSettings(executable = it) } ?: RipgrepSettings(),
                     version = args.contains("--version"),
                     sessionGraceSeconds = sessionGrace,
+                    build = option("build")?.takeIf { it.isNotBlank() },
                 )
             }
         }

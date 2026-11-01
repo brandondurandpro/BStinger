@@ -29,7 +29,11 @@ enum class TunnelState { Starting, Connected, Reconnecting, Failed }
  * the same local port: the [RpcClient] then reconnects to the daemon, which never stopped, and resumes its
  * sessions and streams. Authentication and host-key failures are not retried.
  */
-class RemoteTunnel(private val ssh: SshClient, private val remotePort: Int) : Closeable {
+class RemoteTunnel(private val ssh: SshClient, remotePort: Int) : Closeable {
+    /** Loopback port of the daemon on the host; it changes when the daemon restarts (it listens on port 0). */
+    @Volatile var remotePort: Int = remotePort
+        private set
+
     /** Local port the client connects to. */
     val localPort: Int = freePort()
 
@@ -61,6 +65,16 @@ class RemoteTunnel(private val ssh: SshClient, private val remotePort: Int) : Cl
         withTimeout(timeoutMs) { firstConnection.await() }
     }
 
+    /**
+     * Points the tunnel at the daemon's new port: the running ssh is stopped and the supervisor starts the next
+     * one on the same local port, so the [RpcClient] reconnects without knowing anything changed.
+     */
+    fun retarget(port: Int) {
+        if (port == remotePort || closed) return
+        remotePort = port
+        current?.close()
+    }
+
     override fun close() {
         closed = true
         current?.close()
@@ -72,9 +86,10 @@ class RemoteTunnel(private val ssh: SshClient, private val remotePort: Int) : Cl
     private suspend fun supervise() {
         var backoff = FIRST_BACKOFF_MS
         while (!closed) {
+            val target = remotePort
             val process =
                 try {
-                    ssh.forward(localPort, remotePort)
+                    ssh.forward(localPort, target)
                 } catch (e: IOException) {
                     fail(RemoteException("Cannot start the SSH tunnel: ${e.message}", e))
                     return
@@ -98,6 +113,11 @@ class RemoteTunnel(private val ssh: SshClient, private val remotePort: Int) : Cl
             process.close()
             current = null
             if (closed) return
+            if (target != remotePort) {
+                // Retargeted: start the new forward at once.
+                backoff = FIRST_BACKOFF_MS
+                continue
+            }
             if (process.isFatal()) {
                 fail(RemoteException("SSH refused the connection: ${process.errors}"))
                 return

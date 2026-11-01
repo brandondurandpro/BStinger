@@ -15,7 +15,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.drop
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.example.kotlineditor.model.AppServices
@@ -42,8 +41,11 @@ class AppState(
     // Last preferences known: those of the open project are read live, these cover the welcome screen.
     private var preferences: Map<String, String> = preferenceStore.load()
 
-    /** Services of the server currently shown: the embedded one, or a remote one. */
-    var services: AppServices = initialServices
+    /**
+     * Services of the server currently shown: the embedded one, or a remote one. A state, so that what reads it
+     * (the status bar's link, the welcome screen) follows a switch of server.
+     */
+    var services: AppServices by mutableStateOf(initialServices)
         private set
 
     var screen: Screen by mutableStateOf(Screen.Welcome)
@@ -76,7 +78,8 @@ class AppState(
     var remoteStatus: String? by mutableStateOf(null)
         private set
 
-    private var remoteSession: RemoteConnection? = null
+    // State: the welcome screen, the top bar and the status bar show whether the IDE is remote.
+    private var remoteSession: RemoteConnection? by mutableStateOf(null)
     private var remoteJob: Job? = null
 
     private var lastRemote: SshTarget? by mutableStateOf(RemotePreferenceKeys.read(preferences))
@@ -283,18 +286,16 @@ class AppState(
         remoteStatus = "Checking ${target.destination}"
         remoteJob =
             scope.launch {
+                // Set as soon as the connection exists: withContext drops its result when it is cancelled right
+                // as it returns, and the tunnel must not outlive a cancelled connection.
+                var connected: RemoteConnection? = null
                 try {
-                    val session =
-                        withContext(Dispatchers.IO) {
-                            factory.connect(target) { step -> scope.launch { remoteStatus = step } }
-                        }
-                    // Cancelled while a blocking SSH command was running: do not leak the tunnel.
-                    if (isActive) {
-                        switchTo(session, target)
-                    } else {
-                        session.close()
+                    withContext(Dispatchers.IO) {
+                        connected = factory.connect(target) { step -> scope.launch { remoteStatus = step } }
                     }
+                    switchTo(checkNotNull(connected), target)
                 } catch (cancelled: CancellationException) {
+                    if (remoteSession !== connected) connected?.close()
                     throw cancelled
                 } catch (e: Exception) {
                     remoteStatus = null

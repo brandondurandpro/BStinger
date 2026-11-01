@@ -15,6 +15,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 /** Remote Development through the real UI, the real OpenSSH client and a real SSH server. */
@@ -142,4 +143,75 @@ class RemoteDevelopmentE2eTest {
             awaitTag(Tags.treeRow("src"), timeout = 60_000)
             assertEquals(firstPid, RemoteTestEnvironment.daemonPid())
         }
+
+    @Test
+    fun `a rebuilt server with the same version number replaces the running daemon`() =
+        remoteUiTest {
+            val app = launchApp()
+            connectRemoteTo(RemoteTestEnvironment, project.path)
+            awaitTag(Tags.treeRow("src"), timeout = 60_000)
+            val firstPid = RemoteTestEnvironment.daemonPid()
+            val firstBuild = RemoteTestEnvironment.installedBuild()
+            disconnectFromTopBar(app)
+
+            RemoteTestEnvironment.withRebuiltBundle {
+                onNodeWithTag(Tags.WELCOME_REMOTE).performClick()
+                awaitTag(Tags.REMOTE_DIALOG)
+                onNodeWithTag(Tags.REMOTE_CONNECT).performClick()
+                awaitTag(Tags.treeRow("src"), timeout = 60_000)
+            }
+            assertNotEquals(firstBuild, RemoteTestEnvironment.installedBuild(), "the new bundle must be installed")
+            assertNotEquals(firstPid, RemoteTestEnvironment.daemonPid(), "the old daemon must be replaced")
+            assertTrue(app.state.isRemote)
+        }
+
+    @Test
+    fun `an unknown host key tells how to trust the host`() =
+        remoteUiTest {
+            val app = launchApp()
+            RemoteTestEnvironment.forgetHostKey()
+            connectRemoteTo(RemoteTestEnvironment, project.path)
+            awaitTag(Tags.REMOTE_ERROR, timeout = 30_000).assertTextContains("known_hosts", substring = true)
+            assertFalse(app.state.isRemote)
+            awaitTag(Tags.REMOTE_DIALOG)
+        }
+
+    @Test
+    fun `cancelling a connection in progress stops ssh`() =
+        remoteUiTest {
+            val app = launchApp()
+            RemoteTestEnvironment.withSlowSsh(delaySeconds = 60) { wrapper ->
+                connectRemoteTo(RemoteTestEnvironment, project.path)
+                awaitTag(Tags.REMOTE_STATUS)
+                awaitCondition { sshProcesses(wrapper) > 0 }
+
+                onNodeWithTag(Tags.REMOTE_CANCEL).performClick()
+                awaitNoTag(Tags.REMOTE_DIALOG)
+                // Before, the ssh command ran on (an upload for minutes) after the dialog was gone.
+                awaitCondition { sshProcesses(wrapper) == 0 }
+            }
+            assertFalse(app.state.isRemote)
+            awaitTag(Tags.WELCOME)
+        }
+
+    private fun androidx.compose.ui.test.ComposeUiTest.disconnectFromTopBar(app: E2eApp) {
+        onNodeWithTag(Tags.TOP_REMOTE).performClick()
+        awaitTag(Tags.REMOTE_DISCONNECT).performClick()
+        awaitTag(Tags.WELCOME)
+        awaitCondition { !app.state.isRemote }
+    }
+
+    private fun runsWrapper(process: ProcessHandle, wrapper: java.nio.file.Path): Boolean {
+        val line = process.info().commandLine()
+        return line.isPresent && wrapper.toString() in line.get()
+    }
+
+    // Processes of this JVM running the ssh wrapper.
+    private fun sshProcesses(wrapper: java.nio.file.Path): Int =
+        ProcessHandle
+            .current()
+            .descendants()
+            .filter { it.isAlive && runsWrapper(it, wrapper) }
+            .count()
+            .toInt()
 }

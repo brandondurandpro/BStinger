@@ -16,6 +16,7 @@ import java.util.Properties
  * ```
  * version=2026.1
  * protocol=5
+ * build=3f9c0a7d21e84b6c
  * host=127.0.0.1
  * port=42173
  * pid=8842
@@ -30,6 +31,8 @@ object ServerState {
         host: String,
         token: String,
         startedAt: Long = System.currentTimeMillis(),
+        /** Identity of the installed bundle (its hash), so the client can tell a stale daemon from a current one. */
+        build: String? = null,
     ) {
         val properties =
             Properties().apply {
@@ -40,6 +43,7 @@ object ServerState {
                 setProperty("pid", ProcessHandle.current().pid().toString())
                 setProperty("token", token)
                 setProperty("startedAt", startedAt.toString())
+                build?.let { setProperty("build", it) }
             }
         val directory = file.absoluteFile.parentFile
         directory.mkdirs()

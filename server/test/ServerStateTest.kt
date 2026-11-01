@@ -33,6 +33,14 @@ class ServerStateTest {
         assertEquals(server.port.toString(), properties.getProperty("port"))
         assertEquals(ProcessHandle.current().pid().toString(), properties.getProperty("pid"))
         assertEquals("secret", properties.getProperty("token"))
+        assertNull(properties.getProperty("build"), "a server started by hand has no bundle id")
+    }
+
+    @Test
+    fun `the state file tells which bundle the daemon runs`() {
+        ServerState.write(state, server, "127.0.0.1", "secret", build = "3f9c0a7d21e84b6c")
+
+        assertEquals("3f9c0a7d21e84b6c", assertNotNull(ServerState.read(state)).getProperty("build"))
     }
 
     @Test
@@ -74,6 +82,7 @@ class ServerStateTest {
                     "--state-file", "/tmp/state",
                     "--data-dir", "/tmp/data",
                     "--session-grace", "60",
+                    "--build", "3f9c0a7d21e84b6c",
                     "--version",
                 ),
             )
@@ -84,6 +93,8 @@ class ServerStateTest {
         assertEquals(File("/tmp/state"), options.stateFile)
         assertEquals(File("/tmp/data"), options.dataDirectory)
         assertEquals(60, options.sessionGraceSeconds)
+        assertEquals("3f9c0a7d21e84b6c", options.build)
         assertTrue(options.version)
+        assertNull(ServerMain.LaunchOptions.from(arrayOf("--build", "")).build)
     }
 }

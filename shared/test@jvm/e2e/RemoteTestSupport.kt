@@ -88,11 +88,83 @@ object RemoteTestEnvironment {
         }
     }
 
+    /** Kills the daemon with SIGKILL, as a crash or an OOM killer would: its state file is left behind. */
+    fun killDaemon() {
+        val pid = checkNotNull(daemonPid()) { "no daemon is running" }
+        ProcessHandle.of(pid).ifPresent {
+            it.destroyForcibly()
+            it.onExit().get(10, TimeUnit.SECONDS)
+        }
+    }
+
+    /** Port the daemon listens on (it picks one at each start), from its state file. */
+    fun daemonPort(): Int? {
+        val state = home.resolve(".kotlin-editor/server/state.properties")
+        return runCatching {
+            Properties().apply { Files.newInputStream(state).use { load(it) } }.getProperty("port")?.toInt()
+        }.getOrNull()
+    }
+
+    /** Id of the bundle installed on the remote side (`BUILD` of its install directory), or null. */
+    fun installedBuild(): String? =
+        runCatching {
+            Files.list(home.resolve(".kotlin-editor/server")).use { entries ->
+                entries
+                    .filter { Files.isDirectory(it) && !it.fileName.toString().endsWith(".tmp") }
+                    .map { it.resolve("BUILD") }
+                    .filter { Files.isRegularFile(it) }
+                    .findFirst()
+                    .map { Files.readString(it).trim() }
+                    .orElse(null)
+            }
+        }.getOrNull()
+
+    /**
+     * A bundle with the same [Protocol.APP_VERSION] as [bundle] but other bytes, as a rebuilt server would be;
+     * [use] connects with it, then the regular bundle is the one installed again by [prepare].
+     */
+    fun <T> withRebuiltBundle(use: () -> T): T {
+        val rebuilt = buildBundle(note = "rebuilt ${System.nanoTime()}")
+        System.setProperty("kotlin.editor.remote.bundle", rebuilt.toString())
+        return try {
+            use()
+        } finally {
+            System.setProperty("kotlin.editor.remote.bundle", bundle.toString())
+        }
+    }
+
+    /** Empties known_hosts, as for a host the user never connected to; [prepare] trusts it again. */
+    fun forgetHostKey() {
+        Files.writeString(ssh.knownHosts, "")
+    }
+
+    /**
+     * Runs ssh through a wrapper that waits [delaySeconds] before starting it, so a test can act while a
+     * connection is in progress; [use] gets the wrapper's path, to find its processes.
+     */
+    fun <T> withSlowSsh(delaySeconds: Int, use: (Path) -> T): T {
+        val wrapper = root.resolve("slow-ssh-${System.nanoTime()}.sh")
+        val script =
+            """
+            #!/bin/sh
+            sleep $delaySeconds
+            exec ssh "${'$'}@"
+            """.trimIndent() + "\n"
+        Files.writeString(wrapper, script)
+        wrapper.toFile().setExecutable(true)
+        System.setProperty("kotlin.editor.ssh", wrapper.toString())
+        return try {
+            use(wrapper)
+        } finally {
+            System.clearProperty("kotlin.editor.ssh")
+        }
+    }
+
     /** Text of the server log, for the assertion message when a remote connection fails. */
     fun diagnostics(): String =
         runCatching { Files.readString(home.resolve(".kotlin-editor/server/server.log")) }.getOrDefault("")
 
-    private fun buildBundle(): Path {
+    private fun buildBundle(note: String? = null): Path {
         val start =
             checkNotNull(RemoteTestEnvironment::class.java.getResourceAsStream("/remote/start.sh")) {
                 "remote/start.sh is missing from the test classpath"
@@ -116,7 +188,8 @@ object RemoteTestEnvironment {
                 TestTarFile("start.sh", start, MODE_EXECUTABLE),
                 TestTarFile("classpath", classpath.toByteArray(), 0b110_100_100),
                 TestTarFile("runtime/bin/java", wrapper.toByteArray(), MODE_EXECUTABLE),
-            )
+            ) +
+                listOfNotNull(note?.let { TestTarFile("NOTE", it.toByteArray(), 0b110_100_100) })
         val out = Files.createTempFile(root, "server-${Protocol.APP_VERSION}-linux-x86_64", ".tar.gz")
         writeBundleTarGz(out, files)
         return out
