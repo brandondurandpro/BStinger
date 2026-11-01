@@ -12,6 +12,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import org.example.kotlineditor.model.AppServices
+import org.example.kotlineditor.model.CompletionResult
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.GitBranchInfo
 import org.example.kotlineditor.model.GitFileStatus
@@ -57,6 +58,12 @@ class ProjectState(
         )
     val fileIndex = FileIndex(root, services.search, scope)
     val find = FindState()
+
+    /** Code completion in the editors, from the language servers. */
+    val completion =
+        CompletionState(scope) { path, document ->
+            languageServers?.complete(path, document) ?: CompletionResult.NotReady
+        }
     val terminal = TerminalState(root.path, services.terminal, scope)
 
     /** The Branches tool window: branches and the history of the selected one. */

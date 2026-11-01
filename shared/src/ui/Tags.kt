@@ -177,6 +177,7 @@ object Tags {
     const val EDITOR_EMPTY = "editor.empty"
     const val EDITOR_MESSAGE = "editor.message"
     const val EDITOR_LOADING = "editor.loading"
+    const val COMPLETION = "completion"
     const val STATUS_BAR = "status"
     const val STATUS_CARET = "status.caret"
     const val STATUS_LANGUAGE = "status.language"
@@ -297,6 +298,9 @@ object Tags {
     fun dockSplitter(dock: String) = "dock.splitter:$dock"
 
     fun line(index: Int) = "line:$index"
+
+    /** A row of the completion popup, by its label. */
+    fun completionItem(label: String) = "completion.item:$label"
 
     /** The text of a line of the editor, as wide as the text (without the gutter). */
     fun lineText(index: Int) = "line.text:$index"
