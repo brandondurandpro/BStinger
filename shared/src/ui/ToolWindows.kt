@@ -147,7 +147,7 @@ private fun ToolWindowContent(project: ProjectState, window: ToolWindow, drag: T
         ToolWindow.Project -> ProjectPanel(project, drag, modifier)
         ToolWindow.Git -> GitPanel(project, drag, modifier)
         ToolWindow.Branches -> BranchesPanel(project, drag, modifier)
-        ToolWindow.Terminal -> TerminalPanel(project, drag, modifier)
+        ToolWindow.Terminal -> TerminalPanel(project.terminal, project.toolWindows, drag, modifier)
         ToolWindow.Network -> NetworkPanel(project, drag, modifier)
         ToolWindow.LanguageServers -> LanguageServersPanel(project, drag, modifier)
     }

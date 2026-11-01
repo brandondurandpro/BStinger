@@ -8,7 +8,6 @@ dependencies:
   - //server: exported
   - //lsp: exported
   - //testkit: exported
-  - //remote-ssh: exported
   - $compose.uiTest: exported
   - $compose.desktop.currentOs: exported
   - $kotlin.test: exported

@@ -93,16 +93,19 @@ All the logic on files runs in a **server**; the IDE is a client that only displ
   development installs and starts (`--token-file`/`--state-file`, `--version`).
 - The client, from the bottom up:
   - `syntax` – syntax highlighting without the UI: line lexer, outlines, tree-sitter grammars and captures;
-  - `client-state` – the IDE's state and logic (documents, editors, project, Git, terminal, agents), compiled
-    without the Compose plugin and unit tested without the UI;
-  - `remote-ssh` – remote development over SSH (OpenSSH client, installer, tunnel supervisor);
+  - `core` – what every feature builds on: documents and their editing, folding, preferences, tool window layout,
+    compiled without the Compose plugin and unit tested without the UI;
   - `ui/kit` – theme, fonts, components, popups, icons, tool window chrome, and the tags shared by several modules;
-  - `ui/editor`, `ui/git`, `ui/terminal`, `ui/language-servers`, `ui/remote`, `ui/tree` – the UI of each feature,
-    each with its own test tags (`EditorTags`, `GitTags`…);
-  - `shared` – the screens and tool windows assembled from them, and the end-to-end tests;
+  - `features/editor`, `features/git`, `features/terminal`, `features/language-servers`, `features/remote`,
+    `features/tree` – one module per feature, holding its state (`src/state`), its UI (`src/ui`, with its own test
+    tags such as `GitTags`) and its tests (`test`, end-to-end tests in `test/e2e`). A feature's UI sees the project
+    through a host interface (`GitHost`, `TreeHost`…) rather than through `ProjectState`;
+  - `e2e` – the end-to-end test support (`launchApp`, `SampleProject`, fixtures) used by the tests of every module;
+  - `shared` – the project and application state (`ProjectState`, `AppState`, agent mode), the screens and tool
+    windows assembled from the features, and the end-to-end tests that span several features;
   - `desktopApp` – the IDE. By default it embeds a server on loopback; use `--server host:port --token <secret>`
     (or `KOTLIN_EDITOR_SERVER` / `KOTLIN_EDITOR_TOKEN`) for a remote one.
-- **Remote development** – `remote-ssh/src/remote` and `ui/remote/src/RemoteDialog.kt`. Server bundles are built with `tools/remote-bundle.sh` and looked up in `remote/`
+- **Remote development** – `features/remote/src/ssh` and `features/remote/src/ui/RemoteDialog.kt`. Server bundles are built with `tools/remote-bundle.sh` and looked up in `remote/`
   next to the application (see [docs/REMOTE.md](docs/REMOTE.md)).
 
 **Protocol.** JSON-RPC 2.0 over TCP (`TCP_NODELAY`), framed like LSP (`Content-Length` header, then the JSON body):

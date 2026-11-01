@@ -74,7 +74,7 @@ STAGE="$ROOT/build/remote/stage-$TARGET"
 rm -rf "$STAGE"
 mkdir -p "$STAGE"
 cp "$JAR" "$STAGE/serverApp.jar"
-cp "$ROOT/remote-ssh/resources/remote/start.sh" "$STAGE/start.sh"
+cp "$ROOT/features/remote/resources/remote/start.sh" "$STAGE/start.sh"
 chmod +x "$STAGE/start.sh"
 printf '%s\n' "$VERSION" > "$STAGE/VERSION"
 

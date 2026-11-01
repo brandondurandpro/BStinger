@@ -2,13 +2,12 @@ product:
   type: jvm/lib
 
 dependencies:
-  - //ui/kit: exported
-  - //ui/editor: exported
-  - //ui/git: exported
-  - //ui/language-servers: exported
-  - //ui/remote: exported
-  - //ui/terminal: exported
-  - //ui/tree: exported
+  - //features/editor: exported
+  - //features/git: exported
+  - //features/language-servers: exported
+  - //features/remote: exported
+  - //features/terminal: exported
+  - //features/tree: exported
   - $libs.androidx.lifecycle.viewmodel.compose
   - $libs.androidx.lifecycle.runtime.compose
 

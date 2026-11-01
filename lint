@@ -38,7 +38,7 @@ fetch "detekt-rules-ktlint-wrapper/$DETEKT_VERSION/detekt-rules-ktlint-wrapper-$
 }
 rules="build/tasks/_detekt-rules_jarJvm/detekt-rules-jvm.jar"
 
-sources="detekt-rules/src:detekt-rules/test:lsp/src:lsp/test:protocol/src:compression/src:compression/test:server/src:server/test:serverApp/src:syntax/src:syntax/test:client-state/src:client-state/test:remote-ssh/src:remote-ssh/test:ui/kit/src:ui/editor/src:ui/editor/test:ui/git/src:ui/terminal/src:ui/language-servers/src:ui/remote/src:ui/tree/src:shared/src:shared/test:desktopApp/src:packaging/src"
+sources="detekt-rules/src:detekt-rules/test:lsp/src:lsp/test:protocol/src:compression/src:compression/test:server/src:server/test:serverApp/src:syntax/src:syntax/test:core/src:core/test:ui/kit/src:features/editor/src:features/editor/test:features/git/src:features/git/test:features/language-servers/src:features/language-servers/test:features/remote/src:features/remote/test:features/terminal/src:features/terminal/test:features/tree/src:features/tree/test:e2e/src:shared/src:shared/test:desktopApp/src:packaging/src"
 
 # Fingerprint of every source file, to know when the automatic corrections stop changing anything.
 snapshot() {

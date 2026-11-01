@@ -58,7 +58,7 @@ internal fun NetworkPanel(project: ProjectState, drag: ToolWindowDrag, modifier:
     val view = project.network
     val inspector = view.inspector
     Column(modifier.fillMaxSize().background(IdeColors.Editor).testTag(AppTags.NETWORK)) {
-        ToolWindowHeader("Network", ToolWindow.Network, project, drag) {
+        ToolWindowHeader("Network", ToolWindow.Network, project.toolWindows, drag) {
             if (inspector != null) CaptureActions(view)
             IconButton(
                 { project.toolWindows.setVisible(ToolWindow.Network, false) },

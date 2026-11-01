@@ -1,9 +1,0 @@
-# The terminal tool window: tabs, screen rendering, keyboard and mouse input.
-product:
-  type: jvm/lib
-
-dependencies:
-  - //ui/kit: exported
-
-settings:
-  compose: enabled

@@ -1,26 +1,25 @@
 modules:
   - benchmark
-  - client-state
   - compression
+  - core
   - desktopApp
-  - e2e
   - detekt-rules
+  - e2e
+  - features/editor
+  - features/git
+  - features/language-servers
+  - features/remote
+  - features/terminal
+  - features/tree
   - lsp
   - packaging
   - protocol
-  - remote-ssh
   - server
   - serverApp
   - shared
   - syntax
   - testkit
-  - ui/editor
-  - ui/git
   - ui/kit
-  - ui/language-servers
-  - ui/remote
-  - ui/terminal
-  - ui/tree
 
 plugins:
   - ./packaging

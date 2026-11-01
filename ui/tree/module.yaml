@@ -1,9 +1,0 @@
-# The project tree, and the popups that search the project (Go to File, Find in Files, symbols).
-product:
-  type: jvm/lib
-
-dependencies:
-  - //ui/editor: exported
-
-settings:
-  compose: enabled

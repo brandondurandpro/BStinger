@@ -1,9 +1,0 @@
-# Language servers: the tool window (state, memory) and the choice of a server for a language.
-product:
-  type: jvm/lib
-
-dependencies:
-  - //ui/kit: exported
-
-settings:
-  compose: enabled

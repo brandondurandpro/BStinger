@@ -36,7 +36,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.example.kotlineditor.state.Dock
-import org.example.kotlineditor.state.ProjectState
 import org.example.kotlineditor.state.ToolWindow
 import org.example.kotlineditor.state.ToolWindowLayout
 import java.awt.Cursor
@@ -107,7 +106,7 @@ class ToolWindowDrag {
 fun ToolWindowHeader(
     title: String,
     window: ToolWindow,
-    project: ProjectState,
+    layout: ToolWindowLayout,
     drag: ToolWindowDrag,
     modifier: Modifier = Modifier,
     middle: (@Composable RowScope.() -> Unit)? = null,
@@ -140,7 +139,7 @@ fun ToolWindowHeader(
                             }
 
                             event.type == PointerEventType.Release && dragging -> {
-                                drag.drop(project.toolWindows)
+                                drag.drop(layout)
                             }
                         }
                     }

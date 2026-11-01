@@ -1,0 +1,19 @@
+# Remote development and opening projects: SSH (OpenSSH, installer, tunnel), the remote dialog, Open Project.
+# State in src/state, UI in src/ui, end-to-end tests in test/.
+product:
+  type: jvm/lib
+
+dependencies:
+  - //ui/kit: exported
+
+settings:
+  compose: enabled
+
+test-dependencies:
+  - //e2e
+
+test-settings:
+  jvm:
+    test:
+      freeJvmArgs:
+        - --enable-native-access=ALL-UNNAMED

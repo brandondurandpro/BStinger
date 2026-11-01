@@ -12,7 +12,7 @@ tree-sitter-kotlin = "0.3.8.1"
 tree-sitter-json = "0.24.8"
 sshd = "2.20.1"
 # The Compose version the Kotlin Toolchain uses (`./kotlin show dependencies -m shared`): modules without the Compose
-# plugin (syntax, client-state) take its runtime as a plain library, and must stay on the same version.
+# plugin (syntax, core) take its runtime as a plain library, and must stay on the same version.
 compose = "1.12.1"
 
 [libraries]

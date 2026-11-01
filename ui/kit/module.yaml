@@ -4,7 +4,7 @@ product:
   type: jvm/lib
 
 dependencies:
-  - //client-state: exported
+  - //core: exported
   - $compose.runtime: exported
   - $compose.foundation: exported
   - $compose.material3: exported

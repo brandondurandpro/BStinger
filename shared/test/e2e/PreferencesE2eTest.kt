@@ -7,6 +7,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.state.AppState
+import org.example.kotlineditor.state.DEFAULT_EDITOR_FONT_SIZE
 import org.example.kotlineditor.state.Dock
 import org.example.kotlineditor.state.FilePreferenceStore
 import org.example.kotlineditor.state.PreferenceKeys
@@ -57,7 +58,7 @@ class PreferencesE2eTest {
     fun `the first launch uses the defaults`() =
         runComposeUiTest {
             val app = launchWithProject(project, FilePreferenceStore(file))
-            assertEquals(AppState.DEFAULT_EDITOR_FONT_SIZE, app.state.editorFontSize)
+            assertEquals(DEFAULT_EDITOR_FONT_SIZE, app.state.editorFontSize)
             onNodeWithTag(TreeTags.TREE_AUTO_SELECT).assertIsOn()
             assertEquals(Dock.Left, app.project.toolWindows.dockOf(ToolWindow.Project))
         }
@@ -73,7 +74,7 @@ class PreferencesE2eTest {
                 """.trimIndent(),
             )
             val app = launchWithProject(project, FilePreferenceStore(file))
-            assertEquals(AppState.DEFAULT_EDITOR_FONT_SIZE, app.state.editorFontSize)
+            assertEquals(DEFAULT_EDITOR_FONT_SIZE, app.state.editorFontSize)
             onNodeWithTag(TreeTags.TREE_AUTO_SELECT).assertIsOn()
             assertEquals(Dock.Left, app.project.toolWindows.dockOf(ToolWindow.Git))
         }
