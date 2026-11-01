@@ -125,6 +125,29 @@ class SearchE2eTest {
         }
 
     @Test
+    fun `Enter right after typing in Go to File opens the match of the typed name, not of the previous list`() =
+        runComposeUiTest {
+            // Enough files for the search to take a while: Enter comes before its results (5 000 were not enough).
+            repeat(GOTO_FILE_FILLER) { project.file("src/filler/Filler$it.kt", "") }
+            val app = launchWithProject(project)
+            runOnUiThread { app.project.showPopup(org.example.kotlineditor.state.PopupKind.GotoFile) }
+            awaitTag(Tags.GOTO_FILE_INPUT)
+            awaitCondition { app.project.fileIndex.files != null }
+            // The list of every file is shown first.
+            waitForIdle()
+            onNodeWithTag(Tags.GOTO_FILE_INPUT).performTextInput("strkt")
+            onNodeWithTag(Tags.GOTO_FILE_INPUT).performKeyInput { pressKey(Key.Enter) }
+            awaitTag(Tags.tab("src/main/kotlin/util/Strings.kt"))
+            awaitNoTag(Tags.GOTO_FILE)
+            assertEquals(
+                "Strings.kt",
+                app.project.editor.activeTab
+                    ?.entry
+                    ?.name,
+            )
+        }
+
+    @Test
     fun `Go to File ignores VCS directories and can be dismissed with Escape`() =
         runComposeUiTest {
             val app = launchWithProject(project)
@@ -308,4 +331,8 @@ class SearchE2eTest {
             awaitTag(Tags.line(419)).assertIsDisplayed()
             onNodeWithTag(Tags.STATUS_CARET).assertTextContains("420:3", substring = true)
         }
+
+    private companion object {
+        const val GOTO_FILE_FILLER = 40_000
+    }
 }

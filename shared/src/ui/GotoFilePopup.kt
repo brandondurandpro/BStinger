@@ -31,19 +31,20 @@ import org.example.kotlineditor.state.relativePath
 @Composable
 fun GotoFilePopup(project: ProjectState, onClose: () -> Unit, recentOnly: Boolean = false) {
     var query by remember { mutableStateOf("") }
-    var results by remember { mutableStateOf<List<FileMatch>>(emptyList()) }
-    val cursor = remember { ListCursor() }
+    val found = remember { FoundFiles() }
+    val cursor = found.cursor
     val focus = remember { FocusRequester() }
     val indexed = if (recentOnly) emptyList() else project.fileIndex.files
-    LaunchedEffect(Unit) { focus.requestFocus() }
-    LaunchedEffect(query, indexed) {
-        results = matches(project, query, recentOnly)
-        cursor.selected = firstSelection(recentOnly, query, results)
-    }
-    val open = { match: FileMatch ->
+    val open: (FileMatch) -> Unit = { match ->
         onClose()
         project.editor.open(match.entry)
     }
+    LaunchedEffect(Unit) { focus.requestFocus() }
+    LaunchedEffect(query, indexed) {
+        val results = matches(project, query, recentOnly)
+        found.update(query, indexed, results, firstSelection(recentOnly, query, results), open)
+    }
+    val results = found.results
     PopupFrame(if (recentOnly) Tags.RECENT_FILES else Tags.GOTO_FILE, onClose) {
         Column {
             Label(
@@ -59,7 +60,7 @@ fun GotoFilePopup(project: ProjectState, onClose: () -> Unit, recentOnly: Boolea
                     .testTag(Tags.GOTO_FILE_INPUT)
                     .focusRequester(focus)
                     .popupKeys(
-                        { results.getOrNull(cursor.selected)?.let(open) },
+                        { found.enter(query, indexed, open) },
                         onClose,
                     ) { cursor.move(it, results.size) },
                 placeholder = "Type a file name",
@@ -72,6 +73,36 @@ fun GotoFilePopup(project: ProjectState, onClose: () -> Unit, recentOnly: Boolea
             ) { index, match -> FileMatchRow(match, index == cursor.selected) { open(match) } }
         }
     }
+}
+
+/**
+ * The files the popup lists, and the query and index they were found for: they lag behind what is typed while the
+ * search runs. Enter pressed before the results of the typed query opens their selection once they arrive, never a
+ * file of the previous list.
+ */
+private class FoundFiles {
+    var results by mutableStateOf<List<FileMatch>>(emptyList())
+        private set
+    val cursor = ListCursor()
+    private var foundFor: Pair<String, List<*>?>? = null
+    private var openWhenFound = false
+
+    fun update(query: String, indexed: List<*>?, matches: List<FileMatch>, selection: Int, open: (FileMatch) -> Unit) {
+        results = matches
+        cursor.selected = selection
+        foundFor = query to indexed
+        // Results found before the index was ready are not the ones Enter asked for.
+        if (openWhenFound && indexed != null) {
+            openWhenFound = false
+            selected()?.let(open)
+        }
+    }
+
+    fun enter(query: String, indexed: List<*>?, open: (FileMatch) -> Unit) {
+        if (indexed != null && foundFor == query to indexed) selected()?.let(open) else openWhenFound = true
+    }
+
+    private fun selected(): FileMatch? = results.getOrNull(cursor.selected)
 }
 
 private suspend fun matches(project: ProjectState, query: String, recentOnly: Boolean): List<FileMatch> =
