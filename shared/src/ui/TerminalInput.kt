@@ -122,9 +122,26 @@ private fun copySelection(tab: TerminalTab, selection: TerminalSelection) {
     }
 }
 
+// The text the shell receives for a key press. Ctrl (or Cmd) and plain Alt mark commands through their flags:
+// the layout character they would type is never sent as text (Alt+9 is not 'ç' on a French keyboard). Otherwise
+// the layout decides, and when the event carries no typed character the US base text of the key stands in.
 private fun typedText(event: KeyEvent, key: TerminalKey?, ctrl: Boolean): String =
-    printable(event.utf16CodePoint)
-        ?: if (key != null && !ctrl && !event.isAltPressed) baseText(key, event.isShiftPressed) else ""
+    when {
+        ctrl && !event.isAltPressed -> {
+            // The control flags encode the key; its character stays unknown.
+            ""
+        }
+
+        event.isAltPressed && !ctrl -> {
+            // Alt (not AltGr, which reports Ctrl+Alt): an ESC prefix over the base character of the key.
+            key?.let { baseText(it, event.isShiftPressed) }.orEmpty()
+        }
+
+        else -> {
+            printable(event.utf16CodePoint)
+                ?: key?.let { baseText(it, event.isShiftPressed) }.orEmpty()
+        }
+    }
 
 private fun printable(codePoint: Int): String? =
     if (codePoint >= FIRST_PRINTABLE_CODE_POINT && codePoint != DELETE_CODE_POINT) {
