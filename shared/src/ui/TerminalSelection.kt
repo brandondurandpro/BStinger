@@ -39,7 +39,7 @@ internal fun ordered(a: CellPos, b: CellPos): Pair<CellPos, CellPos> {
 
 /** Cell under [at], or `null` when the point lies outside the canvas. */
 internal fun cellAt(at: Offset, metrics: CellMetrics): CellPos? {
-    val validCell = metrics.width > 0 && metrics.height > 0
+    val validCell = metrics.width > 0f && metrics.height > 0
     val inside = at.x >= 0f && at.y >= 0f
     return if (validCell && inside) CellPos((at.y / metrics.height).toInt(), (at.x / metrics.width).toInt()) else null
 }

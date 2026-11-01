@@ -57,6 +57,10 @@ import org.example.kotlineditor.state.ToolWindow
 import org.example.kotlineditor.state.closeOthers
 import org.example.kotlineditor.state.closeToLeft
 import org.example.kotlineditor.state.closeToRight
+import kotlin.math.roundToInt
+
+// Glyphs measured to get the exact advance of one.
+private const val MEASURED_GLYPHS = 100
 
 /** Terminal tool window (Alt+F12): tabs, and a real terminal drawing the grid the server sends. */
 @Composable
@@ -264,7 +268,7 @@ private fun TerminalLifecycle(
     val rows = metrics.rows(size)
     // Keyed by the tab too: a tab opened or shown later must get the panel's grid, not keep the default one.
     LaunchedEffect(tab, columns, rows, metrics) {
-        if (columns > 0 && rows > 0) tab.resize(columns, rows, metrics.width, metrics.height)
+        if (columns > 0 && rows > 0) tab.resize(columns, rows, metrics.width.roundToInt(), metrics.height)
     }
     DisposableEffect(terminal) {
         onDispose { terminal.focused = false }
@@ -276,8 +280,10 @@ private fun rememberCellMetrics(textMeasurer: TextMeasurer, style: TextStyle): C
     val density = LocalDensity.current
     return remember(textMeasurer, style, density) {
         val lineHeight = style.lineHeight.takeOrElse { style.fontSize * 1.25f }
+        // The average over many glyphs: the width of one is rounded up to the pixel.
+        val glyphs = textMeasurer.measure("M".repeat(MEASURED_GLYPHS), style)
         CellMetrics(
-            textMeasurer.measure("M", style).size.width,
+            glyphs.getHorizontalPosition(MEASURED_GLYPHS, usePrimaryDirection = true) / MEASURED_GLYPHS,
             with(density) { lineHeight.toPx() }.toInt(),
         )
     }

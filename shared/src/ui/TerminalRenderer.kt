@@ -25,9 +25,13 @@ private val SelectionColor = IdeColors.Selection.copy(alpha = 0.55f)
 private val CursorColor = IdeColors.Accent.copy(alpha = 0.55f)
 private val ScrollbarColor = Color(0x59A6A6A6)
 
-/** Size of one cell in pixels; the grid is the canvas divided by it. */
-internal class CellMetrics(val width: Int, val height: Int) {
-    fun columns(size: IntSize): Int = if (width > 0) size.width / width else 0
+/**
+ * Size of one cell in pixels; the grid is the canvas divided by it. The width is the exact advance of a glyph, not
+ * rounded: a row of text is drawn in one piece, so a rounded width would move the cursor, the selection and the
+ * backgrounds off their characters a little more at every column.
+ */
+internal class CellMetrics(val width: Float, val height: Int) {
+    fun columns(size: IntSize): Int = if (width > 0f) (size.width / width).toInt() else 0
 
     fun rows(size: IntSize): Int = if (height > 0) size.height / height else 0
 }
@@ -46,7 +50,7 @@ internal fun DrawScope.drawTerminal(
     for (row in 0 until lineCount) {
         val line = snapshot.line(row)
         val top = row * metrics.height.toFloat()
-        drawBackgrounds(line, top, metrics.width.toFloat(), metrics.height.toFloat())
+        drawBackgrounds(line, top, metrics.width, metrics.height.toFloat())
         drawText(textMeasurer.measure(screenRow(line), style), topLeft = Offset(0f, top))
     }
     drawSelection(selection, snapshot, metrics)
@@ -120,20 +124,20 @@ private fun DrawScope.drawSelection(selection: TerminalSelection, snapshot: Term
         val last = if (row == end.row) end.column else snapshot.columns - 1
         drawRect(
             SelectionColor,
-            topLeft = Offset(first * metrics.width.toFloat(), row * metrics.height.toFloat()),
-            size = Size((last - first + 1) * metrics.width.toFloat(), metrics.height.toFloat()),
+            topLeft = Offset(first * metrics.width, row * metrics.height.toFloat()),
+            size = Size((last - first + 1) * metrics.width, metrics.height.toFloat()),
         )
     }
 }
 
 private fun DrawScope.drawCursor(snapshot: TerminalSnapshot, metrics: CellMetrics) {
     if (!snapshot.cursorVisible) return
-    val left = snapshot.cursorColumn * metrics.width.toFloat()
+    val left = snapshot.cursorColumn * metrics.width
     val top = snapshot.cursorRow * metrics.height.toFloat()
-    drawRect(CursorColor, topLeft = Offset(left, top), size = Size(metrics.width.toFloat(), metrics.height.toFloat()))
+    drawRect(CursorColor, topLeft = Offset(left, top), size = Size(metrics.width, metrics.height.toFloat()))
 }
 
-private fun DrawScope.drawScrollbar(snapshot: TerminalSnapshot, rows: Int, cellWidth: Int) {
+private fun DrawScope.drawScrollbar(snapshot: TerminalSnapshot, rows: Int, cellWidth: Float) {
     val total = snapshot.totalRows
     if (rows <= 0 || total <= rows) return
     val width = 3.dp.toPx()
