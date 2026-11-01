@@ -37,6 +37,8 @@ object RemoteTestEnvironment {
 
     private const val MODE_EXECUTABLE = 0b111_101_101
 
+    private val isLinux = System.getProperty("os.name").lowercase().contains("linux")
+
     private val root: Path by lazy { Files.createTempDirectory("remote-development") }
     val home: Path get() = root.resolve("home").also { Files.createDirectories(it) }
     val ssh: RemoteSshServer by lazy { RemoteSshServer(home) }
@@ -95,6 +97,19 @@ object RemoteTestEnvironment {
             it.destroyForcibly()
             it.onExit().get(10, TimeUnit.SECONDS)
         }
+    }
+
+    /** Removes the daemon's token file, as a reset of the host would: its next start makes a new secret. */
+    fun forgetToken() {
+        Files.deleteIfExists(home.resolve(".kotlin-editor/server/token"))
+    }
+
+    /** The daemon's secret, from its state file. */
+    fun daemonToken(): String? {
+        val state = home.resolve(".kotlin-editor/server/state.properties")
+        return runCatching {
+            Properties().apply { Files.newInputStream(state).use { load(it) } }.getProperty("token")
+        }.getOrNull()
     }
 
     /** Port the daemon listens on (it picks one at each start), from its state file. */
@@ -157,6 +172,34 @@ object RemoteTestEnvironment {
             use(wrapper)
         } finally {
             System.clearProperty("kotlin.editor.ssh")
+        }
+    }
+
+    /**
+     * Path of the login shell [name] (fish, tcsh…): on the PATH, or in a directory of `KOTLIN_EDITOR_TEST_SHELLS`
+     * (colon-separated), or null. The Linux CI installs fish and tcsh, so a missing shell fails there.
+     */
+    fun loginShell(name: String): String? {
+        val directories =
+            System.getenv("KOTLIN_EDITOR_TEST_SHELLS").orEmpty().split(':') +
+                System.getenv("PATH").orEmpty().split(File.pathSeparatorChar)
+        val found =
+            directories
+                .filter { it.isNotBlank() }
+                .map { File(it, name) }
+                .firstOrNull { it.canExecute() }
+                ?.absolutePath
+        check(found != null || System.getenv("CI") == null || !isLinux) { "$name is not installed on this CI runner" }
+        return found
+    }
+
+    /** Runs [use] with [shell] as the login shell of the test user. */
+    fun <T> withLoginShell(shell: String, use: () -> T): T {
+        ssh.loginShell = shell
+        return try {
+            use()
+        } finally {
+            ssh.loginShell = "/bin/sh"
         }
     }
 
@@ -255,6 +298,12 @@ class RemoteSshServer(private val home: Path) : Closeable {
     var port: Int = 0
         private set
 
+    /**
+     * The login shell of the test user: a real SSH server hands the command to it (`$SHELL -c command`), so the
+     * client's commands must work in fish or tcsh as well as in sh.
+     */
+    @Volatile var loginShell: String = "/bin/sh"
+
     private var sshd: SshServer? = null
     private var hostKeys: SimpleGeneratorHostKeyProvider? = null
     private val clientPublic: java.security.PublicKey
@@ -288,7 +337,7 @@ class RemoteSshServer(private val home: Path) : Closeable {
                 username == "tester" && key.encoded.contentEquals(clientPublic.encoded)
             }
         server.passwordAuthenticator = org.apache.sshd.server.auth.password.RejectAllPasswordAuthenticator.INSTANCE
-        server.commandFactory = ShellCommandFactory(home)
+        server.commandFactory = ShellCommandFactory(home) { loginShell }
         server.subsystemFactories = listOf(SftpSubsystemFactory())
         server.forwardingFilter = AcceptAllForwardingFilter.INSTANCE
         server.start()
@@ -366,18 +415,19 @@ class RemoteSshServer(private val home: Path) : Closeable {
     }
 }
 
-private class ShellCommandFactory(private val home: Path) : CommandFactory {
-    override fun createCommand(channel: ChannelSession, command: String): Command = ShellCommand(command, home)
+private class ShellCommandFactory(private val home: Path, private val shell: () -> String) : CommandFactory {
+    override fun createCommand(channel: ChannelSession, command: String): Command = ShellCommand(command, home, shell())
 }
 
-/** Runs the command with /bin/sh, as a Linux SSH server does, with HOME pointed at the fake remote home. */
-private class ShellCommand(command: String, private val home: Path) : AbstractCommandSupport(command, null) {
+/** Runs the command with the login shell, as a Linux SSH server does, with HOME pointed at the fake remote home. */
+private class ShellCommand(command: String, private val home: Path, private val shell: String) :
+    AbstractCommandSupport(command, null) {
     @Volatile private var process: Process? = null
 
     override fun run() {
         try {
             val started =
-                ProcessBuilder("/bin/sh", "-c", command)
+                ProcessBuilder(shell, "-c", command)
                     .directory(home.toFile())
                     .apply { environment()["HOME"] = home.toAbsolutePath().toString() }
                     .start()

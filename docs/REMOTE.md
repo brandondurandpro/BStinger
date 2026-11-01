@@ -101,7 +101,8 @@ IDE ── RpcClient ── 127.0.0.1:<local port> ── ssh -N -L ── 127.0
   `BUILD` file differs, it uploads the bundle and unpacks it through a staging directory of its own (a cancelled
   install or another IDE installing at the same time cannot mix files), then starts `start.sh` and reads the
   daemon's `state.properties`, which reports the daemon's build id and protocol.
-- Every remote command runs in `sh -c '…'`, whatever the user's login shell (bash, zsh, fish, csh). Cancelling a
+- Every remote command runs in `sh -c '…'`, whatever the user's login shell (bash, zsh, fish, csh): the e2e tests
+  install and connect with fish and tcsh as the login shell, and the Linux CI installs both. Cancelling a
   connection kills the running `ssh`, so an abandoned upload does not keep going in the background.
 - `start.sh` is idempotent and holds a lock while it runs (two IDE windows connecting together start one daemon):
   it reuses a live daemon of the same build, replaces the daemon of another build, checks that the pid of the state
@@ -115,7 +116,9 @@ IDE ── RpcClient ── 127.0.0.1:<local port> ── ssh -N -L ── 127.0
 - The daemon listens on a port chosen when it starts. If it dies (a crash, a reboot of the host) while the SSH link
   is fine, the client keeps reconnecting to nothing: after a second of reconnection the session runs the installer
   again, which restarts the daemon, and points the tunnel at its new port. The client reconnects on the same local
-  port without noticing; the shells of the dead daemon are lost, as with any server restart.
+  port without noticing; the shells of the dead daemon are lost, as with any server restart. If the daemon came
+  back with a new token (its token file was removed), the client switches to it before reaching the new daemon,
+  and a client the daemon refused with the old token connects again with the new one.
 - SSH compression is disabled: the protocol already compresses bodies with zstd. One SSH connection carries the
   tunnel, and the forwarded port uses `TCP_NODELAY` on both ends.
 

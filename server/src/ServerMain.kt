@@ -49,7 +49,9 @@ object ServerMain {
                 options = ServerOptions(sessionGraceMs = options.sessionGraceSeconds * 1_000),
             ).start(options.host, options.port)
         options.stateFile?.let { state -> ServerState.write(state, server, options.host, token, build = options.build) }
-        println("Kotlin Editor server ${Protocol.APP_VERSION} listening on ${options.host}:${server.port}")
+        // Scripts (measure_memory.sh) read the port from this exact line: the version goes on its own line.
+        println("Kotlin Editor server ${Protocol.APP_VERSION}")
+        println("Kotlin Editor server listening on ${options.host}:${server.port}")
         if (options.stateFile == null) {
             println("Connect with: --server ${options.host}:${server.port} --token $token")
         }

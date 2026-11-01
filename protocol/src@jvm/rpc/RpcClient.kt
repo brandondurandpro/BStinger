@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
@@ -122,6 +123,17 @@ class RpcClient(host: String, port: Int, token: String, private val options: Cli
 
     /** Stops listening to the stream [id]. */
     fun closeStream(id: Long) = streams.close(id)
+
+    /**
+     * The server now expects [token] (it restarted with a new secret): the next connections use it, and a client
+     * the server refused with the old one starts connecting again.
+     */
+    fun reconnectWith(token: String) {
+        if (connector.retryWith(token) && scope.isActive) {
+            mutableStatus.value = ConnectionStatus.Reconnecting
+            scope.launch { connector.run(this) }
+        }
+    }
 
     override fun close() {
         connector.close()

@@ -8,12 +8,8 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import org.example.kotlineditor.model.AppServices
 import org.example.kotlineditor.model.ConnectionStatus
@@ -41,7 +37,9 @@ class RemoteSession(
     private val installer: RemoteInstaller,
 ) : RemoteConnection {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val daemonFailure = MutableStateFlow<String?>(null)
+
+    // The daemon's secret: it is kept in a file on the host, and changes only if that file was removed.
+    @Volatile private var token: String = server.token
 
     val remote: RemoteTarget get() = host.target
 
@@ -51,9 +49,7 @@ class RemoteSession(
 
     override val home: String get() = host.home
 
-    override val failure: StateFlow<String?> =
-        combine(tunnel.failure, daemonFailure) { ssh, daemon -> ssh ?: daemon }
-            .stateIn(scope, SharingStarted.Eagerly, null)
+    override val failure: StateFlow<String?> get() = tunnel.failure
 
     init {
         scope.launch { recoverDaemon() }
@@ -67,7 +63,8 @@ class RemoteSession(
 
     private suspend fun recoverDaemon() {
         client.status.collectLatest { status ->
-            if (status == ConnectionStatus.Reconnecting) keepDaemonReachable()
+            // Disconnected: the daemon refused the token (it came back with a new one before the session saw it).
+            if (status != ConnectionStatus.Connected) keepDaemonReachable()
         }
     }
 
@@ -87,13 +84,11 @@ class RemoteSession(
     private suspend fun checkDaemon() {
         try {
             val running = installer.ensureServer(host.target)
-            // The token lives in a file the daemon keeps; a new one means the host was reset.
-            daemonFailure.value =
-                if (running.token != server.token) {
-                    "The server on ${target.destination} has a new token: disconnect and connect again"
-                } else {
-                    null
-                }
+            // The token first: the client must not reach the new daemon with the old secret.
+            if (running.token != token) {
+                token = running.token
+                client.reconnectWith(running.token)
+            }
             tunnel.retarget(running.port)
         } catch (cancelled: CancellationException) {
             throw cancelled

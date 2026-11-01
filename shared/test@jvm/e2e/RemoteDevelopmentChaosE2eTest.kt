@@ -86,6 +86,32 @@ class RemoteDevelopmentChaosE2eTest {
         }
 
     @Test
+    fun `the editor keeps working when the daemon comes back with a new token`() =
+        remoteUiTest {
+            launchApp()
+            connectRemoteTo(RemoteTestEnvironment, project.path)
+            awaitTag(Tags.treeRow("src"), timeout = 60_000)
+            val firstToken = RemoteTestEnvironment.daemonToken()
+
+            // The host was reset: the daemon is gone and so is its secret.
+            RemoteTestEnvironment.killDaemon()
+            RemoteTestEnvironment.forgetToken()
+            awaitReconnecting()
+            awaitNoTag(Tags.STATUS_CONNECTION, timeout = 60_000)
+            assertNotEquals(firstToken, RemoteTestEnvironment.daemonToken(), "the daemon should have a new token")
+
+            openFromTree("docs/guide.md")
+            onNodeWithTag(Tags.EDITOR).performClick()
+            onNodeWithTag(Tags.EDITOR).performKeyInput {
+                withKeyDown(Key.CtrlLeft) { pressKey(Key.MoveHome) }
+                pressKey(Key.Q)
+                withKeyDown(Key.CtrlLeft) { pressKey(Key.S) }
+            }
+            awaitCondition { project.read("docs/guide.md").startsWith("qGuide") }
+            assertFalse(project.read("docs/guide.md").startsWith("qq"), "the edit must be written once")
+        }
+
+    @Test
     fun `a changed host key is shown instead of reconnecting forever`() =
         remoteUiTest {
             launchApp()

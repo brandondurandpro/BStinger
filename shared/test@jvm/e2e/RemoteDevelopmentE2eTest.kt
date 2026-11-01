@@ -194,6 +194,43 @@ class RemoteDevelopmentE2eTest {
             awaitTag(Tags.WELCOME)
         }
 
+    @Test
+    fun `installs the server and opens a project when the login shell is fish`() = installsWithLoginShell("fish")
+
+    @Test
+    fun `installs the server and opens a project when the login shell is tcsh`() = installsWithLoginShell("tcsh")
+
+    // ssh runs the commands in the user's login shell: the whole install (upload, unpack, start) must work there.
+    private fun installsWithLoginShell(name: String) {
+        if (!RemoteTestEnvironment.available) return
+        val shell = RemoteTestEnvironment.loginShell(name)
+        if (shell == null) {
+            println("SKIPPED: $name is not installed")
+            return
+        }
+        RemoteTestEnvironment.withLoginShell(shell) {
+            remoteUiTest {
+                val app = launchApp()
+                val previousBuild = RemoteTestEnvironment.installedBuild()
+                // A bundle never installed yet, so the upload and unpacking run in that shell too.
+                RemoteTestEnvironment.withRebuiltBundle {
+                    connectRemoteTo(RemoteTestEnvironment, project.path)
+                    awaitTag(Tags.treeRow("src"), timeout = 60_000)
+                }
+                assertTrue(app.state.isRemote)
+                assertNotEquals(previousBuild, RemoteTestEnvironment.installedBuild(), "installed through $name")
+                openFromTree("README.md")
+                onNodeWithTag(Tags.EDITOR).performClick()
+                onNodeWithTag(Tags.EDITOR).performKeyInput {
+                    withKeyDown(Key.CtrlLeft) { pressKey(Key.MoveHome) }
+                    pressKey(Key.Q)
+                    withKeyDown(Key.CtrlLeft) { pressKey(Key.S) }
+                }
+                awaitCondition { project.read("README.md").startsWith("q# Demo") }
+            }
+        }
+    }
+
     private fun androidx.compose.ui.test.ComposeUiTest.disconnectFromTopBar(app: E2eApp) {
         onNodeWithTag(Tags.TOP_REMOTE).performClick()
         awaitTag(Tags.REMOTE_DISCONNECT).performClick()
