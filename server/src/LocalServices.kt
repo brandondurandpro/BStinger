@@ -1,5 +1,6 @@
 package org.example.kotlineditor.server
 
+import org.example.kotlineditor.model.ServerPlaces
 import org.example.kotlineditor.server.ripgrep.RipgrepSettings
 import java.io.File
 
@@ -26,4 +27,12 @@ class LocalServices(
 
     /** Open files of each project. */
     val sessions = FileSessionStore(File(dataDirectory, "sessions"))
+
+    /** Places of this machine, for the client's Open Project dialog. */
+    val places = LocalPlaces()
+}
+
+/** [ServerPlaces] on this machine: its home directory. */
+class LocalPlaces : ServerPlaces {
+    override suspend fun home(): String? = System.getProperty("user.home")
 }

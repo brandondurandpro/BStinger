@@ -11,7 +11,6 @@ import kotlinx.serialization.json.put
 import org.example.kotlineditor.model.AppServices
 import org.example.kotlineditor.model.BlameLine
 import org.example.kotlineditor.model.DiffLine
-import org.example.kotlineditor.model.DirectoryPicker
 import org.example.kotlineditor.model.FileContent
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.FileSymbol
@@ -24,6 +23,7 @@ import org.example.kotlineditor.model.ProjectFileSystem
 import org.example.kotlineditor.model.ProjectSearch
 import org.example.kotlineditor.model.ProjectSession
 import org.example.kotlineditor.model.RecentProjectsStore
+import org.example.kotlineditor.model.ServerPlaces
 import org.example.kotlineditor.model.SessionStore
 import org.example.kotlineditor.model.TerminalKeyEvent
 import org.example.kotlineditor.model.TerminalLauncher
@@ -44,18 +44,23 @@ private const val NAME = "name"
 private const val TERMINAL = "terminal"
 
 /** Every IDE service, backed by a server. */
-fun RpcClient.appServices(directoryPicker: DirectoryPicker): AppServices =
+fun RpcClient.appServices(): AppServices =
     AppServices(
         fileSystem = RemoteFileSystem(this),
         search = RemoteSearch(this),
         recentProjects = RemoteRecentProjects(this),
-        directoryPicker = directoryPicker,
+        places = RemotePlaces(this),
         terminal = RemoteTerminalLauncher(this),
         sessions = RemoteSessions(this),
         git = RemoteGit(this),
         connection = status,
         network = network,
     )
+
+/** [ServerPlaces] of the server. */
+class RemotePlaces(private val client: RpcClient) : ServerPlaces {
+    override suspend fun home(): String? = client.call(Method.UserHome).stringOrNull()
+}
 
 /** [ProjectFileSystem] of the server. */
 class RemoteFileSystem(private val client: RpcClient) : ProjectFileSystem {

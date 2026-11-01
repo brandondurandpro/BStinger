@@ -60,8 +60,10 @@ fun ProjectScreen(app: AppState, project: ProjectState) {
     SyncOnWindowFocus(project)
     // Shortcuts only reach a focused component: with no file open nothing else holds the focus, so the screen takes it.
     val windowFocused = LocalWindowInfo.current.isWindowFocused
-    LaunchedEffect(hasFocus, project.popup, project.branchPickerOpen, windowFocused) {
-        if (!hasFocus && project.popup == null && !project.branchPickerOpen) runCatching { rootFocus.requestFocus() }
+    // With the Open Project dialog open, its own field keeps the keyboard.
+    val screenFocusFree = project.popup == null && !project.branchPickerOpen && !app.projectPickerOpen
+    LaunchedEffect(hasFocus, screenFocusFree, windowFocused) {
+        if (!hasFocus && screenFocusFree) runCatching { rootFocus.requestFocus() }
     }
     Column(
         Modifier
