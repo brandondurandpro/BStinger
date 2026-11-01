@@ -27,11 +27,13 @@ The first connection installs the matching server under `~/.kotlin-editor/server
 daemon and opens an SSH tunnel. Later connections reuse the daemon; the SSH link is supervised and restarted when
 the network comes back.
 
-If no project directory was given, a folder browser opens in the **SSH user's home**. Click a folder to list its
-subfolders, use **Up** and **Home**, type an absolute path (or `~`) in the path field, and **Open** the folder
-shown. The path is checked as you type, with a 250 ms debounce, so pausing on a valid folder updates the list
-without pressing Enter; Enter checks immediately. The project view's *Open…* menu starts the same browser in the
-current project. Nothing is written on the host while browsing.
+If no project directory was given, the IDE's **Open Project** dialog opens in the **SSH user's home**: the same
+dialog as for the local server, browsing the host's disk. Click a directory to highlight it, double-click to list
+its subdirectories, use **Up** and **Home**, type an absolute path (or `~`, the SSH home) in the path field, and
+**Open** the highlighted or shown directory. A typed path is checked once you pause (250 ms), so pausing on a valid
+directory updates the list without pressing Enter; Enter checks immediately, and Open waits until the typed path
+is the one shown. The project menu's *Open…* starts the dialog in the current project. Nothing is written on the
+host while browsing.
 
 Authentication is key or `ssh-agent` only: the client runs OpenSSH in batch mode, so it never asks for a password.
 `~/.ssh/config`, `ProxyJump`, known hosts and hardware keys therefore work as with `ssh` itself.
@@ -137,12 +139,13 @@ IDE ── RpcClient ── 127.0.0.1:<local port> ── ssh -N -L ── 127.0
 
 ## Tests
 
-`RemoteDevelopmentE2eTest`, `RemoteDevelopmentChaosE2eTest`, `RemoteFolderPickerE2eTest` and
+`RemoteDevelopmentE2eTest`, `RemoteDevelopmentChaosE2eTest`, `RemoteOpenProjectE2eTest` and
 `RemoteDevelopmentPerformanceE2eTest` run a real Apache MINA SSH server on the test machine, point its `HOME` at a
 temporary directory and connect the real OpenSSH client to it. They cover install/daemon/tunnel, editing and saving,
 cancellation (which stops `ssh`) and validation, disconnecting, tunnel restarts, a changed or unknown host key, a
-daemon killed and restarted on another port, a rebuilt bundle replacing the running daemon, the folder browser (SSH home,
-click-through navigation, live path check with debounce, path errors, opening the chosen folder), a listing that
+daemon killed and restarted on another port, a rebuilt bundle replacing the running daemon, the Open Project dialog on the
+host (SSH home, `~` and Home, double-click navigation, live path check with debounce, path and file errors,
+opening the chosen directory, a remote directory not remembered for the local dialog), a listing that
 completes after a reconnection,
 1,000 folders, the `~/.ssh/config` catalog (including aliases, includes and search), saved folders surviving a
 restart, the pick view (manual form hidden behind "New host…", recent folders before the hosts) and host tags

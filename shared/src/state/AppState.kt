@@ -57,10 +57,6 @@ class AppState(
     var remoteDialog: RemoteDialogState? by mutableStateOf(null)
         private set
 
-    /** The remote folder picker, when open. */
-    var folderPicker: FolderPickerState? by mutableStateOf(null)
-        private set
-
     /** Hosts of the client's `~/.ssh/config`, shown in the remote dialog. */
     var sshHosts: List<SshConfigHost> by mutableStateOf(emptyList())
         private set
@@ -326,7 +322,7 @@ class AppState(
     fun dispose() {
         remoteJob?.cancel()
         remoteJob = null
-        closeFolderPicker()
+        projectPickerOpen = false
         remoteSession?.close()
         remoteSession = null
     }
@@ -338,7 +334,7 @@ class AppState(
         remoteJob = null
         remoteDialog = null
         remoteStatus = null
-        closeFolderPicker()
+        projectPickerOpen = false
         scope.launch {
             (screen as? Screen.Project)?.project?.let { saveAndDispose(it) }
             remoteSession?.close()
@@ -410,28 +406,9 @@ class AppState(
         }
     }
 
-    /**
-     * Opens a project: the Open Project dialog, which browses the server's disk, or for a remote server the
-     * remote folder browser (starting in the SSH user's home, or in the open project).
-     */
+    /** Opens the Open Project dialog, which browses the directories of the server's disk, local or remote. */
     fun browseForProject() {
-        if (isRemote) {
-            closeFolderPicker()
-            val start = (screen as? Screen.Project)?.project?.root?.path ?: remoteHome ?: "/"
-            folderPicker = FolderPickerState(services.fileSystem, scope, start, remoteHome)
-        } else {
-            projectPickerOpen = true
-        }
-    }
-
-    fun closeFolderPicker() {
-        folderPicker?.dispose()
-        folderPicker = null
-    }
-
-    fun openPickedFolder(path: String) {
-        closeFolderPicker()
-        openProject(path)
+        projectPickerOpen = true
     }
 
     /** Closes the Open Project dialog without opening anything (its Cancel, Escape or the backdrop). */
@@ -452,14 +429,26 @@ class AppState(
     suspend fun pickerSubdirectories(directory: FileEntry): List<FileEntry> =
         services.fileSystem.list(directory).filter { it.isDirectory }
 
-    /** Remembers [path] as the last directory the Open Project dialog browsed (a preference). */
+    /** Remembers [path] as the last directory the Open Project dialog browsed (a preference of the local server). */
     fun rememberProjectPickerDirectory(path: String) {
-        if (path == lastPickerDirectory) return
+        // A remote path means nothing on the local disk, and the remote dialog starts from the project or home.
+        if (isRemote || path == lastPickerDirectory) return
         lastPickerDirectory = path
     }
 
-    /** Where the Open Project dialog starts: the last directory it browsed, the server's home, else the root. */
-    fun projectPickerStart(): String = lastPickerDirectory ?: serverHome ?: "/"
+    /**
+     * Where the Open Project dialog starts: on a remote server the open project, else the SSH user's home; on the
+     * local one the last directory it browsed, else the home; the root when nothing is known.
+     */
+    fun projectPickerStart(): String =
+        if (isRemote) {
+            (screen as? Screen.Project)?.project?.root?.path ?: projectPickerHome() ?: "/"
+        } else {
+            lastPickerDirectory ?: serverHome ?: "/"
+        }
+
+    /** The home directory of the server shown (the SSH user's on a remote one): the dialog's Home and `~`. */
+    fun projectPickerHome(): String? = if (isRemote) remoteHome ?: serverHome else serverHome
 
     fun removeRecent(path: String) {
         recentProjects.remove(path)
@@ -475,7 +464,7 @@ class AppState(
 
     /** Saves everything, stops the remote session, then calls [onDone] (used when the window is closed). */
     fun exit(onDone: () -> Unit) {
-        closeFolderPicker()
+        projectPickerOpen = false
         scope.launch {
             (screen as? Screen.Project)?.project?.let { saveAndDispose(it) }
             runCatching { preferenceStore.save(currentPreferences()) }

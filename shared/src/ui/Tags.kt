@@ -28,17 +28,6 @@ object Tags {
     const val REMOTE_SELECTED = "remote.selected"
     const val STATUS_REMOTE = "status.remote"
     const val TOP_REMOTE = "toolbar.remote"
-    const val FOLDER_PICKER = "folder.picker"
-    const val FOLDER_PICKER_PATH = "folder.picker.path"
-    const val FOLDER_PICKER_UP = "folder.picker.up"
-    const val FOLDER_PICKER_HOME = "folder.picker.home"
-    const val FOLDER_PICKER_OPEN = "folder.picker.open"
-    const val FOLDER_PICKER_CANCEL = "folder.picker.cancel"
-    const val FOLDER_PICKER_ERROR = "folder.picker.error"
-    const val FOLDER_PICKER_EMPTY = "folder.picker.empty"
-    const val FOLDER_PICKER_COUNT = "folder.picker.count"
-    const val FOLDER_PICKER_LOADING = "folder.picker.loading"
-    const val FOLDER_PICKER_CHECKING = "folder.picker.checking"
     const val OPEN_PROJECT = "openProject"
     const val OPEN_PROJECT_PATH = "openProject.path"
     const val OPEN_PROJECT_UP = "openProject.up"
@@ -47,6 +36,9 @@ object Tags {
     const val OPEN_PROJECT_ERROR = "openProject.error"
     const val OPEN_PROJECT_EMPTY = "openProject.empty"
     const val OPEN_PROJECT_LOADING = "openProject.loading"
+    const val OPEN_PROJECT_HOME = "openProject.home"
+    const val OPEN_PROJECT_CHECKING = "openProject.checking"
+    const val OPEN_PROJECT_COUNT = "openProject.count"
     const val PROJECT = "project"
     const val PROJECT_WIDGET = "project.widget"
     const val PROJECT_CLOSE = "project.close"
@@ -288,8 +280,6 @@ object ItemTags {
     fun recentProject(path: String) = "recent:$path"
 
     fun recentRemove(path: String) = "recent.remove:$path"
-
-    fun folderEntry(path: String) = "folder.picker.entry:$path"
 
     fun sshHost(alias: String) = "remote.host:$alias"
 

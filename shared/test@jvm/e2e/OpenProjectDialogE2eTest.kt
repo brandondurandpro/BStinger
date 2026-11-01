@@ -3,12 +3,15 @@ package org.example.kotlineditor.e2e
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performMouseInput
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.state.Screen
@@ -163,5 +166,43 @@ class OpenProjectDialogE2eTest {
             awaitTag(Tags.PROJECT)
             awaitTag(Tags.treeRow("src")).assertIsDisplayed()
             assertEquals(other.root.fileName.toString(), app.state.title)
+        }
+
+    @Test
+    fun `a typed path is listed after a pause, without Enter, and Open waits for it`() =
+        runComposeUiTest {
+            val app = launchApp()
+            openProjectPickerFromWelcome()
+            awaitTag(Tags.OPEN_PROJECT_COUNT)
+            onNodeWithTag(Tags.OPEN_PROJECT_PATH).performTextReplacement(project.path)
+            onNodeWithTag(Tags.OPEN_PROJECT_OPEN).assertIsNotEnabled()
+            awaitTag(ItemTags.pickerDirectory(pathInProject("src").toString())).assertIsDisplayed()
+            awaitCondition { runCatching { onNodeWithTag(Tags.OPEN_PROJECT_OPEN).assertIsEnabled() }.isSuccess }
+            onNodeWithTag(Tags.OPEN_PROJECT_OPEN).performClick()
+            awaitTag(Tags.PROJECT)
+            assertEquals(project.root.fileName.toString(), app.state.title)
+        }
+
+    @Test
+    fun `Home shows the home directory of the server`() =
+        runComposeUiTest {
+            val app = launchApp()
+            awaitCondition { app.state.serverHome != null }
+            openProjectPickerFromWelcome()
+            showDirectoryInProjectPicker(project.path)
+            onNodeWithTag(Tags.OPEN_PROJECT_HOME).performClick()
+            awaitCondition { shownDirectoryInProjectPicker() == app.state.serverHome }
+        }
+
+    @Test
+    fun `a relative fragment being typed is not checked and Open stays off`() =
+        runComposeUiTest {
+            launchApp()
+            openProjectPickerFromWelcome()
+            awaitTag(Tags.OPEN_PROJECT_COUNT)
+            onNodeWithTag(Tags.OPEN_PROJECT_PATH).performTextReplacement("src")
+            awaitNoTag(Tags.OPEN_PROJECT_CHECKING)
+            onNodeWithTag(Tags.OPEN_PROJECT_OPEN).assertIsNotEnabled()
+            onNodeWithTag(Tags.OPEN_PROJECT_ERROR).assertDoesNotExist()
         }
 }

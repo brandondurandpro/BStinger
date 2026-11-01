@@ -2,7 +2,7 @@ package org.example.kotlineditor.e2e
 
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
@@ -14,6 +14,7 @@ import java.nio.file.Files
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 
@@ -124,24 +125,24 @@ class RemoteDevelopmentChaosE2eTest {
         }
 
     @Test
-    fun `the folder browser finishes a listing when the SSH link comes back`() {
+    fun `the Open Project dialog finishes a listing when the SSH link comes back`() {
         if (!RemoteTestEnvironment.available) return
         val folder = Files.createTempDirectory(RemoteTestEnvironment.home, "after-chaos-")
         try {
             remoteUiTest {
                 launchApp()
                 connectRemoteTo(RemoteTestEnvironment, null)
-                awaitTag(Tags.FOLDER_PICKER, timeout = 60_000)
-                awaitTag(ItemTags.folderEntry(folder.toString()))
+                awaitTag(Tags.OPEN_PROJECT, timeout = 60_000)
+                awaitTag(ItemTags.pickerDirectory(folder.toString()))
 
-                // The click's listing request is sent while the link is down; it must finish after the reconnect.
+                // The double click's listing request is sent while the link is down; it must finish after.
                 RemoteTestEnvironment.ssh.stop()
-                onNodeWithTag(ItemTags.folderEntry(folder.toString())).performClick()
+                onNodeWithTag(ItemTags.pickerDirectory(folder.toString())).performDoubleClick()
                 RemoteTestEnvironment.ssh.start()
 
-                awaitTag(Tags.FOLDER_PICKER_EMPTY, timeout = 30_000)
-                onNodeWithTag(Tags.FOLDER_PICKER_PATH)
-                    .assertTextContains(folder.toString(), substring = true)
+                awaitTag(Tags.OPEN_PROJECT_EMPTY, timeout = 30_000)
+                awaitCondition { shownDirectoryInProjectPicker() == folder.toString() }
+                awaitNoTag(Tags.OPEN_PROJECT_ERROR)
             }
         } finally {
             folder.toFile().deleteRecursively()
@@ -156,16 +157,19 @@ class RemoteDevelopmentChaosE2eTest {
             remoteUiTest {
                 launchApp()
                 connectRemoteTo(RemoteTestEnvironment, null)
-                awaitTag(Tags.FOLDER_PICKER, timeout = 60_000)
+                awaitTag(Tags.OPEN_PROJECT, timeout = 60_000)
+                awaitTag(Tags.OPEN_PROJECT_COUNT)
 
                 RemoteTestEnvironment.ssh.stop()
                 val path = folder.toString()
                 typeFolderPathInChunks(path.dropLast(4), path.takeLast(4))
                 RemoteTestEnvironment.ssh.start()
 
-                awaitTag(Tags.FOLDER_PICKER_EMPTY, timeout = 30_000)
-                onNodeWithTag(Tags.FOLDER_PICKER_PATH)
-                    .assertTextContains(path, substring = true)
+                awaitTag(Tags.OPEN_PROJECT_EMPTY, timeout = 30_000)
+                assertEquals(path, shownDirectoryInProjectPicker())
+                awaitCondition {
+                    runCatching { onNodeWithTag(Tags.OPEN_PROJECT_OPEN).assertIsEnabled() }.isSuccess
+                }
             }
         } finally {
             folder.toFile().deleteRecursively()

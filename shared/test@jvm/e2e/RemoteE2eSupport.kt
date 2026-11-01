@@ -6,6 +6,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.ui.Tags
 
@@ -16,20 +17,17 @@ fun remoteUiTest(block: ComposeUiTest.() -> Unit) {
     runComposeUiTest { block() }
 }
 
-/** Replaces the folder-picker path in one edit (one debounce). */
+/** Replaces the path of the Open Project dialog in one edit, without Enter (one debounced check). */
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.replaceFolderPath(text: String) {
-    onNodeWithTag(Tags.FOLDER_PICKER_PATH).performClick()
-    onNodeWithTag(Tags.FOLDER_PICKER_PATH).performTextClearance()
-    if (text.isNotEmpty()) onNodeWithTag(Tags.FOLDER_PICKER_PATH).performTextInput(text)
+    onNodeWithTag(Tags.OPEN_PROJECT_PATH).performTextReplacement(text)
 }
 
-/** Replaces the folder-picker path with several quick edits, as a user typing would produce. */
+/** Replaces the path of the Open Project dialog with several quick edits, as a user typing would, without Enter. */
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.typeFolderPathInChunks(vararg chunks: String) {
-    onNodeWithTag(Tags.FOLDER_PICKER_PATH).performClick()
-    onNodeWithTag(Tags.FOLDER_PICKER_PATH).performTextClearance()
-    chunks.forEach { onNodeWithTag(Tags.FOLDER_PICKER_PATH).performTextInput(it) }
+    onNodeWithTag(Tags.OPEN_PROJECT_PATH).performTextClearance()
+    chunks.forEach { onNodeWithTag(Tags.OPEN_PROJECT_PATH).performTextInput(it) }
 }
 
 /** Fills the Remote Development dialog for the fake SSH server of [RemoteTestEnvironment]. */

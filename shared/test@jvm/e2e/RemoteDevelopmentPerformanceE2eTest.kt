@@ -8,6 +8,7 @@ import java.nio.file.Files
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlin.test.assertTrue
 
 /** Remote development on a project big enough for a per-file or per-tree slowdown to show. */
 @OptIn(ExperimentalTestApi::class)
@@ -61,14 +62,20 @@ class RemoteDevelopmentPerformanceE2eTest {
             remoteUiTest {
                 launchApp()
                 connectRemoteTo(RemoteTestEnvironment, null)
-                awaitTag(Tags.FOLDER_PICKER, timeout = 60_000)
+                awaitTag(Tags.OPEN_PROJECT, timeout = 60_000)
+                awaitTag(Tags.OPEN_PROJECT_COUNT)
                 measure("type and list 1000 remote folders", budgetMillis = 10_000, budgetMegabytes = 256) {
                     replaceFolderPath(many.toString())
-                    awaitTag(Tags.FOLDER_PICKER_COUNT)
-                    onNodeWithTag(Tags.FOLDER_PICKER_COUNT)
-                        .assertTextContains("1000 folders", substring = true)
+                    awaitCondition {
+                        runCatching {
+                            onNodeWithTag(Tags.OPEN_PROJECT_COUNT).assertTextContains("1000 directories")
+                        }.isSuccess
+                    }
                     renderFrame()
                 }
+                // The list is virtualized: only the visible rows are composed.
+                val rows = onAllNodes(hasTestTagPrefix("openProject.dir:")).fetchSemanticsNodes().size
+                assertTrue(rows in 1..100, "$rows rows composed for 1000 directories")
             }
         } finally {
             many.toFile().deleteRecursively()
