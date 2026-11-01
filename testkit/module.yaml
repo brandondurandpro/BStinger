@@ -2,3 +2,7 @@
 product:
   type: kmp/lib
   platforms: [jvm]
+
+dependencies:
+  # The fake language server reads and writes JSON-RPC messages.
+  - $libs.kotlinx.serialization.json
