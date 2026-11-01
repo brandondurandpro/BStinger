@@ -22,21 +22,28 @@ object TreeSitterCore {
     @Volatile
     var directory: File = File(System.getProperty("java.io.tmpdir"), "kotlin-editor-tree-sitter")
 
-    private val loaded: Boolean by lazy {
+    // Why the runtime does not load (no library for this platform, another libc...), null when it does. A failure of
+    // the lookup reaches here wrapped in the ExceptionInInitializerError of jtreesitter's bindings.
+    private val loadFailure: Throwable? by lazy {
         try {
             Parser().close()
-            true
-        } catch (_: LinkageError) {
-            // No library for this platform, or it does not load (another libc...): the line lexer is used. A failure
-            // of the lookup reaches here wrapped in the ExceptionInInitializerError of jtreesitter's bindings.
-            false
+            null
+        } catch (e: LinkageError) {
+            e
+        } catch (e: IllegalStateException) {
+            e
+        } catch (e: IllegalArgumentException) {
+            e
         } catch (_: RuntimeException) {
-            false
+            IllegalStateException("The tree-sitter runtime failed to start")
         }
     }
 
     /** Whether tree-sitter works here: loads the library on the first call. */
-    val isAvailable: Boolean get() = loaded
+    val isAvailable: Boolean get() = loadFailure == null
+
+    /** Why tree-sitter does not work here, `null` when it does. */
+    val failure: Throwable? get() = loadFailure
 
     /** The library file, copied out of the classpath once (its name carries a hash of its content). */
     internal fun library(): File {

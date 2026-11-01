@@ -159,7 +159,7 @@ class TreeSitterHighlighterTest {
     fun close() = repository.close()
 
     private fun grammar(id: String): LoadedGrammar =
-        assertNotNull(runBlocking { store.await(GrammarSpec.all.single { it.id == id }) })
+        assertNotNull(runBlocking { store.await(GrammarSpec.all.single { it.id == id }) }, store.lastFailure)
 
     private fun styled(spans: LineSpans?, line: String): Map<String, Int> =
         (0 until (spans?.size ?: 0)).associate {
@@ -283,8 +283,8 @@ class GrammarStoreTest {
     @Test
     fun `a grammar is downloaded once, then loaded from the cache`() {
         val store = TestGrammars.store(repository, directory)
-        assertNotNull(runBlocking { store.await(kotlin) })
-        assertNotNull(runBlocking { store.await(kotlin) })
+        assertNotNull(runBlocking { store.await(kotlin) }, store.lastFailure)
+        assertNotNull(runBlocking { store.await(kotlin) }, store.lastFailure)
         assertEquals(1, store.downloads)
         val restarted = TestGrammars.store(repository, directory)
         assertNotNull(runBlocking { restarted.await(kotlin) })
