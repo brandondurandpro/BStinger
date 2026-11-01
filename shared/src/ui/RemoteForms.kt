@@ -59,7 +59,7 @@ private fun HostField(dialog: RemoteDialogState, onConnect: () -> Unit, onChange
     Field("Host or ~/.ssh/config alias") {
         IdeTextField(
             dialog.host,
-            { onChange(dialog.copy(host = it, alias = "")) },
+            { onChange(dialog.copy(host = it, alias = "", selectedRow = "")) },
             Modifier.fillMaxWidth().testTag(Tags.REMOTE_HOST),
             placeholder = "server.example.com",
             onSubmit = onConnect,

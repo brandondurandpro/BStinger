@@ -11,9 +11,10 @@ work happens next to the sources; only the editor state and the results travel.
 3. **Connect**.
 
 The dialog is a **pick view**: the remote folders already opened first, then the `~/.ssh/config` host catalog, and
-a search field above both. Picking a host uses its alias, so user, port, identity file and `ProxyJump` all come
-from `~/.ssh/config`; picking a folder fills its host and path, ready to connect again. The manual form is hidden
-behind a **New host…** button, which also collapses back to the pick view.
+a search field above both. The picked line is highlighted like an IntelliJ selection. Picking a host uses its
+alias, so user, port, identity file and `ProxyJump` all come from `~/.ssh/config`; picking a folder fills its host
+and path, ready to connect again. The manual form is hidden behind a **New host…** button, which also collapses
+back to the pick view.
 
 Hosts can be **tagged** (production, dev, test…): enter comma-separated tags on the selected host, or click a
 tag chip on another row to filter the lists by it. Tags live in the client's preferences and survive restarts.

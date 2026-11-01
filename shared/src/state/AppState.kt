@@ -167,6 +167,7 @@ class AppState(
                 projectPath = "",
                 tags = tagsFor(host.alias).joinToString(", "),
                 manual = false,
+                selectedRow = "h:${host.alias}",
                 error = null,
             )
     }
@@ -184,6 +185,7 @@ class AppState(
                 projectPath = workspace.path,
                 tags = tagsFor(workspace.target.tagKey).joinToString(", "),
                 manual = false,
+                selectedRow = "w:${workspace.key}",
                 error = null,
             )
     }
@@ -212,6 +214,7 @@ class AppState(
                 projectPath = "",
                 alias = "",
                 tags = "",
+                selectedRow = "",
                 error = null,
             )
     }

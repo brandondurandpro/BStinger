@@ -26,6 +26,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -35,21 +37,21 @@ import org.example.kotlineditor.state.RemoteDialogState
 import org.example.kotlineditor.state.RemoteWorkspace
 
 /**
- * Recent remote folders and `~/.ssh/config` hosts, searchable; rows carry the user's tags as chips, and clicking
- * a chip filters by it.
+ * Recent remote folders and `~/.ssh/config` hosts, searchable; the picked line is highlighted like an IntelliJ
+ * selection, rows carry the user's tags as chips, and clicking a chip filters by it.
  */
 @Suppress("CognitiveComplexMethod") // filtering, loading and two sections in one compact panel
 @Composable
 internal fun RemoteCatalog(app: AppState, dialog: RemoteDialogState, onChange: (RemoteDialogState) -> Unit) {
     val query = dialog.hostSearch
     val workspaces =
-        app.remoteWorkspaces.filter {
-            matches(
-                query,
-                it.searchText + " " + app.tagsFor(it.target.tagKey).joinToString(" "),
-            )
-        }
-    val hosts = app.sshHosts.filter { matches(query, it.searchText + " " + app.tagsFor(it.alias).joinToString(" ")) }
+        app.remoteWorkspaces
+            .filter { matches(query, it.searchText + " " + app.tagsFor(it.target.tagKey).joinToString(" ")) }
+            .map { it to (dialog.selectedRow == "w:${it.key}") }
+    val hosts =
+        app.sshHosts
+            .filter { matches(query, it.searchText + " " + app.tagsFor(it.alias).joinToString(" ")) }
+            .map { it to (dialog.selectedRow == "h:${it.alias}") }
     val empty = hosts.isEmpty() && workspaces.isEmpty()
     // Do not show a skeleton that changes height while ssh -G resolves the config.
     if (app.sshHostsLoading && empty) return
@@ -68,18 +70,21 @@ internal fun RemoteCatalog(app: AppState, dialog: RemoteDialogState, onChange: (
             LazyColumn(Modifier.fillMaxWidth().heightIn(max = 280.dp), state = listState) {
                 if (workspaces.isNotEmpty()) {
                     item { SectionHeader("Recent folders") }
-                    items(workspaces, key = { "w:${it.key}" }) { workspace ->
-                        WorkspaceRow(app, workspace, onTagClick = { tag ->
+                    items(workspaces, key = { "w:${it.first.key}" }) { (workspace, isSelected) ->
+                        WorkspaceRow(app, workspace, isSelected, onTagClick = { tag ->
                             onChange(dialog.copy(hostSearch = tag))
                         }) { app.selectRemoteWorkspace(workspace) }
                     }
                 }
                 if (hosts.isNotEmpty()) {
                     item { SectionHeader("~/.ssh/config") }
-                    items(hosts, key = { "h:${it.alias}" }) { host ->
-                        SshHostRow(app, host, onTagClick = { tag ->
-                            onChange(dialog.copy(hostSearch = tag))
-                        }) { app.selectSshHost(host) }
+                    items(hosts, key = { "h:${it.first.alias}" }) { (host, isSelected) ->
+                        SshHostRow(
+                            app.tagsFor(host.alias),
+                            host,
+                            isSelected,
+                            onTagClick = { tag -> onChange(dialog.copy(hostSearch = tag)) },
+                        ) { app.selectSshHost(host) }
                     }
                 }
             }
@@ -122,9 +127,14 @@ private fun SectionHeader(text: String) {
 }
 
 @Composable
-private fun SshHostRow(app: AppState, host: SshConfigHost, onTagClick: (String) -> Unit, onClick: () -> Unit) {
-    val tags = app.tagsFor(host.alias)
-    CatalogRow(ItemTags.sshHost(host.alias), onClick) {
+private fun SshHostRow(
+    tags: List<String>,
+    host: SshConfigHost,
+    isSelected: Boolean,
+    onTagClick: (String) -> Unit,
+    onClick: () -> Unit,
+) {
+    CatalogRow(ItemTags.sshHost(host.alias), isSelected, onClick) {
         Column {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -144,11 +154,12 @@ private fun SshHostRow(app: AppState, host: SshConfigHost, onTagClick: (String) 
 private fun WorkspaceRow(
     app: AppState,
     workspace: RemoteWorkspace,
+    isSelected: Boolean,
     onTagClick: (String) -> Unit,
     onClick: () -> Unit,
 ) {
     val tags = app.tagsFor(workspace.target.tagKey)
-    CatalogRow(ItemTags.remoteWorkspace(workspace.label, workspace.path), onClick) {
+    CatalogRow(ItemTags.remoteWorkspace(workspace.label, workspace.path), isSelected, onClick) {
         Column {
             Label(workspace.path, fontSize = 12.sp)
             Row(
@@ -190,17 +201,24 @@ private fun tagColor(tag: String): Color =
     }
 
 @Composable
-private fun CatalogRow(tag: String, onClick: () -> Unit, content: @Composable () -> Unit) {
+private fun CatalogRow(tag: String, isSelected: Boolean, onClick: () -> Unit, content: @Composable () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
+    val rowBackground =
+        when {
+            isSelected -> IdeColors.Selection
+            hovered -> IdeColors.Hover
+            else -> Color.Transparent
+        }
     Row(
         Modifier
             .fillMaxWidth()
-            .background(if (hovered) IdeColors.Hover else Color.Transparent, RoundedCornerShape(4.dp))
+            .background(rowBackground, RoundedCornerShape(4.dp))
             .hoverable(interaction)
-            .clickable(interaction, indication = null, onClick = onClick)
             .testTag(tag)
-            .padding(horizontal = 8.dp, vertical = 5.dp),
+            .padding(horizontal = 8.dp, vertical = 5.dp)
+            .clickable(interaction, indication = null, onClick = onClick)
+            .semantics { selected = isSelected },
         verticalAlignment = Alignment.CenterVertically,
     ) {
         content()

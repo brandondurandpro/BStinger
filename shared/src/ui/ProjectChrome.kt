@@ -1,6 +1,7 @@
 package org.example.kotlineditor.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -65,21 +66,22 @@ private fun RemoteBadge(app: AppState) {
     val connection by app.connection.collectAsState()
     val failure by app.remoteFailure.collectAsState()
     val failing = failure != null || connection != ConnectionStatus.Connected
-    val accent = if (failing) IdeColors.Error else IdeColors.Accent
+    val border = if (failing) IdeColors.Error else IdeColors.Separator
     val label = app.remoteLabel ?: "remote"
     Box {
         Row(
             Modifier
-                .background(accent.copy(alpha = 0.15f), RoundedCornerShape(4.dp))
+                .border(1.dp, border, RoundedCornerShape(50))
                 .clickable { menuOpen = true }
                 .testTag(Tags.TOP_REMOTE)
-                .padding(horizontal = 8.dp, vertical = 4.dp),
+                .padding(horizontal = 10.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            Label("Remote", color = IdeColors.TextSecondary)
             Label(
-                "Remote  ·  $label",
-                color = accent,
-                fontWeight = FontWeight.SemiBold,
+                label,
+                color = if (failing) IdeColors.Error else IdeColors.Text,
+                modifier = Modifier.padding(start = 6.dp),
             )
             Chevron(expanded = false)
         }

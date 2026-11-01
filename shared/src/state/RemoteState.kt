@@ -17,6 +17,8 @@ data class RemoteDialogState(
     val manual: Boolean = false,
     /** Comma-separated tags of the selected host, shown as chips in the lists. */
     val tags: String = "",
+    /** Catalog line currently picked (`h:<alias>` or `w:<key>`), highlighted in the lists. */
+    val selectedRow: String = "",
     val connecting: Boolean = false,
     val error: String? = null,
 ) {

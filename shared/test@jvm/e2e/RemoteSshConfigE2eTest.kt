@@ -1,5 +1,8 @@
 package org.example.kotlineditor.e2e
 
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.hasTestTag
@@ -176,7 +179,9 @@ class RemoteSshConfigE2eTest {
             onNodeWithTag(Tags.WELCOME_REMOTE).performClick()
             awaitTag(Tags.REMOTE_DIALOG)
             awaitTag(ItemTags.sshHost("test-remote"), timeout = 30_000)
+            assertNotSelected(ItemTags.sshHost("test-remote"))
             onNodeWithTag(ItemTags.sshHost("test-remote")).performClick()
+            assertSelected(ItemTags.sshHost("test-remote"))
             onNodeWithTag(Tags.REMOTE_PROJECT).performTextInput(project.toString())
             onNodeWithTag(Tags.REMOTE_CONNECT).performClick()
             awaitTag(Tags.treeRow("README.md"), timeout = 60_000)
@@ -193,4 +198,20 @@ class RemoteSshConfigE2eTest {
             val host = onNodeWithTag(ItemTags.sshHost("test-remote")).fetchSemanticsNode().boundsInRoot.top
             assertTrue(folder < host, "recent folders must come before the SSH config hosts")
         }
+
+    private fun ComposeUiTest.assertSelected(tag: String) {
+        val node = onNodeWithTag(tag).fetchSemanticsNode()
+        assertTrue(
+            node.config.getOrNull(SemanticsProperties.Selected) == true,
+            "the row tagged $tag should be highlighted as selected",
+        )
+    }
+
+    private fun ComposeUiTest.assertNotSelected(tag: String) {
+        val node = onNodeWithTag(tag).fetchSemanticsNode()
+        assertTrue(
+            node.config.getOrNull(SemanticsProperties.Selected) != true,
+            "the row tagged $tag should not be highlighted",
+        )
+    }
 }
