@@ -23,10 +23,10 @@ internal fun ModeSwitch(project: ProjectState) {
             .background(IdeColors.Editor, RoundedCornerShape(6.dp))
             .border(1.dp, IdeColors.Separator, RoundedCornerShape(6.dp))
             .padding(2.dp)
-            .testTag(Tags.MODE_SWITCH),
+            .testTag(AppTags.MODE_SWITCH),
     ) {
-        ModeButton("IDE", !project.agentMode, Tags.MODE_IDE) { project.agentMode = false }
-        ModeButton("Agent", project.agentMode, Tags.MODE_AGENT) { project.agentMode = true }
+        ModeButton("IDE", !project.agentMode, AppTags.MODE_IDE) { project.agentMode = false }
+        ModeButton("Agent", project.agentMode, AppTags.MODE_AGENT) { project.agentMode = true }
     }
 }
 

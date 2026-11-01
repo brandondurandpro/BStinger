@@ -104,7 +104,7 @@ internal fun CompletionList(
             .width(COMPLETION_WIDTH)
             .background(IdeColors.Popup, RoundedCornerShape(4.dp))
             .border(1.dp, IdeColors.Separator, RoundedCornerShape(4.dp))
-            .testTag(Tags.COMPLETION),
+            .testTag(EditorTags.COMPLETION),
     ) {
         LazyColumn(Modifier.fillMaxWidth().heightIn(max = COMPLETION_ROW_HEIGHT * COMPLETION_ROWS), state = listState) {
             itemsIndexed(items, key = { index, item -> "$index:${item.label}" }) { index, item ->
@@ -122,7 +122,7 @@ private fun CompletionRow(item: CompletionItem, typed: String, selected: Boolean
             .height(COMPLETION_ROW_HEIGHT)
             .background(if (selected) IdeColors.Selection else Color.Transparent)
             .pointerInput(onAccept) { detectTapGestures(onDoubleTap = { onAccept() }, onTap = { onAccept() }) }
-            .testTag(Tags.completionItem(item.label))
+            .testTag(EditorTags.completionItem(item.label))
             .semantics { this.selected = selected }
             .padding(horizontal = 6.dp),
         verticalAlignment = Alignment.CenterVertically,

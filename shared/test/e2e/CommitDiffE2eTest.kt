@@ -9,8 +9,9 @@ import org.example.kotlineditor.model.DiffKind
 import org.example.kotlineditor.model.DiffLine
 import org.example.kotlineditor.state.EditorTab
 import org.example.kotlineditor.state.TabStatus
-import org.example.kotlineditor.ui.ItemTags
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.AppTags
+import org.example.kotlineditor.ui.EditorTags
+import org.example.kotlineditor.ui.GitTags
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -31,15 +32,15 @@ class CommitDiffE2eTest {
     private fun ComposeUiTest.openCommit(app: E2eApp, hash: String) {
         awaitCondition { app.project.gitBranch != null }
         if (!app.project.toolWindows.isVisible(org.example.kotlineditor.state.ToolWindow.Branches)) {
-            onNodeWithTag(Tags.TOOL_BRANCHES).performClick()
+            onNodeWithTag(AppTags.TOOL_BRANCHES).performClick()
         }
-        awaitTag(ItemTags.historyCommit(hash)).performClick()
-        awaitTag(Tags.HISTORY_DETAILS)
+        awaitTag(GitTags.historyCommit(hash)).performClick()
+        awaitTag(GitTags.HISTORY_DETAILS)
     }
 
     private fun ComposeUiTest.diffOf(app: E2eApp, hash: String, path: String): List<DiffLine> {
-        awaitTag(Tags.commitDiffTab(hash, path))
-        awaitTag(Tags.DIFF)
+        awaitTag(EditorTags.commitDiffTab(hash, path))
+        awaitTag(EditorTags.DIFF)
         val editor = app.project.editor
         awaitCondition { editor.activeTab?.status is TabStatus.Diff }
         val tab: EditorTab = app.project.editor.activeTab!!
@@ -61,7 +62,7 @@ class CommitDiffE2eTest {
             val app = launchWithProject(project)
 
             openCommit(app, first)
-            awaitTag(ItemTags.historyFile("README.md")).performClick()
+            awaitTag(GitTags.historyFile("README.md")).performClick()
             val lines = diffOf(app, first, "README.md")
             assertEquals(listOf("First change"), lines.filter { it.kind == DiffKind.Added }.map { it.text })
             assertTrue(lines.none { it.text == "Second change" || it.text == "Uncommitted" })
@@ -83,22 +84,22 @@ class CommitDiffE2eTest {
             val app = launchWithProject(project)
 
             openCommit(app, one)
-            awaitTag(ItemTags.historyFile("README.md")).performClick()
+            awaitTag(GitTags.historyFile("README.md")).performClick()
             diffOf(app, one, "README.md")
             openCommit(app, two)
-            awaitTag(ItemTags.historyFile("README.md")).performClick()
+            awaitTag(GitTags.historyFile("README.md")).performClick()
             val lines = diffOf(app, two, "README.md")
             assertEquals(listOf("Two"), lines.filter { it.kind == DiffKind.Added }.map { it.text })
-            awaitTag(Tags.commitDiffTab(one, "README.md"))
+            awaitTag(EditorTags.commitDiffTab(one, "README.md"))
 
             openCommit(app, one)
-            awaitTag(ItemTags.historyFile("README.md")).performClick()
+            awaitTag(GitTags.historyFile("README.md")).performClick()
             diffOf(app, one, "README.md")
             val tabs = app.project.editor.allTabs
             assertEquals(2, tabs.count { it.commit != null })
             // Closing it works like any tab.
-            onNodeWithTag(Tags.commitDiffTabClose(one, "README.md")).performClick()
-            awaitNoTag(Tags.commitDiffTab(one, "README.md"))
+            onNodeWithTag(EditorTags.commitDiffTabClose(one, "README.md")).performClick()
+            awaitNoTag(EditorTags.commitDiffTab(one, "README.md"))
         }
 
     @Test
@@ -121,12 +122,12 @@ class CommitDiffE2eTest {
                     ?.files
                     ?.any { it.oldPath == "README.md" } == true
             }
-            awaitTag(ItemTags.historyFile("GUIDE.md")).performClick()
+            awaitTag(GitTags.historyFile("GUIDE.md")).performClick()
             val renamed = diffOf(app, head, "GUIDE.md")
             assertEquals(listOf("# Demo"), renamed.filter { it.kind == DiffKind.Removed }.map { it.text })
             assertEquals(listOf("# Demo guide"), renamed.filter { it.kind == DiffKind.Added }.map { it.text })
 
-            onNodeWithTag(ItemTags.historyFile("build.gradle.kts")).performClick()
+            onNodeWithTag(GitTags.historyFile("build.gradle.kts")).performClick()
             val deleted = diffOf(app, head, "build.gradle.kts")
             assertTrue(deleted.any { it.kind == DiffKind.Removed })
             assertTrue(deleted.none { it.kind == DiffKind.Added })
@@ -141,17 +142,17 @@ class CommitDiffE2eTest {
             val head = hashOf("HEAD")
             val app = launchWithProject(project)
             openCommit(app, head)
-            awaitTag(ItemTags.historyFile("README.md")).performClick()
+            awaitTag(GitTags.historyFile("README.md")).performClick()
             val before = diffOf(app, head, "README.md")
 
             // The working tree and HEAD move on; the commit's diff stays what the commit did.
             project.file("README.md", textOf("# Demo", "Committed", "Later", ""))
             project.git("commit", "-q", "-am", "Later")
-            onNodeWithTag(Tags.HISTORY_REFRESH).performClick()
+            onNodeWithTag(GitTags.HISTORY_REFRESH).performClick()
             app.project.refreshGitStatus()
             val history = app.project.history
             awaitCondition { history.commits.firstOrNull()?.subject == "Later" }
-            onNodeWithTag(Tags.commitDiffTab(head, "README.md")).performClick()
+            onNodeWithTag(EditorTags.commitDiffTab(head, "README.md")).performClick()
             assertEquals(before, diffOf(app, head, "README.md"))
         }
 }

@@ -45,7 +45,7 @@ fun GotoFilePopup(project: ProjectState, onClose: () -> Unit, recentOnly: Boolea
         found.update(query, indexed, results, firstSelection(recentOnly, query, results), open)
     }
     val results = found.results
-    PopupFrame(if (recentOnly) Tags.RECENT_FILES else Tags.GOTO_FILE, onClose) {
+    PopupFrame(if (recentOnly) TreeTags.RECENT_FILES else TreeTags.GOTO_FILE, onClose) {
         Column {
             Label(
                 if (recentOnly) "Recent Files" else "Files",
@@ -57,7 +57,7 @@ fun GotoFilePopup(project: ProjectState, onClose: () -> Unit, recentOnly: Boolea
                 { query = it },
                 Modifier
                     .fillMaxWidth()
-                    .testTag(Tags.GOTO_FILE_INPUT)
+                    .testTag(TreeTags.GOTO_FILE_INPUT)
                     .focusRequester(focus)
                     .popupKeys(
                         { found.enter(query, indexed, open) },
@@ -120,7 +120,7 @@ private fun FileMatchRow(match: FileMatch, selected: Boolean, onClick: () -> Uni
         Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .testTag(ItemTags.gotoFileItem(match.relativePath))
+            .testTag(TreeTags.gotoFileItem(match.relativePath))
             .resultRow(selected)
             .padding(horizontal = 8.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,

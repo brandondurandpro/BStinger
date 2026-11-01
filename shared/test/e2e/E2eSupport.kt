@@ -37,9 +37,11 @@ import org.example.kotlineditor.state.ProjectState
 import org.example.kotlineditor.state.Screen
 import org.example.kotlineditor.syntax.treesitter.GrammarStore
 import org.example.kotlineditor.testkit.ChaosProxy
-import org.example.kotlineditor.ui.ItemTags
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.AppTags
+import org.example.kotlineditor.ui.EditorTags
+import org.example.kotlineditor.ui.RemoteTags
 import org.example.kotlineditor.ui.TextClipboard
+import org.example.kotlineditor.ui.TreeTags
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.createDirectories
@@ -233,15 +235,15 @@ fun ComposeUiTest.launchApp(
 /** Opens the Open Project dialog from the welcome screen and waits for it to list a directory. */
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.openProjectPickerFromWelcome() {
-    onNodeWithTag(Tags.WELCOME_OPEN).performClick()
-    awaitTag(Tags.OPEN_PROJECT)
+    onNodeWithTag(AppTags.WELCOME_OPEN).performClick()
+    awaitTag(RemoteTags.OPEN_PROJECT)
 }
 
 /** Types [path] at the path field of the Open Project dialog and commits it with Enter (does not wait). */
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.navigateToInProjectPicker(path: String) {
     // A menu that opened the dialog can steal the focus back while closing; wait for the field to own it.
-    val field = onNodeWithTag(Tags.OPEN_PROJECT_PATH).requestFocus()
+    val field = onNodeWithTag(RemoteTags.OPEN_PROJECT_PATH).requestFocus()
     awaitCondition { runCatching { field.assertIsFocused() }.isSuccess }
     field.performTextReplacement(path)
     field.performKeyInput { pressKey(Key.Enter) }
@@ -256,7 +258,7 @@ fun ComposeUiTest.showDirectoryInProjectPicker(path: String) {
     waitForIdle()
     awaitCondition {
         shownDirectoryInProjectPicker() == path &&
-            onAllNodes(hasTestTag(Tags.OPEN_PROJECT_LOADING)).fetchSemanticsNodes().isEmpty()
+            onAllNodes(hasTestTag(RemoteTags.OPEN_PROJECT_LOADING)).fetchSemanticsNodes().isEmpty()
     }
 }
 
@@ -266,15 +268,15 @@ fun ComposeUiTest.openProjectDirectoryFromWelcome(path: String) {
     openProjectPickerFromWelcome()
     showDirectoryInProjectPicker(path)
     // A click on the disabled button is lost: wait for the listing to have enabled it.
-    awaitCondition { runCatching { onNodeWithTag(Tags.OPEN_PROJECT_OPEN).assertIsEnabled() }.isSuccess }
-    onNodeWithTag(Tags.OPEN_PROJECT_OPEN).performClick()
+    awaitCondition { runCatching { onNodeWithTag(RemoteTags.OPEN_PROJECT_OPEN).assertIsEnabled() }.isSuccess }
+    onNodeWithTag(RemoteTags.OPEN_PROJECT_OPEN).performClick()
 }
 
 /** The directory the path field of the Open Project dialog shows. */
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.shownDirectoryInProjectPicker(): String? {
     val field =
-        onAllNodes(hasTestTag(Tags.OPEN_PROJECT_PATH)).fetchSemanticsNodes().singleOrNull()
+        onAllNodes(hasTestTag(RemoteTags.OPEN_PROJECT_PATH)).fetchSemanticsNodes().singleOrNull()
             ?: return null
     return field.config
         .getOrElseNullable(androidx.compose.ui.semantics.SemanticsProperties.EditableText) { null }
@@ -293,7 +295,7 @@ fun ComposeUiTest.launchWithProject(
     val app =
         launchApp(preferences = preferences, chaos = chaos, grammars = grammars, languageServers = languageServers)
     openProjectDirectoryFromWelcome(project.path)
-    awaitTag(Tags.treeRow("src"))
+    awaitTag(TreeTags.treeRow("src"))
     return app
 }
 
@@ -327,13 +329,13 @@ fun ComposeUiTest.openFromTree(relativePath: String) {
     for (i in 1 until parts.size) {
         val dir = parts.subList(0, i).joinToString("/")
         val child = parts.subList(0, i + 1).joinToString("/")
-        if (onAllNodes(hasTestTag(Tags.treeRow(child))).fetchSemanticsNodes().isEmpty()) {
-            awaitTag(Tags.treeChevron(dir)).performClick()
-            awaitTag(Tags.treeRow(child))
+        if (onAllNodes(hasTestTag(TreeTags.treeRow(child))).fetchSemanticsNodes().isEmpty()) {
+            awaitTag(TreeTags.treeChevron(dir)).performClick()
+            awaitTag(TreeTags.treeRow(child))
         }
     }
-    onNodeWithTag(Tags.treeRow(relativePath)).performDoubleClick()
-    awaitTag(Tags.tab(relativePath))
+    onNodeWithTag(TreeTags.treeRow(relativePath)).performDoubleClick()
+    awaitTag(EditorTags.tab(relativePath))
     awaitEditorReady()
 }
 
@@ -341,7 +343,9 @@ fun ComposeUiTest.openFromTree(relativePath: String) {
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.awaitEditorReady() {
     waitUntil(timeoutMillis = TIMEOUT) {
-        onAllNodes(hasTestTag(Tags.EDITOR) or hasTestTag(Tags.EDITOR_MESSAGE)).fetchSemanticsNodes().isNotEmpty()
+        onAllNodes(
+            hasTestTag(EditorTags.EDITOR) or hasTestTag(EditorTags.EDITOR_MESSAGE),
+        ).fetchSemanticsNodes().isNotEmpty()
     }
 }
 
@@ -370,7 +374,7 @@ fun ComposeUiTest.rightClickOn(tag: String) {
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.awaitReconnecting() {
     awaitCondition {
-        onAllNodes(hasTestTag(Tags.STATUS_CONNECTION)).fetchSemanticsNodes().any { node ->
+        onAllNodes(hasTestTag(AppTags.STATUS_CONNECTION)).fetchSemanticsNodes().any { node ->
             node.config
                 .getOrElseNullable(androidx.compose.ui.semantics.SemanticsProperties.Text) { null }
                 ?.any { "reconnecting" in it.text } == true
@@ -380,13 +384,13 @@ fun ComposeUiTest.awaitReconnecting() {
 
 /** Waits until the status bar no longer warns about the server. */
 @OptIn(ExperimentalTestApi::class)
-fun ComposeUiTest.awaitReconnected() = awaitNoTag(Tags.STATUS_CONNECTION)
+fun ComposeUiTest.awaitReconnected() = awaitNoTag(AppTags.STATUS_CONNECTION)
 
 /** Waits until the status bar's connection message contains [text]. */
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.awaitStatusContains(text: String, timeout: Long = TIMEOUT) {
     awaitCondition(timeout) {
-        onAllNodes(hasTestTag(Tags.STATUS_CONNECTION)).fetchSemanticsNodes().any { node ->
+        onAllNodes(hasTestTag(AppTags.STATUS_CONNECTION)).fetchSemanticsNodes().any { node ->
             node.config
                 .getOrElseNullable(androidx.compose.ui.semantics.SemanticsProperties.Text) { null }
                 ?.any { text in it.text } == true
@@ -397,15 +401,15 @@ fun ComposeUiTest.awaitStatusContains(text: String, timeout: Long = TIMEOUT) {
 /** Opens [path] from the list of recent projects of the welcome screen, and waits for its tree. */
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.openRecentFromWelcome(path: String) {
-    awaitTag(ItemTags.recentProject(path)).performClick()
-    awaitTag(Tags.PROJECT)
+    awaitTag(AppTags.recentProject(path)).performClick()
+    awaitTag(AppTags.PROJECT)
     awaitCondition { onAllNodes(hasTestTagPrefix("tree:")).fetchSemanticsNodes().isNotEmpty() }
 }
 
 /** Clicks the project name in the toolbar, then [path] among the recent projects of its menu. */
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.switchProjectTo(path: String) {
-    onNodeWithTag(Tags.PROJECT_WIDGET).performClick()
-    awaitTag(ItemTags.switchProject(path)).performClick()
-    awaitNoTag(Tags.PROJECT_MENU)
+    onNodeWithTag(AppTags.PROJECT_WIDGET).performClick()
+    awaitTag(AppTags.switchProject(path)).performClick()
+    awaitNoTag(AppTags.PROJECT_MENU)
 }

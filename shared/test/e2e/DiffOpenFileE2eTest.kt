@@ -10,8 +10,9 @@ import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.state.TabStatus
 import org.example.kotlineditor.state.TextPos
-import org.example.kotlineditor.ui.ItemTags
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.AppTags
+import org.example.kotlineditor.ui.EditorTags
+import org.example.kotlineditor.ui.GitTags
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -28,14 +29,14 @@ class DiffOpenFileE2eTest {
     }
 
     private fun ComposeUiTest.openWorkingTreeDiff(path: String) {
-        onNodeWithTag(Tags.TOOL_GIT).performClick()
-        awaitTag(ItemTags.gitChange(path)).performClick()
-        awaitTag(Tags.diffTab(path))
-        awaitTag(Tags.DIFF_OPEN_FILE)
+        onNodeWithTag(AppTags.TOOL_GIT).performClick()
+        awaitTag(GitTags.gitChange(path)).performClick()
+        awaitTag(EditorTags.diffTab(path))
+        awaitTag(EditorTags.DIFF_OPEN_FILE)
     }
 
     private fun ComposeUiTest.awaitCaretIn(app: E2eApp, path: String, line: Int) {
-        awaitTag(Tags.tab(path))
+        awaitTag(EditorTags.tab(path))
         val editor = app.project.editor
         awaitCondition {
             val tab = editor.activeTab?.takeIf { !it.isDiff }
@@ -52,10 +53,10 @@ class DiffOpenFileE2eTest {
             val app = launchWithProject(project)
             openWorkingTreeDiff("README.md")
 
-            onNodeWithTag(Tags.DIFF_OPEN_FILE).performClick()
+            onNodeWithTag(EditorTags.DIFF_OPEN_FILE).performClick()
             awaitCaretIn(app, "README.md", line = 2)
             // The diff tab stays open next to the file.
-            awaitTag(Tags.diffTab("README.md"))
+            awaitTag(EditorTags.diffTab("README.md"))
         }
 
     @Test
@@ -66,10 +67,10 @@ class DiffOpenFileE2eTest {
             project.file("src/main/kotlin/App.kt", app.readText() + "// added\n")
             val ide = launchWithProject(project)
             openFromTree("src/main/kotlin/App.kt")
-            awaitTag(Tags.tab("src/main/kotlin/App.kt"))
+            awaitTag(EditorTags.tab("src/main/kotlin/App.kt"))
             openWorkingTreeDiff("src/main/kotlin/App.kt")
 
-            onNodeWithTag(Tags.DIFF).performKeyInput { pressKey(Key.F4) }
+            onNodeWithTag(EditorTags.DIFF).performKeyInput { pressKey(Key.F4) }
             awaitCaretIn(ide, "src/main/kotlin/App.kt", line = app.readLines().lastIndex)
             val tabs = ide.project.editor.allTabs
             val textTabs = tabs.count { !it.isDiff && it.relativePath == "src/main/kotlin/App.kt" }
@@ -85,16 +86,16 @@ class DiffOpenFileE2eTest {
             val commit = project.git("rev-parse", "HEAD").trim()
             val app = launchWithProject(project)
             awaitCondition { app.project.gitBranch != null }
-            onNodeWithTag(Tags.TOOL_BRANCHES).performClick()
-            awaitTag(ItemTags.historyCommit(commit)).performClick()
-            awaitTag(ItemTags.historyFile("README.md")).performClick()
-            awaitTag(Tags.commitDiffTab(commit, "README.md"))
-            awaitTag(Tags.DIFF)
+            onNodeWithTag(AppTags.TOOL_BRANCHES).performClick()
+            awaitTag(GitTags.historyCommit(commit)).performClick()
+            awaitTag(GitTags.historyFile("README.md")).performClick()
+            awaitTag(EditorTags.commitDiffTab(commit, "README.md"))
+            awaitTag(EditorTags.DIFF)
             // Minimized, the Branches window leaves the diff the whole height (the Windows runners' screen is small).
-            onNodeWithTag(Tags.HISTORY_HIDE).performClick()
-            awaitNoTag(Tags.BRANCHES_PANEL)
+            onNodeWithTag(GitTags.HISTORY_HIDE).performClick()
+            awaitNoTag(GitTags.BRANCHES_PANEL)
 
-            onNodeWithTag(Tags.DIFF_OPEN_FILE).performClick()
+            onNodeWithTag(EditorTags.DIFF_OPEN_FILE).performClick()
             awaitCaretIn(app, "README.md", line = 3)
             val opened = app.project.editor.activeTab!!
             assertEquals("Added by the commit", opened.document!!.lines[3])
@@ -109,16 +110,16 @@ class DiffOpenFileE2eTest {
             val commit = project.git("rev-parse", "HEAD").trim()
             val app = launchWithProject(project)
             awaitCondition { app.project.gitBranch != null }
-            onNodeWithTag(Tags.TOOL_BRANCHES).performClick()
-            awaitTag(ItemTags.historyCommit(commit)).performClick()
-            awaitTag(ItemTags.historyFile("build.gradle.kts")).performClick()
-            awaitTag(Tags.DIFF_OPEN_FILE).performClick()
+            onNodeWithTag(AppTags.TOOL_BRANCHES).performClick()
+            awaitTag(GitTags.historyCommit(commit)).performClick()
+            awaitTag(GitTags.historyFile("build.gradle.kts")).performClick()
+            awaitTag(EditorTags.DIFF_OPEN_FILE).performClick()
 
-            awaitTag(Tags.tab("build.gradle.kts"))
+            awaitTag(EditorTags.tab("build.gradle.kts"))
             val editor = app.project.editor
             awaitCondition { editor.activeTab?.status is TabStatus.Unsupported }
             val message = (editor.activeTab!!.status as TabStatus.Unsupported).message
             assertTrue(message.startsWith("Cannot read file"), message)
-            awaitTag(Tags.commitDiffTab(commit, "build.gradle.kts"))
+            awaitTag(EditorTags.commitDiffTab(commit, "build.gradle.kts"))
         }
 }

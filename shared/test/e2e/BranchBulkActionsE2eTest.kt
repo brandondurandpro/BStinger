@@ -13,8 +13,7 @@ import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.v2.runComposeUiTest
-import org.example.kotlineditor.ui.ItemTags
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.GitTags
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.AfterTest
@@ -47,9 +46,9 @@ class BranchBulkActionsE2eTest {
     private fun ComposeUiTest.openPicker(app: E2eApp, vararg branches: String) {
         val names = branches.toList()
         awaitCondition { app.project.gitBranchInfos.count { it.name in names } == names.size }
-        onNodeWithTag(Tags.GIT_BRANCH).performClick()
-        awaitTag(Tags.BRANCH_PICKER)
-        branches.forEach { awaitTag(ItemTags.branchItem(it)) }
+        onNodeWithTag(GitTags.GIT_BRANCH).performClick()
+        awaitTag(GitTags.BRANCH_PICKER)
+        branches.forEach { awaitTag(GitTags.branchItem(it)) }
     }
 
     private fun ComposeUiTest.assertShown(text: String) =
@@ -83,33 +82,33 @@ class BranchBulkActionsE2eTest {
             openPicker(app, "feature/login", "feature/search-ui", "release")
 
             // Select all ticks only what the query shows.
-            onNodeWithTag(Tags.BRANCH_SEARCH).performTextInput("feature")
-            awaitNoTag(ItemTags.branchItem("release"))
-            onNodeWithTag(Tags.BRANCH_SELECT_ALL).performClick()
+            onNodeWithTag(GitTags.BRANCH_SEARCH).performTextInput("feature")
+            awaitNoTag(GitTags.branchItem("release"))
+            onNodeWithTag(GitTags.BRANCH_SELECT_ALL).performClick()
             awaitCondition { app.project.pickedBranches == setOf("feature/login", "feature/search-ui") }
-            onNodeWithTag(Tags.BRANCH_PICK_COUNT, useUnmergedTree = true).assertTextContains("2 selected")
-            onNodeWithTag(Tags.BRANCH_UNPIN_PICKED).assertIsNotEnabled()
+            onNodeWithTag(GitTags.BRANCH_PICK_COUNT, useUnmergedTree = true).assertTextContains("2 selected")
+            onNodeWithTag(GitTags.BRANCH_UNPIN_PICKED).assertIsNotEnabled()
 
-            onNodeWithTag(Tags.BRANCH_PIN_PICKED).performClick()
+            onNodeWithTag(GitTags.BRANCH_PIN_PICKED).performClick()
             awaitCondition { app.project.selectedBranches == setOf("feature/login", "feature/search-ui") }
             // The action is done: the ticks are cleared, the pins stay.
-            awaitNoTag(Tags.BRANCH_PICK_COUNT)
+            awaitNoTag(GitTags.BRANCH_PICK_COUNT)
             assertTrue(app.project.pickedBranches.isEmpty())
 
-            onNodeWithTag(ItemTags.branchSelect("feature/login")).performClick()
-            awaitTag(Tags.BRANCH_PICK_COUNT)
-            onNodeWithTag(Tags.BRANCH_PIN_PICKED).assertIsNotEnabled()
-            onNodeWithTag(Tags.BRANCH_UNPIN_PICKED).performClick()
+            onNodeWithTag(GitTags.branchSelect("feature/login")).performClick()
+            awaitTag(GitTags.BRANCH_PICK_COUNT)
+            onNodeWithTag(GitTags.BRANCH_PIN_PICKED).assertIsNotEnabled()
+            onNodeWithTag(GitTags.BRANCH_UNPIN_PICKED).performClick()
             awaitCondition { app.project.selectedBranches == setOf("feature/search-ui") }
 
             // Clear unticks without acting.
-            onNodeWithTag(ItemTags.branchSelect("feature/search-ui")).performClick()
-            awaitTag(Tags.BRANCH_PICK_COUNT)
-            onNodeWithTag(Tags.BRANCH_CLEAR_PICKS).performClick()
-            awaitNoTag(Tags.BRANCH_PICK_COUNT)
+            onNodeWithTag(GitTags.branchSelect("feature/search-ui")).performClick()
+            awaitTag(GitTags.BRANCH_PICK_COUNT)
+            onNodeWithTag(GitTags.BRANCH_CLEAR_PICKS).performClick()
+            awaitNoTag(GitTags.BRANCH_PICK_COUNT)
             assertEquals(setOf("feature/search-ui"), app.project.selectedBranches)
-            onNodeWithTag(Tags.BRANCH_SEARCH).performKeyInput { pressKey(Key.Escape) }
-            awaitTag(ItemTags.pinnedBranch("feature/search-ui"))
+            onNodeWithTag(GitTags.BRANCH_SEARCH).performKeyInput { pressKey(Key.Escape) }
+            awaitTag(GitTags.pinnedBranch("feature/search-ui"))
         }
 
     @Test
@@ -120,40 +119,40 @@ class BranchBulkActionsE2eTest {
             listOf("feature/login", "feature/search-ui", "keep").forEach { project.git("branch", it) }
             val app = launchWithProject(project)
             openPicker(app, default, "feature/login", "feature/search-ui")
-            onNodeWithTag(ItemTags.branchPin("feature/login")).performClick()
+            onNodeWithTag(GitTags.branchPin("feature/login")).performClick()
             listOf(default, "feature/login", "feature/search-ui").forEach {
-                onNodeWithTag(ItemTags.branchSelect(it)).performClick()
+                onNodeWithTag(GitTags.branchSelect(it)).performClick()
             }
             awaitCondition { app.project.pickedBranches.size == 3 }
 
-            onNodeWithTag(Tags.BRANCH_DELETE_PICKED).performClick()
-            awaitTag(Tags.BRANCH_DELETE_DIALOG)
+            onNodeWithTag(GitTags.BRANCH_DELETE_PICKED).performClick()
+            awaitTag(GitTags.BRANCH_DELETE_DIALOG)
             // Before anything is deleted, the dialog shows what will be: the current branch cannot be, and says so.
-            awaitTag(ItemTags.branchToDelete("feature/login"))
-            awaitTag(ItemTags.branchToDelete("feature/search-ui"))
-            awaitNoTag(ItemTags.branchToDelete(default))
-            awaitNoTag(ItemTags.branchToDelete("keep"))
+            awaitTag(GitTags.branchToDelete("feature/login"))
+            awaitTag(GitTags.branchToDelete("feature/search-ui"))
+            awaitNoTag(GitTags.branchToDelete(default))
+            awaitNoTag(GitTags.branchToDelete("keep"))
             assertShown("$default is the current branch: it is kept.")
-            onNodeWithTag(Tags.BRANCH_DELETE_SUMMARY, useUnmergedTree = true)
+            onNodeWithTag(GitTags.BRANCH_DELETE_SUMMARY, useUnmergedTree = true)
                 .assertTextContains("2 of 2 branches will be deleted")
             assertEquals(localBranches(), setOf(default, "feature/login", "feature/search-ui", "keep"))
 
             // One branch can be spared from the dialog itself.
-            onNodeWithTag(ItemTags.branchToDeleteCheck("feature/search-ui")).performClick()
+            onNodeWithTag(GitTags.branchToDeleteCheck("feature/search-ui")).performClick()
             awaitCondition {
                 runCatching {
-                    onNodeWithTag(Tags.BRANCH_DELETE_SUMMARY, useUnmergedTree = true)
+                    onNodeWithTag(GitTags.BRANCH_DELETE_SUMMARY, useUnmergedTree = true)
                         .assertTextContains("1 of 2 branches will be deleted")
                 }.isSuccess
             }
-            onNodeWithTag(Tags.BRANCH_DELETE_CONFIRM).performClick()
+            onNodeWithTag(GitTags.BRANCH_DELETE_CONFIRM).performClick()
 
-            awaitNoTag(Tags.BRANCH_DELETE_DIALOG)
-            awaitTag(Tags.BRANCH_DONE)
-            onNodeWithTag(Tags.BRANCH_DONE).assertTextContains("1 branch deleted")
+            awaitNoTag(GitTags.BRANCH_DELETE_DIALOG)
+            awaitTag(GitTags.BRANCH_DONE)
+            onNodeWithTag(GitTags.BRANCH_DONE).assertTextContains("1 branch deleted")
             assertEquals(setOf(default, "feature/search-ui", "keep"), localBranches())
-            awaitNoTag(ItemTags.branchItem("feature/login"))
-            awaitTag(ItemTags.branchItem("feature/search-ui"))
+            awaitNoTag(GitTags.branchItem("feature/login"))
+            awaitTag(GitTags.branchItem("feature/search-ui"))
             // The deleted branch leaves the toolbar too, and the ticks are gone with it.
             awaitCondition { "feature/login" !in app.project.selectedBranches }
             awaitCondition { "feature/login" !in app.project.pickedBranches }
@@ -166,26 +165,26 @@ class BranchBulkActionsE2eTest {
             val app = launchWithProject(project)
             awaitCondition { app.project.gitBranchInfos.any { it.name == "feature/old" && it.upstreamGone } }
             openPicker(app, "feature/tracked", "feature/old", "local-only")
-            onNodeWithTag(Tags.BRANCH_CLEANUP).assertIsEnabled()
-            onNodeWithTag(Tags.BRANCH_CLEANUP).assertTextContains("Clean up 2 without remote…")
+            onNodeWithTag(GitTags.BRANCH_CLEANUP).assertIsEnabled()
+            onNodeWithTag(GitTags.BRANCH_CLEANUP).assertTextContains("Clean up 2 without remote…")
 
-            onNodeWithTag(Tags.BRANCH_CLEANUP).performClick()
-            awaitTag(Tags.BRANCH_DELETE_DIALOG)
-            awaitTag(ItemTags.branchToDelete("feature/old"))
-            awaitTag(ItemTags.branchToDelete("local-only"))
-            awaitNoTag(ItemTags.branchToDelete("feature/tracked"))
-            awaitNoTag(ItemTags.branchToDelete(default))
+            onNodeWithTag(GitTags.BRANCH_CLEANUP).performClick()
+            awaitTag(GitTags.BRANCH_DELETE_DIALOG)
+            awaitTag(GitTags.branchToDelete("feature/old"))
+            awaitTag(GitTags.branchToDelete("local-only"))
+            awaitNoTag(GitTags.branchToDelete("feature/tracked"))
+            awaitNoTag(GitTags.branchToDelete(default))
             // Each row says why it is listed.
             assertShown("origin/feature/old no longer exists on the remote")
             assertShown("no remote tracking branch")
 
-            onNodeWithTag(Tags.BRANCH_DELETE_CONFIRM).performClick()
-            awaitTag(Tags.BRANCH_DONE)
+            onNodeWithTag(GitTags.BRANCH_DELETE_CONFIRM).performClick()
+            awaitTag(GitTags.BRANCH_DONE)
             assertEquals(setOf(default, "feature/tracked"), localBranches())
             // Nothing is left to clean up; the remote kept its branches.
             awaitCondition { app.project.branchesWithoutRemote().isEmpty() }
-            onNodeWithTag(Tags.BRANCH_CLEANUP).assertIsNotEnabled()
-            onNodeWithTag(Tags.BRANCH_CLEANUP).assertTextContains("No branch without remote")
+            onNodeWithTag(GitTags.BRANCH_CLEANUP).assertIsNotEnabled()
+            onNodeWithTag(GitTags.BRANCH_CLEANUP).assertTextContains("No branch without remote")
             assertTrue("feature/tracked" in project.git("ls-remote", "--heads", "origin"))
         }
 
@@ -199,22 +198,22 @@ class BranchBulkActionsE2eTest {
             openPicker(app, "a", "b")
 
             // Without any remote, the current branch is the only one the cleanup leaves out.
-            onNodeWithTag(Tags.BRANCH_CLEANUP).performClick()
-            awaitTag(ItemTags.branchToDelete("a"))
-            awaitTag(ItemTags.branchToDelete("b"))
-            awaitNoTag(ItemTags.branchToDelete(default))
-            onNodeWithTag(Tags.BRANCH_DELETE_CANCEL).performClick()
-            awaitNoTag(Tags.BRANCH_DELETE_DIALOG)
-            awaitTag(Tags.BRANCH_SEARCH)
+            onNodeWithTag(GitTags.BRANCH_CLEANUP).performClick()
+            awaitTag(GitTags.branchToDelete("a"))
+            awaitTag(GitTags.branchToDelete("b"))
+            awaitNoTag(GitTags.branchToDelete(default))
+            onNodeWithTag(GitTags.BRANCH_DELETE_CANCEL).performClick()
+            awaitNoTag(GitTags.BRANCH_DELETE_DIALOG)
+            awaitTag(GitTags.BRANCH_SEARCH)
 
-            onNodeWithTag(Tags.BRANCH_CLEANUP).performClick()
-            awaitTag(Tags.BRANCH_DELETE_DIALOG)
-            onNodeWithTag(Tags.BRANCH_DELETE_DIALOG).performKeyInput { pressKey(Key.Escape) }
-            awaitNoTag(Tags.BRANCH_DELETE_DIALOG)
+            onNodeWithTag(GitTags.BRANCH_CLEANUP).performClick()
+            awaitTag(GitTags.BRANCH_DELETE_DIALOG)
+            onNodeWithTag(GitTags.BRANCH_DELETE_DIALOG).performKeyInput { pressKey(Key.Escape) }
+            awaitNoTag(GitTags.BRANCH_DELETE_DIALOG)
             // Escape leaves the dialog, not the picker; the next Escape, back in the search field, closes the picker.
-            awaitTag(Tags.BRANCH_PICKER)
-            onNodeWithTag(Tags.BRANCH_SEARCH).performKeyInput { pressKey(Key.Escape) }
-            awaitNoTag(Tags.BRANCH_PICKER)
+            awaitTag(GitTags.BRANCH_PICKER)
+            onNodeWithTag(GitTags.BRANCH_SEARCH).performKeyInput { pressKey(Key.Escape) }
+            awaitNoTag(GitTags.BRANCH_PICKER)
             assertEquals(setOf(default, "a", "b"), localBranches())
         }
 
@@ -229,18 +228,18 @@ class BranchBulkActionsE2eTest {
             val app = launchWithProject(project)
             openPicker(app, "busy", "free")
 
-            onNodeWithTag(Tags.BRANCH_CLEANUP).performClick()
-            awaitTag(ItemTags.branchToDelete("busy"))
-            onNodeWithTag(Tags.BRANCH_DELETE_CONFIRM).performClick()
+            onNodeWithTag(GitTags.BRANCH_CLEANUP).performClick()
+            awaitTag(GitTags.branchToDelete("busy"))
+            onNodeWithTag(GitTags.BRANCH_DELETE_CONFIRM).performClick()
 
             // The dialog stays open with Git's reason, and only lists what is still there.
-            awaitTag(Tags.BRANCH_ERROR)
-            onNodeWithTag(Tags.BRANCH_ERROR).assertTextContains("busy", substring = true)
-            awaitNoTag(ItemTags.branchToDelete("free"))
-            awaitTag(ItemTags.branchToDelete("busy"))
+            awaitTag(GitTags.BRANCH_ERROR)
+            onNodeWithTag(GitTags.BRANCH_ERROR).assertTextContains("busy", substring = true)
+            awaitNoTag(GitTags.branchToDelete("free"))
+            awaitTag(GitTags.branchToDelete("busy"))
             assertTrue("free" !in localBranches() && "busy" in localBranches())
-            onNodeWithTag(Tags.BRANCH_DELETE_CANCEL).performClick()
-            awaitNoTag(Tags.BRANCH_DELETE_DIALOG)
+            onNodeWithTag(GitTags.BRANCH_DELETE_CANCEL).performClick()
+            awaitNoTag(GitTags.BRANCH_DELETE_DIALOG)
             project.git("worktree", "remove", "--force", worktree.toString())
         }
 
@@ -252,13 +251,13 @@ class BranchBulkActionsE2eTest {
             listOf("a", "b").forEach { project.git("branch", it) }
             val app = launchWithProject(project)
             openPicker(app, "a", "b")
-            onNodeWithTag(Tags.BRANCH_CLEANUP).performClick()
-            awaitTag(ItemTags.branchToDelete("a"))
+            onNodeWithTag(GitTags.BRANCH_CLEANUP).performClick()
+            awaitTag(GitTags.branchToDelete("a"))
 
             project.git("branch", "-D", "a")
-            onNodeWithTag(Tags.BRANCH_DELETE_CONFIRM).performClick()
-            awaitTag(Tags.BRANCH_DONE)
-            awaitNoTag(Tags.BRANCH_ERROR)
+            onNodeWithTag(GitTags.BRANCH_DELETE_CONFIRM).performClick()
+            awaitTag(GitTags.BRANCH_DONE)
+            awaitNoTag(GitTags.BRANCH_ERROR)
             assertEquals(setOf(default), localBranches())
             assertTrue(!app.project.gitMessageIsError)
         }

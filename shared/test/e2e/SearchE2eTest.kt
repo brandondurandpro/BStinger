@@ -21,8 +21,9 @@ import androidx.compose.ui.test.withKeyDown
 import org.example.kotlineditor.state.TextPos
 import org.example.kotlineditor.state.delete
 import org.example.kotlineditor.state.selectedText
-import org.example.kotlineditor.ui.ItemTags
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.AppTags
+import org.example.kotlineditor.ui.EditorTags
+import org.example.kotlineditor.ui.TreeTags
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -46,20 +47,20 @@ class SearchE2eTest {
             val doc =
                 app.project.editor.activeTab!!
                     .document!!
-            onNodeWithTag(Tags.EDITOR).performClick()
-            onNodeWithTag(Tags.EDITOR).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.F) } }
-            awaitTag(Tags.FIND_BAR_INPUT).performTextInput("val")
+            onNodeWithTag(EditorTags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.F) } }
+            awaitTag(EditorTags.FIND_BAR_INPUT).performTextInput("val")
             awaitCondition { app.project.find.matches.size == 2 }
-            onNodeWithTag(Tags.FIND_BAR_COUNT).assertTextContains("/2", substring = true)
-            onNodeWithTag(Tags.FIND_BAR_INPUT).performKeyInput { pressKey(Key.Enter) }
+            onNodeWithTag(EditorTags.FIND_BAR_COUNT).assertTextContains("/2", substring = true)
+            onNodeWithTag(EditorTags.FIND_BAR_INPUT).performKeyInput { pressKey(Key.Enter) }
             waitForIdle()
             assertEquals("val", doc.selectedText())
             val first = doc.caret
-            onNodeWithTag(Tags.FIND_BAR_INPUT).performKeyInput { pressKey(Key.Enter) }
+            onNodeWithTag(EditorTags.FIND_BAR_INPUT).performKeyInput { pressKey(Key.Enter) }
             waitForIdle()
             assertEquals("val", doc.selectedText())
             assertEquals(1, kotlin.math.abs(doc.caret.line - first.line))
-            onNodeWithTag(Tags.FIND_BAR_NEXT).performClick()
+            onNodeWithTag(EditorTags.FIND_BAR_NEXT).performClick()
             waitForIdle()
             assertEquals(first, doc.caret)
         }
@@ -70,21 +71,21 @@ class SearchE2eTest {
             project.file("Case.txt", "Hello hello HELLO\n")
             val app = launchWithProject(project)
             openFromTree("Case.txt")
-            onNodeWithTag(Tags.EDITOR).performClick()
-            onNodeWithTag(Tags.EDITOR).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.F) } }
-            awaitTag(Tags.FIND_BAR_INPUT).performTextInput("hello")
+            onNodeWithTag(EditorTags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.F) } }
+            awaitTag(EditorTags.FIND_BAR_INPUT).performTextInput("hello")
             awaitCondition { app.project.find.matches.size == 3 }
             app.project.find.matchCase = true
             awaitCondition { app.project.find.matches.size == 1 }
-            onNodeWithTag(Tags.FIND_BAR_INPUT).performTextClearance()
-            onNodeWithTag(Tags.FIND_BAR_INPUT).performTextInput("absent")
+            onNodeWithTag(EditorTags.FIND_BAR_INPUT).performTextClearance()
+            onNodeWithTag(EditorTags.FIND_BAR_INPUT).performTextInput("absent")
             awaitCondition {
                 runCatching {
-                    onNodeWithTag(Tags.FIND_BAR_COUNT).assertTextContains("0 results")
+                    onNodeWithTag(EditorTags.FIND_BAR_COUNT).assertTextContains("0 results")
                 }.isSuccess
             }
-            onNodeWithTag(Tags.FIND_BAR_CLOSE).performClick()
-            awaitNoTag(Tags.FIND_BAR)
+            onNodeWithTag(EditorTags.FIND_BAR_CLOSE).performClick()
+            awaitNoTag(EditorTags.FIND_BAR)
         }
 
     @Test
@@ -95,10 +96,10 @@ class SearchE2eTest {
             val doc =
                 app.project.editor.activeTab!!
                     .document!!
-            onNodeWithTag(Tags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performClick()
             runOnUiThread { doc.select(TextPos(7, 8), TextPos(7, 16)) }
-            onNodeWithTag(Tags.EDITOR).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.F) } }
-            awaitTag(Tags.FIND_BAR_INPUT)
+            onNodeWithTag(EditorTags.EDITOR).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.F) } }
+            awaitTag(EditorTags.FIND_BAR_INPUT)
             assertEquals("greeting", app.project.find.query)
             awaitCondition { app.project.find.matches.size == 2 }
         }
@@ -107,15 +108,15 @@ class SearchE2eTest {
     fun `Go to File finds files by fuzzy name and opens them`() =
         runComposeUiTest {
             val app = launchWithProject(project)
-            onNodeWithTag(Tags.TREE).performClick()
+            onNodeWithTag(TreeTags.TREE).performClick()
             onNodeWithTag(
-                Tags.TREE,
+                TreeTags.TREE,
             ).performKeyInput { withKeyDown(Key.CtrlLeft) { withKeyDown(Key.ShiftLeft) { pressKey(Key.N) } } }
-            awaitTag(Tags.GOTO_FILE_INPUT).performTextInput("strkt")
-            awaitTag(ItemTags.gotoFileItem("src/main/kotlin/util/Strings.kt")).assertIsDisplayed()
-            onNodeWithTag(Tags.GOTO_FILE_INPUT).performKeyInput { pressKey(Key.Enter) }
-            awaitTag(Tags.tab("src/main/kotlin/util/Strings.kt"))
-            awaitNoTag(Tags.GOTO_FILE)
+            awaitTag(TreeTags.GOTO_FILE_INPUT).performTextInput("strkt")
+            awaitTag(TreeTags.gotoFileItem("src/main/kotlin/util/Strings.kt")).assertIsDisplayed()
+            onNodeWithTag(TreeTags.GOTO_FILE_INPUT).performKeyInput { pressKey(Key.Enter) }
+            awaitTag(EditorTags.tab("src/main/kotlin/util/Strings.kt"))
+            awaitNoTag(TreeTags.GOTO_FILE)
             assertEquals(
                 "Strings.kt",
                 app.project.editor.activeTab
@@ -131,14 +132,14 @@ class SearchE2eTest {
             repeat(GOTO_FILE_FILLER) { project.file("src/filler/Filler$it.kt", "") }
             val app = launchWithProject(project)
             runOnUiThread { app.project.showPopup(org.example.kotlineditor.state.PopupKind.GotoFile) }
-            awaitTag(Tags.GOTO_FILE_INPUT)
+            awaitTag(TreeTags.GOTO_FILE_INPUT)
             awaitCondition { app.project.fileIndex.files != null }
             // The list of every file is shown first.
             waitForIdle()
-            onNodeWithTag(Tags.GOTO_FILE_INPUT).performTextInput("strkt")
-            onNodeWithTag(Tags.GOTO_FILE_INPUT).performKeyInput { pressKey(Key.Enter) }
-            awaitTag(Tags.tab("src/main/kotlin/util/Strings.kt"))
-            awaitNoTag(Tags.GOTO_FILE)
+            onNodeWithTag(TreeTags.GOTO_FILE_INPUT).performTextInput("strkt")
+            onNodeWithTag(TreeTags.GOTO_FILE_INPUT).performKeyInput { pressKey(Key.Enter) }
+            awaitTag(EditorTags.tab("src/main/kotlin/util/Strings.kt"))
+            awaitNoTag(TreeTags.GOTO_FILE)
             assertEquals(
                 "Strings.kt",
                 app.project.editor.activeTab
@@ -152,12 +153,12 @@ class SearchE2eTest {
         runComposeUiTest {
             val app = launchWithProject(project)
             runOnUiThread { app.project.showPopup(org.example.kotlineditor.state.PopupKind.GotoFile) }
-            awaitTag(Tags.GOTO_FILE_INPUT).performTextInput("config")
+            awaitTag(TreeTags.GOTO_FILE_INPUT).performTextInput("config")
             awaitCondition { app.project.fileIndex.files != null }
             waitForIdle()
-            awaitNoTag(ItemTags.gotoFileItem(".git/config"))
-            onNodeWithTag(Tags.GOTO_FILE_INPUT).performKeyInput { pressKey(Key.Escape) }
-            awaitNoTag(Tags.GOTO_FILE)
+            awaitNoTag(TreeTags.gotoFileItem(".git/config"))
+            onNodeWithTag(TreeTags.GOTO_FILE_INPUT).performKeyInput { pressKey(Key.Escape) }
+            awaitNoTag(TreeTags.GOTO_FILE)
             assertNull(app.project.popup)
         }
 
@@ -170,12 +171,12 @@ class SearchE2eTest {
                 app.project.editor.activeTab!!
                     .document!!
             val text = document.text()
-            onNodeWithTag(Tags.EDITOR).performClick()
-            onNodeWithTag(Tags.EDITOR).performKeyInput {
+            onNodeWithTag(EditorTags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performKeyInput {
                 pressKey(Key.ShiftLeft)
                 pressKey(Key.ShiftLeft)
             }
-            awaitTag(Tags.GOTO_FILE_INPUT).assertIsFocused()
+            awaitTag(TreeTags.GOTO_FILE_INPUT).assertIsFocused()
             assertEquals(text, document.text())
         }
 
@@ -188,7 +189,7 @@ class SearchE2eTest {
                 app.project.editor.activeTab!!
                     .document!!
             val text = document.text()
-            onNodeWithTag(Tags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performClick()
             // Compose reports a key without a character (here Shift) with CHAR_UNDEFINED.
             val scene = (this as SkikoComposeUiTest).scene
             runOnUiThread {
@@ -197,7 +198,7 @@ class SearchE2eTest {
                     scene.sendKeyEvent(KeyEvent(Key.ShiftLeft, KeyEventType.KeyUp, codePoint = 0xFFFF))
                 }
             }
-            awaitTag(Tags.GOTO_FILE_INPUT)
+            awaitTag(TreeTags.GOTO_FILE_INPUT)
             assertEquals(text, document.text())
         }
 
@@ -206,29 +207,29 @@ class SearchE2eTest {
         runComposeUiTest {
             launchWithProject(project)
             openFromTree("src/main/kotlin/App.kt")
-            onNodeWithTag(Tags.EDITOR).performClick()
-            onNodeWithTag(Tags.EDITOR).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.P) } }
-            awaitTag(Tags.GOTO_FILE_INPUT).assertIsFocused()
+            onNodeWithTag(EditorTags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.P) } }
+            awaitTag(TreeTags.GOTO_FILE_INPUT).assertIsFocused()
         }
 
     @Test
     fun `Ctrl+P opens Go to File when no file is open`() =
         runComposeUiTest {
             launchWithProject(project)
-            awaitTag(Tags.EDITOR_EMPTY)
-            onNodeWithTag(Tags.PROJECT).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.P) } }
-            awaitTag(Tags.GOTO_FILE_INPUT).assertIsFocused()
+            awaitTag(AppTags.EDITOR_EMPTY)
+            onNodeWithTag(AppTags.PROJECT).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.P) } }
+            awaitTag(TreeTags.GOTO_FILE_INPUT).assertIsFocused()
         }
 
     @Test
     fun `Ctrl+Shift+F opens Find in Files when no file is open`() =
         runComposeUiTest {
             launchWithProject(project)
-            awaitTag(Tags.EDITOR_EMPTY)
-            onNodeWithTag(Tags.PROJECT).performKeyInput {
+            awaitTag(AppTags.EDITOR_EMPTY)
+            onNodeWithTag(AppTags.PROJECT).performKeyInput {
                 withKeyDown(Key.CtrlLeft) { withKeyDown(Key.ShiftLeft) { pressKey(Key.F) } }
             }
-            awaitTag(Tags.FIND_IN_FILES_INPUT).assertIsFocused()
+            awaitTag(TreeTags.FIND_IN_FILES_INPUT).assertIsFocused()
         }
 
     @Test
@@ -236,28 +237,28 @@ class SearchE2eTest {
         runComposeUiTest {
             launchWithProject(project)
             openFromTree("src/main/kotlin/App.kt")
-            onNodeWithTag(Tags.EDITOR).performClick()
-            onNodeWithTag(Tags.EDITOR).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.F4) } }
-            awaitTag(Tags.EDITOR_EMPTY)
-            onNodeWithTag(Tags.PROJECT).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.P) } }
-            awaitTag(Tags.GOTO_FILE_INPUT).assertIsFocused()
+            onNodeWithTag(EditorTags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.F4) } }
+            awaitTag(AppTags.EDITOR_EMPTY)
+            onNodeWithTag(AppTags.PROJECT).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.P) } }
+            awaitTag(TreeTags.GOTO_FILE_INPUT).assertIsFocused()
         }
 
     @Test
     fun `search shortcuts still work after dismissing a popup when no file is open`() =
         runComposeUiTest {
             val app = launchWithProject(project)
-            awaitTag(Tags.EDITOR_EMPTY)
-            onNodeWithTag(Tags.PROJECT).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.P) } }
-            awaitTag(Tags.GOTO_FILE_INPUT).performKeyInput { pressKey(Key.Escape) }
-            awaitNoTag(Tags.GOTO_FILE)
-            onNodeWithTag(Tags.PROJECT).performKeyInput {
+            awaitTag(AppTags.EDITOR_EMPTY)
+            onNodeWithTag(AppTags.PROJECT).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.P) } }
+            awaitTag(TreeTags.GOTO_FILE_INPUT).performKeyInput { pressKey(Key.Escape) }
+            awaitNoTag(TreeTags.GOTO_FILE)
+            onNodeWithTag(AppTags.PROJECT).performKeyInput {
                 withKeyDown(Key.CtrlLeft) { withKeyDown(Key.ShiftLeft) { pressKey(Key.F) } }
             }
-            awaitTag(Tags.FIND_IN_FILES_INPUT).performKeyInput { pressKey(Key.Escape) }
-            awaitNoTag(Tags.FIND_IN_FILES)
-            onNodeWithTag(Tags.PROJECT).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.P) } }
-            awaitTag(Tags.GOTO_FILE_INPUT).assertIsFocused()
+            awaitTag(TreeTags.FIND_IN_FILES_INPUT).performKeyInput { pressKey(Key.Escape) }
+            awaitNoTag(TreeTags.FIND_IN_FILES)
+            onNodeWithTag(AppTags.PROJECT).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.P) } }
+            awaitTag(TreeTags.GOTO_FILE_INPUT).assertIsFocused()
             assertNull(app.project.editor.activeTab)
         }
 
@@ -265,16 +266,16 @@ class SearchE2eTest {
     fun `Find in Files lists matches across the project and opens the selected one at its line`() =
         runComposeUiTest {
             val app = launchWithProject(project)
-            onNodeWithTag(Tags.TREE).performClick()
+            onNodeWithTag(TreeTags.TREE).performClick()
             onNodeWithTag(
-                Tags.TREE,
+                TreeTags.TREE,
             ).performKeyInput { withKeyDown(Key.CtrlLeft) { withKeyDown(Key.ShiftLeft) { pressKey(Key.F) } } }
-            awaitTag(Tags.FIND_IN_FILES_INPUT).performTextInput("Hello")
-            awaitTag(ItemTags.findInFilesItem("docs/guide.md", 1))
-            awaitTag(ItemTags.findInFilesItem("src/main/kotlin/App.kt", 7))
-            onNodeWithTag(Tags.FIND_IN_FILES_COUNT).assertTextContains("2 matches in 2 files")
-            onNodeWithTag(ItemTags.findInFilesItem("src/main/kotlin/App.kt", 7)).performClick()
-            awaitTag(Tags.tab("src/main/kotlin/App.kt"))
+            awaitTag(TreeTags.FIND_IN_FILES_INPUT).performTextInput("Hello")
+            awaitTag(TreeTags.findInFilesItem("docs/guide.md", 1))
+            awaitTag(TreeTags.findInFilesItem("src/main/kotlin/App.kt", 7))
+            onNodeWithTag(TreeTags.FIND_IN_FILES_COUNT).assertTextContains("2 matches in 2 files")
+            onNodeWithTag(TreeTags.findInFilesItem("src/main/kotlin/App.kt", 7)).performClick()
+            awaitTag(EditorTags.tab("src/main/kotlin/App.kt"))
             awaitCondition {
                 app.project.editor.activeTab
                     ?.document
@@ -293,12 +294,12 @@ class SearchE2eTest {
     fun `Find in Files counts its matches and files in correct English`() =
         runComposeUiTest {
             launchWithProject(project)
-            onNodeWithTag(Tags.TREE).performClick()
+            onNodeWithTag(TreeTags.TREE).performClick()
             onNodeWithTag(
-                Tags.TREE,
+                TreeTags.TREE,
             ).performKeyInput { withKeyDown(Key.CtrlLeft) { withKeyDown(Key.ShiftLeft) { pressKey(Key.F) } } }
-            val input = awaitTag(Tags.FIND_IN_FILES_INPUT)
-            val count = onNodeWithTag(Tags.FIND_IN_FILES_COUNT)
+            val input = awaitTag(TreeTags.FIND_IN_FILES_INPUT)
+            val count = onNodeWithTag(TreeTags.FIND_IN_FILES_COUNT)
             input.performTextInput("Hello from")
             awaitCondition { runCatching { count.assertTextEquals("1 match in 1 file") }.isSuccess }
             input.performTextClearance()
@@ -316,20 +317,20 @@ class SearchE2eTest {
             project.file("Lines.txt", (1..500).joinToString("\n") { "line $it" })
             val app = launchWithProject(project)
             openFromTree("Lines.txt")
-            onNodeWithTag(Tags.EDITOR).performClick()
-            onNodeWithTag(Tags.EDITOR).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.G) } }
-            awaitTag(Tags.GOTO_LINE_INPUT).performTextClearance()
-            onNodeWithTag(Tags.GOTO_LINE_INPUT).performTextInput("420:3")
-            onNodeWithTag(Tags.GOTO_LINE_INPUT).performKeyInput { pressKey(Key.Enter) }
-            awaitNoTag(Tags.GOTO_LINE)
+            onNodeWithTag(EditorTags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.G) } }
+            awaitTag(AppTags.GOTO_LINE_INPUT).performTextClearance()
+            onNodeWithTag(AppTags.GOTO_LINE_INPUT).performTextInput("420:3")
+            onNodeWithTag(AppTags.GOTO_LINE_INPUT).performKeyInput { pressKey(Key.Enter) }
+            awaitNoTag(AppTags.GOTO_LINE)
             assertEquals(
                 TextPos(419, 2),
                 app.project.editor.activeTab!!
                     .document!!
                     .caret,
             )
-            awaitTag(Tags.line(419)).assertIsDisplayed()
-            onNodeWithTag(Tags.STATUS_CARET).assertTextContains("420:3", substring = true)
+            awaitTag(EditorTags.line(419)).assertIsDisplayed()
+            onNodeWithTag(AppTags.STATUS_CARET).assertTextContains("420:3", substring = true)
         }
 
     private companion object {

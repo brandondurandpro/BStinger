@@ -15,8 +15,7 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.requestFocus
 import androidx.compose.ui.test.v2.runComposeUiTest
-import org.example.kotlineditor.ui.ItemTags
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.RemoteTags
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.createDirectories
@@ -112,12 +111,12 @@ class OpenProjectDialogPerformanceE2eTest {
 
             measure("list $DIRECTORIES directories", budgetMillis = 10_000, budgetMegabytes = 200) {
                 showDirectoryInProjectPicker(parent.toString())
-                awaitTag(ItemTags.pickerDirectory(directory(0).toString()))
+                awaitTag(RemoteTags.pickerDirectory(directory(0).toString()))
                 renderFrame()
             }
             assertTrue(composedRows() < MAX_COMPOSED_ROWS, "composed directory rows: ${composedRows()}")
 
-            val list = onNode(hasScrollToNodeAction() and hasAnyAncestor(hasTestTag(Tags.OPEN_PROJECT)))
+            val list = onNode(hasScrollToNodeAction() and hasAnyAncestor(hasTestTag(RemoteTags.OPEN_PROJECT)))
             measure(
                 "scroll the directory list through $SCROLL_STEPS positions",
                 budgetMillis = 15_000,
@@ -136,7 +135,7 @@ class OpenProjectDialogPerformanceE2eTest {
             // Typing appends to the shown directory: one more segment selects a nested directory.
             val child = directory(2_999)
             measure("reach a directory by typing one segment", budgetMillis = 2_000, budgetMegabytes = 50) {
-                val field = onNodeWithTag(Tags.OPEN_PROJECT_PATH).requestFocus()
+                val field = onNodeWithTag(RemoteTags.OPEN_PROJECT_PATH).requestFocus()
                 field.performTextInput(parent.fileSystem.separator + child.fileName)
                 field.performKeyInput { pressKey(Key.Enter) }
                 awaitCondition { shownDirectoryInProjectPicker() == child.toString() }

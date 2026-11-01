@@ -55,8 +55,8 @@ fun LanguageServerStatusItems(project: ProjectState) {
             text = statusText(server),
             color = colorOf(server),
             tooltip = tooltipOf(server),
-            tag = Tags.statusLanguageServer(server.id),
-            tooltipTag = Tags.statusLanguageServerTooltip(server.id),
+            tag = LanguageServerTags.statusLanguageServer(server.id),
+            tooltipTag = LanguageServerTags.statusLanguageServerTooltip(server.id),
         ) { project.showToolWindow(ToolWindow.LanguageServers) }
     }
     val server = state.status.server
@@ -65,8 +65,8 @@ fun LanguageServerStatusItems(project: ProjectState) {
             text = "Server ${memoryText(server.heapUsedBytes)}",
             color = IdeColors.TextSecondary,
             tooltip = serverTooltip(server),
-            tag = Tags.STATUS_SERVER_MEMORY,
-            tooltipTag = Tags.STATUS_SERVER_MEMORY_TOOLTIP,
+            tag = LanguageServerTags.STATUS_SERVER_MEMORY,
+            tooltipTag = LanguageServerTags.STATUS_SERVER_MEMORY_TOOLTIP,
         ) { project.showToolWindow(ToolWindow.LanguageServers) }
     }
 }
@@ -110,11 +110,11 @@ private fun MultilineTooltip(text: String, modifier: Modifier = Modifier) {
 @Composable
 fun LanguageServersPanel(project: ProjectState, drag: ToolWindowDrag, modifier: Modifier = Modifier) {
     val state = project.languageServers
-    Column(modifier.fillMaxSize().background(IdeColors.Editor).testTag(Tags.LANGUAGE_SERVERS)) {
+    Column(modifier.fillMaxSize().background(IdeColors.Editor).testTag(LanguageServerTags.LANGUAGE_SERVERS)) {
         ToolWindowHeader("Language Servers", ToolWindow.LanguageServers, project, drag) {
             IconButton(
                 { project.toolWindows.setVisible(ToolWindow.LanguageServers, false) },
-                Modifier.testTag(Tags.LANGUAGE_SERVERS_HIDE),
+                Modifier.testTag(LanguageServerTags.LANGUAGE_SERVERS_HIDE),
             ) { CloseIcon() }
         }
         if (state != null) LanguageServersContent(project, state)
@@ -126,7 +126,7 @@ private fun ColumnScope.LanguageServersContent(project: ProjectState, state: Lan
     state.error?.let {
         Label(
             it,
-            Modifier.padding(horizontal = 12.dp, vertical = 4.dp).testTag(Tags.LANGUAGE_SERVERS_ERROR),
+            Modifier.padding(horizontal = 12.dp, vertical = 4.dp).testTag(LanguageServerTags.LANGUAGE_SERVERS_ERROR),
             color = IdeColors.Error,
             fontSize = 12.sp,
             maxLines = 2,
@@ -138,7 +138,7 @@ private fun ColumnScope.LanguageServersContent(project: ProjectState, state: Lan
         if (servers.isEmpty()) {
             Label(
                 "No language server is running. Opening a PHP file starts one.",
-                Modifier.padding(12.dp).testTag(Tags.LANGUAGE_SERVERS_EMPTY),
+                Modifier.padding(12.dp).testTag(LanguageServerTags.LANGUAGE_SERVERS_EMPTY),
                 color = IdeColors.TextSecondary,
                 fontSize = 12.sp,
             )
@@ -154,7 +154,10 @@ private fun ColumnScope.LanguageServersContent(project: ProjectState, state: Lan
 @Composable
 private fun IdeServerRow(server: ServerMemory) {
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp).testTag(Tags.LANGUAGE_SERVERS_IDE),
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .testTag(LanguageServerTags.LANGUAGE_SERVERS_IDE),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
@@ -174,7 +177,7 @@ private fun ServerRow(project: ProjectState, state: LanguageServersState, server
         Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 8.dp)
-            .testTag(Tags.languageServerRow(server.id)),
+            .testTag(LanguageServerTags.languageServerRow(server.id)),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -183,7 +186,7 @@ private fun ServerRow(project: ProjectState, state: LanguageServersState, server
                 Label("${server.languageName} · ${server.serverName}", fontWeight = FontWeight.Bold)
                 Label(
                     "  ${stateText(server)}",
-                    Modifier.testTag(Tags.languageServerState(server.id)),
+                    Modifier.testTag(LanguageServerTags.languageServerState(server.id)),
                     color = colorOf(server),
                     fontSize = 12.sp,
                 )
@@ -194,7 +197,7 @@ private fun ServerRow(project: ProjectState, state: LanguageServersState, server
             note?.let {
                 Label(
                     it,
-                    Modifier.testTag(Tags.languageServerMessage(server.id)),
+                    Modifier.testTag(LanguageServerTags.languageServerMessage(server.id)),
                     color = colorOf(server),
                     fontSize = 12.sp,
                     maxLines = 3,
@@ -203,30 +206,47 @@ private fun ServerRow(project: ProjectState, state: LanguageServersState, server
         }
         Label(
             memoryDetails(server),
-            Modifier.width(260.dp).testTag(Tags.languageServerMemory(server.id)),
+            Modifier.width(260.dp).testTag(LanguageServerTags.languageServerMemory(server.id)),
             color = IdeColors.TextSecondary,
             fontSize = 12.sp,
         )
-        IdeButton("Restart", { state.restart(server) }, Modifier.testTag(Tags.languageServerRestart(server.id)))
-        if (state.isRunning(server)) {
-            IdeButton("Stop", { state.stop(server) }, Modifier.testTag(Tags.languageServerStop(server.id)))
-        } else {
-            IdeButton("Start", { state.start(server) }, Modifier.testTag(Tags.languageServerStart(server.id)))
-        }
-        IdeButton(
-            if (state.log?.id == server.id) "Hide log" else "Log",
-            { state.toggleLog(server) },
-            Modifier.testTag(Tags.languageServerLog(server.id)),
-        )
-        IdeButton("Change…", { state.offerChoice(server.language, project.root.path) })
+        ServerActions(project, state, server)
     }
+}
+
+@Composable
+private fun ServerActions(project: ProjectState, state: LanguageServersState, server: LanguageServerInfo) {
+    IdeButton(
+        "Restart",
+        { state.restart(server) },
+        Modifier.testTag(LanguageServerTags.languageServerRestart(server.id)),
+    )
+    if (state.isRunning(server)) {
+        IdeButton(
+            "Stop",
+            { state.stop(server) },
+            Modifier.testTag(LanguageServerTags.languageServerStop(server.id)),
+        )
+    } else {
+        IdeButton(
+            "Start",
+            { state.start(server) },
+            Modifier.testTag(LanguageServerTags.languageServerStart(server.id)),
+        )
+    }
+    IdeButton(
+        if (state.log?.id == server.id) "Hide log" else "Log",
+        { state.toggleLog(server) },
+        Modifier.testTag(LanguageServerTags.languageServerLog(server.id)),
+    )
+    IdeButton("Change…", { state.offerChoice(server.language, project.root.path) })
 }
 
 @Composable
 private fun LogView(lines: List<String>, modifier: Modifier) {
     val list = rememberLazyListState()
     LaunchedEffect(lines) { if (lines.isNotEmpty()) list.scrollToItem(lines.lastIndex) }
-    LazyColumn(modifier.fillMaxWidth().padding(8.dp).testTag(Tags.LANGUAGE_SERVERS_LOG), list) {
+    LazyColumn(modifier.fillMaxWidth().padding(8.dp).testTag(LanguageServerTags.LANGUAGE_SERVERS_LOG), list) {
         if (lines.isEmpty()) item { Label("The log is empty", color = IdeColors.TextSecondary, fontSize = 12.sp) }
         items(lines) { Label(it, color = IdeColors.Code, fontSize = 12.sp) }
     }

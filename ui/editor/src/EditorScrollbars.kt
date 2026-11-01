@@ -20,7 +20,7 @@ import org.example.kotlineditor.state.VerticalScroll
 internal fun BoxScope.EditorScrollbars(tab: EditorTab, metrics: EditorMetrics, viewportWidth: () -> Float) {
     VerticalScrollbar(
         remember(tab) { VerticalScrollAdapter(tab.verticalScroll) },
-        Modifier.align(Alignment.CenterEnd).fillMaxHeight().testTag(Tags.EDITOR_VERTICAL_SCROLLBAR),
+        Modifier.align(Alignment.CenterEnd).fillMaxHeight().testTag(EditorTags.EDITOR_VERTICAL_SCROLLBAR),
     )
     HorizontalScrollbar(
         remember(

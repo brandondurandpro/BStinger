@@ -20,6 +20,8 @@ import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.test.withKeyDown
 import org.example.kotlineditor.state.delete
+import org.example.kotlineditor.ui.AppTags
+import org.example.kotlineditor.ui.EditorTags
 import org.example.kotlineditor.ui.Tags
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -38,10 +40,10 @@ class SplitEditorE2eTest {
     }
 
     private fun ComposeUiTest.inPane(index: Int, tag: String) =
-        onNode(hasTestTag(tag) and hasAnyAncestor(hasTestTag(Tags.pane(index))))
+        onNode(hasTestTag(tag) and hasAnyAncestor(hasTestTag(AppTags.pane(index))))
 
     private fun ComposeUiTest.rightClickTab(path: String, pane: Int) {
-        inPane(pane, Tags.tab(path)).performMouseInput {
+        inPane(pane, EditorTags.tab(path)).performMouseInput {
             moveTo(center)
             press(MouseButton.Secondary)
             release(MouseButton.Secondary)
@@ -50,9 +52,9 @@ class SplitEditorE2eTest {
 
     private fun ComposeUiTest.splitRight(path: String) {
         rightClickTab(path, 0)
-        awaitTag(Tags.MENU_SPLIT_RIGHT).performClick()
-        awaitTag(Tags.pane(1))
-        awaitCondition { onAllNodesWithTag(Tags.EDITOR).fetchSemanticsNodes().size == 2 }
+        awaitTag(EditorTags.MENU_SPLIT_RIGHT).performClick()
+        awaitTag(AppTags.pane(1))
+        awaitCondition { onAllNodesWithTag(EditorTags.EDITOR).fetchSemanticsNodes().size == 2 }
     }
 
     private fun E2eApp.tabsOf(pane: Int) = project.editor.panes[pane].tabs
@@ -79,13 +81,13 @@ class SplitEditorE2eTest {
             openFromTree("docs/guide.md")
             splitRight("docs/guide.md")
             assertEquals(2, app.project.editor.panes.size)
-            inPane(0, Tags.tab("README.md")).assertIsDisplayed()
-            inPane(0, Tags.tab("docs/guide.md")).assertIsDisplayed()
-            inPane(1, Tags.tab("docs/guide.md")).assertIsDisplayed()
-            val readmeInRight = hasTestTag(Tags.tab("README.md")) and hasAnyAncestor(hasTestTag(Tags.pane(1)))
+            inPane(0, EditorTags.tab("README.md")).assertIsDisplayed()
+            inPane(0, EditorTags.tab("docs/guide.md")).assertIsDisplayed()
+            inPane(1, EditorTags.tab("docs/guide.md")).assertIsDisplayed()
+            val readmeInRight = hasTestTag(EditorTags.tab("README.md")) and hasAnyAncestor(hasTestTag(AppTags.pane(1)))
             assertTrue(onAllNodes(readmeInRight).fetchSemanticsNodes().isEmpty())
-            val left = inPane(0, Tags.EDITOR).fetchSemanticsNode().boundsInRoot
-            val right = inPane(1, Tags.EDITOR).fetchSemanticsNode().boundsInRoot
+            val left = inPane(0, EditorTags.EDITOR).fetchSemanticsNode().boundsInRoot
+            val right = inPane(1, EditorTags.EDITOR).fetchSemanticsNode().boundsInRoot
             assertTrue(left.right <= right.left, "panes are side by side: $left / $right")
         }
 
@@ -97,15 +99,15 @@ class SplitEditorE2eTest {
             splitRight("README.md")
             val editor = app.project.editor
             assertSame(app.tabsOf(0).single().document, app.tabsOf(1).single().document)
-            inPane(1, Tags.EDITOR).performClick()
-            inPane(1, Tags.EDITOR).performKeyInput {
+            inPane(1, EditorTags.EDITOR).performClick()
+            inPane(1, EditorTags.EDITOR).performKeyInput {
                 withKeyDown(Key.CtrlLeft) { pressKey(Key.MoveHome) }
                 pressKey(Key.X)
             }
             waitForIdle()
             awaitCondition { app.firstLine(0).startsWith("x") }
-            inPane(0, Tags.line(0)).assertLine("x# Demo")
-            inPane(1, Tags.line(0)).assertLine("x# Demo")
+            inPane(0, EditorTags.line(0)).assertLine("x# Demo")
+            inPane(1, EditorTags.line(0)).assertLine("x# Demo")
         }
 
     @Test
@@ -117,11 +119,11 @@ class SplitEditorE2eTest {
             splitRight("docs/guide.md")
             val editor = app.project.editor
             assertSame(editor.panes[1], editor.activePane)
-            inPane(0, Tags.EDITOR).performClick()
+            inPane(0, EditorTags.EDITOR).performClick()
             awaitCondition { editor.activePane === editor.panes[0] }
-            inPane(1, Tags.EDITOR).performClick()
+            inPane(1, EditorTags.EDITOR).performClick()
             awaitCondition { editor.activePane === editor.panes[1] }
-            inPane(0, Tags.tab("README.md")).performClick()
+            inPane(0, EditorTags.tab("README.md")).performClick()
             awaitCondition { editor.activePane === editor.panes[0] && editor.activeTab?.entry?.name == "README.md" }
             assertEquals("guide.md", app.activeNameOf(1))
         }
@@ -134,12 +136,12 @@ class SplitEditorE2eTest {
             openFromTree("docs/guide.md")
             splitRight("docs/guide.md")
             rightClickTab("docs/guide.md", 1)
-            awaitTag(Tags.MENU_UNSPLIT).performClick()
-            awaitNoTag(Tags.pane(1))
+            awaitTag(EditorTags.MENU_UNSPLIT).performClick()
+            awaitNoTag(AppTags.pane(1))
             val editor = app.project.editor
             assertFalse(editor.isSplit)
             assertEquals(listOf("guide.md", "README.md"), app.names(0))
-            awaitCondition { onAllNodesWithTag(Tags.EDITOR).fetchSemanticsNodes().size == 1 }
+            awaitCondition { onAllNodesWithTag(EditorTags.EDITOR).fetchSemanticsNodes().size == 1 }
         }
 
     @Test
@@ -148,8 +150,8 @@ class SplitEditorE2eTest {
             launchWithProject(project)
             openFromTree("README.md")
             rightClickTab("README.md", 0)
-            awaitTag(Tags.MENU_UNSPLIT).assertIsNotEnabled()
-            onNodeWithTag(Tags.MENU_SPLIT_RIGHT).assertIsEnabled()
+            awaitTag(EditorTags.MENU_UNSPLIT).assertIsNotEnabled()
+            onNodeWithTag(EditorTags.MENU_SPLIT_RIGHT).assertIsEnabled()
         }
 
     @Test
@@ -190,7 +192,7 @@ class SplitEditorE2eTest {
             splitRight("docs/guide.md")
             rightClickTab("README.md", 0)
             awaitTag(Tags.MENU_CLOSE_ALL_TABS).performClick()
-            awaitTag(Tags.EDITOR_EMPTY).assertIsDisplayed()
+            awaitTag(AppTags.EDITOR_EMPTY).assertIsDisplayed()
             assertFalse(app.project.editor.isSplit)
             assertTrue(app.tabsOf(0).isEmpty())
         }
@@ -201,8 +203,8 @@ class SplitEditorE2eTest {
             val app = launchWithProject(project)
             openFromTree("README.md")
             splitRight("README.md")
-            inPane(1, Tags.tabClose("README.md")).performClick()
-            awaitNoTag(Tags.pane(1))
+            inPane(1, EditorTags.tabClose("README.md")).performClick()
+            awaitNoTag(AppTags.pane(1))
             assertFalse(app.project.editor.isSplit)
             assertEquals(listOf("README.md"), app.names(0))
         }

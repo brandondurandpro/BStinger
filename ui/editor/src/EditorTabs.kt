@@ -67,7 +67,7 @@ fun EditorTabs(editor: EditorState, pane: EditorPane, modifier: Modifier = Modif
             .height(36.dp)
             .background(IdeColors.Panel)
             .wheelScrollsHorizontally(listState)
-            .testTag(Tags.TABS),
+            .testTag(EditorTags.TABS),
     ) {
         // The wheel scrolls the tabs once they overflow, like the terminal's tabs.
         LazyRow(Modifier.fillMaxWidth().fillMaxHeight(), state = listState) {
@@ -102,17 +102,17 @@ private fun tagsOf(tab: EditorTab): TabTags {
     return when {
         commit != null -> {
             TabTags(
-                Tags.commitDiffTab(commit.hash, tab.relativePath),
-                Tags.commitDiffTabClose(commit.hash, tab.relativePath),
+                EditorTags.commitDiffTab(commit.hash, tab.relativePath),
+                EditorTags.commitDiffTabClose(commit.hash, tab.relativePath),
             )
         }
 
         tab.isDiff -> {
-            TabTags(Tags.diffTab(tab.relativePath), Tags.diffTabClose(tab.relativePath))
+            TabTags(EditorTags.diffTab(tab.relativePath), EditorTags.diffTabClose(tab.relativePath))
         }
 
         else -> {
-            TabTags(Tags.tab(tab.relativePath), Tags.tabClose(tab.relativePath))
+            TabTags(EditorTags.tab(tab.relativePath), EditorTags.tabClose(tab.relativePath))
         }
     }
 }
@@ -166,7 +166,7 @@ private fun ModifiedDot(tab: EditorTab, modified: Boolean) {
         Modifier
             .size(6.dp)
             .background(IdeColors.Modified, CircleShape)
-            .testTag(Tags.tabModified(tab.relativePath)),
+            .testTag(EditorTags.tabModified(tab.relativePath)),
     )
 }
 
@@ -200,7 +200,7 @@ private fun TabContextMenu(
         expanded = true,
         onDismissRequest = onDismiss,
         offset = offset,
-        modifier = Modifier.testTag(Tags.TAB_MENU),
+        modifier = Modifier.testTag(EditorTags.TAB_MENU),
     ) {
         TabMenuItem("Close", Tags.MENU_CLOSE_TAB) { action { editor.close(tab) } }
         TabMenuItem(
@@ -221,20 +221,20 @@ private fun TabContextMenu(
         MenuSeparator()
         TabMenuItem("Close All", Tags.MENU_CLOSE_ALL_TABS) { action { editor.closeAll() } }
         MenuSeparator()
-        TabMenuItem("Split Right", Tags.MENU_SPLIT_RIGHT, enabled = !editor.isSplit) {
+        TabMenuItem("Split Right", EditorTags.MENU_SPLIT_RIGHT, enabled = !editor.isSplit) {
             action {
                 editor.activate(tab)
                 editor.splitRight()
             }
         }
-        TabMenuItem("Unsplit", Tags.MENU_UNSPLIT, enabled = editor.isSplit) {
+        TabMenuItem("Unsplit", EditorTags.MENU_UNSPLIT, enabled = editor.isSplit) {
             action {
                 editor.activate(tab)
                 editor.unsplit()
             }
         }
         MenuSeparator()
-        TabMenuItem("Copy Path", Tags.MENU_COPY_TAB_PATH) { action { TextClipboard.set(tab.entry.path) } }
+        TabMenuItem("Copy Path", EditorTags.MENU_COPY_TAB_PATH) { action { TextClipboard.set(tab.entry.path) } }
     }
 }
 

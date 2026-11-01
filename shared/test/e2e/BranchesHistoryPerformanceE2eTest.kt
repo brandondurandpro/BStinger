@@ -13,8 +13,9 @@ import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.model.DiffKind
 import org.example.kotlineditor.state.BranchSection
 import org.example.kotlineditor.state.TabStatus
-import org.example.kotlineditor.ui.ItemTags
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.AppTags
+import org.example.kotlineditor.ui.EditorTags
+import org.example.kotlineditor.ui.GitTags
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -78,7 +79,7 @@ class BranchesHistoryPerformanceE2eTest {
     private fun ComposeUiTest.measureSearch(app: E2eApp) {
         // The oldest commit only: the search reads the whole history before it can answer.
         measure("search the oldest of $COMMITS commits", budgetMillis = 5_000, budgetMegabytes = 50) {
-            onNodeWithTag(Tags.HISTORY_SEARCH).performTextInput("commit 0 of the long history")
+            onNodeWithTag(GitTags.HISTORY_SEARCH).performTextInput("commit 0 of the long history")
             awaitCondition(timeout = 20_000) {
                 val history = app.project.history
                 history.appliedQuery.isNotEmpty() && history.complete
@@ -87,15 +88,15 @@ class BranchesHistoryPerformanceE2eTest {
         }
         assertEquals(1, app.project.history.commits.size)
         measure("search the $COMMITS commits, every one matching", budgetMillis = 5_000, budgetMegabytes = 100) {
-            onNodeWithTag(Tags.HISTORY_SEARCH_CLEAR).performClick()
-            onNodeWithTag(Tags.HISTORY_SEARCH).performTextInput("long history")
+            onNodeWithTag(GitTags.HISTORY_SEARCH_CLEAR).performClick()
+            onNodeWithTag(GitTags.HISTORY_SEARCH).performTextInput("long history")
             awaitCondition(timeout = 20_000) {
                 app.project.history.appliedQuery == "long history" && !app.project.history.loading
             }
             renderFrame()
         }
         assertTrue(composedCommitRows() < MAX_COMPOSED_ROWS, "composed rows after search: ${composedCommitRows()}")
-        onNodeWithTag(Tags.HISTORY_SEARCH_CLEAR).performClick()
+        onNodeWithTag(GitTags.HISTORY_SEARCH_CLEAR).performClick()
     }
 
     private fun ComposeUiTest.visibleBranchRows(): List<String> =
@@ -106,7 +107,7 @@ class BranchesHistoryPerformanceE2eTest {
     // A wheel scroll keeps the list moving frame after frame, unlike jumping to an index. Measured net of the same
     // input plumbing and frames without movement, like the branch picker's benchmark.
     private fun ComposeUiTest.measureBranchWheel() {
-        val list = onNodeWithTag(Tags.HISTORY_BRANCH_LIST)
+        val list = onNodeWithTag(GitTags.HISTORY_BRANCH_LIST)
         list.performScrollToIndex(BRANCHES / 2)
         renderFrame()
         val before = visibleBranchRows()
@@ -150,22 +151,22 @@ class BranchesHistoryPerformanceE2eTest {
     }
 
     private fun ComposeUiTest.measureBranchList() {
-        val local = ItemTags.historySection(BranchSection.Local.name)
+        val local = GitTags.historySection(BranchSection.Local.name)
         measure("fold the $BRANCHES local branches", budgetMillis = 2_000, budgetMegabytes = 50) {
             onNodeWithTag(local).performClick()
-            awaitNoTag(ItemTags.historyBranch("history/branch-0000"))
+            awaitNoTag(GitTags.historyBranch("history/branch-0000"))
             renderFrame()
         }
         measure("unfold the $BRANCHES local branches", budgetMillis = 2_000, budgetMegabytes = 50) {
             onNodeWithTag(local).performClick()
-            awaitTag(ItemTags.historyBranch("history/branch-0000"))
+            awaitTag(GitTags.historyBranch("history/branch-0000"))
             renderFrame()
         }
         val unfolded = onAllNodes(hasTestTagPrefix("history.branch:")).fetchSemanticsNodes().size
         assertTrue(unfolded < MAX_COMPOSED_ROWS, "composed branch rows after unfolding: $unfolded")
         measureBranchWheel()
         measure("widen the branch list by dragging its splitter", budgetMillis = 2_000, budgetMegabytes = 50) {
-            onNodeWithTag(Tags.HISTORY_BRANCHES_SPLITTER).performMouseInput {
+            onNodeWithTag(GitTags.HISTORY_BRANCHES_SPLITTER).performMouseInput {
                 moveTo(center)
                 press()
                 repeat(DRAG_STEPS) { moveBy(Offset(4f, 0f)) }
@@ -184,8 +185,8 @@ class BranchesHistoryPerformanceE2eTest {
             val newest = project.git("rev-parse", "HEAD").trim()
 
             measure("open the Branches window on $COMMITS commits", budgetMillis = 5_000, budgetMegabytes = 100) {
-                onNodeWithTag(Tags.TOOL_BRANCHES).performClick()
-                awaitTag(ItemTags.historyCommit(newest))
+                onNodeWithTag(AppTags.TOOL_BRANCHES).performClick()
+                awaitTag(GitTags.historyCommit(newest))
                 renderFrame()
             }
             assertTrue(composedCommitRows() < MAX_COMPOSED_ROWS, "composed commit rows: ${composedCommitRows()}")
@@ -206,8 +207,8 @@ class BranchesHistoryPerformanceE2eTest {
             val oldest = app.project.history.commits[COMMITS / 2]
             measure("select a commit and show its files", budgetMillis = 3_000, budgetMegabytes = 50) {
                 list.performScrollToIndex(COMMITS / 2)
-                onNodeWithTag(ItemTags.historyCommit(oldest.hash)).performClick()
-                awaitTag(ItemTags.historyFile("history.txt"))
+                onNodeWithTag(GitTags.historyCommit(oldest.hash)).performClick()
+                awaitTag(GitTags.historyFile("history.txt"))
                 renderFrame()
             }
             val branchRows = onAllNodes(hasTestTagPrefix("history.branch:")).fetchSemanticsNodes().size
@@ -237,22 +238,22 @@ class BranchesHistoryPerformanceE2eTest {
             val head = project.git("rev-parse", "HEAD").trim()
             val app = launchWithProject(project)
             awaitCondition { app.project.gitBranch != null }
-            onNodeWithTag(Tags.TOOL_BRANCHES).performClick()
-            awaitTag(ItemTags.historyCommit(head)).performClick()
-            awaitTag(ItemTags.historyFile("big.txt"))
+            onNodeWithTag(AppTags.TOOL_BRANCHES).performClick()
+            awaitTag(GitTags.historyCommit(head)).performClick()
+            awaitTag(GitTags.historyFile("big.txt"))
 
             val editor = app.project.editor
             measure("open the diff of a commit that changed 2000 lines", budgetMillis = 8_000, budgetMegabytes = 300) {
-                onNodeWithTag(ItemTags.historyFile("big.txt")).performClick()
+                onNodeWithTag(GitTags.historyFile("big.txt")).performClick()
                 awaitCondition(timeout = 20_000) { editor.activeTab?.status is TabStatus.Diff }
-                awaitTag(Tags.DIFF)
+                awaitTag(EditorTags.DIFF)
                 renderFrame()
             }
             val diff = (editor.activeTab!!.status as TabStatus.Diff).lines
             assertEquals(lines / 10, diff.count { it.kind == DiffKind.Added })
 
             measure("open the file of $lines lines from its diff", budgetMillis = 5_000, budgetMegabytes = 200) {
-                onNodeWithTag(Tags.DIFF_OPEN_FILE).performClick()
+                onNodeWithTag(EditorTags.DIFF_OPEN_FILE).performClick()
                 awaitCondition(timeout = 20_000) { editor.activeTab?.document != null }
                 renderFrame()
             }

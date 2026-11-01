@@ -5,8 +5,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.state.delete
-import org.example.kotlineditor.ui.ItemTags
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.AppTags
+import org.example.kotlineditor.ui.TreeTags
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -40,14 +40,14 @@ class ProjectSwitcherPerformanceE2eTest {
             launchApp(recent = listOf(project.path, huge.path) + missing)
             openRecentFromWelcome(project.path)
             measure("open the project menu ($RECENT recent projects)", budgetMillis = 2_000, budgetMegabytes = 200) {
-                onNodeWithTag(Tags.PROJECT_WIDGET).performClick()
-                awaitTag(ItemTags.switchProject(huge.path))
+                onNodeWithTag(AppTags.PROJECT_WIDGET).performClick()
+                awaitTag(AppTags.switchProject(huge.path))
                 renderFrame()
             }
             assertEquals(RECENT - 1, onAllNodes(hasTestTagPrefix("project.switch:")).fetchSemanticsNodes().size)
             measure("switch to a project of $FILES files", budgetMillis = 10_000, budgetMegabytes = 1_000) {
-                onNodeWithTag(ItemTags.switchProject(huge.path)).performClick()
-                awaitTag(Tags.treeRow("file00000.txt"))
+                onNodeWithTag(AppTags.switchProject(huge.path)).performClick()
+                awaitTag(TreeTags.treeRow("file00000.txt"))
                 renderFrame()
             }
         }

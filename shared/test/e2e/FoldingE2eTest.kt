@@ -13,7 +13,7 @@ import androidx.compose.ui.test.withKeyDown
 import org.example.kotlineditor.state.Document
 import org.example.kotlineditor.state.TextPos
 import org.example.kotlineditor.state.delete
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.EditorTags
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -58,13 +58,13 @@ class FoldingE2eTest {
         runComposeUiTest {
             val app = launchWithProject(project)
             openFold(app)
-            awaitTag(Tags.foldMarker(1), unmerged = true).performClick()
-            awaitNoTag(Tags.line(2))
-            awaitNoTag(Tags.line(3))
-            onNodeWithTag(Tags.line(1)).assertTextContains("...}", substring = true)
-            onNodeWithTag(Tags.line(4)).assertExists()
-            onNodeWithTag(Tags.foldMarker(1), useUnmergedTree = true).performClick()
-            awaitTag(Tags.line(2)).assertTextContains("println(\"a\")", substring = true)
+            awaitTag(EditorTags.foldMarker(1), unmerged = true).performClick()
+            awaitNoTag(EditorTags.line(2))
+            awaitNoTag(EditorTags.line(3))
+            onNodeWithTag(EditorTags.line(1)).assertTextContains("...}", substring = true)
+            onNodeWithTag(EditorTags.line(4)).assertExists()
+            onNodeWithTag(EditorTags.foldMarker(1), useUnmergedTree = true).performClick()
+            awaitTag(EditorTags.line(2)).assertTextContains("println(\"a\")", substring = true)
         }
 
     @Test
@@ -72,14 +72,14 @@ class FoldingE2eTest {
         runComposeUiTest {
             val app = launchWithProject(project)
             val doc = openFold(app)
-            onNodeWithTag(Tags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performClick()
             runOnUiThread { doc.moveTo(TextPos(6, 4)) }
-            onNodeWithTag(Tags.EDITOR).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.Minus) } }
-            awaitNoTag(Tags.line(6))
+            onNodeWithTag(EditorTags.EDITOR).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.Minus) } }
+            awaitNoTag(EditorTags.line(6))
             assertEquals(setOf(5), doc.folding.folded)
             assertEquals(5, doc.caret.line) // the caret left the hidden lines
-            onNodeWithTag(Tags.EDITOR).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.Equals) } }
-            awaitTag(Tags.line(6))
+            onNodeWithTag(EditorTags.EDITOR).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.Equals) } }
+            awaitTag(EditorTags.line(6))
         }
 
     @Test
@@ -87,17 +87,17 @@ class FoldingE2eTest {
         runComposeUiTest {
             val app = launchWithProject(project)
             val doc = openFold(app)
-            onNodeWithTag(Tags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performClick()
             runOnUiThread { doc.moveTo(TextPos(1, 0)) }
             runOnUiThread { doc.folding.regions = doc.folding.regions - 0 } // keep the class body open
             onNodeWithTag(
-                Tags.EDITOR,
+                EditorTags.EDITOR,
             ).performKeyInput { withKeyDown(Key.CtrlLeft) { withKeyDown(Key.ShiftLeft) { pressKey(Key.Minus) } } }
-            awaitNoTag(Tags.line(2))
-            onNodeWithTag(Tags.EDITOR).performKeyInput { pressKey(Key.DirectionDown) }
+            awaitNoTag(EditorTags.line(2))
+            onNodeWithTag(EditorTags.EDITOR).performKeyInput { pressKey(Key.DirectionDown) }
             waitForIdle()
             assertEquals(4, doc.caret.line)
-            onNodeWithTag(Tags.EDITOR).performKeyInput { pressKey(Key.DirectionDown) }
+            onNodeWithTag(EditorTags.EDITOR).performKeyInput { pressKey(Key.DirectionDown) }
             waitForIdle()
             assertEquals(5, doc.caret.line)
         }
@@ -107,10 +107,10 @@ class FoldingE2eTest {
         runComposeUiTest {
             val app = launchWithProject(project)
             val doc = openFold(app)
-            awaitTag(Tags.foldMarker(1), unmerged = true).performClick()
-            awaitNoTag(Tags.line(2))
+            awaitTag(EditorTags.foldMarker(1), unmerged = true).performClick()
+            awaitNoTag(EditorTags.line(2))
             runOnUiThread { doc.moveTo(TextPos(2, 0)) }
-            awaitTag(Tags.line(2))
+            awaitTag(EditorTags.line(2))
             assertTrue(doc.folding.folded.isEmpty())
         }
 
@@ -119,12 +119,12 @@ class FoldingE2eTest {
         runComposeUiTest {
             val app = launchWithProject(project)
             val doc = openFold(app)
-            awaitTag(Tags.foldMarker(5), unmerged = true).performClick()
-            awaitNoTag(Tags.line(6))
-            onNodeWithTag(Tags.EDITOR).performClick()
+            awaitTag(EditorTags.foldMarker(5), unmerged = true).performClick()
+            awaitNoTag(EditorTags.line(6))
+            onNodeWithTag(EditorTags.EDITOR).performClick()
             runOnUiThread { doc.moveTo(TextPos(0, 0)) }
-            onNodeWithTag(Tags.EDITOR).performKeyInput { pressKey(Key.Enter) }
-            awaitTag(Tags.line(7))
+            onNodeWithTag(EditorTags.EDITOR).performKeyInput { pressKey(Key.Enter) }
+            awaitTag(EditorTags.line(7))
             assertTrue(doc.folding.folded.isEmpty())
         }
 }

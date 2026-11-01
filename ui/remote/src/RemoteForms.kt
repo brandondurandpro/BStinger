@@ -39,14 +39,14 @@ internal fun SelectedHost(app: AppState, dialog: RemoteDialogState, onConnect: (
         Label(
             pathName(dialog.alias.ifEmpty { dialog.host }),
             fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.testTag(Tags.REMOTE_SELECTED),
+            modifier = Modifier.testTag(RemoteTags.REMOTE_SELECTED),
         )
         if (dialog.alias.isNotEmpty()) {
             Label(
                 "Using ~/.ssh/config: ${dialog.alias} (user, port and key come from it)",
                 color = IdeColors.TextSecondary,
                 fontSize = 11.sp,
-                modifier = Modifier.padding(top = 2.dp).testTag(Tags.REMOTE_CONFIG),
+                modifier = Modifier.padding(top = 2.dp).testTag(RemoteTags.REMOTE_CONFIG),
             )
         }
         ProjectField(app, dialog, onConnect)
@@ -60,7 +60,7 @@ private fun HostField(dialog: RemoteDialogState, onConnect: () -> Unit, onChange
         IdeTextField(
             dialog.host,
             { onChange(dialog.copy(host = it, alias = "", selectedRow = "")) },
-            Modifier.fillMaxWidth().testTag(Tags.REMOTE_HOST),
+            Modifier.fillMaxWidth().testTag(RemoteTags.REMOTE_HOST),
             placeholder = "server.example.com",
             onSubmit = onConnect,
         )
@@ -69,7 +69,7 @@ private fun HostField(dialog: RemoteDialogState, onConnect: () -> Unit, onChange
                 "Using ~/.ssh/config: ${dialog.alias} (user, port and key come from it)",
                 color = IdeColors.TextSecondary,
                 fontSize = 11.sp,
-                modifier = Modifier.padding(top = 4.dp).testTag(Tags.REMOTE_CONFIG),
+                modifier = Modifier.padding(top = 4.dp).testTag(RemoteTags.REMOTE_CONFIG),
             )
         }
     }
@@ -83,7 +83,7 @@ private fun UserAndPort(dialog: RemoteDialogState, onConnect: () -> Unit, onChan
                 IdeTextField(
                     dialog.user,
                     { onChange(dialog.copy(user = it, alias = "")) },
-                    Modifier.fillMaxWidth().testTag(Tags.REMOTE_USER),
+                    Modifier.fillMaxWidth().testTag(RemoteTags.REMOTE_USER),
                     placeholder = "current user",
                     onSubmit = onConnect,
                 )
@@ -94,7 +94,7 @@ private fun UserAndPort(dialog: RemoteDialogState, onConnect: () -> Unit, onChan
                 IdeTextField(
                     dialog.port,
                     { onChange(dialog.copy(port = it, alias = "")) },
-                    Modifier.fillMaxWidth().testTag(Tags.REMOTE_PORT),
+                    Modifier.fillMaxWidth().testTag(RemoteTags.REMOTE_PORT),
                     placeholder = "22",
                     onSubmit = onConnect,
                 )
@@ -109,7 +109,7 @@ private fun IdentityField(dialog: RemoteDialogState, onConnect: () -> Unit, onCh
         IdeTextField(
             dialog.identityFile,
             { onChange(dialog.copy(identityFile = it, alias = "")) },
-            Modifier.fillMaxWidth().testTag(Tags.REMOTE_IDENTITY),
+            Modifier.fillMaxWidth().testTag(RemoteTags.REMOTE_IDENTITY),
             placeholder = "uses ssh-agent or ~/.ssh/config when empty",
             onSubmit = onConnect,
         )
@@ -127,7 +127,7 @@ private fun ProjectField(
         IdeTextField(
             dialog.projectPath,
             { app.updateRemoteDialog(dialog.copy(projectPath = it)) },
-            Modifier.fillMaxWidth().testTag(Tags.REMOTE_PROJECT),
+            Modifier.fillMaxWidth().testTag(RemoteTags.REMOTE_PROJECT),
             placeholder = "Leave empty to browse the host",
             onSubmit = onConnect,
         )
@@ -140,7 +140,7 @@ private fun TagsField(app: AppState, dialog: RemoteDialogState, modifier: Modifi
         IdeTextField(
             dialog.tags,
             { app.editRemoteTags(it) },
-            Modifier.fillMaxWidth().testTag(Tags.REMOTE_TAGS),
+            Modifier.fillMaxWidth().testTag(RemoteTags.REMOTE_TAGS),
             placeholder = "production, dev",
         )
     }

@@ -9,8 +9,9 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import org.example.kotlineditor.state.Screen
-import org.example.kotlineditor.ui.ItemTags
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.AppTags
+import org.example.kotlineditor.ui.RemoteTags
+import org.example.kotlineditor.ui.TreeTags
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.createDirectories
@@ -57,17 +58,17 @@ class RemoteOpenProjectE2eTest {
             val project = checkNotNull(demo)
             val app = launchApp()
             connectRemoteTo(RemoteTestEnvironment, null)
-            awaitTag(Tags.OPEN_PROJECT, timeout = 60_000)
+            awaitTag(RemoteTags.OPEN_PROJECT, timeout = 60_000)
             awaitCondition { shownDirectoryInProjectPicker() == home }
             onNodeWithText("Choose a project directory on tester@127.0.0.1", substring = true).assertExists()
 
-            awaitTag(ItemTags.pickerDirectory(workspace.toString())).performDoubleClick()
+            awaitTag(RemoteTags.pickerDirectory(workspace.toString())).performDoubleClick()
             awaitCondition { shownDirectoryInProjectPicker() == workspace.toString() }
-            awaitTag(ItemTags.pickerDirectory(project.toString())).performClick()
+            awaitTag(RemoteTags.pickerDirectory(project.toString())).performClick()
             awaitEnabledOpen()
-            onNodeWithTag(Tags.OPEN_PROJECT_OPEN).performClick()
+            onNodeWithTag(RemoteTags.OPEN_PROJECT_OPEN).performClick()
 
-            awaitTag(Tags.treeRow("README.md"), timeout = 60_000)
+            awaitTag(TreeTags.treeRow("README.md"), timeout = 60_000)
             assertTrue(app.state.isRemote)
         }
 
@@ -77,15 +78,15 @@ class RemoteOpenProjectE2eTest {
             val project = checkNotNull(demo)
             launchApp()
             connectRemoteTo(RemoteTestEnvironment, null)
-            awaitTag(Tags.OPEN_PROJECT, timeout = 60_000)
+            awaitTag(RemoteTags.OPEN_PROJECT, timeout = 60_000)
 
             replaceFolderPath(project.toString())
             // No Enter: the debounced check lists the directory's subdirectories by itself.
-            awaitTag(ItemTags.pickerDirectory(project.resolve("src").toString()), timeout = 15_000)
+            awaitTag(RemoteTags.pickerDirectory(project.resolve("src").toString()), timeout = 15_000)
             assertEquals(project.toString(), shownDirectoryInProjectPicker())
             awaitEnabledOpen()
-            onNodeWithTag(Tags.OPEN_PROJECT_OPEN).performClick()
-            awaitTag(Tags.treeRow("README.md"), timeout = 60_000)
+            onNodeWithTag(RemoteTags.OPEN_PROJECT_OPEN).performClick()
+            awaitTag(TreeTags.treeRow("README.md"), timeout = 60_000)
         }
 
     @Test
@@ -94,17 +95,17 @@ class RemoteOpenProjectE2eTest {
             val project = checkNotNull(demo)
             launchApp()
             connectRemoteTo(RemoteTestEnvironment, null)
-            awaitTag(Tags.OPEN_PROJECT, timeout = 60_000)
+            awaitTag(RemoteTags.OPEN_PROJECT, timeout = 60_000)
 
             typeFolderPathInChunks("/does", "/not", "/exist")
-            awaitTag(Tags.OPEN_PROJECT_ERROR, timeout = 15_000)
+            awaitTag(RemoteTags.OPEN_PROJECT_ERROR, timeout = 15_000)
                 .assertTextContains("Directory not found", substring = true)
-            onNodeWithTag(Tags.OPEN_PROJECT_OPEN).assertIsNotEnabled()
+            onNodeWithTag(RemoteTags.OPEN_PROJECT_OPEN).assertIsNotEnabled()
 
             val path = project.toString()
             typeFolderPathInChunks(path.dropLast(5), path.takeLast(5))
-            awaitTag(ItemTags.pickerDirectory(project.resolve("src").toString()), timeout = 15_000)
-            awaitNoTag(Tags.OPEN_PROJECT_ERROR)
+            awaitTag(RemoteTags.pickerDirectory(project.resolve("src").toString()), timeout = 15_000)
+            awaitNoTag(RemoteTags.OPEN_PROJECT_ERROR)
         }
 
     @Test
@@ -113,17 +114,17 @@ class RemoteOpenProjectE2eTest {
             val project = checkNotNull(demo)
             launchApp()
             connectRemoteTo(RemoteTestEnvironment, null)
-            awaitTag(Tags.OPEN_PROJECT, timeout = 60_000)
-            awaitTag(Tags.OPEN_PROJECT_COUNT)
+            awaitTag(RemoteTags.OPEN_PROJECT, timeout = 60_000)
+            awaitTag(RemoteTags.OPEN_PROJECT_COUNT)
 
             replaceFolderPath("$project/")
-            awaitTag(Tags.OPEN_PROJECT_CHECKING)
-            onNodeWithTag(Tags.OPEN_PROJECT_OPEN).assertIsNotEnabled()
-            awaitTag(ItemTags.pickerDirectory(project.resolve("src").toString()), timeout = 15_000)
+            awaitTag(RemoteTags.OPEN_PROJECT_CHECKING)
+            onNodeWithTag(RemoteTags.OPEN_PROJECT_OPEN).assertIsNotEnabled()
+            awaitTag(RemoteTags.pickerDirectory(project.resolve("src").toString()), timeout = 15_000)
             assertEquals("$project/", shownDirectoryInProjectPicker(), "the trailing slash stays as typed")
             awaitEnabledOpen()
-            onNodeWithTag(Tags.OPEN_PROJECT_OPEN).performClick()
-            awaitTag(Tags.treeRow("README.md"), timeout = 60_000)
+            onNodeWithTag(RemoteTags.OPEN_PROJECT_OPEN).performClick()
+            awaitTag(TreeTags.treeRow("README.md"), timeout = 60_000)
         }
 
     @Test
@@ -132,16 +133,16 @@ class RemoteOpenProjectE2eTest {
             val workspace = checkNotNull(root)
             launchApp()
             connectRemoteTo(RemoteTestEnvironment, null)
-            awaitTag(Tags.OPEN_PROJECT, timeout = 60_000)
+            awaitTag(RemoteTags.OPEN_PROJECT, timeout = 60_000)
 
             val relative = RemoteTestEnvironment.home.relativize(workspace).toString()
             replaceFolderPath("~/$relative")
-            awaitTag(ItemTags.pickerDirectory(checkNotNull(demo).toString()), timeout = 15_000)
+            awaitTag(RemoteTags.pickerDirectory(checkNotNull(demo).toString()), timeout = 15_000)
             assertEquals("~/$relative", shownDirectoryInProjectPicker())
 
-            onNodeWithTag(Tags.OPEN_PROJECT_HOME).performClick()
+            onNodeWithTag(RemoteTags.OPEN_PROJECT_HOME).performClick()
             awaitCondition { shownDirectoryInProjectPicker() == home }
-            awaitTag(ItemTags.pickerDirectory(workspace.toString()))
+            awaitTag(RemoteTags.pickerDirectory(workspace.toString()))
         }
 
     @Test
@@ -150,22 +151,22 @@ class RemoteOpenProjectE2eTest {
             val workspace = checkNotNull(root)
             launchApp()
             connectRemoteTo(RemoteTestEnvironment, null)
-            awaitTag(Tags.OPEN_PROJECT, timeout = 60_000)
+            awaitTag(RemoteTags.OPEN_PROJECT, timeout = 60_000)
 
             navigateToInProjectPicker("/does/not/exist")
-            awaitTag(Tags.OPEN_PROJECT_ERROR).assertTextContains("Directory not found", substring = true)
+            awaitTag(RemoteTags.OPEN_PROJECT_ERROR).assertTextContains("Directory not found", substring = true)
             val file = workspace.resolve("notes.txt").toString()
             navigateToInProjectPicker(file)
             awaitCondition {
                 runCatching {
-                    onNodeWithTag(Tags.OPEN_PROJECT_ERROR).assertTextContains(file, substring = true)
+                    onNodeWithTag(RemoteTags.OPEN_PROJECT_ERROR).assertTextContains(file, substring = true)
                 }.isSuccess
             }
-            onNodeWithTag(Tags.OPEN_PROJECT_OPEN).assertIsNotEnabled()
+            onNodeWithTag(RemoteTags.OPEN_PROJECT_OPEN).assertIsNotEnabled()
 
             showDirectoryInProjectPicker(home)
-            awaitNoTag(Tags.OPEN_PROJECT_ERROR)
-            awaitTag(ItemTags.pickerDirectory(workspace.toString()))
+            awaitNoTag(RemoteTags.OPEN_PROJECT_ERROR)
+            awaitTag(RemoteTags.pickerDirectory(workspace.toString()))
         }
 
     @Test
@@ -173,9 +174,9 @@ class RemoteOpenProjectE2eTest {
         remoteUiTest {
             val app = launchApp()
             connectRemoteTo(RemoteTestEnvironment, null)
-            awaitTag(Tags.OPEN_PROJECT, timeout = 60_000)
-            onNodeWithTag(Tags.OPEN_PROJECT_CANCEL).performClick()
-            awaitNoTag(Tags.OPEN_PROJECT)
+            awaitTag(RemoteTags.OPEN_PROJECT, timeout = 60_000)
+            onNodeWithTag(RemoteTags.OPEN_PROJECT_CANCEL).performClick()
+            awaitNoTag(RemoteTags.OPEN_PROJECT)
             assertTrue(app.state.screen == Screen.Welcome)
             assertTrue(app.state.isRemote)
         }
@@ -186,13 +187,13 @@ class RemoteOpenProjectE2eTest {
             val project = checkNotNull(demo)
             launchApp()
             connectRemoteTo(RemoteTestEnvironment, project.toString())
-            awaitTag(Tags.treeRow("README.md"), timeout = 60_000)
-            onNodeWithTag(Tags.PROJECT_WIDGET).performClick()
-            onNodeWithTag(Tags.PROJECT_OPEN_OTHER).performClick()
-            awaitTag(Tags.OPEN_PROJECT)
+            awaitTag(TreeTags.treeRow("README.md"), timeout = 60_000)
+            onNodeWithTag(AppTags.PROJECT_WIDGET).performClick()
+            onNodeWithTag(AppTags.PROJECT_OPEN_OTHER).performClick()
+            awaitTag(RemoteTags.OPEN_PROJECT)
             awaitCondition { shownDirectoryInProjectPicker() == project.toString() }
-            onNodeWithTag(Tags.OPEN_PROJECT_CANCEL).performClick()
-            awaitNoTag(Tags.OPEN_PROJECT)
+            onNodeWithTag(RemoteTags.OPEN_PROJECT_CANCEL).performClick()
+            awaitNoTag(RemoteTags.OPEN_PROJECT)
         }
 
     @Test
@@ -203,21 +204,21 @@ class RemoteOpenProjectE2eTest {
             awaitCondition { app.state.serverHome != null }
             val localHome = app.state.serverHome
             connectRemoteTo(RemoteTestEnvironment, null)
-            awaitTag(Tags.OPEN_PROJECT, timeout = 60_000)
+            awaitTag(RemoteTags.OPEN_PROJECT, timeout = 60_000)
             showDirectoryInProjectPicker(project.toString())
             awaitEnabledOpen()
-            onNodeWithTag(Tags.OPEN_PROJECT_OPEN).performClick()
-            awaitTag(Tags.treeRow("README.md"), timeout = 60_000)
+            onNodeWithTag(RemoteTags.OPEN_PROJECT_OPEN).performClick()
+            awaitTag(TreeTags.treeRow("README.md"), timeout = 60_000)
 
-            onNodeWithTag(Tags.TOP_REMOTE).performClick()
-            awaitTag(Tags.REMOTE_DISCONNECT).performClick()
-            awaitTag(Tags.WELCOME)
+            onNodeWithTag(AppTags.TOP_REMOTE).performClick()
+            awaitTag(AppTags.REMOTE_DISCONNECT).performClick()
+            awaitTag(AppTags.WELCOME)
             awaitCondition { !app.state.isRemote }
             openProjectPickerFromWelcome()
             awaitCondition { shownDirectoryInProjectPicker() == localHome }
         }
 
     private fun ComposeUiTest.awaitEnabledOpen() {
-        awaitCondition { runCatching { onNodeWithTag(Tags.OPEN_PROJECT_OPEN).assertIsEnabled() }.isSuccess }
+        awaitCondition { runCatching { onNodeWithTag(RemoteTags.OPEN_PROJECT_OPEN).assertIsEnabled() }.isSuccess }
     }
 }

@@ -18,8 +18,11 @@ import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.test.withKeyDown
 import org.example.kotlineditor.state.delete
+import org.example.kotlineditor.ui.AppTags
+import org.example.kotlineditor.ui.EditorTags
 import org.example.kotlineditor.ui.Tags
 import org.example.kotlineditor.ui.TextClipboard
+import org.example.kotlineditor.ui.TreeTags
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -50,10 +53,10 @@ class EditorTabsE2eTest {
         runComposeUiTest {
             val app = launchWithProject(project)
             openFromTree("src/main/kotlin/App.kt")
-            onNodeWithTag(Tags.tab("src/main/kotlin/App.kt")).assertIsDisplayed()
-            awaitTag(Tags.line(0)).assertTextContains("package demo", substring = true)
-            onNodeWithTag(Tags.line(7)).assertTextContains("val greeting = \"Hello\"", substring = true)
-            onNodeWithTag(Tags.STATUS_PATH).assertTextContains("App.kt", substring = true)
+            onNodeWithTag(EditorTags.tab("src/main/kotlin/App.kt")).assertIsDisplayed()
+            awaitTag(EditorTags.line(0)).assertTextContains("package demo", substring = true)
+            onNodeWithTag(EditorTags.line(7)).assertTextContains("val greeting = \"Hello\"", substring = true)
+            onNodeWithTag(AppTags.STATUS_PATH).assertTextContains("App.kt", substring = true)
             assertEquals("${project.root.fileName} – App.kt", app.state.title)
         }
 
@@ -69,7 +72,7 @@ class EditorTabsE2eTest {
                     ?.entry
                     ?.name,
             )
-            onNodeWithTag(Tags.treeRow("README.md")).performDoubleClick()
+            onNodeWithTag(TreeTags.treeRow("README.md")).performDoubleClick()
             awaitCondition {
                 app.project.editor.activeTab
                     ?.entry
@@ -84,11 +87,15 @@ class EditorTabsE2eTest {
             launchWithProject(project)
             openFromTree("README.md")
             openFromTree("docs/guide.md")
-            awaitTag(Tags.line(1)).assertTextContains("Hello from the guide", substring = true)
-            onNodeWithTag(Tags.tab("README.md")).performClick()
+            awaitTag(EditorTags.line(1)).assertTextContains("Hello from the guide", substring = true)
+            onNodeWithTag(EditorTags.tab("README.md")).performClick()
             awaitCondition {
-                onAllNodesWithTag(Tags.line(0)).fetchSemanticsNodes().isNotEmpty() &&
-                    runCatching { onNodeWithTag(Tags.line(0)).assertTextContains("# Demo", substring = true) }.isSuccess
+                onAllNodesWithTag(EditorTags.line(0)).fetchSemanticsNodes().isNotEmpty() &&
+                    runCatching {
+                        onNodeWithTag(
+                            EditorTags.line(0),
+                        ).assertTextContains("# Demo", substring = true)
+                    }.isSuccess
             }
         }
 
@@ -98,7 +105,7 @@ class EditorTabsE2eTest {
             val app = launchWithProject(project)
             openFromTree("README.md")
             openFromTree("build.gradle.kts")
-            onNodeWithTag(Tags.tab("README.md")).performClick()
+            onNodeWithTag(EditorTags.tab("README.md")).performClick()
             openFromTree("docs/guide.md")
             assertEquals(listOf("README.md", "guide.md", "build.gradle.kts"), app.tabNames())
         }
@@ -110,10 +117,10 @@ class EditorTabsE2eTest {
             openFromTree("README.md")
             openFromTree("build.gradle.kts")
             openFromTree("docs/guide.md")
-            onNodeWithTag(Tags.tab("README.md")).performClick()
-            onNodeWithTag(Tags.tab("docs/guide.md")).performClick()
-            onNodeWithTag(Tags.tabClose("docs/guide.md")).performClick()
-            awaitNoTag(Tags.tab("docs/guide.md"))
+            onNodeWithTag(EditorTags.tab("README.md")).performClick()
+            onNodeWithTag(EditorTags.tab("docs/guide.md")).performClick()
+            onNodeWithTag(EditorTags.tabClose("docs/guide.md")).performClick()
+            awaitNoTag(EditorTags.tab("docs/guide.md"))
             assertEquals(
                 "README.md",
                 app.project.editor.activeTab
@@ -128,8 +135,8 @@ class EditorTabsE2eTest {
         runComposeUiTest {
             launchWithProject(project)
             openFromTree("README.md")
-            onNodeWithTag(Tags.tabClose("README.md")).performClick()
-            awaitTag(Tags.EDITOR_EMPTY).assertIsDisplayed()
+            onNodeWithTag(EditorTags.tabClose("README.md")).performClick()
+            awaitTag(AppTags.EDITOR_EMPTY).assertIsDisplayed()
         }
 
     @Test
@@ -138,12 +145,12 @@ class EditorTabsE2eTest {
             val app = launchWithProject(project)
             openFromTree("README.md")
             openFromTree("build.gradle.kts")
-            onNodeWithTag(Tags.tab("README.md")).performMouseInput {
+            onNodeWithTag(EditorTags.tab("README.md")).performMouseInput {
                 moveTo(center)
                 press(MouseButton.Tertiary)
                 release(MouseButton.Tertiary)
             }
-            awaitNoTag(Tags.tab("README.md"))
+            awaitNoTag(EditorTags.tab("README.md"))
             assertEquals(listOf("build.gradle.kts"), app.tabNames())
         }
 
@@ -154,11 +161,11 @@ class EditorTabsE2eTest {
             openFromTree("README.md")
             openFromTree("build.gradle.kts")
             openFromTree("docs/guide.md")
-            rightClick(Tags.tab("README.md"))
-            awaitTag(Tags.TAB_MENU).assertIsDisplayed()
+            rightClick(EditorTags.tab("README.md"))
+            awaitTag(EditorTags.TAB_MENU).assertIsDisplayed()
             awaitTag(Tags.MENU_CLOSE_OTHER_TABS).performClick()
-            awaitNoTag(Tags.tab("build.gradle.kts"))
-            awaitNoTag(Tags.tab("docs/guide.md"))
+            awaitNoTag(EditorTags.tab("build.gradle.kts"))
+            awaitNoTag(EditorTags.tab("docs/guide.md"))
             assertEquals(listOf("README.md"), app.tabNames())
             assertEquals(
                 "README.md",
@@ -175,13 +182,13 @@ class EditorTabsE2eTest {
             openFromTree("README.md")
             openFromTree("build.gradle.kts")
             openFromTree("docs/guide.md")
-            rightClick(Tags.tab("build.gradle.kts"))
+            rightClick(EditorTags.tab("build.gradle.kts"))
             awaitTag(Tags.MENU_CLOSE_TABS_LEFT).performClick()
-            awaitNoTag(Tags.tab("README.md"))
+            awaitNoTag(EditorTags.tab("README.md"))
             assertEquals(listOf("build.gradle.kts", "guide.md"), app.tabNames())
-            rightClick(Tags.tab("build.gradle.kts"))
+            rightClick(EditorTags.tab("build.gradle.kts"))
             awaitTag(Tags.MENU_CLOSE_TABS_RIGHT).performClick()
-            awaitNoTag(Tags.tab("docs/guide.md"))
+            awaitNoTag(EditorTags.tab("docs/guide.md"))
             assertEquals(listOf("build.gradle.kts"), app.tabNames())
         }
 
@@ -191,12 +198,12 @@ class EditorTabsE2eTest {
             launchWithProject(project)
             openFromTree("README.md")
             openFromTree("build.gradle.kts")
-            rightClick(Tags.tab("README.md"))
-            awaitTag(Tags.MENU_COPY_TAB_PATH).performClick()
+            rightClick(EditorTags.tab("README.md"))
+            awaitTag(EditorTags.MENU_COPY_TAB_PATH).performClick()
             assertTrue(TextClipboard.get()!!.endsWith("README.md"))
-            rightClick(Tags.tab("README.md"))
+            rightClick(EditorTags.tab("README.md"))
             awaitTag(Tags.MENU_CLOSE_ALL_TABS).performClick()
-            awaitTag(Tags.EDITOR_EMPTY).assertIsDisplayed()
+            awaitTag(AppTags.EDITOR_EMPTY).assertIsDisplayed()
         }
 
     @Test
@@ -205,21 +212,25 @@ class EditorTabsE2eTest {
             val app = launchWithProject(project)
             openFromTree("README.md")
             openFromTree("build.gradle.kts")
-            awaitTag(Tags.EDITOR)
-            onNodeWithTag(Tags.EDITOR).performKeyInput { withKeyDown(Key.AltLeft) { pressKey(Key.DirectionLeft) } }
+            awaitTag(EditorTags.EDITOR)
+            onNodeWithTag(
+                EditorTags.EDITOR,
+            ).performKeyInput { withKeyDown(Key.AltLeft) { pressKey(Key.DirectionLeft) } }
             awaitCondition {
                 app.project.editor.activeTab
                     ?.entry
                     ?.name == "README.md"
             }
-            onNodeWithTag(Tags.EDITOR).performKeyInput { withKeyDown(Key.AltLeft) { pressKey(Key.DirectionRight) } }
+            onNodeWithTag(
+                EditorTags.EDITOR,
+            ).performKeyInput { withKeyDown(Key.AltLeft) { pressKey(Key.DirectionRight) } }
             awaitCondition {
                 app.project.editor.activeTab
                     ?.entry
                     ?.name == "build.gradle.kts"
             }
-            onNodeWithTag(Tags.EDITOR).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.F4) } }
-            awaitNoTag(Tags.tab("build.gradle.kts"))
+            onNodeWithTag(EditorTags.EDITOR).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.F4) } }
+            awaitNoTag(EditorTags.tab("build.gradle.kts"))
             assertEquals(listOf("README.md"), app.tabNames())
         }
 
@@ -228,7 +239,7 @@ class EditorTabsE2eTest {
         runComposeUiTest {
             launchWithProject(project)
             openFromTree("logo.png")
-            awaitTag(Tags.EDITOR_MESSAGE).assertTextContains("Binary file", substring = true)
+            awaitTag(EditorTags.EDITOR_MESSAGE).assertTextContains("Binary file", substring = true)
         }
 
     @Test
@@ -237,13 +248,13 @@ class EditorTabsE2eTest {
             project.file("Long.kt", (1..2000).joinToString("\n") { "val line$it = $it" })
             val app = launchWithProject(project)
             openFromTree("Long.kt")
-            awaitTag(Tags.line(0))
+            awaitTag(EditorTags.line(0))
             editorList().performScrollToIndex(1500)
-            awaitTag(Tags.line(1500))
+            awaitTag(EditorTags.line(1500))
             openFromTree("README.md")
-            awaitNoTag(Tags.line(1500))
-            onNodeWithTag(Tags.tab("Long.kt")).performClick()
-            awaitTag(Tags.line(1500)).assertTextContains("val line1501 = 1501")
+            awaitNoTag(EditorTags.line(1500))
+            onNodeWithTag(EditorTags.tab("Long.kt")).performClick()
+            awaitTag(EditorTags.line(1500)).assertTextContains("val line1501 = 1501")
             assertTrue(
                 app.project.editor.activeTab!!
                     .verticalScroll
@@ -257,16 +268,16 @@ class EditorTabsE2eTest {
             repeat(20) { project.file("File$it.txt", "content $it\n") }
             launchWithProject(project)
             for (i in 0 until 20) openFromTree("File$i.txt")
-            awaitTag(Tags.tab("File19.txt"))
-            assertEquals(false, shown(Tags.tab("File0.txt")), "the tab row should overflow")
+            awaitTag(EditorTags.tab("File19.txt"))
+            assertEquals(false, shown(EditorTags.tab("File0.txt")), "the tab row should overflow")
             repeat(20) {
-                onNodeWithTag(Tags.TABS).performMouseInput {
+                onNodeWithTag(EditorTags.TABS).performMouseInput {
                     moveTo(center)
                     scroll(-10f)
                 }
                 waitForIdle()
             }
-            awaitCondition { shown(Tags.tab("File0.txt")) }
+            awaitCondition { shown(EditorTags.tab("File0.txt")) }
         }
 
     @Test
@@ -278,7 +289,7 @@ class EditorTabsE2eTest {
             val elapsed =
                 measureTime {
                     openFromTree("Big.kt")
-                    awaitTag(Tags.line(0))
+                    awaitTag(EditorTags.line(0))
                 }
             assertTrue(elapsed.inWholeMilliseconds < 5_000, "opening took $elapsed")
             assertEquals(
@@ -287,14 +298,19 @@ class EditorTabsE2eTest {
                     .document!!
                     .lineCount,
             )
-            val composed = (0 until 200).count { onAllNodesWithTag(Tags.line(it)).fetchSemanticsNodes().isNotEmpty() }
+            val composed =
+                (0 until 200).count {
+                    onAllNodesWithTag(
+                        EditorTags.line(it),
+                    ).fetchSemanticsNodes().isNotEmpty()
+                }
             assertTrue(composed < 120, "composed lines: $composed")
             editorList().performScrollToIndex(lines - 1)
-            awaitTag(Tags.line(lines - 1)).assertTextContains("fun f$lines(x: Int)", substring = true)
+            awaitTag(EditorTags.line(lines - 1)).assertTextContains("fun f$lines(x: Int)", substring = true)
         }
 
     private fun androidx.compose.ui.test.ComposeUiTest.editorList() =
-        onNode(hasScrollToIndexAction() and hasAnyAncestor(hasTestTag(Tags.EDITOR)))
+        onNode(hasScrollToIndexAction() and hasAnyAncestor(hasTestTag(EditorTags.EDITOR)))
 
     private fun androidx.compose.ui.test.ComposeUiTest.shown(tag: String) =
         runCatching { onNodeWithTag(tag).assertIsDisplayed() }.isSuccess

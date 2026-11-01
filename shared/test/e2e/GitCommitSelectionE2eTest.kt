@@ -7,8 +7,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.v2.runComposeUiTest
-import org.example.kotlineditor.ui.ItemTags
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.AppTags
+import org.example.kotlineditor.ui.GitTags
 import java.nio.file.Files
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -26,8 +26,8 @@ class GitCommitSelectionE2eTest {
 
     private fun ComposeUiTest.openGit(): E2eApp {
         val app = launchWithProject(project)
-        onNodeWithTag(Tags.TOOL_GIT).performClick()
-        awaitTag(Tags.GIT_PANEL)
+        onNodeWithTag(AppTags.TOOL_GIT).performClick()
+        awaitTag(GitTags.GIT_PANEL)
         return app
     }
 
@@ -38,11 +38,11 @@ class GitCommitSelectionE2eTest {
             project.file("README.md", "# Changed\n")
             project.file("notes.txt", "new\n")
             val app = openGit()
-            awaitTag(ItemTags.gitChange("README.md"))
-            awaitTag(ItemTags.gitChange("notes.txt"))
-            awaitTag(ItemTags.gitChangeCheck("README.md")).performClick()
+            awaitTag(GitTags.gitChange("README.md"))
+            awaitTag(GitTags.gitChange("notes.txt"))
+            awaitTag(GitTags.gitChangeCheck("README.md")).performClick()
             awaitCondition { app.project.selectedForCommit == setOf("README.md") }
-            awaitTag(ItemTags.gitChangeCheck("README.md")).performClick()
+            awaitTag(GitTags.gitChangeCheck("README.md")).performClick()
             awaitCondition { app.project.selectedForCommit.isEmpty() }
         }
 
@@ -54,11 +54,11 @@ class GitCommitSelectionE2eTest {
             project.file("build.gradle.kts", "moved\n")
             project.file("notes.txt", "new\n")
             val app = openGit()
-            awaitTag(ItemTags.gitChangeCheck("README.md")).performClick()
-            awaitTag(ItemTags.gitChangeCheck("notes.txt")).performClick()
+            awaitTag(GitTags.gitChangeCheck("README.md")).performClick()
+            awaitTag(GitTags.gitChangeCheck("notes.txt")).performClick()
             assertEquals(setOf("README.md", "notes.txt"), app.project.selectedForCommit)
-            awaitTag(Tags.GIT_COMMIT_MESSAGE).performTextInput("Two files")
-            onNodeWithTag(Tags.GIT_COMMIT).performClick()
+            awaitTag(GitTags.GIT_COMMIT_MESSAGE).performTextInput("Two files")
+            onNodeWithTag(GitTags.GIT_COMMIT).performClick()
             awaitCondition { !app.project.gitBusy && app.project.gitStatus.keys == setOf("build.gradle.kts") }
             assertEquals("Committed 2 files", app.project.gitMessage)
             assertEquals("Two files", project.lastCommitSubject())
@@ -71,15 +71,15 @@ class GitCommitSelectionE2eTest {
             project.commitAll()
             project.file("README.md", "# Changed\n")
             val app = openGit()
-            awaitTag(ItemTags.gitChangeCheck("README.md")).performClick()
+            awaitTag(GitTags.gitChangeCheck("README.md")).performClick()
             // A blank message fails, and the checked file stays checked for the next try.
-            onNodeWithTag(Tags.GIT_COMMIT).performClick()
-            awaitTag(Tags.GIT_MESSAGE)
+            onNodeWithTag(GitTags.GIT_COMMIT).performClick()
+            awaitTag(GitTags.GIT_MESSAGE)
             assertEquals("A commit message is required", app.project.gitMessage)
             assertEquals(setOf("README.md"), app.project.selectedForCommit)
             // The same selection then commits without ticking again.
-            awaitTag(Tags.GIT_COMMIT_MESSAGE).performTextInput("Update the readme")
-            onNodeWithTag(Tags.GIT_COMMIT).performClick()
+            awaitTag(GitTags.GIT_COMMIT_MESSAGE).performTextInput("Update the readme")
+            onNodeWithTag(GitTags.GIT_COMMIT).performClick()
             awaitCondition { !app.project.gitBusy && app.project.gitStatus.isEmpty() }
             assertEquals("Update the readme", project.lastCommitSubject())
         }
@@ -91,12 +91,12 @@ class GitCommitSelectionE2eTest {
             project.file("README.md", "# Changed\n")
             project.file("notes.txt", "new\n")
             val app = openGit()
-            awaitTag(ItemTags.gitChangeCheck("README.md")).performClick()
-            awaitTag(ItemTags.gitChangeCheck("notes.txt")).performClick()
+            awaitTag(GitTags.gitChangeCheck("README.md")).performClick()
+            awaitTag(GitTags.gitChangeCheck("notes.txt")).performClick()
             assertEquals(setOf("README.md", "notes.txt"), app.project.selectedForCommit)
             // Another program reverts the file on disk; the refresh of the panel drops it from the selection.
             project.git("checkout", "--", "README.md")
-            onNodeWithTag(Tags.GIT_REFRESH).performClick()
+            onNodeWithTag(GitTags.GIT_REFRESH).performClick()
             awaitCondition { app.project.selectedForCommit == setOf("notes.txt") }
             awaitCondition { app.project.gitStatus.keys == setOf("notes.txt") }
         }
@@ -108,10 +108,10 @@ class GitCommitSelectionE2eTest {
             Files.delete(project.root.resolve("README.md"))
             project.file("notes.txt", "new\n")
             val app = openGit()
-            awaitTag(ItemTags.gitChangeCheck("README.md")).performClick()
-            awaitTag(ItemTags.gitChangeCheck("notes.txt")).performClick()
-            awaitTag(Tags.GIT_COMMIT_MESSAGE).performTextInput("Reshape the project")
-            onNodeWithTag(Tags.GIT_COMMIT).performClick()
+            awaitTag(GitTags.gitChangeCheck("README.md")).performClick()
+            awaitTag(GitTags.gitChangeCheck("notes.txt")).performClick()
+            awaitTag(GitTags.GIT_COMMIT_MESSAGE).performTextInput("Reshape the project")
+            onNodeWithTag(GitTags.GIT_COMMIT).performClick()
             awaitCondition { !app.project.gitBusy && app.project.gitStatus.isEmpty() }
             assertEquals("Reshape the project", project.lastCommitSubject())
             // The committed files carry the deletion and the addition, nothing of another file.
@@ -128,13 +128,13 @@ class GitCommitSelectionE2eTest {
             project.file("notes.txt", "new\n")
             val app = openGit()
             // One row is ticked first: the master checkbox then ticks only what is left.
-            awaitTag(ItemTags.gitChangeCheck("README.md")).performClick()
+            awaitTag(GitTags.gitChangeCheck("README.md")).performClick()
             awaitCondition { app.project.selectedForCommit == setOf("README.md") }
-            awaitTag(Tags.GIT_SELECT_ALL).performClick()
+            awaitTag(GitTags.GIT_SELECT_ALL).performClick()
             awaitCondition {
                 app.project.selectedForCommit == setOf("README.md", "build.gradle.kts", "notes.txt")
             }
-            awaitTag(Tags.GIT_SELECT_ALL).performClick()
+            awaitTag(GitTags.GIT_SELECT_ALL).performClick()
             awaitCondition { app.project.selectedForCommit.isEmpty() }
         }
 
@@ -144,11 +144,11 @@ class GitCommitSelectionE2eTest {
             project.commitAll()
             project.file("README.md", "# Changed\n")
             val app = openGit()
-            awaitTag(ItemTags.gitChange("README.md"))
-            awaitTag(Tags.GIT_COMMIT_MESSAGE).performTextInput("Update the readme")
-            onNodeWithTag(Tags.GIT_COMMIT).assertIsNotEnabled()
-            awaitNoTag(Tags.GIT_MESSAGE)
-            awaitTag(ItemTags.gitChangeCheck("README.md")).performClick()
+            awaitTag(GitTags.gitChange("README.md"))
+            awaitTag(GitTags.GIT_COMMIT_MESSAGE).performTextInput("Update the readme")
+            onNodeWithTag(GitTags.GIT_COMMIT).assertIsNotEnabled()
+            awaitNoTag(GitTags.GIT_MESSAGE)
+            awaitTag(GitTags.gitChangeCheck("README.md")).performClick()
             awaitCondition { app.project.selectedForCommit == setOf("README.md") }
             assertEquals("Update the readme", app.project.commitMessage)
         }

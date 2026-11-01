@@ -60,13 +60,13 @@ internal fun RemoteCatalog(app: AppState, dialog: RemoteDialogState, onChange: (
         IdeTextField(
             query,
             { onChange(dialog.copy(hostSearch = it)) },
-            Modifier.fillMaxWidth().testTag(Tags.REMOTE_SEARCH),
+            Modifier.fillMaxWidth().testTag(RemoteTags.REMOTE_SEARCH),
             placeholder = "Search recent folders, SSH hosts and tags",
             leading = { SearchIcon() },
         )
         CatalogStatus(app, empty, query)
         val listState = rememberLazyListState()
-        Box(Modifier.fillMaxWidth().heightIn(max = 280.dp).testTag(Tags.REMOTE_CATALOG)) {
+        Box(Modifier.fillMaxWidth().heightIn(max = 280.dp).testTag(RemoteTags.REMOTE_CATALOG)) {
             LazyColumn(Modifier.fillMaxWidth().heightIn(max = 280.dp), state = listState) {
                 if (workspaces.isNotEmpty()) {
                     item { SectionHeader("Recent folders") }
@@ -103,7 +103,7 @@ private fun CatalogStatus(app: AppState, empty: Boolean, query: String) {
             "Loading ~/.ssh/config…",
             color = IdeColors.TextSecondary,
             fontSize = 11.sp,
-            modifier = Modifier.padding(top = 6.dp).testTag(Tags.REMOTE_HOSTS_LOADING),
+            modifier = Modifier.padding(top = 6.dp).testTag(RemoteTags.REMOTE_HOSTS_LOADING),
         )
     }
     val noMatch = empty && query.isNotBlank()
@@ -135,14 +135,14 @@ private fun SshHostRow(
     onTagClick: (String) -> Unit,
     onClick: () -> Unit,
 ) {
-    CatalogRow(ItemTags.sshHost(host.alias), isSelected, onClick) {
+    CatalogRow(RemoteTags.sshHost(host.alias), isSelected, onClick) {
         Column {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Label(host.alias, fontWeight = FontWeight.SemiBold)
-                tags.forEach { tag -> TagChip(tag, ItemTags.remoteTag(host.alias, tag), onTagClick) }
+                tags.forEach { tag -> TagChip(tag, RemoteTags.remoteTag(host.alias, tag), onTagClick) }
             }
             if (host.summary.isNotBlank()) {
                 Label(host.summary, color = IdeColors.TextSecondary, fontSize = 11.sp)
@@ -160,7 +160,7 @@ private fun WorkspaceRow(
     onClick: () -> Unit,
 ) {
     val tags = app.tagsFor(workspace.target.tagKey)
-    CatalogRow(ItemTags.remoteWorkspace(workspace.label, workspace.path), isSelected, onClick) {
+    CatalogRow(RemoteTags.remoteWorkspace(workspace.label, workspace.path), isSelected, onClick) {
         Column {
             Label(workspace.path, fontSize = 12.sp)
             Row(
@@ -168,7 +168,7 @@ private fun WorkspaceRow(
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Label(workspace.label, color = IdeColors.TextSecondary, fontSize = 11.sp)
-                tags.forEach { tag -> TagChip(tag, ItemTags.remoteTag(workspace.target.tagKey, tag), onTagClick) }
+                tags.forEach { tag -> TagChip(tag, RemoteTags.remoteTag(workspace.target.tagKey, tag), onTagClick) }
             }
         }
     }

@@ -8,8 +8,10 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.withKeyDown
-import org.example.kotlineditor.ui.ItemTags
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.AppTags
+import org.example.kotlineditor.ui.EditorTags
+import org.example.kotlineditor.ui.RemoteTags
+import org.example.kotlineditor.ui.TreeTags
 import java.nio.file.Files
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -38,7 +40,7 @@ class RemoteDevelopmentChaosE2eTest {
         remoteUiTest {
             launchApp()
             connectRemoteTo(RemoteTestEnvironment, project.path)
-            awaitTag(Tags.treeRow("src"), timeout = 60_000)
+            awaitTag(TreeTags.treeRow("src"), timeout = 60_000)
             openFromTree("README.md")
 
             // The link goes down: the tunnel and the client must both recover, without losing the daemon.
@@ -48,8 +50,8 @@ class RemoteDevelopmentChaosE2eTest {
             awaitReconnected()
 
             openFromTree("docs/guide.md")
-            onNodeWithTag(Tags.EDITOR).performClick()
-            onNodeWithTag(Tags.EDITOR).performKeyInput {
+            onNodeWithTag(EditorTags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performKeyInput {
                 withKeyDown(Key.CtrlLeft) { pressKey(Key.MoveHome) }
                 pressKey(Key.Q)
                 withKeyDown(Key.CtrlLeft) { pressKey(Key.S) }
@@ -62,22 +64,22 @@ class RemoteDevelopmentChaosE2eTest {
         remoteUiTest {
             launchApp()
             connectRemoteTo(RemoteTestEnvironment, project.path)
-            awaitTag(Tags.treeRow("src"), timeout = 60_000)
+            awaitTag(TreeTags.treeRow("src"), timeout = 60_000)
             val firstPid = RemoteTestEnvironment.daemonPid()
             val firstPort = RemoteTestEnvironment.daemonPort()
 
             // A crash: the SSH link is fine, but nothing listens on the forwarded port any more.
             RemoteTestEnvironment.killDaemon()
             awaitReconnecting()
-            awaitNoTag(Tags.STATUS_CONNECTION, timeout = 60_000)
+            awaitNoTag(AppTags.STATUS_CONNECTION, timeout = 60_000)
             val secondPid = RemoteTestEnvironment.daemonPid()
             assertNotEquals(firstPid, secondPid, "the session should have started a new daemon")
             val secondPort = RemoteTestEnvironment.daemonPort()
             println("daemon restarted: pid $firstPid -> $secondPid, port $firstPort -> $secondPort")
 
             openFromTree("docs/guide.md")
-            onNodeWithTag(Tags.EDITOR).performClick()
-            onNodeWithTag(Tags.EDITOR).performKeyInput {
+            onNodeWithTag(EditorTags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performKeyInput {
                 withKeyDown(Key.CtrlLeft) { pressKey(Key.MoveHome) }
                 pressKey(Key.Q)
                 withKeyDown(Key.CtrlLeft) { pressKey(Key.S) }
@@ -91,19 +93,19 @@ class RemoteDevelopmentChaosE2eTest {
         remoteUiTest {
             launchApp()
             connectRemoteTo(RemoteTestEnvironment, project.path)
-            awaitTag(Tags.treeRow("src"), timeout = 60_000)
+            awaitTag(TreeTags.treeRow("src"), timeout = 60_000)
             val firstToken = RemoteTestEnvironment.daemonToken()
 
             // The host was reset: the daemon is gone and so is its secret.
             RemoteTestEnvironment.killDaemon()
             RemoteTestEnvironment.forgetToken()
             awaitReconnecting()
-            awaitNoTag(Tags.STATUS_CONNECTION, timeout = 60_000)
+            awaitNoTag(AppTags.STATUS_CONNECTION, timeout = 60_000)
             assertNotEquals(firstToken, RemoteTestEnvironment.daemonToken(), "the daemon should have a new token")
 
             openFromTree("docs/guide.md")
-            onNodeWithTag(Tags.EDITOR).performClick()
-            onNodeWithTag(Tags.EDITOR).performKeyInput {
+            onNodeWithTag(EditorTags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performKeyInput {
                 withKeyDown(Key.CtrlLeft) { pressKey(Key.MoveHome) }
                 pressKey(Key.Q)
                 withKeyDown(Key.CtrlLeft) { pressKey(Key.S) }
@@ -117,11 +119,11 @@ class RemoteDevelopmentChaosE2eTest {
         remoteUiTest {
             launchApp()
             connectRemoteTo(RemoteTestEnvironment, project.path)
-            awaitTag(Tags.treeRow("src"), timeout = 60_000)
+            awaitTag(TreeTags.treeRow("src"), timeout = 60_000)
 
             RemoteTestEnvironment.ssh.restartWithNewHostKey()
             awaitStatusContains("Host key", timeout = 30_000)
-            awaitTag(Tags.STATUS_CONNECTION)
+            awaitTag(AppTags.STATUS_CONNECTION)
         }
 
     @Test
@@ -132,17 +134,17 @@ class RemoteDevelopmentChaosE2eTest {
             remoteUiTest {
                 launchApp()
                 connectRemoteTo(RemoteTestEnvironment, null)
-                awaitTag(Tags.OPEN_PROJECT, timeout = 60_000)
-                awaitTag(ItemTags.pickerDirectory(folder.toString()))
+                awaitTag(RemoteTags.OPEN_PROJECT, timeout = 60_000)
+                awaitTag(RemoteTags.pickerDirectory(folder.toString()))
 
                 // The double click's listing request is sent while the link is down; it must finish after.
                 RemoteTestEnvironment.ssh.stop()
-                onNodeWithTag(ItemTags.pickerDirectory(folder.toString())).performDoubleClick()
+                onNodeWithTag(RemoteTags.pickerDirectory(folder.toString())).performDoubleClick()
                 RemoteTestEnvironment.ssh.start()
 
-                awaitTag(Tags.OPEN_PROJECT_EMPTY, timeout = 30_000)
+                awaitTag(RemoteTags.OPEN_PROJECT_EMPTY, timeout = 30_000)
                 awaitCondition { shownDirectoryInProjectPicker() == folder.toString() }
-                awaitNoTag(Tags.OPEN_PROJECT_ERROR)
+                awaitNoTag(RemoteTags.OPEN_PROJECT_ERROR)
             }
         } finally {
             folder.toFile().deleteRecursively()
@@ -157,18 +159,18 @@ class RemoteDevelopmentChaosE2eTest {
             remoteUiTest {
                 launchApp()
                 connectRemoteTo(RemoteTestEnvironment, null)
-                awaitTag(Tags.OPEN_PROJECT, timeout = 60_000)
-                awaitTag(Tags.OPEN_PROJECT_COUNT)
+                awaitTag(RemoteTags.OPEN_PROJECT, timeout = 60_000)
+                awaitTag(RemoteTags.OPEN_PROJECT_COUNT)
 
                 RemoteTestEnvironment.ssh.stop()
                 val path = folder.toString()
                 typeFolderPathInChunks(path.dropLast(4), path.takeLast(4))
                 RemoteTestEnvironment.ssh.start()
 
-                awaitTag(Tags.OPEN_PROJECT_EMPTY, timeout = 30_000)
+                awaitTag(RemoteTags.OPEN_PROJECT_EMPTY, timeout = 30_000)
                 assertEquals(path, shownDirectoryInProjectPicker())
                 awaitCondition {
-                    runCatching { onNodeWithTag(Tags.OPEN_PROJECT_OPEN).assertIsEnabled() }.isSuccess
+                    runCatching { onNodeWithTag(RemoteTags.OPEN_PROJECT_OPEN).assertIsEnabled() }.isSuccess
                 }
             }
         } finally {

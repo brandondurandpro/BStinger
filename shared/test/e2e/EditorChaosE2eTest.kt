@@ -12,7 +12,8 @@ import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.test.withKeyDown
 import org.example.kotlineditor.state.TabStatus
 import org.example.kotlineditor.state.delete
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.EditorTags
+import org.example.kotlineditor.ui.TreeTags
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -32,15 +33,15 @@ class EditorChaosE2eTest {
     }
 
     private fun ComposeUiTest.typeAtStart(key: Key) {
-        onNodeWithTag(Tags.EDITOR).performClick()
-        onNodeWithTag(Tags.EDITOR).performKeyInput {
+        onNodeWithTag(EditorTags.EDITOR).performClick()
+        onNodeWithTag(EditorTags.EDITOR).performKeyInput {
             withKeyDown(Key.CtrlLeft) { pressKey(Key.MoveHome) }
             pressKey(key)
         }
     }
 
     private fun ComposeUiTest.save() {
-        onNodeWithTag(Tags.EDITOR).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.S) } }
+        onNodeWithTag(EditorTags.EDITOR).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.S) } }
     }
 
     @Test
@@ -53,11 +54,11 @@ class EditorChaosE2eTest {
             typeAtStart(Key.Q)
             save()
             // Still modified, nothing written: the edit is not lost, it waits for the server.
-            awaitTag(Tags.tabModified("README.md"))
+            awaitTag(EditorTags.tabModified("README.md"))
             assertEquals(readme, project.read("README.md"))
             app.network.comeBack()
             awaitCondition { project.read("README.md") == "q$readme" }
-            awaitNoTag(Tags.tabModified("README.md"))
+            awaitNoTag(EditorTags.tabModified("README.md"))
             awaitReconnected()
         }
 
@@ -67,13 +68,13 @@ class EditorChaosE2eTest {
             val app = launchWithProject(project, chaos = true)
             // The connection stays open but nothing goes through, as after a laptop sleep or a dead Wi-Fi.
             app.network.blackHole = true
-            onNodeWithTag(Tags.treeRow("README.md")).performDoubleClick()
-            awaitTag(Tags.tab("README.md"))
+            onNodeWithTag(TreeTags.treeRow("README.md")).performDoubleClick()
+            awaitTag(EditorTags.tab("README.md"))
             awaitReconnecting()
             val tab = app.project.editor.activeTab
             assertIs<TabStatus.Loading>(tab?.status)
             app.network.blackHole = false
-            awaitTag(Tags.line(0)).assertTextContains("# Demo", substring = true)
+            awaitTag(EditorTags.line(0)).assertTextContains("# Demo", substring = true)
             awaitReconnected()
         }
 
@@ -86,12 +87,12 @@ class EditorChaosE2eTest {
             app.process.stop()
             awaitReconnecting()
             // Editing goes on while the server is down.
-            onNodeWithTag(Tags.EDITOR).performKeyInput { pressKey(Key.W) }
+            onNodeWithTag(EditorTags.EDITOR).performKeyInput { pressKey(Key.W) }
             app.process.start()
             awaitReconnected()
             save()
             awaitCondition { project.read("README.md") == "qw$readme" }
-            awaitNoTag(Tags.tabModified("README.md"))
+            awaitNoTag(EditorTags.tabModified("README.md"))
         }
 
     @Test
@@ -103,7 +104,7 @@ class EditorChaosE2eTest {
             typeAtStart(Key.Q)
             waitForIdle()
             // Shown at once, without a round trip to the server.
-            onNodeWithTag(Tags.line(0)).assertTextContains("q# Demo", substring = true)
+            onNodeWithTag(EditorTags.line(0)).assertTextContains("q# Demo", substring = true)
             save()
             awaitCondition { project.read("README.md") == "q$readme" }
         }

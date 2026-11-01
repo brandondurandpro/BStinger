@@ -8,8 +8,8 @@ import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.v2.runComposeUiTest
+import org.example.kotlineditor.ui.EditorTags
 import org.example.kotlineditor.ui.IdeColors
-import org.example.kotlineditor.ui.Tags
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -42,7 +42,7 @@ class SyntaxHighlightingChaosE2eTest {
             openFromTree("src/main/kotlin/App.kt")
             awaitColor(7, "val", IdeColors.Keyword)
             assertEquals(IdeColors.Code, colorOf(8, "println"), "no grammar yet")
-            onNodeWithTag(Tags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performClick()
             pressInEditor(Key.MoveEnd, ctrl = true)
             typeInEditor("\nval more = greeting.length")
             assertEquals("val more = greeting.length", textOfLine(10))
@@ -59,7 +59,7 @@ class SyntaxHighlightingChaosE2eTest {
             launchWithProject(project, grammars = TestGrammars.store(repository))
             val opened = System.nanoTime()
             openFromTree("src/main/kotlin/App.kt")
-            onNodeWithTag(Tags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performClick()
             pressInEditor(Key.MoveEnd, ctrl = true)
             typeInEditor("\nval more = greeting.length")
             val ready = (System.nanoTime() - opened) / NANOS_PER_MILLI
@@ -94,7 +94,7 @@ class SyntaxHighlightingChaosE2eTest {
             awaitReconnecting()
             app.process.start()
             awaitReconnected()
-            onNodeWithTag(Tags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performClick()
             pressInEditor(Key.MoveEnd, ctrl = true)
             typeInEditor("\nval more = greeting.length")
             awaitColor(10, "length", IdeColors.Property)
@@ -102,7 +102,7 @@ class SyntaxHighlightingChaosE2eTest {
         }
 
     private fun ComposeUiTest.textOfLine(line: Int): String? =
-        onAllNodes(hasTestTag(Tags.lineText(line)), useUnmergedTree = true)
+        onAllNodes(hasTestTag(EditorTags.lineText(line)), useUnmergedTree = true)
             .fetchSemanticsNodes()
             .firstOrNull()
             ?.config

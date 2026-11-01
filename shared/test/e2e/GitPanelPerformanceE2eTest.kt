@@ -5,8 +5,8 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.v2.runComposeUiTest
-import org.example.kotlineditor.ui.ItemTags
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.AppTags
+import org.example.kotlineditor.ui.GitTags
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertTrue
@@ -47,28 +47,28 @@ class GitPanelPerformanceE2eTest {
             awaitCondition { app.project.gitStatus.size == CHANGES }
 
             measure("open the Git panel on $CHANGES changes", budgetMillis = 8_000, budgetMegabytes = 200) {
-                onNodeWithTag(Tags.TOOL_GIT).performClick()
-                awaitTag(ItemTags.gitChangeCheck(name(0)))
+                onNodeWithTag(AppTags.TOOL_GIT).performClick()
+                awaitTag(GitTags.gitChangeCheck(name(0)))
                 renderFrame()
             }
             assertTrue(composedChangeRows() < MAX_COMPOSED_ROWS, "composed rows: ${composedChangeRows()}")
 
             // A tick is read per row: only the ticked row recomposes, not the list.
             measure("tick one of $CHANGES changes", budgetMillis = 2_000, budgetMegabytes = 50) {
-                onNodeWithTag(ItemTags.gitChangeCheck(name(0))).performClick()
+                onNodeWithTag(GitTags.gitChangeCheck(name(0))).performClick()
                 awaitCondition { app.project.selectedForCommit == setOf(name(0)) }
                 renderFrame()
             }
             assertTrue(composedCheckboxes() < MAX_COMPOSED_ROWS, "composed checkboxes: ${composedCheckboxes()}")
 
             measure("untick it again", budgetMillis = 2_000, budgetMegabytes = 50) {
-                onNodeWithTag(ItemTags.gitChangeCheck(name(0))).performClick()
+                onNodeWithTag(GitTags.gitChangeCheck(name(0))).performClick()
                 awaitCondition { app.project.selectedForCommit.isEmpty() }
                 renderFrame()
             }
 
             measure("tick all of $CHANGES changes at once", budgetMillis = 2_000, budgetMegabytes = 50) {
-                onNodeWithTag(Tags.GIT_SELECT_ALL).performClick()
+                onNodeWithTag(GitTags.GIT_SELECT_ALL).performClick()
                 awaitCondition { app.project.selectedForCommit.size == CHANGES }
                 renderFrame()
             }
@@ -86,13 +86,13 @@ class GitPanelPerformanceE2eTest {
             project.file("build.gradle.kts", "moved\n")
             project.file("notes.txt", "new\n")
             val app = launchWithProject(project)
-            onNodeWithTag(Tags.TOOL_GIT).performClick()
-            awaitTag(ItemTags.gitChangeCheck("README.md"))
+            onNodeWithTag(AppTags.TOOL_GIT).performClick()
+            awaitTag(GitTags.gitChangeCheck("README.md"))
 
             measure("tick one of 3 changes, frame drawn", budgetMillis = 200, budgetMegabytes = 10) {
-                onNodeWithTag(ItemTags.gitChangeCheck("README.md")).performClick()
+                onNodeWithTag(GitTags.gitChangeCheck("README.md")).performClick()
                 awaitCondition { app.project.selectedForCommit == setOf("README.md") }
-                onNodeWithTag(ItemTags.gitChangeCheck("README.md")).performClick()
+                onNodeWithTag(GitTags.gitChangeCheck("README.md")).performClick()
                 awaitCondition { app.project.selectedForCommit.isEmpty() }
                 renderFrame()
             }

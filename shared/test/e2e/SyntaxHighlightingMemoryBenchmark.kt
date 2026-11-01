@@ -8,8 +8,8 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.v2.runComposeUiTest
 import kotlinx.coroutines.runBlocking
 import org.example.kotlineditor.syntax.treesitter.GrammarSpec
+import org.example.kotlineditor.ui.EditorTags
 import org.example.kotlineditor.ui.IdeColors
-import org.example.kotlineditor.ui.Tags
 import java.io.File
 import java.lang.foreign.Arena
 import java.lang.foreign.FunctionDescriptor
@@ -73,7 +73,7 @@ class SyntaxHighlightingMemoryBenchmark {
             if (grammars) awaitColor(8, "println", IdeColors.FunctionDeclaration)
             val small = sample("+ 10 small Kotlin files (large ones hidden)")
             openFromTree("src/Big.kt")
-            onNodeWithTag(Tags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performClick()
             pressInEditor(Key.MoveEnd, ctrl = true)
             repeat(TYPED_LINES) { typeInEditor("\nval z = name.length") }
             val typed = sample("+ 20 lines typed in the large file")

@@ -47,13 +47,13 @@ complexity:
 
 comments:
   # Documentation is required for the API modules other modules build on (`protocol`, `server`); the application
-  # modules (`shared`, `desktopApp`) are not a library API.
+  # modules (`shared` and the client modules split from it, `desktopApp`) are not a library API.
   UndocumentedPublicClass:
-    excludes: ['**/shared/**', '**/desktopApp/**', '**/test/**', '**/test@jvm/**']
+    excludes: ['**/shared/**', '**/ui/**', '**/client-state/**', '**/syntax/**', '**/remote-ssh/**', '**/desktopApp/**', '**/test/**', '**/test@jvm/**']
   UndocumentedPublicFunction:
-    excludes: ['**/shared/**', '**/desktopApp/**', '**/test/**', '**/test@jvm/**']
+    excludes: ['**/shared/**', '**/ui/**', '**/client-state/**', '**/syntax/**', '**/remote-ssh/**', '**/desktopApp/**', '**/test/**', '**/test@jvm/**']
   UndocumentedPublicProperty:
-    excludes: ['**/shared/**', '**/desktopApp/**', '**/test/**', '**/test@jvm/**']
+    excludes: ['**/shared/**', '**/ui/**', '**/client-state/**', '**/syntax/**', '**/remote-ssh/**', '**/desktopApp/**', '**/test/**', '**/test@jvm/**']
 
 # The project's own rules (module detekt-rules), see AGENTS.md, "Kotlin Coding Guidelines".
 kotlin-editor:

@@ -11,7 +11,8 @@ import org.example.kotlineditor.state.Dock
 import org.example.kotlineditor.state.FilePreferenceStore
 import org.example.kotlineditor.state.PreferenceKeys
 import org.example.kotlineditor.state.ToolWindow
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.AppTags
+import org.example.kotlineditor.ui.TreeTags
 import java.nio.file.Files
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -35,8 +36,8 @@ class PreferencesE2eTest {
         runComposeUiTest {
             val app = launchWithProject(project, FilePreferenceStore(file))
             runOnUiThread { app.state.zoomEditor(2f) }
-            onNodeWithTag(Tags.TREE_AUTO_SELECT).performClick()
-            onNodeWithTag(Tags.TOOL_GIT).performClick()
+            onNodeWithTag(TreeTags.TREE_AUTO_SELECT).performClick()
+            onNodeWithTag(AppTags.TOOL_GIT).performClick()
             runOnUiThread { app.project.toolWindows.move(ToolWindow.Project, Dock.Right, first = true) }
             awaitCondition { FilePreferenceStore(file).load()["layout.dock.Project"] == "Right" }
             awaitCondition { FilePreferenceStore(file).load()[PreferenceKeys.AUTO_SELECT_OPENED_FILE] == "false" }
@@ -46,7 +47,7 @@ class PreferencesE2eTest {
         runComposeUiTest {
             val app = launchWithProject(project, FilePreferenceStore(file))
             assertEquals(15f, app.state.editorFontSize)
-            onNodeWithTag(Tags.TREE_AUTO_SELECT).assertIsOff()
+            onNodeWithTag(TreeTags.TREE_AUTO_SELECT).assertIsOff()
             assertEquals(Dock.Right, app.project.toolWindows.dockOf(ToolWindow.Project))
             assertEquals(true, app.project.toolWindows.isVisible(ToolWindow.Git))
         }
@@ -57,7 +58,7 @@ class PreferencesE2eTest {
         runComposeUiTest {
             val app = launchWithProject(project, FilePreferenceStore(file))
             assertEquals(AppState.DEFAULT_EDITOR_FONT_SIZE, app.state.editorFontSize)
-            onNodeWithTag(Tags.TREE_AUTO_SELECT).assertIsOn()
+            onNodeWithTag(TreeTags.TREE_AUTO_SELECT).assertIsOn()
             assertEquals(Dock.Left, app.project.toolWindows.dockOf(ToolWindow.Project))
         }
 
@@ -73,7 +74,7 @@ class PreferencesE2eTest {
             )
             val app = launchWithProject(project, FilePreferenceStore(file))
             assertEquals(AppState.DEFAULT_EDITOR_FONT_SIZE, app.state.editorFontSize)
-            onNodeWithTag(Tags.TREE_AUTO_SELECT).assertIsOn()
+            onNodeWithTag(TreeTags.TREE_AUTO_SELECT).assertIsOn()
             assertEquals(Dock.Left, app.project.toolWindows.dockOf(ToolWindow.Git))
         }
 

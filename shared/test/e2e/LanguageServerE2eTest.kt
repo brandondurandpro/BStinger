@@ -11,7 +11,7 @@ import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.e2e.FakePhpServers.Companion.FAKE
 import org.example.kotlineditor.e2e.FakePhpServers.Companion.NEEDS_NODE
 import org.example.kotlineditor.model.LanguageServerState
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.LanguageServerTags
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -41,30 +41,34 @@ class LanguageServerE2eTest {
             val servers = servers()
             val app = launchWithProject(project, languageServers = servers.settings)
             openFromTree("README.md")
-            awaitNoTag(Tags.LSP_CHOICE, timeout = 1_000)
+            awaitNoTag(LanguageServerTags.LSP_CHOICE, timeout = 1_000)
 
             openFromTree("src/index.php")
-            awaitTag(Tags.LSP_CHOICE)
-            awaitTag(Tags.LSP_CHOICE_OPEN).performClick()
-            awaitTag(Tags.LSP_CHOICE_DIALOG)
+            awaitTag(LanguageServerTags.LSP_CHOICE)
+            awaitTag(LanguageServerTags.LSP_CHOICE_OPEN).performClick()
+            awaitTag(LanguageServerTags.LSP_CHOICE_DIALOG)
             // The recommended server, the first that can run, is selected: its advantages are shown.
-            assertContains(textOf(Tags.LSP_CHOICE_DETAILS), "Starts in a second")
-            assertContains(textOf(Tags.lspChoiceOption(NEEDS_NODE)), "Node.js not found")
-            onNodeWithTag(Tags.lspChoiceOption(NEEDS_NODE)).performClick()
-            awaitCondition { textOf(Tags.lspChoiceDetail(NEEDS_NODE)).contains("Node.js not found") }
-            onNodeWithTag(Tags.lspChoiceUse(NEEDS_NODE)).assertIsNotEnabled()
+            assertContains(textOf(LanguageServerTags.LSP_CHOICE_DETAILS), "Starts in a second")
+            assertContains(textOf(LanguageServerTags.lspChoiceOption(NEEDS_NODE)), "Node.js not found")
+            onNodeWithTag(LanguageServerTags.lspChoiceOption(NEEDS_NODE)).performClick()
+            awaitCondition { textOf(LanguageServerTags.lspChoiceDetail(NEEDS_NODE)).contains("Node.js not found") }
+            onNodeWithTag(LanguageServerTags.lspChoiceUse(NEEDS_NODE)).assertIsNotEnabled()
             assertTrue(app.languageServers.isEmpty(), "nothing starts before the choice")
 
-            onNodeWithTag(Tags.lspChoiceOption(FAKE)).performClick()
-            awaitTag(Tags.lspChoiceUse(FAKE)).performClick()
-            awaitNoTag(Tags.LSP_CHOICE_DIALOG)
-            awaitNoTag(Tags.LSP_CHOICE)
+            onNodeWithTag(LanguageServerTags.lspChoiceOption(FAKE)).performClick()
+            awaitTag(LanguageServerTags.lspChoiceUse(FAKE)).performClick()
+            awaitNoTag(LanguageServerTags.LSP_CHOICE_DIALOG)
+            awaitNoTag(LanguageServerTags.LSP_CHOICE)
             val running = awaitServer(app) { it.state == LanguageServerState.Running && it.memory != null }
             assertEquals(project.path, running.root)
             assertTrue(isAlive(running.pid!!))
             assertContains(servers.saved(), "php=fake")
-            awaitCondition { textOf(Tags.statusLanguageServer(running.id)).matches(Regex("PHP · \\d+ MB")) }
-            awaitCondition { textOf(Tags.STATUS_SERVER_MEMORY).matches(Regex("Server \\d+ MB")) }
+            awaitCondition {
+                textOf(
+                    LanguageServerTags.statusLanguageServer(running.id),
+                ).matches(Regex("PHP · \\d+ MB"))
+            }
+            awaitCondition { textOf(LanguageServerTags.STATUS_SERVER_MEMORY).matches(Regex("Server \\d+ MB")) }
         }
 
     @Test
@@ -73,8 +77,8 @@ class LanguageServerE2eTest {
             val servers = servers()
             val app = launchWithProject(project, languageServers = servers.settings)
             openFromTree("src/index.php")
-            awaitTag(Tags.LSP_CHOICE_QUICK).performClick()
-            awaitNoTag(Tags.LSP_CHOICE)
+            awaitTag(LanguageServerTags.LSP_CHOICE_QUICK).performClick()
+            awaitNoTag(LanguageServerTags.LSP_CHOICE)
             awaitServer(app) { it.isRunning() }
             assertContains(servers.saved(), "php=fake")
         }
@@ -84,18 +88,18 @@ class LanguageServerE2eTest {
         runComposeUiTest {
             val app = launchWithProject(project, languageServers = servers().settings)
             openFromTree("src/index.php")
-            awaitTag(Tags.LSP_CHOICE_OPEN).performClick()
-            val dialog = awaitTag(Tags.LSP_CHOICE_DIALOG)
+            awaitTag(LanguageServerTags.LSP_CHOICE_OPEN).performClick()
+            val dialog = awaitTag(LanguageServerTags.LSP_CHOICE_DIALOG)
             dialog.performKeyInput { pressKey(Key.DirectionDown) }
-            awaitTag(Tags.lspChoiceDetail(NEEDS_NODE))
+            awaitTag(LanguageServerTags.lspChoiceDetail(NEEDS_NODE))
             dialog.performKeyInput { pressKey(Key.Escape) }
-            awaitNoTag(Tags.LSP_CHOICE_DIALOG)
-            awaitTag(Tags.LSP_CHOICE)
+            awaitNoTag(LanguageServerTags.LSP_CHOICE_DIALOG)
+            awaitTag(LanguageServerTags.LSP_CHOICE)
             assertTrue(app.languageServers.isEmpty())
 
-            awaitTag(Tags.LSP_CHOICE_OPEN).performClick()
-            awaitTag(Tags.LSP_CHOICE_DIALOG).performKeyInput { pressKey(Key.Enter) }
-            awaitNoTag(Tags.LSP_CHOICE)
+            awaitTag(LanguageServerTags.LSP_CHOICE_OPEN).performClick()
+            awaitTag(LanguageServerTags.LSP_CHOICE_DIALOG).performKeyInput { pressKey(Key.Enter) }
+            awaitNoTag(LanguageServerTags.LSP_CHOICE)
             awaitServer(app) { it.isRunning() }
         }
 
@@ -104,10 +108,10 @@ class LanguageServerE2eTest {
         runComposeUiTest {
             val app = launchWithProject(project, languageServers = servers().settings)
             openFromTree("src/index.php")
-            awaitTag(Tags.LSP_CHOICE_OPEN).performClick()
-            awaitTag(Tags.LSP_CHOICE_CANCEL).performClick()
-            awaitNoTag(Tags.LSP_CHOICE_DIALOG)
-            awaitTag(Tags.LSP_CHOICE)
+            awaitTag(LanguageServerTags.LSP_CHOICE_OPEN).performClick()
+            awaitTag(LanguageServerTags.LSP_CHOICE_CANCEL).performClick()
+            awaitNoTag(LanguageServerTags.LSP_CHOICE_DIALOG)
+            awaitTag(LanguageServerTags.LSP_CHOICE)
             assertTrue(app.languageServers.isEmpty())
         }
 
@@ -116,13 +120,13 @@ class LanguageServerE2eTest {
         runComposeUiTest {
             val app = launchWithProject(project, languageServers = servers().settings)
             openFromTree("src/index.php")
-            awaitTag(Tags.LSP_CHOICE_NOT_NOW).performClick()
-            awaitNoTag(Tags.LSP_CHOICE)
+            awaitTag(LanguageServerTags.LSP_CHOICE_NOT_NOW).performClick()
+            awaitNoTag(LanguageServerTags.LSP_CHOICE)
             openFromTree("src/util.php")
-            awaitNoTag(Tags.LSP_CHOICE, timeout = 2_000)
+            awaitNoTag(LanguageServerTags.LSP_CHOICE, timeout = 2_000)
             Thread.sleep(500)
             waitForIdle()
-            awaitNoTag(Tags.LSP_CHOICE)
+            awaitNoTag(LanguageServerTags.LSP_CHOICE)
             assertTrue(app.languageServers.isEmpty())
         }
 
@@ -133,7 +137,7 @@ class LanguageServerE2eTest {
             openFromTree("src/index.php")
             openFromTree("src/util.php")
             val running = awaitServer(app) { it.state == LanguageServerState.Running }
-            awaitNoTag(Tags.LSP_CHOICE)
+            awaitNoTag(LanguageServerTags.LSP_CHOICE)
             assertEquals(1, app.languageServers.size)
             assertEquals(1, running.users)
         }
@@ -144,10 +148,10 @@ class LanguageServerE2eTest {
             val app = launchWithProject(project, languageServers = servers().chosen().settings)
             openFromTree("src/index.php")
             val first = awaitServer(app) { it.state == LanguageServerState.Running }
-            awaitTag(Tags.statusLanguageServer(first.id)).performClick()
-            awaitTag(Tags.LANGUAGE_SERVERS)
-            onNodeWithTag(Tags.languageServerRestart(first.id)).performClick()
-            onNodeWithTag(Tags.languageServerRestart(first.id)).performClick()
+            awaitTag(LanguageServerTags.statusLanguageServer(first.id)).performClick()
+            awaitTag(LanguageServerTags.LANGUAGE_SERVERS)
+            onNodeWithTag(LanguageServerTags.languageServerRestart(first.id)).performClick()
+            onNodeWithTag(LanguageServerTags.languageServerRestart(first.id)).performClick()
             val second = awaitServer(app) { it.generation > first.generation && it.isRunning() }
             Thread.sleep(1_000)
             waitForIdle()
@@ -162,12 +166,12 @@ class LanguageServerE2eTest {
             val app = launchWithProject(project, languageServers = servers().chosen().settings)
             openFromTree("src/index.php")
             val running = awaitServer(app) { it.state == LanguageServerState.Running }
-            awaitTag(Tags.statusLanguageServer(running.id)).performClick()
-            awaitTag(Tags.languageServerStop(running.id)).performClick()
+            awaitTag(LanguageServerTags.statusLanguageServer(running.id)).performClick()
+            awaitTag(LanguageServerTags.languageServerStop(running.id)).performClick()
             awaitServer(app) { it.state == LanguageServerState.Stopped }
-            awaitCondition { textOf(Tags.statusLanguageServer(running.id)) == "PHP · stopped" }
+            awaitCondition { textOf(LanguageServerTags.statusLanguageServer(running.id)) == "PHP · stopped" }
             awaitCondition { !isAlive(running.pid!!) }
-            awaitTag(Tags.languageServerStart(running.id)).performClick()
+            awaitTag(LanguageServerTags.languageServerStart(running.id)).performClick()
             awaitServer(app) { it.state == LanguageServerState.Running && it.pid != running.pid }
         }
 
@@ -177,10 +181,14 @@ class LanguageServerE2eTest {
             val app = launchWithProject(project, languageServers = servers("--crash-on-start").chosen().settings)
             openFromTree("src/index.php")
             val crashed = awaitServer(app) { it.state == LanguageServerState.Crashed }
-            awaitCondition { textOf(Tags.statusLanguageServer(crashed.id)) == "PHP · crashed" }
-            awaitTag(Tags.statusLanguageServer(crashed.id)).performClick()
-            awaitCondition { textOf(Tags.languageServerMessage(crashed.id)).contains("Fatal error: fake crash") }
-            awaitTag(Tags.languageServerStart(crashed.id))
+            awaitCondition { textOf(LanguageServerTags.statusLanguageServer(crashed.id)) == "PHP · crashed" }
+            awaitTag(LanguageServerTags.statusLanguageServer(crashed.id)).performClick()
+            awaitCondition {
+                textOf(
+                    LanguageServerTags.languageServerMessage(crashed.id),
+                ).contains("Fatal error: fake crash")
+            }
+            awaitTag(LanguageServerTags.languageServerStart(crashed.id))
         }
 
     @Test
@@ -189,10 +197,14 @@ class LanguageServerE2eTest {
             val app = launchWithProject(project, languageServers = servers("--ask-configuration").chosen().settings)
             openFromTree("src/index.php")
             val running = awaitServer(app) { it.state == LanguageServerState.Running }
-            awaitTag(Tags.statusLanguageServer(running.id)).performClick()
-            awaitTag(Tags.languageServerLog(running.id)).performClick()
-            awaitTag(Tags.LANGUAGE_SERVERS_LOG)
-            awaitCondition { textOf(Tags.LANGUAGE_SERVERS_LOG).contains("response \"configuration-1\": [null]") }
+            awaitTag(LanguageServerTags.statusLanguageServer(running.id)).performClick()
+            awaitTag(LanguageServerTags.languageServerLog(running.id)).performClick()
+            awaitTag(LanguageServerTags.LANGUAGE_SERVERS_LOG)
+            awaitCondition {
+                textOf(
+                    LanguageServerTags.LANGUAGE_SERVERS_LOG,
+                ).contains("response \"configuration-1\": [null]")
+            }
         }
 
     @Test
@@ -201,7 +213,11 @@ class LanguageServerE2eTest {
             val app = launchWithProject(project, languageServers = servers("--progress", "4").chosen().settings)
             openFromTree("src/index.php")
             val indexing = awaitServer(app) { it.state == LanguageServerState.Indexing }
-            awaitCondition { textOf(Tags.statusLanguageServer(indexing.id)).matches(Regex("PHP · indexing \\d+ %")) }
+            awaitCondition {
+                textOf(
+                    LanguageServerTags.statusLanguageServer(indexing.id),
+                ).matches(Regex("PHP · indexing \\d+ %"))
+            }
             awaitServer(app) { it.state == LanguageServerState.Running }
         }
 

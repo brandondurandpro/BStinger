@@ -67,7 +67,7 @@ private const val MEASURED_GLYPHS = 100
 fun TerminalPanel(project: ProjectState, drag: ToolWindowDrag, modifier: Modifier = Modifier) {
     val terminal = project.terminal
     LaunchedEffect(Unit) { terminal.ensureStarted() }
-    Column(modifier.background(TerminalBackground).testTag(Tags.TERMINAL)) {
+    Column(modifier.background(TerminalBackground).testTag(TerminalTags.TERMINAL)) {
         ToolWindowHeader(
             "Terminal",
             ToolWindow.Terminal,
@@ -80,12 +80,12 @@ fun TerminalPanel(project: ProjectState, drag: ToolWindowDrag, modifier: Modifie
                 Modifier.padding(end = 6.dp),
                 color = IdeColors.TextSecondary,
             )
-            IconButton({ terminal.newTab() }, Modifier.testTag(Tags.TERMINAL_NEW)) {
+            IconButton({ terminal.newTab() }, Modifier.testTag(TerminalTags.TERMINAL_NEW)) {
                 PlusIcon()
             }
             IconButton(
                 { project.toolWindows.setVisible(ToolWindow.Terminal, false) },
-                Modifier.testTag(Tags.TERMINAL_HIDE),
+                Modifier.testTag(TerminalTags.TERMINAL_HIDE),
             ) {
                 MinimizeIcon()
             }
@@ -93,7 +93,7 @@ fun TerminalPanel(project: ProjectState, drag: ToolWindowDrag, modifier: Modifie
         if (terminal.active?.lost == true) {
             Label(
                 "This shell is gone: the server restarted. Open a new tab with +.",
-                Modifier.padding(horizontal = 12.dp, vertical = 4.dp).testTag(Tags.TERMINAL_LOST),
+                Modifier.padding(horizontal = 12.dp, vertical = 4.dp).testTag(TerminalTags.TERMINAL_LOST),
                 color = IdeColors.Error,
             )
         }
@@ -114,7 +114,7 @@ private fun TerminalTabs(terminal: TerminalState, modifier: Modifier) {
         val index = terminal.activeIndex
         if (index in terminal.tabs.indices && !isFullyVisible(listState, index)) listState.animateScrollToItem(index)
     }
-    Box(modifier.fillMaxHeight().wheelScrollsHorizontally(listState).testTag(Tags.TERMINAL_TABS)) {
+    Box(modifier.fillMaxHeight().wheelScrollsHorizontally(listState).testTag(TerminalTags.TERMINAL_TABS)) {
         LazyRow(
             Modifier.fillMaxSize(),
             state = listState,
@@ -164,22 +164,25 @@ private fun TerminalTabChip(
             event.changes.forEach { it.consume() }
         }
     // The tab shows a short name; what the shell says about itself (user, host, directory, command) is in the tooltip.
-    TooltipArea(tooltip = { Tooltip(tab.title, Modifier.testTag(Tags.terminalTabTooltip(tab.number))) }) {
+    TooltipArea(tooltip = { Tooltip(tab.title, Modifier.testTag(TerminalTags.terminalTabTooltip(tab.number))) }) {
         Row(
             Modifier
                 .padding(end = 4.dp)
                 .background(background, shape)
                 .then(press)
                 .padding(start = 8.dp, end = 2.dp, top = 1.dp, bottom = 1.dp)
-                .testTag(Tags.terminalTab(tab.number)),
+                .testTag(TerminalTags.terminalTab(tab.number)),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Label(
                 tab.name,
-                Modifier.testTag(Tags.terminalTabName(tab.number)),
+                Modifier.testTag(TerminalTags.terminalTabName(tab.number)),
                 color = if (active) IdeColors.Text else IdeColors.TextSecondary,
             )
-            IconButton(onClose, Modifier.padding(start = 4.dp).size(18.dp).testTag(Tags.terminalTabClose(tab.number))) {
+            IconButton(
+                onClose,
+                Modifier.padding(start = 4.dp).size(18.dp).testTag(TerminalTags.terminalTabClose(tab.number)),
+            ) {
                 CloseIcon()
             }
             menu()
@@ -198,7 +201,7 @@ private fun TerminalTabContextMenu(terminal: TerminalState, index: Int, offset: 
         expanded = true,
         onDismissRequest = onDismiss,
         offset = offset,
-        modifier = Modifier.testTag(Tags.TERMINAL_TAB_MENU),
+        modifier = Modifier.testTag(TerminalTags.TERMINAL_TAB_MENU),
     ) {
         TabMenuItem("Close", Tags.MENU_CLOSE_TAB) { action { terminal.close(index) } }
         TabMenuItem(
@@ -249,7 +252,7 @@ private fun TerminalView(terminal: TerminalState, modifier: Modifier) {
             .onPreviewKeyEvent { event -> handleTerminalKey(event, terminal, tab, selection) }
             .terminalPointerInput(tab, focus, metrics, selection)
             .terminalTextInput(tab)
-            .testTag(Tags.TERMINAL_INPUT),
+            .testTag(TerminalTags.TERMINAL_INPUT),
     ) {
         drawTerminal(tab.snapshot, textMeasurer, style, metrics, rows, selection)
     }

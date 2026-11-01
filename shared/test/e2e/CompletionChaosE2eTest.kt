@@ -7,7 +7,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.v2.runComposeUiTest
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.EditorTags
 import java.nio.file.Files
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -29,7 +29,7 @@ class CompletionChaosE2eTest {
         val app = launchWithProject(project, chaos = true, languageServers = servers.settings)
         openFromTree("src/index.php")
         awaitServer(app) { it.isRunning() }
-        onNodeWithTag(Tags.EDITOR).performClick()
+        onNodeWithTag(EditorTags.EDITOR).performClick()
         caretToEnd()
         return app
     }

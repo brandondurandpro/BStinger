@@ -16,8 +16,7 @@ import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.v2.runComposeUiTest
-import org.example.kotlineditor.ui.ItemTags
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.GitTags
 import java.nio.file.Files
 import kotlin.io.path.createDirectories
 import kotlin.io.path.writeText
@@ -121,18 +120,18 @@ class BranchPickerPerformanceE2eTest {
             createBranches()
             val app = launchWithProject(project)
             awaitCondition { app.project.gitBranchInfos.size > BRANCHES }
-            onNodeWithTag(Tags.GIT_BRANCH).performClick()
-            awaitTag(Tags.BRANCH_PICKER)
-            awaitTag(ItemTags.branchItem("monitored/branch-0000"))
+            onNodeWithTag(GitTags.GIT_BRANCH).performClick()
+            awaitTag(GitTags.BRANCH_PICKER)
+            awaitTag(GitTags.branchItem("monitored/branch-0000"))
 
             measure("tick all $BRANCHES branches", budgetMillis = 3_000, budgetMegabytes = 100) {
-                onNodeWithTag(Tags.BRANCH_SELECT_ALL).performClick()
-                awaitTag(Tags.BRANCH_PICK_COUNT)
+                onNodeWithTag(GitTags.BRANCH_SELECT_ALL).performClick()
+                awaitTag(GitTags.BRANCH_PICK_COUNT)
                 renderFrame()
             }
             measure("pin $BRANCHES ticked branches in the toolbar", budgetMillis = 5_000, budgetMegabytes = 200) {
-                onNodeWithTag(Tags.BRANCH_PIN_PICKED).performClick()
-                awaitNoTag(Tags.BRANCH_PICK_COUNT)
+                onNodeWithTag(GitTags.BRANCH_PIN_PICKED).performClick()
+                awaitNoTag(GitTags.BRANCH_PICK_COUNT)
                 renderFrame()
             }
             // Select all ticked the current branch too.
@@ -141,8 +140,8 @@ class BranchPickerPerformanceE2eTest {
             assertTrue(chips < MAX_COMPOSED_ROWS, "composed toolbar chips: $chips")
 
             measure("open the cleanup of $BRANCHES branches", budgetMillis = 3_000, budgetMegabytes = 100) {
-                onNodeWithTag(Tags.BRANCH_CLEANUP).performClick()
-                awaitTag(ItemTags.branchToDelete("monitored/branch-0000"))
+                onNodeWithTag(GitTags.BRANCH_CLEANUP).performClick()
+                awaitTag(GitTags.branchToDelete("monitored/branch-0000"))
                 renderFrame()
             }
             assertTrue(composedDeletionRows() < MAX_COMPOSED_ROWS, "composed rows to delete: ${composedDeletionRows()}")
@@ -151,8 +150,8 @@ class BranchPickerPerformanceE2eTest {
             // per branch on a slow disk). The frames rendered meanwhile allocate in proportion to that time, so this
             // step has no memory budget; the UI's own cost is measured by the steps above.
             measure("delete $BRANCHES branches", budgetMillis = 45_000) {
-                onNodeWithTag(Tags.BRANCH_DELETE_CONFIRM).performClick()
-                awaitTag(Tags.BRANCH_DONE, timeout = 60_000)
+                onNodeWithTag(GitTags.BRANCH_DELETE_CONFIRM).performClick()
+                awaitTag(GitTags.BRANCH_DONE, timeout = 60_000)
                 renderFrame()
             }
             assertTrue(localBranchCount() == 1, "branches left: ${localBranchCount()}")
@@ -171,25 +170,25 @@ class BranchPickerPerformanceE2eTest {
                 project.git("remote", "add", "origin", remote.toString())
                 val app = launchWithProject(project)
                 awaitCondition { app.project.gitBranchInfos.size > BRANCHES }
-                onNodeWithTag(Tags.GIT_BRANCH).performClick()
-                awaitTag(Tags.BRANCH_PICKER)
-                onNodeWithTag(Tags.BRANCH_SELECT_ALL).performClick()
-                onNodeWithTag(Tags.BRANCH_PIN_PICKED).performClick()
-                awaitNoTag(Tags.BRANCH_PICK_COUNT)
-                onNodeWithTag(Tags.BRANCH_SEARCH).performClick()
-                onNodeWithTag(Tags.BRANCH_SEARCH).performKeyInput { pressKey(Key.Escape) }
-                awaitNoTag(Tags.BRANCH_PICKER)
+                onNodeWithTag(GitTags.GIT_BRANCH).performClick()
+                awaitTag(GitTags.BRANCH_PICKER)
+                onNodeWithTag(GitTags.BRANCH_SELECT_ALL).performClick()
+                onNodeWithTag(GitTags.BRANCH_PIN_PICKED).performClick()
+                awaitNoTag(GitTags.BRANCH_PICK_COUNT)
+                onNodeWithTag(GitTags.BRANCH_SEARCH).performClick()
+                onNodeWithTag(GitTags.BRANCH_SEARCH).performKeyInput { pressKey(Key.Escape) }
+                awaitNoTag(GitTags.BRANCH_PICKER)
                 val first = "monitored/branch-0000"
-                awaitTag(ItemTags.pinnedBranch(first))
+                awaitTag(GitTags.pinnedBranch(first))
 
                 measure("open the menu of a pinned branch", budgetMillis = 2_000, budgetMegabytes = 50) {
-                    onNodeWithTag(ItemTags.pinnedBranchMenu(first)).performClick()
-                    awaitTag(ItemTags.branchMenuPush(first))
+                    onNodeWithTag(GitTags.pinnedBranchMenu(first)).performClick()
+                    awaitTag(GitTags.branchMenuPush(first))
                     renderFrame()
                 }
                 // The push itself is one Git process; what is measured is the refresh of $BRANCHES branches after it.
                 measure("push a pinned branch, then refresh", budgetMillis = 10_000, budgetMegabytes = 150) {
-                    onNodeWithTag(ItemTags.branchMenuPush(first)).performClick()
+                    onNodeWithTag(GitTags.branchMenuPush(first)).performClick()
                     awaitCondition(timeout = 20_000) { app.project.branchSync?.running == false }
                     awaitCondition { app.project.gitBranchInfos.any { it.name == first && it.hasUpstream } }
                     renderFrame()
@@ -211,14 +210,14 @@ class BranchPickerPerformanceE2eTest {
             awaitCondition { app.project.gitBranchInfos.size > BRANCHES }
 
             measure("open the branch picker with $BRANCHES branches", budgetMillis = 10_000, budgetMegabytes = 100) {
-                onNodeWithTag(Tags.GIT_BRANCH).performClick()
-                awaitTag(Tags.BRANCH_PICKER)
-                awaitTag(ItemTags.branchItem("monitored/branch-0000"))
+                onNodeWithTag(GitTags.GIT_BRANCH).performClick()
+                awaitTag(GitTags.BRANCH_PICKER)
+                awaitTag(GitTags.branchItem("monitored/branch-0000"))
                 renderFrame()
             }
             assertTrue(composedRows() < MAX_COMPOSED_ROWS, "composed branch rows: ${composedRows()}")
 
-            val list = onNode(hasScrollToNodeAction() and hasAnyAncestor(hasTestTag(Tags.BRANCH_PICKER)))
+            val list = onNode(hasScrollToNodeAction() and hasAnyAncestor(hasTestTag(GitTags.BRANCH_PICKER)))
             measure(
                 "scroll the branch picker through $SCROLL_STEPS positions",
                 budgetMillis = 15_000,
@@ -235,8 +234,8 @@ class BranchPickerPerformanceE2eTest {
             assertTrue(composedRows() < MAX_COMPOSED_ROWS, "composed branch rows after the wheel: ${composedRows()}")
 
             measure("search one branch among $BRANCHES", budgetMillis = 5_000, budgetMegabytes = 50) {
-                onNodeWithTag(Tags.BRANCH_SEARCH).performTextInput("branch-2999")
-                awaitTag(ItemTags.branchItem("monitored/branch-2999"))
+                onNodeWithTag(GitTags.BRANCH_SEARCH).performTextInput("branch-2999")
+                awaitTag(GitTags.branchItem("monitored/branch-2999"))
                 renderFrame()
             }
             assertTrue(composedRows() < MAX_COMPOSED_ROWS, "composed branch rows after search: ${composedRows()}")

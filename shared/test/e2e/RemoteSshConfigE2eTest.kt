@@ -12,8 +12,9 @@ import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import org.example.kotlineditor.state.InMemoryPreferenceStore
 import org.example.kotlineditor.state.RemotePreferenceKeys
-import org.example.kotlineditor.ui.ItemTags
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.AppTags
+import org.example.kotlineditor.ui.RemoteTags
+import org.example.kotlineditor.ui.TreeTags
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.createDirectories
@@ -63,42 +64,42 @@ class RemoteSshConfigE2eTest {
         remoteUiTest {
             val project = checkNotNull(demo)
             launchApp()
-            onNodeWithTag(Tags.WELCOME_REMOTE).performClick()
-            awaitTag(Tags.REMOTE_DIALOG)
-            awaitTag(ItemTags.sshHost("test-remote"), timeout = 30_000)
-            onNodeWithTag(ItemTags.sshHost("test-remote")).performClick()
-            onNodeWithTag(Tags.REMOTE_CONFIG).assertTextContains("test-remote", substring = true)
-            onNodeWithTag(Tags.REMOTE_PROJECT).performTextInput(project.toString())
-            onNodeWithTag(Tags.REMOTE_CONNECT).performClick()
-            awaitTag(Tags.treeRow("README.md"), timeout = 60_000)
+            onNodeWithTag(AppTags.WELCOME_REMOTE).performClick()
+            awaitTag(RemoteTags.REMOTE_DIALOG)
+            awaitTag(RemoteTags.sshHost("test-remote"), timeout = 30_000)
+            onNodeWithTag(RemoteTags.sshHost("test-remote")).performClick()
+            onNodeWithTag(RemoteTags.REMOTE_CONFIG).assertTextContains("test-remote", substring = true)
+            onNodeWithTag(RemoteTags.REMOTE_PROJECT).performTextInput(project.toString())
+            onNodeWithTag(RemoteTags.REMOTE_CONNECT).performClick()
+            awaitTag(TreeTags.treeRow("README.md"), timeout = 60_000)
         }
 
     @Test
     fun `the ssh catalog can be searched`() =
         remoteUiTest {
             launchApp()
-            onNodeWithTag(Tags.WELCOME_REMOTE).performClick()
-            awaitTag(Tags.REMOTE_DIALOG)
-            awaitTag(ItemTags.sshHost("test-remote"), timeout = 30_000)
+            onNodeWithTag(AppTags.WELCOME_REMOTE).performClick()
+            awaitTag(RemoteTags.REMOTE_DIALOG)
+            awaitTag(RemoteTags.sshHost("test-remote"), timeout = 30_000)
 
-            onNodeWithTag(Tags.REMOTE_SEARCH).performTextInput("no such host")
-            awaitNoTag(ItemTags.sshHost("test-remote"))
-            onNodeWithTag(Tags.REMOTE_SEARCH).performTextClearance()
-            awaitTag(ItemTags.sshHost("test-remote"))
+            onNodeWithTag(RemoteTags.REMOTE_SEARCH).performTextInput("no such host")
+            awaitNoTag(RemoteTags.sshHost("test-remote"))
+            onNodeWithTag(RemoteTags.REMOTE_SEARCH).performTextClearance()
+            awaitTag(RemoteTags.sshHost("test-remote"))
         }
 
     @Test
     fun `the manual form is hidden until New host is clicked`() =
         remoteUiTest {
             launchApp()
-            onNodeWithTag(Tags.WELCOME_REMOTE).performClick()
-            awaitTag(Tags.REMOTE_DIALOG)
-            awaitCondition { onAllNodes(hasTestTag(Tags.REMOTE_HOST)).fetchSemanticsNodes().isEmpty() }
+            onNodeWithTag(AppTags.WELCOME_REMOTE).performClick()
+            awaitTag(RemoteTags.REMOTE_DIALOG)
+            awaitCondition { onAllNodes(hasTestTag(RemoteTags.REMOTE_HOST)).fetchSemanticsNodes().isEmpty() }
 
-            onNodeWithTag(Tags.REMOTE_NEW_HOST).performClick()
-            awaitTag(Tags.REMOTE_HOST)
-            onNodeWithTag(Tags.REMOTE_NEW_HOST).performClick()
-            awaitCondition { onAllNodes(hasTestTag(Tags.REMOTE_HOST)).fetchSemanticsNodes().isEmpty() }
+            onNodeWithTag(RemoteTags.REMOTE_NEW_HOST).performClick()
+            awaitTag(RemoteTags.REMOTE_HOST)
+            onNodeWithTag(RemoteTags.REMOTE_NEW_HOST).performClick()
+            awaitCondition { onAllNodes(hasTestTag(RemoteTags.REMOTE_HOST)).fetchSemanticsNodes().isEmpty() }
         }
 
     @Test
@@ -108,13 +109,13 @@ class RemoteSshConfigE2eTest {
         val preferences = InMemoryPreferenceStore()
         remoteUiTest {
             launchApp(preferences = preferences)
-            onNodeWithTag(Tags.WELCOME_REMOTE).performClick()
-            awaitTag(Tags.REMOTE_DIALOG)
-            awaitTag(ItemTags.sshHost("test-remote"), timeout = 30_000)
-            onNodeWithTag(ItemTags.sshHost("test-remote")).performClick()
-            onNodeWithTag(Tags.REMOTE_PROJECT).performTextInput(project.toString())
-            onNodeWithTag(Tags.REMOTE_CONNECT).performClick()
-            awaitTag(Tags.treeRow("README.md"), timeout = 60_000)
+            onNodeWithTag(AppTags.WELCOME_REMOTE).performClick()
+            awaitTag(RemoteTags.REMOTE_DIALOG)
+            awaitTag(RemoteTags.sshHost("test-remote"), timeout = 30_000)
+            onNodeWithTag(RemoteTags.sshHost("test-remote")).performClick()
+            onNodeWithTag(RemoteTags.REMOTE_PROJECT).performTextInput(project.toString())
+            onNodeWithTag(RemoteTags.REMOTE_CONNECT).performClick()
+            awaitTag(TreeTags.treeRow("README.md"), timeout = 60_000)
             awaitCondition {
                 preferences.load()[RemotePreferenceKeys.WORKSPACES].orEmpty().contains(project.toString())
             }
@@ -122,18 +123,18 @@ class RemoteSshConfigE2eTest {
 
         remoteUiTest {
             launchApp(preferences = preferences)
-            onNodeWithTag(Tags.WELCOME_REMOTE).performClick()
-            awaitTag(Tags.REMOTE_DIALOG)
-            val saved = ItemTags.remoteWorkspace("test-remote", project.toString())
+            onNodeWithTag(AppTags.WELCOME_REMOTE).performClick()
+            awaitTag(RemoteTags.REMOTE_DIALOG)
+            val saved = RemoteTags.remoteWorkspace("test-remote", project.toString())
             awaitTag(saved, timeout = 30_000)
 
-            onNodeWithTag(Tags.REMOTE_SEARCH).performTextInput("no such folder")
+            onNodeWithTag(RemoteTags.REMOTE_SEARCH).performTextInput("no such folder")
             awaitNoTag(saved)
-            onNodeWithTag(Tags.REMOTE_SEARCH).performTextClearance()
+            onNodeWithTag(RemoteTags.REMOTE_SEARCH).performTextClearance()
             awaitTag(saved)
             onNodeWithTag(saved).performClick()
-            onNodeWithTag(Tags.REMOTE_PROJECT).assertTextContains(project.toString(), substring = true)
-            onNodeWithTag(Tags.REMOTE_CONFIG).assertTextContains("test-remote", substring = true)
+            onNodeWithTag(RemoteTags.REMOTE_PROJECT).assertTextContains(project.toString(), substring = true)
+            onNodeWithTag(RemoteTags.REMOTE_CONFIG).assertTextContains("test-remote", substring = true)
         }
     }
 
@@ -143,17 +144,17 @@ class RemoteSshConfigE2eTest {
         val preferences = InMemoryPreferenceStore()
         remoteUiTest {
             launchApp(preferences = preferences)
-            onNodeWithTag(Tags.WELCOME_REMOTE).performClick()
-            awaitTag(Tags.REMOTE_DIALOG)
-            awaitTag(ItemTags.sshHost("test-remote"), timeout = 30_000)
-            onNodeWithTag(ItemTags.sshHost("test-remote")).performClick()
-            awaitTag(Tags.REMOTE_TAGS)
-            onNodeWithTag(Tags.REMOTE_TAGS).performTextInput("production, dev")
+            onNodeWithTag(AppTags.WELCOME_REMOTE).performClick()
+            awaitTag(RemoteTags.REMOTE_DIALOG)
+            awaitTag(RemoteTags.sshHost("test-remote"), timeout = 30_000)
+            onNodeWithTag(RemoteTags.sshHost("test-remote")).performClick()
+            awaitTag(RemoteTags.REMOTE_TAGS)
+            onNodeWithTag(RemoteTags.REMOTE_TAGS).performTextInput("production, dev")
 
-            awaitTag(ItemTags.remoteTag("test-remote", "production"))
-            awaitTag(ItemTags.remoteTag("test-remote", "dev"))
-            onNodeWithTag(Tags.REMOTE_SEARCH).performTextInput("production")
-            awaitTag(ItemTags.sshHost("test-remote"))
+            awaitTag(RemoteTags.remoteTag("test-remote", "production"))
+            awaitTag(RemoteTags.remoteTag("test-remote", "dev"))
+            onNodeWithTag(RemoteTags.REMOTE_SEARCH).performTextInput("production")
+            awaitTag(RemoteTags.sshHost("test-remote"))
             awaitCondition {
                 preferences.load()[RemotePreferenceKeys.TAGS].orEmpty().contains("test-remote")
             }
@@ -161,13 +162,13 @@ class RemoteSshConfigE2eTest {
 
         remoteUiTest {
             launchApp(preferences = preferences)
-            onNodeWithTag(Tags.WELCOME_REMOTE).performClick()
-            awaitTag(Tags.REMOTE_DIALOG)
-            awaitTag(ItemTags.remoteTag("test-remote", "production"), timeout = 30_000)
+            onNodeWithTag(AppTags.WELCOME_REMOTE).performClick()
+            awaitTag(RemoteTags.REMOTE_DIALOG)
+            awaitTag(RemoteTags.remoteTag("test-remote", "production"), timeout = 30_000)
 
-            onNodeWithTag(ItemTags.remoteTag("test-remote", "production")).performClick()
-            onNodeWithTag(Tags.REMOTE_SEARCH).assertTextContains("production", substring = true)
-            awaitTag(ItemTags.sshHost("test-remote"))
+            onNodeWithTag(RemoteTags.remoteTag("test-remote", "production")).performClick()
+            onNodeWithTag(RemoteTags.REMOTE_SEARCH).assertTextContains("production", substring = true)
+            awaitTag(RemoteTags.sshHost("test-remote"))
         }
     }
 
@@ -176,26 +177,26 @@ class RemoteSshConfigE2eTest {
         remoteUiTest {
             val project = checkNotNull(demo)
             launchApp()
-            onNodeWithTag(Tags.WELCOME_REMOTE).performClick()
-            awaitTag(Tags.REMOTE_DIALOG)
-            awaitTag(ItemTags.sshHost("test-remote"), timeout = 30_000)
-            assertNotSelected(ItemTags.sshHost("test-remote"))
-            onNodeWithTag(ItemTags.sshHost("test-remote")).performClick()
-            assertSelected(ItemTags.sshHost("test-remote"))
-            onNodeWithTag(Tags.REMOTE_PROJECT).performTextInput(project.toString())
-            onNodeWithTag(Tags.REMOTE_CONNECT).performClick()
-            awaitTag(Tags.treeRow("README.md"), timeout = 60_000)
+            onNodeWithTag(AppTags.WELCOME_REMOTE).performClick()
+            awaitTag(RemoteTags.REMOTE_DIALOG)
+            awaitTag(RemoteTags.sshHost("test-remote"), timeout = 30_000)
+            assertNotSelected(RemoteTags.sshHost("test-remote"))
+            onNodeWithTag(RemoteTags.sshHost("test-remote")).performClick()
+            assertSelected(RemoteTags.sshHost("test-remote"))
+            onNodeWithTag(RemoteTags.REMOTE_PROJECT).performTextInput(project.toString())
+            onNodeWithTag(RemoteTags.REMOTE_CONNECT).performClick()
+            awaitTag(TreeTags.treeRow("README.md"), timeout = 60_000)
 
-            onNodeWithTag(Tags.PROJECT_WIDGET).performClick()
-            onNodeWithTag(Tags.PROJECT_CLOSE).performClick()
-            awaitTag(Tags.WELCOME)
-            onNodeWithTag(Tags.WELCOME_REMOTE).performClick()
-            awaitTag(Tags.REMOTE_DIALOG)
-            val saved = ItemTags.remoteWorkspace("test-remote", project.toString())
+            onNodeWithTag(AppTags.PROJECT_WIDGET).performClick()
+            onNodeWithTag(AppTags.PROJECT_CLOSE).performClick()
+            awaitTag(AppTags.WELCOME)
+            onNodeWithTag(AppTags.WELCOME_REMOTE).performClick()
+            awaitTag(RemoteTags.REMOTE_DIALOG)
+            val saved = RemoteTags.remoteWorkspace("test-remote", project.toString())
             awaitTag(saved, timeout = 30_000)
 
             val folder = onNodeWithTag(saved).fetchSemanticsNode().boundsInRoot.top
-            val host = onNodeWithTag(ItemTags.sshHost("test-remote")).fetchSemanticsNode().boundsInRoot.top
+            val host = onNodeWithTag(RemoteTags.sshHost("test-remote")).fetchSemanticsNode().boundsInRoot.top
             assertTrue(folder < host, "recent folders must come before the SSH config hosts")
         }
 

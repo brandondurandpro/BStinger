@@ -14,8 +14,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import org.example.kotlineditor.state.BranchSection
 import org.example.kotlineditor.state.Pane
-import org.example.kotlineditor.ui.ItemTags
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.AppTags
+import org.example.kotlineditor.ui.GitTags
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.AfterTest
@@ -52,9 +52,9 @@ class BranchesPanelLayoutE2eTest {
 
     private fun ComposeUiTest.openBranches(app: E2eApp, default: String) {
         awaitCondition { app.project.gitBranchInfos.size == 2 }
-        onNodeWithTag(Tags.TOOL_BRANCHES).performClick()
-        awaitTag(Tags.BRANCHES_PANEL)
-        awaitTag(ItemTags.historyBranch("origin/$default"))
+        onNodeWithTag(AppTags.TOOL_BRANCHES).performClick()
+        awaitTag(GitTags.BRANCHES_PANEL)
+        awaitTag(GitTags.historyBranch("origin/$default"))
     }
 
     private fun ComposeUiTest.widthOf(tag: String): Dp = onNodeWithTag(tag).getBoundsInRoot().let { it.right - it.left }
@@ -75,8 +75,8 @@ class BranchesPanelLayoutE2eTest {
 
     private fun ComposeUiTest.selectHead() {
         val head = project.git("rev-parse", "HEAD").trim()
-        awaitTag(ItemTags.historyCommit(head)).performClick()
-        awaitTag(Tags.HISTORY_DETAILS)
+        awaitTag(GitTags.historyCommit(head)).performClick()
+        awaitTag(GitTags.HISTORY_DETAILS)
     }
 
     @Test
@@ -86,22 +86,22 @@ class BranchesPanelLayoutE2eTest {
             val app = launchWithProject(project)
             openBranches(app, default)
             selectHead()
-            val branches = widthOf(Tags.HISTORY_BRANCH_SEARCH)
-            val details = widthOf(Tags.HISTORY_DETAILS)
+            val branches = widthOf(GitTags.HISTORY_BRANCH_SEARCH)
+            val details = widthOf(GitTags.HISTORY_DETAILS)
 
             // The branch list widens to the right; the details widen to the left.
-            drag(Tags.HISTORY_BRANCHES_SPLITTER, 60.dp)
-            assertClose(branches + 60.dp, widthOf(Tags.HISTORY_BRANCH_SEARCH), "branch list")
-            drag(Tags.HISTORY_DETAILS_SPLITTER, (-80).dp)
-            assertClose(details + 80.dp, widthOf(Tags.HISTORY_DETAILS), "details")
+            drag(GitTags.HISTORY_BRANCHES_SPLITTER, 60.dp)
+            assertClose(branches + 60.dp, widthOf(GitTags.HISTORY_BRANCH_SEARCH), "branch list")
+            drag(GitTags.HISTORY_DETAILS_SPLITTER, (-80).dp)
+            assertClose(details + 80.dp, widthOf(GitTags.HISTORY_DETAILS), "details")
 
             // Hidden and shown again, the window keeps its panes, and the layout preferences hold them.
-            onNodeWithTag(Tags.TOOL_BRANCHES).performClick()
-            awaitNoTag(Tags.BRANCHES_PANEL)
-            onNodeWithTag(Tags.TOOL_BRANCHES).performClick()
-            awaitTag(Tags.HISTORY_DETAILS)
-            assertClose(branches + 60.dp, widthOf(Tags.HISTORY_BRANCH_SEARCH), "branch list after reopening")
-            assertClose(details + 80.dp, widthOf(Tags.HISTORY_DETAILS), "details after reopening")
+            onNodeWithTag(AppTags.TOOL_BRANCHES).performClick()
+            awaitNoTag(GitTags.BRANCHES_PANEL)
+            onNodeWithTag(AppTags.TOOL_BRANCHES).performClick()
+            awaitTag(GitTags.HISTORY_DETAILS)
+            assertClose(branches + 60.dp, widthOf(GitTags.HISTORY_BRANCH_SEARCH), "branch list after reopening")
+            assertClose(details + 80.dp, widthOf(GitTags.HISTORY_DETAILS), "details after reopening")
             val saved = app.project.toolWindows.toPreferences()
             val savedWidth = saved.getValue("layout.pane.HistoryBranches").toFloat()
             assertEquals(Pane.HistoryBranches.defaultWidth + 60f, savedWidth, 1f)
@@ -115,18 +115,18 @@ class BranchesPanelLayoutE2eTest {
             openBranches(app, default)
             selectHead()
 
-            drag(Tags.HISTORY_BRANCHES_SPLITTER, (-1000).dp)
+            drag(GitTags.HISTORY_BRANCHES_SPLITTER, (-1000).dp)
             assertEquals(120f, app.project.toolWindows.widthOf(Pane.HistoryBranches))
             // Both side panes as wide as they can be: the window shrinks them, the commit list keeps its width.
-            drag(Tags.HISTORY_BRANCHES_SPLITTER, 3000.dp)
-            drag(Tags.HISTORY_DETAILS_SPLITTER, (-3000).dp)
+            drag(GitTags.HISTORY_BRANCHES_SPLITTER, 3000.dp)
+            drag(GitTags.HISTORY_DETAILS_SPLITTER, (-3000).dp)
             assertEquals(900f, app.project.toolWindows.widthOf(Pane.HistoryBranches))
             val head = project.git("rev-parse", "HEAD").trim()
-            val commitRow = widthOf(ItemTags.historyCommit(head))
+            val commitRow = widthOf(GitTags.historyCommit(head))
             assertTrue(commitRow >= 199.dp, "commit list width: $commitRow")
             // Still usable: a click on another commit row shows it.
-            onNodeWithTag(ItemTags.historyCommit(head)).performClick()
-            awaitTag(Tags.HISTORY_DETAILS)
+            onNodeWithTag(GitTags.historyCommit(head)).performClick()
+            awaitTag(GitTags.HISTORY_DETAILS)
         }
 
     @Test
@@ -135,32 +135,32 @@ class BranchesPanelLayoutE2eTest {
             val default = repository()
             val app = launchWithProject(project)
             openBranches(app, default)
-            awaitTag(ItemTags.historyBranch("feature/login"))
+            awaitTag(GitTags.historyBranch("feature/login"))
 
-            onNodeWithTag(ItemTags.historySection(BranchSection.Local.name)).performClick()
-            awaitNoTag(ItemTags.historyBranch("feature/login"))
-            awaitNoTag(ItemTags.historyBranch(default))
-            awaitTag(ItemTags.historyBranch("origin/$default"))
+            onNodeWithTag(GitTags.historySection(BranchSection.Local.name)).performClick()
+            awaitNoTag(GitTags.historyBranch("feature/login"))
+            awaitNoTag(GitTags.historyBranch(default))
+            awaitTag(GitTags.historyBranch("origin/$default"))
             // The header still counts the folded branches.
-            awaitTag(ItemTags.historySection(BranchSection.Local.name))
+            awaitTag(GitTags.historySection(BranchSection.Local.name))
                 .assertTextContains("2", substring = true)
 
-            onNodeWithTag(ItemTags.historySection(BranchSection.Remote.name)).performClick()
-            awaitNoTag(ItemTags.historyBranch("origin/$default"))
+            onNodeWithTag(GitTags.historySection(BranchSection.Remote.name)).performClick()
+            awaitNoTag(GitTags.historyBranch("origin/$default"))
 
             // Folded sections stay folded while filtering, and after the window is hidden and shown again.
-            onNodeWithTag(Tags.HISTORY_BRANCH_SEARCH).performTextInput("login")
-            awaitTag(ItemTags.historySection(BranchSection.Local.name)).assertTextContains("1", substring = true)
-            awaitNoTag(ItemTags.historyBranch("feature/login"))
-            onNodeWithTag(Tags.TOOL_BRANCHES).performClick()
-            awaitNoTag(Tags.BRANCHES_PANEL)
-            onNodeWithTag(Tags.TOOL_BRANCHES).performClick()
-            awaitTag(ItemTags.historySection(BranchSection.Local.name))
-            awaitNoTag(ItemTags.historyBranch("feature/login"))
+            onNodeWithTag(GitTags.HISTORY_BRANCH_SEARCH).performTextInput("login")
+            awaitTag(GitTags.historySection(BranchSection.Local.name)).assertTextContains("1", substring = true)
+            awaitNoTag(GitTags.historyBranch("feature/login"))
+            onNodeWithTag(AppTags.TOOL_BRANCHES).performClick()
+            awaitNoTag(GitTags.BRANCHES_PANEL)
+            onNodeWithTag(AppTags.TOOL_BRANCHES).performClick()
+            awaitTag(GitTags.historySection(BranchSection.Local.name))
+            awaitNoTag(GitTags.historyBranch("feature/login"))
 
-            onNodeWithTag(ItemTags.historySection(BranchSection.Local.name)).performClick()
-            awaitTag(ItemTags.historyBranch("feature/login"))
-            awaitNoTag(ItemTags.historyBranch("origin/$default"))
+            onNodeWithTag(GitTags.historySection(BranchSection.Local.name)).performClick()
+            awaitTag(GitTags.historyBranch("feature/login"))
+            awaitNoTag(GitTags.historyBranch("origin/$default"))
             // The selection does not depend on the folding: the history still shows the current branch.
             assertEquals(default, app.project.history.selectedRef)
         }

@@ -30,7 +30,7 @@ import org.example.kotlineditor.model.DiffLine
 @Composable
 internal fun SideBySideDiff(listState: LazyListState, lines: List<DiffLine>, style: TextStyle) {
     val rows = sideBySideRows(lines)
-    Box(Modifier.fillMaxSize().testTag(Tags.DIFF_SPLIT)) {
+    Box(Modifier.fillMaxSize().testTag(EditorTags.DIFF_SPLIT)) {
         LazyColumn(Modifier.fillMaxSize(), state = listState) {
             itemsIndexed(rows, key = { index, _ -> index }) { index, row ->
                 if (row.hunkText == null) {
@@ -107,7 +107,7 @@ private fun HunkRow(index: Int, text: String, style: TextStyle) {
             .fillMaxWidth()
             .height(DIFF_LINE_HEIGHT)
             .background(IdeColors.DiffHunkBackground)
-            .testTag(Tags.diffSplitRow(index))
+            .testTag(EditorTags.diffSplitRow(index))
             .padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -122,7 +122,7 @@ private fun HunkRow(index: Int, text: String, style: TextStyle) {
 
 @Composable
 private fun SideBySideRow(index: Int, row: SideBySideDiffRow, style: TextStyle) {
-    Row(Modifier.fillMaxWidth().height(DIFF_LINE_HEIGHT).testTag(Tags.diffSplitRow(index))) {
+    Row(Modifier.fillMaxWidth().height(DIFF_LINE_HEIGHT).testTag(EditorTags.diffSplitRow(index))) {
         SplitCell(row.left, index, SIDE_LEFT, style, Modifier.weight(1f))
         Box(Modifier.fillMaxHeight().width(1.dp).background(IdeColors.Border))
         SplitCell(row.right, index, SIDE_RIGHT, style, Modifier.weight(1f))
@@ -139,7 +139,7 @@ private fun SplitCell(cell: DiffCell?, index: Int, side: Int, style: TextStyle, 
             .fillMaxHeight()
             .clipToBounds()
             .background(cell?.let { backgroundOf(it.kind) } ?: Color.Transparent)
-            .testTag(Tags.diffSplitCell(index, side)),
+            .testTag(EditorTags.diffSplitCell(index, side)),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         LineNumber(cell?.number ?: -1)

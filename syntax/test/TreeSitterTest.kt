@@ -10,6 +10,7 @@ import io.github.treesitter.jtreesitter.Tree
 import kotlinx.coroutines.runBlocking
 import org.example.kotlineditor.e2e.LocalGrammarRepository
 import org.example.kotlineditor.e2e.TestGrammars
+import org.example.kotlineditor.syntax.SyntaxColor
 import org.example.kotlineditor.syntax.treesitter.CaptureStyles
 import org.example.kotlineditor.syntax.treesitter.GrammarSpec
 import org.example.kotlineditor.syntax.treesitter.LineSpanBuilder
@@ -18,7 +19,6 @@ import org.example.kotlineditor.syntax.treesitter.LoadedGrammar
 import org.example.kotlineditor.syntax.treesitter.NativePlatform
 import org.example.kotlineditor.syntax.treesitter.QueryPredicates
 import org.example.kotlineditor.syntax.treesitter.TreeSitterHighlighter
-import org.example.kotlineditor.syntax.SyntaxColor
 import java.nio.file.Files
 import kotlin.random.Random
 import kotlin.test.AfterTest

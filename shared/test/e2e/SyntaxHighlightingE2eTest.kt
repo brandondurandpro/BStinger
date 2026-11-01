@@ -12,8 +12,9 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.syntax.treesitter.SyntaxSession
+import org.example.kotlineditor.ui.AppTags
+import org.example.kotlineditor.ui.EditorTags
 import org.example.kotlineditor.ui.IdeColors
-import org.example.kotlineditor.ui.Tags
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -50,7 +51,7 @@ class SyntaxHighlightingE2eTest {
             assertEquals(IdeColors.Keyword, colorOf(7, "val"))
             assertEquals(IdeColors.StringLiteral, colorOf(7, "\"Hello\""))
             assertEquals(IdeColors.Comment, colorOf(5, "of the demo */"))
-            onNodeWithTag(Tags.STATUS_LANGUAGE).assertTextEquals("Kotlin")
+            onNodeWithTag(AppTags.STATUS_LANGUAGE).assertTextEquals("Kotlin")
             assertEquals(1, repository.jarsServed)
         }
 
@@ -60,7 +61,7 @@ class SyntaxHighlightingE2eTest {
             launchWithProject(project, grammars = TestGrammars.store(repository))
             openFromTree("src/main/kotlin/App.kt")
             awaitColor(8, "println", IdeColors.FunctionDeclaration)
-            onNodeWithTag(Tags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performClick()
             pressInEditor(Key.MoveEnd, ctrl = true)
             typeInEditor("\nval answer = greeting.length - 42")
             awaitColor(10, "length", IdeColors.Property)
@@ -75,7 +76,7 @@ class SyntaxHighlightingE2eTest {
             launchWithProject(project, grammars = TestGrammars.store(repository))
             openFromTree("src/main/kotlin/App.kt")
             awaitColor(8, "println", IdeColors.FunctionDeclaration)
-            onNodeWithTag(Tags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performClick()
             pressInEditor(Key.MoveHome, ctrl = true)
             pressInEditor(Key.DirectionDown, times = 4)
             pressInEditor(Key.Delete, times = 2)
@@ -93,7 +94,7 @@ class SyntaxHighlightingE2eTest {
             project.file("src/main/kotlin/Empty.kt", "")
             launchWithProject(project, grammars = TestGrammars.store(repository))
             openFromTree("src/main/kotlin/Empty.kt")
-            onNodeWithTag(Tags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performClick()
             typeInEditor("val n = names.size - 1")
             awaitColor(0, "size", IdeColors.Property)
             assertEquals(IdeColors.Number, colorOf(0, "1"))
@@ -120,7 +121,7 @@ class SyntaxHighlightingE2eTest {
             assertEquals(IdeColors.StringLiteral, colorOf(1, "\"name\""))
             assertEquals(IdeColors.Number, colorOf(2, "3"))
             assertEquals(IdeColors.Keyword, colorOf(3, "true"))
-            onNodeWithTag(Tags.STATUS_LANGUAGE).assertTextEquals("JSON")
+            onNodeWithTag(AppTags.STATUS_LANGUAGE).assertTextEquals("JSON")
             openFromTree("src/main/kotlin/App.kt")
             awaitColor(8, "println", IdeColors.FunctionDeclaration)
             openFromTree("src/main/kotlin/util/Strings.kt")
@@ -139,10 +140,10 @@ class SyntaxHighlightingE2eTest {
             assertEquals(IdeColors.StringLiteral, colorOf(0, "\"a\""))
             assertEquals(IdeColors.Comment, colorOf(0, "// note"))
             assertEquals(IdeColors.Code, colorOf(1, "println"))
-            onNodeWithTag(Tags.STATUS_LANGUAGE).assertTextEquals("CLike")
+            onNodeWithTag(AppTags.STATUS_LANGUAGE).assertTextEquals("CLike")
             openFromTree("notes.txt")
             awaitCondition { colorOf(0, "Just") == IdeColors.Code }
-            onNodeWithTag(Tags.STATUS_LANGUAGE).assertTextEquals("Plain")
+            onNodeWithTag(AppTags.STATUS_LANGUAGE).assertTextEquals("Plain")
             assertEquals(0, repository.jarsServed)
         }
 
@@ -152,8 +153,8 @@ class SyntaxHighlightingE2eTest {
             repository.latencyMs = SLOW_DOWNLOAD_MS
             launchWithProject(project, grammars = TestGrammars.store(repository))
             openFromTree("src/main/kotlin/App.kt")
-            onNodeWithTag(Tags.tabClose("src/main/kotlin/App.kt")).performClick()
-            awaitNoTag(Tags.tab("src/main/kotlin/App.kt"))
+            onNodeWithTag(EditorTags.tabClose("src/main/kotlin/App.kt")).performClick()
+            awaitNoTag(EditorTags.tab("src/main/kotlin/App.kt"))
             openFromTree("src/main/kotlin/App.kt")
             awaitColor(8, "println", IdeColors.FunctionDeclaration)
             assertEquals(1, repository.jarsServed, "the download goes on for the file opened again")
@@ -166,7 +167,7 @@ class SyntaxHighlightingE2eTest {
             openFromTree("src/main/kotlin/App.kt")
             awaitColor(7, "val", IdeColors.Keyword)
             assertEquals(IdeColors.Code, colorOf(8, "println"))
-            onNodeWithTag(Tags.STATUS_LANGUAGE).assertTextEquals("Kotlin")
+            onNodeWithTag(AppTags.STATUS_LANGUAGE).assertTextEquals("Kotlin")
         }
 
     @Test
@@ -180,11 +181,11 @@ class SyntaxHighlightingE2eTest {
             openFromTree("src/main/kotlin/util/Strings.kt")
             awaitColor(2, "uppercase", IdeColors.FunctionDeclaration)
             awaitCondition { !syntax.isParsed }
-            onNodeWithTag(Tags.tab("src/main/kotlin/App.kt")).performClick()
+            onNodeWithTag(EditorTags.tab("src/main/kotlin/App.kt")).performClick()
             awaitCondition { colorOf(8, "println") != null }
             assertEquals(IdeColors.FunctionDeclaration, colorOf(8, "println"), "the last colors, while parsed again")
             awaitCondition { syntax.isParsed }
-            onNodeWithTag(Tags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performClick()
             pressInEditor(Key.MoveEnd, ctrl = true)
             typeInEditor("\nval answer = greeting.length")
             awaitColor(10, "length", IdeColors.Property)
@@ -199,20 +200,20 @@ class SyntaxHighlightingE2eTest {
             awaitColor(8, "println", IdeColors.FunctionDeclaration)
             val editor = app.project.editor
             val syntax = syntaxOf(app)
-            onNodeWithTag(Tags.tab("src/main/kotlin/App.kt")).performMouseInput {
+            onNodeWithTag(EditorTags.tab("src/main/kotlin/App.kt")).performMouseInput {
                 moveTo(center)
                 press(MouseButton.Secondary)
                 release(MouseButton.Secondary)
             }
-            awaitTag(Tags.MENU_SPLIT_RIGHT).performClick()
-            awaitCondition { onAllNodesWithTag(Tags.EDITOR).fetchSemanticsNodes().size == 2 }
+            awaitTag(EditorTags.MENU_SPLIT_RIGHT).performClick()
+            awaitCondition { onAllNodesWithTag(EditorTags.EDITOR).fetchSemanticsNodes().size == 2 }
             // The right pane is active: the file opened there hides App.kt in that pane only.
             openFromTree("README.md")
             val right = editor.panes[1]
             awaitCondition { right.tabs.any { it.entry.name == "README.md" } }
             waitForIdle()
             assertTrue(syntax.isParsed, "still shown in the left pane")
-            onNode(hasTestTag(Tags.EDITOR) and hasAnyAncestor(hasTestTag(Tags.pane(0)))).performClick()
+            onNode(hasTestTag(EditorTags.EDITOR) and hasAnyAncestor(hasTestTag(AppTags.pane(0)))).performClick()
             awaitCondition { editor.activePane == editor.panes[0] }
             openFromTree("src/main/kotlin/util/Strings.kt")
             awaitCondition { !syntax.isParsed }

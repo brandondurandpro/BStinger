@@ -118,7 +118,7 @@ fun ProjectTree(project: ProjectState, modifier: Modifier = Modifier) {
     FollowSelection(scene)
     Box(
         modifier
-            .testTag(Tags.TREE)
+            .testTag(TreeTags.TREE)
             .focusRequester(focusRequester)
             .onFocusChanged { focused = it.hasFocus }
             .onKeyEvent { it.type == KeyEventType.KeyDown && TREE_KEYS.dispatch(it, project) }

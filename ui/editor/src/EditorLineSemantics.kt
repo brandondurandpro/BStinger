@@ -104,7 +104,7 @@ private fun LineNode(
             .fillMaxWidth()
             .height(metrics.lineHeight)
             .semantics(mergeDescendants = true) {}
-            .testTag(Tags.line(index)),
+            .testTag(EditorTags.line(index)),
     ) {
         for (kind in changes) {
             val marker =
@@ -113,14 +113,14 @@ private fun LineNode(
                 } else {
                     Modifier.size(3.dp, metrics.lineHeight)
                 }
-            Box(marker.testTag(Tags.changeMarker(index, kind.name)))
+            Box(marker.testTag(EditorTags.changeMarker(index, kind.name)))
         }
         if (tab.blameVisible && annotated) {
             Box(
                 Modifier
                     .offset(x = gutter - metrics.blameWidth)
                     .size(metrics.blameWidth, metrics.lineHeight)
-                    .testTag(Tags.blame(index)),
+                    .testTag(EditorTags.blame(index)),
             )
         }
         if (folding.isFoldable(index)) {
@@ -129,7 +129,7 @@ private fun LineNode(
                     .align(Alignment.CenterStart)
                     .offset(x = gutter - 2.dp - 16.dp)
                     .size(16.dp)
-                    .testTag(Tags.foldMarker(index)),
+                    .testTag(EditorTags.foldMarker(index)),
             )
         }
         Box(
@@ -137,7 +137,7 @@ private fun LineNode(
                 .offset { IntOffset(textLeft(metrics, tab.horizontalScroll.offset), 0) }
                 .size(textWidth, metrics.lineHeight)
                 .semantics { this.text = text }
-                .testTag(Tags.lineText(index)),
+                .testTag(EditorTags.lineText(index)),
         )
     }
 }

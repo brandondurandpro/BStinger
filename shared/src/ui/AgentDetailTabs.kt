@@ -45,13 +45,13 @@ internal fun DetailStrip(conversation: Conversation) {
             .height(32.dp)
             .background(IdeColors.Editor)
             .padding(horizontal = 6.dp)
-            .testTag(Tags.AGENT_DETAILS),
+            .testTag(AppTags.AGENT_DETAILS),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         DetailChip(
             selected = conversation.showsChat || editor == null,
-            tag = Tags.AGENT_DETAIL_CONVERSATION,
+            tag = AppTags.AGENT_DETAIL_CONVERSATION,
             onSelect = { conversation.showsChat = true },
         ) {
             SpeechBubbleIcon(IdeColors.TextSecondary)
@@ -62,7 +62,7 @@ internal fun DetailStrip(conversation: Conversation) {
             val active = editor?.activeTab
             DetailChip(
                 selected = !conversation.showsChat,
-                tag = Tags.AGENT_DETAIL_EDITOR,
+                tag = AppTags.AGENT_DETAIL_EDITOR,
                 onSelect = { conversation.showsChat = false },
             ) {
                 FileIcon(active?.entry?.name.orEmpty(), isDirectory = false, size = 14.dp)
@@ -82,7 +82,7 @@ internal fun DetailStrip(conversation: Conversation) {
 internal fun WorkspaceStatus(agent: AgentState, conversation: Conversation, modifier: Modifier = Modifier) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
         Row(
-            Modifier.weight(1f).padding(end = 10.dp).testTag(Tags.AGENT_WORKSPACE_STATUS),
+            Modifier.weight(1f).padding(end = 10.dp).testTag(AppTags.AGENT_WORKSPACE_STATUS),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             WorkspaceText(conversation)
@@ -139,8 +139,8 @@ private fun WorkModeSwitch(agent: AgentState, conversation: Conversation) {
 
 private val WORK_MODES =
     listOf(
-        Triple(WorkMode.Direct, "Current branch", Tags.AGENT_MODE_DIRECT),
-        Triple(WorkMode.Worktree, "Worktree", Tags.AGENT_MODE_WORKTREE),
+        Triple(WorkMode.Direct, "Current branch", AppTags.AGENT_MODE_DIRECT),
+        Triple(WorkMode.Worktree, "Worktree", AppTags.AGENT_MODE_WORKTREE),
     )
 
 // A rounded sub-tab.

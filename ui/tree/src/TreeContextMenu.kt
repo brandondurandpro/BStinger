@@ -27,22 +27,22 @@ internal fun TreeContextMenu(project: ProjectState, entry: FileEntry, offset: Dp
         expanded = true,
         onDismissRequest = onDismiss,
         offset = offset,
-        modifier = Modifier.testTag(Tags.TREE_MENU),
+        modifier = Modifier.testTag(TreeTags.TREE_MENU),
     ) {
         MenuItem(
             "New File…",
-            Tags.MENU_NEW_FILE,
+            TreeTags.MENU_NEW_FILE,
         ) { action { project.fileDialog = FileDialog.Create(directory, isDirectory = false) } }
         MenuItem(
             "New Directory…",
-            Tags.MENU_NEW_DIRECTORY,
+            TreeTags.MENU_NEW_DIRECTORY,
         ) { action { project.fileDialog = FileDialog.Create(directory, isDirectory = true) } }
         if (!isRoot) {
-            MenuItem("Rename…", Tags.MENU_RENAME) { action { project.fileDialog = FileDialog.Rename(entry) } }
-            MenuItem("Delete…", Tags.MENU_DELETE) { action { project.fileDialog = FileDialog.Delete(entry) } }
+            MenuItem("Rename…", TreeTags.MENU_RENAME) { action { project.fileDialog = FileDialog.Rename(entry) } }
+            MenuItem("Delete…", TreeTags.MENU_DELETE) { action { project.fileDialog = FileDialog.Delete(entry) } }
         }
-        MenuItem("Copy Path", Tags.MENU_COPY_PATH) { action { TextClipboard.set(entry.path) } }
-        MenuItem("Reload from Disk", Tags.MENU_RELOAD) { action { tree.refresh() } }
+        MenuItem("Copy Path", TreeTags.MENU_COPY_PATH) { action { TextClipboard.set(entry.path) } }
+        MenuItem("Reload from Disk", TreeTags.MENU_RELOAD) { action { tree.refresh() } }
     }
 }
 

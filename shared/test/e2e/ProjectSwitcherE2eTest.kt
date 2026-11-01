@@ -19,8 +19,9 @@ import androidx.compose.ui.test.requestFocus
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.text.TextLayoutResult
 import org.example.kotlineditor.state.delete
-import org.example.kotlineditor.ui.ItemTags
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.AppTags
+import org.example.kotlineditor.ui.EditorTags
+import org.example.kotlineditor.ui.TreeTags
 import java.nio.file.Files
 import kotlin.io.path.createDirectories
 import kotlin.test.AfterTest
@@ -46,12 +47,12 @@ class ProjectSwitcherE2eTest {
         runComposeUiTest {
             launchApp(recent = listOf(project.path, other.path))
             openRecentFromWelcome(project.path)
-            onNodeWithTag(Tags.PROJECT_WIDGET).performClick()
-            awaitTag(ItemTags.switchProject(other.path)).assertIsDisplayed()
+            onNodeWithTag(AppTags.PROJECT_WIDGET).performClick()
+            awaitTag(AppTags.switchProject(other.path)).assertIsDisplayed()
             onNodeWithText("Recent Projects").assertIsDisplayed()
-            awaitNoTag(ItemTags.switchProject(project.path))
-            onNodeWithTag(Tags.PROJECT_OPEN_OTHER).assertIsDisplayed()
-            onNodeWithTag(Tags.PROJECT_CLOSE).assertIsDisplayed()
+            awaitNoTag(AppTags.switchProject(project.path))
+            onNodeWithTag(AppTags.PROJECT_OPEN_OTHER).assertIsDisplayed()
+            onNodeWithTag(AppTags.PROJECT_CLOSE).assertIsDisplayed()
         }
 
     @Test
@@ -59,10 +60,10 @@ class ProjectSwitcherE2eTest {
         runComposeUiTest {
             launchApp(recent = listOf(project.path, other.path))
             openRecentFromWelcome(project.path)
-            onNodeWithTag(Tags.PROJECT_WIDGET).performClick()
-            val open = awaitTag(Tags.PROJECT_OPEN_OTHER).assertTextEquals("Open Project…").getBoundsInRoot()
-            val home = onNodeWithTag(Tags.PROJECT_CLOSE).assertTextEquals("Go Homepage").getBoundsInRoot()
-            val recent = onNodeWithTag(ItemTags.switchProject(other.path)).getBoundsInRoot()
+            onNodeWithTag(AppTags.PROJECT_WIDGET).performClick()
+            val open = awaitTag(AppTags.PROJECT_OPEN_OTHER).assertTextEquals("Open Project…").getBoundsInRoot()
+            val home = onNodeWithTag(AppTags.PROJECT_CLOSE).assertTextEquals("Go Homepage").getBoundsInRoot()
+            val recent = onNodeWithTag(AppTags.switchProject(other.path)).getBoundsInRoot()
             assertTrue(open.top < home.top && home.top < recent.top, "open $open, home $home, recent $recent")
         }
 
@@ -77,10 +78,10 @@ class ProjectSwitcherE2eTest {
             try {
                 launchApp(recent = listOf(project.path, deep.path))
                 openRecentFromWelcome(project.path)
-                onNodeWithTag(Tags.PROJECT_WIDGET).performClick()
-                awaitTag(ItemTags.switchProject(deep.path))
+                onNodeWithTag(AppTags.PROJECT_WIDGET).performClick()
+                awaitTag(AppTags.switchProject(deep.path))
                 val label =
-                    onNode(hasText(deep.path) and hasAnyAncestor(hasTestTag(ItemTags.switchProject(deep.path))), true)
+                    onNode(hasText(deep.path) and hasAnyAncestor(hasTestTag(AppTags.switchProject(deep.path))), true)
                         .fetchSemanticsNode()
                 val layouts = mutableListOf<TextLayoutResult>()
                 label.config[SemanticsActions.GetTextLayoutResult].action!!(layouts)
@@ -96,13 +97,13 @@ class ProjectSwitcherE2eTest {
             val app = launchApp(recent = listOf(project.path, other.path))
             openRecentFromWelcome(project.path)
             switchProjectTo(other.path)
-            awaitTag(Tags.treeRow("Other.kt")).assertIsDisplayed()
+            awaitTag(TreeTags.treeRow("Other.kt")).assertIsDisplayed()
             assertEquals(other.root.fileName.toString(), app.state.title)
             // It becomes the most recent project, and the one left is now offered in the menu.
             awaitCondition { app.recentPaths == listOf(other.path, project.path) }
-            onNodeWithTag(Tags.PROJECT_WIDGET).performClick()
-            awaitTag(ItemTags.switchProject(project.path))
-            awaitNoTag(ItemTags.switchProject(other.path))
+            onNodeWithTag(AppTags.PROJECT_WIDGET).performClick()
+            awaitTag(AppTags.switchProject(project.path))
+            awaitNoTag(AppTags.switchProject(other.path))
         }
 
     @Test
@@ -112,18 +113,18 @@ class ProjectSwitcherE2eTest {
             openRecentFromWelcome(project.path)
             openFromTree("README.md")
             switchProjectTo(other.path)
-            awaitTag(Tags.treeRow("Other.kt"))
-            awaitNoTag(Tags.tab("README.md"))
+            awaitTag(TreeTags.treeRow("Other.kt"))
+            awaitNoTag(EditorTags.tab("README.md"))
             switchProjectTo(project.path)
-            awaitTag(Tags.tab("README.md"))
+            awaitTag(EditorTags.tab("README.md"))
         }
 
     @Test
     fun `with no other recent project the menu only offers Open Project and Go Homepage`() =
         runComposeUiTest {
             launchWithProject(project)
-            onNodeWithTag(Tags.PROJECT_WIDGET).performClick()
-            awaitTag(Tags.PROJECT_OPEN_OTHER)
+            onNodeWithTag(AppTags.PROJECT_WIDGET).performClick()
+            awaitTag(AppTags.PROJECT_OPEN_OTHER)
             assertTrue(onAllNodes(hasTestTagPrefix("project.switch:")).fetchSemanticsNodes().isEmpty())
             assertTrue(onAllNodes(hasText("Recent Projects")).fetchSemanticsNodes().isEmpty())
         }
@@ -134,9 +135,9 @@ class ProjectSwitcherE2eTest {
             val app = launchApp(recent = listOf(project.path, other.path))
             openRecentFromWelcome(project.path)
             val opened = app.project
-            onNodeWithTag(Tags.PROJECT_WIDGET).performClick()
-            awaitTag(Tags.PROJECT_OPEN_OTHER).requestFocus().performKeyInput { pressKey(Key.Escape) }
-            awaitNoTag(Tags.PROJECT_MENU)
+            onNodeWithTag(AppTags.PROJECT_WIDGET).performClick()
+            awaitTag(AppTags.PROJECT_OPEN_OTHER).requestFocus().performKeyInput { pressKey(Key.Escape) }
+            awaitNoTag(AppTags.PROJECT_MENU)
             waitForIdle()
             assertTrue(app.project === opened)
         }
@@ -149,13 +150,13 @@ class ProjectSwitcherE2eTest {
             openRecentFromWelcome(project.path)
             val opened = app.project
             switchProjectTo(missing)
-            awaitTag(Tags.STATUS_ERROR).assertTextContains("Directory not found", substring = true)
+            awaitTag(AppTags.STATUS_ERROR).assertTextContains("Directory not found", substring = true)
             assertTrue(app.project === opened)
-            awaitTag(Tags.treeRow("README.md"))
-            awaitNoTag(Tags.STATUS_OPENING)
+            awaitTag(TreeTags.treeRow("README.md"))
+            awaitNoTag(AppTags.STATUS_OPENING)
             // The next successful switch clears the message.
             switchProjectTo(other.path)
-            awaitTag(Tags.treeRow("Other.kt"))
-            awaitNoTag(Tags.STATUS_ERROR)
+            awaitTag(TreeTags.treeRow("Other.kt"))
+            awaitNoTag(AppTags.STATUS_ERROR)
         }
 }

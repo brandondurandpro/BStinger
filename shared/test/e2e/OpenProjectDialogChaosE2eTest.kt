@@ -6,8 +6,9 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.v2.runComposeUiTest
-import org.example.kotlineditor.ui.ItemTags
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.AppTags
+import org.example.kotlineditor.ui.RemoteTags
+import org.example.kotlineditor.ui.TreeTags
 import kotlin.test.AfterTest
 import kotlin.test.Test
 
@@ -27,12 +28,12 @@ class OpenProjectDialogChaosE2eTest {
     }
 
     private fun ComposeUiTest.openFromProjectMenu() {
-        onNodeWithTag(Tags.PROJECT_WIDGET).performClick()
-        awaitTag(Tags.PROJECT_OPEN_OTHER).performClick()
-        awaitTag(Tags.OPEN_PROJECT)
+        onNodeWithTag(AppTags.PROJECT_WIDGET).performClick()
+        awaitTag(AppTags.PROJECT_OPEN_OTHER).performClick()
+        awaitTag(RemoteTags.OPEN_PROJECT)
     }
 
-    private fun srcRowOf(sample: SampleProject) = ItemTags.pickerDirectory(sample.root.resolve("src").toString())
+    private fun srcRowOf(sample: SampleProject) = RemoteTags.pickerDirectory(sample.root.resolve("src").toString())
 
     @Test
     fun `the navigation typed while the network is down lists the directories once it is back`() =
@@ -68,13 +69,13 @@ class OpenProjectDialogChaosE2eTest {
             app.network.latencyMs = 400
             navigateToInProjectPicker(project.path)
             // The listing of the typed path is still in the air: Open waits for it, it does not open the other one.
-            onNodeWithTag(Tags.OPEN_PROJECT_OPEN).performClick()
-            onNodeWithTag(Tags.OPEN_PROJECT).assertExists()
+            onNodeWithTag(RemoteTags.OPEN_PROJECT_OPEN).performClick()
+            onNodeWithTag(RemoteTags.OPEN_PROJECT).assertExists()
             awaitTag(srcRowOf(project))
-            onNodeWithTag(Tags.OPEN_PROJECT_OPEN).performClick()
-            awaitNoTag(Tags.OPEN_PROJECT)
-            awaitTag(Tags.treeRow("src"))
-            onNodeWithTag(Tags.treeRow("Other.kt")).assertDoesNotExist()
+            onNodeWithTag(RemoteTags.OPEN_PROJECT_OPEN).performClick()
+            awaitNoTag(RemoteTags.OPEN_PROJECT)
+            awaitTag(TreeTags.treeRow("src"))
+            onNodeWithTag(TreeTags.treeRow("Other.kt")).assertDoesNotExist()
         }
 
     @Test

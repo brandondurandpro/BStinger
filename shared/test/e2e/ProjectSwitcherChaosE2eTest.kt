@@ -4,7 +4,8 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.state.delete
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.AppTags
+import org.example.kotlineditor.ui.TreeTags
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -35,12 +36,12 @@ class ProjectSwitcherChaosE2eTest {
             awaitReconnecting()
             switchProjectTo(other.path)
             // The user sees that the switch is pending, and the project left stays usable meanwhile.
-            awaitTag(Tags.STATUS_OPENING).assertTextContains("Opening", substring = true)
-            awaitTag(Tags.treeRow("README.md"))
+            awaitTag(AppTags.STATUS_OPENING).assertTextContains("Opening", substring = true)
+            awaitTag(TreeTags.treeRow("README.md"))
             app.network.comeBack()
-            awaitTag(Tags.treeRow("Other.kt"))
-            awaitNoTag(Tags.STATUS_OPENING)
-            awaitNoTag(Tags.STATUS_ERROR)
+            awaitTag(TreeTags.treeRow("Other.kt"))
+            awaitNoTag(AppTags.STATUS_OPENING)
+            awaitNoTag(AppTags.STATUS_ERROR)
         }
 
     @Test
@@ -52,8 +53,8 @@ class ProjectSwitcherChaosE2eTest {
             switchProjectTo(other.path)
             // Changed mind before the first answer arrived.
             switchProjectTo(third.path)
-            awaitTag(Tags.treeRow("Third.kt"))
-            awaitNoTag(Tags.STATUS_OPENING)
+            awaitTag(TreeTags.treeRow("Third.kt"))
+            awaitNoTag(AppTags.STATUS_OPENING)
             app.network.latencyMs = 0L
             // The project chosen first never opened: it would have become the most recent one before the third.
             awaitCondition { app.recentPaths == listOf(third.path, project.path, other.path) }
@@ -67,9 +68,9 @@ class ProjectSwitcherChaosE2eTest {
             openRecentFromWelcome(project.path)
             app.process.restart()
             switchProjectTo(other.path)
-            awaitTag(Tags.treeRow("Other.kt"))
+            awaitTag(TreeTags.treeRow("Other.kt"))
             awaitReconnected()
-            awaitNoTag(Tags.STATUS_ERROR)
+            awaitNoTag(AppTags.STATUS_ERROR)
         }
 
     @Test
@@ -80,9 +81,9 @@ class ProjectSwitcherChaosE2eTest {
             val opened = app.project
             other.delete()
             switchProjectTo(other.path)
-            awaitTag(Tags.STATUS_ERROR).assertTextContains("Directory not found", substring = true)
-            awaitNoTag(Tags.STATUS_OPENING)
+            awaitTag(AppTags.STATUS_ERROR).assertTextContains("Directory not found", substring = true)
+            awaitNoTag(AppTags.STATUS_OPENING)
             assertTrue(app.project === opened)
-            awaitTag(Tags.treeRow("README.md"))
+            awaitTag(TreeTags.treeRow("README.md"))
         }
 }

@@ -13,8 +13,8 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.state.PopupKind
-import org.example.kotlineditor.ui.ItemTags
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.EditorTags
+import org.example.kotlineditor.ui.TreeTags
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -33,20 +33,20 @@ class AutoSelectOpenedFileE2eTest {
 
     private fun ComposeUiTest.gotoFile(app: E2eApp, query: String, relative: String) {
         runOnUiThread { app.project.showPopup(PopupKind.GotoFile) }
-        awaitTag(Tags.GOTO_FILE_INPUT).performTextInput(query)
-        awaitTag(ItemTags.gotoFileItem(relative))
-        onNodeWithTag(Tags.GOTO_FILE_INPUT).performKeyInput { pressKey(Key.Enter) }
-        awaitTag(Tags.tab(relative))
+        awaitTag(TreeTags.GOTO_FILE_INPUT).performTextInput(query)
+        awaitTag(TreeTags.gotoFileItem(relative))
+        onNodeWithTag(TreeTags.GOTO_FILE_INPUT).performKeyInput { pressKey(Key.Enter) }
+        awaitTag(EditorTags.tab(relative))
     }
 
     @Test
     fun `the option is on by default and reveals a file opened from Go to File`() =
         runComposeUiTest {
             val app = launchWithProject(project)
-            onNodeWithTag(Tags.TREE_AUTO_SELECT).assertIsOn()
+            onNodeWithTag(TreeTags.TREE_AUTO_SELECT).assertIsOn()
             gotoFile(app, "Strings", "src/main/kotlin/util/Strings.kt")
             // Its directories were expanded and its row is selected and visible.
-            awaitTag(Tags.treeRow("src/main/kotlin/util/Strings.kt")).assertIsDisplayed()
+            awaitTag(TreeTags.treeRow("src/main/kotlin/util/Strings.kt")).assertIsDisplayed()
             awaitCondition { app.project.tree.selectedPath == path("src/main/kotlin/util/Strings.kt") }
         }
 
@@ -57,7 +57,7 @@ class AutoSelectOpenedFileE2eTest {
             openFromTree("README.md")
             openFromTree("docs/guide.md")
             awaitCondition { app.project.tree.selectedPath == path("docs/guide.md") }
-            onNodeWithTag(Tags.tab("README.md")).performClick()
+            onNodeWithTag(EditorTags.tab("README.md")).performClick()
             awaitCondition { app.project.tree.selectedPath == path("README.md") }
         }
 
@@ -65,17 +65,17 @@ class AutoSelectOpenedFileE2eTest {
     fun `when the option is off the tree selection does not follow the editor`() =
         runComposeUiTest {
             val app = launchWithProject(project)
-            onNodeWithTag(Tags.TREE_AUTO_SELECT).performClick()
-            onNodeWithTag(Tags.TREE_AUTO_SELECT).assertIsOff()
-            onNodeWithTag(Tags.treeRow("README.md")).performClick()
+            onNodeWithTag(TreeTags.TREE_AUTO_SELECT).performClick()
+            onNodeWithTag(TreeTags.TREE_AUTO_SELECT).assertIsOff()
+            onNodeWithTag(TreeTags.treeRow("README.md")).performClick()
             gotoFile(app, "Strings", "src/main/kotlin/util/Strings.kt")
             waitForIdle()
             assertEquals(path("README.md"), app.project.tree.selectedPath)
-            awaitNoTag(Tags.treeRow("src/main/kotlin/util/Strings.kt"))
+            awaitNoTag(TreeTags.treeRow("src/main/kotlin/util/Strings.kt"))
             // Turning it back on selects the file being edited right away.
-            onNodeWithTag(Tags.TREE_AUTO_SELECT).performClick()
-            onNodeWithTag(Tags.TREE_AUTO_SELECT).assertIsOn()
-            awaitTag(Tags.treeRow("src/main/kotlin/util/Strings.kt")).assertIsDisplayed()
+            onNodeWithTag(TreeTags.TREE_AUTO_SELECT).performClick()
+            onNodeWithTag(TreeTags.TREE_AUTO_SELECT).assertIsOn()
+            awaitTag(TreeTags.treeRow("src/main/kotlin/util/Strings.kt")).assertIsDisplayed()
             awaitCondition { app.project.tree.selectedPath == path("src/main/kotlin/util/Strings.kt") }
         }
 }

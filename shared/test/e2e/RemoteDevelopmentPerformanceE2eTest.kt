@@ -3,7 +3,8 @@ package org.example.kotlineditor.e2e
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.onNodeWithTag
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.RemoteTags
+import org.example.kotlineditor.ui.TreeTags
 import java.nio.file.Files
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -40,7 +41,7 @@ class RemoteDevelopmentPerformanceE2eTest {
 
             measure("remote connect and project tree", budgetMillis = 60_000) {
                 connectRemoteTo(RemoteTestEnvironment, project.path)
-                awaitTag(Tags.treeRow("src"), timeout = 60_000)
+                awaitTag(TreeTags.treeRow("src"), timeout = 60_000)
                 renderFrame()
             }
             measure("open a 5000-line remote file", budgetMillis = 15_000, budgetMegabytes = 512) {
@@ -62,13 +63,13 @@ class RemoteDevelopmentPerformanceE2eTest {
             remoteUiTest {
                 launchApp()
                 connectRemoteTo(RemoteTestEnvironment, null)
-                awaitTag(Tags.OPEN_PROJECT, timeout = 60_000)
-                awaitTag(Tags.OPEN_PROJECT_COUNT)
+                awaitTag(RemoteTags.OPEN_PROJECT, timeout = 60_000)
+                awaitTag(RemoteTags.OPEN_PROJECT_COUNT)
                 measure("type and list 1000 remote folders", budgetMillis = 10_000, budgetMegabytes = 256) {
                     replaceFolderPath(many.toString())
                     awaitCondition {
                         runCatching {
-                            onNodeWithTag(Tags.OPEN_PROJECT_COUNT).assertTextContains("1000 directories")
+                            onNodeWithTag(RemoteTags.OPEN_PROJECT_COUNT).assertTextContains("1000 directories")
                         }.isSuccess
                     }
                     renderFrame()

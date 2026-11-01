@@ -13,8 +13,7 @@ import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.test.withKeyDown
 import org.example.kotlineditor.state.delete
-import org.example.kotlineditor.ui.ItemTags
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.TreeTags
 import kotlin.test.AfterTest
 import kotlin.test.Test
 
@@ -29,11 +28,11 @@ class SearchChaosE2eTest {
     }
 
     private fun ComposeUiTest.openFindInFiles() {
-        onNodeWithTag(Tags.TREE).performClick()
-        onNodeWithTag(Tags.TREE).performKeyInput {
+        onNodeWithTag(TreeTags.TREE).performClick()
+        onNodeWithTag(TreeTags.TREE).performKeyInput {
             withKeyDown(Key.CtrlLeft) { withKeyDown(Key.ShiftLeft) { pressKey(Key.F) } }
         }
-        awaitTag(Tags.FIND_IN_FILES_INPUT)
+        awaitTag(TreeTags.FIND_IN_FILES_INPUT)
     }
 
     @Test
@@ -43,11 +42,11 @@ class SearchChaosE2eTest {
             openFindInFiles()
             app.network.goDown()
             awaitReconnecting()
-            onNodeWithTag(Tags.FIND_IN_FILES_INPUT).performTextInput("Hello")
+            onNodeWithTag(TreeTags.FIND_IN_FILES_INPUT).performTextInput("Hello")
             app.network.comeBack()
-            awaitTag(ItemTags.findInFilesItem("docs/guide.md", 1))
-            awaitTag(ItemTags.findInFilesItem("src/main/kotlin/App.kt", 7))
-            onNodeWithTag(Tags.FIND_IN_FILES_COUNT).assertTextContains("2 matches in 2 files")
+            awaitTag(TreeTags.findInFilesItem("docs/guide.md", 1))
+            awaitTag(TreeTags.findInFilesItem("src/main/kotlin/App.kt", 7))
+            onNodeWithTag(TreeTags.FIND_IN_FILES_COUNT).assertTextContains("2 matches in 2 files")
         }
 
     @Test
@@ -57,14 +56,14 @@ class SearchChaosE2eTest {
             app.network.latencyMs = 300
             openFindInFiles()
             // Each key starts a search; the answers of the earlier queries arrive late and must not win.
-            onNodeWithTag(Tags.FIND_IN_FILES_INPUT).performTextInput("Hel")
-            onNodeWithTag(Tags.FIND_IN_FILES_INPUT).performTextInput("lo from")
-            awaitTag(ItemTags.findInFilesItem("docs/guide.md", 1))
+            onNodeWithTag(TreeTags.FIND_IN_FILES_INPUT).performTextInput("Hel")
+            onNodeWithTag(TreeTags.FIND_IN_FILES_INPUT).performTextInput("lo from")
+            awaitTag(TreeTags.findInFilesItem("docs/guide.md", 1))
             awaitCondition {
                 runCatching {
-                    onNodeWithTag(Tags.FIND_IN_FILES_COUNT).assertTextEquals("1 match in 1 file")
+                    onNodeWithTag(TreeTags.FIND_IN_FILES_COUNT).assertTextEquals("1 match in 1 file")
                 }.isSuccess
             }
-            awaitNoTag(ItemTags.findInFilesItem("src/main/kotlin/App.kt", 7))
+            awaitNoTag(TreeTags.findInFilesItem("src/main/kotlin/App.kt", 7))
         }
 }

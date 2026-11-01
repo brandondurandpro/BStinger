@@ -76,7 +76,7 @@ fun LanguageServerChoiceBanner(project: ProjectState) {
     val state = project.languageServers ?: return
     val choice = state.choice ?: return
     val recommended = recommendedOf(choice)
-    Column(Modifier.fillMaxWidth().testTag(Tags.LSP_CHOICE)) {
+    Column(Modifier.fillMaxWidth().testTag(LanguageServerTags.LSP_CHOICE)) {
         Row(
             Modifier
                 .fillMaxWidth()
@@ -88,14 +88,18 @@ fun LanguageServerChoiceBanner(project: ProjectState) {
         ) {
             InfoIcon()
             Label("${choice.languageName} code insight needs a language server", fontSize = 13.sp)
-            BannerLink("Choose server…", Tags.LSP_CHOICE_OPEN, onClick = state::openChoiceDialog)
+            BannerLink("Choose server…", LanguageServerTags.LSP_CHOICE_OPEN, onClick = state::openChoiceDialog)
             if (recommended != null) {
-                BannerLink("Use ${recommended.displayName}", Tags.LSP_CHOICE_QUICK, enabled = !state.choosing) {
+                BannerLink(
+                    "Use ${recommended.displayName}",
+                    LanguageServerTags.LSP_CHOICE_QUICK,
+                    enabled = !state.choosing,
+                ) {
                     state.choose(recommended.id)
                 }
             }
             Spacer(Modifier.weight(1f))
-            BannerLink("Not now", Tags.LSP_CHOICE_NOT_NOW, onClick = state::notNow)
+            BannerLink("Not now", LanguageServerTags.LSP_CHOICE_NOT_NOW, onClick = state::notNow)
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(BannerBorder))
     }
@@ -164,7 +168,7 @@ fun LanguageServerChoiceDialog(project: ProjectState) {
                 .dialogKeys(state, use)
                 .focusRequester(focus)
                 .focusable()
-                .testTag(Tags.LSP_CHOICE_DIALOG),
+                .testTag(LanguageServerTags.LSP_CHOICE_DIALOG),
         ) {
             DialogTitle("Language Server for ${choice.languageName}", state::closeChoiceDialog)
             Row(Modifier.weight(1f).fillMaxWidth()) {
@@ -267,7 +271,7 @@ private fun CandidateRow(
             .hoverable(interaction)
             .clickable(interaction, indication = null, onClick = onClick)
             .padding(horizontal = 8.dp, vertical = 7.dp)
-            .testTag(Tags.lspChoiceOption(candidate.id)),
+            .testTag(LanguageServerTags.lspChoiceOption(candidate.id)),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
@@ -312,7 +316,7 @@ private fun CandidateDetails(
             .fillMaxHeight()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 18.dp)
-            .testTag(Tags.LSP_CHOICE_DETAILS),
+            .testTag(LanguageServerTags.LSP_CHOICE_DETAILS),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -330,7 +334,7 @@ private fun CandidateDetails(
         }
         Section("On the server machine") {
             Column(
-                Modifier.testTag(Tags.lspChoiceDetail(candidate.id)),
+                Modifier.testTag(LanguageServerTags.lspChoiceDetail(candidate.id)),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 candidate.details.forEach { line ->
@@ -392,11 +396,11 @@ private fun DialogFooter(state: LanguageServersState, selected: LanguageServerCa
             color = IdeColors.TextSecondary,
             fontSize = 11.sp,
         )
-        IdeButton("Cancel", state::closeChoiceDialog, Modifier.testTag(Tags.LSP_CHOICE_CANCEL))
+        IdeButton("Cancel", state::closeChoiceDialog, Modifier.testTag(LanguageServerTags.LSP_CHOICE_CANCEL))
         IdeButton(
             "Use ${selected.displayName}",
             use,
-            Modifier.testTag(Tags.lspChoiceUse(selected.id)),
+            Modifier.testTag(LanguageServerTags.lspChoiceUse(selected.id)),
             primary = true,
             enabled = selected.available && !state.choosing,
         )

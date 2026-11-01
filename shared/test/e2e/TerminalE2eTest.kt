@@ -26,7 +26,10 @@ import androidx.compose.ui.test.withKeyDown
 import org.example.kotlineditor.model.text
 import org.example.kotlineditor.state.ToolWindow
 import org.example.kotlineditor.state.delete
+import org.example.kotlineditor.ui.AppTags
 import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.TerminalTags
+import org.example.kotlineditor.ui.TreeTags
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -59,16 +62,16 @@ class TerminalE2eTest {
         screenLines(app).any { "echo" !in it && it.endsWith(text) }
 
     private fun ComposeUiTest.runCommand(command: String) {
-        onNodeWithTag(Tags.TERMINAL_INPUT).performClick()
-        onNodeWithTag(Tags.TERMINAL_INPUT).performTextInput(command)
-        onNodeWithTag(Tags.TERMINAL_INPUT).performKeyInput { pressKey(Key.Enter) }
+        onNodeWithTag(TerminalTags.TERMINAL_INPUT).performClick()
+        onNodeWithTag(TerminalTags.TERMINAL_INPUT).performTextInput(command)
+        onNodeWithTag(TerminalTags.TERMINAL_INPUT).performKeyInput { pressKey(Key.Enter) }
     }
 
     // The tab is first scrolled fully into view: a click at the center of a tab half hidden by the scrolled row would
     // land outside it.
     private fun ComposeUiTest.clickTab(number: Int, button: MouseButton) {
-        onNodeWithTag(Tags.terminalTab(number)).performScrollTo()
-        onNodeWithTag(Tags.terminalTab(number)).performMouseInput {
+        onNodeWithTag(TerminalTags.terminalTab(number)).performScrollTo()
+        onNodeWithTag(TerminalTags.terminalTab(number)).performMouseInput {
             moveTo(center)
             press(button)
             release(button)
@@ -78,7 +81,7 @@ class TerminalE2eTest {
     // Scrolls the tabs until [reached]; more than once if needed, as a scroll can end short of it.
     private fun ComposeUiTest.scrollTabsUntil(delta: Float, wheel: ScrollWheel, reached: () -> Boolean) {
         repeat(SCROLL_ATTEMPTS) {
-            onNodeWithTag(Tags.TERMINAL_TABS).performMouseInput {
+            onNodeWithTag(TerminalTags.TERMINAL_TABS).performMouseInput {
                 moveTo(center)
                 scroll(delta, wheel)
             }
@@ -100,9 +103,9 @@ class TerminalE2eTest {
     // Opens the terminal with tabs 1 to [count], tab [count] being shown, once every shell has drawn its prompt, so
     // that the row of tabs no longer moves when a click is sent.
     private fun ComposeUiTest.openTabs(app: E2eApp, count: Int) {
-        onNodeWithTag(Tags.TOOL_TERMINAL).performClick()
-        awaitTag(Tags.TERMINAL_INPUT)
-        repeat(count - 1) { onNodeWithTag(Tags.TERMINAL_NEW).performClick() }
+        onNodeWithTag(AppTags.TOOL_TERMINAL).performClick()
+        awaitTag(TerminalTags.TERMINAL_INPUT)
+        repeat(count - 1) { onNodeWithTag(TerminalTags.TERMINAL_NEW).performClick() }
         awaitCondition { app.tabNumbers() == (1..count).toList() }
         awaitCondition {
             app.project.terminal.tabs.all { tab ->
@@ -114,22 +117,22 @@ class TerminalE2eTest {
     }
 
     private fun ComposeUiTest.clickTabClose(number: Int) {
-        onNodeWithTag(Tags.terminalTab(number)).performScrollTo()
-        onNodeWithTag(Tags.terminalTabClose(number)).assertIsDisplayed().performClick()
+        onNodeWithTag(TerminalTags.terminalTab(number)).performScrollTo()
+        onNodeWithTag(TerminalTags.terminalTabClose(number)).assertIsDisplayed().performClick()
     }
 
     private fun ComposeUiTest.typeKeys(keys: List<Key>) {
-        onNodeWithTag(Tags.TERMINAL_INPUT).performClick()
-        onNodeWithTag(Tags.TERMINAL_INPUT).performKeyInput { keys.forEach { pressKey(it) } }
+        onNodeWithTag(TerminalTags.TERMINAL_INPUT).performClick()
+        onNodeWithTag(TerminalTags.TERMINAL_INPUT).performKeyInput { keys.forEach { pressKey(it) } }
     }
 
     @Test
     fun `Alt+F12 opens a terminal that runs commands in the project directory`() =
         runComposeUiTest {
             val app = launchWithProject(project)
-            onNodeWithTag(Tags.TREE).performClick()
-            onNodeWithTag(Tags.TREE).performKeyInput { withKeyDown(Key.AltLeft) { pressKey(Key.F12) } }
-            awaitTag(Tags.TERMINAL_INPUT)
+            onNodeWithTag(TreeTags.TREE).performClick()
+            onNodeWithTag(TreeTags.TREE).performKeyInput { withKeyDown(Key.AltLeft) { pressKey(Key.F12) } }
+            awaitTag(TerminalTags.TERMINAL_INPUT)
             runCommand("echo hello-terminal")
             awaitCondition { printed(app, "hello-terminal") }
             // Checked right away: ConPTY repaints the screen and may push earlier lines out of it. Joined without
@@ -147,8 +150,8 @@ class TerminalE2eTest {
     fun `typed keys are encoded by the server engine`() =
         runComposeUiTest {
             val app = launchWithProject(project)
-            onNodeWithTag(Tags.TOOL_TERMINAL).performClick()
-            awaitTag(Tags.TERMINAL_INPUT)
+            onNodeWithTag(AppTags.TOOL_TERMINAL).performClick()
+            awaitTag(TerminalTags.TERMINAL_INPUT)
             typeKeys(
                 listOf(
                     Key.E,
@@ -174,18 +177,18 @@ class TerminalE2eTest {
     fun `each tab runs its own shell`() =
         runComposeUiTest {
             val app = launchWithProject(project)
-            onNodeWithTag(Tags.TOOL_TERMINAL).performClick()
-            awaitTag(Tags.TERMINAL_INPUT)
+            onNodeWithTag(AppTags.TOOL_TERMINAL).performClick()
+            awaitTag(TerminalTags.TERMINAL_INPUT)
             runCommand("echo first-tab")
             awaitCondition { printed(app, "first-tab") }
-            onNodeWithTag(Tags.TERMINAL_NEW).performClick()
+            onNodeWithTag(TerminalTags.TERMINAL_NEW).performClick()
             awaitCondition { app.project.terminal.tabs.size == 2 }
             runCommand("echo second-tab")
             awaitCondition { printed(app, "second-tab") }
-            onNodeWithTag(Tags.terminalTab(1)).performClick()
+            onNodeWithTag(TerminalTags.terminalTab(1)).performClick()
             awaitCondition { printed(app, "first-tab") }
             clickTabClose(1)
-            awaitNoTag(Tags.terminalTab(1))
+            awaitNoTag(TerminalTags.terminalTab(1))
             assertEquals(listOf(2), app.tabNumbers())
             awaitCondition { printed(app, "second-tab") }
         }
@@ -212,12 +215,17 @@ class TerminalE2eTest {
             val app = launchWithProject(project)
             openTabs(app, 2)
             val inHeader = hasAnyAncestor(hasTestTag(Tags.toolHeader(ToolWindow.Terminal.name)))
-            for (tag in listOf(Tags.terminalTab(1), Tags.terminalTab(2), Tags.TERMINAL_NEW, Tags.TERMINAL_HIDE)) {
+            for (tag in listOf(
+                TerminalTags.terminalTab(1),
+                TerminalTags.terminalTab(2),
+                TerminalTags.TERMINAL_NEW,
+                TerminalTags.TERMINAL_HIDE,
+            )) {
                 onNode(hasTestTag(tag) and inHeader).assertIsDisplayed()
             }
             // Dragging a tab does not drag the panel, as dragging the bare header does.
             val dock = app.project.toolWindows.dockOf(ToolWindow.Terminal)
-            onNodeWithTag(Tags.terminalTab(1)).performMouseInput {
+            onNodeWithTag(TerminalTags.terminalTab(1)).performMouseInput {
                 moveTo(center)
                 press()
                 moveBy(Offset(0f, -400f))
@@ -235,23 +243,23 @@ class TerminalE2eTest {
             // opened is scrolled into view, and the button that opens them stays reachable.
             openTabs(app, 1)
             var last = 1
-            while (shown(Tags.terminalTab(1))) {
+            while (shown(TerminalTags.terminalTab(1))) {
                 check(last < MAX_TABS) { "$MAX_TABS tabs still fit in the panel" }
-                onNodeWithTag(Tags.TERMINAL_NEW).assertIsDisplayed().performClick()
+                onNodeWithTag(TerminalTags.TERMINAL_NEW).assertIsDisplayed().performClick()
                 last++
-                awaitCondition { app.tabNumbers().size == last && shown(Tags.terminalTab(last)) }
+                awaitCondition { app.tabNumbers().size == last && shown(TerminalTags.terminalTab(last)) }
                 waitForIdle()
             }
             // A plain mouse wheel scrolls the tabs, as does a horizontal one (touchpad, Shift+wheel).
-            scrollTabsUntil(-100f, ScrollWheel.Vertical) { shown(Tags.terminalTab(1)) }
+            scrollTabsUntil(-100f, ScrollWheel.Vertical) { shown(TerminalTags.terminalTab(1)) }
             scrollTabsUntil(100f, ScrollWheel.Horizontal) {
-                shown(Tags.terminalTab(last)) && !shown(Tags.terminalTab(1))
+                shown(TerminalTags.terminalTab(last)) && !shown(TerminalTags.terminalTab(1))
             }
-            scrollTabsUntil(-100f, ScrollWheel.Horizontal) { shown(Tags.terminalTab(1)) }
+            scrollTabsUntil(-100f, ScrollWheel.Horizontal) { shown(TerminalTags.terminalTab(1)) }
             clickTab(1, MouseButton.Primary)
             awaitCondition { app.activeNumber() == 1 }
-            onNodeWithTag(Tags.TERMINAL_NEW).performClick()
-            awaitCondition { shown(Tags.terminalTab(last + 1)) && !shown(Tags.terminalTab(1)) }
+            onNodeWithTag(TerminalTags.TERMINAL_NEW).performClick()
+            awaitCondition { shown(TerminalTags.terminalTab(last + 1)) && !shown(TerminalTags.terminalTab(1)) }
         }
 
     @Test
@@ -260,13 +268,13 @@ class TerminalE2eTest {
             val app = launchWithProject(project)
             openTabs(app, 3)
             clickTabClose(2)
-            awaitNoTag(Tags.terminalTab(2))
+            awaitNoTag(TerminalTags.terminalTab(2))
             assertEquals(listOf(1, 3), app.tabNumbers())
             clickTab(3, MouseButton.Tertiary)
-            awaitNoTag(Tags.terminalTab(3))
+            awaitNoTag(TerminalTags.terminalTab(3))
             assertEquals(listOf(1), app.tabNumbers())
             clickTabClose(1)
-            awaitNoTag(Tags.TERMINAL_INPUT)
+            awaitNoTag(TerminalTags.TERMINAL_INPUT)
             assertEquals(emptyList(), app.tabNumbers())
         }
 
@@ -276,11 +284,11 @@ class TerminalE2eTest {
             val app = launchWithProject(project)
             openTabs(app, 3)
             clickTab(2, MouseButton.Secondary)
-            awaitTag(Tags.TERMINAL_TAB_MENU).assertIsDisplayed()
+            awaitTag(TerminalTags.TERMINAL_TAB_MENU).assertIsDisplayed()
             awaitTag(Tags.MENU_CLOSE_OTHER_TABS).performClick()
-            awaitNoTag(Tags.TERMINAL_TAB_MENU)
-            awaitNoTag(Tags.terminalTab(1))
-            awaitNoTag(Tags.terminalTab(3))
+            awaitNoTag(TerminalTags.TERMINAL_TAB_MENU)
+            awaitNoTag(TerminalTags.terminalTab(1))
+            awaitNoTag(TerminalTags.terminalTab(3))
             assertEquals(listOf(2), app.tabNumbers())
             assertEquals(2, app.activeNumber())
             // With a single tab, there are no others nor tabs on either side to close.
@@ -298,17 +306,17 @@ class TerminalE2eTest {
             openTabs(app, 4)
             clickTab(2, MouseButton.Secondary)
             awaitTag(Tags.MENU_CLOSE_TABS_LEFT).performClick()
-            awaitNoTag(Tags.terminalTab(1))
+            awaitNoTag(TerminalTags.terminalTab(1))
             assertEquals(listOf(2, 3, 4), app.tabNumbers())
             assertEquals(2, app.activeNumber())
             clickTab(3, MouseButton.Secondary)
             awaitTag(Tags.MENU_CLOSE_TABS_RIGHT).performClick()
-            awaitNoTag(Tags.terminalTab(4))
+            awaitNoTag(TerminalTags.terminalTab(4))
             assertEquals(listOf(2, 3), app.tabNumbers())
             assertEquals(3, app.activeNumber())
             clickTab(3, MouseButton.Secondary)
             awaitTag(Tags.MENU_CLOSE_TAB).performClick()
-            awaitNoTag(Tags.terminalTab(3))
+            awaitNoTag(TerminalTags.terminalTab(3))
             assertEquals(listOf(2), app.tabNumbers())
         }
 
@@ -318,26 +326,26 @@ class TerminalE2eTest {
             val app = launchWithProject(project)
             openTabs(app, 2)
             clickTab(1, MouseButton.Secondary)
-            awaitTag(Tags.TERMINAL_TAB_MENU)
-            onNodeWithTag(Tags.TERMINAL_INPUT).performMouseInput { click(bottomRight - Offset(5f, 5f)) }
-            awaitNoTag(Tags.TERMINAL_TAB_MENU)
+            awaitTag(TerminalTags.TERMINAL_TAB_MENU)
+            onNodeWithTag(TerminalTags.TERMINAL_INPUT).performMouseInput { click(bottomRight - Offset(5f, 5f)) }
+            awaitNoTag(TerminalTags.TERMINAL_TAB_MENU)
             assertEquals(listOf(1, 2), app.tabNumbers())
             clickTab(1, MouseButton.Secondary)
             awaitTag(Tags.MENU_CLOSE_ALL_TABS).performClick()
-            awaitNoTag(Tags.TERMINAL_INPUT)
+            awaitNoTag(TerminalTags.TERMINAL_INPUT)
             assertEquals(emptyList(), app.tabNumbers())
             // A new tab can still be opened afterwards.
-            onNodeWithTag(Tags.TERMINAL_NEW).performClick()
-            awaitTag(Tags.terminalTab(3))
-            awaitTag(Tags.TERMINAL_INPUT)
+            onNodeWithTag(TerminalTags.TERMINAL_NEW).performClick()
+            awaitTag(TerminalTags.terminalTab(3))
+            awaitTag(TerminalTags.TERMINAL_INPUT)
         }
 
     @Test
     fun `the shell exit is reported and closing the project stops the shell`() =
         runComposeUiTest {
             val app = launchWithProject(project)
-            onNodeWithTag(Tags.TOOL_TERMINAL).performClick()
-            awaitTag(Tags.TERMINAL_INPUT)
+            onNodeWithTag(AppTags.TOOL_TERMINAL).performClick()
+            awaitTag(TerminalTags.TERMINAL_INPUT)
             awaitCondition {
                 app.project.terminal.active
                     ?.running == true
@@ -351,7 +359,7 @@ class TerminalE2eTest {
             assertFalse(terminalTab?.running ?: true)
             val terminal = app.project.terminal
             runOnUiThread { app.state.closeProject() }
-            awaitTag(Tags.WELCOME)
+            awaitTag(AppTags.WELCOME)
             awaitCondition { terminal.tabs.isEmpty() }
         }
 
@@ -359,14 +367,14 @@ class TerminalE2eTest {
     fun `the terminal can be minimized and keeps its shells`() =
         runComposeUiTest {
             val app = launchWithProject(project)
-            onNodeWithTag(Tags.TOOL_TERMINAL).performClick()
-            awaitTag(Tags.TERMINAL_INPUT)
+            onNodeWithTag(AppTags.TOOL_TERMINAL).performClick()
+            awaitTag(TerminalTags.TERMINAL_INPUT)
             runCommand("echo marker-x")
             awaitCondition { printed(app, "marker-x") }
-            onNodeWithTag(Tags.TERMINAL_HIDE).performClick()
-            awaitNoTag(Tags.TERMINAL)
-            onNodeWithTag(Tags.TOOL_TERMINAL).performClick()
-            awaitTag(Tags.TERMINAL_INPUT)
+            onNodeWithTag(TerminalTags.TERMINAL_HIDE).performClick()
+            awaitNoTag(TerminalTags.TERMINAL)
+            onNodeWithTag(AppTags.TOOL_TERMINAL).performClick()
+            awaitTag(TerminalTags.TERMINAL_INPUT)
             assertTrue(printed(app, "marker-x"))
         }
 
@@ -375,13 +383,13 @@ class TerminalE2eTest {
         runComposeUiTest {
             val app = launchWithProject(project)
             openTabs(app, 3)
-            onNodeWithTag(Tags.terminalTabName(1)).assertTextEquals("Local")
-            onNodeWithTag(Tags.terminalTabName(2)).assertTextEquals("Local (2)")
-            onNodeWithTag(Tags.terminalTabName(3)).assertTextEquals("Local (3)")
+            onNodeWithTag(TerminalTags.terminalTabName(1)).assertTextEquals("Local")
+            onNodeWithTag(TerminalTags.terminalTabName(2)).assertTextEquals("Local (2)")
+            onNodeWithTag(TerminalTags.terminalTabName(3)).assertTextEquals("Local (3)")
             clickTabClose(2)
-            awaitNoTag(Tags.terminalTab(2))
-            onNodeWithTag(Tags.TERMINAL_NEW).performClick()
-            awaitTag(Tags.terminalTabName(4)).assertTextEquals("Local (2)")
+            awaitNoTag(TerminalTags.terminalTab(2))
+            onNodeWithTag(TerminalTags.TERMINAL_NEW).performClick()
+            awaitTag(TerminalTags.terminalTabName(4)).assertTextEquals("Local (2)")
             val tabs = app.project.terminal.tabs
             val names = tabs.map { it.name }
             assertEquals(listOf("Local", "Local (3)", "Local (2)"), names)
@@ -395,10 +403,12 @@ class TerminalE2eTest {
             val tabs = app.project.terminal.tabs
             val tab = tabs.single()
             // Shells set long titles (user@host: directory, the path of cmd.exe), or none at all (dash).
-            onNodeWithTag(Tags.terminalTabName(1)).assertTextEquals("Local")
-            onNodeWithTag(Tags.terminalTab(1)).performMouseInput { moveTo(center) }
-            awaitTag(Tags.terminalTabTooltip(1))
-            onNode(hasAnyAncestor(hasTestTag(Tags.terminalTabTooltip(1))) and hasText(tab.title)).assertIsDisplayed()
-            onNodeWithTag(Tags.terminalTabName(1)).assertTextEquals("Local")
+            onNodeWithTag(TerminalTags.terminalTabName(1)).assertTextEquals("Local")
+            onNodeWithTag(TerminalTags.terminalTab(1)).performMouseInput { moveTo(center) }
+            awaitTag(TerminalTags.terminalTabTooltip(1))
+            onNode(
+                hasAnyAncestor(hasTestTag(TerminalTags.terminalTabTooltip(1))) and hasText(tab.title),
+            ).assertIsDisplayed()
+            onNodeWithTag(TerminalTags.terminalTabName(1)).assertTextEquals("Local")
         }
 }

@@ -13,9 +13,10 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.model.TerminalSnapshot
 import org.example.kotlineditor.model.line
+import org.example.kotlineditor.ui.AppTags
 import org.example.kotlineditor.ui.IdeColors
-import org.example.kotlineditor.ui.Tags
 import org.example.kotlineditor.ui.TerminalBackground
+import org.example.kotlineditor.ui.TerminalTags
 import kotlin.math.abs
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -68,12 +69,12 @@ class TerminalCursorE2eTest {
     fun `the cursor stays on its character at the end of a long line`() =
         runComposeUiTest {
             val app = launchWithProject(project)
-            onNodeWithTag(Tags.TOOL_TERMINAL).performClick()
-            awaitTag(Tags.TERMINAL_INPUT)
+            onNodeWithTag(AppTags.TOOL_TERMINAL).performClick()
+            awaitTag(TerminalTags.TERMINAL_INPUT)
             // The prompt is drawn once the cursor has left the first column.
             awaitCondition { app.terminalSnapshot().let { it != null && it.cursorColumn > 0 } }
             val prompt = checkNotNull(app.terminalSnapshot())
-            val input = onNodeWithTag(Tags.TERMINAL_INPUT)
+            val input = onNodeWithTag(TerminalTags.TERMINAL_INPUT)
             input.performClick()
             // Bars to the end of the prompt's row (cmd.exe's prompt is a long path), then to near the end of the next
             // one, where a drift is the widest whatever the prompt. Typed, never run.

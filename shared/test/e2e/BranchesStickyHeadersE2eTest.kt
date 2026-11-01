@@ -12,8 +12,8 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.unit.Dp
 import org.example.kotlineditor.state.BranchSection
-import org.example.kotlineditor.ui.ItemTags
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.AppTags
+import org.example.kotlineditor.ui.GitTags
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.AfterTest
@@ -49,9 +49,9 @@ class BranchesStickyHeadersE2eTest {
 
     private fun ComposeUiTest.openBranches(app: E2eApp) {
         awaitCondition { app.project.gitBranchInfos.size > LOCALS }
-        onNodeWithTag(Tags.TOOL_BRANCHES).performClick()
-        awaitTag(Tags.BRANCHES_PANEL)
-        awaitTag(ItemTags.historyBranch("local-000"))
+        onNodeWithTag(AppTags.TOOL_BRANCHES).performClick()
+        awaitTag(GitTags.BRANCHES_PANEL)
+        awaitTag(GitTags.historyBranch("local-000"))
         // The remote branches are loaded by their own request; wait for them before scrolling to their section.
         awaitCondition { app.project.history.remoteBranches.size > LOCALS }
     }
@@ -72,14 +72,14 @@ class BranchesStickyHeadersE2eTest {
             repository()
             val app = launchWithProject(project)
             openBranches(app)
-            val local = ItemTags.historySection(BranchSection.Local.name)
-            val remote = ItemTags.historySection(BranchSection.Remote.name)
+            val local = GitTags.historySection(BranchSection.Local.name)
+            val remote = GitTags.historySection(BranchSection.Remote.name)
             val top = topOf(local)
-            val list = onNodeWithTag(Tags.HISTORY_BRANCH_LIST)
+            val list = onNodeWithTag(GitTags.HISTORY_BRANCH_LIST)
 
             list.performScrollToIndex(LOCALS / 2)
             waitForIdle()
-            assertTrue(!exists(ItemTags.historyBranch("local-000")), "the local branches must have scrolled")
+            assertTrue(!exists(GitTags.historyBranch("local-000")), "the local branches must have scrolled")
             assertSameTop(top, local)
 
             // The remote header takes the top when its section arrives, pushing the local one out of view.
@@ -90,10 +90,10 @@ class BranchesStickyHeadersE2eTest {
 
             // A stuck header is still a header: a click folds its section.
             onNodeWithTag(remote).performClick()
-            awaitNoTag(ItemTags.historyBranch("origin/local-030"))
+            awaitNoTag(GitTags.historyBranch("origin/local-030"))
             onNodeWithTag(remote).performClick()
             list.performScrollToIndex(LOCALS + 2 + LOCALS / 2)
-            awaitTag(ItemTags.historyBranch("origin/local-030"))
+            awaitTag(GitTags.historyBranch("origin/local-030"))
 
             // Back at the top, the local header is in its natural place again.
             list.performScrollToIndex(0)
@@ -107,30 +107,30 @@ class BranchesStickyHeadersE2eTest {
             repository()
             val app = launchWithProject(project)
             openBranches(app)
-            val local = ItemTags.historySection(BranchSection.Local.name)
+            val local = GitTags.historySection(BranchSection.Local.name)
             val top = topOf(local)
-            val list = onNodeWithTag(Tags.HISTORY_BRANCH_LIST)
+            val list = onNodeWithTag(GitTags.HISTORY_BRANCH_LIST)
 
             list.performScrollToIndex(LOCALS / 2)
             waitForIdle()
             assertSameTop(top, local)
 
             // One local and one remote branch left: the list no longer scrolls, the header is back in place.
-            onNodeWithTag(Tags.HISTORY_BRANCH_SEARCH).performTextInput("local-003")
+            onNodeWithTag(GitTags.HISTORY_BRANCH_SEARCH).performTextInput("local-003")
             awaitCondition { app.project.history.branchQuery == "local-003" }
             waitForIdle()
             onNodeWithTag(local).assertTextContains("1", substring = true)
             assertSameTop(top, local)
 
             // A filter that matches nothing keeps both headers, with no rows under them.
-            onNodeWithTag(Tags.HISTORY_BRANCH_SEARCH).performTextInput("nothing matches this")
+            onNodeWithTag(GitTags.HISTORY_BRANCH_SEARCH).performTextInput("nothing matches this")
             awaitCondition {
                 app.project.history.branchQuery
                     .endsWith("nothing matches this")
             }
             waitForIdle()
             awaitTag(local).assertTextContains("0", substring = true)
-            awaitTag(ItemTags.historySection(BranchSection.Remote.name))
+            awaitTag(GitTags.historySection(BranchSection.Remote.name))
             assertSameTop(top, local)
         }
 
@@ -140,13 +140,13 @@ class BranchesStickyHeadersE2eTest {
             repository()
             val app = launchWithProject(project)
             openBranches(app)
-            val local = ItemTags.historySection(BranchSection.Local.name)
-            val remote = ItemTags.historySection(BranchSection.Remote.name)
+            val local = GitTags.historySection(BranchSection.Local.name)
+            val remote = GitTags.historySection(BranchSection.Remote.name)
             val top = topOf(local)
-            val list = onNodeWithTag(Tags.HISTORY_BRANCH_LIST)
+            val list = onNodeWithTag(GitTags.HISTORY_BRANCH_LIST)
 
             onNodeWithTag(local).performClick()
-            awaitNoTag(ItemTags.historyBranch("local-000"))
+            awaitNoTag(GitTags.historyBranch("local-000"))
             assertSameTop(top, local)
 
             // With no local rows to hold it, the folded header scrolls away and the remote one takes the top.
@@ -154,7 +154,7 @@ class BranchesStickyHeadersE2eTest {
             waitForIdle()
             assertSameTop(top, remote)
             assertTrue(!exists(local) || topOf(local).value < top.value, "the folded local header should be pushed out")
-            assertTrue(!exists(ItemTags.historyBranch("local-000")), "the local section must stay folded")
+            assertTrue(!exists(GitTags.historyBranch("local-000")), "the local section must stay folded")
         }
 
     @Test
@@ -163,12 +163,12 @@ class BranchesStickyHeadersE2eTest {
             repository()
             val app = launchWithProject(project)
             openBranches(app)
-            val local = ItemTags.historySection(BranchSection.Local.name)
-            val remote = ItemTags.historySection(BranchSection.Remote.name)
+            val local = GitTags.historySection(BranchSection.Local.name)
+            val remote = GitTags.historySection(BranchSection.Remote.name)
             val top = topOf(local)
-            val list = onNodeWithTag(Tags.HISTORY_BRANCH_LIST)
+            val list = onNodeWithTag(GitTags.HISTORY_BRANCH_LIST)
 
-            onNodeWithTag(Tags.HISTORY_BRANCH_SEARCH).performTextInput("local-00")
+            onNodeWithTag(GitTags.HISTORY_BRANCH_SEARCH).performTextInput("local-00")
             awaitCondition { app.project.history.branchQuery == "local-00" }
             waitForIdle()
             onNodeWithTag(local).assertTextContains("10", substring = true)
@@ -176,7 +176,7 @@ class BranchesStickyHeadersE2eTest {
             // Ten local and ten remote branches left: still taller than the list, so it scrolls.
             list.performScrollToIndex(10)
             waitForIdle()
-            assertTrue(!exists(ItemTags.historyBranch("local-000")), "the filtered local branches must have scrolled")
+            assertTrue(!exists(GitTags.historyBranch("local-000")), "the filtered local branches must have scrolled")
             assertSameTop(top, local)
 
             list.performScrollToIndex(11 + 5)

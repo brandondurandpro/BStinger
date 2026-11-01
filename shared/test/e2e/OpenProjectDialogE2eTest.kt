@@ -15,8 +15,9 @@ import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.state.Screen
-import org.example.kotlineditor.ui.ItemTags
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.AppTags
+import org.example.kotlineditor.ui.RemoteTags
+import org.example.kotlineditor.ui.TreeTags
 import java.nio.file.Path
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -55,9 +56,9 @@ class OpenProjectDialogE2eTest {
             val app = launchApp()
             openProjectPickerFromWelcome()
             showDirectoryInProjectPicker(project.path)
-            awaitTag(ItemTags.pickerDirectory(pathInProject("src").toString())).assertIsDisplayed()
-            onNodeWithTag(Tags.OPEN_PROJECT_OPEN).performClick()
-            awaitTag(Tags.PROJECT)
+            awaitTag(RemoteTags.pickerDirectory(pathInProject("src").toString())).assertIsDisplayed()
+            onNodeWithTag(RemoteTags.OPEN_PROJECT_OPEN).performClick()
+            awaitTag(AppTags.PROJECT)
             assertEquals(project.root.fileName.toString(), app.state.title)
             awaitCondition { app.recentPaths == listOf(project.path) }
         }
@@ -68,11 +69,11 @@ class OpenProjectDialogE2eTest {
             launchApp()
             openProjectPickerFromWelcome()
             showDirectoryInProjectPicker(project.path)
-            onNodeWithTag(Tags.OPEN_PROJECT_CANCEL).performClick()
-            onNodeWithTag(Tags.WELCOME_OPEN).performClick()
-            awaitTag(Tags.OPEN_PROJECT)
+            onNodeWithTag(RemoteTags.OPEN_PROJECT_CANCEL).performClick()
+            onNodeWithTag(AppTags.WELCOME_OPEN).performClick()
+            awaitTag(RemoteTags.OPEN_PROJECT)
             awaitCondition { shownDirectoryInProjectPicker() == project.path }
-            awaitTag(ItemTags.pickerDirectory(pathInProject("src").toString())).assertIsDisplayed()
+            awaitTag(RemoteTags.pickerDirectory(pathInProject("src").toString())).assertIsDisplayed()
         }
 
     @Test
@@ -83,10 +84,10 @@ class OpenProjectDialogE2eTest {
             showDirectoryInProjectPicker(project.path)
             val src = pathInProject("src").toString()
             // A real double click (two clicks in a row): the second one enters the directory.
-            onNodeWithTag(ItemTags.pickerDirectory(src)).performDoubleClick()
+            onNodeWithTag(RemoteTags.pickerDirectory(src)).performDoubleClick()
             awaitCondition { shownDirectoryInProjectPicker() == src }
-            awaitTag(ItemTags.pickerDirectory(pathInProject("src/main").toString())).assertIsDisplayed()
-            awaitTag(ItemTags.pickerDirectory(pathInProject("src/test").toString())).assertIsDisplayed()
+            awaitTag(RemoteTags.pickerDirectory(pathInProject("src/main").toString())).assertIsDisplayed()
+            awaitTag(RemoteTags.pickerDirectory(pathInProject("src/test").toString())).assertIsDisplayed()
         }
 
     @Test
@@ -95,9 +96,9 @@ class OpenProjectDialogE2eTest {
             launchApp()
             openProjectPickerFromWelcome()
             showDirectoryInProjectPicker(pathInProject("src").toString())
-            onNodeWithTag(Tags.OPEN_PROJECT_UP).performClick()
+            onNodeWithTag(RemoteTags.OPEN_PROJECT_UP).performClick()
             awaitCondition { shownDirectoryInProjectPicker() == project.path }
-            awaitTag(ItemTags.pickerDirectory(pathInProject("src").toString())).assertIsDisplayed()
+            awaitTag(RemoteTags.pickerDirectory(pathInProject("src").toString())).assertIsDisplayed()
         }
 
     @Test
@@ -107,11 +108,11 @@ class OpenProjectDialogE2eTest {
             openProjectPickerFromWelcome()
             showDirectoryInProjectPicker(project.path)
             // A real click focuses the row: the keys are then for the list, not for the path field.
-            onNodeWithTag(ItemTags.pickerDirectory(pathInProject("docs").toString())).performMouseInput { click() }
+            onNodeWithTag(RemoteTags.pickerDirectory(pathInProject("docs").toString())).performMouseInput { click() }
             // Down selects the next one (src), which Enter opens as the project.
-            onNodeWithTag(Tags.OPEN_PROJECT).performKeyInput { pressKey(Key.DirectionDown) }
-            onNodeWithTag(Tags.OPEN_PROJECT).performKeyInput { pressKey(Key.Enter) }
-            awaitTag(Tags.PROJECT)
+            onNodeWithTag(RemoteTags.OPEN_PROJECT).performKeyInput { pressKey(Key.DirectionDown) }
+            onNodeWithTag(RemoteTags.OPEN_PROJECT).performKeyInput { pressKey(Key.Enter) }
+            awaitTag(AppTags.PROJECT)
             assertEquals("src", app.state.title)
         }
 
@@ -123,16 +124,16 @@ class OpenProjectDialogE2eTest {
             navigateToInProjectPicker("/no/such/project/directory")
             awaitCondition {
                 runCatching {
-                    onNodeWithTag(Tags.OPEN_PROJECT_ERROR)
+                    onNodeWithTag(RemoteTags.OPEN_PROJECT_ERROR)
                         .assertTextEquals("Directory not found: /no/such/project/directory")
                 }.isSuccess
             }
             assertIs<Screen.Welcome>(app.state.screen)
             // The failed navigation does not block the next one.
             showDirectoryInProjectPicker(project.path)
-            awaitTag(ItemTags.pickerDirectory(pathInProject("src").toString())).assertIsDisplayed()
-            onNodeWithTag(Tags.OPEN_PROJECT_OPEN).performClick()
-            awaitTag(Tags.PROJECT)
+            awaitTag(RemoteTags.pickerDirectory(pathInProject("src").toString())).assertIsDisplayed()
+            onNodeWithTag(RemoteTags.OPEN_PROJECT_OPEN).performClick()
+            awaitTag(AppTags.PROJECT)
         }
 
     @Test
@@ -141,7 +142,7 @@ class OpenProjectDialogE2eTest {
             launchApp()
             openProjectPickerFromWelcome()
             showDirectoryInProjectPicker(empty.path)
-            awaitTag(Tags.OPEN_PROJECT_EMPTY).assertIsDisplayed()
+            awaitTag(RemoteTags.OPEN_PROJECT_EMPTY).assertIsDisplayed()
         }
 
     @Test
@@ -149,24 +150,24 @@ class OpenProjectDialogE2eTest {
         runComposeUiTest {
             launchApp()
             openProjectPickerFromWelcome()
-            onNodeWithTag(Tags.OPEN_PROJECT_PATH).performKeyInput { pressKey(Key.Escape) }
-            awaitNoTag(Tags.OPEN_PROJECT)
+            onNodeWithTag(RemoteTags.OPEN_PROJECT_PATH).performKeyInput { pressKey(Key.Escape) }
+            awaitNoTag(RemoteTags.OPEN_PROJECT)
         }
 
     @Test
     fun `Open Project in the project menu switches to the directory chosen`() =
         runComposeUiTest {
             val app = launchWithProject(project)
-            onNodeWithTag(Tags.PROJECT_WIDGET).performClick()
-            awaitTag(Tags.PROJECT_OPEN_OTHER).performClick()
-            awaitTag(Tags.OPEN_PROJECT)
+            onNodeWithTag(AppTags.PROJECT_WIDGET).performClick()
+            awaitTag(AppTags.PROJECT_OPEN_OTHER).performClick()
+            awaitTag(RemoteTags.OPEN_PROJECT)
             showDirectoryInProjectPicker(other.path)
-            awaitTag(ItemTags.pickerDirectory(other.root.resolve("src").toString())).assertIsDisplayed()
-            onNodeWithTag(Tags.OPEN_PROJECT_OPEN).performClick()
+            awaitTag(RemoteTags.pickerDirectory(other.root.resolve("src").toString())).assertIsDisplayed()
+            onNodeWithTag(RemoteTags.OPEN_PROJECT_OPEN).performClick()
             // The first project already shows a project screen with a src row: wait for the switch itself.
             awaitCondition { app.state.title == other.root.fileName.toString() }
-            awaitTag(Tags.PROJECT)
-            awaitTag(Tags.treeRow("src")).assertIsDisplayed()
+            awaitTag(AppTags.PROJECT)
+            awaitTag(TreeTags.treeRow("src")).assertIsDisplayed()
         }
 
     @Test
@@ -174,13 +175,13 @@ class OpenProjectDialogE2eTest {
         runComposeUiTest {
             val app = launchApp()
             openProjectPickerFromWelcome()
-            awaitTag(Tags.OPEN_PROJECT_COUNT)
-            onNodeWithTag(Tags.OPEN_PROJECT_PATH).performTextReplacement(project.path)
-            onNodeWithTag(Tags.OPEN_PROJECT_OPEN).assertIsNotEnabled()
-            awaitTag(ItemTags.pickerDirectory(pathInProject("src").toString())).assertIsDisplayed()
-            awaitCondition { runCatching { onNodeWithTag(Tags.OPEN_PROJECT_OPEN).assertIsEnabled() }.isSuccess }
-            onNodeWithTag(Tags.OPEN_PROJECT_OPEN).performClick()
-            awaitTag(Tags.PROJECT)
+            awaitTag(RemoteTags.OPEN_PROJECT_COUNT)
+            onNodeWithTag(RemoteTags.OPEN_PROJECT_PATH).performTextReplacement(project.path)
+            onNodeWithTag(RemoteTags.OPEN_PROJECT_OPEN).assertIsNotEnabled()
+            awaitTag(RemoteTags.pickerDirectory(pathInProject("src").toString())).assertIsDisplayed()
+            awaitCondition { runCatching { onNodeWithTag(RemoteTags.OPEN_PROJECT_OPEN).assertIsEnabled() }.isSuccess }
+            onNodeWithTag(RemoteTags.OPEN_PROJECT_OPEN).performClick()
+            awaitTag(AppTags.PROJECT)
             assertEquals(project.root.fileName.toString(), app.state.title)
         }
 
@@ -191,7 +192,7 @@ class OpenProjectDialogE2eTest {
             awaitCondition { app.state.serverHome != null }
             openProjectPickerFromWelcome()
             showDirectoryInProjectPicker(project.path)
-            onNodeWithTag(Tags.OPEN_PROJECT_HOME).performClick()
+            onNodeWithTag(RemoteTags.OPEN_PROJECT_HOME).performClick()
             awaitCondition { shownDirectoryInProjectPicker() == app.state.serverHome }
         }
 
@@ -200,10 +201,10 @@ class OpenProjectDialogE2eTest {
         runComposeUiTest {
             launchApp()
             openProjectPickerFromWelcome()
-            awaitTag(Tags.OPEN_PROJECT_COUNT)
-            onNodeWithTag(Tags.OPEN_PROJECT_PATH).performTextReplacement("src")
-            awaitNoTag(Tags.OPEN_PROJECT_CHECKING)
-            onNodeWithTag(Tags.OPEN_PROJECT_OPEN).assertIsNotEnabled()
-            onNodeWithTag(Tags.OPEN_PROJECT_ERROR).assertDoesNotExist()
+            awaitTag(RemoteTags.OPEN_PROJECT_COUNT)
+            onNodeWithTag(RemoteTags.OPEN_PROJECT_PATH).performTextReplacement("src")
+            awaitNoTag(RemoteTags.OPEN_PROJECT_CHECKING)
+            onNodeWithTag(RemoteTags.OPEN_PROJECT_OPEN).assertIsNotEnabled()
+            onNodeWithTag(RemoteTags.OPEN_PROJECT_ERROR).assertDoesNotExist()
         }
 }

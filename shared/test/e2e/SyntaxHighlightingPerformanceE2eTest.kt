@@ -14,8 +14,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.example.kotlineditor.state.EditorTab
 import org.example.kotlineditor.syntax.treesitter.GrammarSpec
+import org.example.kotlineditor.ui.EditorTags
 import org.example.kotlineditor.ui.IdeColors
-import org.example.kotlineditor.ui.Tags
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -58,7 +58,7 @@ class SyntaxHighlightingPerformanceE2eTest {
             awaitColor(1, "length", IdeColors.Property)
         }
         val tab = app.project.editor.activeTab!!
-        onNodeWithTag(Tags.EDITOR).performClick()
+        onNodeWithTag(EditorTags.EDITOR).performClick()
         return tab
     }
 
@@ -160,12 +160,12 @@ class SyntaxHighlightingPerformanceE2eTest {
                 budgetMillis = 2_000,
                 budgetMegabytes = 60,
             ) {
-                onNodeWithTag(Tags.tab("src/Big.kt")).performClick()
+                onNodeWithTag(EditorTags.tab("src/Big.kt")).performClick()
                 renderFrame()
                 assertEquals(IdeColors.Property, colorOf(1, "length"), "the last colors stay while it is parsed")
                 awaitCondition { syntax.isParsed }
             }
-            onNodeWithTag(Tags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performClick()
             pressInEditor(Key.MoveHome, ctrl = true)
             measure("type a line at the start once parsed again", budgetMillis = 1_500, budgetMegabytes = 100) {
                 typeInEditor("val a = b.size\n")

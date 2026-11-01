@@ -5,7 +5,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.model.LanguageServerState
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.LanguageServerTags
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -37,7 +37,7 @@ class LanguageServerChaosE2eTest {
             assertEquals(1, app.languageServers.size)
             assertEquals(1, after.users)
             assertContains(servers.saved(), "php=fake")
-            awaitNoTag(Tags.LSP_CHOICE)
+            awaitNoTag(LanguageServerTags.LSP_CHOICE)
         }
 
     @Test
@@ -54,7 +54,7 @@ class LanguageServerChaosE2eTest {
             awaitReconnected()
             val after = awaitServer(app) { it.isRunning() && it.generation > before.generation }
             assertEquals(1, after.recentCrashes)
-            awaitCondition { textOf(Tags.statusLanguageServer(after.id)).matches(Regex("PHP · \\d+ MB")) }
+            awaitCondition { textOf(LanguageServerTags.statusLanguageServer(after.id)).matches(Regex("PHP · \\d+ MB")) }
         }
 
     @Test
@@ -63,9 +63,9 @@ class LanguageServerChaosE2eTest {
             val app = launchWithProject(project, chaos = true, languageServers = servers.settings)
             openFromTree("src/index.php")
             val first = awaitServer(app) { it.state == LanguageServerState.Running }
-            awaitTag(Tags.statusLanguageServer(first.id)).performClick()
+            awaitTag(LanguageServerTags.statusLanguageServer(first.id)).performClick()
             app.network.dropFromServer = true
-            onNodeWithTag(Tags.languageServerRestart(first.id)).performClick()
+            onNodeWithTag(LanguageServerTags.languageServerRestart(first.id)).performClick()
             // The server restarted it, but the answer was lost: the client sends the same request again.
             awaitCondition(SERVER_START_MS) { !isAlive(first.pid!!) }
             app.network.cutAll()
@@ -85,10 +85,10 @@ class LanguageServerChaosE2eTest {
             openFromTree("src/index.php")
             val first = awaitServer(app) { it.state == LanguageServerState.Running }
             app.network.latencyMs = 300
-            awaitTag(Tags.statusLanguageServer(first.id)).performClick()
-            awaitTag(Tags.languageServerStop(first.id)).performClick()
+            awaitTag(LanguageServerTags.statusLanguageServer(first.id)).performClick()
+            awaitTag(LanguageServerTags.languageServerStop(first.id)).performClick()
             awaitServer(app) { it.state == LanguageServerState.Stopped }
-            awaitTag(Tags.languageServerStart(first.id)).performClick()
+            awaitTag(LanguageServerTags.languageServerStart(first.id)).performClick()
             val restarted = awaitServer(app) { it.isRunning() && it.generation > first.generation }
             Thread.sleep(2_000)
             waitForIdle()

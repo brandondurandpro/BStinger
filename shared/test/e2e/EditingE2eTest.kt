@@ -19,8 +19,9 @@ import org.example.kotlineditor.state.Document
 import org.example.kotlineditor.state.TextPos
 import org.example.kotlineditor.state.delete
 import org.example.kotlineditor.state.selectedText
-import org.example.kotlineditor.ui.ItemTags
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.AppTags
+import org.example.kotlineditor.ui.EditorTags
+import org.example.kotlineditor.ui.TreeTags
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -39,7 +40,7 @@ class EditingE2eTest {
     private fun E2eApp.document(): Document = project.editor.activeTab!!.document!!
 
     private fun ComposeUiTest.keys(block: androidx.compose.ui.test.KeyInjectionScope.() -> Unit) {
-        onNodeWithTag(Tags.EDITOR).performKeyInput(block)
+        onNodeWithTag(EditorTags.EDITOR).performKeyInput(block)
         waitForIdle()
     }
 
@@ -56,13 +57,13 @@ class EditingE2eTest {
         runComposeUiTest {
             val app = launchWithProject(project)
             openFromTree("README.md")
-            onNodeWithTag(Tags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performClick()
             keys { withKeyDown(Key.CtrlLeft) { pressKey(Key.MoveHome) } }
             type("hello ")
             assertEquals("hello # Demo", app.document().lines[0])
-            awaitTag(Tags.tabModified("README.md"))
-            onNodeWithTag(Tags.line(0)).assertTextContains("hello # Demo", substring = true)
-            onNodeWithTag(Tags.STATUS_CARET).assertTextContains("1:7", substring = true)
+            awaitTag(EditorTags.tabModified("README.md"))
+            onNodeWithTag(EditorTags.line(0)).assertTextContains("hello # Demo", substring = true)
+            onNodeWithTag(AppTags.STATUS_CARET).assertTextContains("1:7", substring = true)
         }
 
     @Test
@@ -70,7 +71,7 @@ class EditingE2eTest {
         runComposeUiTest {
             val app = launchWithProject(project)
             openFromTree("docs/guide.md")
-            onNodeWithTag(Tags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performClick()
             keys {
                 withKeyDown(Key.CtrlLeft) { pressKey(Key.MoveEnd) }
                 pressKey(Key.Enter)
@@ -79,7 +80,7 @@ class EditingE2eTest {
             keys { withKeyDown(Key.CtrlLeft) { pressKey(Key.S) } }
             awaitCondition { project.read("docs/guide.md").contains("saved") }
             assertEquals(textOf("Guide", "Hello from the guide", "", "saved"), project.read("docs/guide.md"))
-            awaitNoTag(Tags.tabModified("docs/guide.md"))
+            awaitNoTag(EditorTags.tabModified("docs/guide.md"))
             assertFalse(app.document().isModified)
         }
 
@@ -88,7 +89,7 @@ class EditingE2eTest {
         runComposeUiTest {
             val app = launchWithProject(project)
             openFromTree("README.md")
-            onNodeWithTag(Tags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performClick()
             keys { withKeyDown(Key.CtrlLeft) { pressKey(Key.MoveHome) } }
             type("abc")
             assertEquals("abc# Demo", app.document().lines[0])
@@ -105,7 +106,7 @@ class EditingE2eTest {
             openFromTree("src/main/kotlin/App.kt")
             val doc = app.document()
             // Line 6 is "fun main() {": put the caret at its end.
-            onNodeWithTag(Tags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performClick()
             runOnUiThread { doc.moveTo(TextPos(6, doc.lines[6].length)) }
             keys { pressKey(Key.Enter) }
             assertEquals("    ", doc.lines[7])
@@ -121,7 +122,7 @@ class EditingE2eTest {
             val app = launchWithProject(project)
             openFromTree("src/main/kotlin/util/Strings.kt")
             val doc = app.document()
-            onNodeWithTag(Tags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performClick()
             runOnUiThread { doc.moveTo(TextPos(2, 0)) }
             keys { withKeyDown(Key.CtrlLeft) { pressKey(Key.D) } }
             assertEquals(doc.lines[2], doc.lines[3])
@@ -142,13 +143,13 @@ class EditingE2eTest {
             val app = launchWithProject(project)
             openFromTree("README.md")
             val doc = app.document()
-            onNodeWithTag(Tags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performClick()
             keys {
                 withKeyDown(Key.CtrlLeft) { pressKey(Key.MoveHome) }
                 withKeyDown(Key.ShiftLeft) { repeat(6) { pressKey(Key.DirectionRight) } }
             }
             assertEquals("# Demo", doc.selectedText())
-            onNodeWithTag(Tags.STATUS_CARET).assertTextContains("(6 chars)", substring = true)
+            onNodeWithTag(AppTags.STATUS_CARET).assertTextContains("(6 chars)", substring = true)
             keys {
                 withKeyDown(Key.CtrlLeft) { pressKey(Key.C) }
                 withKeyDown(Key.CtrlLeft) { pressKey(Key.MoveEnd) }
@@ -163,7 +164,7 @@ class EditingE2eTest {
             val app = launchWithProject(project)
             openFromTree("docs/guide.md")
             val doc = app.document()
-            val line = onNodeWithTag(Tags.line(1))
+            val line = onNodeWithTag(EditorTags.line(1))
             // Past the end of the text, left of the scrollbar (which must not move the caret).
             line.performMouseInput { click(Offset(width * 0.7f, centerY)) }
             waitForIdle()
@@ -180,12 +181,12 @@ class EditingE2eTest {
             project.file("Long.kt", (1..3000).joinToString("\n") { "val v$it = $it" })
             val app = launchWithProject(project)
             openFromTree("Long.kt")
-            onNodeWithTag(Tags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performClick()
             keys { withKeyDown(Key.CtrlLeft) { pressKey(Key.MoveEnd) } }
-            awaitTag(Tags.line(2999))
+            awaitTag(EditorTags.line(2999))
             type("x")
             assertEquals("val v3000 = 3000x", app.document().lines[2999])
-            onNodeWithTag(Tags.line(2999)).assertTextContains("3000x", substring = true)
+            onNodeWithTag(EditorTags.line(2999)).assertTextContains("3000x", substring = true)
         }
 
     @Test
@@ -194,7 +195,7 @@ class EditingE2eTest {
             val app = launchWithProject(project)
             openFromTree("docs/guide.md")
             val doc = app.document()
-            onNodeWithTag(Tags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performClick()
             runOnUiThread { doc.moveTo(TextPos(0, 0)) }
             keys { withKeyDown(Key.AltLeft) { withKeyDown(Key.ShiftLeft) { pressKey(Key.DirectionDown) } } }
             assertEquals(listOf("Hello from the guide", "Guide"), doc.lines.take(2))
@@ -208,7 +209,7 @@ class EditingE2eTest {
             val app = launchWithProject(project)
             openFromTree("docs/guide.md")
             val doc = app.document()
-            onNodeWithTag(Tags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performClick()
             runOnUiThread { doc.moveTo(TextPos(1, 7)) }
             keys { withKeyDown(Key.CtrlLeft) { pressKey(Key.W) } }
             assertEquals("from", doc.selectedText())
@@ -236,14 +237,14 @@ class EditingE2eTest {
             )
             val app = launchWithProject(project)
             openFromTree("Shapes.kt")
-            onNodeWithTag(Tags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performClick()
             keys { withKeyDown(Key.CtrlLeft) { pressKey(Key.F12) } }
-            awaitTag(ItemTags.structureItem("Circle", 2))
-            awaitTag(ItemTags.structureItem("area", 3))
-            awaitTag(Tags.STRUCTURE_INPUT).performTextInput("perim")
-            awaitNoTag(ItemTags.structureItem("Circle", 2))
-            onNodeWithTag(Tags.STRUCTURE_INPUT).performKeyInput { pressKey(Key.Enter) }
-            awaitNoTag(Tags.STRUCTURE)
+            awaitTag(TreeTags.structureItem("Circle", 2))
+            awaitTag(TreeTags.structureItem("area", 3))
+            awaitTag(TreeTags.STRUCTURE_INPUT).performTextInput("perim")
+            awaitNoTag(TreeTags.structureItem("Circle", 2))
+            onNodeWithTag(TreeTags.STRUCTURE_INPUT).performKeyInput { pressKey(Key.Enter) }
+            awaitNoTag(TreeTags.STRUCTURE)
             assertEquals(TextPos(6, 4), app.document().caret)
         }
 
@@ -253,8 +254,8 @@ class EditingE2eTest {
             project.file("Long.kt", (1..2000).joinToString("\n") { "val v$it = $it" })
             val app = launchWithProject(project)
             openFromTree("Long.kt")
-            awaitTag(Tags.line(0))
-            onNodeWithTag(Tags.EDITOR).performMouseInput {
+            awaitTag(EditorTags.line(0))
+            onNodeWithTag(EditorTags.EDITOR).performMouseInput {
                 moveTo(center)
                 scroll(20f)
             }
@@ -263,8 +264,8 @@ class EditingE2eTest {
             awaitCondition { scroll.firstRow > 0 }
             mainClock.advanceTimeBy(WHEEL_ANIMATION_MILLIS)
             waitForIdle()
-            awaitTag(Tags.line(scroll.firstRow))
-            awaitNoTag(Tags.line(0))
+            awaitTag(EditorTags.line(scroll.firstRow))
+            awaitNoTag(EditorTags.line(0))
         }
 
     @Test
@@ -275,9 +276,9 @@ class EditingE2eTest {
             openFromTree("Long.kt")
             val tab = app.project.editor.activeTab!!
             val doc = app.document()
-            onNodeWithTag(Tags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performClick()
             val caret = doc.caret
-            onNodeWithTag(Tags.EDITOR_VERTICAL_SCROLLBAR).performMouseInput {
+            onNodeWithTag(EditorTags.EDITOR_VERTICAL_SCROLLBAR).performMouseInput {
                 moveTo(Offset(centerX, 4f))
                 press()
                 moveTo(Offset(centerX, height * 0.3f))

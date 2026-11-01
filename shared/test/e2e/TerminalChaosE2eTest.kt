@@ -12,7 +12,8 @@ import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.model.text
 import org.example.kotlineditor.state.delete
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.AppTags
+import org.example.kotlineditor.ui.TerminalTags
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -39,15 +40,15 @@ class TerminalChaosE2eTest {
         screenLines(app).count { line -> "echo" !in line && line.endsWith(text) }
 
     private fun ComposeUiTest.openTerminal(app: E2eApp) {
-        onNodeWithTag(Tags.TOOL_TERMINAL).performClick()
-        awaitTag(Tags.TERMINAL_INPUT)
+        onNodeWithTag(AppTags.TOOL_TERMINAL).performClick()
+        awaitTag(TerminalTags.TERMINAL_INPUT)
         awaitCondition { screenLines(app).any { it.isNotBlank() } }
     }
 
     private fun ComposeUiTest.runCommand(command: String) {
-        onNodeWithTag(Tags.TERMINAL_INPUT).performClick()
-        onNodeWithTag(Tags.TERMINAL_INPUT).performTextInput(command)
-        onNodeWithTag(Tags.TERMINAL_INPUT).performKeyInput { pressKey(Key.Enter) }
+        onNodeWithTag(TerminalTags.TERMINAL_INPUT).performClick()
+        onNodeWithTag(TerminalTags.TERMINAL_INPUT).performTextInput(command)
+        onNodeWithTag(TerminalTags.TERMINAL_INPUT).performKeyInput { pressKey(Key.Enter) }
     }
 
     @Test
@@ -86,10 +87,10 @@ class TerminalChaosE2eTest {
             app.process.restart()
             awaitReconnected()
             // The old screen must not pretend the shell still runs: typing there would go nowhere.
-            awaitTag(Tags.TERMINAL_LOST).assertIsDisplayed()
-            onNodeWithTag(Tags.TERMINAL_NEW).performClick()
+            awaitTag(TerminalTags.TERMINAL_LOST).assertIsDisplayed()
+            onNodeWithTag(TerminalTags.TERMINAL_NEW).performClick()
             awaitCondition { app.project.terminal.tabs.size == 2 && screenLines(app).any { it.isNotBlank() } }
-            awaitNoTag(Tags.TERMINAL_LOST)
+            awaitNoTag(TerminalTags.TERMINAL_LOST)
             runCommand("echo new-shell")
             awaitCondition { printedLines(app, "new-shell") > 0 }
         }

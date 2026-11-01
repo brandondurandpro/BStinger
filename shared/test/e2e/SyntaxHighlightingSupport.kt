@@ -10,8 +10,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.withKeyDown
+import org.example.kotlineditor.ui.EditorTags
 import org.example.kotlineditor.ui.IdeColors
-import org.example.kotlineditor.ui.Tags
 
 /**
  * The color [word] is drawn with on line [line] (the first occurrence), read from the line's semantics, which carry
@@ -19,7 +19,11 @@ import org.example.kotlineditor.ui.Tags
  */
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.colorOf(line: Int, word: String): Color? {
-    val node = onAllNodes(hasTestTag(Tags.lineText(line)), useUnmergedTree = true).fetchSemanticsNodes().firstOrNull()
+    val node =
+        onAllNodes(
+            hasTestTag(EditorTags.lineText(line)),
+            useUnmergedTree = true,
+        ).fetchSemanticsNodes().firstOrNull()
     val text =
         node
             ?.config
@@ -50,7 +54,7 @@ fun ComposeUiTest.awaitColor(line: Int, word: String, color: Color, timeout: Lon
  */
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.typeInEditor(text: String) {
-    onNodeWithTag(Tags.EDITOR).performKeyInput {
+    onNodeWithTag(EditorTags.EDITOR).performKeyInput {
         for (c in text) {
             val (key, shifted) = keyOf(c)
             if (shifted) withKeyDown(Key.ShiftLeft) { pressKey(key) } else pressKey(key)
@@ -62,7 +66,7 @@ fun ComposeUiTest.typeInEditor(text: String) {
 /** Presses [key] in the editor, with Ctrl when [ctrl]. */
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.pressInEditor(key: Key, ctrl: Boolean = false, times: Int = 1) {
-    onNodeWithTag(Tags.EDITOR).performKeyInput {
+    onNodeWithTag(EditorTags.EDITOR).performKeyInput {
         repeat(times) { if (ctrl) withKeyDown(Key.CtrlLeft) { pressKey(key) } else pressKey(key) }
     }
     waitForIdle()

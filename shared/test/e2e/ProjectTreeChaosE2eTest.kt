@@ -9,7 +9,9 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.state.delete
 import org.example.kotlineditor.state.relativePath
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.AppTags
+import org.example.kotlineditor.ui.EditorTags
+import org.example.kotlineditor.ui.TreeTags
 import kotlin.io.path.deleteExisting
 import kotlin.io.path.exists
 import kotlin.test.AfterTest
@@ -34,11 +36,11 @@ class ProjectTreeChaosE2eTest {
             val tree = app.project.tree
             app.network.goDown()
             awaitReconnecting()
-            onNodeWithTag(Tags.treeChevron("src")).performClick()
+            onNodeWithTag(TreeTags.treeChevron("src")).performClick()
             awaitCondition { tree.rows.any { tree.relativePath(it.entry) == "src" && it.loading } }
             app.network.comeBack()
-            awaitTag(Tags.treeRow("src/main"))
-            awaitTag(Tags.treeRow("src/test"))
+            awaitTag(TreeTags.treeRow("src/main"))
+            awaitTag(TreeTags.treeRow("src/test"))
             awaitCondition { tree.rows.none { it.loading } }
         }
 
@@ -46,22 +48,22 @@ class ProjectTreeChaosE2eTest {
     fun `a file whose creation answer is lost is created once, without an error`() =
         runComposeUiTest {
             val app = launchWithProject(project, chaos = true)
-            rightClickOn(Tags.treeRow("docs"))
-            awaitTag(Tags.MENU_NEW_FILE).performClick()
-            awaitTag(Tags.FILE_DIALOG_INPUT).performTextInput("notes.md")
+            rightClickOn(TreeTags.treeRow("docs"))
+            awaitTag(TreeTags.MENU_NEW_FILE).performClick()
+            awaitTag(AppTags.FILE_DIALOG_INPUT).performTextInput("notes.md")
             // The request reaches the server, then the connection breaks before its answer arrives: the client sends
             // it again on a new connection.
             app.network.dropFromServer = true
-            onNodeWithTag(Tags.FILE_DIALOG_OK).performClick()
+            onNodeWithTag(AppTags.FILE_DIALOG_OK).performClick()
             awaitCondition { project.root.resolve("docs/notes.md").exists() }
             app.network.cutAll()
             app.network.dropFromServer = false
             // A second execution would fail with "already exists": the server answers the retry from its cache.
-            awaitNoTag(Tags.FILE_DIALOG)
-            assertTrue(onAllNodesWithTag(Tags.FILE_DIALOG_ERROR).fetchSemanticsNodes().isEmpty())
-            awaitTag(Tags.tab("docs/notes.md"))
-            awaitTag(Tags.treeRow("docs/notes.md"))
-            assertEquals(1, onAllNodesWithTag(Tags.treeRow("docs/notes.md")).fetchSemanticsNodes().size)
+            awaitNoTag(AppTags.FILE_DIALOG)
+            assertTrue(onAllNodesWithTag(AppTags.FILE_DIALOG_ERROR).fetchSemanticsNodes().isEmpty())
+            awaitTag(EditorTags.tab("docs/notes.md"))
+            awaitTag(TreeTags.treeRow("docs/notes.md"))
+            assertEquals(1, onAllNodesWithTag(TreeTags.treeRow("docs/notes.md")).fetchSemanticsNodes().size)
         }
 
     @Test
@@ -70,7 +72,7 @@ class ProjectTreeChaosE2eTest {
             launchWithProject(project, chaos = true)
             // The tree still shows the file: it was listed before another program deleted it.
             project.root.resolve("README.md").deleteExisting()
-            onNodeWithTag(Tags.treeRow("README.md")).performDoubleClick()
-            awaitTag(Tags.EDITOR_MESSAGE).assertTextContains("Cannot read", substring = true)
+            onNodeWithTag(TreeTags.treeRow("README.md")).performDoubleClick()
+            awaitTag(EditorTags.EDITOR_MESSAGE).assertTextContains("Cannot read", substring = true)
         }
 }

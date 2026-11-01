@@ -57,16 +57,16 @@ private class NetworkCapture(val records: List<NetworkRecord>, val totals: Netwo
 internal fun NetworkPanel(project: ProjectState, drag: ToolWindowDrag, modifier: Modifier = Modifier) {
     val view = project.network
     val inspector = view.inspector
-    Column(modifier.fillMaxSize().background(IdeColors.Editor).testTag(Tags.NETWORK)) {
+    Column(modifier.fillMaxSize().background(IdeColors.Editor).testTag(AppTags.NETWORK)) {
         ToolWindowHeader("Network", ToolWindow.Network, project, drag) {
             if (inspector != null) CaptureActions(view)
             IconButton(
                 { project.toolWindows.setVisible(ToolWindow.Network, false) },
-                Modifier.testTag(Tags.NETWORK_HIDE),
+                Modifier.testTag(AppTags.NETWORK_HIDE),
             ) { CloseIcon() }
         }
         if (inspector == null) {
-            Box(Modifier.fillMaxSize().padding(12.dp).testTag(Tags.NETWORK_UNAVAILABLE)) {
+            Box(Modifier.fillMaxSize().padding(12.dp).testTag(AppTags.NETWORK_UNAVAILABLE)) {
                 Label("No server connection to inspect", color = IdeColors.TextSecondary, fontSize = 12.sp)
             }
         } else {
@@ -86,13 +86,13 @@ internal fun NetworkPanel(project: ProjectState, drag: ToolWindowDrag, modifier:
 
 @Composable
 private fun CaptureActions(view: NetworkView) {
-    IconButton({ view.paused = !view.paused }, Modifier.testTag(Tags.NETWORK_RECORD)) {
+    IconButton({ view.paused = !view.paused }, Modifier.testTag(AppTags.NETWORK_RECORD)) {
         Label("●", color = if (view.paused) IdeColors.TextSecondary else IdeColors.Error)
     }
-    IconButton({ view.hidePings = !view.hidePings }, Modifier.testTag(Tags.NETWORK_PINGS)) {
+    IconButton({ view.hidePings = !view.hidePings }, Modifier.testTag(AppTags.NETWORK_PINGS)) {
         Label("♡", color = if (view.hidePings) IdeColors.TextSecondary else IdeColors.Text)
     }
-    IconButton(view::clear, Modifier.testTag(Tags.NETWORK_CLEAR)) {
+    IconButton(view::clear, Modifier.testTag(AppTags.NETWORK_CLEAR)) {
         Label("⊘", color = IdeColors.TextSecondary)
     }
 }
@@ -122,14 +122,14 @@ private fun Toolbar(view: NetworkView, totals: NetworkTotals) {
         IdeTextField(
             view.filter,
             { view.filter = it },
-            Modifier.width(220.dp).testTag(Tags.NETWORK_FILTER),
+            Modifier.width(220.dp).testTag(AppTags.NETWORK_FILTER),
             placeholder = "Filter (method, kind)",
         )
         Label(
             "${totals.frames} frames · ↑ ${formatBytes(totals.sentBytes)} (wire ${formatBytes(totals.sentWireBytes)})" +
                 " · ↓ ${formatBytes(totals.receivedBytes)} (wire ${formatBytes(totals.receivedWireBytes)})" +
                 if (view.paused) " · paused" else "",
-            Modifier.padding(start = 12.dp).testTag(Tags.NETWORK_TOTALS),
+            Modifier.padding(start = 12.dp).testTag(AppTags.NETWORK_TOTALS),
             color = IdeColors.TextSecondary,
             fontSize = 12.sp,
         )
@@ -145,7 +145,7 @@ private fun FrameList(view: NetworkView, records: List<NetworkRecord>, modifier:
             background = IdeColors.Panel,
         )
         if (records.isEmpty()) {
-            Box(Modifier.fillMaxSize().padding(12.dp).testTag(Tags.NETWORK_EMPTY)) {
+            Box(Modifier.fillMaxSize().padding(12.dp).testTag(AppTags.NETWORK_EMPTY)) {
                 Label(
                     if (view.paused) "Recording paused" else "Waiting for frames…",
                     color = IdeColors.TextSecondary,
@@ -162,7 +162,7 @@ private fun FrameList(view: NetworkView, records: List<NetworkRecord>, modifier:
                         modifier =
                         Modifier
                             .clickable { view.selected = record }
-                            .testTag(ItemTags.networkRecord(record.seq)),
+                            .testTag(AppTags.networkRecord(record.seq)),
                     )
                 }
             }
@@ -218,7 +218,7 @@ private fun FrameDetail(record: NetworkRecord, modifier: Modifier) {
     val message = remember(record) { messageLines(record.body) }
     val hex = remember(record) { hexDump(record.body) }
     val code = LocalCodeStyle.current.copy(fontSize = 12.sp, lineHeight = 16.sp)
-    LazyColumn(modifier.fillMaxHeight().padding(8.dp).testTag(Tags.NETWORK_DETAIL)) {
+    LazyColumn(modifier.fillMaxHeight().padding(8.dp).testTag(AppTags.NETWORK_DETAIL)) {
         item {
             val arrow = if (record.direction == Direction.Sent) "↑ Sent" else "↓ Received"
             Label(

@@ -49,7 +49,7 @@ fun DiffView(
     modifier: Modifier = Modifier,
 ) {
     val style = LocalCodeStyle.current
-    Column(modifier.fillMaxSize().background(IdeColors.Editor).testTag(Tags.DIFF)) {
+    Column(modifier.fillMaxSize().background(IdeColors.Editor).testTag(EditorTags.DIFF)) {
         DiffToolbar(sideBySide, onToggleSideBySide, onOpenFile)
         Box(Modifier.weight(1f).fillMaxWidth()) {
             if (sideBySide) {
@@ -68,7 +68,7 @@ private fun DiffToolbar(sideBySide: Boolean, onToggleSideBySide: () -> Unit, onO
             .fillMaxWidth()
             .height(30.dp)
             .background(IdeColors.Panel)
-            .testTag(Tags.DIFF_TOOLBAR)
+            .testTag(EditorTags.DIFF_TOOLBAR)
             .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -85,7 +85,7 @@ private fun OpenFileButton(onOpenFile: () -> Unit) {
     val shape = RoundedCornerShape(4.dp)
     Row(
         Modifier
-            .testTag(Tags.DIFF_OPEN_FILE)
+            .testTag(EditorTags.DIFF_OPEN_FILE)
             .border(1.dp, IdeColors.InputBorder, shape)
             .clickable(onClick = onOpenFile)
             .pointerHoverIcon(PointerIcon.Hand)
@@ -106,7 +106,7 @@ private fun DiffLayoutToggle(sideBySide: Boolean, onToggle: () -> Unit) {
     val shape = RoundedCornerShape(4.dp)
     Row(
         Modifier
-            .testTag(Tags.DIFF_LAYOUT_TOGGLE)
+            .testTag(EditorTags.DIFF_LAYOUT_TOGGLE)
             .background(background, shape)
             .border(1.dp, border, shape)
             .clickable(onClick = onToggle)
@@ -140,7 +140,7 @@ private fun DiffRow(index: Int, line: DiffLine, style: TextStyle) {
             .fillMaxWidth()
             .height(DIFF_LINE_HEIGHT)
             .background(backgroundOf(line.kind))
-            .testTag(Tags.diffLine(index)),
+            .testTag(EditorTags.diffLine(index)),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         LineNumber(line.oldLine)
@@ -153,7 +153,7 @@ private fun DiffRow(index: Int, line: DiffLine, style: TextStyle) {
         )
         BasicText(
             line.text,
-            Modifier.testTag(Tags.diffLineKind(index, line.kind.name)),
+            Modifier.testTag(EditorTags.diffLineKind(index, line.kind.name)),
             style = style.copy(color = textColorOf(line.kind)),
             softWrap = false,
             maxLines = 1,

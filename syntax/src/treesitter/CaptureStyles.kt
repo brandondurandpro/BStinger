@@ -3,9 +3,10 @@ package org.example.kotlineditor.syntax.treesitter
 import org.example.kotlineditor.syntax.SyntaxColor
 
 /**
- * Colors ([SyntaxColor]) of the captures of highlight queries. Queries name captures from the generic (`keyword`) to the specific
- * (`keyword.control.conditional`), and differ by source (the grammars' own, Helix's): a name takes the style of its
- * longest known prefix. Captures without style (`variable`, `punctuation`, `operator`...) keep the text color.
+ * Colors ([SyntaxColor]) of the captures of highlight queries. Queries name captures from the generic (`keyword`) to
+ * the specific (`keyword.control.conditional`), and differ by source (the grammars' own, Helix's): a name takes the
+ * style of its longest known prefix. Captures without style (`variable`, `punctuation`, `operator`...) keep the text
+ * color.
  */
 internal object CaptureStyles {
     const val NONE = -1

@@ -34,11 +34,11 @@ internal fun GitActionsBar(project: ProjectState) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             BranchMenu(project)
             Spacer(Modifier.weight(1f))
-            IdeButton("Pull", { project.pull() }, Modifier.testTag(Tags.GIT_PULL), enabled = !project.gitBusy)
+            IdeButton("Pull", { project.pull() }, Modifier.testTag(GitTags.GIT_PULL), enabled = !project.gitBusy)
             IdeButton(
                 "Push",
                 { project.push() },
-                Modifier.padding(start = 6.dp).testTag(Tags.GIT_PUSH),
+                Modifier.padding(start = 6.dp).testTag(GitTags.GIT_PUSH),
                 enabled = !project.gitBusy,
             )
         }
@@ -46,13 +46,13 @@ internal fun GitActionsBar(project: ProjectState) {
             IdeTextField(
                 project.commitMessage,
                 { project.commitMessage = it },
-                Modifier.weight(1f).testTag(Tags.GIT_COMMIT_MESSAGE),
+                Modifier.weight(1f).testTag(GitTags.GIT_COMMIT_MESSAGE),
                 placeholder = "Commit message",
             )
             IdeButton(
                 "Commit",
                 { project.commitChanges(project.commitMessage) },
-                Modifier.padding(start = 6.dp).testTag(Tags.GIT_COMMIT),
+                Modifier.padding(start = 6.dp).testTag(GitTags.GIT_COMMIT),
                 primary = true,
                 enabled = !project.gitBusy && project.selectedForCommit.isNotEmpty(),
             )
@@ -60,7 +60,7 @@ internal fun GitActionsBar(project: ProjectState) {
         project.gitMessage?.let { message ->
             Label(
                 message,
-                Modifier.padding(top = 6.dp).testTag(Tags.GIT_MESSAGE),
+                Modifier.padding(top = 6.dp).testTag(GitTags.GIT_MESSAGE),
                 color = if (project.gitMessageIsError) IdeColors.Error else IdeColors.GitAdded,
                 fontSize = 11.sp,
             )
@@ -75,7 +75,7 @@ private fun BranchMenu(project: ProjectState) {
         Row(
             Modifier
                 .clickable(enabled = !project.gitBusy && project.gitBranches.isNotEmpty()) { open = true }
-                .testTag(Tags.GIT_BRANCH_BUTTON)
+                .testTag(GitTags.GIT_BRANCH_BUTTON)
                 .padding(vertical = 4.dp, horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -91,7 +91,7 @@ private fun BranchMenu(project: ProjectState) {
                         open = false
                         project.checkoutBranch(branch)
                     },
-                    modifier = Modifier.testTag(ItemTags.gitBranch(branch)),
+                    modifier = Modifier.testTag(GitTags.gitBranch(branch)),
                 )
             }
         }

@@ -17,8 +17,8 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.state.HISTORY_PAGE
-import org.example.kotlineditor.ui.ItemTags
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.AppTags
+import org.example.kotlineditor.ui.GitTags
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.AfterTest
@@ -41,13 +41,13 @@ class BranchesHistoryE2eTest {
     private fun hashOf(ref: String) = project.git("rev-parse", ref).trim()
 
     private fun ComposeUiTest.openBranches() {
-        onNodeWithTag(Tags.TOOL_BRANCHES).performClick()
-        awaitTag(Tags.BRANCHES_PANEL)
+        onNodeWithTag(AppTags.TOOL_BRANCHES).performClick()
+        awaitTag(GitTags.BRANCHES_PANEL)
     }
 
     private fun ComposeUiTest.awaitTitle(ref: String) =
         awaitCondition {
-            runCatching { onNodeWithTag(Tags.HISTORY_TITLE).assertTextContains("History of $ref") }.isSuccess
+            runCatching { onNodeWithTag(GitTags.HISTORY_TITLE).assertTextContains("History of $ref") }.isSuccess
         }
 
     @Test
@@ -66,25 +66,25 @@ class BranchesHistoryE2eTest {
 
             awaitTitle(default)
             val head = hashOf("HEAD")
-            awaitTag(ItemTags.historyCommit(head))
-            awaitTag(ItemTags.historyCommit(hashOf("HEAD~1")))
-            awaitTag(Tags.HISTORY_END)
-            onNodeWithTag(Tags.HISTORY_END).assertTextContains("2 commits")
+            awaitTag(GitTags.historyCommit(head))
+            awaitTag(GitTags.historyCommit(hashOf("HEAD~1")))
+            awaitTag(GitTags.HISTORY_END)
+            onNodeWithTag(GitTags.HISTORY_END).assertTextContains("2 commits")
             // The newest commit carries its branch and its tag.
-            onNodeWithTag(ItemTags.historyCommit(head)).assertTextContains("v1", substring = true)
+            onNodeWithTag(GitTags.historyCommit(head)).assertTextContains("v1", substring = true)
 
-            onNodeWithTag(ItemTags.historyCommit(head)).performClick()
-            awaitTag(Tags.HISTORY_DETAILS)
-            awaitTag(ItemTags.historyFile("src/Added.kt"))
-            awaitTag(ItemTags.historyFile("README.md"))
+            onNodeWithTag(GitTags.historyCommit(head)).performClick()
+            awaitTag(GitTags.HISTORY_DETAILS)
+            awaitTag(GitTags.historyFile("src/Added.kt"))
+            awaitTag(GitTags.historyFile("README.md"))
             awaitCondition {
-                onAllNodes(hasText("And remove the readme.") and hasAnyAncestor(hasTestTag(Tags.HISTORY_DETAILS)))
+                onAllNodes(hasText("And remove the readme.") and hasAnyAncestor(hasTestTag(GitTags.HISTORY_DETAILS)))
                     .fetchSemanticsNodes()
                     .isNotEmpty()
             }
             // The strip button hides it again.
-            onNodeWithTag(Tags.TOOL_BRANCHES).performClick()
-            awaitNoTag(Tags.BRANCHES_PANEL)
+            onNodeWithTag(AppTags.TOOL_BRANCHES).performClick()
+            awaitNoTag(GitTags.BRANCHES_PANEL)
         }
 
     @Test
@@ -103,24 +103,24 @@ class BranchesHistoryE2eTest {
             val app = launchWithProject(project)
             awaitCondition { app.project.gitBranchInfos.size == 2 }
             openBranches()
-            awaitTag(ItemTags.historyBranch("origin/$default"))
+            awaitTag(GitTags.historyBranch("origin/$default"))
 
-            onNodeWithTag(ItemTags.historyBranch("feature/login")).performClick()
+            onNodeWithTag(GitTags.historyBranch("feature/login")).performClick()
             awaitTitle("feature/login")
-            awaitTag(ItemTags.historyCommit(hashOf("feature/login")))
-            awaitNoTag(ItemTags.historyCommit(hashOf(default)))
+            awaitTag(GitTags.historyCommit(hashOf("feature/login")))
+            awaitNoTag(GitTags.historyCommit(hashOf(default)))
 
             // The remote branch has only the first commit: it was pushed before the others.
-            onNodeWithTag(ItemTags.historyBranch("origin/$default")).performClick()
+            onNodeWithTag(GitTags.historyBranch("origin/$default")).performClick()
             awaitTitle("origin/$default")
-            awaitTag(ItemTags.historyCommit(hashOf("origin/$default")))
-            awaitTag(Tags.HISTORY_END)
-            onNodeWithTag(Tags.HISTORY_END).assertTextContains("1 commit")
+            awaitTag(GitTags.historyCommit(hashOf("origin/$default")))
+            awaitTag(GitTags.HISTORY_END)
+            onNodeWithTag(GitTags.HISTORY_END).assertTextContains("1 commit")
 
-            onNodeWithTag(Tags.HISTORY_BRANCH_SEARCH).performTextInput("login")
-            awaitNoTag(ItemTags.historyBranch(default))
-            awaitNoTag(ItemTags.historyBranch("origin/$default"))
-            awaitTag(ItemTags.historyBranch("feature/login"))
+            onNodeWithTag(GitTags.HISTORY_BRANCH_SEARCH).performTextInput("login")
+            awaitNoTag(GitTags.historyBranch(default))
+            awaitNoTag(GitTags.historyBranch("origin/$default"))
+            awaitTag(GitTags.historyBranch("feature/login"))
         }
 
     @Test
@@ -130,18 +130,18 @@ class BranchesHistoryE2eTest {
             project.git("branch", "feature")
             val app = launchWithProject(project)
             awaitCondition { app.project.gitBranchInfos.any { it.name == "feature" } }
-            onNodeWithTag(Tags.GIT_BRANCH).performClick()
-            awaitTag(Tags.BRANCH_PICKER)
-            onNodeWithTag(ItemTags.branchPin("feature")).performClick()
-            onNodeWithTag(Tags.BRANCH_SEARCH).performClick()
-            onNodeWithTag(Tags.BRANCH_SEARCH).performKeyInput { pressKey(Key.Escape) }
-            awaitTag(ItemTags.pinnedBranch("feature"))
+            onNodeWithTag(GitTags.GIT_BRANCH).performClick()
+            awaitTag(GitTags.BRANCH_PICKER)
+            onNodeWithTag(GitTags.branchPin("feature")).performClick()
+            onNodeWithTag(GitTags.BRANCH_SEARCH).performClick()
+            onNodeWithTag(GitTags.BRANCH_SEARCH).performKeyInput { pressKey(Key.Escape) }
+            awaitTag(GitTags.pinnedBranch("feature"))
 
-            onNodeWithTag(ItemTags.pinnedBranchMenu("feature")).performClick()
-            awaitTag(ItemTags.branchMenuHistory("feature")).performClick()
-            awaitTag(Tags.BRANCHES_PANEL)
+            onNodeWithTag(GitTags.pinnedBranchMenu("feature")).performClick()
+            awaitTag(GitTags.branchMenuHistory("feature")).performClick()
+            awaitTag(GitTags.BRANCHES_PANEL)
             awaitTitle("feature")
-            awaitTag(ItemTags.historyCommit(hashOf("feature")))
+            awaitTag(GitTags.historyCommit(hashOf("feature")))
         }
 
     @Test
@@ -164,8 +164,8 @@ class BranchesHistoryE2eTest {
             }
             awaitCondition { app.project.history.complete }
             list.performScrollToIndex(total)
-            awaitTag(Tags.HISTORY_END)
-            onNodeWithTag(Tags.HISTORY_END).assertTextContains("$total commits")
+            awaitTag(GitTags.HISTORY_END)
+            onNodeWithTag(GitTags.HISTORY_END).assertTextContains("$total commits")
             // Each commit once, newest first, down to the first one.
             val commits = app.project.history.commits
             assertEquals(total, commits.map { it.hash }.distinct().size)
@@ -180,16 +180,16 @@ class BranchesHistoryE2eTest {
             val app = launchWithProject(project)
             awaitCondition { app.project.gitBranchInfos.any { it.name == "doomed" } }
             openBranches()
-            onNodeWithTag(ItemTags.historyBranch("doomed")).performClick()
+            onNodeWithTag(GitTags.historyBranch("doomed")).performClick()
             awaitTitle("doomed")
-            awaitTag(ItemTags.historyCommit(hashOf("doomed")))
+            awaitTag(GitTags.historyCommit(hashOf("doomed")))
 
             project.git("branch", "-D", "doomed")
-            onNodeWithTag(Tags.HISTORY_REFRESH).performClick()
-            awaitTag(Tags.HISTORY_ERROR)
-            awaitNoTag(Tags.HISTORY_LOADING)
+            onNodeWithTag(GitTags.HISTORY_REFRESH).performClick()
+            awaitTag(GitTags.HISTORY_ERROR)
+            awaitNoTag(GitTags.HISTORY_LOADING)
             // The branch left the list, and another one can be shown.
-            awaitNoTag(ItemTags.historyBranch("doomed"))
+            awaitNoTag(GitTags.historyBranch("doomed"))
         }
 
     @Test
@@ -199,7 +199,7 @@ class BranchesHistoryE2eTest {
             awaitCondition { !app.project.isGitRepository }
             openBranches()
             awaitCondition {
-                onAllNodes(hasText("Not a Git repository") and hasAnyAncestor(hasTestTag(Tags.BRANCHES_PANEL)))
+                onAllNodes(hasText("Not a Git repository") and hasAnyAncestor(hasTestTag(GitTags.BRANCHES_PANEL)))
                     .fetchSemanticsNodes()
                     .isNotEmpty()
             }
@@ -209,5 +209,5 @@ class BranchesHistoryE2eTest {
 /** The scrollable commit list of the Branches window. */
 internal fun hasScrollToIndexInHistory() =
     hasScrollToIndexAction() and
-        hasAnyAncestor(hasTestTag(Tags.BRANCHES_PANEL)) and
+        hasAnyAncestor(hasTestTag(GitTags.BRANCHES_PANEL)) and
         hasAnyChild(hasTestTagPrefix("history.commit:"))

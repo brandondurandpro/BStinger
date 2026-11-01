@@ -122,7 +122,7 @@ fun CodeEditor(
     Box(
         modifier
             .background(IdeColors.Editor)
-            .testTag(Tags.EDITOR)
+            .testTag(EditorTags.EDITOR)
             .onSizeChanged(onSize)
             .focusRequester(focusRequester)
             .onFocusChanged { focused = it.isFocused }
@@ -138,7 +138,7 @@ fun CodeEditor(
         Box(
             Modifier
                 .fillMaxSize()
-                .testTag(Tags.EDITOR_TEXT)
+                .testTag(EditorTags.EDITOR_TEXT)
                 .pointerHoverIcon(PointerIcon.Text)
                 .pointerInput(document) {
                     val target =
@@ -322,6 +322,6 @@ private fun scrollToX(horizontal: HorizontalScroll, metrics: EditorMetrics, x: F
 @Composable
 fun EditorMessage(text: String, modifier: Modifier = Modifier) {
     Box(modifier.fillMaxSize().background(IdeColors.Editor), contentAlignment = Alignment.Center) {
-        BasicText(text, Modifier.testTag(Tags.EDITOR_MESSAGE), style = TextStyle(color = IdeColors.TextSecondary))
+        BasicText(text, Modifier.testTag(EditorTags.EDITOR_MESSAGE), style = TextStyle(color = IdeColors.TextSecondary))
     }
 }

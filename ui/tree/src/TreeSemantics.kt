@@ -80,17 +80,17 @@ private fun RowNode(scene: TreeScene, index: Int, row: TreeRow) {
             .offset { IntOffset(0, scene.rowTop(index).roundToInt()) }
             .fillMaxWidth()
             .height(ROW_HEIGHT)
-            .testTag(Tags.treeRow(relativePath)),
+            .testTag(TreeTags.treeRow(relativePath)),
     ) {
         if (row.entry.isDirectory) {
             Box(
                 Modifier
                     .offset { IntOffset(g.chevronLeft(row.depth).roundToInt(), 0) }
                     .size(TREE_CHEVRON_SIZE, ROW_HEIGHT)
-                    .testTag(Tags.treeChevron(relativePath)),
+                    .testTag(TreeTags.treeChevron(relativePath)),
             )
         }
-        val statusTag = status?.let { Modifier.testTag(Tags.treeGitStatus(relativePath, it.name)) } ?: Modifier
+        val statusTag = status?.let { Modifier.testTag(TreeTags.treeGitStatus(relativePath, it.name)) } ?: Modifier
         Box(
             Modifier
                 .offset { IntOffset(g.labelLeft(row.depth).roundToInt(), 0) }
@@ -113,7 +113,7 @@ private fun StickyNodes(scene: TreeScene) {
                     .offset { IntOffset(0, scene.sticky().firstOrNull { it.index == index }?.y ?: 0) }
                     .fillMaxWidth()
                     .height(ROW_HEIGHT)
-                    .testTag(Tags.treeSticky(scene.cache.relativePath(scene.tree, row.entry.path))),
+                    .testTag(TreeTags.treeSticky(scene.cache.relativePath(scene.tree, row.entry.path))),
             )
         }
     }

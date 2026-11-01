@@ -51,18 +51,18 @@ import org.example.kotlineditor.state.placeholder
 @Composable
 internal fun ConversationList(agent: AgentState, modifier: Modifier) {
     var filter by remember { mutableStateOf("") }
-    Column(modifier.background(IdeColors.Panel).testTag(Tags.AGENT_LIST)) {
+    Column(modifier.background(IdeColors.Panel).testTag(AppTags.AGENT_LIST)) {
         Row(
             Modifier.fillMaxWidth().height(34.dp).padding(start = 12.dp, end = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Label("Conversations", Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
-            IconButton({ agent.newConversation() }, Modifier.testTag(Tags.AGENT_NEW)) { PlusIcon() }
+            IconButton({ agent.newConversation() }, Modifier.testTag(AppTags.AGENT_NEW)) { PlusIcon() }
         }
         IdeTextField(
             filter,
             { filter = it },
-            Modifier.fillMaxWidth().padding(horizontal = 8.dp).testTag(Tags.AGENT_FILTER),
+            Modifier.fillMaxWidth().padding(horizontal = 8.dp).testTag(AppTags.AGENT_FILTER),
             placeholder = "Search conversations",
             leading = { SearchIcon() },
         )
@@ -113,7 +113,7 @@ private fun ConversationRow(agent: AgentState, conversation: Conversation, selec
                 .hoverable(interaction)
                 .clickable(interaction, indication = null) { agent.open(conversation) }
                 .then(press)
-                .testTag(Tags.agentConversation(conversation.id))
+                .testTag(AppTags.agentConversation(conversation.id))
                 .padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -131,7 +131,7 @@ private fun ConversationRow(agent: AgentState, conversation: Conversation, selec
                         menu = null
                         agent.delete(conversation)
                     },
-                    modifier = Modifier.testTag(Tags.AGENT_DELETE),
+                    modifier = Modifier.testTag(AppTags.AGENT_DELETE),
                 )
             }
         }

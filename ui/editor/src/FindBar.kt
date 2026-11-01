@@ -31,7 +31,7 @@ import org.example.kotlineditor.state.replaceAll
 /** Find (Ctrl+F) and Replace (Ctrl+R) bar above the editor. */
 @Composable
 fun FindBar(find: FindState, document: Document, focus: FocusRequester, onClose: () -> Unit) {
-    Column(Modifier.fillMaxWidth().background(IdeColors.Panel).testTag(Tags.FIND_BAR)) {
+    Column(Modifier.fillMaxWidth().background(IdeColors.Panel).testTag(EditorTags.FIND_BAR)) {
         FindRow(find, document, focus, onClose)
         if (find.replaceVisible) ReplaceRow(find, document, onClose)
     }
@@ -48,7 +48,7 @@ private fun FindRow(find: FindState, document: Document, focus: FocusRequester, 
             { find.query = it },
             Modifier
                 .width(360.dp)
-                .testTag(Tags.FIND_BAR_INPUT)
+                .testTag(EditorTags.FIND_BAR_INPUT)
                 .focusRequester(focus)
                 .findKeys(
                     onEnter = { previous -> if (previous) find.previous(document) else find.next(document) },
@@ -61,13 +61,13 @@ private fun FindRow(find: FindState, document: Document, focus: FocusRequester, 
         val notFound = find.query.isNotEmpty() && find.matches.isEmpty()
         Label(
             matchCount(find),
-            Modifier.padding(horizontal = 10.dp).testTag(Tags.FIND_BAR_COUNT),
+            Modifier.padding(horizontal = 10.dp).testTag(EditorTags.FIND_BAR_COUNT),
             color = if (notFound) IdeColors.Error else IdeColors.TextSecondary,
         )
-        IconButton({ find.previous(document) }, Modifier.testTag(Tags.FIND_BAR_PREVIOUS)) { ArrowIcon(up = true) }
-        IconButton({ find.next(document) }, Modifier.testTag(Tags.FIND_BAR_NEXT)) { ArrowIcon(up = false) }
+        IconButton({ find.previous(document) }, Modifier.testTag(EditorTags.FIND_BAR_PREVIOUS)) { ArrowIcon(up = true) }
+        IconButton({ find.next(document) }, Modifier.testTag(EditorTags.FIND_BAR_NEXT)) { ArrowIcon(up = false) }
         Box(Modifier.weight(1f))
-        IconButton(onClose, Modifier.testTag(Tags.FIND_BAR_CLOSE)) { CloseIcon() }
+        IconButton(onClose, Modifier.testTag(EditorTags.FIND_BAR_CLOSE)) { CloseIcon() }
     }
 }
 
@@ -82,19 +82,19 @@ private fun ReplaceRow(find: FindState, document: Document, onClose: () -> Unit)
             { find.replacement = it },
             Modifier
                 .width(360.dp)
-                .testTag(Tags.REPLACE_INPUT)
+                .testTag(EditorTags.REPLACE_INPUT)
                 .findKeys(onEnter = { find.replaceCurrent(document) }, onClose = onClose),
             placeholder = "Replace",
         )
         IdeButton(
             "Replace",
             { find.replaceCurrent(document) },
-            Modifier.padding(start = 10.dp).testTag(Tags.REPLACE_ONE),
+            Modifier.padding(start = 10.dp).testTag(EditorTags.REPLACE_ONE),
         )
         IdeButton(
             "Replace All",
             { find.replaceAll(document) },
-            Modifier.padding(start = 6.dp).testTag(Tags.REPLACE_ALL),
+            Modifier.padding(start = 6.dp).testTag(EditorTags.REPLACE_ALL),
         )
     }
 }

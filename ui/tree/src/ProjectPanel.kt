@@ -23,7 +23,7 @@ import org.example.kotlineditor.state.ToolWindow
 
 @Composable
 fun ProjectPanel(project: ProjectState, drag: ToolWindowDrag, modifier: Modifier = Modifier) {
-    Column(modifier.fillMaxSize().testTag(Tags.PROJECT_PANEL)) {
+    Column(modifier.fillMaxSize().testTag(TreeTags.PROJECT_PANEL)) {
         ToolWindowHeader("Project", ToolWindow.Project, project, drag) {
             AutoSelectToggle(project)
             IconButton({
@@ -46,7 +46,7 @@ private fun AutoSelectToggle(project: ProjectState) {
                 .size(22.dp)
                 .background(if (on) IdeColors.Selection else Color.Transparent, RoundedCornerShape(4.dp))
                 .toggleable(value = on, onValueChange = { project.autoSelectOpenedFile = it })
-                .testTag(Tags.TREE_AUTO_SELECT),
+                .testTag(TreeTags.TREE_AUTO_SELECT),
             contentAlignment = Alignment.Center,
         ) {
             LocateIcon(color = if (on) IdeColors.Text else IdeColors.TextSecondary)

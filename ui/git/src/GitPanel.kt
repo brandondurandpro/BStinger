@@ -35,28 +35,28 @@ import org.example.kotlineditor.state.toggleBlame
 @Composable
 fun GitPanel(project: ProjectState, drag: ToolWindowDrag, modifier: Modifier = Modifier) {
     val changes = project.gitStatus.entries.sortedBy { it.key }
-    Column(modifier.fillMaxSize().background(IdeColors.Editor).testTag(Tags.GIT_PANEL)) {
+    Column(modifier.fillMaxSize().background(IdeColors.Editor).testTag(GitTags.GIT_PANEL)) {
         ToolWindowHeader("Git", ToolWindow.Git, project, drag) {
             BlameToggle(project)
-            IconButton(project::refreshGitStatus, Modifier.testTag(Tags.GIT_REFRESH)) {
+            IconButton(project::refreshGitStatus, Modifier.testTag(GitTags.GIT_REFRESH)) {
                 Label("⟳", color = IdeColors.TextSecondary)
             }
             IconButton(
                 { project.toolWindows.setVisible(ToolWindow.Git, false) },
-                Modifier.testTag(Tags.GIT_HIDE),
+                Modifier.testTag(GitTags.GIT_HIDE),
             ) { CloseIcon() }
         }
         if (project.isGitRepository) {
             GitActionsBar(project)
             Box(Modifier.fillMaxWidth().height(1.dp).background(IdeColors.Border))
             if (changes.isEmpty()) {
-                Message("No changes", Tags.GIT_EMPTY)
+                Message("No changes", GitTags.GIT_EMPTY)
             } else {
                 SelectAll(project, changes.size)
                 ChangeList(project, changes)
             }
         } else {
-            Message("Not a Git repository", Tags.GIT_NOT_A_REPOSITORY)
+            Message("Not a Git repository", GitTags.GIT_NOT_A_REPOSITORY)
         }
     }
 }
@@ -72,7 +72,7 @@ private fun BlameToggle(project: ProjectState) {
             .background(if (active) IdeColors.Selection else Color.Transparent, RoundedCornerShape(4.dp))
             .clickable(enabled = enabled) { project.toggleBlame() }
             .padding(horizontal = 5.dp, vertical = 3.dp)
-            .testTag(Tags.GIT_BLAME),
+            .testTag(GitTags.GIT_BLAME),
         contentAlignment = Alignment.Center,
     ) {
         Label(
@@ -100,7 +100,7 @@ private fun SelectAll(project: ProjectState, changes: Int) {
     Row(
         Modifier
             .fillMaxWidth()
-            .testTag(Tags.GIT_SELECT_ALL)
+            .testTag(GitTags.GIT_SELECT_ALL)
             .clickable(
                 remember { MutableInteractionSource() },
                 indication = null,
@@ -157,14 +157,14 @@ private fun ChangeRow(project: ProjectState, path: String, status: GitFileStatus
         // The checkbox decides what the next commit carries; the file name opens the diff.
         BranchCheckbox(
             checked,
-            Modifier.padding(start = 9.dp).testTag(ItemTags.gitChangeCheck(path)),
+            Modifier.padding(start = 9.dp).testTag(GitTags.gitChangeCheck(path)),
             size = 14.dp,
         ) { project.toggleCommitSelection(path) }
         Row(
             Modifier
                 .weight(1f)
                 .clickable { project.openDiff(path) }
-                .testTag(ItemTags.gitChange(path))
+                .testTag(GitTags.gitChange(path))
                 .padding(horizontal = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {

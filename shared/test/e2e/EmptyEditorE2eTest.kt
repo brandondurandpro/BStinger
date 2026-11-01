@@ -3,8 +3,7 @@ package org.example.kotlineditor.e2e
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.v2.runComposeUiTest
-import org.example.kotlineditor.ui.ItemTags
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.AppTags
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -37,10 +36,10 @@ class EmptyEditorE2eTest {
     fun `the hints are shown when no file is open`() =
         runComposeUiTest {
             launchWithProject(project)
-            awaitTag(Tags.EDITOR_EMPTY)
+            awaitTag(AppTags.EDITOR_EMPTY)
             actions.forEach { action ->
-                onNodeWithTag(ItemTags.editorHint(action)).fetchSemanticsNode()
-                onNodeWithTag(ItemTags.editorHintShortcut(action)).fetchSemanticsNode()
+                onNodeWithTag(AppTags.editorHint(action)).fetchSemanticsNode()
+                onNodeWithTag(AppTags.editorHintShortcut(action)).fetchSemanticsNode()
             }
             assertTrue(actions.isNotEmpty())
         }
@@ -49,10 +48,10 @@ class EmptyEditorE2eTest {
     fun `the hint rows are aligned on the left edge, not staggered`() =
         runComposeUiTest {
             launchWithProject(project)
-            awaitTag(Tags.EDITOR_EMPTY)
+            awaitTag(AppTags.EDITOR_EMPTY)
             val lefts =
                 actions.map { action ->
-                    onNodeWithTag(ItemTags.editorHint(action)).fetchSemanticsNode().boundsInRoot.left
+                    onNodeWithTag(AppTags.editorHint(action)).fetchSemanticsNode().boundsInRoot.left
                 }
             assertEquals(
                 1,
@@ -65,10 +64,10 @@ class EmptyEditorE2eTest {
     fun `the shortcut column is aligned across the hint rows`() =
         runComposeUiTest {
             launchWithProject(project)
-            awaitTag(Tags.EDITOR_EMPTY)
+            awaitTag(AppTags.EDITOR_EMPTY)
             val lefts =
                 actions.map { action ->
-                    onNodeWithTag(ItemTags.editorHintShortcut(action)).fetchSemanticsNode().boundsInRoot.left
+                    onNodeWithTag(AppTags.editorHintShortcut(action)).fetchSemanticsNode().boundsInRoot.left
                 }
             assertEquals(
                 1,

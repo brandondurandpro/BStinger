@@ -10,8 +10,9 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.state.Screen
 import org.example.kotlineditor.state.delete
-import org.example.kotlineditor.ui.ItemTags
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.AppTags
+import org.example.kotlineditor.ui.RemoteTags
+import org.example.kotlineditor.ui.TreeTags
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -30,9 +31,9 @@ class WelcomeScreenE2eTest {
     fun `first launch shows the welcome screen with an Open button`() =
         runComposeUiTest {
             val app = launchApp()
-            onNodeWithTag(Tags.WELCOME).assertIsDisplayed()
+            onNodeWithTag(AppTags.WELCOME).assertIsDisplayed()
             onNodeWithText("Welcome to Kotlin Editor").assertIsDisplayed()
-            onNodeWithTag(Tags.WELCOME_OPEN).assertIsDisplayed()
+            onNodeWithTag(AppTags.WELCOME_OPEN).assertIsDisplayed()
             assertEquals("Welcome to Kotlin Editor", app.state.title)
         }
 
@@ -41,8 +42,8 @@ class WelcomeScreenE2eTest {
         runComposeUiTest {
             val app = launchApp()
             openProjectDirectoryFromWelcome(project.path)
-            awaitTag(Tags.PROJECT)
-            awaitTag(Tags.treeRow(project.root.fileName.toString())).assertIsDisplayed()
+            awaitTag(AppTags.PROJECT)
+            awaitTag(TreeTags.treeRow(project.root.fileName.toString())).assertIsDisplayed()
             assertEquals(project.root.fileName.toString(), app.state.title)
             // The project is remembered as the most recent one.
             awaitCondition { app.recentPaths == listOf(project.path) }
@@ -53,8 +54,8 @@ class WelcomeScreenE2eTest {
         runComposeUiTest {
             val app = launchApp()
             openProjectPickerFromWelcome()
-            onNodeWithTag(Tags.OPEN_PROJECT_CANCEL).performClick()
-            awaitNoTag(Tags.OPEN_PROJECT)
+            onNodeWithTag(RemoteTags.OPEN_PROJECT_CANCEL).performClick()
+            awaitNoTag(RemoteTags.OPEN_PROJECT)
             assertIs<Screen.Welcome>(app.state.screen)
         }
 
@@ -64,10 +65,10 @@ class WelcomeScreenE2eTest {
             val other = SampleProject().apply { file("Other.kt", "class Other") }
             try {
                 launchApp(recent = listOf(project.path, other.path))
-                onNodeWithTag(ItemTags.recentProject(project.path)).assertIsDisplayed()
-                onNodeWithTag(ItemTags.recentProject(other.path)).assertIsDisplayed()
-                onNodeWithTag(ItemTags.recentProject(other.path)).performClick()
-                awaitTag(Tags.treeRow("Other.kt")).assertIsDisplayed()
+                onNodeWithTag(AppTags.recentProject(project.path)).assertIsDisplayed()
+                onNodeWithTag(AppTags.recentProject(other.path)).assertIsDisplayed()
+                onNodeWithTag(AppTags.recentProject(other.path)).performClick()
+                awaitTag(TreeTags.treeRow("Other.kt")).assertIsDisplayed()
             } finally {
                 other.delete()
             }
@@ -77,18 +78,18 @@ class WelcomeScreenE2eTest {
     fun `searching filters recent projects`() =
         runComposeUiTest {
             launchApp(recent = listOf(project.path, "/does/not/exist/zeta"))
-            onNodeWithTag(Tags.WELCOME_SEARCH).performTextInput("zeta")
-            awaitNoTag(ItemTags.recentProject(project.path))
-            onNodeWithTag(ItemTags.recentProject("/does/not/exist/zeta")).assertIsDisplayed()
+            onNodeWithTag(AppTags.WELCOME_SEARCH).performTextInput("zeta")
+            awaitNoTag(AppTags.recentProject(project.path))
+            onNodeWithTag(AppTags.recentProject("/does/not/exist/zeta")).assertIsDisplayed()
         }
 
     @Test
     fun `a recent project can be removed from the list`() =
         runComposeUiTest {
             val app = launchApp(recent = listOf(project.path, "/tmp/elsewhere"))
-            onNodeWithTag(ItemTags.recentProject(project.path)).performMouseInput { enter(center) }
-            awaitTag(ItemTags.recentRemove(project.path)).performClick()
-            awaitNoTag(ItemTags.recentProject(project.path))
+            onNodeWithTag(AppTags.recentProject(project.path)).performMouseInput { enter(center) }
+            awaitTag(AppTags.recentRemove(project.path)).performClick()
+            awaitNoTag(AppTags.recentProject(project.path))
             awaitCondition { app.recentPaths == listOf("/tmp/elsewhere") }
         }
 
@@ -96,8 +97,8 @@ class WelcomeScreenE2eTest {
     fun `opening a recent project that no longer exists shows an error`() =
         runComposeUiTest {
             val app = launchApp(recent = listOf("/definitely/missing/project"))
-            onNodeWithTag(ItemTags.recentProject("/definitely/missing/project")).performClick()
-            awaitTag(Tags.WELCOME_ERROR).assertIsDisplayed()
+            onNodeWithTag(AppTags.recentProject("/definitely/missing/project")).performClick()
+            awaitTag(AppTags.WELCOME_ERROR).assertIsDisplayed()
             assertIs<Screen.Welcome>(app.state.screen)
         }
 
@@ -105,10 +106,10 @@ class WelcomeScreenE2eTest {
     fun `closing the project returns to the welcome screen with the project in recents`() =
         runComposeUiTest {
             val app = launchWithProject(project)
-            onNodeWithTag(Tags.PROJECT_WIDGET).performClick()
-            awaitTag(Tags.PROJECT_CLOSE).performClick()
-            awaitTag(Tags.WELCOME)
+            onNodeWithTag(AppTags.PROJECT_WIDGET).performClick()
+            awaitTag(AppTags.PROJECT_CLOSE).performClick()
+            awaitTag(AppTags.WELCOME)
             assertIs<Screen.Welcome>(app.state.screen)
-            onNodeWithTag(ItemTags.recentProject(project.path)).assertIsDisplayed()
+            onNodeWithTag(AppTags.recentProject(project.path)).assertIsDisplayed()
         }
 }

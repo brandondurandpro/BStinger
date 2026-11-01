@@ -13,7 +13,8 @@ import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.test.withKeyDown
 import org.example.kotlineditor.state.Document
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.EditorTags
+import org.example.kotlineditor.ui.LanguageServerTags
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -40,7 +41,7 @@ class CompletionE2eTest {
     private fun ComposeUiTest.openPhp(app: E2eApp, path: String = "src/index.php") {
         openFromTree(path)
         awaitServer(app) { it.isRunning() }
-        onNodeWithTag(Tags.EDITOR).performClick()
+        onNodeWithTag(EditorTags.EDITOR).performClick()
         caretToEnd()
     }
 
@@ -52,9 +53,9 @@ class CompletionE2eTest {
             openPhp(app)
             typeCode("sho")
             awaitCompletion("shout")
-            onNodeWithTag(Tags.completionItem("shout"), useUnmergedTree = true).assertIsSelected()
+            onNodeWithTag(EditorTags.completionItem("shout"), useUnmergedTree = true).assertIsSelected()
             editorKeys { pressKey(Key.Enter) }
-            awaitNoTag(Tags.COMPLETION)
+            awaitNoTag(EditorTags.COMPLETION)
             assertEquals("shout", app.document().line(2))
         }
 
@@ -94,10 +95,10 @@ class CompletionE2eTest {
             editorKeys { pressKey(Key.Backspace) }
             awaitCondition { completionLabels().size == 3 }
             editorKeys { pressKey(Key.DirectionDown) }
-            onNodeWithTag(Tags.completionItem("strlen"), useUnmergedTree = true).assertIsSelected()
+            onNodeWithTag(EditorTags.completionItem("strlen"), useUnmergedTree = true).assertIsSelected()
             editorKeys { pressKey(Key.DirectionUp) }
             editorKeys { pressKey(Key.DirectionUp) }
-            onNodeWithTag(Tags.completionItem("strtoupper"), useUnmergedTree = true).assertIsSelected()
+            onNodeWithTag(EditorTags.completionItem("strtoupper"), useUnmergedTree = true).assertIsSelected()
             editorKeys { pressKey(Key.Enter) }
             assertEquals("strtoupper", app.document().line(2))
         }
@@ -114,7 +115,7 @@ class CompletionE2eTest {
             val rights =
                 details.map { detail ->
                     val nodes =
-                        onAllNodes(hasText(detail) and hasAnyAncestor(hasTestTag(Tags.COMPLETION)), true)
+                        onAllNodes(hasText(detail) and hasAnyAncestor(hasTestTag(EditorTags.COMPLETION)), true)
                             .fetchSemanticsNodes()
                     nodes.single().boundsInRoot.right
                 }
@@ -130,7 +131,7 @@ class CompletionE2eTest {
             typeCode("arr")
             awaitCompletion("array_map")
             editorKeys { pressKey(Key.Escape) }
-            awaitNoTag(Tags.COMPLETION)
+            awaitNoTag(EditorTags.COMPLETION)
             // A space ends the word: no popup, the text is what was typed.
             typeCode(" x")
             editorKeys { pressKey(Key.DirectionDown) }
@@ -144,8 +145,8 @@ class CompletionE2eTest {
             openPhp(app)
             typeCode("strl")
             awaitCompletion("strlen")
-            onNodeWithTag(Tags.completionItem("strlen"), useUnmergedTree = true).performClick()
-            awaitNoTag(Tags.COMPLETION)
+            onNodeWithTag(EditorTags.completionItem("strlen"), useUnmergedTree = true).performClick()
+            awaitNoTag(EditorTags.COMPLETION)
             assertEquals("strlen", app.document().line(2))
             editorKeys { withKeyDown(Key.CtrlLeft) { pressKey(Key.Z) } }
             assertEquals("strl", app.document().line(2))
@@ -174,11 +175,11 @@ class CompletionE2eTest {
             // The server answered (an item matching "z" would show): nothing to show.
             assertFalse(completionShown())
             openFromTree("README.md")
-            onNodeWithTag(Tags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performClick()
             caretToEnd()
             typeCode("str")
             editorKeys { withKeyDown(Key.CtrlLeft) { pressKey(Key.Spacebar) } }
-            awaitNoTag(Tags.COMPLETION, timeout = 1_000)
+            awaitNoTag(EditorTags.COMPLETION, timeout = 1_000)
             assertTrue(
                 app
                     .document()
@@ -193,11 +194,11 @@ class CompletionE2eTest {
         runComposeUiTest {
             val app = launchWithProject(project, languageServers = servers("--hang-on-initialize").settings)
             openFromTree("src/index.php")
-            onNodeWithTag(Tags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performClick()
             caretToEnd()
             typeCode("strl")
             editorKeys { withKeyDown(Key.CtrlLeft) { pressKey(Key.Spacebar) } }
-            awaitNoTag(Tags.COMPLETION, timeout = 1_000)
+            awaitNoTag(EditorTags.COMPLETION, timeout = 1_000)
             assertEquals("strl", app.document().line(2))
         }
 
@@ -207,9 +208,9 @@ class CompletionE2eTest {
             val app = launchWithProject(project, languageServers = servers().settings)
             openPhp(app)
             val server = awaitServer(app) { it.isRunning() }
-            awaitTag(Tags.statusLanguageServer(server.id)).performClick()
-            awaitTag(Tags.languageServerRestart(server.id)).performClick()
-            onNodeWithTag(Tags.EDITOR).performClick()
+            awaitTag(LanguageServerTags.statusLanguageServer(server.id)).performClick()
+            awaitTag(LanguageServerTags.languageServerRestart(server.id)).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performClick()
             caretToEnd()
             typeCode("function duringRestart() {}\n")
             awaitServer(app) { it.isRunning() && it.generation > server.generation }

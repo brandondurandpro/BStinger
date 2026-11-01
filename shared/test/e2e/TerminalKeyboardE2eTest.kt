@@ -13,7 +13,8 @@ import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.model.TerminalKey
 import org.example.kotlineditor.model.TerminalKeyEvent
 import org.example.kotlineditor.model.text
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.AppTags
+import org.example.kotlineditor.ui.TerminalTags
 import java.awt.event.InputEvent
 import java.awt.event.KeyEvent.CHAR_UNDEFINED
 import java.awt.event.KeyEvent.KEY_LOCATION_LEFT
@@ -102,7 +103,7 @@ class TerminalKeyboardE2eTest {
                 isAltPressed = modifiers and InputEvent.ALT_DOWN_MASK != 0,
                 isShiftPressed = modifiers and InputEvent.SHIFT_DOWN_MASK != 0,
             )
-        onNodeWithTag(Tags.TERMINAL_INPUT).performKeyPress(event)
+        onNodeWithTag(TerminalTags.TERMINAL_INPUT).performKeyPress(event)
     }
 
     // Presses then releases one key, as the platform reports it, with the held modifiers down around it.
@@ -150,9 +151,9 @@ class TerminalKeyboardE2eTest {
 
     private fun ComposeUiTest.openTerminal(): E2eApp {
         val app = launchWithProject(project)
-        onNodeWithTag(Tags.TOOL_TERMINAL).performClick()
-        awaitTag(Tags.TERMINAL_INPUT)
-        onNodeWithTag(Tags.TERMINAL_INPUT).performClick()
+        onNodeWithTag(AppTags.TOOL_TERMINAL).performClick()
+        awaitTag(TerminalTags.TERMINAL_INPUT)
+        onNodeWithTag(TerminalTags.TERMINAL_INPUT).performClick()
         awaitCondition { app.project.terminal.focused }
         awaitCondition { app.screen().any(String::isNotBlank) }
         return app

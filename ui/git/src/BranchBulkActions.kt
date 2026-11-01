@@ -65,42 +65,42 @@ internal fun BranchBulkBar(
             .padding(top = 8.dp)
             .background(barColor, RoundedCornerShape(5.dp))
             .padding(horizontal = 6.dp, vertical = 4.dp)
-            .testTag(Tags.BRANCH_BULK_BAR),
+            .testTag(GitTags.BRANCH_BULK_BAR),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         if (active) {
             Label(
                 "${picked.size} selected",
-                Modifier.testTag(Tags.BRANCH_PICK_COUNT),
+                Modifier.testTag(GitTags.BRANCH_PICK_COUNT),
                 color = IdeColors.Accent,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,
             )
-            BarButton("Pin", Tags.BRANCH_PIN_PICKED, enabled = !project.selectedBranches.containsAll(picked)) {
+            BarButton("Pin", GitTags.BRANCH_PIN_PICKED, enabled = !project.selectedBranches.containsAll(picked)) {
                 project.pinPickedBranches()
                 project.clearBranchPicks()
             }
-            BarButton("Unpin", Tags.BRANCH_UNPIN_PICKED, enabled = picked.any { it in project.selectedBranches }) {
+            BarButton("Unpin", GitTags.BRANCH_UNPIN_PICKED, enabled = picked.any { it in project.selectedBranches }) {
                 project.unpinPickedBranches()
                 project.clearBranchPicks()
             }
             val deletable = picked.any { it != project.gitBranch }
-            BarButton("Delete…", Tags.BRANCH_DELETE_PICKED, enabled = deletable && !project.gitBusy, danger = true) {
+            BarButton("Delete…", GitTags.BRANCH_DELETE_PICKED, enabled = deletable && !project.gitBusy, danger = true) {
                 onDelete()
             }
-            BarButton("Clear", Tags.BRANCH_CLEAR_PICKS) { project.clearBranchPicks() }
+            BarButton("Clear", GitTags.BRANCH_CLEAR_PICKS) { project.clearBranchPicks() }
         } else {
             Label("Tick branches to pin or delete several at once", color = IdeColors.TextSecondary, fontSize = 11.sp)
         }
         Spacer(Modifier.weight(1f))
         val unpicked = matches.any { it.name !in picked }
-        BarButton("Select all", Tags.BRANCH_SELECT_ALL, enabled = unpicked) {
+        BarButton("Select all", GitTags.BRANCH_SELECT_ALL, enabled = unpicked) {
             project.pickBranches(matches.map { it.name })
         }
         BarButton(
             if (withoutRemote == 0) "No branch without remote" else "Clean up $withoutRemote without remote…",
-            Tags.BRANCH_CLEANUP,
+            GitTags.BRANCH_CLEANUP,
             enabled = withoutRemote > 0 && !project.gitBusy,
             danger = true,
         ) { onCleanup() }
@@ -133,14 +133,14 @@ internal fun BranchDeleteDialog(
             .onEscape(cancel)
             .focusRequester(focus)
             .focusable()
-            .testTag(Tags.BRANCH_DELETE_DIALOG),
+            .testTag(GitTags.BRANCH_DELETE_DIALOG),
     ) {
         DeletionIntro(request)
         DeletionList(candidates, progress.unticked, progress::toggle)
         if (progress.deleting) {
-            BranchStatusLine("Deleting ${plural(toDelete.size, "branch", "branches")}…", Tags.BRANCH_DELETING)
+            BranchStatusLine("Deleting ${plural(toDelete.size, "branch", "branches")}…", GitTags.BRANCH_DELETING)
         }
-        progress.failure?.let { BranchStatusLine(it, Tags.BRANCH_ERROR, isError = true) }
+        progress.failure?.let { BranchStatusLine(it, GitTags.BRANCH_ERROR, isError = true) }
         Row(
             Modifier.fillMaxWidth().padding(top = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -152,16 +152,21 @@ internal fun BranchDeleteDialog(
                 } else {
                     "${toDelete.size} of ${plural(candidates.size, "branch", "branches")} will be deleted"
                 },
-                Modifier.testTag(Tags.BRANCH_DELETE_SUMMARY),
+                Modifier.testTag(GitTags.BRANCH_DELETE_SUMMARY),
                 color = IdeColors.TextSecondary,
                 fontSize = 11.sp,
             )
             Spacer(Modifier.weight(1f))
-            IdeButton("Cancel", { cancel() }, Modifier.testTag(Tags.BRANCH_DELETE_CANCEL), enabled = !progress.deleting)
+            IdeButton(
+                "Cancel",
+                { cancel() },
+                Modifier.testTag(GitTags.BRANCH_DELETE_CANCEL),
+                enabled = !progress.deleting,
+            )
             IdeButton(
                 "Delete ${plural(toDelete.size, "branch", "branches")}",
                 { progress.delete(project, toDelete, onDeleted) },
-                Modifier.testTag(Tags.BRANCH_DELETE_CONFIRM),
+                Modifier.testTag(GitTags.BRANCH_DELETE_CONFIRM),
                 primary = true,
                 enabled = toDelete.isNotEmpty() && !progress.deleting && !project.gitBusy,
             )
@@ -234,11 +239,11 @@ private fun DeletionList(candidates: List<GitBranchInfo>, unticked: Set<String>,
                 Modifier
                     .fillMaxWidth()
                     .clickable { onToggle(branch.name) }
-                    .testTag(ItemTags.branchToDelete(branch.name))
+                    .testTag(GitTags.branchToDelete(branch.name))
                     .padding(horizontal = 6.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                BranchCheckbox(branch.name !in unticked, Modifier.testTag(ItemTags.branchToDeleteCheck(branch.name))) {
+                BranchCheckbox(branch.name !in unticked, Modifier.testTag(GitTags.branchToDeleteCheck(branch.name))) {
                     onToggle(branch.name)
                 }
                 BranchIcon(Modifier.padding(start = 8.dp))

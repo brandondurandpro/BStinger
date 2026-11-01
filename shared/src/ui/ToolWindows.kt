@@ -47,20 +47,20 @@ internal fun ToolStrip(project: ProjectState?, devtools: Boolean, top: @Composab
 
 @Composable
 private fun ColumnScope.ToolButtons(project: ProjectState, devtools: Boolean) {
-    ToolButton(project, ToolWindow.Project, Tags.TOOL_PROJECT) { FolderIcon(Modifier.size(18.dp)) }
-    ToolButton(project, ToolWindow.Git, Tags.TOOL_GIT) { BranchIcon(color = IdeColors.Text) }
-    ToolButton(project, ToolWindow.Branches, Tags.TOOL_BRANCHES) { HistoryIcon(color = IdeColors.Text) }
+    ToolButton(project, ToolWindow.Project, AppTags.TOOL_PROJECT) { FolderIcon(Modifier.size(18.dp)) }
+    ToolButton(project, ToolWindow.Git, AppTags.TOOL_GIT) { BranchIcon(color = IdeColors.Text) }
+    ToolButton(project, ToolWindow.Branches, AppTags.TOOL_BRANCHES) { HistoryIcon(color = IdeColors.Text) }
     Spacer(Modifier.weight(1f))
     // Bottom tool windows sit at the bottom of the strip, like in IntelliJ's New UI.
     if (devtools) {
-        ToolButton(project, ToolWindow.Network, Tags.TOOL_NETWORK) {
+        ToolButton(project, ToolWindow.Network, AppTags.TOOL_NETWORK) {
             Label("⇅", color = IdeColors.Text, fontWeight = FontWeight.Bold)
         }
     }
-    ToolButton(project, ToolWindow.LanguageServers, Tags.TOOL_LANGUAGE_SERVERS) {
+    ToolButton(project, ToolWindow.LanguageServers, AppTags.TOOL_LANGUAGE_SERVERS) {
         Label("LS", color = IdeColors.Text, fontWeight = FontWeight.Bold, fontSize = 11.sp)
     }
-    ToolButton(project, ToolWindow.Terminal, Tags.TOOL_TERMINAL) {
+    ToolButton(project, ToolWindow.Terminal, AppTags.TOOL_TERMINAL) {
         Label(">_", color = IdeColors.Text, fontWeight = FontWeight.Bold)
     }
 }
@@ -174,7 +174,7 @@ private fun stackedWindowSplitter(project: ProjectState, dock: Dock, before: Too
 private fun dockResizeSplitter(project: ProjectState, dock: Dock) {
     val density = LocalDensity.current
     val horizontalBar = dock == Dock.Bottom
-    SplitterBox(horizontalBar = horizontalBar, tag = Tags.dockSplitter(dock.name)) { delta ->
+    SplitterBox(horizontalBar = horizontalBar, tag = AppTags.dockSplitter(dock.name)) { delta ->
         val dp = with(density) { delta.toDp().value }
         project.toolWindows.resize(dock, if (dock == Dock.Right || dock == Dock.Bottom) -dp else dp)
     }

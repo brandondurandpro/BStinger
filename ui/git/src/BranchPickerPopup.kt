@@ -62,7 +62,7 @@ internal fun BranchPickerPopup(project: ProjectState, onClose: () -> Unit) {
     val matches = remember(branches, query) { filterBranches(branches, query) }
     BranchPickerFocus(project, query, branches, matches, cursor, focus, searching = status.deletion == null)
     val choose = { branch: GitBranchInfo? -> status.checkout(project, branch, onClose) }
-    PopupFrame(Tags.BRANCH_PICKER, onClose, width = 760) {
+    PopupFrame(GitTags.BRANCH_PICKER, onClose, width = 760) {
         Column {
             BranchPickerHeader(project, branches.size, onClose)
             val request = status.deletion
@@ -127,9 +127,9 @@ private class BranchPickerStatus {
 
 @Composable
 private fun BranchPickerStatusLines(status: BranchPickerStatus) {
-    status.checkingOut?.let { BranchStatusLine("Checking out $it…", tag = Tags.BRANCH_CHECKING_OUT) }
-    status.failure?.let { BranchStatusLine(it, isError = true, tag = Tags.BRANCH_ERROR) }
-    status.done?.let { BranchStatusLine(it, tag = Tags.BRANCH_DONE) }
+    status.checkingOut?.let { BranchStatusLine("Checking out $it…", tag = GitTags.BRANCH_CHECKING_OUT) }
+    status.failure?.let { BranchStatusLine(it, isError = true, tag = GitTags.BRANCH_ERROR) }
+    status.done?.let { BranchStatusLine(it, tag = GitTags.BRANCH_DONE) }
 }
 
 @Composable
@@ -148,7 +148,7 @@ private fun BranchSearchField(
         Modifier
             .fillMaxWidth()
             .padding(top = 10.dp)
-            .testTag(Tags.BRANCH_SEARCH)
+            .testTag(GitTags.BRANCH_SEARCH)
             .focusRequester(focus)
             .popupKeys(onEnter, onClose) { cursor.move(it, matchCount) },
         placeholder = "Search branches…",
@@ -191,14 +191,14 @@ private fun BranchResults(
         branches.isEmpty() -> {
             PickerMessage(
                 "No branch here yet, or the server is out of reach.",
-                Tags.BRANCH_EMPTY,
+                GitTags.BRANCH_EMPTY,
             )
         }
 
         matches.isEmpty() -> {
             PickerMessage(
                 "No branch matches \"$query\"",
-                Tags.BRANCH_NO_MATCH,
+                GitTags.BRANCH_NO_MATCH,
             )
         }
 
@@ -250,7 +250,7 @@ private fun BranchPickerHeader(project: ProjectState, count: Int, onClose: () ->
                 Label("$pinned pinned", color = IdeColors.Accent, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
             }
         }
-        IconButton({ project.refreshBranches() }, Modifier.testTag(Tags.BRANCH_REFRESH)) {
+        IconButton({ project.refreshBranches() }, Modifier.testTag(GitTags.BRANCH_REFRESH)) {
             Label("⟳", color = IdeColors.TextSecondary, fontSize = 16.sp)
         }
         IconButton(onClose) { CloseIcon() }
@@ -304,11 +304,11 @@ private fun BranchRow(
             .background(branchRowBackground(branch, selected, hovered), RoundedCornerShape(6.dp))
             .hoverable(interaction)
             .clickable(interaction, indication = null, onClick = onChoose)
-            .testTag(ItemTags.branchItem(branch.name))
+            .testTag(GitTags.branchItem(branch.name))
             .padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        BranchCheckbox(branch.name in project.pickedBranches, Modifier.testTag(ItemTags.branchSelect(branch.name))) {
+        BranchCheckbox(branch.name in project.pickedBranches, Modifier.testTag(GitTags.branchSelect(branch.name))) {
             project.toggleBranchPick(branch.name)
         }
         BranchIcon(
@@ -320,7 +320,7 @@ private fun BranchRow(
         val pinned = branch.name in project.selectedBranches
         IconButton(
             { project.toggleBranchSelection(branch.name) },
-            Modifier.padding(start = 8.dp).testTag(ItemTags.branchPin(branch.name)),
+            Modifier.padding(start = 8.dp).testTag(GitTags.branchPin(branch.name)),
         ) {
             PinIcon(pinned, color = if (pinned) IdeColors.Accent else IdeColors.TextSecondary)
         }
@@ -409,7 +409,7 @@ internal fun BranchSyncBadge(branch: GitBranchInfo, modifier: Modifier = Modifie
         if (status != null) {
             Label(
                 status.first,
-                Modifier.testTag(ItemTags.branchSync(branch.name)),
+                Modifier.testTag(GitTags.branchSync(branch.name)),
                 color = status.second,
                 fontSize = fontSize,
             )
@@ -431,10 +431,10 @@ private fun syncStatus(branch: GitBranchInfo, compact: Boolean): Pair<String, Co
 @Composable
 private fun SyncCounts(branch: GitBranchInfo, fontSize: TextUnit) {
     if (branch.ahead > 0) {
-        SyncCount("↑ ${branch.ahead}", ItemTags.branchAhead(branch.name), IdeColors.GitAhead, fontSize)
+        SyncCount("↑ ${branch.ahead}", GitTags.branchAhead(branch.name), IdeColors.GitAhead, fontSize)
     }
     if (branch.behind > 0) {
-        SyncCount("↓ ${branch.behind}", ItemTags.branchBehind(branch.name), IdeColors.GitBehind, fontSize)
+        SyncCount("↓ ${branch.behind}", GitTags.branchBehind(branch.name), IdeColors.GitBehind, fontSize)
     }
 }
 
@@ -466,7 +466,7 @@ private fun BranchPickerFooter(selectedCount: Int) {
             } else {
                 "${plural(selectedCount, "branch", "branches")} pinned in the toolbar"
             },
-            Modifier.testTag(Tags.BRANCH_SELECTION_COUNT),
+            Modifier.testTag(GitTags.BRANCH_SELECTION_COUNT),
             color = if (selectedCount == 0) IdeColors.TextSecondary else IdeColors.Accent,
             fontSize = 10.sp,
         )

@@ -8,7 +8,8 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.model.Direction
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.EditorTags
+import org.example.kotlineditor.ui.LanguageServerTags
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -38,7 +39,7 @@ class CompletionPerformanceE2eTest {
 
     private fun ComposeUiTest.openAtEnd(path: String) {
         openFromTree(path)
-        onNodeWithTag(Tags.EDITOR).performClick()
+        onNodeWithTag(EditorTags.EDITOR).performClick()
         caretToEnd()
     }
 
@@ -63,9 +64,9 @@ class CompletionPerformanceE2eTest {
                     budgetMillis = 4_000,
                 ) { typeWords() }
 
-            awaitTag(Tags.LSP_CHOICE_QUICK).performClick()
+            awaitTag(LanguageServerTags.LSP_CHOICE_QUICK).performClick()
             awaitServer(app) { it.isRunning() }
-            onNodeWithTag(Tags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performClick()
             caretToEnd()
             app.client.network.recording = true
             val with =

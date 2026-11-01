@@ -11,8 +11,9 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.state.delete
-import org.example.kotlineditor.ui.ItemTags
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.AppTags
+import org.example.kotlineditor.ui.EditorTags
+import org.example.kotlineditor.ui.GitTags
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.AfterTest
@@ -41,10 +42,10 @@ class GitChaosE2eTest {
             val app = launchWithProject(project, chaos = true)
             app.network.goDown()
             awaitReconnecting()
-            onNodeWithTag(Tags.TOOL_GIT).performClick()
-            awaitTag(Tags.GIT_PANEL)
+            onNodeWithTag(AppTags.TOOL_GIT).performClick()
+            awaitTag(GitTags.GIT_PANEL)
             app.network.comeBack()
-            awaitTag(ItemTags.gitChange("README.md"))
+            awaitTag(GitTags.gitChange("README.md"))
         }
 
     @Test
@@ -56,15 +57,15 @@ class GitChaosE2eTest {
             awaitCondition { app.project.gitBranchInfos.any { it.name == "feature" } }
             app.network.goDown()
             awaitReconnecting()
-            onNodeWithTag(Tags.GIT_BRANCH).performClick()
-            awaitTag(Tags.BRANCH_PICKER)
+            onNodeWithTag(GitTags.GIT_BRANCH).performClick()
+            awaitTag(GitTags.BRANCH_PICKER)
             // The last known branches stay usable; the refresh issued on opening waits for the link.
-            awaitTag(ItemTags.branchItem("feature"))
-            onNodeWithTag(Tags.BRANCH_REFRESH).performClick()
+            awaitTag(GitTags.branchItem("feature"))
+            onNodeWithTag(GitTags.BRANCH_REFRESH).performClick()
             app.network.comeBack()
             awaitReconnected()
             awaitCondition { app.project.gitBranchInfos.any { it.name == "feature" } }
-            awaitTag(ItemTags.branchItem("feature"))
+            awaitTag(GitTags.branchItem("feature"))
         }
 
     @Test
@@ -73,16 +74,16 @@ class GitChaosE2eTest {
             project.commitAll()
             val app = launchWithProject(project, chaos = true)
             awaitCondition { app.project.gitBranchInfos.isNotEmpty() }
-            onNodeWithTag(Tags.GIT_BRANCH).performClick()
-            awaitTag(Tags.BRANCH_PICKER)
+            onNodeWithTag(GitTags.GIT_BRANCH).performClick()
+            awaitTag(GitTags.BRANCH_PICKER)
             project.git("branch", "after-restart")
 
             // The restarted server loses its sessions; the panel must stay usable and reach the new one.
             app.process.restart()
             awaitReconnected()
-            awaitTag(Tags.BRANCH_PICKER)
-            onNodeWithTag(Tags.BRANCH_REFRESH).performClick()
-            awaitTag(ItemTags.branchItem("after-restart"))
+            awaitTag(GitTags.BRANCH_PICKER)
+            onNodeWithTag(GitTags.BRANCH_REFRESH).performClick()
+            awaitTag(GitTags.branchItem("after-restart"))
         }
 
     @Test
@@ -95,14 +96,14 @@ class GitChaosE2eTest {
             project.git("branch", "slow-link")
             app.network.latencyMs = SLOW_BRANCH_LINK_MS
 
-            onNodeWithTag(Tags.GIT_BRANCH).performClick()
-            awaitTag(Tags.BRANCH_PICKER)
+            onNodeWithTag(GitTags.GIT_BRANCH).performClick()
+            awaitTag(GitTags.BRANCH_PICKER)
             // The panel and its cached rows open without waiting for the slow round trip it triggers.
-            awaitTag(ItemTags.branchItem(default), timeout = 2_000)
+            awaitTag(GitTags.branchItem(default), timeout = 2_000)
 
             // Once the refresh crosses the link, the new branch shows up under the current query.
-            onNodeWithTag(Tags.BRANCH_SEARCH).performTextInput("slow-link")
-            awaitTag(ItemTags.branchItem("slow-link"), timeout = 15_000)
+            onNodeWithTag(GitTags.BRANCH_SEARCH).performTextInput("slow-link")
+            awaitTag(GitTags.branchItem("slow-link"), timeout = 15_000)
         }
 
     private fun localBranches(): Set<String> =
@@ -116,11 +117,11 @@ class GitChaosE2eTest {
     // Opens the cleanup dialog of the branch picker on the branches `a` and `b`, which have no remote.
     private fun ComposeUiTest.openCleanup(app: E2eApp) {
         awaitCondition { app.project.gitBranchInfos.count { it.name == "a" || it.name == "b" } == 2 }
-        onNodeWithTag(Tags.GIT_BRANCH).performClick()
-        awaitTag(Tags.BRANCH_PICKER)
-        onNodeWithTag(Tags.BRANCH_CLEANUP).performClick()
-        awaitTag(ItemTags.branchToDelete("a"))
-        awaitTag(ItemTags.branchToDelete("b"))
+        onNodeWithTag(GitTags.GIT_BRANCH).performClick()
+        awaitTag(GitTags.BRANCH_PICKER)
+        onNodeWithTag(GitTags.BRANCH_CLEANUP).performClick()
+        awaitTag(GitTags.branchToDelete("a"))
+        awaitTag(GitTags.branchToDelete("b"))
     }
 
     @Test
@@ -134,15 +135,15 @@ class GitChaosE2eTest {
             // The branches are deleted, then the connection breaks before the answer: the client sends it again, and
             // the server finds them already gone, which is not an error.
             app.network.dropFromServer = true
-            onNodeWithTag(Tags.BRANCH_DELETE_CONFIRM).performClick()
+            onNodeWithTag(GitTags.BRANCH_DELETE_CONFIRM).performClick()
             awaitCondition { localBranches() == setOf(default) }
             app.network.cutAll()
             app.network.dropFromServer = false
-            awaitTag(Tags.BRANCH_DONE)
-            awaitNoTag(Tags.BRANCH_ERROR)
+            awaitTag(GitTags.BRANCH_DONE)
+            awaitNoTag(GitTags.BRANCH_ERROR)
             assertEquals("2 branches deleted", app.project.gitMessage)
             assertFalse(app.project.gitMessageIsError)
-            awaitNoTag(ItemTags.branchItem("a"))
+            awaitNoTag(GitTags.branchItem("a"))
         }
 
     @Test
@@ -155,14 +156,14 @@ class GitChaosE2eTest {
             openCleanup(app)
             app.network.goDown()
             awaitReconnecting()
-            onNodeWithTag(Tags.BRANCH_DELETE_CONFIRM).performClick()
+            onNodeWithTag(GitTags.BRANCH_DELETE_CONFIRM).performClick()
             // Nothing pretends to be done: the dialog says it is deleting, and the disk still has the branches.
-            awaitTag(Tags.BRANCH_DELETING)
-            onNodeWithTag(Tags.BRANCH_DELETE_CONFIRM).assertIsNotEnabled()
+            awaitTag(GitTags.BRANCH_DELETING)
+            onNodeWithTag(GitTags.BRANCH_DELETE_CONFIRM).assertIsNotEnabled()
             assertEquals(setOf(default, "a", "b"), localBranches())
             app.network.comeBack()
             awaitReconnected()
-            awaitTag(Tags.BRANCH_DONE)
+            awaitTag(GitTags.BRANCH_DONE)
             assertEquals(setOf(default), localBranches())
         }
 
@@ -176,9 +177,9 @@ class GitChaosE2eTest {
             openCleanup(app)
             app.process.restart()
             awaitReconnected()
-            awaitTag(Tags.BRANCH_DELETE_DIALOG)
-            onNodeWithTag(Tags.BRANCH_DELETE_CONFIRM).performClick()
-            awaitTag(Tags.BRANCH_DONE)
+            awaitTag(GitTags.BRANCH_DELETE_DIALOG)
+            onNodeWithTag(GitTags.BRANCH_DELETE_CONFIRM).performClick()
+            awaitTag(GitTags.BRANCH_DONE)
             assertEquals(setOf(default), localBranches())
         }
 
@@ -195,18 +196,18 @@ class GitChaosE2eTest {
         project.git("checkout", "-q", default)
         val app = launchWithProject(project, chaos = true)
         awaitCondition { app.project.gitBranchInfos.any { it.name == "feature" && it.ahead == 1 } }
-        onNodeWithTag(Tags.GIT_BRANCH).performClick()
-        awaitTag(Tags.BRANCH_PICKER)
-        onNodeWithTag(ItemTags.branchPin("feature")).performClick()
-        onNodeWithTag(Tags.BRANCH_SEARCH).performClick()
-        onNodeWithTag(Tags.BRANCH_SEARCH).performKeyInput { pressKey(Key.Escape) }
-        awaitTag(ItemTags.pinnedBranch("feature"))
+        onNodeWithTag(GitTags.GIT_BRANCH).performClick()
+        awaitTag(GitTags.BRANCH_PICKER)
+        onNodeWithTag(GitTags.branchPin("feature")).performClick()
+        onNodeWithTag(GitTags.BRANCH_SEARCH).performClick()
+        onNodeWithTag(GitTags.BRANCH_SEARCH).performKeyInput { pressKey(Key.Escape) }
+        awaitTag(GitTags.pinnedBranch("feature"))
         return app
     }
 
     private fun ComposeUiTest.pushFeatureFromItsChip() {
-        onNodeWithTag(ItemTags.pinnedBranchMenu("feature")).performClick()
-        awaitTag(ItemTags.branchMenuPush("feature")).performClick()
+        onNodeWithTag(GitTags.pinnedBranchMenu("feature")).performClick()
+        awaitTag(GitTags.branchMenuPush("feature")).performClick()
     }
 
     @Test
@@ -225,7 +226,7 @@ class GitChaosE2eTest {
                 app.network.dropFromServer = false
                 awaitCondition { app.project.branchSync?.running == false }
                 assertEquals(false, app.project.branchSync?.isError, app.project.branchSync?.text)
-                awaitNoTag(ItemTags.branchAhead("feature"))
+                awaitNoTag(GitTags.branchAhead("feature"))
             } finally {
                 remote.toFile().deleteRecursively()
             }
@@ -240,7 +241,7 @@ class GitChaosE2eTest {
                 app.network.goDown()
                 awaitReconnecting()
                 pushFeatureFromItsChip()
-                awaitTag(Tags.BRANCH_SYNC_STATUS)
+                awaitTag(GitTags.BRANCH_SYNC_STATUS)
                 assertEquals(true, app.project.branchSync?.running)
                 app.network.comeBack()
                 awaitReconnected()
@@ -259,13 +260,13 @@ class GitChaosE2eTest {
             project.file("README.md", "# Changed\n")
             project.file("notes.txt", "other\n")
             val app = launchWithProject(project, chaos = true)
-            onNodeWithTag(Tags.TOOL_GIT).performClick()
-            awaitTag(ItemTags.gitChange("README.md"))
-            awaitTag(ItemTags.gitChangeCheck("README.md")).performClick()
-            awaitTag(Tags.GIT_COMMIT_MESSAGE).performTextInput("Update the readme")
+            onNodeWithTag(AppTags.TOOL_GIT).performClick()
+            awaitTag(GitTags.gitChange("README.md"))
+            awaitTag(GitTags.gitChangeCheck("README.md")).performClick()
+            awaitTag(GitTags.GIT_COMMIT_MESSAGE).performTextInput("Update the readme")
             // The commit is made, then the connection breaks before its answer arrives: the client sends it again.
             app.network.dropFromServer = true
-            onNodeWithTag(Tags.GIT_COMMIT).performClick()
+            onNodeWithTag(GitTags.GIT_COMMIT).performClick()
             awaitCondition { project.lastCommitSubject() == "Update the readme" }
             app.network.cutAll()
             app.network.dropFromServer = false
@@ -280,13 +281,13 @@ class GitChaosE2eTest {
             project.commitAll()
             project.file("README.md", "# Changed\n")
             val app = launchWithProject(project, chaos = true)
-            onNodeWithTag(Tags.TOOL_GIT).performClick()
-            awaitTag(ItemTags.gitChange("README.md")).performClick()
-            awaitTag(Tags.DIFF_OPEN_FILE)
+            onNodeWithTag(AppTags.TOOL_GIT).performClick()
+            awaitTag(GitTags.gitChange("README.md")).performClick()
+            awaitTag(EditorTags.DIFF_OPEN_FILE)
             app.network.goDown()
             awaitReconnecting()
-            onNodeWithTag(Tags.DIFF_OPEN_FILE).performClick()
-            awaitTag(Tags.tab("README.md"))
+            onNodeWithTag(EditorTags.DIFF_OPEN_FILE).performClick()
+            awaitTag(EditorTags.tab("README.md"))
             // No content is made up while the file cannot be read.
             val editor = app.project.editor
             assertEquals(null, editor.activeTab?.document)

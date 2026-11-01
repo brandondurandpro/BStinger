@@ -70,7 +70,7 @@ fun ProjectScreen(app: AppState, project: ProjectState) {
         Modifier
             .fillMaxSize()
             .background(IdeColors.Panel)
-            .testTag(Tags.PROJECT)
+            .testTag(AppTags.PROJECT)
             .onPreviewKeyEvent(shortcuts::handle)
             .focusRequester(rootFocus)
             .onFocusChanged { hasFocus = it.hasFocus }
@@ -117,7 +117,7 @@ private fun ProjectBody(app: AppState, project: ProjectState, findFocus: FocusRe
     Box(
         Modifier
             .fillMaxSize()
-            .testTag(Tags.WORKSPACE)
+            .testTag(AppTags.WORKSPACE)
             .onGloballyPositioned { drag.workspace = it.boundsInRoot() },
     ) {
         Row(Modifier.fillMaxSize()) {
@@ -185,7 +185,7 @@ private fun EditorPaneView(
     Column(
         modifier
             .fillMaxHeight()
-            .testTag(Tags.pane(index))
+            .testTag(AppTags.pane(index))
             .pointerInput(pane) {
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
@@ -213,7 +213,7 @@ private fun TabContent(
 ) {
     when (val status = tab.status) {
         TabStatus.Loading -> {
-            Box(Modifier.fillMaxSize().testTag(Tags.EDITOR_LOADING))
+            Box(Modifier.fillMaxSize().testTag(AppTags.EDITOR_LOADING))
         }
 
         is TabStatus.Unsupported -> {

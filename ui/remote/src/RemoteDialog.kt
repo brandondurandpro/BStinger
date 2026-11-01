@@ -24,7 +24,7 @@ import org.example.kotlineditor.state.RemoteDialogState
 fun RemoteDialog(app: AppState, dialog: RemoteDialogState) {
     val connect = { if (!dialog.connecting) app.connectRemote(dialog) }
     val cancel = { app.dismissRemoteDialog() }
-    PopupFrame(Tags.REMOTE_DIALOG, cancel, width = 760) {
+    PopupFrame(RemoteTags.REMOTE_DIALOG, cancel, width = 760) {
         Column {
             DialogHeader()
             RemoteCatalog(app, dialog) { app.updateRemoteDialog(it) }
@@ -58,7 +58,7 @@ private fun Progress(app: AppState, dialog: RemoteDialogState) {
             it,
             color = IdeColors.TextSecondary,
             fontSize = 12.sp,
-            modifier = Modifier.padding(top = 10.dp).testTag(Tags.REMOTE_STATUS),
+            modifier = Modifier.padding(top = 10.dp).testTag(RemoteTags.REMOTE_STATUS),
         )
     }
     dialog.error?.let {
@@ -66,7 +66,7 @@ private fun Progress(app: AppState, dialog: RemoteDialogState) {
             it,
             color = IdeColors.Error,
             fontSize = 12.sp,
-            modifier = Modifier.padding(top = 10.dp).testTag(Tags.REMOTE_ERROR),
+            modifier = Modifier.padding(top = 10.dp).testTag(RemoteTags.REMOTE_ERROR),
         )
     }
 }
@@ -88,16 +88,16 @@ private fun DialogButtons(app: AppState, dialog: RemoteDialogState, connect: () 
                     app.addRemoteHost()
                 }
             },
-            Modifier.testTag(Tags.REMOTE_NEW_HOST),
+            Modifier.testTag(RemoteTags.REMOTE_NEW_HOST),
         )
         Spacer(Modifier.weight(1f))
-        IdeButton("Cancel", cancel, Modifier.testTag(Tags.REMOTE_CANCEL))
+        IdeButton("Cancel", cancel, Modifier.testTag(RemoteTags.REMOTE_CANCEL))
         IdeButton(
             if (dialog.connecting) "Connecting…" else "Connect",
             connect,
             Modifier
                 .padding(start = 8.dp)
-                .testTag(Tags.REMOTE_CONNECT),
+                .testTag(RemoteTags.REMOTE_CONNECT),
             primary = true,
             enabled = !dialog.connecting,
         )

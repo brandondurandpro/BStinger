@@ -55,7 +55,7 @@ fun BranchWidget(project: ProjectState, modifier: Modifier = Modifier) {
             Modifier
                 .background(background, RoundedCornerShape(5.dp))
                 .clickable { project.branchPickerOpen = true }
-                .testTag(Tags.GIT_BRANCH)
+                .testTag(GitTags.GIT_BRANCH)
                 .padding(horizontal = 6.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -93,7 +93,7 @@ private fun BranchSyncStatus(project: ProjectState, sync: BranchSync) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Label(
             sync.text,
-            Modifier.widthIn(max = 360.dp).testTag(Tags.BRANCH_SYNC_STATUS),
+            Modifier.widthIn(max = 360.dp).testTag(GitTags.BRANCH_SYNC_STATUS),
             color = color,
             fontSize = 11.sp,
         )
@@ -102,7 +102,7 @@ private fun BranchSyncStatus(project: ProjectState, sync: BranchSync) {
                 Modifier
                     .size(18.dp)
                     .clickable { project.branchSync = null }
-                    .testTag(Tags.BRANCH_SYNC_DISMISS),
+                    .testTag(GitTags.BRANCH_SYNC_DISMISS),
                 contentAlignment = Alignment.Center,
             ) {
                 CloseIcon(Modifier.size(10.dp))
@@ -119,7 +119,7 @@ private fun PinnedBranchChip(project: ProjectState, branch: GitBranchInfo) {
             .background(IdeColors.Editor, RoundedCornerShape(5.dp))
             .border(1.dp, IdeColors.Separator, RoundedCornerShape(5.dp))
             .clickable { project.checkoutBranch(branch.name) }
-            .testTag(ItemTags.pinnedBranch(branch.name))
+            .testTag(GitTags.pinnedBranch(branch.name))
             .padding(start = 6.dp, end = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -135,7 +135,7 @@ private fun PinnedBranchChip(project: ProjectState, branch: GitBranchInfo) {
             Modifier
                 .size(18.dp)
                 .clickable { project.toggleBranchSelection(branch.name) }
-                .testTag(ItemTags.unpinnedBranch(branch.name)),
+                .testTag(GitTags.unpinnedBranch(branch.name)),
             contentAlignment = Alignment.Center,
         ) {
             CloseIcon(Modifier.size(10.dp))
@@ -152,7 +152,7 @@ private fun PinnedBranchMenu(project: ProjectState, branch: GitBranchInfo) {
             Modifier
                 .size(18.dp)
                 .clickable { open = true }
-                .testTag(ItemTags.pinnedBranchMenu(branch.name)),
+                .testTag(GitTags.pinnedBranchMenu(branch.name)),
             contentAlignment = Alignment.Center,
         ) {
             Chevron(expanded = true, Modifier.size(12.dp))
@@ -170,18 +170,18 @@ private fun PinnedBranchMenu(project: ProjectState, branch: GitBranchInfo) {
                 )
             }
             val idle = !project.gitBusy
-            item("Checkout", ItemTags.branchMenuCheckout(branch.name), idle) { project.checkoutBranch(branch.name) }
-            item(pullLabel(branch), ItemTags.branchMenuPull(branch.name), idle && branch.hasUpstream) {
+            item("Checkout", GitTags.branchMenuCheckout(branch.name), idle) { project.checkoutBranch(branch.name) }
+            item(pullLabel(branch), GitTags.branchMenuPull(branch.name), idle && branch.hasUpstream) {
                 project.syncBranch(branch.name, BranchSync.Action.Pull)
             }
-            item(pushLabel(branch), ItemTags.branchMenuPush(branch.name), idle) {
+            item(pushLabel(branch), GitTags.branchMenuPush(branch.name), idle) {
                 project.syncBranch(branch.name, BranchSync.Action.Push)
             }
-            item("Show Changes", ItemTags.branchMenuChanges(branch.name), true) {
+            item("Show Changes", GitTags.branchMenuChanges(branch.name), true) {
                 project.showToolWindow(ToolWindow.Git)
             }
-            item("Show History", ItemTags.branchMenuHistory(branch.name), true) { project.showHistory(branch.name) }
-            item("Unpin", ItemTags.branchMenuUnpin(branch.name), true) { project.toggleBranchSelection(branch.name) }
+            item("Show History", GitTags.branchMenuHistory(branch.name), true) { project.showHistory(branch.name) }
+            item("Unpin", GitTags.branchMenuUnpin(branch.name), true) { project.toggleBranchSelection(branch.name) }
         }
     }
 }

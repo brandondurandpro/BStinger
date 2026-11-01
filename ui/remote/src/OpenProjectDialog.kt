@@ -80,13 +80,13 @@ fun OpenProjectDialog(app: AppState) {
     LaunchedEffect(browser) { runCatching { fieldFocus.requestFocus() } }
     var fieldFocused by remember { mutableStateOf(false) }
 
-    PopupFrame(Tags.OPEN_PROJECT, onClose, width = OPEN_PROJECT_WIDTH) {
+    PopupFrame(RemoteTags.OPEN_PROJECT, onClose, width = OPEN_PROJECT_WIDTH) {
         Column(Modifier.pickerPanelKeys(browser, fieldFocused, onClose)) {
             DirectoryHeader(browser, fieldFocus, { fieldFocused = it }, onClose)
             browser.error?.let {
                 Label(
                     it,
-                    Modifier.padding(top = 6.dp).testTag(Tags.OPEN_PROJECT_ERROR),
+                    Modifier.padding(top = 6.dp).testTag(RemoteTags.OPEN_PROJECT_ERROR),
                     color = IdeColors.Error,
                     fontSize = 12.sp,
                 )
@@ -112,11 +112,11 @@ private fun DirectoryHeader(
         fontSize = 12.sp,
     )
     Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(browser::goUp, Modifier.testTag(Tags.OPEN_PROJECT_UP)) { ArrowIcon(up = true) }
+        IconButton(browser::goUp, Modifier.testTag(RemoteTags.OPEN_PROJECT_UP)) { ArrowIcon(up = true) }
         IdeButton(
             "Home",
             browser::goHome,
-            Modifier.padding(start = 6.dp).testTag(Tags.OPEN_PROJECT_HOME),
+            Modifier.padding(start = 6.dp).testTag(RemoteTags.OPEN_PROJECT_HOME),
             enabled = browser.home != null,
         )
         IdeTextField(
@@ -125,7 +125,7 @@ private fun DirectoryHeader(
             Modifier
                 .weight(1f)
                 .padding(start = 6.dp)
-                .testTag(Tags.OPEN_PROJECT_PATH)
+                .testTag(RemoteTags.OPEN_PROJECT_PATH)
                 .onFocusChanged { setFieldFocused(it.isFocused) }
                 .focusRequester(fieldFocus)
                 .fieldKeys({ browser.followPath() }, onClose),
@@ -185,11 +185,11 @@ private fun DirectoryFooter(browser: DirectoryBrowser, onClose: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         DirectoryStatus(browser, Modifier.weight(1f))
-        IdeButton("Cancel", onClose, Modifier.testTag(Tags.OPEN_PROJECT_CANCEL))
+        IdeButton("Cancel", onClose, Modifier.testTag(RemoteTags.OPEN_PROJECT_CANCEL))
         IdeButton(
             "Open",
             browser::openHighlighted,
-            Modifier.padding(start = 8.dp).testTag(Tags.OPEN_PROJECT_OPEN),
+            Modifier.padding(start = 8.dp).testTag(RemoteTags.OPEN_PROJECT_OPEN),
             primary = true,
             enabled = browser.canOpen,
         )
@@ -204,7 +204,7 @@ private fun DirectoryStatus(browser: DirectoryBrowser, modifier: Modifier) {
         browser.checking -> {
             Label(
                 "Checking the path…",
-                modifier.testTag(Tags.OPEN_PROJECT_CHECKING),
+                modifier.testTag(RemoteTags.OPEN_PROJECT_CHECKING),
                 color = IdeColors.TextSecondary,
                 fontSize = 12.sp,
             )
@@ -213,7 +213,7 @@ private fun DirectoryStatus(browser: DirectoryBrowser, modifier: Modifier) {
         browser.current != null && !browser.loading -> {
             Label(
                 if (count == 1) "1 directory" else "$count directories",
-                modifier.testTag(Tags.OPEN_PROJECT_COUNT),
+                modifier.testTag(RemoteTags.OPEN_PROJECT_COUNT),
                 color = IdeColors.TextSecondary,
                 fontSize = 12.sp,
             )
@@ -243,7 +243,7 @@ private fun DirectoryRow(entry: FileEntry, selected: Boolean, onSelect: () -> Un
             .fillMaxWidth()
             .height(PICKER_ROW_HEIGHT)
             .background(background, RoundedCornerShape(4.dp))
-            .testTag(ItemTags.pickerDirectory(entry.path))
+            .testTag(RemoteTags.pickerDirectory(entry.path))
             .padding(horizontal = 8.dp)
             .hoverable(interaction)
             .clickable(interaction, indication = null) {
@@ -275,7 +275,7 @@ private fun LoadingDirectories() {
     Box(
         Modifier
             .fillMaxSize()
-            .testTag(Tags.OPEN_PROJECT_LOADING),
+            .testTag(RemoteTags.OPEN_PROJECT_LOADING),
         contentAlignment = Alignment.Center,
     ) {
         Label("Listing the directories…", color = IdeColors.TextSecondary, fontSize = 12.sp)
@@ -287,7 +287,7 @@ private fun EmptyDirectories() {
     Box(
         Modifier
             .fillMaxSize()
-            .testTag(Tags.OPEN_PROJECT_EMPTY),
+            .testTag(RemoteTags.OPEN_PROJECT_EMPTY),
         contentAlignment = Alignment.Center,
     ) {
         Label("No directories here", color = IdeColors.TextSecondary, fontSize = 12.sp)

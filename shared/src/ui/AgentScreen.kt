@@ -77,7 +77,7 @@ internal fun AgentWorkspace(app: AppState, project: ProjectState) {
     Box(
         Modifier
             .fillMaxSize()
-            .testTag(Tags.AGENT)
+            .testTag(AppTags.AGENT)
             .then(keys)
             .onGloballyPositioned { drag.workspace = it.boundsInRoot() },
     ) {
@@ -128,7 +128,7 @@ private fun WorkspacePopups(workspace: ProjectState) {
 @Composable
 private fun ConversationsButton(agent: AgentState) {
     val toggle = { agent.conversationsVisible = !agent.conversationsVisible }
-    StripButton(agent.conversationsVisible, "Conversations", Tags.AGENT_STRIP_CONVERSATIONS, toggle) {
+    StripButton(agent.conversationsVisible, "Conversations", AppTags.AGENT_STRIP_CONVERSATIONS, toggle) {
         SpeechBubbleIcon()
     }
     val separator = Modifier.padding(vertical = 6.dp).width(22.dp)
@@ -211,7 +211,7 @@ private fun AgentTabStrip(agent: AgentState) {
             .fillMaxWidth()
             .height(36.dp)
             .background(IdeColors.Panel)
-            .testTag(Tags.AGENT_TABS),
+            .testTag(AppTags.AGENT_TABS),
         state = listState,
     ) {
         items(agent.tabs.open, key = { it.id }) { conversation ->
@@ -236,7 +236,7 @@ private fun AgentTabView(agent: AgentState, conversation: Conversation, active: 
             .activeUnderline(active)
             .hoverable(interaction)
             .then(press)
-            .testTag(Tags.agentTab(conversation.id))
+            .testTag(AppTags.agentTab(conversation.id))
             .padding(start = 10.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -245,12 +245,12 @@ private fun AgentTabView(agent: AgentState, conversation: Conversation, active: 
         // How many files and diffs are open inside, so none is forgotten behind another conversation.
         val editor = conversation.workspace?.editor
         val details = editor?.allTabs?.size ?: 0
-        if (details > 0) DetailCount(details, Modifier.testTag(Tags.agentTabDetails(conversation.id)))
+        if (details > 0) DetailCount(details, Modifier.testTag(AppTags.agentTabDetails(conversation.id)))
         Box(Modifier.size(22.dp), contentAlignment = Alignment.Center) {
             if (hovered || active) {
                 IconButton(
                     { agent.tabs.close(conversation) },
-                    Modifier.testTag(Tags.agentTabClose(conversation.id)),
+                    Modifier.testTag(AppTags.agentTabClose(conversation.id)),
                 ) { CloseIcon() }
             }
         }
@@ -265,7 +265,7 @@ private fun ChatTabIcon(busy: Boolean) {
 @Composable
 private fun NoTab(agent: AgentState) {
     Column(
-        Modifier.fillMaxSize().testTag(Tags.AGENT_EMPTY),
+        Modifier.fillMaxSize().testTag(AppTags.AGENT_EMPTY),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {

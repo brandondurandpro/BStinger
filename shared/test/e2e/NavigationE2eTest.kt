@@ -16,8 +16,8 @@ import androidx.compose.ui.test.withKeyDown
 import org.example.kotlineditor.state.TextPos
 import org.example.kotlineditor.state.delete
 import org.example.kotlineditor.state.selectedText
-import org.example.kotlineditor.ui.ItemTags
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.EditorTags
+import org.example.kotlineditor.ui.TreeTags
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -40,12 +40,12 @@ class NavigationE2eTest {
             val doc =
                 app.project.editor.activeTab!!
                     .document!!
-            onNodeWithTag(Tags.EDITOR).performClick()
-            onNodeWithTag(Tags.EDITOR).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.R) } }
-            awaitTag(Tags.FIND_BAR_INPUT).performTextInput("old")
+            onNodeWithTag(EditorTags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.R) } }
+            awaitTag(EditorTags.FIND_BAR_INPUT).performTextInput("old")
             awaitCondition { app.project.find.matches.size == 3 }
-            awaitTag(Tags.REPLACE_INPUT).performTextInput("new")
-            onNodeWithTag(Tags.REPLACE_ALL).performClick()
+            awaitTag(EditorTags.REPLACE_INPUT).performTextInput("new")
+            onNodeWithTag(EditorTags.REPLACE_ALL).performClick()
             awaitCondition { doc.text() == "val a = new\nval b = new + new\n" }
             awaitCondition {
                 app.project.find.matches
@@ -64,13 +64,13 @@ class NavigationE2eTest {
             val doc =
                 app.project.editor.activeTab!!
                     .document!!
-            onNodeWithTag(Tags.EDITOR).performClick()
-            onNodeWithTag(Tags.EDITOR).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.R) } }
-            awaitTag(Tags.FIND_BAR_INPUT).performTextInput("x")
+            onNodeWithTag(EditorTags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.R) } }
+            awaitTag(EditorTags.FIND_BAR_INPUT).performTextInput("x")
             awaitCondition { app.project.find.matches.size == 3 }
-            awaitTag(Tags.REPLACE_INPUT).performTextInput("y")
-            onNodeWithTag(Tags.REPLACE_ONE).performClick() // first click selects the current occurrence
-            onNodeWithTag(Tags.REPLACE_ONE).performClick()
+            awaitTag(EditorTags.REPLACE_INPUT).performTextInput("y")
+            onNodeWithTag(EditorTags.REPLACE_ONE).performClick() // first click selects the current occurrence
+            onNodeWithTag(EditorTags.REPLACE_ONE).performClick()
             awaitCondition { doc.lines[0] == "y1 x2 x3" }
             awaitCondition { doc.selectedText() == "x" && doc.selectionRange()!!.first == TextPos(0, 3) }
         }
@@ -79,16 +79,16 @@ class NavigationE2eTest {
     fun `Go to Symbol finds declarations across the project`() =
         runComposeUiTest {
             val app = launchWithProject(project)
-            onNodeWithTag(Tags.TREE).performClick()
-            onNodeWithTag(Tags.TREE).performKeyInput {
+            onNodeWithTag(TreeTags.TREE).performClick()
+            onNodeWithTag(TreeTags.TREE).performKeyInput {
                 withKeyDown(
                     Key.CtrlLeft,
                 ) { withKeyDown(Key.AltLeft) { withKeyDown(Key.ShiftLeft) { pressKey(Key.N) } } }
             }
-            awaitTag(Tags.GOTO_SYMBOL_INPUT).performTextInput("greetLoud")
-            awaitTag(ItemTags.gotoSymbolItem("greetingIsLoud", "src/test/kotlin/AppTest.kt"))
-            onNodeWithTag(Tags.GOTO_SYMBOL_INPUT).performKeyInput { pressKey(Key.Enter) }
-            awaitTag(Tags.tab("src/test/kotlin/AppTest.kt"))
+            awaitTag(TreeTags.GOTO_SYMBOL_INPUT).performTextInput("greetLoud")
+            awaitTag(TreeTags.gotoSymbolItem("greetingIsLoud", "src/test/kotlin/AppTest.kt"))
+            onNodeWithTag(TreeTags.GOTO_SYMBOL_INPUT).performKeyInput { pressKey(Key.Enter) }
+            awaitTag(EditorTags.tab("src/test/kotlin/AppTest.kt"))
             awaitCondition {
                 app.project.editor.activeTab
                     ?.document
@@ -104,10 +104,10 @@ class NavigationE2eTest {
             val doc =
                 app.project.editor.activeTab!!
                     .document!!
-            onNodeWithTag(Tags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performClick()
             // Line 8: "    println(greeting.shout())", caret on "shout".
             runOnUiThread { doc.moveTo(TextPos(8, 23)) }
-            onNodeWithTag(Tags.EDITOR).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.B) } }
+            onNodeWithTag(EditorTags.EDITOR).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.B) } }
             awaitCondition {
                 app.project.editor.activeTab
                     ?.entry
@@ -119,7 +119,7 @@ class NavigationE2eTest {
                     ?.caret == TextPos(2, 11)
             }
             awaitEditorReady()
-            onNodeWithTag(Tags.EDITOR).performKeyInput {
+            onNodeWithTag(EditorTags.EDITOR).performKeyInput {
                 withKeyDown(Key.CtrlLeft) { withKeyDown(Key.AltLeft) { pressKey(Key.DirectionLeft) } }
             }
             awaitCondition {
@@ -139,19 +139,19 @@ class NavigationE2eTest {
             val doc =
                 app.project.editor.activeTab!!
                     .document!!
-            awaitTag(Tags.line(2))
+            awaitTag(EditorTags.line(2))
             // Locate column 14 ("helper") from the rendered text node: the font is monospace.
             val text =
                 onNode(
                     hasText("fun use() = helper()", substring = false),
                     useUnmergedTree = true,
                 ).fetchSemanticsNode().boundsInRoot
-            val editor = onNodeWithTag(Tags.EDITOR).fetchSemanticsNode().boundsInRoot
+            val editor = onNodeWithTag(EditorTags.EDITOR).fetchSemanticsNode().boundsInRoot
             val charWidth = text.width / "fun use() = helper()".length
             val target = Offset(text.left - editor.left + 14.5f * charWidth, text.center.y - editor.top)
-            onNodeWithTag(Tags.EDITOR).performKeyInput { keyDown(Key.CtrlLeft) }
-            onNodeWithTag(Tags.EDITOR).performMouseInput { click(target) }
-            onNodeWithTag(Tags.EDITOR).performKeyInput { keyUp(Key.CtrlLeft) }
+            onNodeWithTag(EditorTags.EDITOR).performKeyInput { keyDown(Key.CtrlLeft) }
+            onNodeWithTag(EditorTags.EDITOR).performMouseInput { click(target) }
+            onNodeWithTag(EditorTags.EDITOR).performKeyInput { keyUp(Key.CtrlLeft) }
             awaitCondition { doc.caret == TextPos(0, 4) }
         }
 }

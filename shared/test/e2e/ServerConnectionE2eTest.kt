@@ -10,7 +10,8 @@ import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.test.withKeyDown
 import org.example.kotlineditor.state.delete
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.AppTags
+import org.example.kotlineditor.ui.EditorTags
 import kotlin.test.AfterTest
 import kotlin.test.Test
 
@@ -30,10 +31,10 @@ class ServerConnectionE2eTest {
             openFromTree("README.md")
             app.server.dropConnections()
             openFromTree("docs/guide.md")
-            awaitTag(Tags.line(1)).assertTextContains("Hello from the guide", substring = true)
-            onNodeWithTag(Tags.EDITOR).performClick()
+            awaitTag(EditorTags.line(1)).assertTextContains("Hello from the guide", substring = true)
+            onNodeWithTag(EditorTags.EDITOR).performClick()
             app.server.dropConnections()
-            onNodeWithTag(Tags.EDITOR).performKeyInput {
+            onNodeWithTag(EditorTags.EDITOR).performKeyInput {
                 withKeyDown(Key.CtrlLeft) { pressKey(Key.MoveHome) }
                 pressKey(Key.Q)
                 withKeyDown(Key.CtrlLeft) { pressKey(Key.S) }
@@ -46,7 +47,7 @@ class ServerConnectionE2eTest {
         runComposeUiTest {
             val app = launchWithProject(project)
             app.server.close()
-            awaitTag(Tags.STATUS_CONNECTION).assertTextContains("reconnecting", substring = true)
+            awaitTag(AppTags.STATUS_CONNECTION).assertTextContains("reconnecting", substring = true)
         }
 
     @Test
@@ -55,10 +56,10 @@ class ServerConnectionE2eTest {
             val app = launchWithProject(project, chaos = true)
             // Reinstalled or reconfigured: same address, new secret.
             app.process.restart(token = "another-token")
-            awaitTag(Tags.STATUS_CONNECTION)
+            awaitTag(AppTags.STATUS_CONNECTION)
             awaitCondition {
                 runCatching {
-                    onNodeWithTag(Tags.STATUS_CONNECTION).assertTextContains("disconnected", substring = true)
+                    onNodeWithTag(AppTags.STATUS_CONNECTION).assertTextContains("disconnected", substring = true)
                 }.isSuccess
             }
         }

@@ -20,7 +20,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.example.kotlineditor.state.VerticalScroll
 import org.example.kotlineditor.state.delete
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.TreeTags
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertTrue
@@ -86,11 +86,11 @@ class ProjectTreePerformanceE2eTest {
             repeat(FILES) { project.file(name(it), "") }
             val app = launchWithProject(project)
             val tree = app.project.tree
-            val list = onNode(hasScrollToNodeAction() and hasAnyAncestor(hasTestTag(Tags.TREE)))
+            val list = onNode(hasScrollToNodeAction() and hasAnyAncestor(hasTestTag(TreeTags.TREE)))
 
             measure("expand a directory of $FILES files", budgetMillis = 5_000) {
-                onNodeWithTag(Tags.treeChevron("huge")).performClick()
-                awaitTag(Tags.treeRow(name(0)))
+                onNodeWithTag(TreeTags.treeChevron("huge")).performClick()
+                awaitTag(TreeTags.treeRow(name(0)))
                 renderFrame()
             }
             assertTrue(tree.rows.size > FILES)
@@ -99,7 +99,7 @@ class ProjectTreePerformanceE2eTest {
             val scroll = tree.scroll
             val rows = "$STEPS steps of $ROWS_PER_STEP rows"
             report("scroll it, jumping ($rows)", scrollCost(scroll, FILES / 2, userScroll = false), 6_000, 100)
-            awaitTag(Tags.treeSticky("huge"))
+            awaitTag(TreeTags.treeSticky("huge"))
             report("scroll it, as a user ($rows)", scrollCost(scroll, FILES / 2, userScroll = true), 4_000, 40)
             measure("scroll it top to bottom in $SCROLL_STEPS frames", budgetMillis = 15_000, budgetMegabytes = 400) {
                 repeat(SCROLL_STEPS) { step ->
@@ -113,10 +113,10 @@ class ProjectTreePerformanceE2eTest {
             val first = FILES - FILES / SCROLL_STEPS
             runBlocking { scroll.scrollToRow(first) }
             val start = first + 2 * ROWS_PER_STEP - ROWS_BEFORE
-            awaitTag(Tags.treeRow(name(start))).performClick()
+            awaitTag(TreeTags.treeRow(name(start))).performClick()
             measure("move the selection $KEY_PRESSES rows up", budgetMillis = 10_000) {
                 repeat(KEY_PRESSES) {
-                    onNodeWithTag(Tags.TREE).performKeyInput { pressKey(Key.DirectionUp) }
+                    onNodeWithTag(TreeTags.TREE).performKeyInput { pressKey(Key.DirectionUp) }
                     renderFrame()
                 }
             }
@@ -125,13 +125,13 @@ class ProjectTreePerformanceE2eTest {
             list.performScrollToIndex(0)
             renderFrame()
             measure("collapse it", budgetMillis = 2_000) {
-                onNodeWithTag(Tags.treeChevron("huge")).performClick()
-                awaitNoTag(Tags.treeRow(name(0)))
+                onNodeWithTag(TreeTags.treeChevron("huge")).performClick()
+                awaitNoTag(TreeTags.treeRow(name(0)))
                 renderFrame()
             }
             measure("expand it again (already listed)", budgetMillis = 2_000) {
-                onNodeWithTag(Tags.treeChevron("huge")).performClick()
-                awaitTag(Tags.treeRow(name(0)))
+                onNodeWithTag(TreeTags.treeChevron("huge")).performClick()
+                awaitTag(TreeTags.treeRow(name(0)))
                 renderFrame()
             }
         }

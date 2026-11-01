@@ -62,7 +62,7 @@ fun FindInFilesPopup(project: ProjectState, onClose: () -> Unit) {
         }
         Unit
     }
-    PopupFrame(Tags.FIND_IN_FILES, onClose, width = 760) {
+    PopupFrame(TreeTags.FIND_IN_FILES, onClose, width = 760) {
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Label("Find in Files", fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
@@ -70,7 +70,7 @@ fun FindInFilesPopup(project: ProjectState, onClose: () -> Unit) {
                     status(results, query),
                     color = IdeColors.TextSecondary,
                     fontSize = 12.sp,
-                    modifier = Modifier.testTag(Tags.FIND_IN_FILES_COUNT),
+                    modifier = Modifier.testTag(TreeTags.FIND_IN_FILES_COUNT),
                 )
             }
             IdeTextField(
@@ -79,7 +79,7 @@ fun FindInFilesPopup(project: ProjectState, onClose: () -> Unit) {
                 Modifier
                     .fillMaxWidth()
                     .padding(top = 8.dp)
-                    .testTag(Tags.FIND_IN_FILES_INPUT)
+                    .testTag(TreeTags.FIND_IN_FILES_INPUT)
                     .focusRequester(focus)
                     .popupKeys({ open(list.getOrNull(cursor.selected)) }, onClose) { cursor.move(it, list.size) },
                 placeholder = "Text to find",
@@ -117,7 +117,7 @@ private fun SearchHitRow(hit: SearchHit, length: Int, selected: Boolean, onClick
         Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .testTag(ItemTags.findInFilesItem(hit.relativePath, hit.line))
+            .testTag(TreeTags.findInFilesItem(hit.relativePath, hit.line))
             .resultRow(selected)
             .padding(horizontal = 8.dp, vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically,

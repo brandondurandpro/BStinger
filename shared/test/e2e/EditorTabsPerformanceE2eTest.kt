@@ -7,7 +7,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.model.FileEntry
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.EditorTags
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertTrue
@@ -36,7 +36,7 @@ class EditorTabsPerformanceE2eTest {
             .mapNotNull { it.config.getOrElseNullable(SemanticsProperties.TestTag) { null } }
 
     private fun ComposeUiTest.wheel(delta: Float) {
-        onNodeWithTag(Tags.TABS).performMouseInput {
+        onNodeWithTag(EditorTags.TABS).performMouseInput {
             moveTo(center)
             scroll(delta)
         }
@@ -55,7 +55,7 @@ class EditorTabsPerformanceE2eTest {
                 }
             }
             awaitCondition { app.project.editor.tabs.size == TABS }
-            awaitTag(Tags.tab("File${TABS - 1}.txt"))
+            awaitTag(EditorTags.tab("File${TABS - 1}.txt"))
             assertTrue(composedTabs().size < MAX_COMPOSED_TABS, "composed tabs: ${composedTabs().size}")
 
             // Warm up, and move away from the end of the row so that the measured steps alternate around the middle.

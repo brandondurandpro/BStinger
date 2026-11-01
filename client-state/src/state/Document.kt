@@ -17,11 +17,7 @@ import org.example.kotlineditor.syntax.treesitter.SyntaxSource
  * editing and search actions are extensions, see `DocumentNavigation.kt`, `DocumentEditing.kt`, ...
  */
 @Stable
-class Document(
-    initialLines: List<String>,
-    val language: Language,
-    val lineSeparator: String = "\n",
-) : SyntaxSource {
+class Document(initialLines: List<String>, val language: Language, val lineSeparator: String = "\n") : SyntaxSource {
     val lines = mutableStateListOf<String>().apply { addAll(initialLines.ifEmpty { listOf("") }) }
 
     var caret by mutableStateOf(TextPos(0, 0))
@@ -34,8 +30,6 @@ class Document(
     /** Incremented on every edit; lets observers (save state, highlighting) react cheaply. */
     override var version by mutableIntStateOf(0)
         private set
-
-    override fun snapshotLines(): List<String> = lines.toList()
 
     var savedVersion by mutableIntStateOf(0)
         private set
@@ -91,6 +85,8 @@ class Document(
             return oneChar && wasTyping && continues
         }
     }
+
+    override fun snapshotLines(): List<String> = lines.toList()
 
     fun text(): String = lines.joinToString(lineSeparator)
 

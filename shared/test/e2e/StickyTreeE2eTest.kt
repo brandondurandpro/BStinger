@@ -18,7 +18,7 @@ import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.state.delete
 import org.example.kotlineditor.state.relativePath
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.TreeTags
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -43,8 +43,8 @@ class StickyTreeE2eTest {
     private fun ComposeUiTest.launchWithHugeDirectory(): E2eApp {
         repeat(FILES) { project.file(name(it), "content $it") }
         val app = launchWithProject(project)
-        onNodeWithTag(Tags.treeChevron("huge")).performClick()
-        awaitTag(Tags.treeRow(name(0)))
+        onNodeWithTag(TreeTags.treeChevron("huge")).performClick()
+        awaitTag(TreeTags.treeRow(name(0)))
         return app
     }
 
@@ -54,7 +54,7 @@ class StickyTreeE2eTest {
 
     // Scrolls the tree so that the row at [index] is the first one.
     private fun ComposeUiTest.scrollTreeTo(index: Int) {
-        onNode(hasScrollToNodeAction() and hasAnyAncestor(hasTestTag(Tags.TREE))).performScrollToIndex(index)
+        onNode(hasScrollToNodeAction() and hasAnyAncestor(hasTestTag(TreeTags.TREE))).performScrollToIndex(index)
         waitForIdle()
     }
 
@@ -74,10 +74,10 @@ class StickyTreeE2eTest {
         runComposeUiTest {
             val app = launchWithHugeDirectory()
             scrollTreeTo(rowIndex(app, name(100)))
-            awaitTag(Tags.treeSticky(rootName)).assertIsDisplayed()
-            awaitTag(Tags.treeSticky("huge")).assertIsDisplayed()
-            val root = onNodeWithTag(Tags.treeSticky(rootName))
-            assertTrue(root.bottom() <= onNodeWithTag(Tags.treeSticky("huge")).top())
+            awaitTag(TreeTags.treeSticky(rootName)).assertIsDisplayed()
+            awaitTag(TreeTags.treeSticky("huge")).assertIsDisplayed()
+            val root = onNodeWithTag(TreeTags.treeSticky(rootName))
+            assertTrue(root.bottom() <= onNodeWithTag(TreeTags.treeSticky("huge")).top())
         }
 
     @Test
@@ -86,11 +86,11 @@ class StickyTreeE2eTest {
             repeat(FILES) { project.file("src/main/kotlin/many/f$it.kt", "") }
             val app = launchWithProject(project)
             app.project.tree.reveal(project.root.resolve("src/main/kotlin/many/f0.kt").toString())
-            awaitTag(Tags.treeRow("src/main/kotlin/many/f0.kt"))
+            awaitTag(TreeTags.treeRow("src/main/kotlin/many/f0.kt"))
             scrollTreeTo(rowIndex(app, "src/main/kotlin/many/f150.kt"))
             val stack = listOf(rootName, "src", "src/main", "src/main/kotlin", "src/main/kotlin/many")
-            stack.forEach { awaitTag(Tags.treeSticky(it)) }
-            val tops = stack.map { onNodeWithTag(Tags.treeSticky(it)).top() }
+            stack.forEach { awaitTag(TreeTags.treeSticky(it)) }
+            val tops = stack.map { onNodeWithTag(TreeTags.treeSticky(it)).top() }
             assertEquals(tops.sorted(), tops, "headers are stacked from the root down")
         }
 
@@ -101,10 +101,10 @@ class StickyTreeE2eTest {
             repeat(FILES / 2) { project.file("top$it.txt", "") }
             val app = launchWithHugeDirectory()
             scrollTreeTo(rowIndex(app, name(100)))
-            awaitTag(Tags.treeSticky("huge"))
+            awaitTag(TreeTags.treeSticky("huge"))
             scrollTreeTo(rowIndex(app, "src"))
-            awaitNoTag(Tags.treeSticky("huge"))
-            awaitTag(Tags.treeSticky(rootName))
+            awaitNoTag(TreeTags.treeSticky("huge"))
+            awaitTag(TreeTags.treeSticky(rootName))
         }
 
     @Test
@@ -112,12 +112,14 @@ class StickyTreeE2eTest {
         runComposeUiTest {
             val app = launchWithHugeDirectory()
             scrollTreeTo(rowIndex(app, name(200)))
-            awaitTag(Tags.treeSticky("huge")).performClick()
-            awaitNoTag(Tags.treeSticky("huge"))
-            onNodeWithTag(Tags.treeRow("huge")).assertIsDisplayed()
+            awaitTag(TreeTags.treeSticky("huge")).performClick()
+            awaitNoTag(TreeTags.treeSticky("huge"))
+            onNodeWithTag(TreeTags.treeRow("huge")).assertIsDisplayed()
             awaitCondition { app.project.tree.selectedPath == project.root.resolve("huge").toString() }
             // Its own row is under the pinned root, not hidden by it.
-            assertTrue(onNodeWithTag(Tags.treeSticky(rootName)).bottom() <= onNodeWithTag(Tags.treeRow("huge")).top())
+            assertTrue(
+                onNodeWithTag(TreeTags.treeSticky(rootName)).bottom() <= onNodeWithTag(TreeTags.treeRow("huge")).top(),
+            )
         }
 
     @Test
@@ -125,11 +127,13 @@ class StickyTreeE2eTest {
         runComposeUiTest {
             val app = launchWithHugeDirectory()
             scrollTreeTo(rowIndex(app, name(100)))
-            val row = awaitTag(Tags.treeRow(name(110)))
+            val row = awaitTag(TreeTags.treeRow(name(110)))
             val before = row.top()
-            awaitTag(Tags.treeSticky("huge")).performMouseInput { scroll(3f) }
+            awaitTag(TreeTags.treeSticky("huge")).performMouseInput { scroll(3f) }
             awaitCondition {
-                onAllNodesWithTag(Tags.treeRow(name(110))).fetchSemanticsNodes().none { it.boundsInRoot.top >= before }
+                onAllNodesWithTag(
+                    TreeTags.treeRow(name(110)),
+                ).fetchSemanticsNodes().none { it.boundsInRoot.top >= before }
             }
         }
 
@@ -138,10 +142,10 @@ class StickyTreeE2eTest {
         runComposeUiTest {
             val app = launchWithHugeDirectory()
             scrollTreeTo(rowIndex(app, name(100)))
-            awaitTag(Tags.treeSticky("huge"))
+            awaitTag(TreeTags.treeSticky("huge"))
             // Rows 100 and 101 are under the root and "huge" headers: 102 is the first one in view.
-            onNodeWithTag(Tags.treeRow(name(102))).performClick()
-            onNodeWithTag(Tags.TREE).performKeyInput {
+            onNodeWithTag(TreeTags.treeRow(name(102))).performClick()
+            onNodeWithTag(TreeTags.TREE).performKeyInput {
                 pressKey(Key.DirectionUp)
                 pressKey(Key.DirectionUp)
             }
@@ -149,7 +153,7 @@ class StickyTreeE2eTest {
             awaitCondition {
                 val headers = onAllNodes(hasTestTagPrefix("tree.sticky:")).fetchSemanticsNodes()
                 val stickyBottom = headers.maxOfOrNull { it.boundsInRoot.bottom } ?: 0f
-                onAllNodesWithTag(Tags.treeRow(name(100))).fetchSemanticsNodes().any {
+                onAllNodesWithTag(TreeTags.treeRow(name(100))).fetchSemanticsNodes().any {
                     it.boundsInRoot.top >= stickyBottom
                 }
             }

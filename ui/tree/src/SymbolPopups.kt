@@ -67,7 +67,7 @@ fun FileStructurePopup(document: Document, onClose: () -> Unit) {
         }
         Unit
     }
-    PopupFrame(Tags.STRUCTURE, onClose, width = 520) {
+    PopupFrame(TreeTags.STRUCTURE, onClose, width = 520) {
         Column {
             Label("File Structure", fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 8.dp))
             IdeTextField(
@@ -75,7 +75,7 @@ fun FileStructurePopup(document: Document, onClose: () -> Unit) {
                 { query = it },
                 Modifier
                     .fillMaxWidth()
-                    .testTag(Tags.STRUCTURE_INPUT)
+                    .testTag(TreeTags.STRUCTURE_INPUT)
                     .focusRequester(focus)
                     .popupKeys({ open(results.getOrNull(cursor.selected)) }, onClose) { cursor.move(it, results.size) },
                 placeholder = "Filter declarations",
@@ -99,7 +99,7 @@ private fun DeclarationRow(declaration: Declaration, indented: Boolean, selected
         Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .testTag(ItemTags.structureItem(declaration.name, declaration.line))
+            .testTag(TreeTags.structureItem(declaration.name, declaration.line))
             .resultRow(selected)
             .padding(start = 8.dp + indent, top = 3.dp, bottom = 3.dp, end = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -137,7 +137,7 @@ fun GotoSymbolPopup(project: ProjectState, onClose: () -> Unit) {
         }
         Unit
     }
-    PopupFrame(Tags.GOTO_SYMBOL, onClose) {
+    PopupFrame(TreeTags.GOTO_SYMBOL, onClose) {
         Column {
             Label("Symbols", fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 8.dp))
             IdeTextField(
@@ -145,7 +145,7 @@ fun GotoSymbolPopup(project: ProjectState, onClose: () -> Unit) {
                 { query = it },
                 Modifier
                     .fillMaxWidth()
-                    .testTag(Tags.GOTO_SYMBOL_INPUT)
+                    .testTag(TreeTags.GOTO_SYMBOL_INPUT)
                     .focusRequester(focus)
                     .popupKeys({ open(list.getOrNull(cursor.selected)) }, onClose) { cursor.move(it, list.size) },
                 placeholder = "Type a class, function or property name",
@@ -175,7 +175,7 @@ private fun SymbolRow(match: SymbolMatch, selected: Boolean, onClick: () -> Unit
         Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .testTag(ItemTags.gotoSymbolItem(match.declaration.name, match.relativePath))
+            .testTag(TreeTags.gotoSymbolItem(match.declaration.name, match.relativePath))
             .resultRow(selected)
             .padding(horizontal = 8.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,

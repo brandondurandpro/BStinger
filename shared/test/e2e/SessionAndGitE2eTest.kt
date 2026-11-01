@@ -13,8 +13,9 @@ import org.example.kotlineditor.model.ProjectSession
 import org.example.kotlineditor.model.SessionFile
 import org.example.kotlineditor.state.TextPos
 import org.example.kotlineditor.state.delete
-import org.example.kotlineditor.ui.ItemTags
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.AppTags
+import org.example.kotlineditor.ui.EditorTags
+import org.example.kotlineditor.ui.TreeTags
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -43,8 +44,8 @@ class SessionAndGitE2eTest {
         runComposeUiTest {
             val sessions = InMemorySessionStore()
             val app = launchApp(recent = listOf(project.path), sessions = sessions)
-            onNodeWithTag(ItemTags.recentProject(project.path)).performClick()
-            awaitTag(Tags.treeRow("src"))
+            onNodeWithTag(AppTags.recentProject(project.path)).performClick()
+            awaitTag(TreeTags.treeRow("src"))
             openFromTree("README.md")
             openFromTree("docs/guide.md")
             runOnUiThread {
@@ -52,12 +53,12 @@ class SessionAndGitE2eTest {
                     .document!!
                     .moveTo(TextPos(1, 6))
             }
-            onNodeWithTag(Tags.tab("README.md")).performClick()
+            onNodeWithTag(EditorTags.tab("README.md")).performClick()
             runOnUiThread { app.state.closeProject() }
-            awaitTag(Tags.WELCOME)
-            onNodeWithTag(ItemTags.recentProject(project.path)).performClick()
-            awaitTag(Tags.tab("docs/guide.md"))
-            awaitTag(Tags.tab("README.md"))
+            awaitTag(AppTags.WELCOME)
+            onNodeWithTag(AppTags.recentProject(project.path)).performClick()
+            awaitTag(EditorTags.tab("docs/guide.md"))
+            awaitTag(EditorTags.tab("README.md"))
             awaitCondition {
                 app.project.editor.activeTab
                     ?.entry
@@ -89,8 +90,8 @@ class SessionAndGitE2eTest {
                 ),
             )
             val app = launchApp(recent = listOf(project.path), sessions = sessions)
-            onNodeWithTag(ItemTags.recentProject(project.path)).performClick()
-            awaitTag(Tags.tab("README.md"))
+            onNodeWithTag(AppTags.recentProject(project.path)).performClick()
+            awaitTag(EditorTags.tab("README.md"))
             assertEquals(
                 listOf("README.md"),
                 app.project.editor.tabs
@@ -106,15 +107,15 @@ class SessionAndGitE2eTest {
             git("commit", "-q", "-m", "init")
             project.file("README.md", "# Changed\n")
             val app = launchWithProject(project)
-            awaitTag(Tags.treeGitStatus("README.md", "Modified"))
-            awaitTag(Tags.treeGitStatus("logo.png", "Untracked"))
+            awaitTag(TreeTags.treeGitStatus("README.md", "Modified"))
+            awaitTag(TreeTags.treeGitStatus("logo.png", "Untracked"))
             openFromTree("build.gradle.kts")
-            onNodeWithTag(Tags.EDITOR).performClick()
-            onNodeWithTag(Tags.EDITOR).performKeyInput {
+            onNodeWithTag(EditorTags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performKeyInput {
                 pressKey(Key.X)
                 withKeyDown(Key.CtrlLeft) { pressKey(Key.S) }
             }
-            awaitTag(Tags.treeGitStatus("build.gradle.kts", "Modified"))
+            awaitTag(TreeTags.treeGitStatus("build.gradle.kts", "Modified"))
             assertEquals(null, app.project.gitStatus["src/main/kotlin/App.kt"])
         }
 }

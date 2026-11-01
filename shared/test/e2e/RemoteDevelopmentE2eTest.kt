@@ -9,7 +9,11 @@ import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.withKeyDown
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.AppTags
+import org.example.kotlineditor.ui.EditorTags
+import org.example.kotlineditor.ui.LanguageServerTags
+import org.example.kotlineditor.ui.RemoteTags
+import org.example.kotlineditor.ui.TreeTags
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -38,13 +42,13 @@ class RemoteDevelopmentE2eTest {
         remoteUiTest {
             val app = launchApp()
             connectRemoteTo(RemoteTestEnvironment, project.path)
-            awaitTag(Tags.treeRow("src"), timeout = 60_000)
+            awaitTag(TreeTags.treeRow("src"), timeout = 60_000)
             assertTrue(app.state.isRemote, "the IDE should show the remote server")
-            onNodeWithTag(Tags.STATUS_REMOTE).assertTextContains("Remote: tester@127.0.0.1", substring = true)
+            onNodeWithTag(AppTags.STATUS_REMOTE).assertTextContains("Remote: tester@127.0.0.1", substring = true)
 
             openFromTree("README.md")
-            onNodeWithTag(Tags.EDITOR).performClick()
-            onNodeWithTag(Tags.EDITOR).performKeyInput {
+            onNodeWithTag(EditorTags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performKeyInput {
                 withKeyDown(Key.CtrlLeft) { pressKey(Key.MoveHome) }
                 pressKey(Key.Q)
                 withKeyDown(Key.CtrlLeft) { pressKey(Key.S) }
@@ -58,36 +62,36 @@ class RemoteDevelopmentE2eTest {
             val app = launchApp()
             val local = app.state.languageServers
             connectRemoteTo(RemoteTestEnvironment, project.path)
-            awaitTag(Tags.treeRow("src"), timeout = 60_000)
+            awaitTag(TreeTags.treeRow("src"), timeout = 60_000)
             // A new state polls the remote server; the local one stopped.
             awaitCondition { app.state.languageServers !== local }
             awaitCondition { app.state.languageServers.status.server.heapMaxBytes > 0 }
-            awaitTag(Tags.STATUS_SERVER_MEMORY)
+            awaitTag(LanguageServerTags.STATUS_SERVER_MEMORY)
         }
 
     @Test
     fun `cancelling the dialog leaves the IDE on the local server`() =
         remoteUiTest {
             val app = launchApp()
-            onNodeWithTag(Tags.WELCOME_REMOTE).performClick()
-            awaitTag(Tags.REMOTE_DIALOG)
-            onNodeWithTag(Tags.REMOTE_CANCEL).performClick()
-            awaitNoTag(Tags.REMOTE_DIALOG)
+            onNodeWithTag(AppTags.WELCOME_REMOTE).performClick()
+            awaitTag(RemoteTags.REMOTE_DIALOG)
+            onNodeWithTag(RemoteTags.REMOTE_CANCEL).performClick()
+            awaitNoTag(RemoteTags.REMOTE_DIALOG)
             assertFalse(app.state.isRemote, "cancelling must not connect")
-            awaitTag(Tags.WELCOME)
+            awaitTag(AppTags.WELCOME)
         }
 
     @Test
     fun `an empty host is reported without running ssh`() =
         remoteUiTest {
             val app = launchApp()
-            onNodeWithTag(Tags.WELCOME_REMOTE).performClick()
-            awaitTag(Tags.REMOTE_DIALOG)
-            onNodeWithTag(Tags.REMOTE_NEW_HOST).performClick()
-            awaitTag(Tags.REMOTE_HOST)
-            onNodeWithTag(Tags.REMOTE_HOST).performTextClearance()
-            onNodeWithTag(Tags.REMOTE_CONNECT).performClick()
-            awaitTag(Tags.REMOTE_ERROR).assertTextContains("Enter a host", substring = true)
+            onNodeWithTag(AppTags.WELCOME_REMOTE).performClick()
+            awaitTag(RemoteTags.REMOTE_DIALOG)
+            onNodeWithTag(RemoteTags.REMOTE_NEW_HOST).performClick()
+            awaitTag(RemoteTags.REMOTE_HOST)
+            onNodeWithTag(RemoteTags.REMOTE_HOST).performTextClearance()
+            onNodeWithTag(RemoteTags.REMOTE_CONNECT).performClick()
+            awaitTag(RemoteTags.REMOTE_ERROR).assertTextContains("Enter a host", substring = true)
             assertFalse(app.state.isRemote)
         }
 
@@ -96,14 +100,14 @@ class RemoteDevelopmentE2eTest {
         remoteUiTest {
             val app = launchApp()
             connectRemoteTo(RemoteTestEnvironment, project.path)
-            awaitTag(Tags.treeRow("src"), timeout = 60_000)
-            onNodeWithTag(Tags.TOP_REMOTE).assertTextContains("tester@127.0.0.1", substring = true)
+            awaitTag(TreeTags.treeRow("src"), timeout = 60_000)
+            onNodeWithTag(AppTags.TOP_REMOTE).assertTextContains("tester@127.0.0.1", substring = true)
 
-            onNodeWithTag(Tags.TOP_REMOTE).performClick()
-            awaitTag(Tags.REMOTE_DISCONNECT).performClick()
-            awaitTag(Tags.WELCOME)
+            onNodeWithTag(AppTags.TOP_REMOTE).performClick()
+            awaitTag(AppTags.REMOTE_DISCONNECT).performClick()
+            awaitTag(AppTags.WELCOME)
             awaitCondition { !app.state.isRemote }
-            awaitNoTag(Tags.TOP_REMOTE)
+            awaitNoTag(AppTags.TOP_REMOTE)
         }
 
     @Test
@@ -111,9 +115,9 @@ class RemoteDevelopmentE2eTest {
         remoteUiTest {
             val app = launchApp()
             connectRemoteTo(RemoteTestEnvironment, project.path, identity = "/does/not/exist/id_rsa")
-            awaitTag(Tags.REMOTE_ERROR, timeout = 30_000)
+            awaitTag(RemoteTags.REMOTE_ERROR, timeout = 30_000)
             assertFalse(app.state.isRemote)
-            awaitTag(Tags.REMOTE_DIALOG)
+            awaitTag(RemoteTags.REMOTE_DIALOG)
         }
 
     @Test
@@ -121,17 +125,17 @@ class RemoteDevelopmentE2eTest {
         remoteUiTest {
             val app = launchApp()
             connectRemoteTo(RemoteTestEnvironment, project.path)
-            awaitTag(Tags.treeRow("src"), timeout = 60_000)
+            awaitTag(TreeTags.treeRow("src"), timeout = 60_000)
 
-            onNodeWithTag(Tags.PROJECT_WIDGET).performClick()
-            onNodeWithTag(Tags.PROJECT_CLOSE).performClick()
-            awaitTag(Tags.WELCOME)
-            onNodeWithTag(Tags.REMOTE_DISCONNECT).performClick()
+            onNodeWithTag(AppTags.PROJECT_WIDGET).performClick()
+            onNodeWithTag(AppTags.PROJECT_CLOSE).performClick()
+            awaitTag(AppTags.WELCOME)
+            onNodeWithTag(AppTags.REMOTE_DISCONNECT).performClick()
             awaitCondition { !app.state.isRemote }
 
             // The Open Project dialog browses the local server again.
             openProjectDirectoryFromWelcome(project.path)
-            awaitTag(Tags.treeRow("src"))
+            awaitTag(TreeTags.treeRow("src"))
             assertFalse(app.state.isRemote)
         }
 
@@ -140,16 +144,16 @@ class RemoteDevelopmentE2eTest {
         remoteUiTest {
             val app = launchApp(chaos = true)
             connectRemoteTo(RemoteTestEnvironment, project.path)
-            awaitTag(Tags.treeRow("src"), timeout = 60_000)
-            onNodeWithTag(Tags.PROJECT_WIDGET).performClick()
-            onNodeWithTag(Tags.PROJECT_CLOSE).performClick()
-            awaitTag(Tags.WELCOME)
+            awaitTag(TreeTags.treeRow("src"), timeout = 60_000)
+            onNodeWithTag(AppTags.PROJECT_WIDGET).performClick()
+            onNodeWithTag(AppTags.PROJECT_CLOSE).performClick()
+            awaitTag(AppTags.WELCOME)
             // The daemon is shared by the tests: its list holds their projects too.
             assertTrue(project.path in app.state.recentProjects, "the remote server's recents")
 
             // A slow link to the local server: its list takes a while to come back.
             app.network.latencyMs = 400
-            onNodeWithTag(Tags.REMOTE_DISCONNECT).performClick()
+            onNodeWithTag(AppTags.REMOTE_DISCONNECT).performClick()
             // From the moment the IDE says it is local, the list is the local one: a remote path shown there would
             // be opened on the local disk, and the screen would still change under the user's click.
             awaitCondition { !app.state.isRemote }
@@ -162,20 +166,20 @@ class RemoteDevelopmentE2eTest {
         remoteUiTest {
             val app = launchApp()
             connectRemoteTo(RemoteTestEnvironment, project.path)
-            awaitTag(Tags.treeRow("src"), timeout = 60_000)
+            awaitTag(TreeTags.treeRow("src"), timeout = 60_000)
             val firstPid = RemoteTestEnvironment.daemonPid()
 
-            onNodeWithTag(Tags.PROJECT_WIDGET).performClick()
-            onNodeWithTag(Tags.PROJECT_CLOSE).performClick()
-            awaitTag(Tags.WELCOME)
-            onNodeWithTag(Tags.REMOTE_DISCONNECT).performClick()
+            onNodeWithTag(AppTags.PROJECT_WIDGET).performClick()
+            onNodeWithTag(AppTags.PROJECT_CLOSE).performClick()
+            awaitTag(AppTags.WELCOME)
+            onNodeWithTag(AppTags.REMOTE_DISCONNECT).performClick()
             awaitCondition { !app.state.isRemote }
 
             // The dialog remembers the last connection; connecting again must reuse the daemon.
-            onNodeWithTag(Tags.WELCOME_REMOTE).performClick()
-            awaitTag(Tags.REMOTE_DIALOG)
-            onNodeWithTag(Tags.REMOTE_CONNECT).performClick()
-            awaitTag(Tags.treeRow("src"), timeout = 60_000)
+            onNodeWithTag(AppTags.WELCOME_REMOTE).performClick()
+            awaitTag(RemoteTags.REMOTE_DIALOG)
+            onNodeWithTag(RemoteTags.REMOTE_CONNECT).performClick()
+            awaitTag(TreeTags.treeRow("src"), timeout = 60_000)
             assertEquals(firstPid, RemoteTestEnvironment.daemonPid())
         }
 
@@ -184,16 +188,16 @@ class RemoteDevelopmentE2eTest {
         remoteUiTest {
             val app = launchApp()
             connectRemoteTo(RemoteTestEnvironment, project.path)
-            awaitTag(Tags.treeRow("src"), timeout = 60_000)
+            awaitTag(TreeTags.treeRow("src"), timeout = 60_000)
             val firstPid = RemoteTestEnvironment.daemonPid()
             val firstBuild = RemoteTestEnvironment.installedBuild()
             disconnectFromTopBar(app)
 
             RemoteTestEnvironment.withRebuiltBundle {
-                onNodeWithTag(Tags.WELCOME_REMOTE).performClick()
-                awaitTag(Tags.REMOTE_DIALOG)
-                onNodeWithTag(Tags.REMOTE_CONNECT).performClick()
-                awaitTag(Tags.treeRow("src"), timeout = 60_000)
+                onNodeWithTag(AppTags.WELCOME_REMOTE).performClick()
+                awaitTag(RemoteTags.REMOTE_DIALOG)
+                onNodeWithTag(RemoteTags.REMOTE_CONNECT).performClick()
+                awaitTag(TreeTags.treeRow("src"), timeout = 60_000)
             }
             assertNotEquals(firstBuild, RemoteTestEnvironment.installedBuild(), "the new bundle must be installed")
             assertNotEquals(firstPid, RemoteTestEnvironment.daemonPid(), "the old daemon must be replaced")
@@ -206,9 +210,9 @@ class RemoteDevelopmentE2eTest {
             val app = launchApp()
             RemoteTestEnvironment.forgetHostKey()
             connectRemoteTo(RemoteTestEnvironment, project.path)
-            awaitTag(Tags.REMOTE_ERROR, timeout = 30_000).assertTextContains("known_hosts", substring = true)
+            awaitTag(RemoteTags.REMOTE_ERROR, timeout = 30_000).assertTextContains("known_hosts", substring = true)
             assertFalse(app.state.isRemote)
-            awaitTag(Tags.REMOTE_DIALOG)
+            awaitTag(RemoteTags.REMOTE_DIALOG)
         }
 
     @Test
@@ -217,16 +221,16 @@ class RemoteDevelopmentE2eTest {
             val app = launchApp()
             RemoteTestEnvironment.withSlowSsh(delaySeconds = 60) { wrapper ->
                 connectRemoteTo(RemoteTestEnvironment, project.path)
-                awaitTag(Tags.REMOTE_STATUS)
+                awaitTag(RemoteTags.REMOTE_STATUS)
                 awaitCondition { sshProcesses(wrapper) > 0 }
 
-                onNodeWithTag(Tags.REMOTE_CANCEL).performClick()
-                awaitNoTag(Tags.REMOTE_DIALOG)
+                onNodeWithTag(RemoteTags.REMOTE_CANCEL).performClick()
+                awaitNoTag(RemoteTags.REMOTE_DIALOG)
                 // Before, the ssh command ran on (an upload for minutes) after the dialog was gone.
                 awaitCondition { sshProcesses(wrapper) == 0 }
             }
             assertFalse(app.state.isRemote)
-            awaitTag(Tags.WELCOME)
+            awaitTag(AppTags.WELCOME)
         }
 
     @Test
@@ -250,13 +254,13 @@ class RemoteDevelopmentE2eTest {
                 // A bundle never installed yet, so the upload and unpacking run in that shell too.
                 RemoteTestEnvironment.withRebuiltBundle {
                     connectRemoteTo(RemoteTestEnvironment, project.path)
-                    awaitTag(Tags.treeRow("src"), timeout = 60_000)
+                    awaitTag(TreeTags.treeRow("src"), timeout = 60_000)
                 }
                 assertTrue(app.state.isRemote)
                 assertNotEquals(previousBuild, RemoteTestEnvironment.installedBuild(), "installed through $name")
                 openFromTree("README.md")
-                onNodeWithTag(Tags.EDITOR).performClick()
-                onNodeWithTag(Tags.EDITOR).performKeyInput {
+                onNodeWithTag(EditorTags.EDITOR).performClick()
+                onNodeWithTag(EditorTags.EDITOR).performKeyInput {
                     withKeyDown(Key.CtrlLeft) { pressKey(Key.MoveHome) }
                     pressKey(Key.Q)
                     withKeyDown(Key.CtrlLeft) { pressKey(Key.S) }
@@ -267,9 +271,9 @@ class RemoteDevelopmentE2eTest {
     }
 
     private fun androidx.compose.ui.test.ComposeUiTest.disconnectFromTopBar(app: E2eApp) {
-        onNodeWithTag(Tags.TOP_REMOTE).performClick()
-        awaitTag(Tags.REMOTE_DISCONNECT).performClick()
-        awaitTag(Tags.WELCOME)
+        onNodeWithTag(AppTags.TOP_REMOTE).performClick()
+        awaitTag(AppTags.REMOTE_DISCONNECT).performClick()
+        awaitTag(AppTags.WELCOME)
         awaitCondition { !app.state.isRemote }
     }
 

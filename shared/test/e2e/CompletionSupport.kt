@@ -10,7 +10,7 @@ import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.withKeyDown
 import org.example.kotlineditor.state.Document
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.EditorTags
 import org.example.kotlineditor.ui.TextClipboard
 
 private val LETTERS =
@@ -24,7 +24,7 @@ private val DIGITS =
 /** Sends keys to the focused editor. */
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.editorKeys(block: KeyInjectionScope.() -> Unit) {
-    onNodeWithTag(Tags.EDITOR).performKeyInput(block)
+    onNodeWithTag(EditorTags.EDITOR).performKeyInput(block)
     waitForIdle()
 }
 
@@ -89,7 +89,7 @@ fun ComposeUiTest.awaitCompletion(label: String, timeout: Long = SERVER_START_MS
 /** Whether the popup is shown. */
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.completionShown(): Boolean =
-    onAllNodes(hasTestTag(Tags.COMPLETION)).fetchSemanticsNodes().isNotEmpty()
+    onAllNodes(hasTestTag(EditorTags.COMPLETION)).fetchSemanticsNodes().isNotEmpty()
 
 /** The line [index] of [document]. */
 fun Document.line(index: Int): String = lines[index]

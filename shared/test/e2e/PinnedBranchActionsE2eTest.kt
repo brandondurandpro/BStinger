@@ -11,8 +11,8 @@ import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.state.ToolWindow
-import org.example.kotlineditor.ui.ItemTags
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.AppTags
+import org.example.kotlineditor.ui.GitTags
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.exists
@@ -70,24 +70,28 @@ class PinnedBranchActionsE2eTest {
 
     private fun ComposeUiTest.pin(app: E2eApp, branch: String) {
         awaitCondition { app.project.gitBranchInfos.any { it.name == branch } }
-        onNodeWithTag(Tags.GIT_BRANCH).performClick()
-        awaitTag(Tags.BRANCH_PICKER)
-        onNodeWithTag(ItemTags.branchPin(branch)).performClick()
+        onNodeWithTag(GitTags.GIT_BRANCH).performClick()
+        awaitTag(GitTags.BRANCH_PICKER)
+        onNodeWithTag(GitTags.branchPin(branch)).performClick()
         awaitCondition { branch in app.project.selectedBranches }
-        onNodeWithTag(Tags.BRANCH_SEARCH).performClick()
-        onNodeWithTag(Tags.BRANCH_SEARCH).performKeyInput { pressKey(Key.Escape) }
-        awaitNoTag(Tags.BRANCH_PICKER)
-        awaitTag(ItemTags.pinnedBranch(branch))
+        onNodeWithTag(GitTags.BRANCH_SEARCH).performClick()
+        onNodeWithTag(GitTags.BRANCH_SEARCH).performKeyInput { pressKey(Key.Escape) }
+        awaitNoTag(GitTags.BRANCH_PICKER)
+        awaitTag(GitTags.pinnedBranch(branch))
     }
 
     private fun ComposeUiTest.menuItem(branch: String, tag: String) {
-        onNodeWithTag(ItemTags.pinnedBranchMenu(branch)).performClick()
+        onNodeWithTag(GitTags.pinnedBranchMenu(branch)).performClick()
         awaitTag(tag)
     }
 
     private fun ComposeUiTest.awaitSyncStatus(text: String) {
         awaitCondition {
-            runCatching { onNodeWithTag(Tags.BRANCH_SYNC_STATUS).assertTextContains(text, substring = true) }.isSuccess
+            runCatching {
+                onNodeWithTag(
+                    GitTags.BRANCH_SYNC_STATUS,
+                ).assertTextContains(text, substring = true)
+            }.isSuccess
         }
     }
 
@@ -98,19 +102,19 @@ class PinnedBranchActionsE2eTest {
             commitOnFeature(default, "local work")
             val app = launchWithProject(project)
             pin(app, "feature")
-            awaitTag(ItemTags.branchAhead("feature"), unmerged = true)
+            awaitTag(GitTags.branchAhead("feature"), unmerged = true)
 
-            menuItem("feature", ItemTags.branchMenuPush("feature"))
-            onNodeWithTag(ItemTags.branchMenuPush("feature")).assertTextContains("Push ↑ 1", substring = true)
-            onNodeWithTag(ItemTags.branchMenuPush("feature")).performClick()
+            menuItem("feature", GitTags.branchMenuPush("feature"))
+            onNodeWithTag(GitTags.branchMenuPush("feature")).assertTextContains("Push ↑ 1", substring = true)
+            onNodeWithTag(GitTags.branchMenuPush("feature")).performClick()
 
             awaitSyncStatus("Pushed feature")
             assertEquals(project.git("rev-parse", "feature").trim(), gitIn(remote, "rev-parse", "feature").trim())
             // The chip no longer shows a commit to push, and the current branch did not change.
-            awaitNoTag(ItemTags.branchAhead("feature"))
+            awaitNoTag(GitTags.branchAhead("feature"))
             assertEquals(default, app.project.gitBranch)
-            onNodeWithTag(Tags.BRANCH_SYNC_DISMISS).performClick()
-            awaitNoTag(Tags.BRANCH_SYNC_STATUS)
+            onNodeWithTag(GitTags.BRANCH_SYNC_DISMISS).performClick()
+            awaitNoTag(GitTags.BRANCH_SYNC_STATUS)
         }
 
     @Test
@@ -120,15 +124,15 @@ class PinnedBranchActionsE2eTest {
             advanceRemoteFeature(remote)
             val app = launchWithProject(project)
             pin(app, "feature")
-            awaitTag(ItemTags.branchBehind("feature"), unmerged = true)
+            awaitTag(GitTags.branchBehind("feature"), unmerged = true)
 
-            menuItem("feature", ItemTags.branchMenuPull("feature"))
-            onNodeWithTag(ItemTags.branchMenuPull("feature")).assertTextContains("Pull ↓ 1", substring = true)
-            onNodeWithTag(ItemTags.branchMenuPull("feature")).performClick()
+            menuItem("feature", GitTags.branchMenuPull("feature"))
+            onNodeWithTag(GitTags.branchMenuPull("feature")).assertTextContains("Pull ↓ 1", substring = true)
+            onNodeWithTag(GitTags.branchMenuPull("feature")).performClick()
 
             awaitSyncStatus("Pulled feature")
             assertEquals(gitIn(remote, "rev-parse", "feature").trim(), project.git("rev-parse", "feature").trim())
-            awaitNoTag(ItemTags.branchBehind("feature"))
+            awaitNoTag(GitTags.branchBehind("feature"))
             assertEquals(default, app.project.gitBranch)
             assertFalse(project.root.resolve("remote.txt").exists(), "the checked-out files must not change")
         }
@@ -143,14 +147,14 @@ class PinnedBranchActionsE2eTest {
             val app = launchWithProject(project)
             pin(app, "feature")
 
-            menuItem("feature", ItemTags.branchMenuPull("feature"))
-            onNodeWithTag(ItemTags.branchMenuPull("feature")).performClick()
+            menuItem("feature", GitTags.branchMenuPull("feature"))
+            onNodeWithTag(GitTags.branchMenuPull("feature")).performClick()
             awaitSyncStatus("Cannot pull feature")
             assertTrue(app.project.branchSync?.isError == true)
             assertEquals(before, project.git("rev-parse", "feature").trim())
             // Dismissing the error clears it; nothing stays pretending to work.
-            onNodeWithTag(Tags.BRANCH_SYNC_DISMISS).performClick()
-            awaitNoTag(Tags.BRANCH_SYNC_STATUS)
+            onNodeWithTag(GitTags.BRANCH_SYNC_DISMISS).performClick()
+            awaitNoTag(GitTags.BRANCH_SYNC_STATUS)
             assertFalse(app.project.gitBusy)
         }
 
@@ -162,10 +166,10 @@ class PinnedBranchActionsE2eTest {
             val app = launchWithProject(project)
             pin(app, "fresh")
 
-            menuItem("fresh", ItemTags.branchMenuPull("fresh"))
-            onNodeWithTag(ItemTags.branchMenuPull("fresh")).assertIsNotEnabled()
-            onNodeWithTag(ItemTags.branchMenuPush("fresh")).assertTextContains("Push to origin/fresh", substring = true)
-            onNodeWithTag(ItemTags.branchMenuPush("fresh")).performClick()
+            menuItem("fresh", GitTags.branchMenuPull("fresh"))
+            onNodeWithTag(GitTags.branchMenuPull("fresh")).assertIsNotEnabled()
+            onNodeWithTag(GitTags.branchMenuPush("fresh")).assertTextContains("Push to origin/fresh", substring = true)
+            onNodeWithTag(GitTags.branchMenuPush("fresh")).performClick()
 
             awaitSyncStatus("Pushed fresh")
             assertEquals("origin/fresh", project.git("rev-parse", "--abbrev-ref", "fresh@{upstream}").trim())
@@ -178,20 +182,20 @@ class PinnedBranchActionsE2eTest {
             projectWithRemote()
             val app = launchWithProject(project)
             pin(app, "feature")
-            if (app.project.toolWindows.isVisible(ToolWindow.Git)) onNodeWithTag(Tags.TOOL_GIT).performClick()
-            awaitNoTag(Tags.GIT_PANEL)
+            if (app.project.toolWindows.isVisible(ToolWindow.Git)) onNodeWithTag(AppTags.TOOL_GIT).performClick()
+            awaitNoTag(GitTags.GIT_PANEL)
 
-            menuItem("feature", ItemTags.branchMenuChanges("feature"))
-            onNodeWithTag(ItemTags.branchMenuChanges("feature")).performClick()
-            awaitTag(Tags.GIT_PANEL)
+            menuItem("feature", GitTags.branchMenuChanges("feature"))
+            onNodeWithTag(GitTags.branchMenuChanges("feature")).performClick()
+            awaitTag(GitTags.GIT_PANEL)
 
-            menuItem("feature", ItemTags.branchMenuUnpin("feature"))
-            onNodeWithTag(ItemTags.branchMenuUnpin("feature")).performClick()
-            awaitNoTag(ItemTags.pinnedBranch("feature"))
+            menuItem("feature", GitTags.branchMenuUnpin("feature"))
+            onNodeWithTag(GitTags.branchMenuUnpin("feature")).performClick()
+            awaitNoTag(GitTags.pinnedBranch("feature"))
 
             pin(app, "feature")
-            menuItem("feature", ItemTags.branchMenuCheckout("feature"))
-            onNodeWithTag(ItemTags.branchMenuCheckout("feature")).performClick()
+            menuItem("feature", GitTags.branchMenuCheckout("feature"))
+            onNodeWithTag(GitTags.branchMenuCheckout("feature")).performClick()
             awaitCondition { app.project.gitBranch == "feature" }
         }
 }

@@ -83,20 +83,20 @@ fun BranchesPanel(project: ProjectState, drag: ToolWindowDrag, modifier: Modifie
     val history = project.history
     // The first time, the history opens on the current branch, as soon as it is known.
     LaunchedEffect(project.gitBranch) { history.selectIfNone(project.gitBranch) }
-    Column(modifier.fillMaxSize().background(IdeColors.Editor).testTag(Tags.BRANCHES_PANEL)) {
+    Column(modifier.fillMaxSize().background(IdeColors.Editor).testTag(GitTags.BRANCHES_PANEL)) {
         ToolWindowHeader("Branches", ToolWindow.Branches, project, drag) {
             IconButton(
                 {
                     project.refreshBranches()
                     history.reload()
                 },
-                Modifier.testTag(Tags.HISTORY_REFRESH),
+                Modifier.testTag(GitTags.HISTORY_REFRESH),
             ) {
                 Label("⟳", color = IdeColors.TextSecondary)
             }
             IconButton(
                 { project.toolWindows.setVisible(ToolWindow.Branches, false) },
-                Modifier.testTag(Tags.HISTORY_HIDE),
+                Modifier.testTag(GitTags.HISTORY_HIDE),
             ) {
                 // Like the terminal: the window is only hidden, its state is kept.
                 MinimizeIcon()
@@ -129,13 +129,13 @@ private fun HistoryColumns(project: ProjectState, history: BranchHistoryState) {
         val detailsWidth = (wantedDetails * scale).coerceAtLeast(0f)
         Row(Modifier.fillMaxSize()) {
             BranchColumn(project, history, Modifier.width(branchesWidth.dp).fillMaxHeight())
-            SplitterBox(horizontalBar = false, tag = Tags.HISTORY_BRANCHES_SPLITTER) { delta ->
+            SplitterBox(horizontalBar = false, tag = GitTags.HISTORY_BRANCHES_SPLITTER) { delta ->
                 layout.resizePane(Pane.HistoryBranches, with(density) { delta.toDp().value })
             }
             CommitColumn(history, Modifier.weight(1f).fillMaxHeight())
             if (commit != null) {
                 // Dragging this splitter to the left widens the details, on its right.
-                SplitterBox(horizontalBar = false, tag = Tags.HISTORY_DETAILS_SPLITTER) { delta ->
+                SplitterBox(horizontalBar = false, tag = GitTags.HISTORY_DETAILS_SPLITTER) { delta ->
                     layout.resizePane(Pane.HistoryDetails, -with(density) { delta.toDp().value })
                 }
                 CommitDetailsColumn(commit, history.details, Modifier.width(detailsWidth.dp).fillMaxHeight()) { file ->
@@ -157,7 +157,7 @@ private fun BranchColumn(project: ProjectState, history: BranchHistoryState, mod
         IdeTextField(
             history.branchQuery,
             { history.branchQuery = it },
-            Modifier.fillMaxWidth().testTag(Tags.HISTORY_BRANCH_SEARCH),
+            Modifier.fillMaxWidth().testTag(GitTags.HISTORY_BRANCH_SEARCH),
             placeholder = "Filter branches",
             leading = { SearchIcon(color = IdeColors.TextSecondary) },
         )
@@ -166,7 +166,7 @@ private fun BranchColumn(project: ProjectState, history: BranchHistoryState, mod
         val hasLocals = localOpen && shownLocals.isNotEmpty()
         val hasRemotes = remoteOpen && shownRemotes.isNotEmpty()
         LazyColumn(
-            Modifier.fillMaxSize().padding(top = 6.dp).testTag(Tags.HISTORY_BRANCH_LIST),
+            Modifier.fillMaxSize().padding(top = 6.dp).testTag(GitTags.HISTORY_BRANCH_LIST),
         ) {
             // The headers stay at the top of the list while their rows scroll under them, like a tree's folders.
             // A section without rows is a plain item: two adjacent sticky headers would push each other out.
@@ -213,7 +213,7 @@ private fun SectionTitle(history: BranchHistoryState, section: BranchSection, co
             // Opaque: rows scroll under the header while it is stuck to the top.
             .background(IdeColors.Editor)
             .clickable { history.toggleSection(section) }
-            .testTag(ItemTags.historySection(section.name))
+            .testTag(GitTags.historySection(section.name))
             .padding(top = 6.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -230,7 +230,7 @@ private fun HistoryBranchRow(name: String, selected: Boolean, local: GitBranchIn
             .fillMaxWidth()
             .background(if (selected) IdeColors.Selection else Color.Transparent, RoundedCornerShape(4.dp))
             .clickable(onClick = onClick)
-            .testTag(ItemTags.historyBranch(name))
+            .testTag(GitTags.historyBranch(name))
             .padding(horizontal = 6.dp, vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -254,7 +254,7 @@ private fun CommitColumn(history: BranchHistoryState, modifier: Modifier) {
         ) {
             Label(
                 history.selectedRef?.let { "History of $it" } ?: "Select a branch",
-                Modifier.weight(1f).testTag(Tags.HISTORY_TITLE),
+                Modifier.weight(1f).testTag(GitTags.HISTORY_TITLE),
                 color = IdeColors.TextSecondary,
                 fontSize = 11.sp,
             )
@@ -278,7 +278,7 @@ private fun CommitSearchField(history: BranchHistoryState, modifier: Modifier) {
         history.commitQuery,
         history::search,
         modifier
-            .testTag(Tags.HISTORY_SEARCH)
+            .testTag(GitTags.HISTORY_SEARCH)
             .onPreviewKeyEvent { event ->
                 val escape = event.type == KeyEventType.KeyDown && event.key == Key.Escape
                 val clear = escape && history.commitQuery.isNotEmpty()
@@ -290,7 +290,7 @@ private fun CommitSearchField(history: BranchHistoryState, modifier: Modifier) {
         trailing = {
             if (history.commitQuery.isNotEmpty()) {
                 Box(
-                    Modifier.size(18.dp).clickable { history.search("") }.testTag(Tags.HISTORY_SEARCH_CLEAR),
+                    Modifier.size(18.dp).clickable { history.search("") }.testTag(GitTags.HISTORY_SEARCH_CLEAR),
                     contentAlignment = Alignment.Center,
                 ) {
                     CloseIcon(Modifier.size(10.dp))
@@ -319,28 +319,32 @@ private fun HistoryFooter(history: BranchHistoryState) {
     val error = history.error
     when {
         error != null -> {
-            FooterText(error, Tags.HISTORY_ERROR, IdeColors.Error)
+            FooterText(error, GitTags.HISTORY_ERROR, IdeColors.Error)
         }
 
         history.loading -> {
-            FooterText("Loading commits…", Tags.HISTORY_LOADING, IdeColors.TextSecondary)
+            FooterText("Loading commits…", GitTags.HISTORY_LOADING, IdeColors.TextSecondary)
         }
 
         history.complete && history.commits.isEmpty() && history.appliedQuery.isNotEmpty() -> {
-            FooterText("No commit matches \"${history.appliedQuery}\"", Tags.HISTORY_NO_MATCH, IdeColors.TextSecondary)
+            FooterText(
+                "No commit matches \"${history.appliedQuery}\"",
+                GitTags.HISTORY_NO_MATCH,
+                IdeColors.TextSecondary,
+            )
         }
 
         history.complete && history.commits.isEmpty() && history.selectedRef != null -> {
-            FooterText("No commit", Tags.HISTORY_EMPTY, IdeColors.TextSecondary)
+            FooterText("No commit", GitTags.HISTORY_EMPTY, IdeColors.TextSecondary)
         }
 
         history.complete && history.appliedQuery.isNotEmpty() -> {
             val found = plural(history.commits.size, "commit matches", "commits match")
-            FooterText("$found \"${history.appliedQuery}\"", Tags.HISTORY_END, IdeColors.LineNumber)
+            FooterText("$found \"${history.appliedQuery}\"", GitTags.HISTORY_END, IdeColors.LineNumber)
         }
 
         history.complete -> {
-            FooterText(plural(history.commits.size, "commit", "commits"), Tags.HISTORY_END, IdeColors.LineNumber)
+            FooterText(plural(history.commits.size, "commit", "commits"), GitTags.HISTORY_END, IdeColors.LineNumber)
         }
     }
 }
@@ -358,7 +362,7 @@ private fun CommitRow(commit: GitCommit, highlight: String, selected: Boolean, o
             .heightIn(min = 24.dp)
             .background(if (selected) IdeColors.Selection else Color.Transparent)
             .clickable(onClick = onClick)
-            .testTag(ItemTags.historyCommit(commit.hash))
+            .testTag(GitTags.historyCommit(commit.hash))
             .padding(horizontal = 10.dp, vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -414,7 +418,7 @@ private fun CommitDetailsColumn(
     modifier: Modifier,
     onOpenFile: (GitCommitFile) -> Unit,
 ) {
-    Column(modifier.padding(10.dp).testTag(Tags.HISTORY_DETAILS)) {
+    Column(modifier.padding(10.dp).testTag(GitTags.HISTORY_DETAILS)) {
         val message = details?.message ?: commit.subject
         Column(Modifier.heightIn(max = 160.dp).verticalScroll(rememberScrollState())) {
             message.lines().forEach { line ->
@@ -444,7 +448,7 @@ private fun CommitDetailsColumn(
                             .fillMaxWidth()
                             .clickable { onOpenFile(file) }
                             .pointerHoverIcon(PointerIcon.Hand)
-                            .testTag(ItemTags.historyFile(file.path))
+                            .testTag(GitTags.historyFile(file.path))
                             .padding(vertical = 2.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {

@@ -21,8 +21,11 @@ import org.example.kotlineditor.model.Direction
 import org.example.kotlineditor.state.Dock
 import org.example.kotlineditor.state.TabStatus
 import org.example.kotlineditor.state.ToolWindow
-import org.example.kotlineditor.ui.ItemTags
+import org.example.kotlineditor.ui.AppTags
+import org.example.kotlineditor.ui.EditorTags
+import org.example.kotlineditor.ui.GitTags
 import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.TreeTags
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -60,12 +63,12 @@ class GitPanelE2eTest {
             project.commitAll()
             project.file("README.md", "# Changed\n")
             launchWithProject(project)
-            onNodeWithTag(Tags.TREE).performClick()
-            onNodeWithTag(Tags.TREE).performKeyInput { withKeyDown(Key.AltLeft) { pressKey(Key.Nine) } }
-            awaitTag(Tags.GIT_PANEL)
-            awaitTag(ItemTags.gitChange("README.md"))
-            val projectPanel = onNodeWithTag(Tags.PROJECT_PANEL).getBoundsInRoot()
-            val gitPanel = onNodeWithTag(Tags.GIT_PANEL).getBoundsInRoot()
+            onNodeWithTag(TreeTags.TREE).performClick()
+            onNodeWithTag(TreeTags.TREE).performKeyInput { withKeyDown(Key.AltLeft) { pressKey(Key.Nine) } }
+            awaitTag(GitTags.GIT_PANEL)
+            awaitTag(GitTags.gitChange("README.md"))
+            val projectPanel = onNodeWithTag(TreeTags.PROJECT_PANEL).getBoundsInRoot()
+            val gitPanel = onNodeWithTag(GitTags.GIT_PANEL).getBoundsInRoot()
             assertTrue(gitPanel.top >= projectPanel.bottom, "Git panel $gitPanel is not below $projectPanel")
             assertEquals(gitPanel.left, projectPanel.left)
         }
@@ -76,12 +79,12 @@ class GitPanelE2eTest {
             project.commitAll()
             project.file("README.md", "# Changed\n")
             val app = launchWithProject(project)
-            onNodeWithTag(Tags.TOOL_GIT).performClick()
-            awaitTag(ItemTags.gitChange("README.md"))
-            onNodeWithTag(ItemTags.gitChange("README.md")).performClick()
-            awaitTag(Tags.diffTab("README.md"))
-            awaitTag(Tags.DIFF)
-            awaitTag(Tags.diffLine(0))
+            onNodeWithTag(AppTags.TOOL_GIT).performClick()
+            awaitTag(GitTags.gitChange("README.md"))
+            onNodeWithTag(GitTags.gitChange("README.md")).performClick()
+            awaitTag(EditorTags.diffTab("README.md"))
+            awaitTag(EditorTags.DIFF)
+            awaitTag(EditorTags.diffLine(0))
             awaitCondition {
                 (
                     app.project.editor.activeTab
@@ -111,21 +114,21 @@ class GitPanelE2eTest {
             project.commitAll()
             project.file("README.md", "# Changed\n")
             val app = launchWithProject(project)
-            onNodeWithTag(Tags.TOOL_GIT).performClick()
-            awaitTag(ItemTags.gitChange("README.md"))
-            onNodeWithTag(ItemTags.gitChange("README.md")).performClick()
-            awaitTag(Tags.DIFF)
-            awaitTag(Tags.diffLine(0))
-            onNodeWithTag(Tags.DIFF_LAYOUT_TOGGLE).performClick()
-            awaitTag(Tags.DIFF_SPLIT)
-            awaitTag(Tags.diffSplitRow(0))
+            onNodeWithTag(AppTags.TOOL_GIT).performClick()
+            awaitTag(GitTags.gitChange("README.md"))
+            onNodeWithTag(GitTags.gitChange("README.md")).performClick()
+            awaitTag(EditorTags.DIFF)
+            awaitTag(EditorTags.diffLine(0))
+            onNodeWithTag(EditorTags.DIFF_LAYOUT_TOGGLE).performClick()
+            awaitTag(EditorTags.DIFF_SPLIT)
+            awaitTag(EditorTags.diffSplitRow(0))
             // The removed line is on the left, the added one on the right.
             onNodeWithText("# Demo").assertIsDisplayed()
             onNodeWithText("# Changed").assertIsDisplayed()
             assertTrue(app.project.diffSideBySide)
-            onNodeWithTag(Tags.DIFF_LAYOUT_TOGGLE).performClick()
-            awaitTag(Tags.diffLine(0))
-            awaitNoTag(Tags.DIFF_SPLIT)
+            onNodeWithTag(EditorTags.DIFF_LAYOUT_TOGGLE).performClick()
+            awaitTag(EditorTags.diffLine(0))
+            awaitNoTag(EditorTags.DIFF_SPLIT)
             assertTrue(!app.project.diffSideBySide)
         }
 
@@ -135,9 +138,9 @@ class GitPanelE2eTest {
             project.commitAll()
             project.file("notes.txt", "first\nsecond\n")
             val app = launchWithProject(project)
-            onNodeWithTag(Tags.TOOL_GIT).performClick()
-            awaitTag(ItemTags.gitChange("notes.txt"))
-            onNodeWithTag(ItemTags.gitChange("notes.txt")).performClick()
+            onNodeWithTag(AppTags.TOOL_GIT).performClick()
+            awaitTag(GitTags.gitChange("notes.txt"))
+            onNodeWithTag(GitTags.gitChange("notes.txt")).performClick()
             awaitCondition {
                 (
                     app.project.editor.activeTab
@@ -145,45 +148,45 @@ class GitPanelE2eTest {
                     )?.lines
                     ?.count { it.kind == DiffKind.Added } == 2
             }
-            awaitTag(Tags.DIFF)
+            awaitTag(EditorTags.DIFF)
         }
 
     @Test
     fun `dragging a panel header moves the panel to another dock but not its button`() =
         runComposeUiTest {
             val app = launchWithProject(project)
-            onNodeWithTag(Tags.TOOL_GIT).performClick()
-            awaitTag(Tags.GIT_PANEL)
-            val buttonBefore = onNodeWithTag(Tags.TOOL_GIT).getBoundsInRoot()
-            val workspace = onNodeWithTag(Tags.WORKSPACE).getBoundsInRoot()
+            onNodeWithTag(AppTags.TOOL_GIT).performClick()
+            awaitTag(GitTags.GIT_PANEL)
+            val buttonBefore = onNodeWithTag(AppTags.TOOL_GIT).getBoundsInRoot()
+            val workspace = onNodeWithTag(AppTags.WORKSPACE).getBoundsInRoot()
             val centerX = (workspace.left.value + workspace.right.value) / 2f
             val centerY = (workspace.top.value + workspace.bottom.value) / 2f
             dragToolWindowHeader("Git", Offset(workspace.right.value - 60f, centerY))
             awaitCondition { app.project.toolWindows.dockOf(ToolWindow.Git) == Dock.Right }
-            onNodeWithTag(Tags.GIT_PANEL).assertIsDisplayed()
-            val moved = onNodeWithTag(Tags.GIT_PANEL).getBoundsInRoot()
+            onNodeWithTag(GitTags.GIT_PANEL).assertIsDisplayed()
+            val moved = onNodeWithTag(GitTags.GIT_PANEL).getBoundsInRoot()
             assertTrue(moved.left.value > centerX, "Git panel $moved is not on the right of $workspace")
-            assertEquals(buttonBefore, onNodeWithTag(Tags.TOOL_GIT).getBoundsInRoot())
+            assertEquals(buttonBefore, onNodeWithTag(AppTags.TOOL_GIT).getBoundsInRoot())
             // The project panel stays where it was, on the left.
             assertEquals(Dock.Left, app.project.toolWindows.dockOf(ToolWindow.Project))
-            assertTrue(onNodeWithTag(Tags.PROJECT_PANEL).getBoundsInRoot().left.value < centerX)
+            assertTrue(onNodeWithTag(TreeTags.PROJECT_PANEL).getBoundsInRoot().left.value < centerX)
         }
 
     @Test
     fun `dragging the Git panel to the top of its column puts it above the project panel`() =
         runComposeUiTest {
             val app = launchWithProject(project)
-            onNodeWithTag(Tags.TOOL_GIT).performClick()
-            awaitTag(Tags.GIT_PANEL)
-            val workspace = onNodeWithTag(Tags.WORKSPACE).getBoundsInRoot()
+            onNodeWithTag(AppTags.TOOL_GIT).performClick()
+            awaitTag(GitTags.GIT_PANEL)
+            val workspace = onNodeWithTag(AppTags.WORKSPACE).getBoundsInRoot()
             dragToolWindowHeader("Git", Offset(workspace.left.value + 120f, workspace.top.value + 40f))
             awaitCondition {
                 app.project.toolWindows
                     .visibleIn(Dock.Left)
                     .first() == ToolWindow.Git
             }
-            val git = onNodeWithTag(Tags.GIT_PANEL).getBoundsInRoot()
-            val tree = onNodeWithTag(Tags.PROJECT_PANEL).getBoundsInRoot()
+            val git = onNodeWithTag(GitTags.GIT_PANEL).getBoundsInRoot()
+            val tree = onNodeWithTag(TreeTags.PROJECT_PANEL).getBoundsInRoot()
             assertTrue(git.bottom <= tree.top, "Git panel $git is not above the project panel $tree")
         }
 
@@ -191,14 +194,14 @@ class GitPanelE2eTest {
     fun `dragging a panel header to the bottom docks it below the editors`() =
         runComposeUiTest {
             val app = launchWithProject(project)
-            onNodeWithTag(Tags.TOOL_GIT).performClick()
-            awaitTag(Tags.GIT_PANEL)
-            val workspace = onNodeWithTag(Tags.WORKSPACE).getBoundsInRoot()
+            onNodeWithTag(AppTags.TOOL_GIT).performClick()
+            awaitTag(GitTags.GIT_PANEL)
+            val workspace = onNodeWithTag(AppTags.WORKSPACE).getBoundsInRoot()
             val centerX = (workspace.left.value + workspace.right.value) / 2f
             val centerY = (workspace.top.value + workspace.bottom.value) / 2f
             dragToolWindowHeader("Git", Offset(centerX, workspace.bottom.value - 40f))
             awaitCondition { app.project.toolWindows.dockOf(ToolWindow.Git) == Dock.Bottom }
-            val moved = onNodeWithTag(Tags.GIT_PANEL).getBoundsInRoot()
+            val moved = onNodeWithTag(GitTags.GIT_PANEL).getBoundsInRoot()
             assertTrue(moved.top.value > centerY, "Git panel $moved is not at the bottom of $workspace")
             assertTrue(moved.left.value < centerX)
         }
@@ -207,8 +210,8 @@ class GitPanelE2eTest {
     fun `a project that is not a Git repository says so`() =
         runComposeUiTest {
             launchWithProject(project)
-            onNodeWithTag(Tags.TOOL_GIT).performClick()
-            awaitTag(Tags.GIT_NOT_A_REPOSITORY)
+            onNodeWithTag(AppTags.TOOL_GIT).performClick()
+            awaitTag(GitTags.GIT_NOT_A_REPOSITORY)
         }
 
     @Test
@@ -216,20 +219,20 @@ class GitPanelE2eTest {
         runComposeUiTest {
             project.commitAll()
             launchWithProject(project)
-            onNodeWithTag(Tags.TOOL_GIT).performClick()
-            awaitTag(Tags.GIT_EMPTY)
+            onNodeWithTag(AppTags.TOOL_GIT).performClick()
+            awaitTag(GitTags.GIT_EMPTY)
         }
 
     @Test
     fun `the Git button hides and shows the panel`() =
         runComposeUiTest {
             launchWithProject(project)
-            onNodeWithTag(Tags.TOOL_GIT).performClick()
-            awaitTag(Tags.GIT_PANEL)
-            onNodeWithTag(Tags.TOOL_GIT).performClick()
-            awaitNoTag(Tags.GIT_PANEL)
-            onNodeWithTag(Tags.TOOL_GIT).performClick()
-            awaitTag(Tags.GIT_PANEL)
+            onNodeWithTag(AppTags.TOOL_GIT).performClick()
+            awaitTag(GitTags.GIT_PANEL)
+            onNodeWithTag(AppTags.TOOL_GIT).performClick()
+            awaitNoTag(GitTags.GIT_PANEL)
+            onNodeWithTag(AppTags.TOOL_GIT).performClick()
+            awaitTag(GitTags.GIT_PANEL)
         }
 
     @Test
@@ -240,8 +243,8 @@ class GitPanelE2eTest {
             launchWithProject(project)
             openFromTree("README.md")
             // The single line replaces three lines of HEAD: modified, with the removed block before it.
-            awaitTag(Tags.changeMarker(0, "Modified"), unmerged = true)
-            awaitTag(Tags.changeMarker(0, "Deleted"), unmerged = true)
+            awaitTag(EditorTags.changeMarker(0, "Modified"), unmerged = true)
+            awaitTag(EditorTags.changeMarker(0, "Deleted"), unmerged = true)
         }
 
     @Test
@@ -254,8 +257,8 @@ class GitPanelE2eTest {
             fun diffs(direction: Direction) =
                 network.snapshot().count { it.direction == direction && it.method == "GitDiff" }
 
-            onNodeWithTag(Tags.TREE).performClick()
-            onNodeWithTag(Tags.TREE).performKeyInput {
+            onNodeWithTag(TreeTags.TREE).performClick()
+            onNodeWithTag(TreeTags.TREE).performKeyInput {
                 withKeyDown(Key.CtrlLeft) {
                     withKeyDown(Key.ShiftLeft) { withKeyDown(Key.AltLeft) { pressKey(Key.D) } }
                 }
@@ -267,8 +270,8 @@ class GitPanelE2eTest {
             awaitCondition { diffs(Direction.Received) == 3 }
             network.clear()
 
-            onNodeWithTag(Tags.EDITOR).performClick()
-            onNodeWithTag(Tags.EDITOR).performKeyInput {
+            onNodeWithTag(EditorTags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performKeyInput {
                 pressKey(Key.X)
                 withKeyDown(Key.CtrlLeft) { pressKey(Key.S) }
             }
@@ -289,9 +292,9 @@ class GitPanelE2eTest {
             project.commitAll()
             val app = launchWithProject(project)
             openFromTree("README.md")
-            onNodeWithTag(Tags.TOOL_GIT).performClick()
-            awaitTag(Tags.GIT_BLAME).performClick()
-            awaitTag(Tags.blame(0), unmerged = true)
+            onNodeWithTag(AppTags.TOOL_GIT).performClick()
+            awaitTag(GitTags.GIT_BLAME).performClick()
+            awaitTag(EditorTags.blame(0), unmerged = true)
             awaitCondition {
                 app.project.editor.activeTab
                     ?.blame
@@ -307,8 +310,8 @@ class GitPanelE2eTest {
             val tab = app.project.editor.activeTab
             assertTrue(tab?.blameVisible == true)
             // Clicking Annotate again hides them.
-            onNodeWithTag(Tags.GIT_BLAME).performClick()
-            awaitNoTag(Tags.blame(0))
+            onNodeWithTag(GitTags.GIT_BLAME).performClick()
+            awaitNoTag(EditorTags.blame(0))
         }
 
     @Test
@@ -318,14 +321,14 @@ class GitPanelE2eTest {
             project.file("README.md", "# Changed\n")
             project.file("notes.txt", "new\n")
             val app = launchWithProject(project)
-            onNodeWithTag(Tags.TOOL_GIT).performClick()
-            awaitTag(ItemTags.gitChange("README.md"))
-            awaitTag(ItemTags.gitChange("notes.txt"))
-            onNodeWithTag(Tags.GIT_COMMIT).assertIsNotEnabled()
-            awaitTag(ItemTags.gitChangeCheck("README.md")).performClick()
+            onNodeWithTag(AppTags.TOOL_GIT).performClick()
+            awaitTag(GitTags.gitChange("README.md"))
+            awaitTag(GitTags.gitChange("notes.txt"))
+            onNodeWithTag(GitTags.GIT_COMMIT).assertIsNotEnabled()
+            awaitTag(GitTags.gitChangeCheck("README.md")).performClick()
             awaitCondition { app.project.selectedForCommit == setOf("README.md") }
-            awaitTag(Tags.GIT_COMMIT_MESSAGE).performTextInput("Update the readme")
-            onNodeWithTag(Tags.GIT_COMMIT).performClick()
+            awaitTag(GitTags.GIT_COMMIT_MESSAGE).performTextInput("Update the readme")
+            onNodeWithTag(GitTags.GIT_COMMIT).performClick()
             awaitCondition { !app.project.gitBusy && app.project.gitStatus.keys == setOf("notes.txt") }
             assertEquals("Committed 1 file", app.project.gitMessage)
             assertEquals("Update the readme", project.lastCommitSubject())
@@ -337,10 +340,10 @@ class GitPanelE2eTest {
             project.commitAll()
             project.git("branch", "feature")
             val app = launchWithProject(project)
-            onNodeWithTag(Tags.TOOL_GIT).performClick()
+            onNodeWithTag(AppTags.TOOL_GIT).performClick()
             awaitCondition { app.project.gitBranches.contains("feature") }
-            awaitTag(Tags.GIT_BRANCH_BUTTON).performClick()
-            awaitTag(ItemTags.gitBranch("feature")).performClick()
+            awaitTag(GitTags.GIT_BRANCH_BUTTON).performClick()
+            awaitTag(GitTags.gitBranch("feature")).performClick()
             awaitCondition { app.project.gitBranch == "feature" }
             assertEquals("Switched to feature", app.project.gitMessage)
         }
@@ -351,14 +354,14 @@ class GitPanelE2eTest {
             project.commitAll()
             project.file("README.md", "# Changed\n")
             val app = launchWithProject(project)
-            onNodeWithTag(Tags.TOOL_GIT).performClick()
-            awaitTag(ItemTags.gitChange("README.md"))
-            onNodeWithTag(ItemTags.gitChange("README.md")).performClick()
-            awaitTag(Tags.diffTab("README.md"))
+            onNodeWithTag(AppTags.TOOL_GIT).performClick()
+            awaitTag(GitTags.gitChange("README.md"))
+            onNodeWithTag(GitTags.gitChange("README.md")).performClick()
+            awaitTag(EditorTags.diffTab("README.md"))
             runOnUiThread { app.state.closeProject() }
-            awaitTag(Tags.WELCOME)
-            onNodeWithTag(ItemTags.recentProject(project.path)).performClick()
-            awaitTag(Tags.treeRow("src"))
+            awaitTag(AppTags.WELCOME)
+            onNodeWithTag(AppTags.recentProject(project.path)).performClick()
+            awaitTag(TreeTags.treeRow("src"))
             assertTrue(
                 app.project.editor.tabs
                     .none { it.isDiff },

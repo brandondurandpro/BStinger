@@ -12,7 +12,8 @@ import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.test.withKeyDown
 import org.example.kotlineditor.model.text
 import org.example.kotlineditor.state.ToolWindow
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.AppTags
+import org.example.kotlineditor.ui.TerminalTags
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertFalse
@@ -37,12 +38,12 @@ class TerminalShortcutsE2eTest {
     }
 
     private fun ComposeUiTest.openTerminal() {
-        onNodeWithTag(Tags.TOOL_TERMINAL).performClick()
-        awaitTag(Tags.TERMINAL_INPUT)
+        onNodeWithTag(AppTags.TOOL_TERMINAL).performClick()
+        awaitTag(TerminalTags.TERMINAL_INPUT)
     }
 
     private fun ComposeUiTest.pressMetaDigit(key: Key) {
-        onNodeWithTag(Tags.TERMINAL_INPUT).performKeyInput { withKeyDown(Key.AltLeft) { pressKey(key) } }
+        onNodeWithTag(TerminalTags.TERMINAL_INPUT).performKeyInput { withKeyDown(Key.AltLeft) { pressKey(key) } }
     }
 
     private fun ComposeUiTest.shellIsPrompting() {
@@ -56,8 +57,8 @@ class TerminalShortcutsE2eTest {
     }
 
     private fun ComposeUiTest.typeCommand(command: String) {
-        onNodeWithTag(Tags.TERMINAL_INPUT).performTextInput(command)
-        onNodeWithTag(Tags.TERMINAL_INPUT).performKeyInput { pressKey(Key.Enter) }
+        onNodeWithTag(TerminalTags.TERMINAL_INPUT).performTextInput(command)
+        onNodeWithTag(TerminalTags.TERMINAL_INPUT).performKeyInput { pressKey(Key.Enter) }
     }
 
     // The command's own echo contains it with "echo"; only its output counts.
@@ -86,7 +87,7 @@ class TerminalShortcutsE2eTest {
             )
             // The shell got Alt+9 and Alt+1 (a numeric argument for readline, ESC 9 ESC 1 for cmd.exe): Enter ends that
             // line, whatever the shell made of it, and the shell is still working: a plain command runs.
-            onNodeWithTag(Tags.TERMINAL_INPUT).performKeyInput { pressKey(Key.Enter) }
+            onNodeWithTag(TerminalTags.TERMINAL_INPUT).performKeyInput { pressKey(Key.Enter) }
             typeCommand("echo still-alive")
             awaitCondition { printed(app, "still-alive") }
         }
@@ -98,7 +99,7 @@ class TerminalShortcutsE2eTest {
             appRef = app
             openTerminal()
             shellIsPrompting()
-            onNodeWithTag(Tags.TERMINAL_INPUT).performKeyInput {
+            onNodeWithTag(TerminalTags.TERMINAL_INPUT).performKeyInput {
                 withKeyDown(Key.CtrlLeft) {
                     withKeyDown(Key.AltLeft) {
                         withKeyDown(Key.ShiftLeft) { pressKey(Key.D) }
@@ -107,8 +108,8 @@ class TerminalShortcutsE2eTest {
             }
             assertTrue(app.state.devtools, "Ctrl+Alt+Shift+D opens the devtools")
             // The terminal stays shown behind the devtools: focusing its grid again must not toggle anything.
-            awaitTag(Tags.TERMINAL_INPUT)
-            onNodeWithTag(Tags.TERMINAL_INPUT).performClick()
+            awaitTag(TerminalTags.TERMINAL_INPUT)
+            onNodeWithTag(TerminalTags.TERMINAL_INPUT).performClick()
             // Back in the terminal, the same shell runs a command with no stray input typed meanwhile.
             typeCommand("echo still-clean")
             awaitCondition { printed(app, "still-clean") }
@@ -121,10 +122,12 @@ class TerminalShortcutsE2eTest {
             appRef = app
             openTerminal()
             shellIsPrompting()
-            onNodeWithTag(Tags.TERMINAL_INPUT).performKeyInput { withKeyDown(Key.AltLeft) { pressKey(Key.F12) } }
-            awaitNoTag(Tags.TERMINAL)
-            onNodeWithTag(Tags.TOOL_TERMINAL).performClick()
-            awaitTag(Tags.TERMINAL_INPUT)
+            onNodeWithTag(
+                TerminalTags.TERMINAL_INPUT,
+            ).performKeyInput { withKeyDown(Key.AltLeft) { pressKey(Key.F12) } }
+            awaitNoTag(TerminalTags.TERMINAL)
+            onNodeWithTag(AppTags.TOOL_TERMINAL).performClick()
+            awaitTag(TerminalTags.TERMINAL_INPUT)
             awaitCondition {
                 app.project.terminal.active
                     ?.running == true

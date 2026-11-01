@@ -6,7 +6,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.model.Direction
 import org.example.kotlineditor.model.LanguageServerState
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.LanguageServerTags
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertTrue
@@ -68,9 +68,9 @@ class LanguageServerPerformanceE2eTest {
             val first = app.languageServers.first()
             val label = "open the Language Servers window with $roots servers"
             measure(label, budgetMillis = 1_500, budgetMegabytes = 200) {
-                onNodeWithTag(Tags.statusLanguageServer(first.id)).performClick()
+                onNodeWithTag(LanguageServerTags.statusLanguageServer(first.id)).performClick()
                 renderFrame()
             }
-            awaitTag(Tags.languageServerRow(app.languageServers.last().id))
+            awaitTag(LanguageServerTags.languageServerRow(app.languageServers.last().id))
         }
 }

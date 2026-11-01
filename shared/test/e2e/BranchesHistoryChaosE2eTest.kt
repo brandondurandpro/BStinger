@@ -7,8 +7,9 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.state.TabStatus
-import org.example.kotlineditor.ui.ItemTags
-import org.example.kotlineditor.ui.Tags
+import org.example.kotlineditor.ui.AppTags
+import org.example.kotlineditor.ui.EditorTags
+import org.example.kotlineditor.ui.GitTags
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -42,9 +43,9 @@ class BranchesHistoryChaosE2eTest {
 
     private fun ComposeUiTest.openBranches(app: E2eApp) {
         awaitCondition { app.project.gitBranchInfos.size == 3 }
-        onNodeWithTag(Tags.TOOL_BRANCHES).performClick()
-        awaitTag(Tags.BRANCHES_PANEL)
-        awaitTag(ItemTags.historyBranch("second"))
+        onNodeWithTag(AppTags.TOOL_BRANCHES).performClick()
+        awaitTag(GitTags.BRANCHES_PANEL)
+        awaitTag(GitTags.historyBranch("second"))
     }
 
     @Test
@@ -54,13 +55,13 @@ class BranchesHistoryChaosE2eTest {
             val app = launchWithProject(project, chaos = true)
             openBranches(app)
             app.network.latencyMs = SLOW_LINK_MS
-            onNodeWithTag(ItemTags.historyBranch("first")).performClick()
-            onNodeWithTag(ItemTags.historyBranch("second")).performClick()
+            onNodeWithTag(GitTags.historyBranch("first")).performClick()
+            onNodeWithTag(GitTags.historyBranch("second")).performClick()
 
-            awaitTag(ItemTags.historyCommit(hashOf("second")), timeout = 15_000)
+            awaitTag(GitTags.historyCommit(hashOf("second")), timeout = 15_000)
             awaitCondition(timeout = 15_000) { !app.project.history.loading }
             // The answer for "first" arrived late, and was dropped.
-            awaitNoTag(ItemTags.historyCommit(hashOf("first")))
+            awaitNoTag(GitTags.historyCommit(hashOf("first")))
             assertEquals("second", app.project.history.selectedRef)
             val left = hashOf("first")
             val shown = app.project.history.commits
@@ -75,12 +76,12 @@ class BranchesHistoryChaosE2eTest {
             openBranches(app)
             app.network.goDown()
             awaitReconnecting()
-            onNodeWithTag(ItemTags.historyBranch("first")).performClick()
-            awaitTag(Tags.HISTORY_LOADING)
+            onNodeWithTag(GitTags.historyBranch("first")).performClick()
+            awaitTag(GitTags.HISTORY_LOADING)
             app.network.comeBack()
             awaitReconnected()
-            awaitTag(ItemTags.historyCommit(hashOf("first")))
-            awaitNoTag(Tags.HISTORY_LOADING)
+            awaitTag(GitTags.historyCommit(hashOf("first")))
+            awaitNoTag(GitTags.HISTORY_LOADING)
         }
 
     @Test
@@ -92,9 +93,9 @@ class BranchesHistoryChaosE2eTest {
             project.git("commit", "-q", "--allow-empty", "-m", "after the restart")
             app.process.restart()
             awaitReconnected()
-            awaitTag(Tags.BRANCHES_PANEL)
-            onNodeWithTag(Tags.HISTORY_REFRESH).performClick()
-            awaitTag(ItemTags.historyCommit(hashOf("HEAD")))
+            awaitTag(GitTags.BRANCHES_PANEL)
+            onNodeWithTag(GitTags.HISTORY_REFRESH).performClick()
+            awaitTag(GitTags.historyCommit(hashOf("HEAD")))
         }
 
     @Test
@@ -103,21 +104,21 @@ class BranchesHistoryChaosE2eTest {
             twoBranches()
             val app = launchWithProject(project, chaos = true)
             openBranches(app)
-            onNodeWithTag(ItemTags.historyBranch("first")).performClick()
-            awaitTag(ItemTags.historyCommit(hashOf("first")))
+            onNodeWithTag(GitTags.historyBranch("first")).performClick()
+            awaitTag(GitTags.historyCommit(hashOf("first")))
             app.network.latencyMs = SLOW_LINK_MS
 
-            onNodeWithTag(Tags.HISTORY_SEARCH).performTextInput("only")
+            onNodeWithTag(GitTags.HISTORY_SEARCH).performTextInput("only")
             awaitCondition { app.project.history.appliedQuery == "only" }
             // A second search before the first one answered: its results are the only ones shown.
-            onNodeWithTag(Tags.HISTORY_SEARCH).performTextInput(" on first")
+            onNodeWithTag(GitTags.HISTORY_SEARCH).performTextInput(" on first")
             awaitCondition(timeout = 15_000) {
                 app.project.history.appliedQuery == "only on first" && app.project.history.complete
             }
             val history = app.project.history
             val subjects = history.commits.map { it.subject }
             assertEquals(listOf("only on first"), subjects)
-            awaitNoTag(ItemTags.historyCommit(hashOf("HEAD")))
+            awaitNoTag(GitTags.historyCommit(hashOf("HEAD")))
         }
 
     @Test
@@ -126,17 +127,17 @@ class BranchesHistoryChaosE2eTest {
             twoBranches()
             val app = launchWithProject(project, chaos = true)
             openBranches(app)
-            onNodeWithTag(ItemTags.historyBranch("second")).performClick()
-            awaitTag(ItemTags.historyCommit(hashOf("second")))
+            onNodeWithTag(GitTags.historyBranch("second")).performClick()
+            awaitTag(GitTags.historyCommit(hashOf("second")))
             app.network.goDown()
             awaitReconnecting()
-            onNodeWithTag(Tags.HISTORY_SEARCH).performTextInput("init")
-            awaitTag(Tags.HISTORY_LOADING)
+            onNodeWithTag(GitTags.HISTORY_SEARCH).performTextInput("init")
+            awaitTag(GitTags.HISTORY_LOADING)
             app.network.comeBack()
             awaitReconnected()
-            awaitTag(ItemTags.historyCommit(hashOf("second~1")))
-            awaitNoTag(ItemTags.historyCommit(hashOf("second")))
-            awaitNoTag(Tags.HISTORY_LOADING)
+            awaitTag(GitTags.historyCommit(hashOf("second~1")))
+            awaitNoTag(GitTags.historyCommit(hashOf("second")))
+            awaitNoTag(GitTags.HISTORY_LOADING)
         }
 
     @Test
@@ -150,14 +151,14 @@ class BranchesHistoryChaosE2eTest {
             project.git("checkout", "-q", "-")
             val app = launchWithProject(project, chaos = true)
             openBranches(app)
-            onNodeWithTag(ItemTags.historyBranch("second")).performClick()
-            awaitTag(ItemTags.historyCommit(edit)).performClick()
-            awaitTag(ItemTags.historyFile("README.md"))
+            onNodeWithTag(GitTags.historyBranch("second")).performClick()
+            awaitTag(GitTags.historyCommit(edit)).performClick()
+            awaitTag(GitTags.historyFile("README.md"))
 
             app.network.goDown()
             awaitReconnecting()
-            onNodeWithTag(ItemTags.historyFile("README.md")).performClick()
-            awaitTag(Tags.commitDiffTab(edit, "README.md"))
+            onNodeWithTag(GitTags.historyFile("README.md")).performClick()
+            awaitTag(EditorTags.commitDiffTab(edit, "README.md"))
             // Nothing pretends to be loaded while the link is down.
             val editor = app.project.editor
             assertTrue(editor.activeTab?.status !is TabStatus.Diff)
@@ -167,6 +168,6 @@ class BranchesHistoryChaosE2eTest {
                 val diff = editor.activeTab?.status as? TabStatus.Diff
                 diff != null && diff.lines.isNotEmpty()
             }
-            awaitTag(Tags.DIFF)
+            awaitTag(EditorTags.DIFF)
         }
 }
