@@ -15,6 +15,7 @@ import org.example.kotlineditor.model.AppServices
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.GitBranchInfo
 import org.example.kotlineditor.model.GitFileStatus
+import org.example.kotlineditor.syntax.treesitter.GrammarStore
 
 private val INDEXED_POPUPS = setOf(PopupKind.GotoFile, PopupKind.FindInFiles, PopupKind.GotoSymbol)
 private val DOCUMENT_POPUPS = setOf(PopupKind.GotoLine, PopupKind.FileStructure)
@@ -27,6 +28,7 @@ class ProjectState(
     val services: AppServices,
     parentScope: CoroutineScope,
     preferences: Map<String, String> = emptyMap(),
+    grammars: GrammarStore? = null,
 ) {
     /** Cancelled when the project is closed, so no background work outlives it. */
     val scope = CoroutineScope(parentScope.coroutineContext + SupervisorJob(parentScope.coroutineContext[Job]))
@@ -46,6 +48,7 @@ class ProjectState(
                 services.git.commitDiff(root.path, commit.hash, tree.relativePath(entry), commit.oldPath)
             },
             blames = { entry -> services.git.blame(root.path, tree.relativePath(entry)) },
+            grammars = grammars,
         )
     val fileIndex = FileIndex(root, services.search, scope)
     val find = FindState()
@@ -110,6 +113,10 @@ class ProjectState(
     var gitStatus: Map<String, GitFileStatus> by mutableStateOf(emptyMap())
         private set
 
+    /** The paths checked in the Git panel for the next commit; the Commit button commits only these. */
+    var selectedForCommit: Set<String> by mutableStateOf(emptySet())
+        private set
+
     /** False when the project is not a Git repository (or Git is unavailable). */
     var isGitRepository by mutableStateOf(true)
         private set
@@ -125,6 +132,16 @@ class ProjectState(
     init {
         refreshGit()
         followActiveFile()
+    }
+
+    /** Checks or unchecks [path] (the checkbox of a change in the Git panel) for the next commit. */
+    fun toggleCommitSelection(path: String) {
+        selectedForCommit = if (path in selectedForCommit) selectedForCommit - path else selectedForCommit + path
+    }
+
+    /** Ticks every change of the status for the next commit (the master checkbox), or unticks them all. */
+    fun toggleAllCommitSelection() {
+        selectedForCommit = if (selectedForCommit.size == gitStatus.size) emptySet() else gitStatus.keys
     }
 
     /** Shows or hides a tool window (Alt+1, Alt+9, Alt+F12, Ctrl+Alt+Shift+D or its button in the left strip). */
@@ -257,6 +274,8 @@ class ProjectState(
             scope.launch {
                 runCatching { services.git.status(root.path) }.onSuccess {
                     gitStatus = it
+                    // Files that left the status are unchecked, so the selection never points outside the list.
+                    selectedForCommit = selectedForCommit intersect it.keys
                     if (editorsReloadPending) {
                         editorsReloadPending = false
                         editor.reloadDiffs()

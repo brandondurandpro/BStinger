@@ -14,6 +14,9 @@ import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.ProjectFileSystem
 import org.example.kotlineditor.syntax.Language
 import org.example.kotlineditor.syntax.SyntaxHighlighter
+import org.example.kotlineditor.syntax.treesitter.GrammarSpec
+import org.example.kotlineditor.syntax.treesitter.GrammarStore
+import org.example.kotlineditor.syntax.treesitter.SyntaxSession
 import java.io.IOException
 
 private const val RECOMPUTE_DELAY_MS = 150L
@@ -27,6 +30,7 @@ internal class TabFiles(
     private val diffs: suspend (FileEntry) -> List<DiffLine>,
     private val blames: suspend (FileEntry) -> List<BlameLine>,
     private val commitDiffs: suspend (FileEntry, CommitDiffTarget) -> List<DiffLine>,
+    private val grammars: GrammarStore?,
 ) {
     fun load(tab: EditorTab) {
         if (tab.isDiff) loadDiff(tab) else loadText(tab)
@@ -138,6 +142,12 @@ internal class TabFiles(
                 }
             }
         if (language.slashComments) launch { recomputeOnEdit(document, language) }
+        val spec = GrammarSpec.forFileName(tab.entry.name)
+        if (grammars != null && spec != null) {
+            val session = SyntaxSession(spec)
+            document.syntax = session
+            launch { session.run(document, grammars) }
+        }
         tab.pendingSelection?.let { (start, end) -> document.select(start, end) }
         tab.pendingSelection = null
         return document

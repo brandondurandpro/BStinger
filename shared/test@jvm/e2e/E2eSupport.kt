@@ -32,6 +32,7 @@ import org.example.kotlineditor.state.InMemoryPreferenceStore
 import org.example.kotlineditor.state.PreferenceStore
 import org.example.kotlineditor.state.ProjectState
 import org.example.kotlineditor.state.Screen
+import org.example.kotlineditor.syntax.treesitter.GrammarStore
 import org.example.kotlineditor.testkit.ChaosProxy
 import org.example.kotlineditor.ui.ItemTags
 import org.example.kotlineditor.ui.Tags
@@ -167,6 +168,7 @@ fun ComposeUiTest.launchApp(
     sessions: org.example.kotlineditor.model.SessionStore? = null,
     preferences: PreferenceStore = InMemoryPreferenceStore(),
     chaos: Boolean = false,
+    grammars: GrammarStore? = TestGrammars.shared,
 ): E2eApp {
     TextClipboard.useSystem = false
     val data = Files.createTempDirectory("kotlin-editor-server").toFile()
@@ -199,7 +201,7 @@ fun ComposeUiTest.launchApp(
     var created: AppState? = null
     setContent {
         val scope = rememberCoroutineScope()
-        val state = remember { AppState(services, scope, preferences) }
+        val state = remember { AppState(services, scope, preferences, grammars) }
         created = state
         DisposableEffect(Unit) {
             onDispose {
@@ -264,8 +266,9 @@ fun ComposeUiTest.launchWithProject(
     project: SampleProject,
     preferences: PreferenceStore = InMemoryPreferenceStore(),
     chaos: Boolean = false,
+    grammars: GrammarStore? = TestGrammars.shared,
 ): E2eApp {
-    val app = launchApp(preferences = preferences, chaos = chaos)
+    val app = launchApp(preferences = preferences, chaos = chaos, grammars = grammars)
     openProjectDirectoryFromWelcome(project.path)
     awaitTag(Tags.treeRow("src"))
     return app

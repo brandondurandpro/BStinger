@@ -1,0 +1,8 @@
+# Packages an application with its own Java runtime (jlink + jpackage): ./kotlin task :<module>:package@packaging
+# The Kotlin Toolchain (0.13) only makes jars, and its executable jar loses dependencies whose file names
+# collide (org.jetbrains.compose.runtime:runtime-desktop and androidx.compose.runtime:runtime-desktop):
+# https://youtrack.jetbrains.com/issue/KTC-6011, fixed after 0.13 (0.14.0-dev-4492).
+product: jvm/amper-plugin
+
+pluginInfo:
+  settingsClass: org.example.packaging.PackagingSettings

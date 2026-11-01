@@ -10,6 +10,7 @@ import org.example.kotlineditor.model.BlameLine
 import org.example.kotlineditor.model.DiffLine
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.ProjectFileSystem
+import org.example.kotlineditor.syntax.treesitter.GrammarStore
 
 private const val MAX_RECENT_FILES = 50
 
@@ -27,8 +28,9 @@ class EditorState(
     diffs: suspend (FileEntry) -> List<DiffLine> = { emptyList() },
     blames: suspend (FileEntry) -> List<BlameLine> = { emptyList() },
     commitDiffs: suspend (FileEntry, CommitDiffTarget) -> List<DiffLine> = { _, _ -> emptyList() },
+    grammars: GrammarStore? = null,
 ) {
-    private val files = TabFiles(fileSystem, scope, onSaved, diffs, blames, commitDiffs)
+    private val files = TabFiles(fileSystem, scope, onSaved, diffs, blames, commitDiffs, grammars)
 
     val panes = mutableStateListOf(EditorPane())
 

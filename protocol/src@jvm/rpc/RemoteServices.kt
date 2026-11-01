@@ -171,10 +171,11 @@ class RemoteGit(private val client: RpcClient) : GitClient {
         }
     }
 
-    override suspend fun commit(root: String, message: String) {
+    override suspend fun commit(root: String, message: String, paths: List<String>) {
         client.call(Method.GitCommit) {
             put(ROOT, root)
             put("message", message)
+            put("paths", paths.toJson())
         }
     }
 

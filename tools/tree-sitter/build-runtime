@@ -1,0 +1,63 @@
+#!/bin/sh
+# Builds the tree-sitter runtime library for every platform the IDE runs on, with `zig cc` (cross-compiling from
+# Linux), into shared/resources/tree-sitter/runtime. jtreesitter calls its C API (`ts_*`), which every build exports;
+# the libraries of other Java bindings only export their JNI functions on Windows. See tools/tree-sitter/README.md.
+#
+# Needs curl, tar (with xz) and, to check the exports, nm and objdump (binutils). Linux x86_64.
+set -eu
+TREE_SITTER=0.26.13
+TREE_SITTER_SHA256=ece24c3c5e2a76384075e830c7139b59fce8fb01e4ef8436fab08bbe10444c89
+ZIG=0.17.0
+ZIG_SHA256=1cbe9df9f27e6b78d14ccbca43b6703a404ef79ef1c463de901d7f088d4e2026
+
+here=$(cd "$(dirname "$0")" && pwd)
+out="$here/../../shared/resources/tree-sitter/runtime"
+cache="$HOME/.cache/kotlin-editor-tools/runtime"
+mkdir -p "$cache" "$out"
+
+fetch() { # url, sha256, destination
+    if [ ! -f "$3" ] || [ "$(sha256sum "$3" | cut -d' ' -f1)" != "$2" ]; then
+        curl -sSfL -o "$3.part" "$1"
+        if [ "$(sha256sum "$3.part" | cut -d' ' -f1)" != "$2" ]; then
+            rm -f "$3.part"
+            echo "Checksum mismatch for $1" >&2
+            exit 1
+        fi
+        mv "$3.part" "$3"
+    fi
+}
+fetch "https://github.com/tree-sitter/tree-sitter/archive/refs/tags/v$TREE_SITTER.tar.gz" "$TREE_SITTER_SHA256" \
+    "$cache/tree-sitter-$TREE_SITTER.tar.gz"
+fetch "https://ziglang.org/download/$ZIG/zig-x86_64-linux-$ZIG.tar.xz" "$ZIG_SHA256" "$cache/zig-$ZIG.tar.xz"
+rm -rf "$cache/src" "$cache/zig"
+mkdir -p "$cache/src" "$cache/zig"
+tar -xzf "$cache/tree-sitter-$TREE_SITTER.tar.gz" -C "$cache/src" --strip-components=1
+tar -xJf "$cache/zig-$ZIG.tar.xz" -C "$cache/zig" --strip-components=1
+src="$cache/src/lib"
+
+# platform (named like NativePlatform), zig target, file, extra linker flags
+build() {
+    "$cache/zig/zig" cc -target "$2" -shared -O2 -fPIC -fvisibility=default -I"$src/include" -I"$src/src" \
+        "$src/src/lib.c" -o "$out/$1-$3" $4
+    rm -f "$out"/*.pdb "$out"/*.lib
+}
+# glibc 2.17 (2012): the oldest the IDE's JDK supports, so the library loads on any distribution it runs on.
+build x86_64-linux-gnu x86_64-linux-gnu.2.17 tree-sitter.so ""
+build aarch64-linux-gnu aarch64-linux-gnu.2.17 tree-sitter.so ""
+build x86_64-macos x86_64-macos tree-sitter.dylib ""
+build aarch64-macos aarch64-macos tree-sitter.dylib ""
+# A DLL exports only what is marked __declspec(dllexport), which api.h does not do: export everything.
+build x86_64-windows x86_64-windows-gnu tree-sitter.dll "-Wl,--export-all-symbols"
+
+# Each library must export the C API jtreesitter calls.
+for symbol in ts_parser_new ts_parser_parse_string_encoding ts_query_new ts_query_cursor_exec ts_tree_edit; do
+    nm -D --defined-only "$out/x86_64-linux-gnu-tree-sitter.so" | grep -q " $symbol$"
+    nm -D --defined-only "$out/aarch64-linux-gnu-tree-sitter.so" | grep -q " $symbol$"
+    objdump -p "$out/x86_64-windows-tree-sitter.dll" | grep -q "\] $symbol$"
+    for mac in x86_64-macos aarch64-macos; do
+        grep -q "_$symbol" "$out/$mac-tree-sitter.dylib"
+    done
+done
+printf 'tree-sitter %s (MIT, https://github.com/tree-sitter/tree-sitter), built by tools/tree-sitter/build-runtime\n' \
+    "$TREE_SITTER" > "$out/VERSION"
+ls -l "$out"

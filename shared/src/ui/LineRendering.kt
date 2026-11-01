@@ -15,8 +15,11 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import org.example.kotlineditor.model.GitChangeKind
+import org.example.kotlineditor.state.TAB_SIZE
 import org.example.kotlineditor.syntax.Language
 import org.example.kotlineditor.syntax.SyntaxHighlighter
+import org.example.kotlineditor.syntax.treesitter.CaptureStyles
+import org.example.kotlineditor.syntax.treesitter.LineSpans
 
 /** Everything painted over the text of one line, in visual columns (`-1` = none). */
 @Immutable
@@ -48,6 +51,8 @@ class LineSource(
     val foldable: Boolean,
     val folded: Boolean,
     val placeholder: String?,
+    /** Tree-sitter colors of the line; `null` when the line lexer colors it. */
+    val spans: LineSpans? = null,
 )
 
 internal val DELETION_MARKER_SIZE = 7.dp
@@ -72,7 +77,13 @@ internal fun changeColor(kind: GitChangeKind): Color =
     }
 
 internal fun highlighted(source: LineSource): AnnotatedString {
-    val highlighted = SyntaxHighlighter.highlight(displayText(source.text), source.language, source.startsInComment)
+    val spans = source.spans
+    val highlighted =
+        if (spans == null) {
+            SyntaxHighlighter.highlight(displayText(source.text), source.language, source.startsInComment)
+        } else {
+            colored(source.text, spans)
+        }
     val placeholder = source.placeholder ?: return highlighted
     return buildAnnotatedString {
         append(highlighted)
@@ -81,6 +92,32 @@ internal fun highlighted(source: LineSource): AnnotatedString {
             SpanStyle(color = IdeColors.TextSecondary, background = IdeColors.FoldPlaceholder),
         ) { append(placeholder) }
     }
+}
+
+// The line as displayed (tabs expanded) with the colors of [spans], which count the characters of [line].
+private fun colored(line: String, spans: LineSpans): AnnotatedString {
+    val text = displayText(line)
+    if (spans.size == 0) return AnnotatedString(text)
+    val columns = if ('\t' in line) displayColumns(line) else null
+    val builder = AnnotatedString.Builder(text)
+    for (i in 0 until spans.size) {
+        val start = columns?.get(spans.starts[i]) ?: spans.starts[i]
+        val end = columns?.get(spans.ends[i]) ?: spans.ends[i]
+        builder.addStyle(CaptureStyles.palette[spans.styles[i]], start, end)
+    }
+    return builder.toAnnotatedString()
+}
+
+// Displayed column of each character offset of [line] (and of its end).
+private fun displayColumns(line: String): IntArray {
+    val columns = IntArray(line.length + 1)
+    var column = 0
+    line.forEachIndexed { index, c ->
+        columns[index] = column
+        column += if (c == '\t') TAB_SIZE else 1
+    }
+    columns[line.length] = column
+    return columns
 }
 
 private fun displayText(line: String) =

@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.example.kotlineditor.model.AppServices
 import org.example.kotlineditor.model.FileEntry
+import org.example.kotlineditor.syntax.treesitter.GrammarStore
 import java.io.IOException
 
 /** The whole IDE: the welcome screen or the open project, plus IDE-wide settings. */
@@ -23,6 +24,8 @@ class AppState(
     private val services: AppServices,
     private val scope: CoroutineScope,
     private val preferenceStore: PreferenceStore = InMemoryPreferenceStore(),
+    /** Tree-sitter grammars; without them, files are colored by the line lexer only. */
+    private val grammars: GrammarStore? = null,
 ) {
     // Last preferences known: those of the open project are read live, these cover the welcome screen.
     private var preferences: Map<String, String> = preferenceStore.load()
@@ -208,7 +211,7 @@ class AppState(
         while (recentProjects.size > MAX_RECENT) recentProjects.removeAt(recentProjects.lastIndex)
         saveRecent()
         (screen as? Screen.Project)?.project?.let { close(it) }
-        val project = ProjectState(root, services, scope, preferences)
+        val project = ProjectState(root, services, scope, preferences, grammars)
         runCatching { services.sessions.load(root.path) }.getOrNull()?.let(project::restoreSession)
         screen = Screen.Project(project)
     }

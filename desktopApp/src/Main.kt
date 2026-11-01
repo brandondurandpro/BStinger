@@ -14,6 +14,8 @@ import org.example.kotlineditor.server.EditorServer
 import org.example.kotlineditor.server.LocalServices
 import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.FilePreferenceStore
+import org.example.kotlineditor.syntax.treesitter.GrammarStore
+import java.io.File
 
 /**
  * The IDE is a client of the Kotlin Editor server. By default the server is embedded (started on loopback with a
@@ -35,7 +37,7 @@ fun main(args: Array<String>) {
 
     application {
         val scope = rememberCoroutineScope()
-        val state = remember { AppState(client.appServices(), scope, FilePreferenceStore()) }
+        val state = remember { AppState(client.appServices(), scope, FilePreferenceStore(), grammarStore()) }
         Window(
             onCloseRequest = {
                 state.exit {
@@ -51,3 +53,6 @@ fun main(args: Array<String>) {
         }
     }
 }
+
+// Grammars are downloaded on the machine running the IDE, next to its preferences: `~/.kotlin-editor/tree-sitter`.
+private fun grammarStore() = GrammarStore(File(System.getProperty("user.home"), ".kotlin-editor/tree-sitter"))
