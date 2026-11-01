@@ -16,11 +16,13 @@ import androidx.compose.ui.test.printToString
 import kotlinx.coroutines.runBlocking
 import org.example.kotlineditor.App
 import org.example.kotlineditor.model.AppServices
+import org.example.kotlineditor.model.ProjectSearch
 import org.example.kotlineditor.rpc.ClientOptions
 import org.example.kotlineditor.rpc.RpcClient
 import org.example.kotlineditor.rpc.appServices
 import org.example.kotlineditor.server.EditorServer
 import org.example.kotlineditor.server.LocalServices
+import org.example.kotlineditor.server.ripgrep.RipgrepSettings
 import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.InMemoryPreferenceStore
 import org.example.kotlineditor.state.PreferenceStore
@@ -104,8 +106,11 @@ class SampleProject(val root: Path = Files.createTempDirectory("kotlin-editor-e2
  * The server process of an e2e app, which a chaos test can stop and start again on the same port and data, as when
  * it crashes or is redeployed: its sessions (shells, cached answers) are lost, the files and stores are not.
  */
-class ServerProcess(private val data: java.io.File) : AutoCloseable {
-    var server: EditorServer = EditorServer(LocalServices(data)).start()
+class ServerProcess(
+    private val data: java.io.File,
+    private val services: (java.io.File) -> LocalServices = ::LocalServices,
+) : AutoCloseable {
+    var server: EditorServer = EditorServer(services(data)).start()
         private set
     val port: Int = server.port
     private var running = true
@@ -119,7 +124,7 @@ class ServerProcess(private val data: java.io.File) : AutoCloseable {
     /** Starts a new server on the same port and data, presenting [token] (the same one by default). */
     fun start(token: String = server.token) {
         check(!running) { "The server is already running" }
-        server = EditorServer(LocalServices(data), token).start(port = port)
+        server = EditorServer(services(data), token).start(port = port)
         running = true
     }
 
@@ -131,6 +136,21 @@ class ServerProcess(private val data: java.io.File) : AutoCloseable {
 
     override fun close() {
         if (running) server.close()
+    }
+}
+
+/**
+ * How the e2e server is set up: where it finds ripgrep, and a wrapper around the searches it serves (each start of
+ * the server, a restart included, wraps its own).
+ */
+class ServerSetup(
+    val ripgrep: RipgrepSettings = RipgrepSettings(),
+    val wrapSearch: (ProjectSearch) -> ProjectSearch = { it },
+) {
+    companion object {
+        /** A server without ripgrep: Find in Files uses the built-in search. */
+        fun withoutRipgrep(): ServerSetup =
+            ServerSetup(RipgrepSettings(executable = "/kotlin-editor-e2e/missing/rg", bundledDirectory = null))
     }
 }
 
@@ -172,10 +192,11 @@ fun ComposeUiTest.launchApp(
     sessions: org.example.kotlineditor.model.SessionStore? = null,
     preferences: PreferenceStore = InMemoryPreferenceStore(),
     chaos: Boolean = false,
+    server: ServerSetup = ServerSetup(),
 ): E2eApp {
     TextClipboard.useSystem = false
     val data = Files.createTempDirectory("kotlin-editor-server").toFile()
-    val process = ServerProcess(data)
+    val process = ServerProcess(data) { LocalServices(it, ripgrep = server.ripgrep, wrapSearch = server.wrapSearch) }
     val token = process.server.token
     // Chaos tests go through a proxy that breaks the network, and notice a dead link within a second.
     val proxy = if (chaos) ChaosProxy(process.port) else null
@@ -226,8 +247,9 @@ fun ComposeUiTest.launchWithProject(
     project: SampleProject,
     preferences: PreferenceStore = InMemoryPreferenceStore(),
     chaos: Boolean = false,
+    server: ServerSetup = ServerSetup(),
 ): E2eApp {
-    val app = launchApp(pick = project.path, preferences = preferences, chaos = chaos)
+    val app = launchApp(pick = project.path, preferences = preferences, chaos = chaos, server = server)
     onNodeWithTag(Tags.WELCOME_OPEN).performClick()
     awaitTag(Tags.treeRow("src"))
     return app

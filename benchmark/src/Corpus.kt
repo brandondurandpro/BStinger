@@ -7,6 +7,7 @@ import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.FileSymbol
 import org.example.kotlineditor.model.GitFileStatus
 import org.example.kotlineditor.model.ProjectSession
+import org.example.kotlineditor.model.SearchQuery
 import org.example.kotlineditor.model.SessionFile
 import org.example.kotlineditor.model.TextMatch
 import kotlinx.serialization.json.JsonElement
@@ -130,8 +131,7 @@ fun smallPayloads(files: List<SourceFile>, query: String): List<Payload> {
             "FindInFiles request",
             request(Method.FindInFiles) {
                 put("root", root.toJson())
-                put("query", query)
-                put("ignoreCase", false)
+                put("query", SearchQuery(query, ignoreCase = false).toJson())
                 put("limit", 1000)
             },
         ),
@@ -150,7 +150,7 @@ fun projectPayloads(files: List<SourceFile>, query: String, includeSymbols: Bool
     val payloads = ArrayList<Payload>()
     payloads += Payload("WalkFiles response", response(files.map { it.entry }.toJson()))
     payloads += Payload("ListDirectory response", response(files.take(20).map { it.entry }.toJson()))
-    payloads += Payload("FindInFiles response", matchesBody(files, query, 500))
+    payloads += Payload("FindInFiles event", matchesBody(files, query, 200))
     if (includeSymbols) payloads += Payload("Symbols response", symbolsBody(files))
     payloads += Payload("GitStatus response", gitStatusBody(files))
     payloads += Payload("GitDiff response", diffBody(files.first()))
@@ -190,7 +190,15 @@ private fun matchesBody(files: List<SourceFile>, query: String, limit: Int): Byt
             }
         }
     }
-    return response(matches.matchesJson())
+    // One batch of a Find in Files stream, as large as the server sends them.
+    return Frame(
+        FrameKind.Event,
+        1,
+        buildJsonObject {
+            put("seq", 1)
+            put("matches", matches.matchesJson())
+        },
+    ).body
 }
 
 private fun symbolsBody(files: List<SourceFile>): ByteArray {

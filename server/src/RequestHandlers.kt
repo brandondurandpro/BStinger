@@ -6,7 +6,6 @@ import kotlinx.serialization.json.JsonPrimitive
 import org.example.kotlineditor.model.GitClient
 import org.example.kotlineditor.rpc.Method
 import org.example.kotlineditor.rpc.blameJson
-import org.example.kotlineditor.rpc.bool
 import org.example.kotlineditor.rpc.branchesJson
 import org.example.kotlineditor.rpc.commitsJson
 import org.example.kotlineditor.rpc.diffJson
@@ -14,8 +13,8 @@ import org.example.kotlineditor.rpc.entry
 import org.example.kotlineditor.rpc.int
 import org.example.kotlineditor.rpc.keyEvent
 import org.example.kotlineditor.rpc.long
-import org.example.kotlineditor.rpc.matchesJson
 import org.example.kotlineditor.rpc.read
+import org.example.kotlineditor.rpc.searchQuery
 import org.example.kotlineditor.rpc.session
 import org.example.kotlineditor.rpc.string
 import org.example.kotlineditor.rpc.stringOrNull
@@ -34,6 +33,7 @@ private const val ROOT = "root"
 private const val BRANCH = "branch"
 private const val LIMIT = "limit"
 private const val TERMINAL = "terminal"
+private const val STREAM = "stream"
 
 /** Implementation of each [Method]: read the named params, call the local services, return the JSON result. */
 internal fun requestHandlers(services: LocalServices): Map<Method, Handler> =
@@ -65,13 +65,15 @@ private fun fileHandlers(services: LocalServices): Map<Method, Handler> {
 }
 
 private fun searchHandlers(services: LocalServices): Map<Method, Handler> {
-    val search = services.search
+    val search = services.servedSearch
     return mapOf(
         Method.WalkFiles to { search.walkFiles(entry(ROOT), params.int(LIMIT)).toJson() },
+        // Answers at once: the matches follow on the stream whose id is the request id.
         Method.FindInFiles to {
-            search
-                .findInFiles(entry(ROOT), params.string("query"), params.bool("ignoreCase"), params.int(LIMIT))
-                .matchesJson()
+            val root = entry(ROOT)
+            val query = params.read("query") { it.searchQuery() }
+            val limit = params.int(LIMIT)
+            nothing { searches.start(id) { search.findInFiles(root, query, limit) } }
         },
         Method.Symbols to { search.symbols(entry(ROOT)).symbolsJson() },
     )
@@ -145,7 +147,13 @@ private fun terminalHandlers(): Map<Method, Handler> =
         },
         Method.TerminalScroll to { nothing { terminalOrFail().scroll(params.int("delta")) } },
         Method.TerminalClear to { nothing { terminalOrFail().clear() } },
-        Method.TerminalResume to { nothing { terminals[params.long(TERMINAL)]?.resume(params.long("lastSeq")) } },
+        Method.StreamResume to { nothing { stream()?.resume(params.long("lastSeq")) } },
+        Method.StreamClose to {
+            nothing {
+                searches.close(params.long(STREAM))
+                terminals.stop(params.long(STREAM))
+            }
+        },
         Method.TerminalDestroy to { nothing { terminals.stop(params.long(TERMINAL)) } },
     )
 
@@ -158,6 +166,8 @@ private inline fun nothing(block: () -> Unit): JsonElement {
 private fun Request.entry(name: String) = params.read(name) { it.entry() }
 
 private fun Request.root() = params.string(ROOT)
+
+private fun Request.stream(): ServerStream? = params.long(STREAM).let { terminals[it] ?: searches[it] }
 
 private fun Request.terminalOrFail(): ServerTerminal =
     checkNotNull(terminals[params.long(TERMINAL)]) { "This terminal has ended" }

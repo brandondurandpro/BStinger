@@ -158,7 +158,7 @@ class ProtocolTest {
         )
         val event = Frame(FrameKind.Event, 5, buildJsonObject { put("seq", 2) })
         assertEquals(
-            """{"jsonrpc":"2.0","method":"terminal/snapshot","params":{"stream":5,"seq":2}}""",
+            """{"jsonrpc":"2.0","method":"stream/event","params":{"stream":5,"seq":2}}""",
             event.body.decodeToString(),
         )
 

@@ -24,12 +24,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import org.example.kotlineditor.model.SearchQuery
+import org.example.kotlineditor.state.FindInFilesSearch
 import org.example.kotlineditor.state.ProjectState
 import org.example.kotlineditor.state.SearchHit
 import org.example.kotlineditor.state.TextPos
 import org.example.kotlineditor.state.relativePath
 import org.example.kotlineditor.state.selectedText
-import java.io.IOException
 
 private const val DEBOUNCE_MS = 150L
 
@@ -44,17 +45,17 @@ fun FindInFilesPopup(project: ProjectState, onClose: () -> Unit) {
             .orEmpty()
     var query by remember { mutableStateOf(initial) }
     var matchCase by remember { mutableStateOf(false) }
-    var results by remember { mutableStateOf<List<SearchHit>?>(emptyList()) }
+    val search = remember { FindInFilesSearch(project.fileIndex, project.services.connection) }
     val cursor = remember { ListCursor() }
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focus.requestFocus() }
     LaunchedEffect(query, matchCase) {
-        if (query.isNotEmpty()) delay(DEBOUNCE_MS) // restarted on every keystroke
-        results = null
-        results = search(project, query, matchCase)
+        if (query.isNotEmpty()) delay(DEBOUNCE_MS) // restarted on every keystroke, which stops the search
         cursor.selected = 0
+        search.run(SearchQuery(query, ignoreCase = !matchCase))
     }
-    val list = results.orEmpty()
+    val list = search.hits
+    KeepSelection(list, cursor)
     val open = { hit: SearchHit? ->
         hit?.let {
             onClose()
@@ -64,15 +65,7 @@ fun FindInFilesPopup(project: ProjectState, onClose: () -> Unit) {
     }
     PopupFrame(Tags.FIND_IN_FILES, onClose, width = 760) {
         Column {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Label("Find in Files", fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                Label(
-                    status(results, query),
-                    color = IdeColors.TextSecondary,
-                    fontSize = 12.sp,
-                    modifier = Modifier.testTag(Tags.FIND_IN_FILES_COUNT),
-                )
-            }
+            Header(search, query)
             IdeTextField(
                 query,
                 { query = it },
@@ -94,22 +87,57 @@ fun FindInFilesPopup(project: ProjectState, onClose: () -> Unit) {
     }
 }
 
-private suspend fun search(project: ProjectState, query: String, matchCase: Boolean): List<SearchHit> =
-    try {
-        project.fileIndex.findInFiles(query, ignoreCase = !matchCase)
-    } catch (expected: IOException) {
-        emptyList() // server unreachable: no results until it is back
+// Title, engine (when it is not ripgrep) and count of the matches, followed by "…" while more may come.
+@Composable
+private fun Header(search: FindInFilesSearch, query: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Label("Find in Files", fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+        if (search.builtIn) {
+            Label(
+                "Built-in search (ripgrep unavailable)",
+                color = IdeColors.TextSecondary,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(end = 12.dp).testTag(Tags.FIND_IN_FILES_ENGINE),
+            )
+        }
+        Label(
+            status(search, query),
+            color = IdeColors.TextSecondary,
+            fontSize = 12.sp,
+            modifier = Modifier.testTag(Tags.FIND_IN_FILES_COUNT),
+        )
     }
+}
 
-private fun status(results: List<SearchHit>?, query: String): String =
-    when {
-        results == null -> "Searching…"
+// Matches arrive in batches and are inserted in order: the selected one stays selected wherever it moves.
+@Composable
+private fun KeepSelection(list: List<SearchHit>, cursor: ListCursor) {
+    val shown = remember { arrayOfNulls<List<SearchHit>>(1) }
+    LaunchedEffect(list) {
+        val previous = shown[0]
+        val selected = previous?.getOrNull(cursor.selected)
+        if (previous != null && selected != null && cursor.selected > 0) {
+            cursor.selected = list.indexOf(selected).coerceAtLeast(0)
+        }
+        shown[0] = list
+    }
+}
+
+private fun status(search: FindInFilesSearch, query: String): String {
+    val hits = search.hits
+    val error = search.error
+    val cut = search.finished?.complete == false
+    val count = if (cut) "${hits.size}+ matches" else plural(hits.size, "match", "matches")
+    val summary = "$count in ${plural(search.fileCount, "file", "files")}"
+    return when {
         query.isEmpty() -> ""
-        results.isEmpty() -> "No matches"
-        else -> "${plural(results.size, "match", "matches")} in ${plural(fileCount(results), "file", "files")}"
+        error != null -> "Search failed: $error"
+        search.searching && hits.isEmpty() -> "Searching…"
+        search.searching -> "$summary…"
+        hits.isEmpty() -> "No matches"
+        else -> summary
     }
-
-private fun fileCount(results: List<SearchHit>) = results.distinctBy { it.entry.path }.size
+}
 
 @Composable
 private fun SearchHitRow(hit: SearchHit, length: Int, selected: Boolean, onClick: () -> Unit) {

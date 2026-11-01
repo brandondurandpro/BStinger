@@ -14,8 +14,8 @@ import kotlinx.serialization.json.put
 /** Mapping between [Frame]s and JSON-RPC 2.0 messages, described by [Protocol]. */
 internal object JsonRpc {
     private const val HELLO = "connection/hello"
-    private const val SNAPSHOT = "terminal/snapshot"
-    private const val END = "terminal/end"
+    private const val EVENT = "stream/event"
+    private const val END = "stream/end"
     private const val PING = "$/ping"
     private const val PONG = "$/pong"
     private const val CANCEL = "$/cancelRequest"
@@ -52,7 +52,7 @@ internal object JsonRpc {
                 }
 
                 FrameKind.Event -> {
-                    notification(SNAPSHOT, streamParams(frame))
+                    notification(EVENT, streamParams(frame))
                 }
 
                 FrameKind.End -> {
@@ -84,7 +84,7 @@ internal object JsonRpc {
         return when (val method = message[METHOD]?.jsonPrimitive?.content) {
             null -> answer(message, id, body)
             HELLO -> Frame(FrameKind.Hello, Protocol.HELLO_ID, params, encoded = body)
-            SNAPSHOT -> streamFrame(FrameKind.Event, params, body)
+            EVENT -> streamFrame(FrameKind.Event, params, body)
             END -> streamFrame(FrameKind.End, params, body)
             PING -> Frame(FrameKind.Ping, 0, encoded = body)
             PONG -> Frame(FrameKind.Pong, 0, encoded = body)

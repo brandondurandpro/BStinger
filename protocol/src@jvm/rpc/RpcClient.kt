@@ -4,7 +4,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,7 +18,6 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.example.kotlineditor.model.ConnectionStatus
 import org.example.kotlineditor.model.NetworkInspector
-import org.example.kotlineditor.model.TerminalSnapshot
 import java.io.Closeable
 import java.io.IOException
 import java.net.InetSocketAddress
@@ -52,8 +51,8 @@ class RejectedException(message: String) : IOException(message)
  *
  * - Requests are registered before being sent and stay registered until answered: when the link breaks they
  *   are simply sent again on the next connection, with the same id (the server deduplicates).
- * - Streams (shell output) carry sequence numbers; out-of-order events are buffered, duplicates dropped, and
- *   after a reconnection the client asks the server to replay what it missed.
+ * - Streams (shell screens, search results) carry sequence numbers; duplicates are dropped, and after a
+ *   reconnection the client asks the server to replay what it missed (see [StreamKind]).
  */
 class RpcClient(host: String, port: Int, token: String, private val options: ClientOptions = ClientOptions()) :
     Closeable {
@@ -79,8 +78,8 @@ class RpcClient(host: String, port: Int, token: String, private val options: Cli
         ) { id, lastSeq ->
             scope.launch {
                 runCatching {
-                    call(Method.TerminalResume) {
-                        put("terminal", id)
+                    call(Method.StreamResume) {
+                        put("stream", id)
                         put("lastSeq", lastSeq)
                     }
                 }
@@ -118,10 +117,16 @@ class RpcClient(host: String, port: Int, token: String, private val options: Cli
     }
 
     /** Registers the stream fed by the server under [id] (before the request creating it is sent). */
-    fun openStream(id: Long): Channel<TerminalSnapshot> = streams.open(id)
+    fun openStream(id: Long, kind: StreamKind): ReceiveChannel<StreamMessage> = streams.open(id, kind)
 
     /** Stops listening to the stream [id]. */
     fun closeStream(id: Long) = streams.close(id)
+
+    /** Stops listening to the stream [id] and tells the server, which stops feeding it and forgets it. */
+    fun abandonStream(id: Long) {
+        streams.close(id)
+        scope.launch { runCatching { call(Method.StreamClose) { put("stream", id) } } }
+    }
 
     override fun close() {
         connector.close()

@@ -1,6 +1,12 @@
 package org.example.kotlineditor.server
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.FlowCollector
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -8,6 +14,9 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.ProjectSearch
+import org.example.kotlineditor.model.SearchEngine
+import org.example.kotlineditor.model.SearchQuery
+import org.example.kotlineditor.model.SearchUpdate
 import org.example.kotlineditor.model.TextMatch
 import org.example.kotlineditor.server.ripgrep.RipgrepBinary
 import org.example.kotlineditor.server.ripgrep.RipgrepMatch
@@ -18,6 +27,7 @@ import org.example.kotlineditor.server.ripgrep.RipgrepSettings
 import java.io.IOException
 import java.nio.file.Paths
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * [ProjectSearch] whose Find in Files runs ripgrep, like VS Code: native, parallel, no index, and it honours
@@ -54,31 +64,61 @@ class RipgrepSearch internal constructor(
             binary
         }
 
-    override suspend fun findInFiles(root: FileEntry, query: String, ignoreCase: Boolean, limit: Int): List<TextMatch> {
-        val executable = if (query.isEmpty() || limit <= 0) null else ripgrep()
-        return executable?.let { search(it, root, query, ignoreCase, limit) }
-            ?: fallback.findInFiles(root, query, ignoreCase, limit)
+    /**
+     * Streams ripgrep's matches in batches ([BATCH_SIZE] at most, sent at most [BATCH_DELAY] after their first
+     * match). When ripgrep is missing, or fails before finding anything, the built-in search answers instead; when
+     * it fails later, the matches already sent stand and the search ends as incomplete. On timeout, the matches
+     * found so far are the answer.
+     */
+    override fun findInFiles(root: FileEntry, query: SearchQuery, limit: Int): Flow<SearchUpdate> =
+        flow {
+            val executable = if (query.text.isEmpty() || limit <= 0) null else ripgrep()
+            val outcome = executable?.let { search(it, root, query, limit) }
+            val failedEarly = outcome?.failed == true && outcome.found == 0
+            if (outcome == null || failedEarly) {
+                emitAll(fallback.findInFiles(root, query, limit))
+            } else {
+                emit(SearchUpdate.Finished(SearchEngine.Ripgrep, outcome.complete))
+            }
+        }
+
+    /** How a ripgrep search went. */
+    private class Outcome {
+        var found = 0
+        var truncated = false
+        var failed = false
+        var timedOut = false
+        val complete: Boolean get() = !failed && !truncated && !timedOut
     }
 
-    // Null when ripgrep failed: the built-in search takes over.
-    private suspend fun search(
+    // Sends the batches of matches ripgrep finds, and tells how it went.
+    private suspend fun FlowCollector<SearchUpdate>.search(
         executable: RipgrepBinary,
         root: FileEntry,
-        query: String,
-        ignoreCase: Boolean,
+        query: SearchQuery,
         limit: Int,
-    ): List<TextMatch>? =
-        try {
-            val runner = RipgrepRunner(executable.path, maxFileSize, onStart = onStart)
-            val matches = runner.matches(RipgrepQuery(Paths.get(root.path), query, ignoreCase))
-            val hits = ArrayList<TextMatch>()
-            // On timeout, the lines found so far are the answer.
-            withTimeoutOrNull(timeout) { matches.take(limit).collect { hits += it.toTextMatch() } }
-            // ripgrep searches files in parallel: sorting keeps the order stable from one search to the next.
-            hits.sortedWith(compareBy<TextMatch> { it.entry.path }.thenBy { it.line })
-        } catch (_: IOException) {
-            null
-        }
+    ): Outcome {
+        val outcome = Outcome()
+        val runner = RipgrepRunner(executable.path, maxFileSize, onStart = onStart)
+        val batches =
+            runner
+                .matches(RipgrepQuery(Paths.get(root.path), query.text, query.ignoreCase))
+                .map { it.toTextMatch() }
+                .take(limit + 1) // one more than the limit tells that the results were cut
+                .batched(BATCH_SIZE, BATCH_DELAY)
+                .catch { failure -> if (failure is IOException) outcome.failed = true else throw failure }
+        val finished =
+            withTimeoutOrNull(timeout) {
+                batches.collect { batch ->
+                    val kept = batch.take(limit - outcome.found)
+                    outcome.truncated = outcome.truncated || kept.size < batch.size
+                    outcome.found += kept.size
+                    if (kept.isNotEmpty()) emit(SearchUpdate.Found(kept))
+                }
+            }
+        outcome.timedOut = finished == null
+        return outcome
+    }
 
     private fun RipgrepMatch.toTextMatch(): TextMatch {
         val file = Paths.get(path)
@@ -89,5 +129,11 @@ class RipgrepSearch internal constructor(
     private companion object {
         /** Same preview length as the built-in search. */
         const val MAX_LINE_PREVIEW = 500
+
+        /** Most matches sent in one message. */
+        const val BATCH_SIZE = 200
+
+        /** Longest a found match waits for others before being sent. */
+        val BATCH_DELAY = 30.milliseconds
     }
 }

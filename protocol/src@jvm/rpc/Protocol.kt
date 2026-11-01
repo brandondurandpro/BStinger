@@ -39,14 +39,17 @@ import java.io.OutputStream
  * - [FrameKind.Hello] is the request `connection/hello` with id [HELLO_ID]; its answer is [FrameKind.Welcome] (a
  *   result) or [FrameKind.Reject] (an error, then the connection is closed).
  * - [FrameKind.Request], [FrameKind.Response] and [FrameKind.Error] are requests and their answers.
- * - [FrameKind.Event] and [FrameKind.End] are the notifications `terminal/snapshot` and `terminal/end`, whose
- *   `stream` parameter is the frame id.
+ * - [FrameKind.Event] and [FrameKind.End] are the notifications `stream/event` and `stream/end`, whose
+ *   `stream` parameter is the frame id. A stream is created by a request (`terminal/start`, `search/findInFiles`)
+ *   whose id becomes the stream id; its events are numbered from 1 by `seq`, and its end holds the last `seq`.
+ *   After a reconnection the client sends `stream/resume` with the last `seq` it received; `stream/close` tells the
+ *   server it no longer listens.
  * - [FrameKind.Ping], [FrameKind.Pong] and [FrameKind.Cancel] are the notifications `$/ping`, `$/pong` and
  *   `$/cancelRequest` (as in LSP, its `id` parameter is the request to cancel).
  */
 object Protocol {
     /** Version announced in the handshake; client and server must speak the same one. */
-    const val VERSION = 5
+    const val VERSION = 6
 
     /** Largest accepted message: anything bigger is treated as a corrupted stream. */
     const val MAX_FRAME = 512 * 1024 * 1024
@@ -167,7 +170,7 @@ enum class FrameKind {
     /** Server to client: failure of the request with the same id; the payload is the JSON-RPC error object. */
     Error,
 
-    /** Server to client: the id is a stream id, the payload holds the sequence number and the screen. */
+    /** Server to client: the id is a stream id, the payload holds the sequence number and the event. */
     Event,
 
     /** Server to client: the stream with this id is over; the payload holds its last sequence number. */
@@ -245,8 +248,11 @@ enum class Method(
     /** Every file of a project. */
     WalkFiles("search/walkFiles"),
 
-    /** Full-text search in a project. */
-    FindInFiles("search/findInFiles"),
+    /**
+     * Starts a full-text search in a project; the request id becomes the id of its stream of matches. Mutating so
+     * a retried request never starts the search twice.
+     */
+    FindInFiles("search/findInFiles", mutating = true),
 
     /** Declarations of a project. */
     Symbols("search/symbols"),
@@ -287,8 +293,11 @@ enum class Method(
     /** Scrolls the terminal viewport. */
     TerminalScroll("terminal/scroll", mutating = true),
 
-    /** Replays the last screen of a terminal after a reconnection. */
-    TerminalResume("terminal/resume"),
+    /** After a reconnection, replays what a stream pushed since the last sequence number the client received. */
+    StreamResume("stream/resume"),
+
+    /** The client no longer listens to a stream: the server stops what feeds it (a search) and forgets it. */
+    StreamClose("stream/close"),
 
     /** Stops a terminal. */
     TerminalDestroy("terminal/destroy", mutating = true),

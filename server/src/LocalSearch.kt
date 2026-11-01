@@ -4,12 +4,17 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
 import org.example.kotlineditor.model.FileContent
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.FileSymbol
 import org.example.kotlineditor.model.IGNORED_DIRECTORIES
 import org.example.kotlineditor.model.ProjectSearch
+import org.example.kotlineditor.model.SearchEngine
+import org.example.kotlineditor.model.SearchQuery
+import org.example.kotlineditor.model.SearchUpdate
 import org.example.kotlineditor.model.TextMatch
 import org.example.kotlineditor.syntax.Language
 import org.example.kotlineditor.syntax.Structure
@@ -31,23 +36,30 @@ class LocalSearch(private val files: LocalFileSystem) : ProjectSearch {
             result
         }
 
-    override suspend fun findInFiles(root: FileEntry, query: String, ignoreCase: Boolean, limit: Int): List<TextMatch> {
-        val hits = ArrayList<TextMatch>()
-        val batches =
-            if (query.isEmpty()) {
-                emptyList<List<FileEntry>>().iterator()
-            } else {
-                walkFiles(root).chunked(BATCH).iterator()
-            }
-        while (hits.size < limit && batches.hasNext()) {
-            val batch = batches.next()
-            hits +=
-                coroutineScope {
-                    batch.map { async(Dispatchers.IO) { matches(it, query, ignoreCase) } }.awaitAll().flatten()
+    /** Searches [BATCH] files at a time in parallel, and sends the matches of each batch of files as one update. */
+    override fun findInFiles(root: FileEntry, query: SearchQuery, limit: Int): Flow<SearchUpdate> =
+        flow {
+            var found = 0
+            var truncated = false
+            val batches =
+                if (query.text.isEmpty() || limit <= 0) {
+                    emptyList<List<FileEntry>>().iterator()
+                } else {
+                    walkFiles(root).chunked(BATCH).iterator()
                 }
+            while (found < limit && batches.hasNext()) {
+                val batch = batches.next()
+                val all =
+                    coroutineScope {
+                        batch.map { async(Dispatchers.IO) { matches(it, query) } }.awaitAll().flatten()
+                    }
+                val hits = all.take(limit - found)
+                truncated = hits.size < all.size
+                found += hits.size
+                if (hits.isNotEmpty()) emit(SearchUpdate.Found(hits))
+            }
+            emit(SearchUpdate.Finished(SearchEngine.BuiltIn, complete = !truncated && !batches.hasNext()))
         }
-        return hits.take(limit)
-    }
 
     override suspend fun symbols(root: FileEntry): List<FileSymbol> {
         val sources = walkFiles(root).filter { Language.fromFileName(it.name) in OUTLINED }
@@ -56,10 +68,10 @@ class LocalSearch(private val files: LocalFileSystem) : ProjectSearch {
         }
     }
 
-    private fun matches(entry: FileEntry, query: String, ignoreCase: Boolean): List<TextMatch> {
+    private fun matches(entry: FileEntry, query: SearchQuery): List<TextMatch> {
         val content = files.readNow(entry) as? FileContent.Text ?: return emptyList()
         return content.lines.withIndex().mapNotNull { (index, line) ->
-            val column = line.indexOf(query, ignoreCase = ignoreCase)
+            val column = line.indexOf(query.text, ignoreCase = query.ignoreCase)
             if (column < 0) null else TextMatch(entry, index, column, line.take(MAX_LINE_PREVIEW))
         }
     }

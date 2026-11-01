@@ -8,10 +8,14 @@ import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.ProjectSearch
+import org.example.kotlineditor.model.SearchQuery
+import org.example.kotlineditor.model.SearchUpdate
+import org.example.kotlineditor.model.TextMatch
 import org.example.kotlineditor.syntax.Declaration
 import java.io.IOException
 
@@ -37,7 +41,10 @@ data class SearchHit(
 )
 
 private const val DEFAULT_RESULTS = 50
-private const val DEFAULT_TEXT_HITS = 1000
+
+/** Most matches a Find in Files shows. */
+const val DEFAULT_TEXT_HITS = 1000
+
 private val BEST_FILE_FIRST =
     compareByDescending<FileMatch> {
         it.score
@@ -120,18 +127,12 @@ class FileIndex(private val root: FileEntry, private val search: ProjectSearch, 
     }
 
     /** Full-text search, run by the server next to the files: only matching lines cross the network. */
-    suspend fun findInFiles(
-        query: String,
-        ignoreCase: Boolean = true,
-        limit: Int = DEFAULT_TEXT_HITS,
-    ): List<SearchHit> =
-        if (query.isEmpty()) {
-            emptyList()
-        } else {
-            search.findInFiles(root, query, ignoreCase, limit).map { hit ->
-                SearchHit(hit.entry, relativePath(hit.entry), hit.line, hit.column, hit.lineText)
-            }
-        }
+    fun findInFiles(query: SearchQuery, limit: Int = DEFAULT_TEXT_HITS): Flow<SearchUpdate> =
+        search.findInFiles(root, query, limit)
+
+    /** A match of the server, with its path relative to the project. */
+    fun hitOf(match: TextMatch): SearchHit =
+        SearchHit(match.entry, relativePath(match.entry), match.line, match.column, match.lineText)
 
     companion object {
         /** See [FuzzyMatch]. */

@@ -136,6 +136,7 @@ object Tags {
     const val FIND_IN_FILES = "findInFiles"
     const val FIND_IN_FILES_INPUT = "findInFiles.input"
     const val FIND_IN_FILES_COUNT = "findInFiles.count"
+    const val FIND_IN_FILES_ENGINE = "findInFiles.engine"
     const val FIND_BAR = "findBar"
     const val FIND_BAR_INPUT = "findBar.input"
     const val FIND_BAR_COUNT = "findBar.count"

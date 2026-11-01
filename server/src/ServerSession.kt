@@ -27,12 +27,19 @@ private val ORDERED =
         Method.TerminalResize,
         Method.TerminalScroll,
         Method.TerminalClear,
-        Method.TerminalResume,
         Method.TerminalDestroy,
+        Method.FindInFiles,
+        Method.StreamResume,
+        Method.StreamClose,
     )
 
-/** One request being executed: its id, its named params, and the session's terminals. */
-internal class Request(val id: Long, val params: JsonObject, val terminals: TerminalRegistry) {
+/** One request being executed: its id, its named params, and the session's terminals and searches. */
+internal class Request(
+    val id: Long,
+    val params: JsonObject,
+    val terminals: TerminalRegistry,
+    val searches: SearchStreams,
+) {
     /** Set by a handler whose answer is source code, so the codec may use the code dictionary. */
     var code = false
 }
@@ -59,7 +66,7 @@ internal class TerminalRegistry(private val push: (Frame) -> Unit) {
     }
 }
 
-/** A client across reconnections: in-flight requests, cached answers of mutations, running terminals. */
+/** A client across reconnections: in-flight requests, cached answers of mutations, running terminals and searches. */
 internal class ServerSession(
     val id: String,
     private val scope: CoroutineScope,
@@ -81,6 +88,7 @@ internal class ServerSession(
                 size > options.responseCacheSize
         }
     private val terminals = TerminalRegistry(::send)
+    private val searches = SearchStreams(scope, ::send)
 
     fun attach(new: ServerConnection) {
         val old = connection
@@ -107,6 +115,7 @@ internal class ServerSession(
     fun dispose() {
         inFlight.values.forEach { it.cancel() }
         terminals.stopAll()
+        searches.closeAll()
         connection?.close()
     }
 
@@ -144,7 +153,7 @@ internal class ServerSession(
 
     private suspend fun execute(id: Long, method: Method, params: JsonElement): Frame =
         try {
-            val request = Request(id, params.params(), terminals)
+            val request = Request(id, params.params(), terminals, searches)
             val result = checkNotNull(handlers[method]) { "No handler for $method" }.invoke(request)
             Frame(FrameKind.Response, id, result, code = request.code)
         } catch (e: IOException) {

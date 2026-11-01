@@ -1,6 +1,7 @@
 package org.example.kotlineditor.rpc
 
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
@@ -24,12 +25,14 @@ import org.example.kotlineditor.model.ProjectFileSystem
 import org.example.kotlineditor.model.ProjectSearch
 import org.example.kotlineditor.model.ProjectSession
 import org.example.kotlineditor.model.RecentProjectsStore
+import org.example.kotlineditor.model.SearchInterruptedException
+import org.example.kotlineditor.model.SearchQuery
+import org.example.kotlineditor.model.SearchUpdate
 import org.example.kotlineditor.model.SessionStore
 import org.example.kotlineditor.model.TerminalKeyEvent
 import org.example.kotlineditor.model.TerminalLauncher
 import org.example.kotlineditor.model.TerminalProcess
 import org.example.kotlineditor.model.TerminalSnapshot
-import org.example.kotlineditor.model.TextMatch
 import java.io.IOException
 
 private const val ROOT = "root"
@@ -41,6 +44,7 @@ private const val FILE = "file"
 private const val PATH = "path"
 private const val NAME = "name"
 private const val TERMINAL = "terminal"
+private const val MATCHES = "matches"
 
 /** Every IDE service, backed by a server. */
 fun RpcClient.appServices(directoryPicker: DirectoryPicker): AppServices =
@@ -119,20 +123,51 @@ class RemoteSearch(private val client: RpcClient) : ProjectSearch {
         return result.entries()
     }
 
-    override suspend fun findInFiles(root: FileEntry, query: String, ignoreCase: Boolean, limit: Int): List<TextMatch> {
-        val result =
-            client.call(Method.FindInFiles) {
-                put(ROOT, root.toJson())
-                put("query", query)
-                put("ignoreCase", ignoreCase)
-                put(LIMIT, limit)
+    /**
+     * The request id of FindInFiles is the id of its stream of matches, registered before the request is sent.
+     * The stream is abandoned (the server stops searching) as soon as the collection stops; it fails with
+     * [StreamLostException] when the server restarted during the search.
+     */
+    override fun findInFiles(root: FileEntry, query: SearchQuery, limit: Int): Flow<SearchUpdate> =
+        flow {
+            val id = client.newId()
+            val updates = client.openStream(id, StreamKind.Appending)
+            try {
+                client.call(Method.FindInFiles, id = id) {
+                    put(ROOT, root.toJson())
+                    put("query", query.toJson())
+                    put(LIMIT, limit)
+                }
+                updates.receiveOrLost().collect { message ->
+                    when (message) {
+                        is StreamMessage.Event -> {
+                            emit(SearchUpdate.Found(message.payload.field(MATCHES).matches()))
+                        }
+
+                        is StreamMessage.End -> {
+                            message.payload.stringOrNull("error")?.let { throw RemoteException(it) }
+                            emit(message.payload.searchFinished())
+                        }
+                    }
+                }
+            } finally {
+                client.abandonStream(id)
             }
-        return result.matches()
-    }
+        }
 
     override suspend fun symbols(root: FileEntry): List<FileSymbol> =
         client.call(Method.Symbols) { put(ROOT, root.toJson()) }.symbols()
 }
+
+// The messages of a stream, failing with SearchInterruptedException when the server lost it.
+private fun ReceiveChannel<StreamMessage>.receiveOrLost(): Flow<StreamMessage> =
+    flow {
+        try {
+            for (message in this@receiveOrLost) emit(message)
+        } catch (_: StreamLostException) {
+            throw SearchInterruptedException()
+        }
+    }
 
 /** [GitClient] of the server. */
 @Suppress("TooManyFunctions") // one per Git operation of the protocol
@@ -287,7 +322,7 @@ class RemoteTerminalLauncher(private val client: RpcClient) : TerminalLauncher {
         cellHeightPx: Int,
     ): TerminalProcess {
         val id = client.newId()
-        val screens = client.openStream(id)
+        val screens = client.openStream(id, StreamKind.Replacing)
         val commands = Channel<suspend () -> Unit>(Channel.UNLIMITED)
         client.scope.launch {
             try {
@@ -302,7 +337,12 @@ class RemoteTerminalLauncher(private val client: RpcClient) : TerminalLauncher {
             }
         }
         return object : TerminalProcess {
-            override val output: Flow<TerminalSnapshot> = flow { for (snapshot in screens) emit(snapshot) }
+            override val output: Flow<TerminalSnapshot> =
+                flow {
+                    for (message in screens) {
+                        if (message is StreamMessage.Event) emit(message.payload.field("snapshot").snapshot())
+                    }
+                }
 
             override fun write(bytes: ByteArray) {
                 command(Method.TerminalWrite) { terminalInput(bytes) }

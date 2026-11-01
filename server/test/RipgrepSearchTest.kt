@@ -3,9 +3,14 @@ package org.example.kotlineditor.server
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.example.kotlineditor.model.FileEntry
+import org.example.kotlineditor.model.SearchEngine
+import org.example.kotlineditor.model.SearchQuery
+import org.example.kotlineditor.model.SearchUpdate
 import org.example.kotlineditor.model.TextMatch
 import org.example.kotlineditor.server.ripgrep.RipgrepBinary
 import org.example.kotlineditor.server.ripgrep.RipgrepProvisioner
@@ -78,12 +83,12 @@ class RipgrepSearchTest {
             val search = search(rg)
             assertEquals(RipgrepBinary.Origin.Configured, search.ripgrep()?.origin)
 
-            val all = search.findInFiles(project, "needle", ignoreCase = true, limit = 100)
+            val all = search.find(project, "needle", ignoreCase = true, limit = 100)
             assertEquals(listOf("a/日本.txt:0:4", "a/日本.txt:2:0", "b.kt:1:3"), all.relative())
             assertEquals("日本語 needle", all[0].lineText)
             assertEquals("日本.txt", all[0].entry.name)
 
-            val exact = search.findInFiles(project, "needle", ignoreCase = false, limit = 100)
+            val exact = search.find(project, "needle", ignoreCase = false, limit = 100)
             assertEquals(listOf("a/日本.txt:0:4"), exact.relative())
             assertAllEnded()
         }
@@ -101,7 +106,7 @@ class RipgrepSearchTest {
             write("node_modules/x/index.js", "needle")
             write(".github/workflow.yml", "needle")
             write("src/Main.kt", "needle")
-            val hits = search(rg).findInFiles(project, "needle", ignoreCase = false, limit = 100)
+            val hits = search(rg).find(project, "needle", ignoreCase = false, limit = 100)
             assertEquals(listOf(".github/workflow.yml:0:0", "src/Main.kt:0:0"), hits.relative())
         }
 
@@ -112,10 +117,10 @@ class RipgrepSearchTest {
             write("a.txt", "run with --files please\n(a+b)*\n")
             write("b.txt", """say "hi there" \"""")
             val search = search(rg)
-            assertEquals(listOf("a.txt:0:9"), search.findInFiles(project, "--files", false, 10).relative())
-            assertEquals(listOf("a.txt:1:0"), search.findInFiles(project, "(a+b)*", false, 10).relative())
+            assertEquals(listOf("a.txt:0:9"), search.find(project, "--files", false, 10).relative())
+            assertEquals(listOf("a.txt:1:0"), search.find(project, "(a+b)*", false, 10).relative())
             // Quotes and backslashes reach ripgrep intact (Windows' command-line quoting would mangle them).
-            assertEquals(listOf("b.txt:0:4"), search.findInFiles(project, """"hi there" \"""", false, 10).relative())
+            assertEquals(listOf("b.txt:0:4"), search.find(project, """"hi there" \"""", false, 10).relative())
         }
 
     @Test
@@ -123,7 +128,7 @@ class RipgrepSearchTest {
         runBlocking {
             val rg = TestRipgrep.require()
             repeat(20) { file -> write("f$file.txt", "needle line\n".repeat(5_000)) }
-            val hits = search(rg).findInFiles(project, "needle", ignoreCase = false, limit = 25)
+            val hits = search(rg).find(project, "needle", ignoreCase = false, limit = 25)
             assertEquals(25, hits.size)
             assertAllEnded()
         }
@@ -150,12 +155,41 @@ class RipgrepSearchTest {
         }
 
     @Test
+    fun `streams matches in batches and kills ripgrep when the listener goes away`() =
+        runBlocking {
+            val rg = TestRipgrep.require()
+            repeat(20) { file -> write("f$file.txt", "needle line\n".repeat(5_000)) }
+            val first =
+                search(rg)
+                    .findInFiles(project, SearchQuery("needle", ignoreCase = false), limit = 1_000_000)
+                    .first()
+            assertTrue(first is SearchUpdate.Found && first.matches.isNotEmpty())
+            assertAllEnded()
+        }
+
+    @Test
+    fun `tells the engine and whether the limit cut the results`() =
+        runBlocking {
+            val rg = TestRipgrep.require()
+            repeat(3) { file -> write("f$file.txt", "needle\n".repeat(10)) }
+            val complete = search(rg).findInFiles(project, SearchQuery("needle"), limit = 30).toList()
+            assertEquals(SearchUpdate.Finished(SearchEngine.Ripgrep, complete = true), complete.last())
+            assertEquals(30, complete.sumOf { (it as? SearchUpdate.Found)?.matches?.size ?: 0 })
+            val cut = search(rg).findInFiles(project, SearchQuery("needle"), limit = 29).toList()
+            assertEquals(SearchUpdate.Finished(SearchEngine.Ripgrep, complete = false), cut.last())
+            assertEquals(29, cut.sumOf { (it as? SearchUpdate.Found)?.matches?.size ?: 0 })
+            val builtIn = search(root.resolve("missing/rg").toString())
+            val fallback = builtIn.findInFiles(project, SearchQuery("needle"), limit = 29).toList()
+            assertEquals(SearchUpdate.Finished(SearchEngine.BuiltIn, complete = false), fallback.last())
+        }
+
+    @Test
     fun `a search past its timeout returns what it found and kills ripgrep`() =
         runBlocking {
             val rg = TestRipgrep.require()
             repeat(50) { file -> write("f$file.txt", "needle line\n".repeat(5_000)) }
             val search = search(rg.path.toString(), timeout = 1.milliseconds)
-            val hits = search.findInFiles(project, "needle", ignoreCase = false, limit = 1_000_000)
+            val hits = search.find(project, "needle", ignoreCase = false, limit = 1_000_000)
             assertTrue(hits.size < 250_000)
             started.forEach { it.onExit().get(10, TimeUnit.SECONDS) }
         }
@@ -181,7 +215,7 @@ class RipgrepSearchTest {
             write("a.txt", "x needle\n")
             val search = search(root.resolve("missing/rg").toString())
             assertNull(search.ripgrep())
-            assertEquals(listOf("a.txt:0:2"), search.findInFiles(project, "needle", false, 10).relative())
+            assertEquals(listOf("a.txt:0:2"), search.find(project, "needle", false, 10).relative())
             assertTrue(started.isEmpty())
         }
 
@@ -203,7 +237,7 @@ class RipgrepSearchTest {
         runBlocking {
             val search = search(fake.toString())
             assertEquals(fake, search.ripgrep()?.path)
-            val hits = search.findInFiles(project, "needle", false, 10)
+            val hits = search.find(project, "needle", false, 10)
             assertEquals(listOf("src/a.txt:0:2"), hits.relative())
         }
         assertAllEnded()

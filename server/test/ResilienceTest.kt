@@ -1,18 +1,27 @@
 package org.example.kotlineditor.server
 
+import kotlinx.coroutines.async
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.example.kotlineditor.model.ConnectionStatus
 import org.example.kotlineditor.model.FileContent
+import org.example.kotlineditor.model.FileEntry
+import org.example.kotlineditor.model.SearchInterruptedException
+import org.example.kotlineditor.model.SearchQuery
+import org.example.kotlineditor.model.SearchUpdate
 import org.example.kotlineditor.model.text
 import org.example.kotlineditor.rpc.ClientOptions
 import org.example.kotlineditor.rpc.RemoteFileSystem
+import org.example.kotlineditor.rpc.RemoteSearch
 import org.example.kotlineditor.rpc.RemoteTerminalLauncher
 import org.example.kotlineditor.rpc.RpcClient
 import org.example.kotlineditor.testkit.ChaosProxy
+import org.example.kotlineditor.testkit.ControlledSearch
 import java.nio.file.Files
 import kotlin.io.path.writeText
 import kotlin.test.AfterTest
@@ -25,11 +34,16 @@ class ResilienceTest {
     private val data = Files.createTempDirectory("resilience-data")
     private val project = Files.createTempDirectory("resilience-project")
     private val token = "secret"
-    private var server = EditorServer(LocalServices(data.toFile()), token).start()
+    private var searches: ControlledSearch? = null
+    private var server =
+        EditorServer(LocalServices(data.toFile(), wrapSearch = { ControlledSearch(it).also { searches = it } }), token)
+            .start()
+
     private val proxy = ChaosProxy(server.port)
     private val options = ClientOptions(heartbeatMs = 200, deadAfterMs = 800, maxBackoffMs = 200)
     private val client = RpcClient("127.0.0.1", proxy.port, token, options)
     private val fs = RemoteFileSystem(client)
+    private val search = RemoteSearch(client)
 
     @AfterTest
     fun cleanup() {
@@ -119,5 +133,79 @@ class ResilienceTest {
             server = EditorServer(LocalServices(data.toFile()), token).start(port = port)
             val file = fs.fileAt(project.resolve("a.txt").toString())!!
             assertEquals(listOf("after restart"), (fs.read(file) as FileContent.Text).lines)
+        }
+
+    private fun needles(files: Int): FileEntry {
+        repeat(files) { project.resolve("f${it.toString().padStart(3, '0')}.txt").writeText("x needle $it\n") }
+        return FileEntry(project.toString(), project.fileName.toString(), true)
+    }
+
+    private fun findNeedles(root: FileEntry) = search.findInFiles(root, SearchQuery("needle"), limit = 10_000)
+
+    @Test
+    fun `search results arrive exactly once across disconnections`() =
+        runBlocking {
+            val root = needles(300)
+            checkNotNull(searches).pauseMs = 5
+            client.awaitConnected()
+            val chaos =
+                launch {
+                    repeat(8) {
+                        delay(150)
+                        proxy.cutAll()
+                    }
+                }
+            val updates = withTimeout(60_000) { findNeedles(root).toList() }
+            chaos.join()
+            val matches = updates.filterIsInstance<SearchUpdate.Found>().flatMap { it.matches }
+            assertEquals(300, matches.size)
+            assertEquals(300, matches.map { it.entry.path }.distinct().size)
+            assertEquals(true, (updates.last() as SearchUpdate.Finished).complete)
+            assertEquals(1, checkNotNull(searches).started.get(), "the search ran once")
+            assertTrue(client.connections.get() > 2, "the client reconnected ${client.connections.get() - 1} times")
+        }
+
+    @Test
+    fun `a search whose start answer is lost is retried but runs once`() =
+        runBlocking {
+            val root = needles(20)
+            client.awaitConnected()
+            proxy.cutOnNextServerData = true
+            val matches = withTimeout(30_000) { findNeedles(root).toList() }.filterIsInstance<SearchUpdate.Found>()
+            assertEquals(20, matches.sumOf { it.matches.size })
+            assertTrue(client.connections.get() >= 2)
+            assertEquals(1, checkNotNull(searches).started.get())
+        }
+
+    @Test
+    fun `a search stops on the server when the client stops listening`() =
+        runBlocking {
+            val root = needles(20)
+            val controlled = checkNotNull(searches)
+            controlled.hold()
+            val first = withTimeout(10_000) { findNeedles(root).first() }
+            assertTrue(first is SearchUpdate.Found)
+            withTimeout(10_000) { while (controlled.stopped.get() == 0) delay(10) }
+            controlled.release()
+        }
+
+    @Test
+    fun `a search lost by a restarting server fails instead of looking complete`() =
+        runBlocking {
+            val root = needles(20)
+            val controlled = checkNotNull(searches)
+            controlled.hold()
+            val updates = Channel<SearchUpdate>(Channel.UNLIMITED)
+            val collecting =
+                async {
+                    runCatching { findNeedles(root).collect { updates.send(it) } }.exceptionOrNull()
+                }
+            withTimeout(10_000) { updates.receive() }
+            val port = server.port
+            server.close()
+            server = EditorServer(LocalServices(data.toFile()), token).start(port = port)
+            val failure = withTimeout(10_000) { collecting.await() }
+            assertTrue(failure is SearchInterruptedException, "failed with $failure")
+            controlled.release()
         }
 }

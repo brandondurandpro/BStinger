@@ -289,7 +289,7 @@ Ajouter des méthodes dédiées, sans réutiliser `ShellSend` (qui est ligne par
 | `TerminalStart` | client → serveur | répertoire, colonnes, lignes, taille en pixels |
 | `TerminalWrite` | client → serveur | octets (clavier, collage, réponses du terminal) |
 | `TerminalResize` | client → serveur | colonnes, lignes, pixels |
-| `TerminalResume` | client → serveur | dernier numéro de séquence reçu |
+| `TerminalResume` (aujourd'hui `stream/resume`, commun à tous les flux) | client → serveur | dernier numéro de séquence reçu |
 | `TerminalDestroy` | client → serveur | id |
 | `TerminalSnapshot` | serveur → client | état complet (cellules, curseur, modes, titre, cwd) |
 | `TerminalDiff` | serveur → client | lignes/cellules modifiées, numérotées |

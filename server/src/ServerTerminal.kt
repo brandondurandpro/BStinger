@@ -46,7 +46,7 @@ internal class ServerTerminal(
     cellWidthPx: Int,
     cellHeightPx: Int,
     private val push: (Frame) -> Unit,
-) {
+) : ServerStream {
     private val state = Any()
     private val input = Any()
     private val process: PtyProcess
@@ -148,8 +148,11 @@ internal class ServerTerminal(
         refresh()
     }
 
+    /** The client stopped listening: the shell is killed, like [destroy]. */
+    override fun close() = destroy()
+
     /** Sends the last screen (and the end, if the shell exited) to a client that reconnected. */
-    fun resume(lastSeq: Long) {
+    override fun resume(lastSeq: Long) {
         synchronized(state) {
             lastFrame?.let { if (seq > lastSeq) push(it) }
             endFrame?.let(push)

@@ -92,9 +92,9 @@ class LocalServicesTest {
             val files = LocalFileSystem()
             val fs = LocalSearch(files)
             val dir = files.resolveDirectory(root.toString())!!
-            val matches = fs.findInFiles(dir, "needle", ignoreCase = true, limit = 10)
+            val matches = fs.find(dir, "needle", ignoreCase = true, limit = 10)
             assertEquals(setOf("A.kt" to 2, "notes.md" to 1), matches.map { it.entry.name to it.line }.toSet())
-            assertEquals(1, fs.findInFiles(dir, "needle", ignoreCase = false, limit = 10).size)
+            assertEquals(1, fs.find(dir, "needle", ignoreCase = false, limit = 10).size)
             val symbols = fs.symbols(dir).map { it.declaration.name to it.declaration.kind }
             assertEquals(listOf("Alpha" to DeclarationKind.Class, "beta" to DeclarationKind.Function), symbols)
         }

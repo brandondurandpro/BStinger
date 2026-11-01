@@ -1,7 +1,9 @@
 package org.example.kotlineditor.model
 
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.toList
 import org.example.kotlineditor.syntax.Declaration
 
 /** A file or directory of the opened project. Paths are absolute and platform-specific (on the server). */
@@ -52,6 +54,47 @@ data class TextMatch(
     val lineText: String,
 )
 
+/** What Find in Files looks for. */
+data class SearchQuery(
+    /** Text searched, literally. */
+    val text: String,
+    /** Whether letter case is ignored. */
+    val ignoreCase: Boolean = true,
+)
+
+/** Which engine ran a Find in Files: the popup says when it is not ripgrep. */
+enum class SearchEngine {
+    /** ripgrep, run by the server. */
+    Ripgrep,
+
+    /** The built-in Kotlin search of the server, used when ripgrep is missing or fails. */
+    BuiltIn,
+}
+
+/** Progress of a streamed Find in Files. */
+sealed interface SearchUpdate {
+    /** More matches. */
+    data class Found(
+        /** The matches, in no particular order. */
+        val matches: List<TextMatch>,
+    ) : SearchUpdate
+
+    /** The search is over. */
+    data class Finished(
+        /** The engine that searched. */
+        val engine: SearchEngine,
+        /** False when the search stopped early (result limit or time limit reached): more matches may exist. */
+        val complete: Boolean,
+    ) : SearchUpdate
+}
+
+/** The server restarted during a Find in Files and lost it: the matches received so far are not the whole answer. */
+class SearchInterruptedException : RuntimeException("The server restarted during the search")
+
+/** Every match of a streamed Find in Files, once it is over. */
+suspend fun ProjectSearch.findAllInFiles(root: FileEntry, query: SearchQuery, limit: Int): List<TextMatch> =
+    findInFiles(root, query, limit).toList().flatMap { (it as? SearchUpdate.Found)?.matches.orEmpty() }
+
 /** A declaration found in a project file (Go to Symbol, Go to Declaration). */
 data class FileSymbol(
     /** File declaring the symbol. */
@@ -95,8 +138,12 @@ interface ProjectSearch {
     /** Every regular file under [root], skipping VCS and build output directories. */
     suspend fun walkFiles(root: FileEntry, limit: Int = DEFAULT_WALK_LIMIT): List<FileEntry>
 
-    /** Full-text search of [query] in the text files under [root]. */
-    suspend fun findInFiles(root: FileEntry, query: String, ignoreCase: Boolean, limit: Int): List<TextMatch>
+    /**
+     * Full-text search of [query] in the text files under [root], streamed: [SearchUpdate.Found] batches as the
+     * matches are found (in no particular order), then one [SearchUpdate.Finished]. At most [limit] matches are
+     * found. Stopping the collection stops the search.
+     */
+    fun findInFiles(root: FileEntry, query: SearchQuery, limit: Int): Flow<SearchUpdate>
 
     /** Declarations of the Kotlin and Java sources under [root]. */
     suspend fun symbols(root: FileEntry): List<FileSymbol>

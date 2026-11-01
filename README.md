@@ -85,7 +85,8 @@ All the logic on files runs in a **server**; the IDE is a client that only displ
 
 **Protocol.** JSON-RPC 2.0 over TCP (`TCP_NODELAY`), framed like LSP (`Content-Length` header, then the JSON body):
 named params, methods such as `fs/read`, `git/status` or `terminal/start`, standard error codes, answers in any order,
-server-pushed notifications for terminal screens (lines sent as style runs), bodies compressed with zstd-3 when it pays
+server-pushed streams (`stream/event`, `stream/end`) for terminal screens (lines sent as style runs) and Find in Files
+results (batches shown as they are found), bodies compressed with zstd-3 when it pays
 (`Content-Encoding: zstd`, a code dictionary on file contents). See `protocol/src@jvm/rpc/Protocol.kt` for the mapping.
 About 70 µs per round trip on loopback, a 200,000-line file in about 100 ms. TCP retransmits lost packets; the session
 layer survives broken links:
@@ -93,7 +94,8 @@ layer survives broken links:
 - automatic reconnection with backoff, heartbeats (ping/pong) to detect silent dead links;
 - unanswered requests are resent after reconnecting; mutating ones are deduplicated by request id on the server,
   so a write whose answer was lost is never applied twice;
-- stream events are numbered: after a reconnection the client gets exactly what it missed, in order, once;
+- stream events are numbered: after a reconnection the client asks for what it missed (`stream/resume`) and gets it
+  in order, once (a terminal only needs its last screen; a search gets every batch it missed);
 - token authentication, protocol version check, request cancellation and timeouts.
 
 `server/test/ResilienceTest.kt` checks all of this through a fault-injecting proxy (cuts, lost answers, black holes,
