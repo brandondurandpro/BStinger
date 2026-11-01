@@ -252,6 +252,24 @@ class EditorTabsE2eTest {
         }
 
     @Test
+    fun `the mouse wheel scrolls the tab row once it overflows`() =
+        runComposeUiTest {
+            repeat(20) { project.file("File$it.txt", "content $it\n") }
+            launchWithProject(project)
+            for (i in 0 until 20) openFromTree("File$i.txt")
+            awaitTag(Tags.tab("File19.txt"))
+            assertEquals(false, shown(Tags.tab("File0.txt")), "the tab row should overflow")
+            repeat(20) {
+                onNodeWithTag(Tags.TABS).performMouseInput {
+                    moveTo(center)
+                    scroll(-10f)
+                }
+                waitForIdle()
+            }
+            awaitCondition { shown(Tags.tab("File0.txt")) }
+        }
+
+    @Test
     fun `a 200k line file opens fast and only visible lines are composed`() =
         runComposeUiTest {
             val lines = 200_000
@@ -277,4 +295,7 @@ class EditorTabsE2eTest {
 
     private fun androidx.compose.ui.test.ComposeUiTest.editorList() =
         onNode(hasScrollToIndexAction() and hasAnyAncestor(hasTestTag(Tags.EDITOR)))
+
+    private fun androidx.compose.ui.test.ComposeUiTest.shown(tag: String) =
+        runCatching { onNodeWithTag(tag).assertIsDisplayed() }.isSuccess
 }
