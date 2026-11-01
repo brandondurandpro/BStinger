@@ -1,0 +1,9 @@
+# Git: the commit panel, branches and history, the branch picker and its bulk actions.
+product:
+  type: jvm/lib
+
+dependencies:
+  - //ui/editor: exported
+
+settings:
+  compose: enabled

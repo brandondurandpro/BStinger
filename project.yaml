@@ -13,6 +13,13 @@ modules:
   - shared
   - syntax
   - testkit
+  - ui/editor
+  - ui/git
+  - ui/kit
+  - ui/language-servers
+  - ui/remote
+  - ui/terminal
+  - ui/tree
 
 plugins:
   - ./packaging
