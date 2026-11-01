@@ -4,15 +4,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PixelMap
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.toPixelMap
-import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performTextInput
-import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.model.TerminalSnapshot
 import org.example.kotlineditor.model.line
@@ -59,11 +56,12 @@ class TerminalCursorE2eTest {
 
     private fun E2eApp.terminalSnapshot(): TerminalSnapshot? = project.terminal.active?.snapshot
 
-    private fun ComposeUiTest.cursorOnLastBar(app: E2eApp): Boolean {
+    // The cursor right after the last bar, on the same row.
+    private fun ComposeUiTest.cursorAfterLastBar(app: E2eApp): Boolean {
         val snapshot = app.terminalSnapshot() ?: return false
         val line = snapshot.line(snapshot.cursorRow)
-        return line.getOrNull(snapshot.cursorColumn)?.text == "|" &&
-            line.getOrNull(snapshot.cursorColumn + 1)?.text.isNullOrBlank()
+        return line.getOrNull(snapshot.cursorColumn - 1)?.text == "|" &&
+            line.getOrNull(snapshot.cursorColumn)?.text.isNullOrBlank()
     }
 
     @Test
@@ -80,9 +78,9 @@ class TerminalCursorE2eTest {
             // Bars up to the end of the prompt's row, where a drift is the widest. Typed, never run.
             val bars = prompt.columns - prompt.cursorColumn - 2
             assertTrue(bars >= MIN_BARS, "The panel is too narrow: ${prompt.columns} columns")
+            // No arrow key to move onto a bar: dash, the /bin/sh of some CI runners, has no line editing.
             input.performTextInput("|".repeat(bars))
-            input.performKeyInput { pressKey(Key.DirectionLeft) }
-            awaitCondition { cursorOnLastBar(app) }
+            awaitCondition { cursorAfterLastBar(app) }
             waitForIdle()
 
             val pixels = input.captureToImage().toPixelMap()
@@ -98,13 +96,15 @@ class TerminalCursorE2eTest {
             val top = cursor.minOf { it.second }
             val bottom = cursor.maxOf { it.second } + 1
 
-            val inked = inkRuns(pixels, top, bottom, 0, pixels.width)
+            val inked = inkRuns(pixels, top, bottom, 0, left)
             val last = inked.last()
             val center = (last.first + last.last) / 2f
+            // The bar is in the cell just before the cursor's.
+            val cell = right - left
             assertTrue(
-                center >= left && center < right,
-                "The last bar is drawn at x=$center but the cursor on it covers x=$left until $right " +
-                    "(bars: ${inked.takeLast(3)})",
+                center >= left - cell && center < left,
+                "The last bar is drawn at x=$center but its cell, before the cursor at x=$left until $right, " +
+                    "covers x=${left - cell} until $left (bars: ${inked.takeLast(3)})",
             )
         }
 
