@@ -128,6 +128,14 @@ server restart).
   minutes), the next ones take a minute. `./windows-vm test [args]` then runs `kotlin.bat test [args]` on the current
   working tree, uncommitted files included, checked out with CRLF line endings as on the CI, and exits with the
   tests' result. The desktop is on http://127.0.0.1:8006; `./windows-vm stop` keeps the disk, `destroy` deletes it.
+- `./linux-vm` – the Linux jobs on your machine: `./linux-vm test [args]` runs `./kotlin build` then `./kotlin test
+  [args]` on the current working tree, uncommitted files included, in Docker containers of Ubuntu 20.04, 22.04 and
+  24.04 under X11 and Wayland, with the CI's packages and display sessions, and prints a summary of the six runs;
+  without args it also checks that the desktop app starts. `--ubuntu 22.04` and `--session wayland` narrow the
+  matrix, `./linux-vm shell` opens a shell in a container with the session started, `./linux-vm clean` deletes the
+  images and caches.
+- `./ci` – the whole CI on your machine: `./lint`, then `./linux-vm test`, then `./windows-vm test` (starting the
+  VM if needed), with a summary at the end; `./ci --help` lists the options to skip a step or narrow the matrix.
 
 The bundled JetBrains Mono font is licensed under the SIL Open Font License 1.1.
 
