@@ -16,17 +16,7 @@ settings:
   compose: enabled
 
 test-dependencies:
-  - //server
-  - //lsp
-  - //testkit
-  - //remote-ssh
-  - $compose.uiTest
-  - $compose.desktop.currentOs
-  - $libs.tree.sitter.kotlin
-  - $libs.tree.sitter.json
-  # A real SSH server for the remote development end-to-end tests; the client is the system OpenSSH.
-  - $libs.sshd.core
-  - $libs.sshd.sftp
+  - //e2e
 
 test-settings:
   jvm:

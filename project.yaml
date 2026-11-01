@@ -3,6 +3,7 @@ modules:
   - client-state
   - compression
   - desktopApp
+  - e2e
   - detekt-rules
   - lsp
   - packaging

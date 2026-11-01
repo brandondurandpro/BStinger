@@ -1,0 +1,23 @@
+# What the end-to-end tests of every UI module share: the app launched against a real server (E2eSupport), the
+# sample projects, the cost measurements (Cost), and the fixtures of each area. Test code only; never shipped.
+product:
+  type: jvm/lib
+
+dependencies:
+  - //shared: exported
+  - //server: exported
+  - //lsp: exported
+  - //testkit: exported
+  - //remote-ssh: exported
+  - $compose.uiTest: exported
+  - $compose.desktop.currentOs: exported
+  - $kotlin.test: exported
+  # Grammar jars served by the loopback Maven repository of TestGrammars.
+  - $libs.tree.sitter.kotlin: exported
+  - $libs.tree.sitter.json: exported
+  # A real SSH server for the remote development end-to-end tests; the client is the system OpenSSH.
+  - $libs.sshd.core: exported
+  - $libs.sshd.sftp: exported
+
+settings:
+  compose: enabled
