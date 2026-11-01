@@ -8,6 +8,7 @@ import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -110,25 +111,34 @@ internal class ToolWindowDrag {
     }
 }
 
-/** Fixed left strip: one button per tool window, wherever the panel itself is docked. */
+/**
+ * Fixed left strip: one button per tool window, wherever the panel itself is docked; [top] adds buttons above them
+ * (the conversation list of agent mode).
+ */
 @Composable
-internal fun ToolStrip(project: ProjectState, devtools: Boolean) {
+internal fun ToolStrip(project: ProjectState?, devtools: Boolean, top: @Composable ColumnScope.() -> Unit = {}) {
     Column(
         Modifier.width(STRIP_WIDTH).fillMaxHeight().padding(vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        ToolButton(project, ToolWindow.Project, Tags.TOOL_PROJECT) { FolderIcon(Modifier.size(18.dp)) }
-        ToolButton(project, ToolWindow.Git, Tags.TOOL_GIT) { BranchIcon(color = IdeColors.Text) }
-        Spacer(Modifier.weight(1f))
-        // Bottom tool windows sit at the bottom of the strip, like in IntelliJ's New UI.
-        if (devtools) {
-            ToolButton(project, ToolWindow.Network, Tags.TOOL_NETWORK) {
-                Label("⇅", color = IdeColors.Text, fontWeight = FontWeight.Bold)
-            }
+        top()
+        if (project != null) ToolButtons(project, devtools)
+    }
+}
+
+@Composable
+private fun ColumnScope.ToolButtons(project: ProjectState, devtools: Boolean) {
+    ToolButton(project, ToolWindow.Project, Tags.TOOL_PROJECT) { FolderIcon(Modifier.size(18.dp)) }
+    ToolButton(project, ToolWindow.Git, Tags.TOOL_GIT) { BranchIcon(color = IdeColors.Text) }
+    Spacer(Modifier.weight(1f))
+    // Bottom tool windows sit at the bottom of the strip, like in IntelliJ's New UI.
+    if (devtools) {
+        ToolButton(project, ToolWindow.Network, Tags.TOOL_NETWORK) {
+            Label("⇅", color = IdeColors.Text, fontWeight = FontWeight.Bold)
         }
-        ToolButton(project, ToolWindow.Terminal, Tags.TOOL_TERMINAL) {
-            Label(">_", color = IdeColors.Text, fontWeight = FontWeight.Bold)
-        }
+    }
+    ToolButton(project, ToolWindow.Terminal, Tags.TOOL_TERMINAL) {
+        Label(">_", color = IdeColors.Text, fontWeight = FontWeight.Bold)
     }
 }
 

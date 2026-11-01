@@ -84,6 +84,8 @@ private fun gitHandlers(git: GitClient): Map<Method, Handler> =
         Method.GitCommit to { nothing { git.commit(root(), params.string("message")) } },
         Method.GitPull to { JsonPrimitive(git.pull(root())) },
         Method.GitPush to { JsonPrimitive(git.push(root())) },
+        Method.GitWorktree to { JsonPrimitive(git.worktree(root(), params.string("branch"))) },
+        Method.GitRemoveWorktree to { nothing { git.removeWorktree(root(), params.string(PATH)) } },
     )
 
 private fun terminalHandlers(): Map<Method, Handler> =

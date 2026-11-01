@@ -25,5 +25,6 @@ class InMemoryPreferenceStore(initial: Map<String, String> = emptyMap()) : Prefe
 object PreferenceKeys {
     const val EDITOR_FONT_SIZE = "editor.fontSize"
     const val AUTO_SELECT_OPENED_FILE = "project.autoSelectOpenedFile"
+    const val AGENT_MODE = "experimental.agentMode"
     const val LAYOUT_PREFIX = "layout."
 }

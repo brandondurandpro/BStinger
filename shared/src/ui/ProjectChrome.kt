@@ -46,16 +46,20 @@ internal fun Toolbar(app: AppState, project: ProjectState) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         ProjectWidget(app, project)
-        project.gitBranch?.let { branch ->
+        // In agent mode, the branch the agent of the active conversation works on.
+        val branch = if (project.agentMode) project.agent.current?.currentBranch else project.gitBranch
+        branch?.let { name ->
             Row(
                 Modifier.padding(start = 12.dp).testTag(Tags.GIT_BRANCH),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 BranchIcon()
-                Label(branch, Modifier.padding(start = 6.dp))
+                Label(name, Modifier.padding(start = 6.dp))
             }
         }
         Spacer(Modifier.weight(1f))
+        if (app.agentModeEnabled) ModeSwitch(project)
+        Spacer(Modifier.width(10.dp))
         IconButton({ project.showPopup(PopupKind.GotoFile) }) { SearchIcon(color = IdeColors.Text) }
     }
 }
@@ -83,6 +87,18 @@ private fun ProjectWidget(app: AppState, project: ProjectState) {
                     app.browseForProject()
                 },
                 modifier = Modifier.testTag(Tags.PROJECT_OPEN_OTHER),
+            )
+            // Feature flag of the experimental agent mode, saved with the preferences.
+            DropdownMenuItem(
+                text = {
+                    val check = if (app.agentModeEnabled) "✓  " else "     "
+                    Text("${check}Agent Mode (Experimental)", fontSize = 13.sp)
+                },
+                onClick = {
+                    menuOpen = false
+                    app.enableAgentMode(!app.agentModeEnabled)
+                },
+                modifier = Modifier.testTag(Tags.PROJECT_AGENT_MODE),
             )
             DropdownMenuItem(
                 text = { Text("Close Project", fontSize = 13.sp) },
@@ -137,7 +153,15 @@ internal fun StatusBar(app: AppState, project: ProjectState) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        val path = listOf(project.name) + tab?.relativePath?.split('/').orEmpty()
+        val path =
+            if (project.agentMode) {
+                val active = project.agent.current
+                val editor = active?.workspace?.editor
+                val file = editor?.activeTab?.takeUnless { active.showsChat }
+                listOfNotNull(project.name, "Agent", active?.title) + file?.relativePath?.split('/').orEmpty()
+            } else {
+                listOf(project.name) + tab?.relativePath?.split('/').orEmpty()
+            }
         Label(
             path.joinToString("  ›  "),
             Modifier.weight(1f).testTag(Tags.STATUS_PATH),
@@ -152,7 +176,7 @@ internal fun StatusBar(app: AppState, project: ProjectState) {
                 fontSize = 12.sp,
             )
         }
-        tab?.document?.let { DocumentStatus(it) }
+        if (!project.agentMode) tab?.document?.let { DocumentStatus(it) }
     }
 }
 

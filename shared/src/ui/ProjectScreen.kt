@@ -75,8 +75,12 @@ fun ProjectScreen(app: AppState, project: ProjectState) {
         Toolbar(app, project)
         Box(Modifier.fillMaxWidth().height(1.dp).background(IdeColors.Border))
         Box(Modifier.weight(1f)) {
-            ProjectBody(app, project, findFocus)
-            ProjectPopups(project) { closePopup(project) }
+            if (project.agentMode) {
+                AgentWorkspace(app, project)
+            } else {
+                ProjectBody(app, project, findFocus)
+                ProjectPopups(project) { closePopup(project) }
+            }
             project.fileDialog?.let { dialog ->
                 FileDialogPopup(project, dialog, onClose = { project.fileDialog = null })
             }
@@ -88,7 +92,7 @@ fun ProjectScreen(app: AppState, project: ProjectState) {
 
 // IntelliJ saves all files when the window loses focus, and synchronizes with the disk when it gets it back.
 @Composable
-private fun SyncOnWindowFocus(project: ProjectState) {
+internal fun SyncOnWindowFocus(project: ProjectState) {
     val windowFocused = LocalWindowInfo.current.isWindowFocused
     var wasFocused by remember { mutableStateOf(windowFocused) }
     LaunchedEffect(windowFocused) {
@@ -127,7 +131,7 @@ private fun ProjectBody(app: AppState, project: ProjectState, findFocus: FocusRe
 }
 
 @Composable
-private fun ProjectPopups(project: ProjectState, onClose: () -> Unit) {
+internal fun ProjectPopups(project: ProjectState, onClose: () -> Unit) {
     val document = project.editor.activeTab?.document
     when (project.popup) {
         PopupKind.GotoFile -> GotoFilePopup(project, onClose = onClose)
@@ -140,14 +144,14 @@ private fun ProjectPopups(project: ProjectState, onClose: () -> Unit) {
     }
 }
 
-private fun closePopup(project: ProjectState) {
+internal fun closePopup(project: ProjectState) {
     project.popup = null
     val editor = project.editor
     if (editor.activeTab?.document != null) runCatching { editor.activePane.focusRequester.requestFocus() }
 }
 
 @Composable
-private fun EditorArea(app: AppState, project: ProjectState, findFocus: FocusRequester, modifier: Modifier) {
+internal fun EditorArea(app: AppState, project: ProjectState, findFocus: FocusRequester, modifier: Modifier) {
     val editor = project.editor
     Row(modifier.fillMaxHeight().background(IdeColors.Editor)) {
         editor.panes.forEachIndexed { index, pane ->

@@ -278,7 +278,7 @@ internal fun MenuSeparator() {
     )
 }
 
-private fun Modifier.activeUnderline(active: Boolean): Modifier =
+internal fun Modifier.activeUnderline(active: Boolean): Modifier =
     drawBehind {
         if (active) drawRect(IdeColors.Accent, Offset(0f, size.height - 2.dp.toPx()), Size(size.width, 2.dp.toPx()))
     }

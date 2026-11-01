@@ -6,11 +6,14 @@ import org.example.kotlineditor.model.BlameLine
 import org.example.kotlineditor.model.DiffLine
 import org.example.kotlineditor.model.GitClient
 import org.example.kotlineditor.model.GitFileStatus
+import org.example.kotlineditor.model.WorktreeClient
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
 /** Git through its command line; no repository or no git means no status. */
-class CliGitClient : GitClient {
+class CliGitClient :
+    GitClient,
+    WorktreeClient by CliWorktrees() {
     private data class BlameVersion(val head: String?, val modified: Long, val size: Long)
 
     private class CachedBlame(val version: BlameVersion, val lines: List<BlameLine>)
@@ -22,10 +25,10 @@ class CliGitClient : GitClient {
             gitOutput(root, "status", "--porcelain", "-uall")?.mapNotNull(::parse)?.toMap().orEmpty()
         }
 
-    /** Reads `.git/HEAD` directly: much cheaper than spawning git. */
+    /** Reads `.git/HEAD` directly (or the HEAD of a worktree, whose `.git` names its Git directory): no git spawned. */
     override suspend fun branch(root: String): String? =
         withContext(Dispatchers.IO) {
-            val ref = runCatching { File(root, ".git/HEAD").readLines().firstOrNull()?.trim() }.getOrNull()
+            val ref = runCatching { File(gitDirectory(root), "HEAD").readLines().firstOrNull()?.trim() }.getOrNull()
             when {
                 ref.isNullOrEmpty() -> null
                 ref.startsWith(BRANCH_REF) -> ref.removePrefix(BRANCH_REF)

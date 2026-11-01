@@ -56,9 +56,22 @@ private fun bind(
     action: IdeContext.(Modifiers) -> Unit,
 ) = binding(keys, ctrl, shift, alt, action)
 
+private val TOGGLE_AGENT_MODE =
+    bind(setOf(Key.A), ctrl = true, alt = true) { if (app.agentModeEnabled) project.agentMode = !project.agentMode }
+
+// Agent mode hides the editors: only its own shortcuts apply, so nothing acts on a file the user cannot see.
+private val AGENT_SHORTCUTS =
+    listOf(
+        TOGGLE_AGENT_MODE,
+        bind(setOf(Key.N), ctrl = true, alt = true) { project.agent.newConversation() },
+        bind(setOf(Key.F4), ctrl = true) { project.agent.closeActive() },
+        bind(setOf(Key.Tab), ctrl = true) { project.agent.tabs.selectNext(if (it.shift) -1 else 1) },
+    )
+
 // IntelliJ default keymap, first match wins. Alt+Shift+. / Alt+Shift+, change the font size (Ctrl+- / Ctrl+= fold).
 private val IDE_SHORTCUTS =
     listOf(
+        TOGGLE_AGENT_MODE,
         bind(setOf(Key.N), ctrl = true, shift = true, alt = true) { project.showPopup(PopupKind.GotoSymbol) },
         bind(setOf(Key.N), ctrl = true, shift = true) { project.showPopup(PopupKind.GotoFile) },
         bind(setOf(Key.P), ctrl = true) { project.showPopup(PopupKind.GotoFile) },
@@ -97,8 +110,11 @@ private val IDE_SHORTCUTS =
         },
     )
 
-/** IDE-wide shortcuts, intercepted before the focused component sees them. */
-internal class GlobalShortcuts(private val context: IdeContext) {
+/**
+ * IDE-wide shortcuts, intercepted before the focused component sees them; [ideOnly] keeps the IDE ones in agent mode,
+ * for the project the agent works on.
+ */
+internal class GlobalShortcuts(private val context: IdeContext, private val ideOnly: Boolean = false) {
     private val doubleShift = DoubleShift()
 
     fun handle(event: KeyEvent): Boolean {
@@ -107,6 +123,10 @@ internal class GlobalShortcuts(private val context: IdeContext) {
         if (project.terminal.focused && !escapesTerminal(event)) return false
         val closesFindBar = event.key == Key.Escape && project.find.visible && project.popup == null
         return when {
+            project.agentMode && !ideOnly -> {
+                event.type == KeyEventType.KeyDown && AGENT_SHORTCUTS.dispatch(event, context)
+            }
+
             doubleShift.isDoubleShift(event) -> {
                 project.showPopup(PopupKind.GotoFile)
                 true

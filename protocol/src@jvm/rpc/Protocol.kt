@@ -314,6 +314,12 @@ enum class Method(
     /** Pushes the current branch. */
     GitPush("git/push", mutating = true),
 
+    /** Worktree of a branch, created on first use; asking again returns the same one. */
+    GitWorktree("git/worktree", mutating = true),
+
+    /** Removes a worktree. */
+    GitRemoveWorktree("git/removeWorktree", mutating = true),
+
     /** Clears the screen and the scrollback of a terminal. */
     TerminalClear("terminal/clear", mutating = true),
 }

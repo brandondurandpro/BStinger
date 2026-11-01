@@ -25,6 +25,8 @@ class ProjectState(
     val services: AppServices,
     parentScope: CoroutineScope,
     preferences: Map<String, String> = emptyMap(),
+    /** Open tool windows and their docks; a worktree of agent mode shares the one of its project. */
+    val toolWindows: ToolWindowLayout = ToolWindowLayout().apply { restore(preferences) },
 ) {
     /** Cancelled when the project is closed, so no background work outlives it. */
     val scope = CoroutineScope(parentScope.coroutineContext + SupervisorJob(parentScope.coroutineContext[Job]))
@@ -45,8 +47,16 @@ class ProjectState(
     val fileIndex = FileIndex(root, services.search, scope)
     val find = FindState()
     val terminal = TerminalState(root.path, services.terminal, scope)
-    val toolWindows = ToolWindowLayout().apply { restore(preferences) }
     val network = NetworkView(services.network)
+
+    // Created on first use: the worktrees of the conversations are projects too, without agent mode of their own.
+    private val agentState = lazy { AgentState(this) }
+
+    /** Conversations of agent mode (proof of concept, in memory), each in a worktree of its branch. */
+    val agent by agentState
+
+    /** True when the window shows agent mode instead of the editors (toolbar switch, Ctrl+Alt+A). */
+    var agentMode by mutableStateOf(false)
     var popup: PopupKind? by mutableStateOf(null)
     var fileDialog: FileDialog? by mutableStateOf(null)
 
@@ -164,6 +174,7 @@ class ProjectState(
     }
 
     fun dispose() {
+        if (agentState.isInitialized()) agent.dispose()
         terminal.stop()
         scope.cancel()
     }
