@@ -18,6 +18,7 @@ object Tags {
     const val PROJECT = "project"
     const val PROJECT_WIDGET = "project.widget"
     const val PROJECT_CLOSE = "project.close"
+    const val PROJECT_AGENT_MODE = "project.agentMode"
     const val PROJECT_OPEN_OTHER = "project.openOther"
     const val PROJECT_MENU = "project.menu"
     const val GIT_BRANCH = "git.branch"
@@ -91,6 +92,26 @@ object Tags {
     const val NETWORK_UNAVAILABLE = "network.unavailable"
     const val NETWORK_DETAIL = "network.detail"
     const val WORKSPACE = "workspace"
+    const val MODE_SWITCH = "mode.switch"
+    const val MODE_IDE = "mode.ide"
+    const val MODE_AGENT = "mode.agent"
+    const val AGENT = "agent"
+    const val AGENT_LIST = "agent.list"
+    const val AGENT_NEW = "agent.new"
+    const val AGENT_FILTER = "agent.filter"
+    const val AGENT_DELETE = "agent.delete"
+    const val AGENT_TABS = "agent.tabs"
+    const val AGENT_EMPTY = "agent.empty"
+    const val AGENT_PROMPT = "agent.prompt"
+    const val AGENT_SEND = "agent.send"
+    const val AGENT_STOP = "agent.stop"
+    const val AGENT_STRIP_CONVERSATIONS = "agent.strip.conversations"
+    const val AGENT_DETAILS = "agent.details"
+    const val AGENT_DETAIL_CONVERSATION = "agent.detail.conversation"
+    const val AGENT_DETAIL_EDITOR = "agent.detail.editor"
+    const val AGENT_WORKSPACE_STATUS = "agent.workspaceStatus"
+    const val AGENT_MODE_DIRECT = "agent.mode.direct"
+    const val AGENT_MODE_WORKTREE = "agent.mode.worktree"
     const val DIFF = "diff"
     const val DIFF_TOOLBAR = "diff.toolbar"
     const val DIFF_OPEN_FILE = "diff.openFile"
@@ -215,6 +236,18 @@ object Tags {
     fun lineText(index: Int) = "line.text:$index"
 
     fun foldMarker(line: Int) = "fold:$line"
+
+    fun agentConversation(id: Int) = "agent.conversation.$id"
+
+    fun agentTab(id: Int) = "agent.tab.$id"
+
+    fun agentTabClose(id: Int) = "agent.tab.$id.close"
+
+    fun agentTabDetails(id: Int) = "agent.tab.$id.details"
+
+    fun agentView(id: Int) = "agent.view.$id"
+
+    fun agentMessage(index: Int) = "agent.message.$index"
 }
 
 /** Test tags of the items of lists and popups (recent projects, search results, terminal lines). */
