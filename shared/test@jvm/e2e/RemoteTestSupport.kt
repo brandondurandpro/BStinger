@@ -42,6 +42,11 @@ object RemoteTestEnvironment {
     val ssh: RemoteSshServer by lazy { RemoteSshServer(home) }
     val bundle: Path by lazy { buildBundle() }
 
+    // Manual-connection tests must not read the developer's real ~/.ssh/config (nor wait for its ssh -G runs).
+    private val emptySshConfig: Path by lazy {
+        root.resolve("ssh-config-empty").also { Files.writeString(it, "# isolated test config\n") }
+    }
+
     init {
         if (available) {
             Runtime.getRuntime().addShutdownHook(Thread { cleanup() })
@@ -55,6 +60,7 @@ object RemoteTestEnvironment {
         ssh.trustCurrentHostKey()
         System.setProperty("kotlin.editor.remote.bundle", bundle.toString())
         System.setProperty("kotlin.editor.ssh.knownHosts", ssh.knownHosts.toString())
+        System.setProperty("kotlin.editor.ssh.config", emptySshConfig.toString())
     }
 
     fun cleanup() {

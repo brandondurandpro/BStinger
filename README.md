@@ -31,10 +31,11 @@ A lightweight IDE in the style of IntelliJ IDEA (New UI, dark theme), written wi
 
 - **Welcome screen**: recent projects (searchable, removable), *Open* to pick a project directory.
 - **Remote development**: *Remote Development* installs the server on a Linux or macOS host over SSH, starts its
-  per-user daemon on the host's loopback and tunnels to it. Connecting without a project opens a folder browser in
-  the SSH user's home: click through folders, go up or home, type a path, then open the current folder. Key/agent
-  authentication, automatic tunnel reconnection, strict host-key checking, no Java needed on the host (the bundle
-  carries a jlink runtime). See [docs/REMOTE.md](docs/REMOTE.md).
+  per-user daemon on the host's loopback and tunnels to it. The host catalog comes from `~/.ssh/config`, and the
+  folders already opened are saved and searchable next to it; connecting without a project opens a folder browser
+  in the SSH user's home (click through folders, go up or home, type a path, then open the current folder).
+  Key/agent authentication, automatic tunnel reconnection, strict host-key checking, no Java needed on the host
+  (the bundle carries a jlink runtime). See [docs/REMOTE.md](docs/REMOTE.md).
 - **Project view**: lazily loaded, virtualized file tree (directories first), keyboard navigation (arrows, Enter),
   double click to open, right click for *New File / New Directory / Rename / Delete / Copy Path*, resizable and
   togglable (`Alt+1`), *Select in Project View* (`Alt+F1`).

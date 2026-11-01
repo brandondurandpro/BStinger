@@ -102,4 +102,6 @@ class RemoteSession(
 object JvmRemoteFactory : RemoteFactory {
     override suspend fun connect(target: SshTarget, onProgress: (String) -> Unit): RemoteConnection =
         RemoteSession.connect(target, ServerPathPicker(target.destination), onProgress)
+
+    override suspend fun sshHosts(): List<SshConfigHost> = SshConfig.load()
 }

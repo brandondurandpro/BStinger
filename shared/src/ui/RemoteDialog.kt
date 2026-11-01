@@ -17,15 +17,16 @@ import org.example.kotlineditor.state.RemoteDialogState
 
 /**
  * Remote Development: installs the server on an SSH host (if needed), starts its daemon, opens the tunnel and
- * switches the IDE to it. Authentication uses ssh-agent or the identity file; no password is ever handled here.
+ * switches the IDE to it. The catalog comes from the client's `~/.ssh/config` and the remote folders already opened.
  */
 @Composable
 fun RemoteDialog(app: AppState, dialog: RemoteDialogState) {
     val connect = { if (!dialog.connecting) app.connectRemote(dialog) }
     val cancel = { app.dismissRemoteDialog() }
-    PopupFrame(Tags.REMOTE_DIALOG, cancel, width = 520) {
+    PopupFrame(Tags.REMOTE_DIALOG, cancel, width = 560) {
         Column {
             DialogHeader()
+            RemoteCatalog(app, dialog) { app.updateRemoteDialog(it) }
             HostField(dialog, connect) { app.updateRemoteDialog(it) }
             UserAndPort(dialog, connect) { app.updateRemoteDialog(it) }
             IdentityField(dialog, connect) { app.updateRemoteDialog(it) }
@@ -40,7 +41,7 @@ fun RemoteDialog(app: AppState, dialog: RemoteDialogState) {
 private fun DialogHeader() {
     Label("Remote Development", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
     Label(
-        "Run the server on another machine over SSH. The server is installed once, then reused. " +
+        "Run the server on another machine over SSH. Pick a host from ~/.ssh/config or a folder already opened. " +
             "Leave the project empty to browse the host.",
         color = IdeColors.TextSecondary,
         fontSize = 12.sp,
@@ -50,14 +51,22 @@ private fun DialogHeader() {
 
 @Composable
 private fun HostField(dialog: RemoteDialogState, onConnect: () -> Unit, onChange: (RemoteDialogState) -> Unit) {
-    Field("Host") {
+    Field("Host or ~/.ssh/config alias") {
         IdeTextField(
             dialog.host,
-            { onChange(dialog.copy(host = it)) },
+            { onChange(dialog.copy(host = it, alias = "")) },
             Modifier.fillMaxWidth().testTag(Tags.REMOTE_HOST),
             placeholder = "server.example.com",
             onSubmit = onConnect,
         )
+        if (dialog.alias.isNotEmpty()) {
+            Label(
+                "Using ~/.ssh/config: ${dialog.alias} (user, port and key come from it)",
+                color = IdeColors.TextSecondary,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(top = 4.dp).testTag(Tags.REMOTE_CONFIG),
+            )
+        }
     }
 }
 
@@ -68,7 +77,7 @@ private fun UserAndPort(dialog: RemoteDialogState, onConnect: () -> Unit, onChan
             Field("User") {
                 IdeTextField(
                     dialog.user,
-                    { onChange(dialog.copy(user = it)) },
+                    { onChange(dialog.copy(user = it, alias = "")) },
                     Modifier.fillMaxWidth().testTag(Tags.REMOTE_USER),
                     placeholder = "current user",
                     onSubmit = onConnect,
@@ -79,7 +88,7 @@ private fun UserAndPort(dialog: RemoteDialogState, onConnect: () -> Unit, onChan
             Field("Port") {
                 IdeTextField(
                     dialog.port,
-                    { onChange(dialog.copy(port = it)) },
+                    { onChange(dialog.copy(port = it, alias = "")) },
                     Modifier.fillMaxWidth().testTag(Tags.REMOTE_PORT),
                     placeholder = "22",
                     onSubmit = onConnect,
@@ -94,9 +103,9 @@ private fun IdentityField(dialog: RemoteDialogState, onConnect: () -> Unit, onCh
     Field("Identity file (optional)", Modifier.padding(top = 8.dp)) {
         IdeTextField(
             dialog.identityFile,
-            { onChange(dialog.copy(identityFile = it)) },
+            { onChange(dialog.copy(identityFile = it, alias = "")) },
             Modifier.fillMaxWidth().testTag(Tags.REMOTE_IDENTITY),
-            placeholder = "uses ssh-agent when empty",
+            placeholder = "uses ssh-agent or ~/.ssh/config when empty",
             onSubmit = onConnect,
         )
     }

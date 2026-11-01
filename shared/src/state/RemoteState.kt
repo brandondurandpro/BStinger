@@ -9,6 +9,10 @@ data class RemoteDialogState(
     val port: String = "22",
     val identityFile: String = "",
     val projectPath: String = "",
+    /** Alias selected in `~/.ssh/config`; ssh then ignores the user/port/identity fields. */
+    val alias: String = "",
+    /** Filter of the SSH host and remote-folder list. */
+    val hostSearch: String = "",
     val connecting: Boolean = false,
     val error: String? = null,
 ) {
@@ -23,6 +27,7 @@ data class RemoteDialogState(
                     port = target.port.toString(),
                     identityFile = target.identityFile.orEmpty(),
                     projectPath = target.projectPath.orEmpty(),
+                    alias = target.alias.orEmpty(),
                 )
             }
     }
@@ -30,8 +35,10 @@ data class RemoteDialogState(
 
 /** The target described by the dialog fields, or a user-facing error. */
 fun RemoteDialogState.toSshTarget(): Result<SshTarget> {
-    val host = host.trim()
-    val port = port.trim().toIntOrNull()
+    val aliasValue = alias.trim().takeIf { it.isNotEmpty() }
+    val host = host.trim().ifEmpty { aliasValue.orEmpty() }
+    val portText = port.trim()
+    val port = if (portText.isEmpty()) 22 else portText.toIntOrNull()
     return when {
         host.isEmpty() -> {
             Result.failure(IllegalArgumentException("Enter a host"))
@@ -49,6 +56,7 @@ fun RemoteDialogState.toSshTarget(): Result<SshTarget> {
                     port = port,
                     identityFile = identityFile.trim().takeIf { it.isNotEmpty() },
                     projectPath = projectPath.trim().takeIf { it.isNotEmpty() },
+                    alias = aliasValue,
                 )
             }
         }
@@ -62,6 +70,8 @@ object RemotePreferenceKeys {
     const val PORT = "remote.port"
     const val IDENTITY = "remote.identity"
     const val PROJECT = "remote.project"
+    const val ALIAS = "remote.alias"
+    const val WORKSPACES = "remote.workspaces"
 
     fun read(preferences: Map<String, String>): SshTarget? {
         val host = preferences[HOST]?.takeIf { it.isNotBlank() } ?: return null
@@ -71,6 +81,7 @@ object RemotePreferenceKeys {
             port = preferences[PORT]?.toIntOrNull()?.takeIf { it in 1..SshTarget.MAX_PORT } ?: 22,
             identityFile = preferences[IDENTITY]?.takeIf { it.isNotBlank() },
             projectPath = preferences[PROJECT]?.takeIf { it.isNotBlank() },
+            alias = preferences[ALIAS]?.takeIf { it.isNotBlank() },
         )
     }
 
@@ -81,5 +92,6 @@ object RemotePreferenceKeys {
             PORT to target.port.toString(),
             IDENTITY to target.identityFile.orEmpty(),
             PROJECT to target.projectPath.orEmpty(),
+            ALIAS to target.alias.orEmpty(),
         )
 }

@@ -6,8 +6,13 @@ work happens next to the sources; only the editor state and the results travel.
 ## Using it
 
 1. Open **Remote Development** on the welcome screen.
-2. Enter the host, optionally the user, port and identity file. Leave the project directory empty to browse it.
+2. Pick a host from the **`~/.ssh/config` catalog**, or enter a host, user, port and identity file manually.
+   Leave the project directory empty to browse it.
 3. **Connect**.
+
+The dialog searches both the SSH config hosts and the remote folders already opened. Picking a host uses its
+alias, so user, port, identity file and `ProxyJump` all come from `~/.ssh/config`; the user, port and key fields
+stay editable for a manual override. Picking a folder fills its host and path, ready to connect again.
 
 The first connection installs the matching server under `~/.kotlin-editor/server` on the host, starts a per-user
 daemon and opens an SSH tunnel. Later connections reuse the daemon; the SSH link is supervised and restarted when
@@ -21,6 +26,17 @@ current project. Nothing is written on the host while browsing.
 
 Authentication is key or `ssh-agent` only: the client runs OpenSSH in batch mode, so it never asks for a password.
 `~/.ssh/config`, `ProxyJump`, known hosts and hardware keys therefore work as with `ssh` itself.
+
+## SSH config catalog and saved folders
+
+The remote dialog reads the client's `~/.ssh/config` (including `Include` files) and lists its concrete `Host`
+aliases; wildcard patterns are skipped. Each alias is resolved with `ssh -G`, so the summary and the connection
+use the same `HostName`, `User`, `Port`, `IdentityFile` and `ProxyJump` as a normal `ssh` command. Selecting an
+alias does not copy secrets: the config remains the source of truth.
+
+Every remote folder successfully opened is saved on the client in the preference store (at most 50, newest first,
+no token or key). The dialog's search field filters both the SSH hosts and those recent folders by alias, host,
+user or path; selecting a folder fills its host and project path.
 
 ## Prerequisites
 
@@ -85,7 +101,10 @@ IDE ── RpcClient ── 127.0.0.1:<local port> ── ssh -N -L ── 127.0
 
 - Remote **Windows** servers are not supported yet. The daemon scripts are POSIX; the dialog reports this clearly.
   macOS and Linux targets share the same POSIX path. Windows clients can connect to Linux/macOS hosts.
-- One saved remote connection replaces the previous one; there is no list of hosts yet.
+- The SSH catalog shows concrete `Host` aliases (wildcard patterns are skipped) and follows `Include` files; the
+  config is re-read when the dialog opens.
+- Saved folders belong to the client profile (`~/.kotlin-editor` preferences), not to the remote host; they are
+  not synchronised between machines.
 - The daemon is started per user, not through systemd/launchd. A reboot requires reconnecting from the IDE.
 
 ## Tests
@@ -96,5 +115,6 @@ temporary directory and connect the real OpenSSH client to it. They cover instal
 cancellation and validation, disconnecting, tunnel restarts, a changed host key, the folder browser (SSH home,
 click-through navigation, live path check with debounce, path errors, opening the chosen folder), a listing that
 completes after a reconnection,
-1,000 folders, and a 5,000-line file on a 200-file project. `RemoteTransportTest` covers the token surviving a
-daemon restart and strict host-key checking.
+1,000 folders, the `~/.ssh/config` catalog (including aliases, includes and search), saved folders surviving a
+restart, and a 5,000-line file on a 200-file project. `RemoteTransportTest` covers the token surviving a daemon
+restart and strict host-key checking.

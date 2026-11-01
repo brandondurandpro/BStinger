@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.example.kotlineditor.model.AppServices
 import org.example.kotlineditor.model.FileEntry
+import org.example.kotlineditor.remote.SshConfigHost
 import org.example.kotlineditor.remote.SshTarget
 import java.io.IOException
 
@@ -53,6 +54,17 @@ class AppState(
     /** The remote folder picker, when open. */
     var folderPicker: FolderPickerState? by mutableStateOf(null)
         private set
+
+    /** Hosts of the client's `~/.ssh/config`, shown in the remote dialog. */
+    var sshHosts: List<SshConfigHost> by mutableStateOf(emptyList())
+        private set
+
+    /** Whether `~/.ssh/config` is being read (it resolves each alias with `ssh -G`). */
+    var sshHostsLoading: Boolean by mutableStateOf(false)
+        private set
+
+    /** Remote folders already opened, newest first, searchable from the remote dialog. */
+    val remoteWorkspaces = mutableStateListOf<RemoteWorkspace>()
 
     /** What the remote connection is doing, while it is being established. */
     var remoteStatus: String? by mutableStateOf(null)
@@ -105,13 +117,60 @@ class AppState(
             }
 
     init {
+        remoteWorkspaces.addAll(
+            RemoteWorkspaceCodec.decode(preferences[RemotePreferenceKeys.WORKSPACES].orEmpty()),
+        )
         scope.launch { savePreferencesOnChange() }
         reloadRecents()
     }
 
-    /** Opens the "Remote Development" dialog, prefilled with the last connection. */
+    /** Opens the "Remote Development" dialog, prefilled with the last connection and the SSH catalog. */
     fun openRemoteDialog() {
         remoteDialog = RemoteDialogState.from(lastRemote)
+        loadSshHosts()
+    }
+
+    private fun loadSshHosts() {
+        val factory = remoteFactory
+        if (factory == null) {
+            sshHosts = emptyList()
+            return
+        }
+        sshHostsLoading = true
+        scope.launch {
+            sshHosts = withContext(Dispatchers.IO) { runCatching { factory.sshHosts() }.getOrDefault(emptyList()) }
+            sshHostsLoading = false
+        }
+    }
+
+    /** A host of `~/.ssh/config` was picked: use the alias, and let ssh resolve user, port and key. */
+    fun selectSshHost(host: SshConfigHost) {
+        val dialog = remoteDialog ?: return
+        remoteDialog =
+            dialog.copy(
+                alias = host.alias,
+                host = host.alias,
+                user = host.user.orEmpty(),
+                port = host.port.toString(),
+                identityFile = "",
+                projectPath = "",
+                error = null,
+            )
+    }
+
+    /** A saved remote folder was picked: fill the connection and its path, ready to connect. */
+    fun selectRemoteWorkspace(workspace: RemoteWorkspace) {
+        val dialog = remoteDialog ?: return
+        remoteDialog =
+            dialog.copy(
+                alias = workspace.target.alias.orEmpty(),
+                host = workspace.target.host,
+                user = workspace.target.user.orEmpty(),
+                port = workspace.target.port.toString(),
+                identityFile = workspace.target.identityFile.orEmpty(),
+                projectPath = workspace.path,
+                error = null,
+            )
     }
 
     /** Updates the dialog while the user types. */
@@ -308,7 +367,9 @@ class AppState(
         return preferences + projectPreferences + fontSizePreference() + remotePreferences()
     }
 
-    private fun remotePreferences(): Map<String, String> = lastRemote?.let(RemotePreferenceKeys::write).orEmpty()
+    private fun remotePreferences(): Map<String, String> =
+        lastRemote?.let(RemotePreferenceKeys::write).orEmpty() +
+            (RemotePreferenceKeys.WORKSPACES to RemoteWorkspaceCodec.encode(remoteWorkspaces))
 
     private fun fontSizePreference() = PreferenceKeys.EDITOR_FONT_SIZE to editorFontSize.toString()
 
@@ -326,10 +387,21 @@ class AppState(
         recentProjects.add(0, root.path)
         while (recentProjects.size > MAX_RECENT) recentProjects.removeAt(recentProjects.lastIndex)
         saveRecent()
+        recordRemoteWorkspace(root.path)
         (screen as? Screen.Project)?.project?.let { saveAndDispose(it) }
         val project = ProjectState(root, services, scope, preferences)
         runCatching { services.sessions.load(root.path) }.getOrNull()?.let(project::restoreSession)
         screen = Screen.Project(project)
+    }
+
+    private fun recordRemoteWorkspace(path: String) {
+        if (!isRemote) return
+        val target = lastRemote?.copy(projectPath = null) ?: return
+        remoteWorkspaces.removeAll { it.matches(target, path) }
+        remoteWorkspaces.add(0, RemoteWorkspace(target, path, System.currentTimeMillis()))
+        while (remoteWorkspaces.size > RemoteWorkspaceCodec.MAX) {
+            remoteWorkspaces.removeAt(remoteWorkspaces.lastIndex)
+        }
     }
 
     private fun saveRecent() {

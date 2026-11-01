@@ -2,6 +2,7 @@ package org.example.kotlineditor.state
 
 import kotlinx.coroutines.flow.StateFlow
 import org.example.kotlineditor.model.AppServices
+import org.example.kotlineditor.remote.SshConfigHost
 import org.example.kotlineditor.remote.SshTarget
 
 /**
@@ -32,4 +33,7 @@ interface RemoteFactory {
      * handshake. Blocking work happens on the caller's IO dispatcher.
      */
     suspend fun connect(target: SshTarget, onProgress: (String) -> Unit = {}): RemoteConnection
+
+    /** Hosts of the user's `~/.ssh/config`, for the remote dialog's catalog. */
+    suspend fun sshHosts(): List<SshConfigHost> = emptyList()
 }

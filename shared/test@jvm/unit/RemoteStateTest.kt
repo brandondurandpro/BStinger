@@ -38,6 +38,19 @@ class RemoteStateTest {
     }
 
     @Test
+    fun `an ssh config alias is kept in the dialog and in the preferences`() {
+        val target =
+            RemoteDialogState(host = "prod", alias = "prod", port = "2222")
+                .toSshTarget()
+                .getOrThrow()
+
+        assertEquals("prod", target.alias)
+        assertEquals("prod", target.destination)
+        assertTrue(target.usesSshConfig)
+        assertEquals(target, RemotePreferenceKeys.read(RemotePreferenceKeys.write(target)))
+    }
+
+    @Test
     fun `the last connection survives a preferences round trip`() {
         val target =
             SshTarget(

@@ -27,6 +27,7 @@ fun SshResult.requireSuccess(what: String): SshResult {
 class SshClient(private val target: SshTarget) {
     private val executable: String = System.getProperty("kotlin.editor.ssh", "ssh")
     private val knownHosts: String? = System.getProperty("kotlin.editor.ssh.knownHosts")
+    private val configFile: String? = System.getProperty("kotlin.editor.ssh.config")
 
     /** Runs [command] on the remote shell and returns its output; [stdin] is its standard input. */
     fun exec(command: String, stdin: File? = null, timeoutMs: Long = 30_000): SshResult =
@@ -55,9 +56,13 @@ class SshClient(private val target: SshTarget) {
     private fun arguments(): List<String> =
         mutableListOf<String>()
             .apply {
+                configFile?.let { addAll(listOf("-F", it)) }
                 addAll(commonOptions())
-                addAll(listOf("-o", "BatchMode=yes", "-p", target.port.toString()))
-                target.identityFile?.let { addAll(listOf("-i", expandHome(it))) }
+                addAll(listOf("-o", "BatchMode=yes"))
+                if (!target.usesSshConfig) {
+                    addAll(listOf("-p", target.port.toString()))
+                    target.identityFile?.let { addAll(listOf("-i", expandHome(it))) }
+                }
             }
 
     // ssh does not expand ~ in -i: it is a process argument, not a shell word.

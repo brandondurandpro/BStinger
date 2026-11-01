@@ -19,6 +19,10 @@ object Tags {
     const val REMOTE_STATUS = "remote.status"
     const val REMOTE_ERROR = "remote.error"
     const val REMOTE_DISCONNECT = "remote.disconnect"
+    const val REMOTE_SEARCH = "remote.search"
+    const val REMOTE_CATALOG = "remote.catalog"
+    const val REMOTE_CONFIG = "remote.config"
+    const val REMOTE_HOSTS_LOADING = "remote.hostsLoading"
     const val STATUS_REMOTE = "status.remote"
     const val FOLDER_PICKER = "folder.picker"
     const val FOLDER_PICKER_PATH = "folder.picker.path"
@@ -235,6 +239,10 @@ object ItemTags {
     fun recentRemove(path: String) = "recent.remove:$path"
 
     fun folderEntry(path: String) = "folder.picker.entry:$path"
+
+    fun sshHost(alias: String) = "remote.host:$alias"
+
+    fun remoteWorkspace(destination: String, path: String) = "remote.workspace:$destination:$path"
 
     fun terminalLine(index: Int) = "terminal.line:$index"
 
