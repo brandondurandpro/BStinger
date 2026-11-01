@@ -5,6 +5,7 @@ import io.github.treesitter.jtreesitter.Parser
 import java.io.File
 import java.io.IOException
 import java.lang.foreign.Arena
+import java.lang.foreign.Linker
 import java.lang.foreign.SymbolLookup
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
@@ -60,9 +61,17 @@ object TreeSitterCore {
     }
 }
 
-/** Found by jtreesitter with a [java.util.ServiceLoader]: points it at the library of [TreeSitterCore]. */
+/**
+ * Found by jtreesitter with a [java.util.ServiceLoader]: points it at the library of [TreeSitterCore]. jtreesitter also
+ * looks up `malloc`, `calloc` and `free`: on Linux and macOS the library resolves them through its dependencies, but a
+ * Windows DLL only exports its own functions, so they come from the C runtime of the JVM's default lookup (the UCRT
+ * the library uses too).
+ */
 class TreeSitterLibraryLookup : NativeLibraryLookup {
-    override fun get(arena: Arena): SymbolLookup = SymbolLookup.libraryLookup(TreeSitterCore.library().toPath(), arena)
+    override fun get(arena: Arena): SymbolLookup =
+        SymbolLookup
+            .libraryLookup(TreeSitterCore.library().toPath(), arena)
+            .or(Linker.nativeLinker().defaultLookup())
 }
 
 /** Writes next to [target] then renames, so that another IDE running at the same time never loads half a file. */
