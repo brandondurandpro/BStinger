@@ -24,7 +24,7 @@ import org.example.kotlineditor.state.RemoteDialogState
 fun RemoteDialog(app: AppState, dialog: RemoteDialogState) {
     val connect = { if (!dialog.connecting) app.connectRemote(dialog) }
     val cancel = { app.dismissRemoteDialog() }
-    PopupFrame(Tags.REMOTE_DIALOG, cancel, width = 560) {
+    PopupFrame(Tags.REMOTE_DIALOG, cancel, width = 760) {
         Column {
             DialogHeader()
             RemoteCatalog(app, dialog) { app.updateRemoteDialog(it) }

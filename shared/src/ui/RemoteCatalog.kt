@@ -64,8 +64,8 @@ internal fun RemoteCatalog(app: AppState, dialog: RemoteDialogState, onChange: (
         )
         CatalogStatus(app, empty, query)
         val listState = rememberLazyListState()
-        Box(Modifier.fillMaxWidth().heightIn(max = 190.dp).testTag(Tags.REMOTE_CATALOG)) {
-            LazyColumn(Modifier.fillMaxWidth().heightIn(max = 190.dp), state = listState) {
+        Box(Modifier.fillMaxWidth().heightIn(max = 280.dp).testTag(Tags.REMOTE_CATALOG)) {
+            LazyColumn(Modifier.fillMaxWidth().heightIn(max = 280.dp), state = listState) {
                 if (workspaces.isNotEmpty()) {
                     item { SectionHeader("Recent folders") }
                     items(workspaces, key = { "w:${it.key}" }) { workspace ->
