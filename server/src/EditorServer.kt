@@ -51,7 +51,7 @@ class ServerOptions(
  * One thread per connection reads messages; requests run concurrently on coroutines and answer in any order.
  */
 class EditorServer(
-    services: LocalServices = LocalServices(),
+    private val services: LocalServices = LocalServices(),
     /** Secret a client must present in its handshake. */
     val token: String = newToken(),
     private val options: ServerOptions = ServerOptions(),
@@ -104,6 +104,7 @@ class EditorServer(
         sessions.values.forEach { it.dispose() }
         sessions.clear()
         scope.cancel()
+        services.close()
     }
 
     /** Drops every connection abruptly while keeping sessions (tests simulate network failures with it). */
@@ -172,6 +173,7 @@ class EditorServer(
                 scope,
                 handlers,
                 options,
+                onDispose = { id -> if (services.languageServersStarted) services.languageServers.release(id) },
             ).also { sessions[it.id] = it }
         session.attach(connection)
         val welcome =

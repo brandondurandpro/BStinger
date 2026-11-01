@@ -491,6 +491,8 @@ class AppServices(
     val connection: StateFlow<ConnectionStatus> = MutableStateFlow(ConnectionStatus.Connected),
     /** Capture of the frames exchanged with the server (devtools), when there is a server. */
     val network: NetworkInspector? = null,
+    /** Language servers run by the server. */
+    val languageServers: LanguageServers = LanguageServers.None,
 )
 
 /** Last segment of a path, whatever the separator. */

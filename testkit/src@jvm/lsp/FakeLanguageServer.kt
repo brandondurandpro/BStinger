@@ -32,7 +32,9 @@ import kotlin.system.exitProcess
  *   `--ignore-shutdown`;
  * - output: `--garbage-stdout`, `--huge-message <mb>` (the hover answer), `--stderr-flood`;
  * - timing and questions: `--latency-ms <n>`, `--ask-configuration` (asks `workspace/configuration` after
- *   `initialized` and writes the answer to stderr), `--diagnostics`.
+ *   `initialized` and writes the answer to stderr), `--diagnostics`, `--progress <seconds>` (reports an
+ *   "Indexing" progress from 0 to 100 % over that many seconds after `initialized`).
+ * A crash writes `Fatal error: fake crash` on stderr first, like a real server would.
  * Memory is allocated as direct buffers with one byte written per page, so that it becomes resident.
  */
 object FakeLanguageServer {
@@ -40,6 +42,8 @@ object FakeLanguageServer {
     private const val PAGE = 4096
     private const val CHUNK_MB = 4
     private const val CRASH_EXIT = 3
+    private const val PROGRESS_STEPS = 10
+    private const val PERCENT = 100
     private const val TICK_MS = 100L
     private const val MILLIS_PER_SECOND = 1000L
 
@@ -51,7 +55,7 @@ object FakeLanguageServer {
             hold(options.holdMb)
             return
         }
-        if (options.crashOnStart) exitProcess(CRASH_EXIT)
+        if (options.crashOnStart) crash()
         Server(options, System.`in`, System.out, System.err).run()
     }
 
@@ -60,6 +64,12 @@ object FakeLanguageServer {
         held.resizeTo(megabytes)
         System.`in`.read()
         held.resizeTo(0)
+    }
+
+    private fun crash(): Nothing {
+        System.err.println("Fatal error: fake crash")
+        System.err.flush()
+        exitProcess(CRASH_EXIT)
     }
 
     /** The options of the command line. */
@@ -79,6 +89,7 @@ object FakeLanguageServer {
         val latencyMs: Long = 0,
         val askConfiguration: Boolean = false,
         val diagnostics: Boolean = false,
+        val progressSeconds: Int? = null,
     ) {
         val allocates get() = leakMbPerSecond > 0 || sawtooth != null || spikeThenPlateau != null
 
@@ -109,6 +120,7 @@ object FakeLanguageServer {
                     latencyMs = values["latency-ms"]?.toLong() ?: 0,
                     askConfiguration = "ask-configuration" in values,
                     diagnostics = "diagnostics" in values,
+                    progressSeconds = int("progress"),
                 )
             }
 
@@ -122,6 +134,7 @@ object FakeLanguageServer {
                     "crash-after",
                     "huge-message",
                     "latency-ms",
+                    "progress",
                 )
         }
     }
@@ -181,12 +194,15 @@ object FakeLanguageServer {
             }
             if (id != null) {
                 requests++
-                if (options.crashAfter != null && requests > options.crashAfter) exitProcess(CRASH_EXIT)
+                if (options.crashAfter != null && requests > options.crashAfter) crash()
             }
             if (options.latencyMs > 0) Thread.sleep(options.latencyMs)
             when (method) {
                 "initialize" -> if (!options.hangOnInitialize) reply(id, capabilities())
-                "initialized" -> if (options.askConfiguration) askConfiguration()
+                "initialized" -> {
+                    if (options.askConfiguration) askConfiguration()
+                    options.progressSeconds?.let { seconds -> thread(isDaemon = true) { reportProgress(seconds) } }
+                }
                 "shutdown" -> if (!options.ignoreShutdown) shutdown().also { reply(id, JsonNull) }
                 "exit" -> if (!options.ignoreShutdown) exit(if (shutdown) 0 else 1)
                 "textDocument/hover" -> reply(id, hover(message["params"]))
@@ -258,6 +274,41 @@ object FakeLanguageServer {
                 },
             )
         }
+
+        private fun reportProgress(seconds: Int) {
+            send(request("progress-1", "window/workDoneProgress/create", buildJsonObject { put("token", "index") }))
+            val steps = PROGRESS_STEPS
+            for (step in 0..steps) {
+                val kind = if (step == 0) "begin" else "report"
+                notify(
+                    "\$/progress",
+                    buildJsonObject {
+                        put("token", "index")
+                        put(
+                            "value",
+                            buildJsonObject {
+                                put("kind", kind)
+                                if (step == 0) put("title", "Indexing")
+                                put("percentage", step * PERCENT / steps)
+                            },
+                        )
+                    },
+                )
+                Thread.sleep(seconds * MILLIS_PER_SECOND / steps)
+            }
+            notify("\$/progress", buildJsonObject {
+                put("token", "index")
+                put("value", buildJsonObject { put("kind", "end") })
+            })
+        }
+
+        private fun request(id: String, method: String, params: JsonObject) =
+            buildJsonObject {
+                put("jsonrpc", "2.0")
+                put("id", id)
+                put("method", method)
+                put("params", params)
+            }
 
         private fun askConfiguration() =
             send(

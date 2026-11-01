@@ -55,6 +55,7 @@ fun RpcClient.appServices(): AppServices =
         git = RemoteGit(this),
         connection = status,
         network = network,
+        languageServers = RemoteLanguageServers(this),
     )
 
 /** [ServerPlaces] of the server. */

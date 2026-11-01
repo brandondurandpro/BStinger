@@ -11,6 +11,7 @@ import kotlin.test.assertTrue
 
 /** Finding PHP and Node.js on the server machine, and checking their versions. */
 class RuntimeDetectorTest {
+    private var extra = emptyList<Path>()
     private val bin = Files.createTempDirectory("bin")
     private val empty = Files.createTempDirectory("empty")
 
@@ -32,6 +33,7 @@ class RuntimeDetectorTest {
         pathEnvironment = listOf(empty.toString(), bin.toString()).joinToString(File.pathSeparator),
         isWindows = isWindows,
         pathExtensions = ".COM;.EXE;.CMD",
+        extraDirectories = { extra },
         probe = { path, _ -> versions[path.fileName.toString()] },
     )
 
@@ -47,6 +49,26 @@ class RuntimeDetectorTest {
         executable("php")
         val status = detector(mapOf("php" to "7.0.33-92+ubuntu24.04.1")).detect(RuntimeKind.Php, minimum = "8.2")
         assertEquals(RuntimeStatus.TooOld(RuntimeKind.Php, bin.resolve("php"), "7.0.33", "8.2"), status)
+    }
+
+    @Test
+    fun `a newer versioned PHP next to an old one is preferred`() {
+        executable("php")
+        executable("php8.4")
+        executable("php8.5")
+        executable("phpdbg")
+        val versions = mapOf("php" to "7.0.33", "php8.4" to "8.4.10", "php8.5" to "8.5.1", "phpdbg" to "9.9")
+        val status = detector(versions).detect(RuntimeKind.Php, minimum = "8.2")
+        assertEquals(RuntimeStatus.Found(RuntimeKind.Php, bin.resolve("php8.5"), "8.5.1"), status)
+    }
+
+    @Test
+    fun `a runtime of a version manager is found outside the PATH`() {
+        val nvm = Files.createDirectories(empty.resolve("nvm/v24.1.0/bin"))
+        Files.createFile(nvm.resolve("node")).toFile().setExecutable(true)
+        extra = listOf(nvm)
+        val status = detector(mapOf("node" to "v24.1.0")).detect(RuntimeKind.Node, minimum = "18")
+        assertEquals(RuntimeStatus.Found(RuntimeKind.Node, nvm.resolve("node"), "24.1.0"), status)
     }
 
     @Test

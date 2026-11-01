@@ -14,9 +14,11 @@ enum class RuntimeKind(
     val executable: String,
     /** Arguments that make it print its version, and nothing else, on stdout. */
     val versionArguments: List<String>,
+    /** Names of versioned executables installed side by side (`php8.4`), null when there are none. */
+    val versionedNames: Regex? = null,
 ) {
-    /** The PHP command line interpreter. */
-    Php("PHP", "php", listOf("-r", "echo PHP_VERSION;")),
+    /** The PHP command line interpreter; Debian and Ubuntu packages install `php8.4` next to `php`. */
+    Php("PHP", "php", listOf("-r", "echo PHP_VERSION;"), Regex("""php\d+(\.\d+)?""")),
 
     /** Node.js. */
     Node("Node.js", "node", listOf("--version")),
@@ -56,8 +58,10 @@ sealed interface RuntimeStatus {
 }
 
 /**
- * Finds the runtimes language servers need on the server machine: the configured path first (a setting), then the
- * `PATH` (with `PATHEXT` on Windows), and asks each its version with a short timeout.
+ * Finds the runtimes language servers need on the server machine: the configured path when there is one (a
+ * setting), otherwise every candidate of the `PATH` (with `PATHEXT` on Windows), versioned names included (`php8.4`
+ * next to an old `php`), then of [extraDirectories] (version managers such as nvm, which a server started outside a
+ * login shell does not have on its `PATH`). Each is asked its version with a short timeout, and the newest wins.
  */
 class RuntimeDetector(
     // Paths set by the user, by runtime; they win over the `PATH`.
@@ -65,17 +69,22 @@ class RuntimeDetector(
     private val pathEnvironment: String = System.getenv("PATH").orEmpty(),
     private val isWindows: Boolean = System.getProperty("os.name").startsWith("Windows"),
     private val pathExtensions: String = System.getenv("PATHEXT") ?: ".COM;.EXE;.BAT;.CMD",
+    // Directories searched after the PATH, by runtime.
+    private val extraDirectories: (RuntimeKind) -> List<Path> = ::versionManagerDirectories,
     // Runs an executable with arguments and returns its stdout, or null when it fails; replaceable in tests.
     private val probe: (Path, List<String>) -> String? = ::runForOutput,
 ) {
     /** The [kind] runtime, checked against the [minimum] version (`"8.2"`), or any version when null. */
     fun detect(kind: RuntimeKind, minimum: String? = null): RuntimeStatus {
         val explicit = configured[kind]
-        val candidates = if (explicit != null) listOf(Paths.get(explicit)) else onPath(kind.executable)
+        val candidates = if (explicit != null) listOf(Paths.get(explicit)) else candidatesOf(kind)
         val found =
-            candidates.firstNotNullOfOrNull { path ->
-                probe(path, kind.versionArguments)?.let(::parseVersion)?.let { path to it }
-            }
+            candidates
+                .mapNotNull { path -> probe(path, kind.versionArguments)?.let(::parseVersion)?.let { path to it } }
+                // The newest; the first found among equals, so the PATH order still decides ties.
+                .fold(null as Pair<Path, String>?) { best, next ->
+                    if (best == null || compareVersions(next.second, best.second) > 0) next else best
+                }
         return when {
             found == null && explicit != null -> {
                 RuntimeStatus.Missing(
@@ -98,15 +107,39 @@ class RuntimeDetector(
         }
     }
 
-    private fun onPath(executable: String): List<Path> {
+    private fun candidatesOf(kind: RuntimeKind): List<Path> {
         val extensions = if (isWindows) pathExtensions.split(';').filter { it.isNotBlank() } else listOf("")
-        val names = extensions.map { executable + it.lowercase() }
-        return pathEnvironment
-            .split(File.pathSeparatorChar)
-            .filter { it.isNotBlank() }
-            .flatMap { directory -> names.map { runCatching { Paths.get(directory, it) }.getOrNull() } }
-            .filterNotNull()
+        val names = extensions.map { kind.executable + it.lowercase() }
+        val onPath =
+            pathEnvironment
+                .split(File.pathSeparatorChar)
+                .filter { it.isNotBlank() }
+                .mapNotNull { runCatching { Paths.get(it) }.getOrNull() }
+        return (onPath + extraDirectories(kind))
+            .flatMap { directory -> names.map(directory::resolve) + versioned(directory, kind, extensions) }
             .filter { Files.isRegularFile(it) && (isWindows || Files.isExecutable(it)) }
+            .distinctBy { runCatching { it.toRealPath() }.getOrDefault(it) }
+    }
+
+    private fun versioned(directory: Path, kind: RuntimeKind, extensions: List<String>): List<Path> {
+        val pattern = kind.versionedNames
+        if (pattern == null || !Files.isDirectory(directory)) return emptyList()
+        return runCatching {
+            Files.list(directory).use { entries ->
+                entries
+                    .filter { isVersioned(it, pattern, extensions) }
+                    .sorted()
+                    .toList()
+            }
+        }.getOrDefault(emptyList())
+    }
+
+    private fun isVersioned(entry: Path, pattern: Regex, extensions: List<String>): Boolean {
+        val name = entry.fileName.toString().lowercase()
+        return extensions.any { extension ->
+            val suffix = extension.lowercase()
+            name.endsWith(suffix) && pattern.matches(name.removeSuffix(suffix))
+        }
     }
 
     /** Version helpers. */
@@ -130,6 +163,21 @@ class RuntimeDetector(
                         )
                     ).map { (a.getOrNull(it) ?: 0).compareTo(b.getOrNull(it) ?: 0) }
             return differences.firstOrNull { it != 0 } ?: 0
+        }
+
+        // Where version managers install runtimes: nvm, fnm, volta and asdf for Node.js.
+        private fun versionManagerDirectories(kind: RuntimeKind): List<Path> {
+            if (kind != RuntimeKind.Node) return emptyList()
+            val home = Paths.get(System.getProperty("user.home"))
+            val nvm = listOf(home.resolve(".nvm/versions/node"), home.resolve(".local/share/fnm/node-versions"))
+            val installed =
+                nvm.flatMap { root ->
+                    runCatching { Files.list(root).use { it.toList() } }.getOrDefault(emptyList()).flatMap {
+                        listOf(it.resolve("bin"), it.resolve("installation/bin"))
+                    }
+                }
+            val managers = listOf(home.resolve(".volta/bin"), home.resolve(".asdf/shims"), Paths.get("/usr/local/bin"))
+            return installed + managers
         }
 
         // Waits first (a version fits in the pipe buffer), so a program that never ends cannot block the server.

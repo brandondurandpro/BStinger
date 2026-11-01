@@ -69,7 +69,7 @@ object PhpServers {
                 fileName = "phpactor.phar",
             ),
             command = { runtimes, phar ->
-                listOf(runtimes.getValue(RuntimeKind.Php).toString(), phar.toString(), "language-server")
+                listOf(runtimes.getValue(RuntimeKind.Php).toString(), checkNotNull(phar).toString(), "language-server")
             },
         )
 
@@ -95,7 +95,7 @@ object PhpServers {
             command = { runtimes, pkg ->
                 listOf(
                     runtimes.getValue(RuntimeKind.Node).toString(),
-                    pkg.resolve("lib").resolve("intelephense.js").toString(),
+                    checkNotNull(pkg).resolve("lib").resolve("intelephense.js").toString(),
                     "--stdio",
                 )
             },
