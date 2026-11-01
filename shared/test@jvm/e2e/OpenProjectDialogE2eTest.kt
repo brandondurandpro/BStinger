@@ -163,9 +163,10 @@ class OpenProjectDialogE2eTest {
             showDirectoryInProjectPicker(other.path)
             awaitTag(ItemTags.pickerDirectory(other.root.resolve("src").toString())).assertIsDisplayed()
             onNodeWithTag(Tags.OPEN_PROJECT_OPEN).performClick()
+            // The first project already shows a project screen with a src row: wait for the switch itself.
+            awaitCondition { app.state.title == other.root.fileName.toString() }
             awaitTag(Tags.PROJECT)
             awaitTag(Tags.treeRow("src")).assertIsDisplayed()
-            assertEquals(other.root.fileName.toString(), app.state.title)
         }
 
     @Test
