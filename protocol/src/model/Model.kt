@@ -134,10 +134,15 @@ class InMemoryRecentProjectsStore(initial: List<String> = emptyList()) : RecentP
     }
 }
 
-/** Lets the user choose a project directory. */
-fun interface DirectoryPicker {
-    /** Asks the user for a project directory; `null` when cancelled. */
-    suspend fun pickDirectory(): String?
+/** Places of the server's machine, for the Open Project dialog (the project directories live on the server). */
+interface ServerPlaces {
+    /** The home directory of the user running the server, or `null` when unknown. */
+    suspend fun home(): String?
+
+    /** Knows nothing: the Open Project dialog falls back to its defaults. */
+    object None : ServerPlaces {
+        override suspend fun home(): String? = null
+    }
 }
 
 /** What is restored when a project is reopened: open files with their caret, and the active one. */
@@ -453,8 +458,8 @@ class AppServices(
     val search: ProjectSearch,
     /** Recently opened projects. */
     val recentProjects: RecentProjectsStore,
-    /** Choice of a project directory. */
-    val directoryPicker: DirectoryPicker,
+    /** Places of the server (its home directory), for the Open Project dialog. */
+    val places: ServerPlaces = ServerPlaces.None,
     /** Terminal shells. */
     val terminal: TerminalLauncher,
     /** Open files of each project. */
@@ -473,3 +478,9 @@ fun pathName(path: String): String {
     val name = trimmed.substring(trimmed.lastIndexOfAny(charArrayOf('/', '\\')) + 1)
     return name.ifEmpty { path }
 }
+
+/**
+ * The directory that contains [path], or `null` when it has none (a drive or filesystem root). Reads the path
+ * strings only, without touching the disk, whatever the separators; paths are those of the server's platform.
+ */
+fun parentPath(path: String): String? = java.io.File(path.ifEmpty { "/" }).parent

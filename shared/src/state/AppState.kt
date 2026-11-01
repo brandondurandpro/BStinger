@@ -42,6 +42,17 @@ class AppState(
     var opening: String? by mutableStateOf(null)
         private set
 
+    /** Whether the Open Project dialog is open (from the welcome screen or the project menu). */
+    var projectPickerOpen: Boolean by mutableStateOf(false)
+        private set
+
+    /** Home directory of the server, where the Open Project dialog starts; null until it is known. */
+    var serverHome: String? by mutableStateOf(null)
+        private set
+
+    // Last directory the Open Project dialog browsed (a preference), or null while unknown.
+    private var lastPickerDirectory: String? = preferences[PreferenceKeys.PICKER_DIRECTORY]
+
     // Only the latest request opens its project: a late answer must not replace a project chosen after it.
     private var openRequest = 0
 
@@ -76,6 +87,7 @@ class AppState(
     init {
         scope.launch { savePreferencesOnChange() }
         scope.launch { runCatching { services.recentProjects.load() }.onSuccess { recentProjects.addAll(it) } }
+        scope.launch { serverHome = runCatching { services.places.home() }.getOrNull() }
     }
 
     fun zoomEditor(delta: Float) {
@@ -108,9 +120,37 @@ class AppState(
         }
     }
 
+    /** Opens the Open Project dialog, which browses the directories of the server's disk. */
     fun browseForProject() {
-        scope.launch { services.directoryPicker.pickDirectory()?.let(::openProject) }
+        projectPickerOpen = true
     }
+
+    /** Closes the Open Project dialog without opening anything (its Cancel, Escape or the backdrop). */
+    fun closeProjectPicker() {
+        projectPickerOpen = false
+    }
+
+    /** Opens [path] as the project of a confirmed Open Project dialog. */
+    fun openFromProjectPicker(path: String) {
+        projectPickerOpen = false
+        openProject(path)
+    }
+
+    /** Resolves [path] on the server's disk to a directory, or `null` when there is no such directory. */
+    suspend fun resolvePickerDirectory(path: String): FileEntry? = services.fileSystem.resolveDirectory(path)
+
+    /** The directories inside [directory], sorted as the server lists them (directories first, by name). */
+    suspend fun pickerSubdirectories(directory: FileEntry): List<FileEntry> =
+        services.fileSystem.list(directory).filter { it.isDirectory }
+
+    /** Remembers [path] as the last directory the Open Project dialog browsed (a preference). */
+    fun rememberProjectPickerDirectory(path: String) {
+        if (path == lastPickerDirectory) return
+        lastPickerDirectory = path
+    }
+
+    /** Where the Open Project dialog starts: the last directory it browsed, the server's home, else the root. */
+    fun projectPickerStart(): String = lastPickerDirectory ?: serverHome ?: "/"
 
     fun removeRecent(path: String) {
         recentProjects.remove(path)
@@ -145,9 +185,10 @@ class AppState(
 
     // The open project's settings on top of the last known preferences.
     private fun currentPreferences(): Map<String, String> {
-        val project = (screen as? Screen.Project)?.project ?: return preferences + fontSizePreference()
+        val picker = lastPickerDirectory?.let { listOf(PreferenceKeys.PICKER_DIRECTORY to it) }.orEmpty()
+        val project = (screen as? Screen.Project)?.project ?: return preferences + picker + fontSizePreference()
         val autoSelect = PreferenceKeys.AUTO_SELECT_OPENED_FILE to project.autoSelectOpenedFile.toString()
-        return preferences + project.toolWindows.toPreferences() + autoSelect + fontSizePreference()
+        return preferences + picker + project.toolWindows.toPreferences() + autoSelect + fontSizePreference()
     }
 
     private fun fontSizePreference() = PreferenceKeys.EDITOR_FONT_SIZE to editorFontSize.toString()

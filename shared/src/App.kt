@@ -5,6 +5,7 @@ import androidx.compose.runtime.key
 import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.Screen
 import org.example.kotlineditor.ui.IdeTheme
+import org.example.kotlineditor.ui.OpenProjectDialog
 import org.example.kotlineditor.ui.ProjectScreen
 import org.example.kotlineditor.ui.WelcomeScreen
 
@@ -15,5 +16,6 @@ fun App(state: AppState) {
             Screen.Welcome -> WelcomeScreen(state)
             is Screen.Project -> key(screen.project) { ProjectScreen(state, screen.project) }
         }
+        if (state.projectPickerOpen) OpenProjectDialog(state)
     }
 }

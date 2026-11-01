@@ -3,16 +3,22 @@ package org.example.kotlineditor.e2e
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.doubleClick
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performMouseInput
+import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.printToString
+import androidx.compose.ui.test.requestFocus
 import kotlinx.coroutines.runBlocking
 import org.example.kotlineditor.App
 import org.example.kotlineditor.model.AppServices
@@ -137,7 +143,6 @@ class ServerProcess(private val data: java.io.File) : AutoCloseable {
 class E2eApp(
     val state: AppState,
     val recentStore: org.example.kotlineditor.model.RecentProjectsStore,
-    val picker: FakePicker,
     val process: ServerProcess,
     val client: RpcClient,
     private val proxy: ChaosProxy?,
@@ -152,15 +157,6 @@ class E2eApp(
     val project: ProjectState get() = (state.screen as Screen.Project).project
 }
 
-class FakePicker(var next: String? = null) : org.example.kotlineditor.model.DirectoryPicker {
-    var calls = 0
-
-    override suspend fun pickDirectory(): String? {
-        calls++
-        return next
-    }
-}
-
 /**
  * Starts the app as in production: a real [EditorServer] (data in a temporary directory) and the UI talking to
  * it through the network client. Everything the e2e tests do therefore goes through the protocol.
@@ -168,7 +164,6 @@ class FakePicker(var next: String? = null) : org.example.kotlineditor.model.Dire
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.launchApp(
     recent: List<String> = emptyList(),
-    pick: String? = null,
     sessions: org.example.kotlineditor.model.SessionStore? = null,
     preferences: PreferenceStore = InMemoryPreferenceStore(),
     chaos: Boolean = false,
@@ -187,14 +182,14 @@ fun ComposeUiTest.launchApp(
         }
     Runtime.getRuntime().addShutdownHook(Thread { data.deleteRecursively() })
     runBlocking { client.awaitConnected() }
-    val remote = client.appServices(FakePicker(pick))
+    val remote = client.appServices()
     if (recent.isNotEmpty()) runBlocking { remote.recentProjects.save(recent) }
     val services =
         AppServices(
             remote.fileSystem,
             remote.search,
             remote.recentProjects,
-            remote.directoryPicker,
+            remote.places,
             remote.terminal,
             sessions ?: remote.sessions,
             remote.git,
@@ -217,18 +212,61 @@ fun ComposeUiTest.launchApp(
     }
     waitForIdle()
     if (recent.isNotEmpty()) waitUntil(timeoutMillis = TIMEOUT) { created!!.recentProjects.size == recent.size }
-    return E2eApp(created!!, services.recentProjects, services.directoryPicker as FakePicker, process, client, proxy)
+    return E2eApp(created!!, services.recentProjects, process, client, proxy)
 }
 
-/** Opens [project] through the welcome screen, as a user would, and waits for its tree. */
+/** Opens the Open Project dialog from the welcome screen and waits for it to list a directory. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.openProjectPickerFromWelcome() {
+    onNodeWithTag(Tags.WELCOME_OPEN).performClick()
+    awaitTag(Tags.OPEN_PROJECT)
+}
+
+/** Types [path] at the path field of the Open Project dialog and commits it with Enter (does not wait). */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.navigateToInProjectPicker(path: String) {
+    // A menu that opened the dialog can steal the focus back while closing; wait for the field to own it.
+    val field = onNodeWithTag(Tags.OPEN_PROJECT_PATH).requestFocus()
+    awaitCondition { runCatching { field.assertIsFocused() }.isSuccess }
+    field.performTextReplacement(path)
+    field.performKeyInput { pressKey(Key.Enter) }
+}
+
+/** Navigates the Open Project dialog to [path] and waits until the dialog shows that directory. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.showDirectoryInProjectPicker(path: String) {
+    navigateToInProjectPicker(path)
+    awaitCondition { shownDirectoryInProjectPicker() == path }
+}
+
+/** Chooses [path] as the new project through the Open Project dialog, starting from the welcome screen. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.openProjectDirectoryFromWelcome(path: String) {
+    openProjectPickerFromWelcome()
+    showDirectoryInProjectPicker(path)
+    onNodeWithTag(Tags.OPEN_PROJECT_OPEN).performClick()
+}
+
+/** The directory the path field of the Open Project dialog shows. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.shownDirectoryInProjectPicker(): String? {
+    val field =
+        onAllNodes(hasTestTag(Tags.OPEN_PROJECT_PATH)).fetchSemanticsNodes().singleOrNull()
+            ?: return null
+    return field.config
+        .getOrElseNullable(androidx.compose.ui.semantics.SemanticsProperties.EditableText) { null }
+        ?.text
+}
+
+/** Opens [project] through the Open Project dialog, as a user would, and waits for its tree. */
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.launchWithProject(
     project: SampleProject,
     preferences: PreferenceStore = InMemoryPreferenceStore(),
     chaos: Boolean = false,
 ): E2eApp {
-    val app = launchApp(pick = project.path, preferences = preferences, chaos = chaos)
-    onNodeWithTag(Tags.WELCOME_OPEN).performClick()
+    val app = launchApp(preferences = preferences, chaos = chaos)
+    openProjectDirectoryFromWelcome(project.path)
     awaitTag(Tags.treeRow("src"))
     return app
 }
