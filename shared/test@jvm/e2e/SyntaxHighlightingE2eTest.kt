@@ -2,15 +2,23 @@ package org.example.kotlineditor.e2e
 
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.MouseButton
 import androidx.compose.ui.test.assertTextEquals
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.v2.runComposeUiTest
+import org.example.kotlineditor.syntax.treesitter.SyntaxSession
 import org.example.kotlineditor.ui.IdeColors
 import org.example.kotlineditor.ui.Tags
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 /**
  * Tree-sitter highlighting: the grammar of a file's language is downloaded (from a [LocalGrammarRepository]) the
@@ -160,6 +168,60 @@ class SyntaxHighlightingE2eTest {
             assertEquals(IdeColors.Code, colorOf(8, "println"))
             onNodeWithTag(Tags.STATUS_LANGUAGE).assertTextEquals("Kotlin")
         }
+
+    @Test
+    fun `a file hidden behind another tab frees its syntax tree and keeps its colors until shown again`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, grammars = TestGrammars.store(repository))
+            openFromTree("src/main/kotlin/App.kt")
+            awaitColor(8, "println", IdeColors.FunctionDeclaration)
+            val syntax = syntaxOf(app)
+            assertTrue(syntax.isParsed)
+            openFromTree("src/main/kotlin/util/Strings.kt")
+            awaitColor(2, "uppercase", IdeColors.FunctionDeclaration)
+            awaitCondition { !syntax.isParsed }
+            onNodeWithTag(Tags.tab("src/main/kotlin/App.kt")).performClick()
+            awaitCondition { colorOf(8, "println") != null }
+            assertEquals(IdeColors.FunctionDeclaration, colorOf(8, "println"), "the last colors, while parsed again")
+            awaitCondition { syntax.isParsed }
+            onNodeWithTag(Tags.EDITOR).performClick()
+            pressInEditor(Key.MoveEnd, ctrl = true)
+            typeInEditor("\nval answer = greeting.length")
+            awaitColor(10, "length", IdeColors.Property)
+            assertEquals(IdeColors.FunctionDeclaration, colorOf(8, "println"))
+        }
+
+    @Test
+    fun `a file shown in another pane keeps its syntax tree`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, grammars = TestGrammars.store(repository))
+            openFromTree("src/main/kotlin/App.kt")
+            awaitColor(8, "println", IdeColors.FunctionDeclaration)
+            val editor = app.project.editor
+            val syntax = syntaxOf(app)
+            onNodeWithTag(Tags.tab("src/main/kotlin/App.kt")).performMouseInput {
+                moveTo(center)
+                press(MouseButton.Secondary)
+                release(MouseButton.Secondary)
+            }
+            awaitTag(Tags.MENU_SPLIT_RIGHT).performClick()
+            awaitCondition { onAllNodesWithTag(Tags.EDITOR).fetchSemanticsNodes().size == 2 }
+            // The right pane is active: the file opened there hides App.kt in that pane only.
+            openFromTree("README.md")
+            val right = editor.panes[1]
+            awaitCondition { right.tabs.any { it.entry.name == "README.md" } }
+            waitForIdle()
+            assertTrue(syntax.isParsed, "still shown in the left pane")
+            onNode(hasTestTag(Tags.EDITOR) and hasAnyAncestor(hasTestTag(Tags.pane(0)))).performClick()
+            awaitCondition { editor.activePane == editor.panes[0] }
+            openFromTree("src/main/kotlin/util/Strings.kt")
+            awaitCondition { !syntax.isParsed }
+        }
+
+    private fun syntaxOf(app: E2eApp): SyntaxSession {
+        val tab = assertNotNull(app.project.editor.activeTab)
+        return assertNotNull(tab.document?.syntax)
+    }
 
     private companion object {
         const val SLOW_DOWNLOAD_MS = 1_000L

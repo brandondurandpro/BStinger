@@ -6,12 +6,16 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
 import org.example.kotlineditor.state.Document
 
@@ -49,7 +53,23 @@ class SyntaxSession(val spec: GrammarSpec) {
     var highlights: SyntaxHighlights? by mutableStateOf(null)
         private set
 
+    /**
+     * Whether the document's syntax tree is in memory. It is freed while no editor shows the document, and parsed
+     * again when one does; its last colors stay meanwhile.
+     */
+    var isParsed: Boolean by mutableStateOf(false)
+        private set
+
     private val wanted = MutableStateFlow(0 until INITIAL_LINES)
+
+    // Editors showing the document: its tree is only kept while there is one.
+    private val shown = MutableStateFlow(0)
+
+    /** An editor shows the document, until [hide]. */
+    fun show() = shown.update { it + 1 }
+
+    /** An editor no longer shows the document. */
+    fun hide() = shown.update { it - 1 }
 
     /** Asks for the colors of lines [first] to [last] (inclusive), drawn now; cheap when they are already known. */
     fun request(first: Int, last: Int) {
@@ -66,27 +86,44 @@ class SyntaxSession(val spec: GrammarSpec) {
         val worker = Dispatchers.Default.limitedParallelism(1)
         val highlighter = withContext(worker) { TreeSitterHighlighter(grammar) }
         try {
-            combine(snapshotFlow { document.version }, wanted) { _, range -> range }
-                .conflate()
-                .collect { range ->
-                    val lines = document.lines.toList()
-                    highlights =
-                        if (lines.sumOf { it.length + 1 } > MAX_CHARACTERS) {
-                            null
-                        } else {
-                            val margin = range.last - range.first + 1
-                            val window = maxOf(0, range.first - margin)..minOf(lines.lastIndex, range.last + margin)
-                            val spans =
-                                withContext(worker) {
-                                    highlighter.update(lines)
-                                    highlighter.highlight(window.first, window.last + 1)
-                                }
-                            SyntaxHighlights(spans.mapValues { (index, line) -> lines[index] to line }, window)
-                        }
+            val visible = shown.map { it > 0 }.distinctUntilChanged()
+            val requests =
+                combine(snapshotFlow { document.version }, wanted, visible) { _, range, isShown ->
+                    range.takeIf { isShown }
                 }
+            requests.conflate().collect { range ->
+                if (range == null) {
+                    // Hidden: the tree is freed, the colors kept for when the document is shown again.
+                    withContext(worker) { highlighter.release() }
+                } else {
+                    highlights = highlightsOf(document.lines.toList(), range, highlighter, worker)
+                }
+                isParsed = range != null && highlights != null
+            }
         } finally {
             withContext(NonCancellable + worker) { highlighter.close() }
         }
+    }
+
+    // The colors of the lines around [range], once [lines] parsed; `null` for a text too large.
+    private suspend fun highlightsOf(
+        lines: List<String>,
+        range: IntRange,
+        highlighter: TreeSitterHighlighter,
+        worker: CoroutineDispatcher,
+    ): SyntaxHighlights? {
+        if (lines.sumOf { it.length + 1 } > MAX_CHARACTERS) {
+            withContext(worker) { highlighter.release() }
+            return null
+        }
+        val margin = range.last - range.first + 1
+        val window = maxOf(0, range.first - margin)..minOf(lines.lastIndex, range.last + margin)
+        val spans =
+            withContext(worker) {
+                highlighter.update(lines)
+                highlighter.highlight(window.first, window.last + 1)
+            }
+        return SyntaxHighlights(spans.mapValues { (index, line) -> lines[index] to line }, window)
     }
 
     private companion object {
