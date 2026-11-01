@@ -75,9 +75,10 @@ class TerminalCursorE2eTest {
             val prompt = checkNotNull(app.terminalSnapshot())
             val input = onNodeWithTag(Tags.TERMINAL_INPUT)
             input.performClick()
-            // Bars up to the end of the prompt's row, where a drift is the widest. Typed, never run.
-            val bars = prompt.columns - prompt.cursorColumn - 2
-            assertTrue(bars >= MIN_BARS, "The panel is too narrow: ${prompt.columns} columns")
+            // Bars to the end of the prompt's row (cmd.exe's prompt is a long path), then to near the end of the next
+            // one, where a drift is the widest whatever the prompt. Typed, never run.
+            assertTrue(prompt.columns >= MIN_COLUMNS, "The panel is too narrow: ${prompt.columns} columns")
+            val bars = 2 * prompt.columns - prompt.cursorColumn - 2
             // No arrow key to move onto a bar: dash, the /bin/sh of some CI runners, has no line editing.
             input.performTextInput("|".repeat(bars))
             awaitCondition { cursorAfterLastBar(app) }
@@ -110,7 +111,7 @@ class TerminalCursorE2eTest {
 
     private companion object {
         // Enough for a cell width rounded to the pixel (8 for 7.8 at 13 px) to drift by more than a cell.
-        const val MIN_BARS = 50
+        const val MIN_COLUMNS = 50
         const val CURSOR_ALPHA = 0.55f
         const val COLOR_TOLERANCE = 0.03f
         const val INK_BRIGHTNESS = 0.45f
