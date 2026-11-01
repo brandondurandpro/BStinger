@@ -136,6 +136,28 @@ class RemoteDevelopmentE2eTest {
         }
 
     @Test
+    fun `once disconnected, the welcome screen lists the local recent projects, never the remote ones`() =
+        remoteUiTest {
+            val app = launchApp(chaos = true)
+            connectRemoteTo(RemoteTestEnvironment, project.path)
+            awaitTag(Tags.treeRow("src"), timeout = 60_000)
+            onNodeWithTag(Tags.PROJECT_WIDGET).performClick()
+            onNodeWithTag(Tags.PROJECT_CLOSE).performClick()
+            awaitTag(Tags.WELCOME)
+            // The daemon is shared by the tests: its list holds their projects too.
+            assertTrue(project.path in app.state.recentProjects, "the remote server's recents")
+
+            // A slow link to the local server: its list takes a while to come back.
+            app.network.latencyMs = 400
+            onNodeWithTag(Tags.REMOTE_DISCONNECT).performClick()
+            // From the moment the IDE says it is local, the list is the local one: a remote path shown there would
+            // be opened on the local disk, and the screen would still change under the user's click.
+            awaitCondition { !app.state.isRemote }
+            assertEquals(emptyList(), app.state.recentProjects.toList(), "the local server has no recent project")
+            openProjectPickerFromWelcome()
+        }
+
+    @Test
     fun `reconnecting reuses the daemon that is already running`() =
         remoteUiTest {
             val app = launchApp()

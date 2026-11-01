@@ -343,11 +343,13 @@ class AppState(
         scope.launch {
             (screen as? Screen.Project)?.project?.let { saveAndDispose(it) }
             remoteSession?.close()
-            remoteSession = null
             services = local
             rebindLanguageServers()
             screen = Screen.Welcome
-            reloadRecents()
+            // The local list replaces the remote one before the IDE shows it is local: a remote path listed there
+            // would be opened on the local disk, and the screen would change under the user's click.
+            loadRecentsNow()
+            remoteSession = null
         }
     }
 
