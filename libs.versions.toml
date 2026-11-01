@@ -7,6 +7,9 @@ kotlinx-serialization = "1.9.0"
 zstd = "1.5.6-10"
 ghostty = "0.1.237"
 pty4j21 = "0.22.2"
+jtreesitter = "0.26.1"
+tree-sitter-kotlin = "0.3.8.1"
+tree-sitter-json = "0.24.8"
 
 [libraries]
 logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
@@ -24,3 +27,9 @@ zstd-jni = { module = "com.github.luben:zstd-jni", version.ref = "zstd" }
 # Update both with this version.
 ghostty-linux = { module = "io.github.vlaaad:ghosttyfx-linux-x86_64", version.ref = "ghostty" }
 pty4j21 = { module = "com.sshtools:pty4j21", version.ref = "pty4j21" }
+# tree-sitter: the official FFM binding. Its native runtime is built by tools/tree-sitter/build-runtime (bonede's
+# exports only JNI functions on Windows). Grammars are downloaded on demand (see GrammarStore); the two below are test
+# fixtures, and must keep the versions of shared/src/syntax/treesitter/GrammarCatalog.kt.
+jtreesitter = { module = "io.github.tree-sitter:jtreesitter", version.ref = "jtreesitter" }
+tree-sitter-kotlin = { module = "io.github.bonede:tree-sitter-kotlin", version.ref = "tree-sitter-kotlin" }
+tree-sitter-json = { module = "io.github.bonede:tree-sitter-json", version.ref = "tree-sitter-json" }

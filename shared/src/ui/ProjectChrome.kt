@@ -259,5 +259,10 @@ private fun DocumentStatus(document: Document) {
     )
     Label(if (document.lineSeparator == "\r\n") "CRLF" else "LF", color = IdeColors.TextSecondary, fontSize = 12.sp)
     Label("UTF-8", color = IdeColors.TextSecondary, fontSize = 12.sp)
-    Label(document.language.name, color = IdeColors.TextSecondary, fontSize = 12.sp)
+    Label(
+        document.syntax?.spec?.name ?: document.language.name,
+        Modifier.testTag(Tags.STATUS_LANGUAGE),
+        color = IdeColors.TextSecondary,
+        fontSize = 12.sp,
+    )
 }

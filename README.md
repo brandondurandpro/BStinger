@@ -47,8 +47,9 @@ A lightweight IDE in the style of IntelliJ IDEA (New UI, dark theme), written wi
 - **Editor tabs**: open next to the active tab, most-recently-used activation on close, middle click to close,
   right click for *Close / Close Others / Close All to the Left or Right / Close All / Copy Path*, `Ctrl+F4`,
   `Alt+←/→`, `Ctrl+Tab`, per-tab scroll position, modified indicator.
-- **Code editor**: virtualized rendering (only visible lines are composed, tested with 200k lines), syntax
-  highlighting (Kotlin, Java, C-like, scripts), JetBrains Mono, line numbers, caret line, selection, identifier usages
+- **Code editor**: virtualized rendering (only visible lines are composed, tested with 200k lines), tree-sitter
+  syntax highlighting for 85 languages (each grammar downloaded the first time a file of its language opens, see
+  [`tools/tree-sitter`](tools/tree-sitter/README.md); a line lexer colors the rest and fills in until then), JetBrains Mono, line numbers, caret line, selection, identifier usages
   and matching brackets highlighting, auto-closing brackets/quotes, smart Home, auto-indent, undo/redo, clipboard,
   IntelliJ shortcuts (`Ctrl+D`, `Ctrl+Y`, `Ctrl+/`, `Tab`/`Shift+Tab`, `Ctrl+Shift+Z`…).
 - **Saving like IntelliJ**: `Ctrl+S`, and automatic save when a tab, the project or the window is closed, or when the
