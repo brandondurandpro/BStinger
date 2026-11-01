@@ -11,9 +11,9 @@ import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
 
 /**
- * The tree-sitter runtime library, bundled for every platform by the `io.github.bonede:tree-sitter` jar, which
- * jtreesitter finds through [TreeSitterLibraryLookup]. It is copied out of the jar into [directory] before being
- * loaded.
+ * The tree-sitter runtime library, bundled for every platform as `/tree-sitter/runtime/<platform>-tree-sitter.<ext>`
+ * (built by `tools/tree-sitter/build-runtime`, which exports its C API on every platform), and found by jtreesitter
+ * through [TreeSitterLibraryLookup]. It is copied out of the jar into [directory] before being loaded.
  */
 object TreeSitterCore {
     private const val HASH_BYTES = 8
@@ -41,7 +41,7 @@ object TreeSitterCore {
     /** The library file, copied out of the classpath once (its name carries a hash of its content). */
     internal fun library(): File {
         val platform = NativePlatform.current ?: throw IOException("No tree-sitter library for this platform")
-        val resource = "/lib/${platform.id}-tree-sitter.${platform.libraryExtension}"
+        val resource = "/tree-sitter/runtime/${platform.id}-tree-sitter.${platform.libraryExtension}"
         val bytes =
             TreeSitterCore::class.java.getResourceAsStream(resource)?.use { it.readBytes() }
                 ?: throw IOException("Missing $resource")

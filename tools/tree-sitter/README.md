@@ -1,9 +1,20 @@
 # Tree-sitter grammars
 
 The editor colors files with [tree-sitter](https://tree-sitter.github.io/), through its official Java binding
-([jtreesitter](https://github.com/tree-sitter/java-tree-sitter), FFM). Only the tree-sitter runtime ships with the IDE
-(the `io.github.bonede:tree-sitter` jar carries it for every platform). The grammars are downloaded by the IDE, on the
-machine it runs on, the first time a file of their language opens.
+([jtreesitter](https://github.com/tree-sitter/java-tree-sitter), FFM). Only the tree-sitter runtime ships with the IDE,
+in `shared/resources/tree-sitter/runtime` for every platform. The grammars are downloaded by the IDE, on the machine it
+runs on, the first time a file of their language opens.
+
+## The runtime
+
+```sh
+tools/tree-sitter/build-runtime
+```
+
+builds the runtime library of every platform (Linux and macOS, x86_64 and aarch64, Windows x86_64) from a pinned
+tree-sitter release with a pinned `zig cc`, and checks that each one exports the C API (`ts_*`) jtreesitter calls. The
+prebuilt runtime of bonede/tree-sitter-ng cannot be used: its Windows DLL only exports its JNI functions. Update
+`TREE_SITTER` with jtreesitter (same minor version).
 
 ## How it works
 

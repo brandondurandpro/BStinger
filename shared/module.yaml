@@ -13,7 +13,6 @@ dependencies:
   - $libs.androidx.lifecycle.viewmodel.compose
   - $libs.androidx.lifecycle.runtime.compose
   - $libs.jtreesitter
-  - $libs.tree.sitter.native
 
 dependencies@android:
   - $compose.uiTooling

@@ -62,6 +62,16 @@ class GrammarCatalogTest {
     }
 
     @Test
+    fun `the runtime is bundled for every platform of the grammars`() {
+        val platforms = GrammarSpec.all.flatMap { it.platforms }.toSet()
+        val extensions = mapOf("linux-gnu" to "so", "macos" to "dylib", "windows" to "dll")
+        for (platform in platforms) {
+            val extension = extensions.entries.single { platform.endsWith(it.key) }.value
+            assertNotNull(javaClass.getResource("/tree-sitter/runtime/$platform-tree-sitter.$extension"), platform)
+        }
+    }
+
+    @Test
     fun `the platform is named like the prebuilt libraries`() {
         assertEquals("x86_64-linux-gnu", NativePlatform.forSystem("Linux", "amd64")?.id)
         assertEquals("aarch64-linux-gnu", NativePlatform.forSystem("Linux", "aarch64")?.id)
