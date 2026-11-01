@@ -5,15 +5,16 @@ import io.github.treesitter.jtreesitter.Parser
 import java.io.File
 import java.io.IOException
 import java.lang.foreign.Arena
+import java.lang.foreign.Linker
 import java.lang.foreign.SymbolLookup
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
 
 /**
- * The tree-sitter runtime library, bundled for every platform by the `io.github.bonede:tree-sitter` jar, which
- * jtreesitter finds through [TreeSitterLibraryLookup]. It is copied out of the jar into [directory] before being
- * loaded.
+ * The tree-sitter runtime library, bundled for every platform as `/tree-sitter/runtime/<platform>-tree-sitter.<ext>`
+ * (built by `tools/tree-sitter/build-runtime`, which exports its C API on every platform), and found by jtreesitter
+ * through [TreeSitterLibraryLookup]. It is copied out of the jar into [directory] before being loaded.
  */
 object TreeSitterCore {
     private const val HASH_BYTES = 8
@@ -22,26 +23,33 @@ object TreeSitterCore {
     @Volatile
     var directory: File = File(System.getProperty("java.io.tmpdir"), "kotlin-editor-tree-sitter")
 
-    private val loaded: Boolean by lazy {
+    // Why the runtime does not load (no library for this platform, another libc...), null when it does. A failure of
+    // the lookup reaches here wrapped in the ExceptionInInitializerError of jtreesitter's bindings.
+    private val loadFailure: Throwable? by lazy {
         try {
             Parser().close()
-            true
-        } catch (_: LinkageError) {
-            // No library for this platform, or it does not load (another libc...): the line lexer is used. A failure
-            // of the lookup reaches here wrapped in the ExceptionInInitializerError of jtreesitter's bindings.
-            false
+            null
+        } catch (e: LinkageError) {
+            e
+        } catch (e: IllegalStateException) {
+            e
+        } catch (e: IllegalArgumentException) {
+            e
         } catch (_: RuntimeException) {
-            false
+            IllegalStateException("The tree-sitter runtime failed to start")
         }
     }
 
     /** Whether tree-sitter works here: loads the library on the first call. */
-    val isAvailable: Boolean get() = loaded
+    val isAvailable: Boolean get() = loadFailure == null
+
+    /** Why tree-sitter does not work here, `null` when it does. */
+    val failure: Throwable? get() = loadFailure
 
     /** The library file, copied out of the classpath once (its name carries a hash of its content). */
     internal fun library(): File {
         val platform = NativePlatform.current ?: throw IOException("No tree-sitter library for this platform")
-        val resource = "/lib/${platform.id}-tree-sitter.${platform.libraryExtension}"
+        val resource = "/tree-sitter/runtime/${platform.id}-tree-sitter.${platform.libraryExtension}"
         val bytes =
             TreeSitterCore::class.java.getResourceAsStream(resource)?.use { it.readBytes() }
                 ?: throw IOException("Missing $resource")
@@ -53,9 +61,17 @@ object TreeSitterCore {
     }
 }
 
-/** Found by jtreesitter with a [java.util.ServiceLoader]: points it at the library of [TreeSitterCore]. */
+/**
+ * Found by jtreesitter with a [java.util.ServiceLoader]: points it at the library of [TreeSitterCore]. jtreesitter also
+ * looks up `malloc`, `calloc` and `free`: on Linux and macOS the library resolves them through its dependencies, but a
+ * Windows DLL only exports its own functions, so they come from the C runtime of the JVM's default lookup (the UCRT
+ * the library uses too).
+ */
 class TreeSitterLibraryLookup : NativeLibraryLookup {
-    override fun get(arena: Arena): SymbolLookup = SymbolLookup.libraryLookup(TreeSitterCore.library().toPath(), arena)
+    override fun get(arena: Arena): SymbolLookup =
+        SymbolLookup
+            .libraryLookup(TreeSitterCore.library().toPath(), arena)
+            .or(Linker.nativeLinker().defaultLookup())
 }
 
 /** Writes next to [target] then renames, so that another IDE running at the same time never loads half a file. */

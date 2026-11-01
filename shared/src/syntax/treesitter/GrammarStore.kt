@@ -93,6 +93,11 @@ class GrammarStore(
     /** Number of jars downloaded (cached libraries are not downloaded again). */
     val downloads: Int get() = downloaded.get()
 
+    /** Why the last grammar that could not load did not, for diagnostics; `null` while every one loaded. */
+    @Volatile
+    var lastFailure: String? = null
+        private set
+
     /** The grammar of [spec], once it is available; `null` if it never will be here. Suspends while it downloads. */
     suspend fun await(spec: GrammarSpec): LoadedGrammar? {
         var retryDelay = firstRetryDelayMs
@@ -113,22 +118,32 @@ class GrammarStore(
         try {
             load(spec)
         } catch (e: IOException) {
-            throw e
+            throw failed(spec, e)
+        } catch (e: IllegalStateException) {
+            failed(spec, e).let { null }
+        } catch (e: IllegalArgumentException) {
+            // A library that does not load, or a query it rejects (QueryError).
+            failed(spec, e).let { null }
+        } catch (e: LinkageError) {
+            failed(spec, e).let { null }
         } catch (_: RuntimeException) {
+            lastFailure = "$spec: unexpected error"
             null
         }
 
-    private suspend fun load(spec: GrammarSpec): LoadedGrammar? {
-        val platform = platform?.takeIf { it.id in spec.platforms }
-        if (platform == null || !coreLoads()) return null
+    private fun <T : Throwable> failed(spec: GrammarSpec, error: T): T {
+        lastFailure = "$spec: " + generateSequence<Throwable>(error) { it.cause }.joinToString(" <- ")
+        return error
+    }
+
+    private suspend fun load(spec: GrammarSpec): LoadedGrammar {
+        val platform =
+            checkNotNull(platform?.takeIf { it.id in spec.platforms }) { "no library for platform ${platform?.id}" }
+        TreeSitterCore.directory = directory
+        TreeSitterCore.failure?.let { throw IllegalStateException("the tree-sitter runtime does not load", it) }
         val library = File(directory, "grammars/${spec.artifact}-${spec.version}/${spec.libraryEntry(platform)}")
         if (!library.isFile) download(spec, platform, library)
         return open(spec, library)
-    }
-
-    private fun coreLoads(): Boolean {
-        TreeSitterCore.directory = directory
-        return TreeSitterCore.isAvailable
     }
 
     private suspend fun download(spec: GrammarSpec, platform: NativePlatform, library: File) {
@@ -140,20 +155,14 @@ class GrammarStore(
         writeAtomically(library, bytes)
     }
 
-    private fun open(spec: GrammarSpec, library: File): LoadedGrammar? {
+    private fun open(spec: GrammarSpec, library: File): LoadedGrammar {
         val text =
-            GrammarStore::class.java
-                .getResourceAsStream("/tree-sitter/${spec.id}/highlights.scm")
-                ?.use { it.readBytes().decodeToString() }
-                ?: return null
-        return try {
-            val language = Language.load(SymbolLookup.libraryLookup(library.toPath(), Arena.global()), spec.symbol)
-            val query = Query(language, text)
-            LoadedGrammar(spec, language, query, QueryPredicates.read(query, text))
-        } catch (_: RuntimeException) {
-            // A library that does not load, or a query it rejects (QueryError): the line lexer is used.
-            null
-        }
+            checkNotNull(GrammarStore::class.java.getResourceAsStream("/tree-sitter/${spec.id}/highlights.scm")) {
+                "no highlight query"
+            }.use { it.readBytes().decodeToString() }
+        val language = Language.load(SymbolLookup.libraryLookup(library.toPath(), Arena.global()), spec.symbol)
+        val query = Query(language, text)
+        return LoadedGrammar(spec, language, query, QueryPredicates.read(query, text))
     }
 
     private fun entry(jar: ByteArray, name: String): ByteArray? {

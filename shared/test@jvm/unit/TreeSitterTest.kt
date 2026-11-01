@@ -71,6 +71,16 @@ class GrammarCatalogTest {
     }
 
     @Test
+    fun `the runtime is bundled for every platform of the grammars`() {
+        val platforms = GrammarSpec.all.flatMap { it.platforms }.toSet()
+        val extensions = mapOf("linux-gnu" to "so", "macos" to "dylib", "windows" to "dll")
+        for (platform in platforms) {
+            val extension = extensions.entries.single { platform.endsWith(it.key) }.value
+            assertNotNull(javaClass.getResource("/tree-sitter/runtime/$platform-tree-sitter.$extension"), platform)
+        }
+    }
+
+    @Test
     fun `the platform is named like the prebuilt libraries`() {
         assertEquals("x86_64-linux-gnu", NativePlatform.forSystem("Linux", "amd64")?.id)
         assertEquals("aarch64-linux-gnu", NativePlatform.forSystem("Linux", "aarch64")?.id)
@@ -158,7 +168,7 @@ class TreeSitterHighlighterTest {
     fun close() = repository.close()
 
     private fun grammar(id: String): LoadedGrammar =
-        assertNotNull(runBlocking { store.await(GrammarSpec.all.single { it.id == id }) })
+        assertNotNull(runBlocking { store.await(GrammarSpec.all.single { it.id == id }) }, store.lastFailure)
 
     private fun styled(spans: LineSpans?, line: String): Map<String, Int> =
         (0 until (spans?.size ?: 0)).associate {
@@ -348,8 +358,8 @@ class GrammarStoreTest {
     @Test
     fun `a grammar is downloaded once, then loaded from the cache`() {
         val store = TestGrammars.store(repository, directory)
-        assertNotNull(runBlocking { store.await(kotlin) })
-        assertNotNull(runBlocking { store.await(kotlin) })
+        assertNotNull(runBlocking { store.await(kotlin) }, store.lastFailure)
+        assertNotNull(runBlocking { store.await(kotlin) }, store.lastFailure)
         assertEquals(1, store.downloads)
         val restarted = TestGrammars.store(repository, directory)
         assertNotNull(runBlocking { restarted.await(kotlin) })

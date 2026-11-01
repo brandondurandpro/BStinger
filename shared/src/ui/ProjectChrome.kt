@@ -164,28 +164,35 @@ private fun RecentProjectItem(path: String, onClick: () -> Unit) {
 
 @Composable
 internal fun EmptyEditor() {
-    Column(
+    // Center the block as a whole: centering each row individually staggers them, because every
+    // row is as wide as its own shortcut text.
+    Box(
         Modifier.fillMaxSize().testTag(Tags.EDITOR_EMPTY),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+        contentAlignment = Alignment.Center,
     ) {
-        Hint("Go to File", "Ctrl+P  or  Ctrl+Shift+N  or  Double Shift")
-        Hint("Recent Files", "Ctrl+E")
-        Hint("Find in Files", "Ctrl+Shift+F")
-        Hint("File Structure", "Ctrl+F12")
-        Hint("Go to Symbol", "Ctrl+Alt+Shift+N")
-        Hint("Project View", "Alt+1")
-        Hint("Git", "Alt+9")
-        Hint("Terminal", "Alt+F12")
-        Hint("Open a file", "Double-click it in the Project view")
+        Column {
+            Hint("Go to File", "Ctrl+P  or  Ctrl+Shift+N  or  Double Shift")
+            Hint("Recent Files", "Ctrl+E")
+            Hint("Find in Files", "Ctrl+Shift+F")
+            Hint("File Structure", "Ctrl+F12")
+            Hint("Go to Symbol", "Ctrl+Alt+Shift+N")
+            Hint("Project View", "Alt+1")
+            Hint("Git", "Alt+9")
+            Hint("Terminal", "Alt+F12")
+            Hint("Open a file", "Double-click it in the Project view")
+        }
     }
 }
 
 @Composable
 private fun Hint(action: String, shortcut: String) {
-    Row(Modifier.padding(vertical = 5.dp)) {
+    Row(
+        Modifier
+            .testTag(ItemTags.editorHint(action))
+            .padding(vertical = 5.dp),
+    ) {
         Label(action, color = IdeColors.TextSecondary, modifier = Modifier.width(140.dp))
-        Label(shortcut, color = IdeColors.Accent)
+        Label(shortcut, color = IdeColors.Accent, modifier = Modifier.testTag(ItemTags.editorHintShortcut(action)))
     }
 }
 

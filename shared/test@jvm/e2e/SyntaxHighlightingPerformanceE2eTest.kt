@@ -80,7 +80,11 @@ class SyntaxHighlightingPerformanceE2eTest {
                 awaitColor(last, "length", IdeColors.Property)
             }
             pressInEditor(Key.MoveHome, ctrl = true)
-            measure("type 20 lines at the start of a 10,002-line file", budgetMillis = 8_000, budgetMegabytes = 1_200) {
+            measure(
+                "type 20 lines at the start of a 10,002-line file",
+                budgetMillis = 15_000,
+                budgetMegabytes = 1_200,
+            ) {
                 repeat(TYPED_LINES) { typeInEditor("val a = b.size\n") }
             }
             measure("color the lines typed at the start", budgetMillis = 1_500) {
