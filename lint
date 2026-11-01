@@ -38,7 +38,7 @@ fetch "detekt-rules-ktlint-wrapper/$DETEKT_VERSION/detekt-rules-ktlint-wrapper-$
 }
 rules="build/tasks/_detekt-rules_jarJvm/detekt-rules-jvm.jar"
 
-sources="detekt-rules/src:detekt-rules/test:lsp/src:lsp/test:protocol/src:protocol/src@jvm:compression/src@jvm:compression/test@jvm:server/src:server/test:serverApp/src:shared/src:shared/src@jvm:shared/test@jvm:desktopApp/src:packaging/src"
+sources="detekt-rules/src:detekt-rules/test:lsp/src:lsp/test:protocol/src:compression/src:compression/test:server/src:server/test:serverApp/src:shared/src:shared/test:desktopApp/src:packaging/src"
 
 # Fingerprint of every source file, to know when the automatic corrections stop changing anything.
 snapshot() {

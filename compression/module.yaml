@@ -1,6 +1,5 @@
 product:
-  type: kmp/lib
-  platforms: [jvm]
+  type: jvm/lib
 
 dependencies:
   - $libs.zstd.jni

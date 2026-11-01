@@ -58,7 +58,7 @@ if [ -z "$TARGET" ]; then
     TARGET="$OS-$ARCH"
 fi
 
-VERSION=$(sed -n 's/.*APP_VERSION = "\([^"]*\)".*/\1/p' "$ROOT/protocol/src@jvm/rpc/Protocol.kt" | head -n 1)
+VERSION=$(sed -n 's/.*APP_VERSION = "\([^"]*\)".*/\1/p' "$ROOT/protocol/src/rpc/Protocol.kt" | head -n 1)
 if [ -z "$VERSION" ]; then
     echo "Cannot read the server version" >&2
     exit 1

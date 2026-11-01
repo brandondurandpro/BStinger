@@ -92,14 +92,14 @@ All the logic on files runs in a **server**; the IDE is a client that only displ
   development installs and starts (`--token-file`/`--state-file`, `--version`).
 - `shared` – Compose UI and UI state; `desktopApp` – the IDE. By default it embeds a server on loopback; use
   `--server host:port --token <secret>` (or `KOTLIN_EDITOR_SERVER` / `KOTLIN_EDITOR_TOKEN`) for a remote one.
-- **Remote development** – `shared/src@jvm/remote` (SSH client, installer, tunnel supervisor) and
+- **Remote development** – `shared/src/remote` (SSH client, installer, tunnel supervisor) and
   `shared/src/ui/RemoteDialog.kt`. Server bundles are built with `tools/remote-bundle.sh` and looked up in `remote/`
   next to the application (see [docs/REMOTE.md](docs/REMOTE.md)).
 
 **Protocol.** JSON-RPC 2.0 over TCP (`TCP_NODELAY`), framed like LSP (`Content-Length` header, then the JSON body):
 named params, methods such as `fs/read`, `git/status` or `terminal/start`, standard error codes, answers in any order,
 server-pushed notifications for terminal screens (lines sent as style runs), bodies compressed with zstd-3 when it pays
-(`Content-Encoding: zstd`, a code dictionary on file contents). See `protocol/src@jvm/rpc/Protocol.kt` for the mapping.
+(`Content-Encoding: zstd`, a code dictionary on file contents). See `protocol/src/rpc/Protocol.kt` for the mapping.
 About 70 µs per round trip on loopback, a 200,000-line file in about 100 ms. TCP retransmits lost packets; the session
 layer survives broken links:
 

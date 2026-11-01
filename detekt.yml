@@ -6,13 +6,13 @@ naming:
   FunctionNaming:
     # Compose API guidelines: @Composable functions that emit UI are PascalCase nouns. Test names are sentences.
     ignoreAnnotated: ['Composable']
-    # Amper keeps tests in `test/` and `test@jvm/`: detekt's default test exclusions only know `test/`.
+    # Amper keeps tests in `test/` (and `test@<platform>/` in multiplatform modules).
     excludes: &tests ['**/test/**', '**/test@jvm/**']
   FunctionNameMaxLength:
     # Test names are full sentences (`a 200k line file opens fast ...`).
     excludes: *tests
   InvalidPackageDeclaration:
-    # Amper's source layout (`src/`, `src@jvm/` per module) does not mirror package names; `rootPackage` cannot
+    # Amper's source layout (`src/` per module) does not mirror package names; `rootPackage` cannot
     # express one root per module, so the rule cannot be satisfied without breaking the build layout.
     active: false
 

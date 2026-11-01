@@ -262,7 +262,7 @@ Côté protocole :
    format de trame, puisque l'identifiant voyage déjà dans le flux. Il devra rester hors du dépôt Git, comme
    `benchmark/dicts-local/`.
 
-Les tests du codec sont dans [`compression/test@jvm`](../compression/test@jvm) ; ceux du protocole, dont un
+Les tests du codec sont dans [`compression/test`](../compression/test) ; ceux du protocole, dont un
 aller-retour de corps `code = true`, dans [`server/test/ProtocolTest.kt`](../server/test/ProtocolTest.kt).
 
 ---

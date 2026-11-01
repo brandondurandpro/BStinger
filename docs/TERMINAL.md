@@ -354,7 +354,7 @@ si les natives devenaient bloquantes.
 - client : `TerminalState`/`TerminalTab` pour les onglets, `TerminalPanel`/`TerminalRenderer`/`TerminalInput`/
   `TerminalSelection` pour le Canvas, le clavier (Kitty), la souris et la sélection ;
 - le terminal capture le clavier (`GlobalShortcuts` ignore tout sauf `F12`), les touches sont encodées côté serveur ;
-- tests : E2E `shared/test@jvm/e2e/TerminalE2eTest.kt` (commande, couleurs, redimensionnement, onglets, texte, Entrée).
+- tests : E2E `shared/test/e2e/TerminalE2eTest.kt` (commande, couleurs, redimensionnement, onglets, texte, Entrée).
 
 ### 6.2 Ce qu'il ne faut pas faire
 

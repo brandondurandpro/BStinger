@@ -1,8 +1,7 @@
 # Language servers (LSP): process supervision, memory sampling, leak detection, server specs. Runs in the server,
 # never in the UI; kept out of `server` and `shared` so it compiles and tests on its own (`./kotlin test -m lsp`).
 product:
-  type: kmp/lib
-  platforms: [jvm]
+  type: jvm/lib
 
 dependencies:
   - //protocol: exported
