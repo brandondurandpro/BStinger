@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -39,7 +38,6 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.layout.onSizeChanged
@@ -141,21 +139,6 @@ private fun TerminalTabs(terminal: TerminalState, modifier: Modifier) {
         )
     }
 }
-
-// The wheel scrolls the row of tabs, a plain vertical one as well as a horizontal one (touchpad, Shift+wheel).
-@OptIn(ExperimentalComposeUiApi::class)
-private fun Modifier.wheelScrollsHorizontally(listState: LazyListState): Modifier =
-    onPointerEvent(PointerEventType.Scroll, PointerEventPass.Initial) { event ->
-        event.changes.firstOrNull()?.let { change ->
-            val delta = change.scrollDelta.let { if (it.x != 0f) it.x else it.y }
-            if (delta != 0f) {
-                listState.dispatchRawDelta(delta * WHEEL_STEP.toPx())
-                change.consume()
-            }
-        }
-    }
-
-private val WHEEL_STEP = 48.dp
 
 // Left click shows the tab, middle click closes it and right click opens its context menu, like editor tabs.
 @OptIn(ExperimentalComposeUiApi::class, ExperimentalFoundationApi::class)

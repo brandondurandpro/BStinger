@@ -7,3 +7,14 @@ dependencies:
 settings:
   jvm:
     mainClass: org.example.kotlineditor.server.MainKt
+
+plugins:
+  packaging:
+    enabled: true
+    name: kotlin-editor-server
+    displayName: Kotlin Editor server
+    mainClass: org.example.kotlineditor.server.MainKt
+    description: Kotlin Editor server, for remote use
+    vendor: Kotlin Editor
+    console: true
+    installer: false

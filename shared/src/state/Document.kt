@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import org.example.kotlineditor.syntax.Language
+import org.example.kotlineditor.syntax.treesitter.SyntaxSession
 
 /**
  * Editable text buffer backed by a snapshot list of lines, so that Compose only re-renders what changed.
@@ -40,6 +41,10 @@ class Document(initialLines: List<String>, val language: Language, val lineSepar
 
     /** Precomputed block-comment state per line, see [org.example.kotlineditor.syntax.SyntaxHighlighter]. */
     var commentStates by mutableStateOf<BooleanArray?>(null)
+
+    /** Tree-sitter highlighting, when the language has a grammar; the line lexer colors the rest. */
+    var syntax: SyntaxSession? = null
+        internal set
 
     /** Selections before each Ctrl+W, for Ctrl+Shift+W. */
     internal val selectionHistory = ArrayDeque<Pair<TextPos?, TextPos>>()

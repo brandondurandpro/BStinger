@@ -1,0 +1,16 @@
+#!/bin/sh
+# Regenerates the tree-sitter grammar catalog and highlight queries, see tools/tree-sitter/README.md.
+# Needs a JDK 23+ and `nm` (binutils) on Linux x86_64, where the queries are checked against the grammars.
+set -eu
+JTREESITTER=0.26.1
+CORE=0.26.6
+here=$(cd "$(dirname "$0")" && pwd)
+cache="$HOME/.cache/kotlin-editor-tools"
+mkdir -p "$cache/native"
+fetch() { [ -f "$2" ] || curl -sSfL -o "$2" "$1"; }
+fetch "https://repo1.maven.org/maven2/io/github/tree-sitter/jtreesitter/$JTREESITTER/jtreesitter-$JTREESITTER.jar" \
+  "$cache/jtreesitter-$JTREESITTER.jar"
+fetch "https://repo1.maven.org/maven2/io/github/bonede/tree-sitter/$CORE/tree-sitter-$CORE.jar" "$cache/tree-sitter-$CORE.jar"
+unzip -p "$cache/tree-sitter-$CORE.jar" lib/x86_64-linux-gnu-tree-sitter.so > "$cache/native/libtree-sitter.so"
+exec java --enable-native-access=ALL-UNNAMED -Djava.library.path="$cache/native" \
+  -cp "$cache/jtreesitter-$JTREESITTER.jar" "$here/UpdateGrammars.java" "$here/../.."

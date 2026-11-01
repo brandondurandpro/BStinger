@@ -1,0 +1,21 @@
+# ./kotlin task :desktopApp:package@packaging
+tasks:
+  package:
+    action: !org.example.packaging.packageApp
+      appJar: ${module.jar}
+      runtimeClasspath: ${module.runtimeClasspath}
+      iconsDir: ${module.rootDir}/packaging
+      distDir: ${taskOutputDir}
+      name: ${pluginSettings.name}
+      displayName: ${pluginSettings.displayName}
+      mainClass: ${pluginSettings.mainClass}
+      description: ${pluginSettings.description}
+      vendor: ${pluginSettings.vendor}
+      version: ${pluginSettings.version}
+      modules: ${pluginSettings.modules}
+      console: ${pluginSettings.console}
+      installer: ${pluginSettings.installer}
+      appImage: ${pluginSettings.appImage}
+      aot: ${pluginSettings.aot}
+      aotTrainingSeconds: ${pluginSettings.aotTrainingSeconds}
+      compress: ${pluginSettings.compress}

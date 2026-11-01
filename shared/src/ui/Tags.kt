@@ -43,6 +43,7 @@ object Tags {
     const val PROJECT_WIDGET = "project.widget"
     const val PROJECT_CLOSE = "project.close"
     const val PROJECT_OPEN_OTHER = "project.openOther"
+    const val PROJECT_MENU = "project.menu"
     const val GIT_BRANCH = "git.branch"
     const val BRANCH_PICKER = "branch.picker"
     const val BRANCH_SEARCH = "branch.search"
@@ -75,6 +76,7 @@ object Tags {
     const val GIT_REFRESH = "git.refresh"
     const val GIT_HIDE = "git.hide"
     const val GIT_BLAME = "git.blame"
+    const val GIT_SELECT_ALL = "git.selectAll"
     const val GIT_COMMIT_MESSAGE = "git.commitMessage"
     const val GIT_COMMIT = "git.commit"
     const val GIT_BRANCH_BUTTON = "git.branchButton"
@@ -88,6 +90,7 @@ object Tags {
     const val HISTORY_REFRESH = "history.refresh"
     const val HISTORY_HIDE = "history.hide"
     const val HISTORY_BRANCH_SEARCH = "history.branchSearch"
+    const val HISTORY_BRANCH_LIST = "history.branchList"
     const val HISTORY_TITLE = "history.title"
     const val HISTORY_LOADING = "history.loading"
     const val HISTORY_ERROR = "history.error"
@@ -155,8 +158,11 @@ object Tags {
     const val EDITOR_LOADING = "editor.loading"
     const val STATUS_BAR = "status"
     const val STATUS_CARET = "status.caret"
+    const val STATUS_LANGUAGE = "status.language"
     const val STATUS_PATH = "status.path"
     const val STATUS_CONNECTION = "status.connection"
+    const val STATUS_OPENING = "status.opening"
+    const val STATUS_ERROR = "status.error"
     const val GOTO_FILE = "gotoFile"
     const val RECENT_FILES = "recentFiles"
     const val GOTO_FILE_INPUT = "gotoFile.input"
@@ -250,9 +256,14 @@ object ItemTags {
 
     fun remoteTag(hostKey: String, tag: String) = "remote.tag:$hostKey:$tag"
 
+    /** A recent project in the menu of the toolbar's project name, which switches to it. */
+    fun switchProject(path: String) = "project.switch:$path"
+
     fun terminalLine(index: Int) = "terminal.line:$index"
 
     fun gitChange(relativePath: String) = "git.change:$relativePath"
+
+    fun gitChangeCheck(relativePath: String) = "git.change.check:$relativePath"
 
     fun gitBranch(name: String) = "git.branchItem:$name"
 
@@ -297,6 +308,12 @@ object ItemTags {
     fun pinnedBranch(name: String) = "branch.pinned:$name"
 
     fun unpinnedBranch(name: String) = "branch.unpinned:$name"
+
+    /** A row of the empty editor's hint list, named after its action. */
+    fun editorHint(action: String) = "editor.hint:$action"
+
+    /** The shortcut shown next to an empty editor's hint. */
+    fun editorHintShortcut(action: String) = "editor.hint.shortcut:$action"
 
     fun networkRecord(seq: Long) = "network.record:$seq"
 

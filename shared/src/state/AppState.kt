@@ -22,6 +22,7 @@ import org.example.kotlineditor.model.AppServices
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.remote.SshConfigHost
 import org.example.kotlineditor.remote.SshTarget
+import org.example.kotlineditor.syntax.treesitter.GrammarStore
 import java.io.IOException
 
 /** The whole IDE: the welcome screen or the open project, plus IDE-wide settings. */
@@ -31,6 +32,8 @@ class AppState(
     initialServices: AppServices,
     private val scope: CoroutineScope,
     private val preferenceStore: PreferenceStore = InMemoryPreferenceStore(),
+    /** Tree-sitter grammars; without them, files are colored by the line lexer only. */
+    private val grammars: GrammarStore? = null,
     /** Services of the local server, restored when a remote session ends; null when the IDE started remotely. */
     private val localServices: AppServices? = initialServices,
     /** Creates SSH sessions; null in previews and tests that do not exercise remote development. */
@@ -98,6 +101,13 @@ class AppState(
     var error: String? by mutableStateOf(null)
         private set
 
+    /** The project being opened (its directory resolved on the server), shown until it opens or fails. */
+    var opening: String? by mutableStateOf(null)
+        private set
+
+    // Only the latest request opens its project: a late answer must not replace a project chosen after it.
+    private var openRequest = 0
+
     /** Whether the devtools were opened (Ctrl+Alt+Shift+D) since the IDE started: shows their buttons. */
     var devtools by mutableStateOf(false)
 
@@ -118,6 +128,13 @@ class AppState(
                         ?: s.project.name
                 }
             }
+
+    /** The recent projects other than the open one, most recent first: those the project menu switches to. */
+    val otherProjects: List<String>
+        get() {
+            val current = (screen as? Screen.Project)?.project?.root?.path
+            return recentProjects.filter { it != current }
+        }
 
     init {
         remoteWorkspaces.addAll(
@@ -346,17 +363,24 @@ class AppState(
     }
 
     fun openProject(path: String) {
+        val request = ++openRequest
+        error = null
+        opening = path
         scope.launch {
             val root =
                 try {
-                    val found = services.fileSystem.resolveDirectory(path)
-                    if (found == null) error = "Directory not found: $path"
-                    found
+                    services.fileSystem.resolveDirectory(path) ?: run {
+                        if (request == openRequest) error = "Directory not found: $path"
+                        null
+                    }
                 } catch (e: IOException) {
-                    error = "Cannot reach the server: ${e.message}"
+                    if (request == openRequest) error = "Cannot reach the server: ${e.message}"
                     null
                 }
-            root?.let { open(it) }
+            if (request == openRequest) {
+                opening = null
+                root?.let { open(it) }
+            }
         }
     }
 
@@ -390,6 +414,8 @@ class AppState(
     }
 
     fun closeProject() {
+        openRequest++
+        opening = null
         (screen as? Screen.Project)?.project?.let { close(it) }
         screen = Screen.Welcome
     }
@@ -449,7 +475,7 @@ class AppState(
         saveRecent()
         recordRemoteWorkspace(root.path)
         (screen as? Screen.Project)?.project?.let { saveAndDispose(it) }
-        val project = ProjectState(root, services, scope, preferences)
+        val project = ProjectState(root, services, scope, preferences, grammars)
         runCatching { services.sessions.load(root.path) }.getOrNull()?.let(project::restoreSession)
         screen = Screen.Project(project)
     }

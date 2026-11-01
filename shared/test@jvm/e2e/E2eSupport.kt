@@ -27,7 +27,9 @@ import org.example.kotlineditor.state.InMemoryPreferenceStore
 import org.example.kotlineditor.state.PreferenceStore
 import org.example.kotlineditor.state.ProjectState
 import org.example.kotlineditor.state.Screen
+import org.example.kotlineditor.syntax.treesitter.GrammarStore
 import org.example.kotlineditor.testkit.ChaosProxy
+import org.example.kotlineditor.ui.ItemTags
 import org.example.kotlineditor.ui.Tags
 import org.example.kotlineditor.ui.TextClipboard
 import java.nio.file.Files
@@ -172,6 +174,7 @@ fun ComposeUiTest.launchApp(
     sessions: org.example.kotlineditor.model.SessionStore? = null,
     preferences: PreferenceStore = InMemoryPreferenceStore(),
     chaos: Boolean = false,
+    grammars: GrammarStore? = TestGrammars.shared,
 ): E2eApp {
     TextClipboard.useSystem = false
     val data = Files.createTempDirectory("kotlin-editor-server").toFile()
@@ -204,7 +207,7 @@ fun ComposeUiTest.launchApp(
     var created: AppState? = null
     setContent {
         val scope = rememberCoroutineScope()
-        val state = remember { AppState(services, scope, preferences, remoteFactory = JvmRemoteFactory) }
+        val state = remember { AppState(services, scope, preferences, grammars, remoteFactory = JvmRemoteFactory) }
         created = state
         DisposableEffect(Unit) {
             onDispose {
@@ -227,8 +230,9 @@ fun ComposeUiTest.launchWithProject(
     project: SampleProject,
     preferences: PreferenceStore = InMemoryPreferenceStore(),
     chaos: Boolean = false,
+    grammars: GrammarStore? = TestGrammars.shared,
 ): E2eApp {
-    val app = launchApp(pick = project.path, preferences = preferences, chaos = chaos)
+    val app = launchApp(pick = project.path, preferences = preferences, chaos = chaos, grammars = grammars)
     onNodeWithTag(Tags.WELCOME_OPEN).performClick()
     awaitTag(Tags.treeRow("src"))
     return app
@@ -329,4 +333,20 @@ fun ComposeUiTest.awaitStatusContains(text: String, timeout: Long = TIMEOUT) {
                 ?.any { text in it.text } == true
         }
     }
+}
+
+/** Opens [path] from the list of recent projects of the welcome screen, and waits for its tree. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.openRecentFromWelcome(path: String) {
+    awaitTag(ItemTags.recentProject(path)).performClick()
+    awaitTag(Tags.PROJECT)
+    awaitCondition { onAllNodes(hasTestTagPrefix("tree:")).fetchSemanticsNodes().isNotEmpty() }
+}
+
+/** Clicks the project name in the toolbar, then [path] among the recent projects of its menu. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.switchProjectTo(path: String) {
+    onNodeWithTag(Tags.PROJECT_WIDGET).performClick()
+    awaitTag(ItemTags.switchProject(path)).performClick()
+    awaitNoTag(Tags.PROJECT_MENU)
 }
