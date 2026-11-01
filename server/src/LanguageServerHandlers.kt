@@ -3,16 +3,20 @@ package org.example.kotlineditor.server
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import org.example.kotlineditor.rpc.Method
+import org.example.kotlineditor.rpc.int
 import org.example.kotlineditor.rpc.languageServerChoiceJson
 import org.example.kotlineditor.rpc.long
 import org.example.kotlineditor.rpc.read
 import org.example.kotlineditor.rpc.string
 import org.example.kotlineditor.rpc.strings
+import org.example.kotlineditor.rpc.textChanges
 import org.example.kotlineditor.rpc.toJson
 
 private const val ID = "id"
 private const val LANGUAGE = "language"
 private const val PROJECT = "project"
+private const val PATH = "path"
+private const val VERSION = "version"
 
 /** The `lsp/` methods: the language servers of [LocalServices.languageServers]. */
 internal fun languageServerHandlers(services: LocalServices): Map<Method, suspend Request.() -> JsonElement> =
@@ -42,5 +46,25 @@ internal fun languageServerHandlers(services: LocalServices): Map<Method, suspen
         Method.LspChoose to {
             services.languageServers.choose(params.string(LANGUAGE), params.string(PROJECT), params.string("candidate"))
             JsonNull
+        },
+        Method.DocOpen to {
+            val path = params.string(PATH)
+            val text = params.string("text")
+            services.languageServers.openDocument(session, params.string(PROJECT), path, params.int(VERSION), text)
+            JsonNull
+        },
+        Method.DocChange to {
+            val changes = params.read("changes") { it.textChanges() }
+            services.languageServers.changeDocument(session, params.string(PATH), params.int(VERSION), changes)
+            JsonNull
+        },
+        Method.DocClose to {
+            services.languageServers.closeDocument(session, params.string(PATH))
+            JsonNull
+        },
+        Method.LspCompletion to {
+            services.languageServers
+                .complete(session, params.string(PATH), params.int(VERSION), params.int("line"), params.int("column"))
+                .toJson()
         },
     )

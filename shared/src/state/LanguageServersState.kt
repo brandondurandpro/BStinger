@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
+import org.example.kotlineditor.model.CompletionResult
 import org.example.kotlineditor.model.ConnectionStatus
 import org.example.kotlineditor.model.LanguageServerCandidateInfo
 import org.example.kotlineditor.model.LanguageServerChoice
@@ -89,6 +90,7 @@ class LanguageServersState(
     private val declarations = MutableStateFlow<Declaration?>(null)
     private var declared: Declaration? = null
     private var logJob: Job? = null
+    private val documents = DocumentSync(servers, scope)
 
     init {
         scope.launch { poll() }
@@ -98,6 +100,7 @@ class LanguageServersState(
         scope.launch {
             connection.drop(1).filter { it == ConnectionStatus.Connected }.collect {
                 declarations.value?.let { declarations.value = it.copy(round = it.round + 1) }
+                documents.resend()
             }
         }
     }
@@ -115,6 +118,23 @@ class LanguageServersState(
                 previous != null -> Declaration(previous.project, emptyList())
                 else -> return
             }
+    }
+
+    /** The open [project] shows [documents], by path: their text is mirrored for the language servers. */
+    fun syncDocuments(project: String?, documents: Map<String, Document>) = this.documents.track(project, documents)
+
+    /**
+     * What the language server of [path] proposes at the caret of [document]; [CompletionResult.NotReady] when
+     * it has none, or none ready.
+     */
+    suspend fun complete(path: String, document: Document): CompletionResult {
+        val version = documents.versionOf(path, document) ?: return CompletionResult.NotReady
+        val caret = document.caret
+        return try {
+            servers.complete(path, version, caret.line, caret.column)
+        } catch (_: IOException) {
+            CompletionResult.NotReady
+        }
     }
 
     /** Uses [candidate] for the language of the choice panel. */
@@ -177,6 +197,7 @@ class LanguageServersState(
 
     /** Stops polling and controlling this server: the IDE switched to another one. */
     fun close() {
+        documents.close()
         jobs.cancel()
     }
 

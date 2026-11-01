@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import org.example.kotlineditor.model.TextChange
 import org.example.kotlineditor.syntax.Language
 import org.example.kotlineditor.syntax.treesitter.SyntaxSession
 
@@ -45,6 +46,12 @@ class Document(initialLines: List<String>, val language: Language, val lineSepar
     /** Tree-sitter highlighting, when the language has a grammar; the line lexer colors the rest. */
     var syntax: SyntaxSession? = null
         internal set
+
+    /**
+     * Told of every change of the text (typing, undo, reload...), with the range it replaced in the text before:
+     * the language servers' copy of the document follows it (see [DocumentSync]).
+     */
+    internal var editListener: ((TextChange) -> Unit)? = null
 
     /** Selections before each Ctrl+W, for Ctrl+Shift+W. */
     internal val selectionHistory = ArrayDeque<Pair<TextPos?, TextPos>>()
@@ -165,6 +172,7 @@ class Document(initialLines: List<String>, val language: Language, val lineSepar
     }
 
     private fun applyRaw(start: TextPos, end: TextPos, text: String): TextPos {
+        editListener?.invoke(TextChange(start.line, start.column, end.line, end.column, text))
         val prefix = lines[start.line].substring(0, start.column)
         val suffix = lines[end.line].substring(end.column)
         val parts = text.split('\n')

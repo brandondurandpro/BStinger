@@ -19,8 +19,10 @@ import org.example.kotlineditor.model.LanguageServerState
 import org.example.kotlineditor.model.LanguageServersStatus
 import org.example.kotlineditor.model.MemoryUsage
 import org.example.kotlineditor.model.ServerMemory
+import org.example.kotlineditor.model.TextChange
 
-// JSON of the language servers: their status snapshot, and the choice of a server for a language.
+// JSON of the language servers: their status snapshot, the choice of a server for a language, the edits of open
+// documents and the completion items.
 
 private const val PRIVATE = "private"
 private const val RESIDENT = "resident"
@@ -153,3 +155,35 @@ private fun JsonObject.candidateInfo() =
         available = bool("available"),
         details = getValue("details").strings(),
     )
+
+/** Edits of a document, as arrays `[startLine, startColumn, endLine, endColumn, text]`: one per keystroke. */
+fun List<TextChange>.textChangesJson(): JsonArray =
+    JsonArray(
+        map {
+            JsonArray(
+                listOf(
+                    JsonPrimitive(it.startLine),
+                    JsonPrimitive(it.startColumn),
+                    JsonPrimitive(it.endLine),
+                    JsonPrimitive(it.endColumn),
+                    JsonPrimitive(it.text),
+                ),
+            )
+        },
+    )
+
+/** Reads the edits of a document. */
+fun JsonElement.textChanges(): List<TextChange> =
+    jsonArray.map { change ->
+        val fields = change.jsonArray
+        require(fields.size == CHANGE_FIELDS) { "An edit has $CHANGE_FIELDS fields" }
+        TextChange(
+            startLine = fields[0].jsonPrimitive.int,
+            startColumn = fields[1].jsonPrimitive.int,
+            endLine = fields[2].jsonPrimitive.int,
+            endColumn = fields[3].jsonPrimitive.int,
+            text = fields[4].jsonPrimitive.content,
+        )
+    }
+
+private const val CHANGE_FIELDS = 5
