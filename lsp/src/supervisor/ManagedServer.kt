@@ -5,6 +5,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
@@ -314,14 +315,22 @@ internal class ManagedServer(
             throw Unavailable(failure.message ?: failure.toString(), failure)
         }
 
-    private suspend fun spawn(command: List<String>): Process {
-        val launched =
-            try {
-                withContext(Dispatchers.IO) { ProcessBuilder(command).directory(File(target.root)).start() }
-            } catch (failure: IOException) {
-                throw Unavailable("Cannot run ${command.first()}: ${failure.message}", failure)
-            }
-        process = launched
+    // Not cancellable: a stop arriving while the process starts must find it in [process] to kill it, else it would
+    // run on unseen (withContext drops the result of a block whose caller was cancelled meanwhile).
+    private suspend fun spawn(command: List<String>): Process =
+        withContext(Dispatchers.IO + NonCancellable) {
+            val launched =
+                try {
+                    ProcessBuilder(command).directory(File(target.root)).start()
+                } catch (failure: IOException) {
+                    throw Unavailable("Cannot run ${command.first()}: ${failure.message}", failure)
+                }
+            process = launched
+            watch(launched)
+            launched
+        }
+
+    private fun watch(launched: Process) {
         leak = null
         startedAt = clock()
         indexingEndedAt = null
@@ -329,7 +338,6 @@ internal class ManagedServer(
         reaper?.record(launched.toHandle())
         drain(launched.errorStream)
         launched.onExit().thenAccept { send(Command.Exited(it, it.exitValue())) }
-        return launched
     }
 
     private fun connect(launched: Process): LspConnection =
