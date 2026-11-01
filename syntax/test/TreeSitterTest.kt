@@ -1,4 +1,4 @@
-package org.example.kotlineditor.unit
+package org.example.kotlineditor.syntax
 
 import io.github.treesitter.jtreesitter.InputEncoding
 import io.github.treesitter.jtreesitter.Parser

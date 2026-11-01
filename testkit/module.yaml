@@ -5,3 +5,5 @@ product:
 dependencies:
   # The fake language server reads and writes JSON-RPC messages.
   - $libs.kotlinx.serialization.json
+  # The loopback Maven repository of grammars (TestGrammars) for the syntax and e2e tests.
+  - //syntax

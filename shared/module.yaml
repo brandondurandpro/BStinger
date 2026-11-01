@@ -3,6 +3,7 @@ product:
 
 dependencies:
   - //protocol: exported
+  - //syntax: exported
   - $compose.runtime
   - $compose.foundation
   - $compose.material3
@@ -11,7 +12,6 @@ dependencies:
   - $compose.preview
   - $libs.androidx.lifecycle.viewmodel.compose
   - $libs.androidx.lifecycle.runtime.compose
-  - $libs.jtreesitter
 
 settings:
   compose:
