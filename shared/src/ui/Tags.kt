@@ -268,6 +268,12 @@ object ItemTags {
 
     fun unpinnedBranch(name: String) = "branch.unpinned:$name"
 
+    /** A row of the empty editor's hint list, named after its action. */
+    fun editorHint(action: String) = "editor.hint:$action"
+
+    /** The shortcut shown next to an empty editor's hint. */
+    fun editorHintShortcut(action: String) = "editor.hint.shortcut:$action"
+
     fun networkRecord(seq: Long) = "network.record:$seq"
 
     fun gotoFileItem(relativePath: String) = "gotoFile.item:$relativePath"
