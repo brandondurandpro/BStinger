@@ -60,8 +60,10 @@ fun ProjectScreen(app: AppState, project: ProjectState) {
     SyncOnWindowFocus(project)
     // Shortcuts only reach a focused component: with no file open nothing else holds the focus, so the screen takes it.
     val windowFocused = LocalWindowInfo.current.isWindowFocused
-    LaunchedEffect(hasFocus, project.popup, project.branchPickerOpen, windowFocused) {
-        if (!hasFocus && project.popup == null && !project.branchPickerOpen) runCatching { rootFocus.requestFocus() }
+    // With the Open Project dialog open, its own field keeps the keyboard.
+    val screenFocusFree = project.popup == null && !project.branchPickerOpen && !app.projectPickerOpen
+    LaunchedEffect(hasFocus, screenFocusFree, windowFocused) {
+        if (!hasFocus && screenFocusFree) runCatching { rootFocus.requestFocus() }
     }
     Column(
         Modifier
@@ -76,16 +78,12 @@ fun ProjectScreen(app: AppState, project: ProjectState) {
         Toolbar(app, project)
         Box(Modifier.fillMaxWidth().height(1.dp).background(IdeColors.Border))
         Box(Modifier.weight(1f)) {
-            ProjectBody(app, project, findFocus)
-            ProjectPopups(project) { closePopup(project) }
-            if (project.branchPickerOpen) {
-                BranchPickerPopup(project) {
-                    project.branchPickerOpen = false
-                    val pane = project.editor.activePane
-                    if (project.editor.activeTab?.document != null) {
-                        runCatching { pane.focusRequester.requestFocus() }
-                    }
-                }
+            if (project.agentMode) {
+                AgentWorkspace(app, project)
+            } else {
+                ProjectBody(app, project, findFocus)
+                ProjectPopups(project) { closePopup(project) }
+                if (project.branchPickerOpen) BranchPicker(project)
             }
             project.fileDialog?.let { dialog ->
                 FileDialogPopup(project, dialog, onClose = { project.fileDialog = null })
@@ -98,7 +96,7 @@ fun ProjectScreen(app: AppState, project: ProjectState) {
 
 // IntelliJ saves all files when the window loses focus, and synchronizes with the disk when it gets it back.
 @Composable
-private fun SyncOnWindowFocus(project: ProjectState) {
+internal fun SyncOnWindowFocus(project: ProjectState) {
     val windowFocused = LocalWindowInfo.current.isWindowFocused
     var wasFocused by remember { mutableStateOf(windowFocused) }
     LaunchedEffect(windowFocused) {
@@ -137,7 +135,7 @@ private fun ProjectBody(app: AppState, project: ProjectState, findFocus: FocusRe
 }
 
 @Composable
-private fun ProjectPopups(project: ProjectState, onClose: () -> Unit) {
+internal fun ProjectPopups(project: ProjectState, onClose: () -> Unit) {
     val document = project.editor.activeTab?.document
     when (project.popup) {
         PopupKind.GotoFile -> GotoFilePopup(project, onClose = onClose)
@@ -150,14 +148,14 @@ private fun ProjectPopups(project: ProjectState, onClose: () -> Unit) {
     }
 }
 
-private fun closePopup(project: ProjectState) {
+internal fun closePopup(project: ProjectState) {
     project.popup = null
     val editor = project.editor
     if (editor.activeTab?.document != null) runCatching { editor.activePane.focusRequester.requestFocus() }
 }
 
 @Composable
-private fun EditorArea(app: AppState, project: ProjectState, findFocus: FocusRequester, modifier: Modifier) {
+internal fun EditorArea(app: AppState, project: ProjectState, findFocus: FocusRequester, modifier: Modifier) {
     val editor = project.editor
     Row(modifier.fillMaxHeight().background(IdeColors.Editor)) {
         editor.panes.forEachIndexed { index, pane ->

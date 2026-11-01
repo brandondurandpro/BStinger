@@ -11,7 +11,6 @@ import kotlinx.serialization.json.put
 import org.example.kotlineditor.model.AppServices
 import org.example.kotlineditor.model.BlameLine
 import org.example.kotlineditor.model.DiffLine
-import org.example.kotlineditor.model.DirectoryPicker
 import org.example.kotlineditor.model.FileContent
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.FileSymbol
@@ -24,12 +23,14 @@ import org.example.kotlineditor.model.ProjectFileSystem
 import org.example.kotlineditor.model.ProjectSearch
 import org.example.kotlineditor.model.ProjectSession
 import org.example.kotlineditor.model.RecentProjectsStore
+import org.example.kotlineditor.model.ServerPlaces
 import org.example.kotlineditor.model.SessionStore
 import org.example.kotlineditor.model.TerminalKeyEvent
 import org.example.kotlineditor.model.TerminalLauncher
 import org.example.kotlineditor.model.TerminalProcess
 import org.example.kotlineditor.model.TerminalSnapshot
 import org.example.kotlineditor.model.TextMatch
+import org.example.kotlineditor.model.WorktreeClient
 import java.io.IOException
 
 private const val ROOT = "root"
@@ -43,18 +44,23 @@ private const val NAME = "name"
 private const val TERMINAL = "terminal"
 
 /** Every IDE service, backed by a server. */
-fun RpcClient.appServices(directoryPicker: DirectoryPicker): AppServices =
+fun RpcClient.appServices(): AppServices =
     AppServices(
         fileSystem = RemoteFileSystem(this),
         search = RemoteSearch(this),
         recentProjects = RemoteRecentProjects(this),
-        directoryPicker = directoryPicker,
+        places = RemotePlaces(this),
         terminal = RemoteTerminalLauncher(this),
         sessions = RemoteSessions(this),
         git = RemoteGit(this),
         connection = status,
         network = network,
     )
+
+/** [ServerPlaces] of the server. */
+class RemotePlaces(private val client: RpcClient) : ServerPlaces {
+    override suspend fun home(): String? = client.call(Method.UserHome).stringOrNull()
+}
 
 /** [ProjectFileSystem] of the server. */
 class RemoteFileSystem(private val client: RpcClient) : ProjectFileSystem {
@@ -136,7 +142,9 @@ class RemoteSearch(private val client: RpcClient) : ProjectSearch {
 
 /** [GitClient] of the server. */
 @Suppress("TooManyFunctions") // one per Git operation of the protocol
-class RemoteGit(private val client: RpcClient) : GitClient {
+class RemoteGit(private val client: RpcClient) :
+    GitClient,
+    WorktreeClient by RemoteWorktrees(client) {
     override suspend fun status(root: String): Map<String, GitFileStatus> =
         client.call(Method.GitStatus) { put(ROOT, root) }.gitStatus()
 
@@ -352,4 +360,23 @@ private fun JsonObjectBuilder.size(columns: Int, rows: Int, cellWidthPx: Int, ce
     put("rows", rows)
     put("cellWidthPx", cellWidthPx)
     put("cellHeightPx", cellHeightPx)
+}
+
+/** [WorktreeClient] of the server. */
+class RemoteWorktrees(private val client: RpcClient) : WorktreeClient {
+    override suspend fun worktree(root: String, branch: String): String {
+        val result =
+            client.call(Method.GitWorktree) {
+                put(ROOT, root)
+                put("branch", branch)
+            }
+        return result.string()
+    }
+
+    override suspend fun removeWorktree(root: String, path: String) {
+        client.call(Method.GitRemoveWorktree) {
+            put(ROOT, root)
+            put(PATH, path)
+        }
+    }
 }

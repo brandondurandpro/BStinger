@@ -48,6 +48,9 @@ object Protocol {
     /** Version announced in the handshake; client and server must speak the same one. */
     const val VERSION = 5
 
+    /** Version of the application, shown in the welcome screen and used to identify remote server bundles. */
+    const val APP_VERSION = "2026.1"
+
     /** Largest accepted message: anything bigger is treated as a corrupted stream. */
     const val MAX_FRAME = 512 * 1024 * 1024
 
@@ -218,6 +221,9 @@ enum class Method(
     /** Path to directory entry, if it is a directory. */
     ResolveDirectory("fs/resolveDirectory"),
 
+    /** Home directory of the user running the server, for the Open Project dialog. */
+    UserHome("fs/userHome"),
+
     /** Children of a directory. */
     ListDirectory("fs/list"),
 
@@ -340,6 +346,12 @@ enum class Method(
 
     /** Fast-forwards a local branch, current or not, to the remote branch it tracks. */
     GitPullBranch("git/pullBranch", mutating = true),
+
+    /** Worktree of a branch, created on first use; asking again returns the same one. */
+    GitWorktree("git/worktree", mutating = true),
+
+    /** Removes a worktree. */
+    GitRemoveWorktree("git/removeWorktree", mutating = true),
 
     /** Clears the screen and the scrollback of a terminal. */
     TerminalClear("terminal/clear", mutating = true),

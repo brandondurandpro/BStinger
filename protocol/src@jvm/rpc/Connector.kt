@@ -22,7 +22,7 @@ import java.util.concurrent.atomic.AtomicLong
  */
 internal class Connector(
     private val address: InetSocketAddress,
-    private val token: String,
+    token: String,
     private val options: ClientOptions,
     private val pending: PendingRequests,
     private val streams: StreamRegistry,
@@ -37,6 +37,9 @@ internal class Connector(
 
     @Volatile var rejection: RejectedException? = null
         private set
+
+    // Sent at each handshake; it changes when the server comes back with a new secret (see retryWith).
+    @Volatile private var token: String = token
 
     @Volatile private var sessionId: String? = null
 
@@ -55,6 +58,17 @@ internal class Connector(
                 serve(opened)
             }
         }
+    }
+
+    /**
+     * Uses [newToken] from the next handshake on. Returns true when the server had refused the previous one: the
+     * caller must then [run] the connector again, as a refusal ends it.
+     */
+    fun retryWith(newToken: String): Boolean {
+        token = newToken
+        val refused = rejection != null
+        rejection = null
+        return refused
     }
 
     fun close() {

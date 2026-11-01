@@ -10,6 +10,15 @@ Every new task, feature or fix starts on its own branch, in its own git worktree
 - Name the branch after the change (`feat/...`, `fix/...`, `perf/...`, `chore/...`).
 - Remove the worktree once its branch is merged.
 
+## Run the app and the tests
+
+Use `./kotlin` (`kotlin.bat` on Windows); it downloads the toolchain on first use.
+
+- Desktop app: `./kotlin run -m desktopApp` (embeds a server on loopback).
+- All tests: `./kotlin test`; one module: `./kotlin test -m shared`.
+- One test class: `./kotlin test -m shared --include-classes='*EditorTabsE2eTest'`; one test: `--include-test=<fqn>.method`.
+- Lint: `./lint`.
+
 ## Every feature needs end-to-end tests
 
 A feature, or a fix of user-visible behavior, is not done until an e2e test exercises it through the real UI.

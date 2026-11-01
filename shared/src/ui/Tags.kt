@@ -7,9 +7,42 @@ object Tags {
     const val WELCOME_OPEN = "welcome.open"
     const val WELCOME_SEARCH = "welcome.search"
     const val WELCOME_ERROR = "welcome.error"
+    const val WELCOME_REMOTE = "welcome.remote"
+    const val REMOTE_DIALOG = "remote.dialog"
+    const val REMOTE_HOST = "remote.host"
+    const val REMOTE_USER = "remote.user"
+    const val REMOTE_PORT = "remote.port"
+    const val REMOTE_IDENTITY = "remote.identity"
+    const val REMOTE_PROJECT = "remote.project"
+    const val REMOTE_CONNECT = "remote.connect"
+    const val REMOTE_CANCEL = "remote.cancel"
+    const val REMOTE_STATUS = "remote.status"
+    const val REMOTE_ERROR = "remote.error"
+    const val REMOTE_DISCONNECT = "remote.disconnect"
+    const val REMOTE_SEARCH = "remote.search"
+    const val REMOTE_CATALOG = "remote.catalog"
+    const val REMOTE_CONFIG = "remote.config"
+    const val REMOTE_HOSTS_LOADING = "remote.hostsLoading"
+    const val REMOTE_NEW_HOST = "remote.newHost"
+    const val REMOTE_TAGS = "remote.tags"
+    const val REMOTE_SELECTED = "remote.selected"
+    const val STATUS_REMOTE = "status.remote"
+    const val TOP_REMOTE = "toolbar.remote"
+    const val OPEN_PROJECT = "openProject"
+    const val OPEN_PROJECT_PATH = "openProject.path"
+    const val OPEN_PROJECT_UP = "openProject.up"
+    const val OPEN_PROJECT_OPEN = "openProject.open"
+    const val OPEN_PROJECT_CANCEL = "openProject.cancel"
+    const val OPEN_PROJECT_ERROR = "openProject.error"
+    const val OPEN_PROJECT_EMPTY = "openProject.empty"
+    const val OPEN_PROJECT_LOADING = "openProject.loading"
+    const val OPEN_PROJECT_HOME = "openProject.home"
+    const val OPEN_PROJECT_CHECKING = "openProject.checking"
+    const val OPEN_PROJECT_COUNT = "openProject.count"
     const val PROJECT = "project"
     const val PROJECT_WIDGET = "project.widget"
     const val PROJECT_CLOSE = "project.close"
+    const val PROJECT_AGENT_MODE = "project.agentMode"
     const val PROJECT_OPEN_OTHER = "project.openOther"
     const val PROJECT_MENU = "project.menu"
     const val GIT_BRANCH = "git.branch"
@@ -83,6 +116,26 @@ object Tags {
     const val NETWORK_UNAVAILABLE = "network.unavailable"
     const val NETWORK_DETAIL = "network.detail"
     const val WORKSPACE = "workspace"
+    const val MODE_SWITCH = "mode.switch"
+    const val MODE_IDE = "mode.ide"
+    const val MODE_AGENT = "mode.agent"
+    const val AGENT = "agent"
+    const val AGENT_LIST = "agent.list"
+    const val AGENT_NEW = "agent.new"
+    const val AGENT_FILTER = "agent.filter"
+    const val AGENT_DELETE = "agent.delete"
+    const val AGENT_TABS = "agent.tabs"
+    const val AGENT_EMPTY = "agent.empty"
+    const val AGENT_PROMPT = "agent.prompt"
+    const val AGENT_SEND = "agent.send"
+    const val AGENT_STOP = "agent.stop"
+    const val AGENT_STRIP_CONVERSATIONS = "agent.strip.conversations"
+    const val AGENT_DETAILS = "agent.details"
+    const val AGENT_DETAIL_CONVERSATION = "agent.detail.conversation"
+    const val AGENT_DETAIL_EDITOR = "agent.detail.editor"
+    const val AGENT_WORKSPACE_STATUS = "agent.workspaceStatus"
+    const val AGENT_MODE_DIRECT = "agent.mode.direct"
+    const val AGENT_MODE_WORKTREE = "agent.mode.worktree"
     const val DIFF = "diff"
     const val DIFF_TOOLBAR = "diff.toolbar"
     const val DIFF_OPEN_FILE = "diff.openFile"
@@ -207,6 +260,18 @@ object Tags {
     fun lineText(index: Int) = "line.text:$index"
 
     fun foldMarker(line: Int) = "fold:$line"
+
+    fun agentConversation(id: Int) = "agent.conversation.$id"
+
+    fun agentTab(id: Int) = "agent.tab.$id"
+
+    fun agentTabClose(id: Int) = "agent.tab.$id.close"
+
+    fun agentTabDetails(id: Int) = "agent.tab.$id.details"
+
+    fun agentView(id: Int) = "agent.view.$id"
+
+    fun agentMessage(index: Int) = "agent.message.$index"
 }
 
 /** Test tags of the items of lists and popups (recent projects, search results, terminal lines). */
@@ -215,6 +280,15 @@ object ItemTags {
     fun recentProject(path: String) = "recent:$path"
 
     fun recentRemove(path: String) = "recent.remove:$path"
+
+    fun sshHost(alias: String) = "remote.host:$alias"
+
+    fun remoteWorkspace(destination: String, path: String) = "remote.workspace:$destination:$path"
+
+    fun remoteTag(hostKey: String, tag: String) = "remote.tag:$hostKey:$tag"
+
+    /** A directory shown by the Open Project dialog, as an absolute path. */
+    fun pickerDirectory(path: String) = "openProject.dir:$path"
 
     /** A recent project in the menu of the toolbar's project name, which switches to it. */
     fun switchProject(path: String) = "project.switch:$path"

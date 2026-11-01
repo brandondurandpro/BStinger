@@ -36,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.example.kotlineditor.model.pathName
+import org.example.kotlineditor.rpc.Protocol
 import org.example.kotlineditor.state.AppState
 
 @Composable
@@ -46,7 +47,7 @@ fun WelcomeScreen(state: AppState) {
                 ProjectBadge("Kotlin Editor", size = 36.dp)
                 Column(Modifier.padding(start = 10.dp)) {
                     Label("Kotlin Editor", fontWeight = FontWeight.SemiBold)
-                    Label("2026.1", color = IdeColors.TextSecondary, fontSize = 12.sp)
+                    Label(Protocol.APP_VERSION, color = IdeColors.TextSecondary, fontSize = 12.sp)
                 }
             }
             Spacer(Modifier.height(20.dp))
@@ -58,6 +59,25 @@ fun WelcomeScreen(state: AppState) {
                     .padding(horizontal = 10.dp, vertical = 6.dp),
             ) {
                 Label("Projects")
+            }
+            Spacer(Modifier.height(6.dp))
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable { state.openRemoteDialog() }
+                    .testTag(Tags.WELCOME_REMOTE)
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+            ) {
+                Label("Remote Development")
+            }
+            state.remoteLabel?.let { destination ->
+                Spacer(Modifier.height(12.dp))
+                Label("Connected to $destination", color = IdeColors.TextSecondary, fontSize = 11.sp)
+                IdeButton(
+                    "Disconnect",
+                    state::disconnectRemote,
+                    Modifier.padding(top = 6.dp).testTag(Tags.REMOTE_DISCONNECT),
+                )
             }
         }
         VerticalDivider(Modifier.fillMaxHeight())

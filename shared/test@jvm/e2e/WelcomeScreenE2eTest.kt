@@ -37,12 +37,11 @@ class WelcomeScreenE2eTest {
         }
 
     @Test
-    fun `Open asks for a directory and opens the project`() =
+    fun `Open browses to a directory and opens it as a project`() =
         runComposeUiTest {
-            val app = launchApp(pick = project.path)
-            onNodeWithTag(Tags.WELCOME_OPEN).performClick()
+            val app = launchApp()
+            openProjectDirectoryFromWelcome(project.path)
             awaitTag(Tags.PROJECT)
-            assertEquals(1, app.picker.calls)
             awaitTag(Tags.treeRow(project.root.fileName.toString())).assertIsDisplayed()
             assertEquals(project.root.fileName.toString(), app.state.title)
             // The project is remembered as the most recent one.
@@ -50,12 +49,12 @@ class WelcomeScreenE2eTest {
         }
 
     @Test
-    fun `cancelling the directory chooser stays on the welcome screen`() =
+    fun `cancelling the Open Project dialog stays on the welcome screen`() =
         runComposeUiTest {
-            val app = launchApp(pick = null)
-            onNodeWithTag(Tags.WELCOME_OPEN).performClick()
-            waitForIdle()
-            assertEquals(1, app.picker.calls)
+            val app = launchApp()
+            openProjectPickerFromWelcome()
+            onNodeWithTag(Tags.OPEN_PROJECT_CANCEL).performClick()
+            awaitNoTag(Tags.OPEN_PROJECT)
             assertIs<Screen.Welcome>(app.state.screen)
         }
 

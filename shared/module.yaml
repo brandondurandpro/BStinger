@@ -32,6 +32,9 @@ test-dependencies@jvm:
   - $compose.desktop.currentOs
   - $libs.tree.sitter.kotlin
   - $libs.tree.sitter.json
+  # A real SSH server for the remote development end-to-end tests; the client is the system OpenSSH.
+  - $libs.sshd.core
+  - $libs.sshd.sftp
 
 test-settings:
   jvm:
