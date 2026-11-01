@@ -53,6 +53,19 @@ class RemoteDevelopmentE2eTest {
         }
 
     @Test
+    fun `the language servers follow the switch to the remote server`() =
+        remoteUiTest {
+            val app = launchApp()
+            val local = app.state.languageServers
+            connectRemoteTo(RemoteTestEnvironment, project.path)
+            awaitTag(Tags.treeRow("src"), timeout = 60_000)
+            // A new state polls the remote server; the local one stopped.
+            awaitCondition { app.state.languageServers !== local }
+            awaitCondition { app.state.languageServers.status.server.heapMaxBytes > 0 }
+            awaitTag(Tags.STATUS_SERVER_MEMORY)
+        }
+
+    @Test
     fun `cancelling the dialog leaves the IDE on the local server`() =
         remoteUiTest {
             val app = launchApp()
