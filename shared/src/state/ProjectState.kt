@@ -15,6 +15,7 @@ import org.example.kotlineditor.model.AppServices
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.GitBranchInfo
 import org.example.kotlineditor.model.GitFileStatus
+import org.example.kotlineditor.syntax.treesitter.GrammarStore
 
 private val INDEXED_POPUPS = setOf(PopupKind.GotoFile, PopupKind.FindInFiles, PopupKind.GotoSymbol)
 private val DOCUMENT_POPUPS = setOf(PopupKind.GotoLine, PopupKind.FileStructure)
@@ -29,6 +30,8 @@ class ProjectState(
     preferences: Map<String, String> = emptyMap(),
     /** Open tool windows and their docks; a worktree of agent mode shares the one of its project. */
     val toolWindows: ToolWindowLayout = ToolWindowLayout().apply { restore(preferences) },
+    /** Tree-sitter grammars, shared with the worktrees agent mode opens from this project. */
+    internal val grammars: GrammarStore? = null,
 ) {
     /** Cancelled when the project is closed, so no background work outlives it. */
     val scope = CoroutineScope(parentScope.coroutineContext + SupervisorJob(parentScope.coroutineContext[Job]))
@@ -48,6 +51,7 @@ class ProjectState(
                 services.git.commitDiff(root.path, commit.hash, tree.relativePath(entry), commit.oldPath)
             },
             blames = { entry -> services.git.blame(root.path, tree.relativePath(entry)) },
+            grammars = grammars,
         )
     val fileIndex = FileIndex(root, services.search, scope)
     val find = FindState()

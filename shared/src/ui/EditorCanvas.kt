@@ -99,6 +99,7 @@ private fun DrawScope.drawRows(
     val lineHeight = metrics.lineHeightPx
     val first = scroll.firstRow
     val last = minOf(folding.rowCount(), first + ceil(size.height / lineHeight).toInt() + 1)
+    if (last > first) document.syntax?.request(folding.lineAt(first), folding.lineAt(last - 1))
     for (row in first until last) {
         val index = folding.lineAt(row)
         translate(top = (row - first) * lineHeight - scroll.rowOffsetPx) {
@@ -139,6 +140,7 @@ private fun DrawScope.drawRow(
             folding.isFoldable(index),
             folded,
             if (folded) folding.placeholder(index, document.lines) else null,
+            document.syntax?.highlights?.spansFor(index, line),
         )
     // Layout places the text area on a whole pixel: so does this, or glyphs would be antialiased differently.
     val textLeft = metrics.gutterPx.roundToInt().toFloat()

@@ -74,8 +74,10 @@ fun EditorTabs(editor: EditorState, pane: EditorPane, modifier: Modifier = Modif
             .fillMaxWidth()
             .height(36.dp)
             .background(IdeColors.Panel)
+            .wheelScrollsHorizontally(listState)
             .testTag(Tags.TABS),
     ) {
+        // The wheel scrolls the tabs once they overflow, like the terminal's tabs.
         LazyRow(Modifier.fillMaxWidth().fillMaxHeight(), state = listState) {
             items(pane.tabs, key = { it.key }) { tab ->
                 EditorTabView(

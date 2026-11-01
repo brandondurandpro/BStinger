@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
@@ -95,6 +96,12 @@ fun CodeEditor(
             val identifier = if (document.hasSelection) null else document.identifierAt(document.caret)
             CaretHints(identifier, document.matchingBracket())
         }
+    }
+    // The syntax tree of a document is only kept while an editor shows it.
+    DisposableEffect(document) {
+        val syntax = document.syntax
+        syntax?.show()
+        onDispose { syntax?.hide() }
     }
     val scope = rememberCoroutineScope()
     val clicks = remember { ClickCounter() }

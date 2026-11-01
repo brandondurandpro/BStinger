@@ -61,6 +61,13 @@ object IdeColors {
     val Comment = Color(0xFF7A7E85)
     val Annotation = Color(0xFFB3AE60)
     val FunctionDeclaration = Color(0xFF56A8F5)
+    val Property = Color(0xFFC77DBB)
+    val StringEscape = Color(0xFFCF8E6D)
+    val TypeParameter = Color(0xFF16BAAC)
+    val Label = Color(0xFF32B8AF)
+    val MarkupTag = Color(0xFFD5B778)
+    val MarkupAttribute = Color(0xFFBABABA)
+    val Link = Color(0xFF548AF7)
 
     val Folder = Color(0xFF9AA7B0)
     val GitAdded = Color(0xFF73BD79)

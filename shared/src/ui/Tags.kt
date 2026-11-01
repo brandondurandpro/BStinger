@@ -147,6 +147,7 @@ object Tags {
     const val EDITOR_LOADING = "editor.loading"
     const val STATUS_BAR = "status"
     const val STATUS_CARET = "status.caret"
+    const val STATUS_LANGUAGE = "status.language"
     const val STATUS_PATH = "status.path"
     const val STATUS_CONNECTION = "status.connection"
     const val STATUS_OPENING = "status.opening"
@@ -300,6 +301,12 @@ object ItemTags {
     fun pinnedBranch(name: String) = "branch.pinned:$name"
 
     fun unpinnedBranch(name: String) = "branch.unpinned:$name"
+
+    /** A row of the empty editor's hint list, named after its action. */
+    fun editorHint(action: String) = "editor.hint:$action"
+
+    /** The shortcut shown next to an empty editor's hint. */
+    fun editorHintShortcut(action: String) = "editor.hint.shortcut:$action"
 
     fun networkRecord(seq: Long) = "network.record:$seq"
 

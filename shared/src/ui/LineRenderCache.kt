@@ -4,6 +4,7 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import org.example.kotlineditor.syntax.Language
+import org.example.kotlineditor.syntax.treesitter.LineSpans
 
 private const val LINE_CAPACITY = 2048
 private const val BLAME_CAPACITY = 256
@@ -23,6 +24,7 @@ internal class LineRenderCache(
         val language: Language,
         val startsInComment: Boolean,
         val placeholder: String?,
+        val spans: LineSpans?,
     )
 
     private val lines = LruMap<LineKey, TextLayoutResult>(lineCapacity)
@@ -36,9 +38,11 @@ internal class LineRenderCache(
     val size: Int get() = lines.size
 
     fun line(source: LineSource): TextLayoutResult =
-        lines.getOrPut(LineKey(source.text, source.language, source.startsInComment, source.placeholder)) {
+        lines.getOrPut(source.key()) {
             measurer.measure(highlighted(source), style, softWrap = false, maxLines = 1)
         }
+
+    private fun LineSource.key() = LineKey(text, language, startsInComment, placeholder, spans)
 
     /** Line number [number] (one-based), without color: the caret line draws it brighter. */
     fun number(number: Int): TextLayoutResult =
