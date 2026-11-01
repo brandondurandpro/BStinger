@@ -165,7 +165,7 @@ class ProcessMemorySamplerTest {
     }
 
     @Test
-    fun `reading ten processes costs well under a millisecond`() {
+    fun `reading ten processes costs a few milliseconds at most`() {
         if (!supported) return
         val pids =
             List(10) { hog(0) }.map {
@@ -182,8 +182,8 @@ class ProcessMemorySamplerTest {
         repeat(runs) { pids.forEach { (pid, start) -> assertNotNull(reader.read(pid, start)) } }
         val micros = (System.nanoTime() - started) / runs / 1_000.0
         println("PERF one sample of 10 processes: %.1f µs".format(micros))
-        // Budget several times the measured cost: a shell command per sample would cost tens of milliseconds.
-        assertTrue(micros < 1_000, "one sample of 10 processes took $micros µs")
+        // About 0.2 ms here and 1.6 ms on a loaded CI runner; a shell command per sample would cost tens of ms.
+        assertTrue(micros < 10_000, "one sample of 10 processes took $micros µs")
     }
 
     private fun awaitSample(history: MemoryHistory, condition: (MemorySample) -> Boolean): MemorySample {
