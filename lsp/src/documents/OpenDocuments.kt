@@ -77,13 +77,13 @@ class MirroredDocument internal constructor(
         val startColumn = change.startColumn
         val endLine = change.endLine
         val endColumn = change.endColumn
-        val valid =
-            startLine in target.indices &&
-                endLine in startLine..target.lastIndex &&
-                startColumn in 0..target[startLine].length &&
-                endColumn in 0..target[endLine].length &&
-                (startLine < endLine || startColumn <= endColumn)
-        if (!valid) throw OutOfSyncException("Edit $change outside of $path")
+        val linesExist = startLine in target.indices && endLine in startLine..target.lastIndex
+        if (!linesExist) throw outside(change)
+        val startExists = startColumn in 0..target[startLine].length
+        val endExists = endColumn in 0..target[endLine].length
+        val ordered = startLine < endLine || startColumn <= endColumn
+        val columnsExist = startExists && endExists
+        if (!columnsExist || !ordered) throw outside(change)
         val prefix = target[startLine].substring(0, startColumn)
         val suffix = target[endLine].substring(endColumn)
         val parts = change.text.split('\n')
@@ -100,6 +100,8 @@ class MirroredDocument internal constructor(
             target.addAll(startLine, replacement)
         }
     }
+
+    private fun outside(change: TextChange) = OutOfSyncException("Edit $change outside of $path")
 }
 
 /**

@@ -153,7 +153,8 @@ private fun completionAction(
     document: Document,
 ): (() -> Unit)? {
     val popup = completion.popup?.takeIf { it.document === document }
-    val plain = !event.isCtrlPressed && !event.isAltPressed && !event.isMetaPressed && !event.isShiftPressed
+    val noCommand = !event.isCtrlPressed && !event.isAltPressed && !event.isMetaPressed
+    val plain = noCommand && !event.isShiftPressed
     return when {
         event.key == Key.Spacebar && event.isCtrlPressed && !event.isAltPressed -> {
             { completion.explicit(path, document) }
@@ -187,7 +188,8 @@ private fun typed(
 ): Boolean {
     val version = document.version
     val used = editorKey()
-    if (used && event.type == KeyEventType.KeyDown && document.version != version) {
+    val edited = used && document.version != version
+    if (edited && event.type == KeyEventType.KeyDown) {
         val typed = typedChar(event)
         if (typed != null) completion.typed(path, document, typed) else completion.edited(path, document)
     }

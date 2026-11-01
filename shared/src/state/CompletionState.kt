@@ -109,7 +109,9 @@ class CompletionState(
         val line = document.lines[document.caret.line]
         val before = line.substring(0, document.caret.column)
         val startsWord = isWordChar(c) && !c.isDigit()
-        val trigger = startsWord || before.endsWith("->") || before.endsWith("::") || c == '\\' || c == '$'
+        val afterAccess = before.endsWith("->") || before.endsWith("::")
+        val startsName = c == '\\' || c == '$'
+        val trigger = startsWord || afterAccess || startsName
         when {
             shown != null && shown.document === document && isWordChar(c) -> {
                 shown.refilter()
@@ -135,7 +137,8 @@ class CompletionState(
     fun caretMoved(document: Document) {
         val shown = popup ?: return
         val caret = document.caret
-        if (shown.document !== document || caret.line != shown.line || caret.column < shown.replaceFrom) {
+        val sameLine = shown.document === document && caret.line == shown.line
+        if (!sameLine || caret.column < shown.replaceFrom) {
             dismiss()
         } else {
             shown.refilter()
@@ -192,7 +195,8 @@ class CompletionState(
     }
 
     private fun show(document: Document, caret: TextPos, result: CompletionResult) {
-        if (!result.ready || result.items.isEmpty() || result.replaceFrom > caret.column) {
+        val nothing = !result.ready || result.items.isEmpty()
+        if (nothing || result.replaceFrom > caret.column) {
             popup = null
             return
         }
