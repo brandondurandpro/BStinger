@@ -12,6 +12,8 @@ dependencies:
   - $compose.preview
   - $libs.androidx.lifecycle.viewmodel.compose
   - $libs.androidx.lifecycle.runtime.compose
+  - $libs.jtreesitter
+  - $libs.tree.sitter.native
 
 dependencies@android:
   - $compose.uiTooling
@@ -29,6 +31,8 @@ test-dependencies@jvm:
   - //testkit
   - $compose.uiTest
   - $compose.desktop.currentOs
+  - $libs.tree.sitter.kotlin
+  - $libs.tree.sitter.json
 
 test-settings:
   jvm:

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -15,6 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.structuralEqualityPolicy
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
@@ -22,7 +24,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.scrollToIndex
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.text
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -32,7 +33,6 @@ import org.example.kotlineditor.model.GitChangeKind
 import org.example.kotlineditor.state.Document
 import org.example.kotlineditor.state.EditorTab
 import org.example.kotlineditor.state.VerticalScroll
-import org.example.kotlineditor.state.displayLine
 import org.example.kotlineditor.state.placeholder
 import kotlin.math.ceil
 import kotlin.math.roundToInt
@@ -93,7 +93,8 @@ private fun LineNode(
     val folding = document.folding
     val line = document.lines[index]
     val folded = folding.isFolded(index)
-    val text = displayLine(line) + if (folded) " " + folding.placeholder(index, document.lines) else ""
+    val placeholder = if (folded) folding.placeholder(index, document.lines) else null
+    val text by rememberLineText(document, index, line, placeholder)
     val density = LocalDensity.current
     val gutter = with(density) { metrics.gutterPx.toDp() }
     val textWidth = with(density) { (text.length * metrics.charWidth).toDp() }
@@ -135,11 +136,32 @@ private fun LineNode(
             Modifier
                 .offset { IntOffset(textLeft(metrics, tab.horizontalScroll.offset), 0) }
                 .size(textWidth, metrics.lineHeight)
-                .semantics { this.text = AnnotatedString(text) }
+                .semantics { this.text = text }
                 .testTag(Tags.lineText(index)),
         )
     }
 }
+
+// The colored text of a line, as drawn: tests read its colors here. Derived, so that the colors published for the
+// other lines (after each edit) do not compose this line again.
+@Composable
+private fun rememberLineText(document: Document, index: Int, line: String, placeholder: String?) =
+    remember(document, index, line, placeholder) {
+        derivedStateOf(structuralEqualityPolicy()) {
+            highlighted(
+                LineSource(
+                    index,
+                    line,
+                    document.language,
+                    document.commentStates?.getOrNull(index) == true,
+                    foldable = false,
+                    folded = placeholder != null,
+                    placeholder,
+                    document.syntax?.highlights?.spansFor(index, line),
+                ),
+            )
+        }
+    }
 
 // The first row on screen, left as it was while a scroll is in progress.
 @Composable

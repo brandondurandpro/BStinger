@@ -126,6 +126,7 @@ object Tags {
     const val EDITOR_LOADING = "editor.loading"
     const val STATUS_BAR = "status"
     const val STATUS_CARET = "status.caret"
+    const val STATUS_LANGUAGE = "status.language"
     const val STATUS_PATH = "status.path"
     const val STATUS_CONNECTION = "status.connection"
     const val STATUS_OPENING = "status.opening"
