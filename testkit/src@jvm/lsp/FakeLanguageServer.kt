@@ -8,6 +8,9 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
@@ -23,9 +26,12 @@ import kotlin.system.exitProcess
  * A real language server on stdin and stdout, which tests start as a process to reproduce what real servers do
  * wrong: crash, hang, ignore shutdown, print garbage, flood stderr, send huge answers, ask questions, leak memory.
  *
- * It answers `initialize` (incremental sync, hover), `shutdown` and `exit` (exit code 0 after shutdown, 1 otherwise,
- * 1 too when stdin closes), echoes the position of `textDocument/hover`, and publishes one diagnostic per opened
- * document with `--diagnostics`. Options, combinable:
+ * It answers `initialize` (incremental sync, hover, completion), `shutdown` and `exit` (exit code 0 after shutdown, 1
+ * otherwise, 1 too when stdin closes), echoes the position of `textDocument/hover`, and publishes one diagnostic per
+ * opened document with `--diagnostics`. It keeps the text of the open documents, applying incremental changes, and
+ * completes like a PHP server: the functions declared in the open documents, the variables of the document, and a
+ * few built-in functions (`strlen`, `strtoupper`...), each with an edit replacing the word before the caret, `$`
+ * included. Options, combinable:
  * - memory: `--leak-mb-per-s <n>`, `--sawtooth <lowMb>:<highMb>:<periodS>`,
  *   `--spike-then-plateau <spikeMb>:<plateauMb>:<spikeS>`, `--child-mb <n>` (a child process holding n MB);
  * - lifecycle: `--crash-on-start`, `--crash-after <n requests>` (exit code 3), `--hang-on-initialize`,
@@ -33,7 +39,9 @@ import kotlin.system.exitProcess
  * - output: `--garbage-stdout`, `--huge-message <mb>` (the hover answer), `--stderr-flood`;
  * - timing and questions: `--latency-ms <n>`, `--ask-configuration` (asks `workspace/configuration` after
  *   `initialized` and writes the answer to stderr), `--diagnostics`, `--progress <seconds>` (reports an
- *   "Indexing" progress from 0 to 100 % over that many seconds after `initialized`).
+ *   "Indexing" progress from 0 to 100 % over that many seconds after `initialized`);
+ * - completion: `--completion-items <n>` (n more functions, `generated_00001`...), `--full-sync` (asks for the whole
+ *   text at each change), `--no-completion` (answers completion with an error).
  * A crash writes `Fatal error: fake crash` on stderr first, like a real server would.
  * Memory is allocated as direct buffers with one byte written per page, so that it becomes resident.
  */
@@ -90,6 +98,9 @@ object FakeLanguageServer {
         val askConfiguration: Boolean = false,
         val diagnostics: Boolean = false,
         val progressSeconds: Int? = null,
+        val completionItems: Int = 0,
+        val fullSync: Boolean = false,
+        val noCompletion: Boolean = false,
     ) {
         val allocates get() = leakMbPerSecond > 0 || sawtooth != null || spikeThenPlateau != null
 
@@ -121,6 +132,9 @@ object FakeLanguageServer {
                     askConfiguration = "ask-configuration" in values,
                     diagnostics = "diagnostics" in values,
                     progressSeconds = int("progress"),
+                    completionItems = int("completion-items") ?: 0,
+                    fullSync = "full-sync" in values,
+                    noCompletion = "no-completion" in values,
                 )
             }
 
@@ -135,6 +149,7 @@ object FakeLanguageServer {
                     "huge-message",
                     "latency-ms",
                     "progress",
+                    "completion-items",
                 )
         }
     }
@@ -169,6 +184,7 @@ object FakeLanguageServer {
         private var requests = 0
         private var shutdown = false
         private var child: Process? = null
+        private val documents = HashMap<String, MutableList<String>>()
 
         fun run() {
             if (options.stderrFlood) thread(isDaemon = true, name = "stderr-flood") { flood() }
@@ -206,7 +222,18 @@ object FakeLanguageServer {
                 "shutdown" -> if (!options.ignoreShutdown) shutdown().also { reply(id, JsonNull) }
                 "exit" -> if (!options.ignoreShutdown) exit(if (shutdown) 0 else 1)
                 "textDocument/hover" -> reply(id, hover(message["params"]))
-                "textDocument/didOpen" -> if (options.diagnostics) publishDiagnostics(message["params"])
+                "textDocument/didOpen" -> {
+                    opened(message["params"])
+                    if (options.diagnostics) publishDiagnostics(message["params"])
+                }
+                "textDocument/didChange" -> changed(message["params"])
+                "textDocument/didClose" -> documents.remove(uriOf(message["params"]))
+                "textDocument/completion" ->
+                    if (options.noCompletion) {
+                        error(id!!, CONTENT_MODIFIED, "Content modified")
+                    } else {
+                        reply(id, completion(message["params"]))
+                    }
                 else -> if (id != null) error(id, METHOD_NOT_FOUND, "Unknown method $method")
             }
         }
@@ -223,8 +250,11 @@ object FakeLanguageServer {
         private fun capabilities() =
             buildJsonObject {
                 putJsonObject("capabilities") {
-                    put("textDocumentSync", 2)
+                    put("textDocumentSync", if (options.fullSync) 1 else 2)
                     put("hoverProvider", true)
+                    putJsonObject("completionProvider") {
+                        put("triggerCharacters", buildJsonArray { add(JsonPrimitive("$")) })
+                    }
                 }
                 putJsonObject("serverInfo") {
                     put("name", "fake-language-server")
@@ -243,6 +273,90 @@ object FakeLanguageServer {
                 }
             return buildJsonObject { put("contents", text) }
         }
+
+        private fun uriOf(params: JsonElement?): String? {
+            val paramsObject = params as? JsonObject
+            val textDocument = paramsObject?.get("textDocument") as? JsonObject
+            val uri = textDocument?.get("uri") as? JsonPrimitive
+            return uri?.contentOrNull
+        }
+
+        private fun opened(params: JsonElement?) {
+            val document = params?.jsonObject?.get("textDocument")?.jsonObject ?: return
+            val uri = document["uri"]?.jsonPrimitive?.contentOrNull ?: return
+            documents[uri] = document["text"]?.jsonPrimitive?.content.orEmpty().split('\n').toMutableList()
+        }
+
+        private fun changed(params: JsonElement?) {
+            val lines = documents[uriOf(params)] ?: return
+            for (change in params!!.jsonObject["contentChanges"]!!.jsonArray) {
+                val fields = change.jsonObject
+                val text = fields["text"]!!.jsonPrimitive.content
+                val range = fields["range"]?.jsonObject
+                if (range == null) {
+                    lines.clear()
+                    lines.addAll(text.split('\n'))
+                    continue
+                }
+                val (startLine, startColumn) = positionOf(range["start"])
+                val (endLine, endColumn) = positionOf(range["end"])
+                val replaced = lines[startLine].substring(0, startColumn) + text + lines[endLine].substring(endColumn)
+                lines.subList(startLine, endLine + 1).clear()
+                lines.addAll(startLine, replaced.split('\n'))
+            }
+        }
+
+        private fun positionOf(position: JsonElement?): Pair<Int, Int> {
+            val fields = position!!.jsonObject
+            return fields["line"]!!.jsonPrimitive.int to fields["character"]!!.jsonPrimitive.int
+        }
+
+        // What a PHP server would propose, unfiltered: the client side filters by the typed prefix.
+        private fun completion(params: JsonElement?): JsonElement {
+            val lines = documents[uriOf(params)] ?: return JsonNull
+            val (line, column) = positionOf(params!!.jsonObject["position"])
+            val text = lines.getOrElse(line) { "" }
+            var start = column.coerceAtMost(text.length)
+            while (start > 0 && isWordChar(text[start - 1])) start--
+            val functions =
+                documents.values.flatMap { document ->
+                    document.flatMap { FUNCTION.findAll(it).map { match -> match.groupValues[1] to match.value } }
+                }
+            val variables = lines.flatMap { VARIABLE.findAll(it).map { match -> match.value } }.distinct()
+            val generated = (1..options.completionItems).map { "generated_%05d".format(it) to "function generated()" }
+            val items =
+                (BUILT_INS + functions + generated).distinctBy { it.first }.map { (name, detail) ->
+                    item(name, FUNCTION_KIND, detail, line, start, column)
+                } + variables.filter { it != text.substring(start, column) }.map {
+                    item(it, VARIABLE_KIND, "mixed", line, start, column)
+                }
+            return buildJsonObject {
+                put("isIncomplete", false)
+                put("items", buildJsonArray { items.forEach(::add) })
+            }
+        }
+
+        private fun isWordChar(c: Char) = c.isLetterOrDigit() || c == '_' || c == '$'
+
+        private fun item(label: String, kind: Int, detail: String, line: Int, start: Int, end: Int) =
+            buildJsonObject {
+                put("label", label)
+                put("kind", kind)
+                put("detail", detail)
+                putJsonObject("textEdit") {
+                    putJsonObject("range") {
+                        putJsonObject("start") {
+                            put("line", line)
+                            put("character", start)
+                        }
+                        putJsonObject("end") {
+                            put("line", line)
+                            put("character", end)
+                        }
+                    }
+                    put("newText", label)
+                }
+            }
 
         private fun publishDiagnostics(params: JsonElement?) {
             val uri = params?.jsonObject?.get("textDocument")?.jsonObject?.get("uri")
@@ -428,4 +542,16 @@ object FakeLanguageServer {
     }
 
     private const val METHOD_NOT_FOUND = -32601
+    private const val CONTENT_MODIFIED = -32801
+    private const val FUNCTION_KIND = 3
+    private const val VARIABLE_KIND = 6
+    private val FUNCTION = Regex("""function\s+(\w+)\s*\([^)]*\)""")
+    private val VARIABLE = Regex("""\$\w+""")
+    private val BUILT_INS =
+        listOf(
+            "strlen" to "function strlen(string \$string): int",
+            "strtoupper" to "function strtoupper(string \$string): string",
+            "str_replace" to "function str_replace(\$search, \$replace, \$subject): string",
+            "array_map" to "function array_map(?callable \$callback, array \$array): array",
+        )
 }

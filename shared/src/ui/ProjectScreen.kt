@@ -34,6 +34,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.example.kotlineditor.model.Languages
 import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.Dock
 import org.example.kotlineditor.state.Document
@@ -267,6 +268,8 @@ private fun ReadyEditor(
         fontSize = app.editorFontSize,
         onZoom = app::zoomEditor,
         onCtrlClick = project::gotoDeclaration,
+        completion = project.completion.takeIf { Languages.languageOf(tab.entry.path) != null },
+        path = tab.entry.path,
     )
 }
 

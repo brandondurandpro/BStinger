@@ -46,7 +46,7 @@ import java.io.OutputStream
  */
 object Protocol {
     /** Version announced in the handshake; client and server must speak the same one. */
-    const val VERSION = 6
+    const val VERSION = 7
 
     /** Version of the application, shown in the welcome screen and used to identify remote server bundles. */
     const val APP_VERSION = "2026.1"
@@ -379,6 +379,18 @@ enum class Method(
 
     /** Saves the language server chosen for a language. */
     LspChoose("lsp/choose", mutating = true),
+
+    /** Opens a document with its whole text (or replaces it), for the language servers. */
+    DocOpen("doc/open", mutating = true),
+
+    /** Edits of an open document, applied to the version before. */
+    DocChange("doc/change", mutating = true),
+
+    /** Closes a document. */
+    DocClose("doc/close", mutating = true),
+
+    /** Completion at a position of an open document. */
+    LspCompletion("lsp/completion"),
 }
 
 /** A JSON-RPC error object `{"code": ..., "message": ...}`. */

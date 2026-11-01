@@ -25,7 +25,10 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
-import org.example.kotlineditor.lsp.Languages
+import org.example.kotlineditor.lsp.documents.DocumentOutbox
+import org.example.kotlineditor.lsp.documents.MirroredDocument
+import org.example.kotlineditor.lsp.documents.OpenDocuments
+import org.example.kotlineditor.lsp.documents.SyncKind
 import org.example.kotlineditor.lsp.jsonrpc.LspConnection
 import org.example.kotlineditor.lsp.jsonrpc.LspResponseException
 import org.example.kotlineditor.lsp.leak.LeakReport
@@ -34,7 +37,9 @@ import org.example.kotlineditor.lsp.memory.MemoryHistory
 import org.example.kotlineditor.lsp.memory.ProcessMemorySampler
 import org.example.kotlineditor.model.LanguageServerInfo
 import org.example.kotlineditor.model.LanguageServerState
+import org.example.kotlineditor.model.Languages
 import org.example.kotlineditor.model.MemoryUsage
+import org.example.kotlineditor.model.TextChange
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
@@ -96,10 +101,13 @@ internal class ManagedServer(
     // Removes this server from the supervisor if it still has no user; false when one came back meanwhile.
     private val onForgotten: (ManagedServer) -> Boolean,
     private val onChange: () -> Unit,
+    // The documents open in the IDE: those under its root are opened in each process it starts.
+    private val documents: OpenDocuments? = null,
 ) {
     val id = target.id
     val language get() = target.spec.language
     val name get() = target.spec.name
+    val root get() = target.root
 
     /** Sessions using it; guarded by the supervisor's lock. */
     val users = HashSet<String>()
@@ -120,6 +128,9 @@ internal class ManagedServer(
     @Volatile private var process: Process? = null
 
     @Volatile private var connection: LspConnection? = null
+
+    // The documents are sent through it once the process answered initialize; null otherwise.
+    @Volatile private var outbox: DocumentOutbox? = null
 
     @Volatile private var leak: LeakReport? = null
 
@@ -179,6 +190,33 @@ internal class ManagedServer(
         val changed = leak?.verdict != report.verdict
         leak = report
         return changed
+    }
+
+    /** Sends [document] to the process, if it is ready; called under the lock of [OpenDocuments]. */
+    fun didOpen(document: MirroredDocument) {
+        outbox?.didOpen(document)
+    }
+
+    /** Sends [changes] of [document], if the process is ready; called under the lock of [OpenDocuments]. */
+    fun didChange(document: MirroredDocument, changes: List<TextChange>) {
+        outbox?.didChange(document, changes)
+    }
+
+    /** Closes [document] in the process, if it is ready; called under the lock of [OpenDocuments]. */
+    fun didClose(document: MirroredDocument) {
+        outbox?.didClose(document)
+    }
+
+    /**
+     * Sends [method] once the document notifications queued before were written, and returns its answer; null
+     * when no process is ready. Fails like [LspConnection.request] when the process stops meanwhile.
+     */
+    suspend fun request(method: String, params: JsonElement): JsonElement? {
+        val box = outbox
+        val link = connection
+        if (box == null || link == null) return null
+        box.flush()
+        return link.request(method, params)
     }
 
     /** Kills what is left without asking (after [Command.Close], or when it did not answer in time). */
@@ -371,21 +409,40 @@ internal class ManagedServer(
             }
 
             else -> {
-                ready(launched, link)
+                ready(launched, link, answered.getOrNull())
             }
         }
     }
 
-    private fun ready(launched: Process, link: LspConnection) {
+    private fun ready(launched: Process, link: LspConnection, initialized: JsonElement?) {
         runCatching { link.notify("initialized", JsonObject(emptyMap())) }
+        openDocuments(DocumentOutbox(link, scope, syncKindOf(initialized)))
         // A key per process: the old one may still be untracked after a new one started.
         samplerKey = "$id#${launched.pid()}".also { history = sampler?.track(it, launched.toHandle()) }
         setState(if (progress.isEmpty()) LanguageServerState.Running else LanguageServerState.Indexing, null)
     }
 
+    // Under the documents' lock: an edit arriving meanwhile is either replayed here or sent after.
+    private fun openDocuments(box: DocumentOutbox) {
+        val open = { mirrored: List<MirroredDocument> ->
+            outbox = box
+            mirrored.forEach(box::didOpen)
+        }
+        documents?.withDocuments(language, target.root, open) ?: open(emptyList())
+    }
+
+    private fun closeOutbox() {
+        val close = {
+            outbox?.close()
+            outbox = null
+        }
+        documents?.locked(close) ?: close()
+    }
+
     private suspend fun stopProcess(graceful: Boolean) {
         startJob?.cancelAndJoin()
         startJob = null
+        closeOutbox()
         val running = process ?: return
         process = null
         val link = connection
@@ -533,14 +590,44 @@ internal class ManagedServer(
                 putJsonObject("textDocument") {
                     putJsonObject("synchronization") { put("dynamicRegistration", false) }
                     putJsonObject("publishDiagnostics") {}
+                    putJsonObject("completion") {
+                        put("contextSupport", false)
+                        putJsonObject("completionItem") {
+                            // The editor inserts plain text: no tab stops to fill.
+                            put("snippetSupport", false)
+                            put("insertReplaceSupport", false)
+                        }
+                    }
                 }
             }
             target.spec.initializationOptions?.let { put("initializationOptions", it) }
         }
 
+    // textDocumentSync is a number or an object whose change is one; Full is 1, Incremental 2, None 0.
+    private fun syncKindOf(initialized: JsonElement?): SyncKind {
+        val initializeResult = initialized as? JsonObject
+        val capabilities = initializeResult?.get("capabilities") as? JsonObject
+        val syncElement = capabilities?.get("textDocumentSync")
+
+        val syncAsPrimitive = syncElement as? JsonPrimitive
+        val syncAsObject = syncElement as? JsonObject
+        val changeElement = syncAsObject?.get("change") as? JsonPrimitive
+
+        val kindFromPrimitive = syncAsPrimitive?.intOrNull
+        val kindFromChangeObject = changeElement?.intOrNull
+        val finalKind = kindFromPrimitive ?: kindFromChangeObject
+
+        return if (finalKind == FULL_SYNC) {
+            SyncKind.Full
+        } else {
+            SyncKind.Incremental
+        }
+    }
+
     private fun seconds(millis: Long) = if (millis % MILLIS == 0L) "${millis / MILLIS} s" else "$millis ms"
 
     private companion object {
         const val MILLIS = 1_000L
+        const val FULL_SYNC = 1
     }
 }

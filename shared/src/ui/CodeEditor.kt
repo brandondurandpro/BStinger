@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
@@ -47,6 +48,7 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import org.example.kotlineditor.model.GitChangeKind
 import org.example.kotlineditor.state.AppState
+import org.example.kotlineditor.state.CompletionState
 import org.example.kotlineditor.state.Document
 import org.example.kotlineditor.state.EditorTab
 import org.example.kotlineditor.state.HorizontalScroll
@@ -85,6 +87,9 @@ fun CodeEditor(
     fontSize: Float = AppState.DEFAULT_EDITOR_FONT_SIZE,
     onZoom: (delta: Float) -> Unit = {},
     onCtrlClick: (TextPos) -> Unit = {},
+    // Code completion, and the path of the file it asks the language server about; null when the file has none.
+    completion: CompletionState? = null,
+    path: String? = null,
 ) {
     var viewportWidth by remember { mutableFloatStateOf(0f) }
     var viewportHeight by remember { mutableFloatStateOf(0f) }
@@ -121,7 +126,7 @@ fun CodeEditor(
             .onSizeChanged(onSize)
             .focusRequester(focusRequester)
             .onFocusChanged { focused = it.isFocused }
-            .onKeyEvent { handleEditorKey(it, document, viewport.visibleRows(metrics.lineHeightPx)) }
+            .onKeyEvent(editorKeys(document, completion, path) { viewport.visibleRows(metrics.lineHeightPx) })
             .focusable()
             .scrollable(tab.horizontalScroll.scrollableState, Orientation.Horizontal)
             // reverseDirection: the wheel and drags give negative deltas going down, as for any vertical list.
@@ -146,6 +151,41 @@ fun CodeEditor(
             EditorCanvas(tab, document, metrics, highlights, hints, caretOn)
         }
         EditorScrollbars(tab, metrics) { viewportWidth }
+        if (completion != null) FollowCompletion(completion, tab, document, metrics) { viewportHeight }
+    }
+}
+
+// Keys go through the IntelliJ keymap, and through the completion popup first when the file has one.
+private fun editorKeys(
+    document: Document,
+    completion: CompletionState?,
+    path: String?,
+    page: () -> Int,
+): (KeyEvent) -> Boolean =
+    { event ->
+        if (completion != null && path != null) {
+            completionKey(event, completion, path, document) { handleEditorKey(event, document, page()) }
+        } else {
+            handleEditorKey(event, document, page())
+        }
+    }
+
+// The popup follows the caret within the word, and closes when it leaves it or when the editor goes away.
+@Composable
+private fun FollowCompletion(
+    completion: CompletionState,
+    tab: EditorTab,
+    document: Document,
+    metrics: EditorMetrics,
+    viewportHeight: () -> Float,
+) {
+    val popup = completion.popup
+    if (popup != null && popup.document === document) CompletionList(popup, completion, tab, metrics, viewportHeight)
+    LaunchedEffect(document) {
+        snapshotFlow { document.caret to document.version }.collect { completion.caretMoved(document) }
+    }
+    DisposableEffect(document) {
+        onDispose { if (completion.popup?.document === document) completion.dismiss() }
     }
 }
 

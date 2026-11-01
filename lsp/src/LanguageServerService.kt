@@ -7,10 +7,19 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonObject
+import org.example.kotlineditor.lsp.completion.CompletionAnswers
+import org.example.kotlineditor.lsp.documents.MirroredDocument
+import org.example.kotlineditor.lsp.documents.OpenDocuments
+import org.example.kotlineditor.lsp.jsonrpc.LspConnectionClosedException
+import org.example.kotlineditor.lsp.jsonrpc.LspResponseException
 import org.example.kotlineditor.lsp.memory.ProcessMemoryReader
 import org.example.kotlineditor.lsp.memory.ProcessMemorySampler
 import org.example.kotlineditor.lsp.provision.CandidateRegistry
@@ -22,11 +31,14 @@ import org.example.kotlineditor.lsp.supervisor.LanguageServerSupervisor
 import org.example.kotlineditor.lsp.supervisor.OrphanReaper
 import org.example.kotlineditor.lsp.supervisor.ServerTarget
 import org.example.kotlineditor.lsp.supervisor.SupervisorTimings
+import org.example.kotlineditor.model.CompletionResult
 import org.example.kotlineditor.model.LanguageServerCandidateInfo
 import org.example.kotlineditor.model.LanguageServerChoice
 import org.example.kotlineditor.model.LanguageServerInfo
 import org.example.kotlineditor.model.LanguageServersStatus
+import org.example.kotlineditor.model.Languages
 import org.example.kotlineditor.model.ServerMemory
+import org.example.kotlineditor.model.TextChange
 import java.io.Closeable
 import java.nio.file.Files
 import java.nio.file.Path
@@ -48,6 +60,8 @@ class LanguageServerSettings(
     val statusHoldMs: Long = 20_000,
     /** Milliseconds between two memory samples of a server. */
     val sampleIntervalMs: Long = 2_000,
+    /** How long a completion waits for the edits it follows, then for the language server's answer. */
+    val completionTimeoutMs: Long = 10_000,
 )
 
 /**
@@ -66,6 +80,7 @@ class LanguageServerService(private val settings: LanguageServerSettings) : Clos
     private val published = MutableStateFlow(LanguageServersStatus.Empty.copy(version = 1))
     private val lastFiles = HashMap<String, Pair<String, List<String>>>()
     private val specs = ConcurrentHashMap<String, LanguageServerSpec>()
+    private val documents = OpenDocuments()
     private val supervisor =
         LanguageServerSupervisor(
             scope,
@@ -73,6 +88,7 @@ class LanguageServerService(private val settings: LanguageServerSettings) : Clos
             OrphanReaper(settings.dataDirectory.resolve("lsp").resolve("pids")),
             settings.timings,
             onChange = { changes.trySend(Unit) },
+            documents = documents,
         )
 
     init {
@@ -100,8 +116,86 @@ class LanguageServerService(private val settings: LanguageServerSettings) : Clos
     /** [session] ended. */
     fun release(session: String) {
         synchronized(lastFiles) { lastFiles.remove(session) }
+        documents.release(session) { document -> serversOf(document).forEach { it.didClose(document) } }
         supervisor.release(session)
     }
+
+    /**
+     * [session] opened [path] of [project] with [text] at [version], or sends it again. Its language server gets it
+     * now if it runs, else when it starts. Files no language server handles are ignored.
+     */
+    fun openDocument(session: String, project: String, path: String, version: Int, text: String) {
+        val place = { file: String -> Languages.languageOf(file)?.let { it to rootOf(it, file, project) } }
+        documents.open(session, path, version, text, place) { document, reopened ->
+            serversOf(document).forEach { server ->
+                if (reopened) server.didClose(document)
+                server.didOpen(document)
+            }
+        }
+    }
+
+    /** Applies the edits of [session] to [path]; throws [org.example.kotlineditor.lsp.documents.OutOfSyncException]. */
+    fun changeDocument(session: String, path: String, version: Int, changes: List<TextChange>) {
+        if (Languages.languageOf(path) == null) return
+        documents.change(session, path, version, changes) { document ->
+            serversOf(document).forEach { it.didChange(document, changes) }
+        }
+    }
+
+    /** [session] closed [path]. */
+    fun closeDocument(session: String, path: String) {
+        documents.close(session, path) { document -> serversOf(document).forEach { it.didClose(document) } }
+    }
+
+    /**
+     * Completion at [line], [column] of [path], once [session]'s [version] of it arrived: what its language server
+     * proposes, filtered by the word before the caret and capped. [CompletionResult.NotReady] when no server can
+     * answer (none for this file, starting, crashed, restarted during the request).
+     */
+    suspend fun complete(session: String, path: String, version: Int, line: Int, column: Int): CompletionResult {
+        val document = documents.get(path)
+        val hasValidClientVersion =
+            document != null &&
+                run {
+                    val matchingVersion =
+                        withTimeoutOrNull(settings.completionTimeoutMs) {
+                            document.clientVersion.firstOrNull { it.session == session && it.version >= version }
+                        }
+                    matchingVersion != null
+                }
+        return if (document != null && hasValidClientVersion) {
+            ask(document, line, column)
+        } else {
+            CompletionResult.NotReady
+        }
+    }
+
+    private suspend fun ask(document: MirroredDocument, line: Int, column: Int): CompletionResult {
+        val text = documents.locked { document.line(line) }
+        val params =
+            buildJsonObject {
+                putJsonObject("textDocument") { put("uri", document.uri) }
+                putJsonObject("position") {
+                    put("line", line)
+                    put("character", column)
+                }
+            }
+        return try {
+            // While another server takes over the language, the old one, stopping, is not ready any more.
+            val answer =
+                withTimeoutOrNull(settings.completionTimeoutMs) {
+                    serversOf(document).firstNotNullOfOrNull { it.request("textDocument/completion", params) }
+                }
+            answer?.let { CompletionAnswers.translate(it, text, column) } ?: CompletionResult.NotReady
+        } catch (_: LspConnectionClosedException) {
+            CompletionResult.NotReady
+        } catch (_: LspResponseException) {
+            // The server refused (content modified, request failed): nothing to propose this time.
+            CompletionResult(column, emptyList(), incomplete = true, ready = true)
+        }
+    }
+
+    private fun serversOf(document: MirroredDocument) = supervisor.serving(document.language, document.root)
 
     /** See [LanguageServerSupervisor.restart]. */
     fun restart(id: String, generation: Long) = supervisor.restart(id, generation)
@@ -245,20 +339,4 @@ class LanguageServerService(private val settings: LanguageServerSettings) : Clos
         const val MIN_MOVE_BYTES = 5L * 1024 * 1024
         const val MIN_MOVE_RATIO = 0.02
     }
-}
-
-/** The languages that have language servers, by file extension. */
-object Languages {
-    private val byExtension = mapOf("php" to "php", "phtml" to "php")
-    private val names = mapOf("php" to "PHP")
-    private val rootMarkers = mapOf("php" to "composer.json")
-
-    /** Language of [path], null when no language server handles it. */
-    fun languageOf(path: String): String? = byExtension[path.substringAfterLast('.', "").lowercase()]
-
-    /** Name of [language] for people. */
-    fun nameOf(language: String): String = names[language] ?: language
-
-    /** File whose directory is the root of a [language] server, null when the project is. */
-    fun rootMarkerOf(language: String): String? = rootMarkers[language]
 }

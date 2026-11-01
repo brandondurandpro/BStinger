@@ -164,6 +164,7 @@ class AppState(
         hostTags.putAll(HostTagsCodec.decode(preferences[RemotePreferenceKeys.TAGS].orEmpty()))
         scope.launch { savePreferencesOnChange() }
         scope.launch { declareOpenFiles() }
+        scope.launch { syncOpenDocuments() }
         reloadRecents()
     }
 
@@ -528,6 +529,22 @@ class AppState(
                     .orEmpty()
             Triple(languageServers, project?.root?.path, files)
         }.collect { (servers, project, files) -> servers.declare(project, files) }
+    }
+
+    // The documents of the open files are mirrored on the server, for completion and the other language features.
+    private suspend fun syncOpenDocuments() {
+        snapshotFlow {
+            val project = (screen as? Screen.Project)?.project
+            val documents =
+                project
+                    ?.editor
+                    ?.allTabs
+                    ?.filterNot { it.isDiff }
+                    ?.mapNotNull { tab -> tab.document?.let { tab.entry.path to it } }
+                    ?.toMap()
+                    .orEmpty()
+            Triple(languageServers, project?.root?.path, documents)
+        }.collect { (servers, project, documents) -> servers.syncDocuments(project, documents) }
     }
 
     private fun languageServersOf(services: AppServices) =

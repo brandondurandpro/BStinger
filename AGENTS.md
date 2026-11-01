@@ -109,3 +109,23 @@ tests, which check what the user sees when the network or the server fails.
 - `./kotlin test` passes; `./kotlin test -m <module>` runs a single module while iterating.
 - `./ci` passes when the change can behave differently on another platform (see above).
 - `main` only accepts squash or rebase merges, once the Lint, Linux and Windows CI checks are green.
+
+## Kotlin Coding Guidelines & Best Practices
+
+1. **Mandatory Code Decomposition**
+   - **No complex one-liners or deep expression chains.** Do not chain multiple operators (`&&`, `||`, `?:`) or nested
+     scopes into a single unreadable line.
+   - **Break down logic.** Always decompose intermediate steps, casts, and lookups into explicitly named, descriptive
+     local variables.
+
+2. **No Code Duplication**
+   - Extract duplicated blocks, timeout checks, or recurring expressions into clean variables or helper functions.
+     Avoid copy-pasting similar logic.
+
+3. **Safe Collection Operations**
+   - Always use `firstOrNull` instead of `first` when querying collections or lists to prevent unexpected
+     `NoSuchElementException` crashes.
+
+4. **Clean Scope & Compilation Safety**
+   - Never declare the same variable name twice within the same scope. Ensure every variable declaration is unique and
+     correct.

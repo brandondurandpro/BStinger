@@ -129,6 +129,7 @@ data class LanguageServerChoice(
 )
 
 /** Language servers running on the server machine for the open projects. */
+@Suppress("TooManyFunctions", "ComplexInterface")
 interface LanguageServers {
     /**
      * The status once its version is greater than [since], or the current one after a while (a long poll): a
@@ -161,7 +162,29 @@ interface LanguageServers {
     /** Saves [candidate] as the server of [language] (for every project), and switches the running ones. */
     suspend fun choose(language: String, project: String, candidate: String)
 
+    /**
+     * Opens [path] of [project] with its whole [text] at [version], or replaces what the server had: after a
+     * reconnection, or when a change was refused. The language server of the file sees it from then on.
+     */
+    suspend fun openDocument(project: String, path: String, version: Int, text: String)
+
+    /**
+     * Applies [changes], in order, to [path] open at `version - 1`, making it [version]. Fails when the server has
+     * another version (it restarted, a change was lost): the client then opens the document again.
+     */
+    suspend fun changeDocument(path: String, version: Int, changes: List<TextChange>)
+
+    /** The client closed [path]. */
+    suspend fun closeDocument(path: String)
+
+    /**
+     * Completion at [line], [column] of [path] once the server has its [version]; [CompletionResult.NotReady] when no
+     * language server can answer now.
+     */
+    suspend fun complete(path: String, version: Int, line: Int, column: Int): CompletionResult
+
     /** No language servers (an IDE without a server, most unit tests). */
+    @Suppress("TooManyFunctions")
     object None : LanguageServers {
         override suspend fun status(since: Long): LanguageServersStatus = kotlinx.coroutines.awaitCancellation()
 
@@ -179,5 +202,112 @@ interface LanguageServers {
             LanguageServerChoice(language, language, emptyList(), null)
 
         override suspend fun choose(language: String, project: String, candidate: String) = Unit
+
+        override suspend fun openDocument(project: String, path: String, version: Int, text: String) = Unit
+
+        override suspend fun changeDocument(path: String, version: Int, changes: List<TextChange>) = Unit
+
+        override suspend fun closeDocument(path: String) = Unit
+
+        override suspend fun complete(path: String, version: Int, line: Int, column: Int) = CompletionResult.NotReady
+    }
+}
+
+/** The languages that have language servers, by file extension. */
+object Languages {
+    private val byExtension = mapOf("php" to "php", "phtml" to "php")
+    private val names = mapOf("php" to "PHP")
+    private val rootMarkers = mapOf("php" to "composer.json")
+
+    /** Language of [path], null when no language server handles it. */
+    fun languageOf(path: String): String? = byExtension[path.substringAfterLast('.', "").lowercase()]
+
+    /** Name of [language] for people. */
+    fun nameOf(language: String): String = names[language] ?: language
+
+    /** File whose directory is the root of a [language] server, null when the project is. */
+    fun rootMarkerOf(language: String): String? = rootMarkers[language]
+}
+
+/**
+ * One edit of an open document: the text between two positions replaced by [text]. Positions are lines and
+ * UTF-16 columns of the text before the edit, lines being separated by `\n` whatever the file uses.
+ */
+data class TextChange(
+    /** Line where the replaced text starts. */
+    val startLine: Int,
+    /** Column where the replaced text starts. */
+    val startColumn: Int,
+    /** Line where the replaced text ends. */
+    val endLine: Int,
+    /** Column where the replaced text ends (excluded). */
+    val endColumn: Int,
+    /** The new text, lines separated by `\n`. */
+    val text: String,
+)
+
+/** What a completion item is, for its icon. */
+enum class CompletionKind {
+    /** A function. */
+    Function,
+
+    /** A method of a class. */
+    Method,
+
+    /** A variable. */
+    Variable,
+
+    /** A class, an enum or a trait. */
+    Class,
+
+    /** An interface. */
+    Interface,
+
+    /** A constant. */
+    Constant,
+
+    /** A property of a class. */
+    Property,
+
+    /** A keyword of the language. */
+    Keyword,
+
+    /** A namespace or a module. */
+    Module,
+
+    /** Anything else. */
+    Other,
+}
+
+/** One proposal of the completion popup. */
+data class CompletionItem(
+    /** What the popup shows. */
+    val label: String,
+    /** What it is. */
+    val kind: CompletionKind,
+    /** Its signature or type, shown on the right; null when the server gives none. */
+    val detail: String?,
+    /** The text that replaces the typed prefix when the item is accepted. */
+    val insertText: String,
+)
+
+/** The answer to a completion request. */
+data class CompletionResult(
+    /**
+     * Column of the caret's line where the replaced text starts: accepting an item replaces the text between it and
+     * the caret with [CompletionItem.insertText].
+     */
+    val replaceFrom: Int,
+    /** The items, best first, already filtered by the typed prefix and capped. */
+    val items: List<CompletionItem>,
+    /** More items exist than were sent, or typing more may bring others: ask again on the next keystroke. */
+    val incomplete: Boolean,
+    /** False when no language server could answer (none for this file, not started yet, crashed). */
+    val ready: Boolean,
+) {
+    /** Answers shared by every client. */
+    companion object {
+        /** No server could answer. */
+        val NotReady = CompletionResult(0, emptyList(), incomplete = false, ready = false)
     }
 }

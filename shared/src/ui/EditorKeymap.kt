@@ -6,9 +6,11 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isAltPressed
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.utf16CodePoint
+import org.example.kotlineditor.state.CompletionState
 import org.example.kotlineditor.state.Document
 import org.example.kotlineditor.state.backspace
 import org.example.kotlineditor.state.clearSelection
@@ -111,6 +113,13 @@ private fun shortcut(event: KeyEvent, document: Document, page: Int): Boolean =
 // Printable characters arrive as KeyDown events carrying their code point. Keys without a character
 // (Shift, Ctrl, function keys, …) report CHAR_UNDEFINED and must never be inserted in the document.
 private fun typeEvent(event: KeyEvent, document: Document): Boolean {
+    val typed = typedChar(event)
+    if (typed != null) document.typeChar(typed)
+    return typed != null
+}
+
+// The character a key types, null for commands and keys without one.
+private fun typedChar(event: KeyEvent): Char? {
     // Ctrl alone and Cmd are commands; Alt (and AltGr, which reports Ctrl+Alt) can produce text.
     val ctrlAlone = event.isCtrlPressed && !event.isAltPressed
     val command = ctrlAlone || event.isMetaPressed
@@ -118,10 +127,107 @@ private fun typeEvent(event: KeyEvent, document: Document): Boolean {
     val control = code < ' '.code || code == DELETE_CHAR
     val notAChar = code == CHAR_UNDEFINED || code in SURROGATES
     val printable = !control && !notAChar
-    val accepted = !command && printable
-    if (accepted) document.typeChar(Char(code))
-    return accepted
+    return if (!command && printable) Char(code) else null
 }
+
+/**
+ * Keys of an editor with code completion (IntelliJ keymap): Ctrl+Space asks for it; while the popup shows items,
+ * Up, Down, Page Up and Page Down move in it, Enter inserts the selected item, Tab inserts it over the rest of the
+ * word, and Escape closes it. Other keys go to [editorKey]; a character typed then may open the popup.
+ */
+internal fun completionKey(
+    event: KeyEvent,
+    completion: CompletionState,
+    path: String,
+    document: Document,
+    editorKey: () -> Boolean,
+): Boolean {
+    val action = if (event.type == KeyEventType.KeyDown) completionAction(event, completion, path, document) else null
+    action?.invoke()
+    return action != null || typed(event, completion, path, document, editorKey)
+}
+
+// What a key does to the completion popup, null when it goes to the editor.
+private fun completionAction(
+    event: KeyEvent,
+    completion: CompletionState,
+    path: String,
+    document: Document,
+): (() -> Unit)? {
+    val popup = completion.popup?.takeIf { it.document === document }
+    val noCommand = !event.isCtrlPressed && !event.isAltPressed && !event.isMetaPressed
+    val plain = noCommand && !event.isShiftPressed
+    return when {
+        event.key == Key.Spacebar && event.isCtrlPressed && !event.isAltPressed -> {
+            { completion.explicit(path, document) }
+        }
+
+        popup == null || !plain -> {
+            null
+        }
+
+        event.key == Key.Escape -> {
+            completion::dismiss
+        }
+
+        popup.items.isEmpty() -> {
+            null
+        }
+
+        else -> {
+            popupKey(event.key, completion)
+        }
+    }
+}
+
+// The editor handles the key; a character it typed may open the popup, a deletion asks the server again.
+private fun typed(
+    event: KeyEvent,
+    completion: CompletionState,
+    path: String,
+    document: Document,
+    editorKey: () -> Boolean,
+): Boolean {
+    val version = document.version
+    val used = editorKey()
+    val edited = used && document.version != version
+    if (edited && event.type == KeyEventType.KeyDown) {
+        val typed = typedChar(event)
+        if (typed != null) completion.typed(path, document, typed) else completion.edited(path, document)
+    }
+    return used
+}
+
+private fun popupKey(key: Key, completion: CompletionState): (() -> Unit)? =
+    when (key) {
+        Key.DirectionDown -> {
+            { completion.move(1) }
+        }
+
+        Key.DirectionUp -> {
+            { completion.move(-1) }
+        }
+
+        Key.PageDown -> {
+            { completion.page(1) }
+        }
+
+        Key.PageUp -> {
+            { completion.page(-1) }
+        }
+
+        Key.Enter, Key.NumPadEnter -> {
+            { completion.accept() }
+        }
+
+        Key.Tab -> {
+            { completion.accept(replaceWord = true) }
+        }
+
+        else -> {
+            null
+        }
+    }
 
 // Vertical caret move counted in displayed rows, so folded regions are skipped.
 private fun Document.moveByRows(delta: Int, extend: Boolean) {

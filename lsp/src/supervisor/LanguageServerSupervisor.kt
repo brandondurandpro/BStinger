@@ -9,6 +9,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
+import org.example.kotlineditor.lsp.documents.OpenDocuments
 import org.example.kotlineditor.lsp.leak.LeakDetector
 import org.example.kotlineditor.lsp.leak.LeakSettings
 import org.example.kotlineditor.lsp.leak.MemoryPoint
@@ -50,6 +51,8 @@ class LanguageServerSupervisor(
     private val clock: () -> Long = System::currentTimeMillis,
     private val leakSettings: LeakSettings = LeakSettings(),
     private val onChange: () -> Unit = {},
+    // The documents open in the IDE, sent to the servers whose root has them.
+    private val documents: OpenDocuments? = null,
 ) : Closeable {
     private val lock = Any()
     private val managed = LinkedHashMap<String, ManagedServer>()
@@ -108,6 +111,10 @@ class LanguageServerSupervisor(
     /** Every server, in the order they were first needed. */
     fun servers(): List<LanguageServerInfo> = synchronized(lock) { managed.values.toList() }.map { it.info() }
 
+    /** The servers of [language] whose root is [root]: the ones that handle a document there. */
+    internal fun serving(language: String, root: String): List<ManagedServer> =
+        synchronized(lock) { managed.values.filter { it.language == language && it.root == root } }
+
     /** The pid of [id]'s process while it runs (tests). */
     fun pidOf(id: String): Long? = synchronized(lock) { managed[id] }?.pid
 
@@ -134,7 +141,7 @@ class LanguageServerSupervisor(
     }
 
     private fun newServer(target: ServerTarget) =
-        ManagedServer(target, scope, sampler, reaper, timings, clock, ::forget, onChange)
+        ManagedServer(target, scope, sampler, reaper, timings, clock, ::forget, onChange, documents)
 
     private fun forget(server: ManagedServer): Boolean {
         val removed =

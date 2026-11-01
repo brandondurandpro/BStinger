@@ -1,15 +1,20 @@
 package org.example.kotlineditor.rpc
 
 import kotlinx.serialization.json.put
+import org.example.kotlineditor.model.CompletionResult
 import org.example.kotlineditor.model.LanguageServerChoice
 import org.example.kotlineditor.model.LanguageServers
 import org.example.kotlineditor.model.LanguageServersStatus
+import org.example.kotlineditor.model.TextChange
 
 private const val ID = "id"
 private const val LANGUAGE = "language"
 private const val PROJECT = "project"
+private const val PATH = "path"
+private const val VERSION = "version"
 
 /** [LanguageServers] of the server. */
+@Suppress("TooManyFunctions")
 class RemoteLanguageServers(private val client: RpcClient) : LanguageServers {
     override suspend fun status(since: Long): LanguageServersStatus =
         client.call(Method.LspStatus) { put("since", since) }.languageServersStatus()
@@ -55,5 +60,37 @@ class RemoteLanguageServers(private val client: RpcClient) : LanguageServers {
             put(PROJECT, project)
             put("candidate", candidate)
         }
+    }
+
+    override suspend fun openDocument(project: String, path: String, version: Int, text: String) {
+        client.call(Method.DocOpen) {
+            put(PROJECT, project)
+            put(PATH, path)
+            put(VERSION, version)
+            put("text", text)
+        }
+    }
+
+    override suspend fun changeDocument(path: String, version: Int, changes: List<TextChange>) {
+        client.call(Method.DocChange) {
+            put(PATH, path)
+            put(VERSION, version)
+            put("changes", changes.textChangesJson())
+        }
+    }
+
+    override suspend fun closeDocument(path: String) {
+        client.call(Method.DocClose) { put(PATH, path) }
+    }
+
+    override suspend fun complete(path: String, version: Int, line: Int, column: Int): CompletionResult {
+        val result =
+            client.call(Method.LspCompletion) {
+                put(PATH, path)
+                put(VERSION, version)
+                put("line", line)
+                put("column", column)
+            }
+        return result.completionResult()
     }
 }

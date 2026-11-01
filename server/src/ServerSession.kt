@@ -31,6 +31,10 @@ private val ORDERED =
         Method.TerminalDestroy,
         // Each one replaces the files declared by the previous one: they must apply in order.
         Method.LspUse,
+        // The edits of a document apply in the order they were typed.
+        Method.DocOpen,
+        Method.DocChange,
+        Method.DocClose,
     )
 
 /** One request being executed: its id, its named params, the session's terminals and the session's id. */
