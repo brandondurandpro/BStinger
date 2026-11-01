@@ -341,6 +341,12 @@ enum class Method(
     /** Fast-forwards a local branch, current or not, to the remote branch it tracks. */
     GitPullBranch("git/pullBranch", mutating = true),
 
+    /** Worktree of a branch, created on first use; asking again returns the same one. */
+    GitWorktree("git/worktree", mutating = true),
+
+    /** Removes a worktree. */
+    GitRemoveWorktree("git/removeWorktree", mutating = true),
+
     /** Clears the screen and the scrollback of a terminal. */
     TerminalClear("terminal/clear", mutating = true),
 }

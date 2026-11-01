@@ -30,6 +30,7 @@ import org.example.kotlineditor.model.TerminalLauncher
 import org.example.kotlineditor.model.TerminalProcess
 import org.example.kotlineditor.model.TerminalSnapshot
 import org.example.kotlineditor.model.TextMatch
+import org.example.kotlineditor.model.WorktreeClient
 import java.io.IOException
 
 private const val ROOT = "root"
@@ -136,7 +137,9 @@ class RemoteSearch(private val client: RpcClient) : ProjectSearch {
 
 /** [GitClient] of the server. */
 @Suppress("TooManyFunctions") // one per Git operation of the protocol
-class RemoteGit(private val client: RpcClient) : GitClient {
+class RemoteGit(private val client: RpcClient) :
+    GitClient,
+    WorktreeClient by RemoteWorktrees(client) {
     override suspend fun status(root: String): Map<String, GitFileStatus> =
         client.call(Method.GitStatus) { put(ROOT, root) }.gitStatus()
 
@@ -352,4 +355,23 @@ private fun JsonObjectBuilder.size(columns: Int, rows: Int, cellWidthPx: Int, ce
     put("rows", rows)
     put("cellWidthPx", cellWidthPx)
     put("cellHeightPx", cellHeightPx)
+}
+
+/** [WorktreeClient] of the server. */
+class RemoteWorktrees(private val client: RpcClient) : WorktreeClient {
+    override suspend fun worktree(root: String, branch: String): String {
+        val result =
+            client.call(Method.GitWorktree) {
+                put(ROOT, root)
+                put("branch", branch)
+            }
+        return result.string()
+    }
+
+    override suspend fun removeWorktree(root: String, path: String) {
+        client.call(Method.GitRemoveWorktree) {
+            put(ROOT, root)
+            put(PATH, path)
+        }
+    }
 }

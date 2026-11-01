@@ -51,6 +51,13 @@ class AppState(
     /** Whether the devtools were opened (Ctrl+Alt+Shift+D) since the IDE started: shows their buttons. */
     var devtools by mutableStateOf(false)
 
+    /**
+     * Feature flag of agent mode (experimental, off by default): shows the IDE | Agent switch of the toolbar and its
+     * shortcuts. Turning it off brings the open project back to the editors.
+     */
+    var agentModeEnabled by mutableStateOf(preferences[PreferenceKeys.AGENT_MODE]?.toBooleanStrictOrNull() ?: false)
+        private set
+
     /** Editor font size in points, shared by every editor (Alt+Shift+. / Alt+Shift+, / Ctrl+wheel). */
     var editorFontSize by mutableFloatStateOf(savedFontSize())
         private set
@@ -83,6 +90,11 @@ class AppState(
 
     fun zoomEditor(delta: Float) {
         editorFontSize = (editorFontSize + delta).coerceIn(MIN_EDITOR_FONT_SIZE, MAX_EDITOR_FONT_SIZE)
+    }
+
+    fun enableAgentMode(enabled: Boolean) {
+        agentModeEnabled = enabled
+        if (!enabled) (screen as? Screen.Project)?.project?.agentMode = false
     }
 
     fun resetEditorZoom() {
@@ -148,9 +160,10 @@ class AppState(
 
     // The open project's settings on top of the last known preferences.
     private fun currentPreferences(): Map<String, String> {
-        val project = (screen as? Screen.Project)?.project ?: return preferences + fontSizePreference()
+        val app = preferences + fontSizePreference() + (PreferenceKeys.AGENT_MODE to agentModeEnabled.toString())
+        val project = (screen as? Screen.Project)?.project ?: return app
         val autoSelect = PreferenceKeys.AUTO_SELECT_OPENED_FILE to project.autoSelectOpenedFile.toString()
-        return preferences + project.toolWindows.toPreferences() + autoSelect + fontSizePreference()
+        return app + project.toolWindows.toPreferences() + autoSelect
     }
 
     private fun fontSizePreference() = PreferenceKeys.EDITOR_FONT_SIZE to editorFontSize.toString()
@@ -170,7 +183,7 @@ class AppState(
         while (recentProjects.size > MAX_RECENT) recentProjects.removeAt(recentProjects.lastIndex)
         saveRecent()
         (screen as? Screen.Project)?.project?.let { close(it) }
-        val project = ProjectState(root, services, scope, preferences, grammars)
+        val project = ProjectState(root, services, scope, preferences, grammars = grammars)
         runCatching { services.sessions.load(root.path) }.getOrNull()?.let(project::restoreSession)
         screen = Screen.Project(project)
     }
