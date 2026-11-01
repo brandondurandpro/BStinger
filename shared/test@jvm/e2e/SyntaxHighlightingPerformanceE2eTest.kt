@@ -18,6 +18,7 @@ import org.example.kotlineditor.ui.IdeColors
 import org.example.kotlineditor.ui.Tags
 import kotlin.test.AfterTest
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -25,7 +26,8 @@ import kotlin.test.assertTrue
  * Tree-sitter highlighting of a 10,002-line Kotlin file, through the real UI: opening it, typing at its end and at
  * its start (every line after the edit moves), jumping across it and scrolling it. The grammar is downloaded before
  * measuring: these tests measure parsing and coloring, not the network. Memory counts the allocations of every
- * thread: each edit is parsed again off the UI thread, from a copy of the text (about 4 MB per keystroke here).
+ * thread: each edit is parsed again off the UI thread, reading the lines that changed rather than a copy of the whole
+ * text (about 1 MB per keystroke here, all included, against 4 MB with a copy).
  */
 @OptIn(ExperimentalTestApi::class)
 class SyntaxHighlightingPerformanceE2eTest {
@@ -69,7 +71,7 @@ class SyntaxHighlightingPerformanceE2eTest {
             measure(
                 "type 20 characters at the end of a 10,002-line file",
                 budgetMillis = 3_000,
-                budgetMegabytes = 300,
+                budgetMegabytes = 100,
             ) {
                 typeInEditor("val z = name.length ")
             }
@@ -81,7 +83,7 @@ class SyntaxHighlightingPerformanceE2eTest {
             measure(
                 "type 20 lines at the start of a 10,002-line file",
                 budgetMillis = 15_000,
-                budgetMegabytes = 3_500,
+                budgetMegabytes = 1_200,
             ) {
                 repeat(TYPED_LINES) { typeInEditor("val a = b.size\n") }
             }
@@ -144,6 +146,31 @@ class SyntaxHighlightingPerformanceE2eTest {
             renderFrame()
             awaitColor(end + 2, "length", IdeColors.Property)
             assertWindowBounded(tab)
+        }
+
+    @Test
+    fun `showing a hidden large file again parses it with its colors kept meanwhile`() =
+        runComposeUiTest {
+            val tab = openBigFile()
+            val syntax = tab.document!!.syntax!!
+            openFromTree("src/main/kotlin/App.kt")
+            awaitCondition { !syntax.isParsed }
+            measure(
+                "show the hidden 10,002-line file again until parsed",
+                budgetMillis = 2_000,
+                budgetMegabytes = 60,
+            ) {
+                onNodeWithTag(Tags.tab("src/Big.kt")).performClick()
+                renderFrame()
+                assertEquals(IdeColors.Property, colorOf(1, "length"), "the last colors stay while it is parsed")
+                awaitCondition { syntax.isParsed }
+            }
+            onNodeWithTag(Tags.EDITOR).performClick()
+            pressInEditor(Key.MoveHome, ctrl = true)
+            measure("type a line at the start once parsed again", budgetMillis = 1_500, budgetMegabytes = 100) {
+                typeInEditor("val a = b.size\n")
+                awaitColor(0, "size", IdeColors.Property)
+            }
         }
 
     // Only the lines around the visible ones are colored, never the whole file.

@@ -11,6 +11,12 @@ import org.example.kotlineditor.syntax.treesitter.GrammarSpec
 import org.example.kotlineditor.ui.IdeColors
 import org.example.kotlineditor.ui.Tags
 import java.io.File
+import java.lang.foreign.Arena
+import java.lang.foreign.FunctionDescriptor
+import java.lang.foreign.Linker
+import java.lang.foreign.MemoryLayout
+import java.lang.foreign.MemorySegment
+import java.lang.foreign.ValueLayout
 import java.lang.management.ManagementFactory
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -18,7 +24,8 @@ import kotlin.test.Test
 /**
  * Memory taken by tree-sitter highlighting: opens a 10,002-line Kotlin file, a 10,000-line JSON file and 10 small
  * Kotlin files through the UI, types in the large one, and prints the heap used after a GC and the resident memory of
- * the process (which counts the native syntax trees). Run it once with grammars and once without, in two JVMs, and
+ * the process (which counts the native syntax trees), and the native memory in use. Hidden tabs free their trees: the
+ * step that hides the large files shows it. Run it once with grammars and once without, in two JVMs, and
  * compare. Skipped unless run with `-Deditor.benchmark=true`; `-Deditor.grammars=false` runs without grammars, e.g.
  * `JAVA_TOOL_OPTIONS="-Deditor.benchmark=true -Deditor.grammars=false" ./kotlin test -m shared
  * --include-classes='*SyntaxHighlightingMemoryBenchmark'`. Linux only (resident memory from `/proc`).
@@ -64,35 +71,69 @@ class SyntaxHighlightingMemoryBenchmark {
             val json = sample("+ 10,000-line JSON file")
             repeat(SMALL_FILES) { openFromTree("src/small/S$it.kt") }
             if (grammars) awaitColor(8, "println", IdeColors.FunctionDeclaration)
-            val small = sample("+ 10 small Kotlin files")
+            val small = sample("+ 10 small Kotlin files (large ones hidden)")
             openFromTree("src/Big.kt")
             onNodeWithTag(Tags.EDITOR).performClick()
             pressInEditor(Key.MoveEnd, ctrl = true)
             repeat(TYPED_LINES) { typeInEditor("\nval z = name.length") }
             val typed = sample("+ 20 lines typed in the large file")
             println("MEMORY grammars=$grammars")
-            val (baseHeap, baseRss) = baseline.second
+            val base = baseline.second
             for ((label, value) in listOf(baseline, big, json, small, typed)) {
-                val (heap, rss) = value
                 println(
-                    "MEMORY ${label.padEnd(36)} heap ${heap / MB} MB (+${(heap - baseHeap) / MB}), " +
-                        "RSS ${rss / MB} MB (+${(rss - baseRss) / MB})",
+                    "MEMORY ${label.padEnd(44)} heap ${value.heap / MB} MB (+${(value.heap - base.heap) / MB}), " +
+                        "native ${value.native / MB} MB (+${(value.native - base.native) / MB}), " +
+                        "RSS ${value.rss / MB} MB (+${(value.rss - base.rss) / MB})",
                 )
             }
         }
     }
 
-    // Heap used after a full GC, and resident memory of the process.
-    private fun ComposeUiTest.sample(label: String): Pair<String, Pair<Long, Long>> {
+    private class Sample(val heap: Long, val native: Long, val rss: Long)
+
+    // Heap used after a full GC, native memory in use (malloc), and resident memory of the process once malloc gave
+    // back what it could: freed native memory otherwise stays resident, and syntax trees are native memory.
+    private fun ComposeUiTest.sample(label: String): Pair<String, Sample> {
         waitForIdle()
         repeat(GC_ROUNDS) {
             System.gc()
             Thread.sleep(GC_PAUSE_MS)
         }
         val heap = ManagementFactory.getMemoryMXBean().heapMemoryUsage.used
+        Malloc.trim()
         val rssLine = File("/proc/self/status").readLines().first { it.startsWith("VmRSS:") }
         val rss = rssLine.split(Regex("\\s+"))[1].toLong() * KB
-        return label to (heap to rss)
+        return label to Sample(heap, Malloc.inUse(), rss)
+    }
+
+    // glibc's malloc_trim and mallinfo2, through the FFM API.
+    private object Malloc {
+        private const val MALLINFO_FIELDS = 10
+        private const val HBLKHD = 4L
+        private const val UORDBLKS = 7L
+
+        private val linker = Linker.nativeLinker()
+        private val lookup = linker.defaultLookup()
+        private val trimHandle =
+            lookup.find("malloc_trim").map {
+                linker.downcallHandle(it, FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG))
+            }
+        private val info = MemoryLayout.structLayout(*Array(MALLINFO_FIELDS) { ValueLayout.JAVA_LONG })
+        private val infoHandle =
+            lookup.find("mallinfo2").map { linker.downcallHandle(it, FunctionDescriptor.of(info)) }
+
+        fun trim() {
+            trimHandle.ifPresent { it.invokeWithArguments(0L) }
+        }
+
+        // Bytes allocated by malloc: `uordblks` (in its arenas) plus `hblkhd` (mapped on their own).
+        fun inUse(): Long {
+            val handle = infoHandle.orElse(null) ?: return 0L
+            return Arena.ofConfined().use { arena ->
+                val struct = handle.invokeWithArguments(arena) as MemorySegment
+                struct.getAtIndex(ValueLayout.JAVA_LONG, UORDBLKS) + struct.getAtIndex(ValueLayout.JAVA_LONG, HBLKHD)
+            }
+        }
     }
 
     private companion object {

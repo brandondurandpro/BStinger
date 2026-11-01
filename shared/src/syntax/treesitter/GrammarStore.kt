@@ -58,7 +58,13 @@ class MavenGrammarRepository(
 }
 
 /** A grammar ready to parse with, and its highlight query. */
-class LoadedGrammar internal constructor(val spec: GrammarSpec, val language: Language, val query: Query) {
+class LoadedGrammar internal constructor(
+    val spec: GrammarSpec,
+    val language: Language,
+    val query: Query,
+    /** The text predicates of [query], checked against the document's lines. */
+    internal val predicates: QueryPredicates,
+) {
     private val styles: Map<String, Int> = query.captureNames.associateWith(CaptureStyles::styleOf)
 
     /** Style of the capture named [name] (see [CaptureStyles.styleOf]). */
@@ -155,7 +161,8 @@ class GrammarStore(
                 "no highlight query"
             }.use { it.readBytes().decodeToString() }
         val language = Language.load(SymbolLookup.libraryLookup(library.toPath(), Arena.global()), spec.symbol)
-        return LoadedGrammar(spec, language, Query(language, text))
+        val query = Query(language, text)
+        return LoadedGrammar(spec, language, query, QueryPredicates.read(query, text))
     }
 
     private fun entry(jar: ByteArray, name: String): ByteArray? {

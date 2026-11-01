@@ -1,5 +1,12 @@
 package org.example.kotlineditor.unit
 
+import io.github.treesitter.jtreesitter.InputEncoding
+import io.github.treesitter.jtreesitter.Parser
+import io.github.treesitter.jtreesitter.Point
+import io.github.treesitter.jtreesitter.Query
+import io.github.treesitter.jtreesitter.QueryCursor
+import io.github.treesitter.jtreesitter.QueryMatch
+import io.github.treesitter.jtreesitter.Tree
 import kotlinx.coroutines.runBlocking
 import org.example.kotlineditor.e2e.LocalGrammarRepository
 import org.example.kotlineditor.e2e.TestGrammars
@@ -9,6 +16,7 @@ import org.example.kotlineditor.syntax.treesitter.LineSpanBuilder
 import org.example.kotlineditor.syntax.treesitter.LineSpans
 import org.example.kotlineditor.syntax.treesitter.LoadedGrammar
 import org.example.kotlineditor.syntax.treesitter.NativePlatform
+import org.example.kotlineditor.syntax.treesitter.QueryPredicates
 import org.example.kotlineditor.syntax.treesitter.TreeSitterHighlighter
 import org.example.kotlineditor.ui.IdeColors
 import java.nio.file.Files
@@ -16,6 +24,7 @@ import kotlin.random.Random
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -263,6 +272,72 @@ class TreeSitterHighlighterTest {
             assertEquals(style("comment"), spans["// été"])
         }
     }
+
+    @Test
+    fun `the tree is freed on release and parsed again by the next update`() {
+        val lines = listOf("fun main() = println(1)")
+        TreeSitterHighlighter(grammar("kotlin")).use { highlighter ->
+            highlighter.update(lines)
+            val colored = highlighter.highlight(0, 1)
+            assertTrue(highlighter.isParsed)
+            highlighter.release()
+            assertFalse(highlighter.isParsed)
+            assertEquals(emptyMap(), highlighter.highlight(0, 1))
+            highlighter.update(lines)
+            assertTrue(highlighter.isParsed)
+            assertEquals(colored, highlighter.highlight(0, 1))
+        }
+    }
+
+    @Test
+    fun `text predicates hold as jtreesitter checks them`() {
+        val kotlin = grammar("kotlin")
+        val source =
+            """
+            ((simple_identifier) @a (#match? @a "^[A-Z]"))
+            ((simple_identifier) @b (#not-match? @b "x$"))
+            ((simple_identifier) @c (#any-of? @c "it" "field" "a\"b"))
+            ((simple_identifier) @d (#not-any-of? @d "it"))
+            ((simple_identifier) @e (#eq? @e "it")) ; a comment (#eq? @e "no")
+            ((simple_identifier) @f (#not-eq? @f "it"))
+            (call_expression (simple_identifier) @g (call_suffix (value_arguments (value_argument (simple_identifier) @h))) (#eq? @g @h))
+            (call_expression (simple_identifier) @i (call_suffix (value_arguments (value_argument (simple_identifier) @j))) (#not-eq? @i @j))
+            ((string_literal) @k (#match? @k "^\"multi\nline"))
+            ((simple_identifier) @l)
+            """.trimIndent()
+        val lines = listOf("val Big = it.field", "f(f) + g(x) + ax", "val s = \"multi", "line\" // \u00e9t\u00e9 it")
+        Query(kotlin.language, source).use { query ->
+            val predicates = QueryPredicates.read(query, source)
+            val text = lines.joinToString("\n")
+            // Parsed from a string, the tree keeps its text and jtreesitter checks the predicates. Not from a callback.
+            val withText = Parser(kotlin.language).use { it.parse(text, InputEncoding.UTF_16LE).get() }
+            val expected = withText.use { captures(query, it) }
+            val read = { offset: Int, _: Point -> text.substring(offset / 2).ifEmpty { null } }
+            val tree = Parser(kotlin.language).use { it.parse(read, InputEncoding.UTF_16LE, null, null).get() }
+            val actual =
+                captures(query, tree) { match ->
+                    predicates.hold(match) { start, end -> text.substring(start, end) }
+                }
+            val unchecked = captures(query, tree)
+            tree.close()
+            assertEquals(expected, actual)
+            assertTrue(unchecked.size > actual.size, "the predicates rule some captures out")
+            assertTrue(expected.any { it.startsWith("c ") } && expected.any { it.startsWith("k ") }, "$expected")
+        }
+    }
+
+    // The captures of [query] in [tree], as "name text-range", those of the matches that [hold].
+    private fun captures(query: Query, tree: Tree, hold: (QueryMatch) -> Boolean = { true }): List<String> =
+        QueryCursor(query).use { cursor ->
+            cursor
+                .findCaptures(tree.rootNode)
+                .toList()
+                .filter { hold(it.value) }
+                .map {
+                    val node = it.value.captures()[it.key].node()
+                    "${it.value.captures()[it.key].name()} ${node.startByte / 2}-${node.endByte / 2}"
+                }
+        }
 
     private companion object {
         const val EDITS = 200
