@@ -27,6 +27,7 @@ import org.example.kotlineditor.state.TerminalTab
 
 private const val FIRST_PRINTABLE_CODE_POINT = 0x20
 private const val DELETE_CODE_POINT = 0x7f
+private const val UNDEFINED_CHAR = 0xffff
 private const val WHEEL_ROWS = 3
 
 // Text the punctuation keys produce on a US layout, used when the platform gives no typed character.
@@ -123,8 +124,9 @@ private fun copySelection(tab: TerminalTab, selection: TerminalSelection) {
 }
 
 // The text the shell receives for a key press. Ctrl (or Cmd) and plain Alt mark commands through their flags:
-// the layout character they would type is never sent as text (Alt+9 is not 'ç' on a French keyboard). Otherwise
-// the layout decides, and when the event carries no typed character the US base text of the key stands in.
+// the layout character they would type is never sent as text (Alt+9 is not 'ç' on a French keyboard). Keys that
+// type nothing (Enter, arrows, function keys) never send text either. Otherwise the layout decides, and when the
+// event carries no typed character the US base text of the key stands in.
 private fun typedText(event: KeyEvent, key: TerminalKey?, ctrl: Boolean): String =
     when {
         ctrl && !event.isAltPressed -> {
@@ -137,14 +139,21 @@ private fun typedText(event: KeyEvent, key: TerminalKey?, ctrl: Boolean): String
             key?.let { baseText(it, event.isShiftPressed) }.orEmpty()
         }
 
+        key != null && baseText(key, shift = false).isEmpty() -> {
+            // Enter, Tab, Backspace, arrows, function keys: the terminal encodes the key itself.
+            ""
+        }
+
         else -> {
             printable(event.utf16CodePoint)
                 ?: key?.let { baseText(it, event.isShiftPressed) }.orEmpty()
         }
     }
 
+// A typed character, or null for a control character and for the undefined one that a modifier, a lock or a
+// function key reports (AWT's CHAR_UNDEFINED, U+FFFF).
 private fun printable(codePoint: Int): String? =
-    if (codePoint >= FIRST_PRINTABLE_CODE_POINT && codePoint != DELETE_CODE_POINT) {
+    if (codePoint >= FIRST_PRINTABLE_CODE_POINT && codePoint != DELETE_CODE_POINT && codePoint != UNDEFINED_CHAR) {
         String(Character.toChars(codePoint))
     } else {
         null

@@ -84,9 +84,9 @@ class TerminalShortcutsE2eTest {
                 app.project.toolWindows.isVisible(ToolWindow.Project) != projectBefore,
                 "Alt+1 must not toggle the Project panel",
             )
-            // A numeric argument now hangs in readline (shown as "(arg: 9)"): Ctrl+U clears it...
-            onNodeWithTag(Tags.TERMINAL_INPUT).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.U) } }
-            // ...and the shell is still working: a plain command runs.
+            // The shell got Alt+9 and Alt+1 (a numeric argument for readline, ESC 9 ESC 1 for cmd.exe): Enter ends that
+            // line, whatever the shell made of it, and the shell is still working: a plain command runs.
+            onNodeWithTag(Tags.TERMINAL_INPUT).performKeyInput { pressKey(Key.Enter) }
             typeCommand("echo still-alive")
             awaitCondition { printed(app, "still-alive") }
         }

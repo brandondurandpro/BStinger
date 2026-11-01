@@ -149,6 +149,8 @@ class E2eApp(
     val process: ServerProcess,
     val client: RpcClient,
     private val proxy: ChaosProxy?,
+    /** What the UI sent to the shells of the terminal. */
+    val terminalInput: TerminalInputRecorder,
 ) {
     val server: EditorServer get() = process.server
 
@@ -188,13 +190,14 @@ fun ComposeUiTest.launchApp(
     runBlocking { client.awaitConnected() }
     val remote = client.appServices()
     if (recent.isNotEmpty()) runBlocking { remote.recentProjects.save(recent) }
+    val terminalInput = TerminalInputRecorder(remote.terminal)
     val services =
         AppServices(
             remote.fileSystem,
             remote.search,
             remote.recentProjects,
             remote.places,
-            remote.terminal,
+            terminalInput,
             sessions ?: remote.sessions,
             remote.git,
             remote.connection,
@@ -217,7 +220,7 @@ fun ComposeUiTest.launchApp(
     }
     waitForIdle()
     if (recent.isNotEmpty()) waitUntil(timeoutMillis = TIMEOUT) { created!!.recentProjects.size == recent.size }
-    return E2eApp(created!!, services.recentProjects, process, client, proxy)
+    return E2eApp(created!!, services.recentProjects, process, client, proxy, terminalInput)
 }
 
 /** Opens the Open Project dialog from the welcome screen and waits for it to list a directory. */
