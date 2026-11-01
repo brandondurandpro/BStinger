@@ -304,6 +304,7 @@ internal fun StatusBar(app: AppState, project: ProjectState) {
         app.error?.let {
             Label(it, Modifier.testTag(Tags.STATUS_ERROR), color = IdeColors.Error, fontSize = 12.sp)
         }
+        LanguageServerStatusItems(project)
         LinkStatus(app)
         if (!project.agentMode) tab?.document?.let { DocumentStatus(it) }
     }

@@ -153,12 +153,17 @@ class AppState(
             return recentProjects.filter { it != current }
         }
 
+    /** The language servers of the server shown, and the choice of a server for a language; replaced on a switch. */
+    var languageServers by mutableStateOf(languageServersOf(initialServices))
+        private set
+
     init {
         remoteWorkspaces.addAll(
             RemoteWorkspaceCodec.decode(preferences[RemotePreferenceKeys.WORKSPACES].orEmpty()),
         )
         hostTags.putAll(HostTagsCodec.decode(preferences[RemotePreferenceKeys.TAGS].orEmpty()))
         scope.launch { savePreferencesOnChange() }
+        scope.launch { declareOpenFiles() }
         reloadRecents()
     }
 
@@ -340,6 +345,7 @@ class AppState(
             remoteSession?.close()
             remoteSession = null
             services = local
+            rebindLanguageServers()
             screen = Screen.Welcome
             reloadRecents()
         }
@@ -350,6 +356,7 @@ class AppState(
         remoteSession?.close()
         remoteSession = session
         services = session.services
+        rebindLanguageServers()
         lastRemote = target
         remoteDialog = null
         remoteStatus = null
@@ -506,6 +513,31 @@ class AppState(
         }
     }
 
+    // The server starts the language servers the open files need, and stops them when they are closed. Declared to
+    // the language servers of the server shown: a switch of server declares them to the new one.
+    private suspend fun declareOpenFiles() {
+        snapshotFlow {
+            val project = (screen as? Screen.Project)?.project
+            val files =
+                project
+                    ?.editor
+                    ?.allTabs
+                    ?.filterNot { it.isDiff }
+                    ?.map { it.entry.path }
+                    .orEmpty()
+            Triple(languageServers, project?.root?.path, files)
+        }.collect { (servers, project, files) -> servers.declare(project, files) }
+    }
+
+    private fun languageServersOf(services: AppServices) =
+        LanguageServersState(services.languageServers, scope, services.connection)
+
+    // The old server's state stops polling: its connection is closed or belongs to another server.
+    private fun rebindLanguageServers() {
+        languageServers.close()
+        languageServers = languageServersOf(services)
+    }
+
     private suspend fun open(root: FileEntry) {
         error = null
         recentProjects.remove(root.path)
@@ -514,7 +546,8 @@ class AppState(
         saveRecent()
         recordRemoteWorkspace(root.path)
         (screen as? Screen.Project)?.project?.let { saveAndDispose(it) }
-        val project = ProjectState(root, services, scope, preferences, grammars = grammars)
+        val project =
+            ProjectState(root, services, scope, preferences, grammars = grammars, languageServers = languageServers)
         runCatching { services.sessions.load(root.path) }.getOrNull()?.let(project::restoreSession)
         screen = Screen.Project(project)
     }

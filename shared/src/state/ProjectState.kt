@@ -32,6 +32,8 @@ class ProjectState(
     val toolWindows: ToolWindowLayout = ToolWindowLayout().apply { restore(preferences) },
     /** Tree-sitter grammars, shared with the worktrees agent mode opens from this project. */
     internal val grammars: GrammarStore? = null,
+    /** Language servers of the IDE, shared by every project; none for the worktrees of agent mode. */
+    val languageServers: LanguageServersState? = null,
 ) {
     /** Cancelled when the project is closed, so no background work outlives it. */
     val scope = CoroutineScope(parentScope.coroutineContext + SupervisorJob(parentScope.coroutineContext[Job]))

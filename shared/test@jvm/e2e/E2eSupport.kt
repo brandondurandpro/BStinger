@@ -22,6 +22,7 @@ import androidx.compose.ui.test.printToString
 import androidx.compose.ui.test.requestFocus
 import kotlinx.coroutines.runBlocking
 import org.example.kotlineditor.App
+import org.example.kotlineditor.lsp.LanguageServerSettings
 import org.example.kotlineditor.model.AppServices
 import org.example.kotlineditor.remote.JvmRemoteFactory
 import org.example.kotlineditor.rpc.ClientOptions
@@ -113,11 +114,15 @@ class SampleProject(val root: Path = Files.createTempDirectory("kotlin-editor-e2
  * The server process of an e2e app, which a chaos test can stop and start again on the same port and data, as when
  * it crashes or is redeployed: its sessions (shells, cached answers) are lost, the files and stores are not.
  */
-class ServerProcess(private val data: java.io.File) : AutoCloseable {
-    var server: EditorServer = EditorServer(LocalServices(data)).start()
+class ServerProcess(private val data: java.io.File, private val languageServers: LanguageServerSettings? = null) :
+    AutoCloseable {
+    var server: EditorServer = EditorServer(services()).start()
         private set
     val port: Int = server.port
     private var running = true
+
+    private fun services() =
+        LocalServices(data, languageServerSettings = languageServers ?: LanguageServerSettings(data.toPath()))
 
     /** Kills the server: connections drop and new ones are refused until [start]. */
     fun stop() {
@@ -128,7 +133,7 @@ class ServerProcess(private val data: java.io.File) : AutoCloseable {
     /** Starts a new server on the same port and data, presenting [token] (the same one by default). */
     fun start(token: String = server.token) {
         check(!running) { "The server is already running" }
-        server = EditorServer(LocalServices(data), token).start(port = port)
+        server = EditorServer(services(), token).start(port = port)
         running = true
     }
 
@@ -173,10 +178,11 @@ fun ComposeUiTest.launchApp(
     preferences: PreferenceStore = InMemoryPreferenceStore(),
     chaos: Boolean = false,
     grammars: GrammarStore? = TestGrammars.shared,
+    languageServers: LanguageServerSettings? = null,
 ): E2eApp {
     TextClipboard.useSystem = false
     val data = Files.createTempDirectory("kotlin-editor-server").toFile()
-    val process = ServerProcess(data)
+    val process = ServerProcess(data, languageServers)
     val token = process.server.token
     // Chaos tests go through a proxy that breaks the network, and notice a dead link within a second.
     val proxy = if (chaos) ChaosProxy(process.port) else null
@@ -202,6 +208,7 @@ fun ComposeUiTest.launchApp(
             remote.git,
             remote.connection,
             remote.network,
+            remote.languageServers,
         )
     var created: AppState? = null
     setContent {
@@ -281,8 +288,10 @@ fun ComposeUiTest.launchWithProject(
     preferences: PreferenceStore = InMemoryPreferenceStore(),
     chaos: Boolean = false,
     grammars: GrammarStore? = TestGrammars.shared,
+    languageServers: LanguageServerSettings? = null,
 ): E2eApp {
-    val app = launchApp(preferences = preferences, chaos = chaos, grammars = grammars)
+    val app =
+        launchApp(preferences = preferences, chaos = chaos, grammars = grammars, languageServers = languageServers)
     openProjectDirectoryFromWelcome(project.path)
     awaitTag(Tags.treeRow("src"))
     return app

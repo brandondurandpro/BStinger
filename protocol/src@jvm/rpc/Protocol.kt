@@ -46,7 +46,7 @@ import java.io.OutputStream
  */
 object Protocol {
     /** Version announced in the handshake; client and server must speak the same one. */
-    const val VERSION = 5
+    const val VERSION = 6
 
     /** Version of the application, shown in the welcome screen and used to identify remote server bundles. */
     const val APP_VERSION = "2026.1"
@@ -355,6 +355,30 @@ enum class Method(
 
     /** Clears the screen and the scrollback of a terminal. */
     TerminalClear("terminal/clear", mutating = true),
+
+    /** Status of the language servers, answered once newer than the version the client has (long poll). */
+    LspStatus("lsp/status"),
+
+    /** Files a session has open in a project, which decide the language servers it needs. */
+    LspUse("lsp/use"),
+
+    /** Restarts a language server if it still runs the given generation. */
+    LspRestart("lsp/restart", mutating = true),
+
+    /** Stops a language server. */
+    LspStop("lsp/stop", mutating = true),
+
+    /** Starts a stopped or crashed language server. */
+    LspStart("lsp/start", mutating = true),
+
+    /** Last lines of a language server's log. */
+    LspLog("lsp/log"),
+
+    /** Language servers offered for a language, and the chosen one. */
+    LspChoice("lsp/choice"),
+
+    /** Saves the language server chosen for a language. */
+    LspChoose("lsp/choose", mutating = true),
 }
 
 /** A JSON-RPC error object `{"code": ..., "message": ...}`. */

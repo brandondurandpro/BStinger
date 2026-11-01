@@ -42,6 +42,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import org.example.kotlineditor.state.Dock
 import org.example.kotlineditor.state.ProjectState
 import org.example.kotlineditor.state.ToolWindow
@@ -138,6 +139,9 @@ private fun ColumnScope.ToolButtons(project: ProjectState, devtools: Boolean) {
             Label("⇅", color = IdeColors.Text, fontWeight = FontWeight.Bold)
         }
     }
+    ToolButton(project, ToolWindow.LanguageServers, Tags.TOOL_LANGUAGE_SERVERS) {
+        Label("LS", color = IdeColors.Text, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+    }
     ToolButton(project, ToolWindow.Terminal, Tags.TOOL_TERMINAL) {
         Label(">_", color = IdeColors.Text, fontWeight = FontWeight.Bold)
     }
@@ -227,6 +231,7 @@ private fun ToolWindowContent(project: ProjectState, window: ToolWindow, drag: T
         ToolWindow.Branches -> BranchesPanel(project, drag, modifier)
         ToolWindow.Terminal -> TerminalPanel(project, drag, modifier)
         ToolWindow.Network -> NetworkPanel(project, drag, modifier)
+        ToolWindow.LanguageServers -> LanguageServersPanel(project, drag, modifier)
     }
 }
 

@@ -29,10 +29,17 @@ private val ORDERED =
         Method.TerminalClear,
         Method.TerminalResume,
         Method.TerminalDestroy,
+        // Each one replaces the files declared by the previous one: they must apply in order.
+        Method.LspUse,
     )
 
-/** One request being executed: its id, its named params, and the session's terminals. */
-internal class Request(val id: Long, val params: JsonObject, val terminals: TerminalRegistry) {
+/** One request being executed: its id, its named params, the session's terminals and the session's id. */
+internal class Request(
+    val id: Long,
+    val params: JsonObject,
+    val terminals: TerminalRegistry,
+    val session: String = "",
+) {
     /** Set by a handler whose answer is source code, so the codec may use the code dictionary. */
     var code = false
 }
@@ -65,6 +72,7 @@ internal class ServerSession(
     private val scope: CoroutineScope,
     private val handlers: Map<Method, suspend Request.() -> JsonElement>,
     private val options: ServerOptions,
+    private val onDispose: (String) -> Unit = {},
 ) {
     @Volatile
     var connection: ServerConnection? = null
@@ -108,6 +116,7 @@ internal class ServerSession(
         inFlight.values.forEach { it.cancel() }
         terminals.stopAll()
         connection?.close()
+        onDispose(id)
     }
 
     // Lost when the client is disconnected: it will retry the request or resume the stream.
@@ -144,7 +153,7 @@ internal class ServerSession(
 
     private suspend fun execute(id: Long, method: Method, params: JsonElement): Frame =
         try {
-            val request = Request(id, params.params(), terminals)
+            val request = Request(id, params.params(), terminals, this.id)
             val result = checkNotNull(handlers[method]) { "No handler for $method" }.invoke(request)
             Frame(FrameKind.Response, id, result, code = request.code)
         } catch (e: IOException) {

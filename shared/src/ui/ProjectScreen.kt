@@ -77,6 +77,7 @@ fun ProjectScreen(app: AppState, project: ProjectState) {
     ) {
         Toolbar(app, project)
         Box(Modifier.fillMaxWidth().height(1.dp).background(IdeColors.Border))
+        if (!project.agentMode) LanguageServerChoicePanel(project)
         Box(Modifier.weight(1f)) {
             if (project.agentMode) {
                 AgentWorkspace(app, project)

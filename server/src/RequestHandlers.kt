@@ -37,7 +37,11 @@ private const val TERMINAL = "terminal"
 
 /** Implementation of each [Method]: read the named params, call the local services, return the JSON result. */
 internal fun requestHandlers(services: LocalServices): Map<Method, Handler> =
-    fileHandlers(services) + searchHandlers(services) + gitHandlers(services.git) + terminalHandlers()
+    fileHandlers(services) +
+        searchHandlers(services) +
+        gitHandlers(services.git) +
+        terminalHandlers() +
+        languageServerHandlers(services)
 
 private fun fileHandlers(services: LocalServices): Map<Method, Handler> {
     val fs = services.fileSystem

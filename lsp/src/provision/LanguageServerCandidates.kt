@@ -29,10 +29,10 @@ data class LanguageServerCandidate(
     val drawbacks: List<String>,
     /** Runtimes it needs. */
     val requirements: List<Requirement>,
-    /** The artifact downloaded on first use. */
-    val tool: PinnedTool,
-    /** The command line, from the found runtimes and the installed artifact. */
-    val command: (runtimes: Map<RuntimeKind, Path>, installed: Path) -> List<String>,
+    /** The artifact downloaded on first use, null for a server already on the machine. */
+    val tool: PinnedTool?,
+    /** The command line, from the found runtimes and the installed artifact (null without [tool]). */
+    val command: (runtimes: Map<RuntimeKind, Path>, installed: Path?) -> List<String>,
 )
 
 /** A candidate and whether it can run on this server machine. */
@@ -52,13 +52,16 @@ class CandidateRegistry(
     private val detector: RuntimeDetector = RuntimeDetector(),
     private val known: List<LanguageServerCandidate> = PhpServers.all,
 ) {
+    /** The candidates of [language], without checking their requirements (which runs programs). */
+    fun offered(language: String): List<LanguageServerCandidate> = known.filter { it.language == language }
+
     /** The candidates of [language] (`php`), in the order they are offered; empty for a language with none. */
     fun candidates(language: String): List<CandidateStatus> = known.filter { it.language == language }.map(::status)
 
     /** The command that starts [status]'s server, installing its artifact first when needed. Blocking. */
     fun commandFor(status: CandidateStatus, downloader: ToolDownloader): List<String> {
         check(status.available) { "${status.candidate.displayName} cannot run here: ${status.details.joinToString()}" }
-        return status.candidate.command(status.runtimes, downloader.obtain(status.candidate.tool))
+        return status.candidate.command(status.runtimes, status.candidate.tool?.let(downloader::obtain))
     }
 
     private fun status(candidate: LanguageServerCandidate): CandidateStatus {
@@ -78,7 +81,8 @@ class CandidateRegistry(
             }
 
             is RuntimeStatus.Missing -> {
-                "${status.reason}: install ${status.kind.displayName} or set its path in Preferences › Language servers"
+                "${status.reason}: install ${status.kind.displayName} or set its path in Preferences › " +
+                    "Language servers"
             }
 
             is RuntimeStatus.TooOld -> {
