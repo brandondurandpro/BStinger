@@ -145,8 +145,11 @@ class ResilienceTest {
             project.resolve("c.txt").writeText("ahead")
             client.awaitConnected()
             val port = server.port
-            client.reconnectWith("next secret")
             server.close()
+            // Given once the old server is gone, as the IDE does when it finds the daemon restarted: the old server
+            // would refuse the new token, and a reconnection while it still runs (a heartbeat missed on a slow
+            // machine) would then stop the client.
+            client.reconnectWith("next secret")
             delay(300)
             server = EditorServer(LocalServices(data.toFile()), "next secret").start(port = port)
             val file = fs.fileAt(project.resolve("c.txt").toString())!!
