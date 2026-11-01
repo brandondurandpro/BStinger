@@ -18,7 +18,6 @@ import org.example.kotlineditor.model.GitChangeKind
 import org.example.kotlineditor.state.TAB_SIZE
 import org.example.kotlineditor.syntax.Language
 import org.example.kotlineditor.syntax.SyntaxHighlighter
-import org.example.kotlineditor.syntax.treesitter.CaptureStyles
 import org.example.kotlineditor.syntax.treesitter.LineSpans
 
 /** Everything painted over the text of one line, in visual columns (`-1` = none). */
@@ -80,7 +79,8 @@ internal fun highlighted(source: LineSource): AnnotatedString {
     val spans = source.spans
     val highlighted =
         if (spans == null) {
-            SyntaxHighlighter.highlight(displayText(source.text), source.language, source.startsInComment)
+            val text = displayText(source.text)
+            styled(text, SyntaxHighlighter.highlight(text, source.language, source.startsInComment), columns = null)
         } else {
             colored(source.text, spans)
         }
@@ -96,14 +96,18 @@ internal fun highlighted(source: LineSource): AnnotatedString {
 
 // The line as displayed (tabs expanded) with the colors of [spans], which count the characters of [line].
 private fun colored(line: String, spans: LineSpans): AnnotatedString {
-    val text = displayText(line)
-    if (spans.size == 0) return AnnotatedString(text)
     val columns = if ('\t' in line) displayColumns(line) else null
+    return styled(displayText(line), spans, columns)
+}
+
+// [text] with the colors of [spans]; [columns] maps their offsets to the columns of [text] (`null`: the same).
+private fun styled(text: String, spans: LineSpans, columns: IntArray?): AnnotatedString {
+    if (spans.size == 0) return AnnotatedString(text)
     val builder = AnnotatedString.Builder(text)
     for (i in 0 until spans.size) {
         val start = columns?.get(spans.starts[i]) ?: spans.starts[i]
         val end = columns?.get(spans.ends[i]) ?: spans.ends[i]
-        builder.addStyle(CaptureStyles.palette[spans.styles[i]], start, end)
+        builder.addStyle(syntaxStyle(spans.styles[i]), start, end)
     }
     return builder.toAnnotatedString()
 }

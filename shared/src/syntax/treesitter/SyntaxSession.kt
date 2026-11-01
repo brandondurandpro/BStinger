@@ -17,7 +17,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
-import org.example.kotlineditor.state.Document
 
 /**
  * The tree-sitter colors of some lines of a document, as computed by its last parse. Immutable: each parse publishes a
@@ -78,9 +77,9 @@ class SyntaxSession(val spec: GrammarSpec) {
         wanted.value = first..last
     }
 
-    /** Highlights [document] until cancelled (its tab closes). */
+    /** Highlights [source] until cancelled (its tab closes). */
     @OptIn(ExperimentalCoroutinesApi::class)
-    suspend fun run(document: Document, store: GrammarStore) {
+    suspend fun run(source: SyntaxSource, store: GrammarStore) {
         val grammar = store.await(spec) ?: return
         // Parser and tree are used by one thread at a time; the UI thread only reads the published highlights.
         val worker = Dispatchers.Default.limitedParallelism(1)
@@ -88,7 +87,7 @@ class SyntaxSession(val spec: GrammarSpec) {
         try {
             val visible = shown.map { it > 0 }.distinctUntilChanged()
             val requests =
-                combine(snapshotFlow { document.version }, wanted, visible) { _, range, isShown ->
+                combine(snapshotFlow { source.version }, wanted, visible) { _, range, isShown ->
                     range.takeIf { isShown }
                 }
             requests.conflate().collect { range ->
@@ -96,7 +95,7 @@ class SyntaxSession(val spec: GrammarSpec) {
                     // Hidden: the tree is freed, the colors kept for when the document is shown again.
                     withContext(worker) { highlighter.release() }
                 } else {
-                    highlights = highlightsOf(document.lines.toList(), range, highlighter, worker)
+                    highlights = highlightsOf(source.snapshotLines(), range, highlighter, worker)
                 }
                 isParsed = range != null && highlights != null
             }

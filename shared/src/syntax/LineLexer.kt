@@ -1,7 +1,14 @@
 package org.example.kotlineditor.syntax
 
 /** What a highlighted range of a line is. */
-internal enum class TokenKind { Comment, Keyword, StringLiteral, Number, Annotation, Declaration }
+internal enum class TokenKind(val color: SyntaxColor) {
+    Comment(SyntaxColor.Comment),
+    Keyword(SyntaxColor.Keyword),
+    StringLiteral(SyntaxColor.StringLiteral),
+    Number(SyntaxColor.Number),
+    Annotation(SyntaxColor.Annotation),
+    Declaration(SyntaxColor.Declaration),
+}
 
 internal class Token(val kind: TokenKind, val start: Int, val end: Int)
 

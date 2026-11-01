@@ -18,7 +18,7 @@ import org.example.kotlineditor.syntax.treesitter.LoadedGrammar
 import org.example.kotlineditor.syntax.treesitter.NativePlatform
 import org.example.kotlineditor.syntax.treesitter.QueryPredicates
 import org.example.kotlineditor.syntax.treesitter.TreeSitterHighlighter
-import org.example.kotlineditor.ui.IdeColors
+import org.example.kotlineditor.syntax.SyntaxColor
 import java.nio.file.Files
 import kotlin.random.Random
 import kotlin.test.AfterTest
@@ -95,18 +95,18 @@ class GrammarCatalogTest {
 }
 
 class CaptureStylesTest {
-    private fun color(name: String) = CaptureStyles.palette.getOrNull(CaptureStyles.styleOf(name))?.color
+    private fun color(name: String) = SyntaxColor.entries.getOrNull(CaptureStyles.styleOf(name))
 
     @Test
     fun `a capture takes the style of its longest known prefix`() {
-        assertEquals(IdeColors.Keyword, color("keyword"))
-        assertEquals(IdeColors.Keyword, color("keyword.control.conditional"))
-        assertEquals(IdeColors.StringLiteral, color("string"))
-        assertEquals(IdeColors.StringEscape, color("string.escape"))
-        assertEquals(IdeColors.FunctionDeclaration, color("function.method.call"))
-        assertEquals(IdeColors.Keyword, color("type.builtin"))
-        assertEquals(IdeColors.Number, color("constant.numeric.integer"))
-        assertEquals(IdeColors.Property, color("variable.other.member"))
+        assertEquals(SyntaxColor.Keyword, color("keyword"))
+        assertEquals(SyntaxColor.Keyword, color("keyword.control.conditional"))
+        assertEquals(SyntaxColor.StringLiteral, color("string"))
+        assertEquals(SyntaxColor.StringEscape, color("string.escape"))
+        assertEquals(SyntaxColor.Declaration, color("function.method.call"))
+        assertEquals(SyntaxColor.Keyword, color("type.builtin"))
+        assertEquals(SyntaxColor.Number, color("constant.numeric.integer"))
+        assertEquals(SyntaxColor.Property, color("variable.other.member"))
     }
 
     @Test

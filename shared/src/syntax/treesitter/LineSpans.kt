@@ -4,7 +4,7 @@ import androidx.compose.runtime.Immutable
 
 /**
  * The colored ranges of one line, in characters of the line (before tabs are expanded): `[starts[i], ends[i])` has
- * the style `CaptureStyles.palette[styles[i]]`. Ranges are sorted and do not overlap. Compared by content, so that
+ * the color `SyntaxColor.entries[styles[i]]`. Ranges are sorted and do not overlap. Compared by content, so that
  * the laid out line can be reused while its colors stay the same.
  */
 @Immutable

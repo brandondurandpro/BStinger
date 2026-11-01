@@ -9,6 +9,7 @@ import androidx.compose.runtime.setValue
 import org.example.kotlineditor.model.TextChange
 import org.example.kotlineditor.syntax.Language
 import org.example.kotlineditor.syntax.treesitter.SyntaxSession
+import org.example.kotlineditor.syntax.treesitter.SyntaxSource
 
 /**
  * Editable text buffer backed by a snapshot list of lines, so that Compose only re-renders what changed.
@@ -16,7 +17,11 @@ import org.example.kotlineditor.syntax.treesitter.SyntaxSession
  * editing and search actions are extensions, see `DocumentNavigation.kt`, `DocumentEditing.kt`, ...
  */
 @Stable
-class Document(initialLines: List<String>, val language: Language, val lineSeparator: String = "\n") {
+class Document(
+    initialLines: List<String>,
+    val language: Language,
+    val lineSeparator: String = "\n",
+) : SyntaxSource {
     val lines = mutableStateListOf<String>().apply { addAll(initialLines.ifEmpty { listOf("") }) }
 
     var caret by mutableStateOf(TextPos(0, 0))
@@ -27,8 +32,10 @@ class Document(initialLines: List<String>, val language: Language, val lineSepar
         private set
 
     /** Incremented on every edit; lets observers (save state, highlighting) react cheaply. */
-    var version by mutableIntStateOf(0)
+    override var version by mutableIntStateOf(0)
         private set
+
+    override fun snapshotLines(): List<String> = lines.toList()
 
     var savedVersion by mutableIntStateOf(0)
         private set

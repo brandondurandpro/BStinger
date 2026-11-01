@@ -1,12 +1,9 @@
 package org.example.kotlineditor.syntax.treesitter
 
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.text.style.TextDecoration
-import org.example.kotlineditor.ui.IdeColors
+import org.example.kotlineditor.syntax.SyntaxColor
 
 /**
- * Colors of the captures of highlight queries. Queries name captures from the generic (`keyword`) to the specific
+ * Colors ([SyntaxColor]) of the captures of highlight queries. Queries name captures from the generic (`keyword`) to the specific
  * (`keyword.control.conditional`), and differ by source (the grammars' own, Helix's): a name takes the style of its
  * longest known prefix. Captures without style (`variable`, `punctuation`, `operator`...) keep the text color.
  */
@@ -14,23 +11,23 @@ internal object CaptureStyles {
     const val NONE = -1
     const val IGNORED = -2
 
-    private val comment = SpanStyle(color = IdeColors.Comment, fontStyle = FontStyle.Italic)
-    private val keyword = SpanStyle(color = IdeColors.Keyword)
-    private val string = SpanStyle(color = IdeColors.StringLiteral)
-    private val escape = SpanStyle(color = IdeColors.StringEscape)
-    private val number = SpanStyle(color = IdeColors.Number)
-    private val annotation = SpanStyle(color = IdeColors.Annotation)
-    private val function = SpanStyle(color = IdeColors.FunctionDeclaration)
-    private val property = SpanStyle(color = IdeColors.Property)
-    private val constant = SpanStyle(color = IdeColors.Property, fontStyle = FontStyle.Italic)
-    private val typeParameter = SpanStyle(color = IdeColors.TypeParameter)
-    private val label = SpanStyle(color = IdeColors.Label)
-    private val tag = SpanStyle(color = IdeColors.MarkupTag)
-    private val attribute = SpanStyle(color = IdeColors.MarkupAttribute)
-    private val link = SpanStyle(color = IdeColors.Link, textDecoration = TextDecoration.Underline)
-    private val italic = SpanStyle(fontStyle = FontStyle.Italic)
+    private val comment = SyntaxColor.Comment
+    private val keyword = SyntaxColor.Keyword
+    private val string = SyntaxColor.StringLiteral
+    private val escape = SyntaxColor.StringEscape
+    private val number = SyntaxColor.Number
+    private val annotation = SyntaxColor.Annotation
+    private val function = SyntaxColor.Declaration
+    private val property = SyntaxColor.Property
+    private val constant = SyntaxColor.Constant
+    private val typeParameter = SyntaxColor.TypeParameter
+    private val label = SyntaxColor.Label
+    private val tag = SyntaxColor.MarkupTag
+    private val attribute = SyntaxColor.MarkupAttribute
+    private val link = SyntaxColor.Link
+    private val italic = SyntaxColor.Emphasis
 
-    private val byName: Map<String, SpanStyle?> =
+    private val byName: Map<String, SyntaxColor?> =
         mapOf(
             "comment" to comment,
             "keyword" to keyword,
@@ -87,20 +84,15 @@ internal object CaptureStyles {
             "text.uri" to link,
             "text.reference" to link,
             "text.literal" to string,
-            "diff.plus" to SpanStyle(color = IdeColors.GitAdded),
-            "diff.minus" to SpanStyle(color = IdeColors.GitDeleted),
+            "diff.plus" to SyntaxColor.DiffAdded,
+            "diff.minus" to SyntaxColor.DiffDeleted,
         )
-
-    /** Every style a capture can have; [LineSpans] refers to them by index. */
-    val palette: List<SpanStyle> = byName.values.filterNotNull().distinct()
-
-    private val indexOf: Map<SpanStyle, Int> = palette.withIndex().associate { it.value to it.index }
 
     // Captures that are not highlights: helpers of predicates (`@_name`) and other editors' markers.
     private val ignored = setOf("spell", "nospell", "conceal", "local", "injection")
 
     /**
-     * Index in [palette] of the style of capture [name] (without `@`): [NONE] when it keeps the text color (it still
+     * Ordinal of the [SyntaxColor] of capture [name] (without `@`): [NONE] when it keeps the text color (it still
      * takes the range over the captures of later patterns), [IGNORED] when it is not a highlight at all.
      */
     fun styleOf(name: String): Int {
@@ -109,6 +101,6 @@ internal object CaptureStyles {
         val known =
             generateSequence(name) { prefix -> prefix.substringBeforeLast('.', "").takeIf { it.isNotEmpty() } }
                 .firstOrNull { byName.containsKey(it) }
-        return known?.let(byName::get)?.let(indexOf::getValue) ?: NONE
+        return known?.let(byName::get)?.ordinal ?: NONE
     }
 }

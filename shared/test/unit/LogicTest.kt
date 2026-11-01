@@ -4,7 +4,8 @@ import org.example.kotlineditor.state.FileIndex
 import org.example.kotlineditor.state.placeholder
 import org.example.kotlineditor.syntax.Language
 import org.example.kotlineditor.syntax.SyntaxHighlighter
-import org.example.kotlineditor.ui.IdeColors
+import org.example.kotlineditor.syntax.SyntaxColor
+import org.example.kotlineditor.syntax.treesitter.LineSpans
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -13,27 +14,27 @@ import kotlin.test.assertTrue
 
 class SyntaxHighlighterTest {
     private fun colorAt(line: String, index: Int, language: Language = Language.Kotlin, inComment: Boolean = false) =
-        SyntaxHighlighter
-            .highlight(line, language, inComment)
-            .spanStyles
-            .lastOrNull { index >= it.start && index < it.end }
-            ?.item
-            ?.color
+        SyntaxHighlighter.highlight(line, language, inComment).colorAt(index)
+
+    private fun LineSpans.colorAt(index: Int): SyntaxColor? {
+        val span = (0 until size).lastOrNull { index >= starts[it] && index < ends[it] } ?: return null
+        return SyntaxColor.entries[styles[span]]
+    }
 
     @Test
     fun `keywords, strings, numbers and comments are colored`() {
         val line = "val x = \"hi\" + 42 // note"
-        assertEquals(IdeColors.Keyword, colorAt(line, 0))
+        assertEquals(SyntaxColor.Keyword, colorAt(line, 0))
         assertNull(colorAt(line, 4))
-        assertEquals(IdeColors.StringLiteral, colorAt(line, 9))
-        assertEquals(IdeColors.Number, colorAt(line, 15))
-        assertEquals(IdeColors.Comment, colorAt(line, 20))
+        assertEquals(SyntaxColor.StringLiteral, colorAt(line, 9))
+        assertEquals(SyntaxColor.Number, colorAt(line, 15))
+        assertEquals(SyntaxColor.Comment, colorAt(line, 20))
     }
 
     @Test
     fun `function declarations and annotations`() {
-        assertEquals(IdeColors.FunctionDeclaration, colorAt("fun main() {}", 5))
-        assertEquals(IdeColors.Annotation, colorAt("@Composable fun x()", 3))
+        assertEquals(SyntaxColor.Declaration, colorAt("fun main() {}", 5))
+        assertEquals(SyntaxColor.Annotation, colorAt("@Composable fun x()", 3))
     }
 
     @Test
@@ -41,8 +42,8 @@ class SyntaxHighlighterTest {
         val lines = listOf("a /* start", "inside", "end */ val", "val")
         val states = SyntaxHighlighter.blockCommentStates(lines, Language.Kotlin)!!
         assertEquals(listOf(false, true, true, false), states.toList())
-        assertEquals(IdeColors.Comment, colorAt("inside", 0, inComment = true))
-        assertEquals(IdeColors.Keyword, colorAt("end */ val", 8, inComment = true))
+        assertEquals(SyntaxColor.Comment, colorAt("inside", 0, inComment = true))
+        assertEquals(SyntaxColor.Keyword, colorAt("end */ val", 8, inComment = true))
     }
 
     @Test
