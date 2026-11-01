@@ -4,16 +4,23 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.example.kotlineditor.model.AppServices
 import org.example.kotlineditor.model.FileEntry
+import org.example.kotlineditor.remote.SshConfigHost
+import org.example.kotlineditor.remote.SshTarget
 import org.example.kotlineditor.syntax.treesitter.GrammarStore
 import java.io.IOException
 
@@ -21,19 +28,71 @@ import java.io.IOException
 @Stable
 @Suppress("TooManyFunctions")
 class AppState(
-    private val services: AppServices,
+    initialServices: AppServices,
     private val scope: CoroutineScope,
     private val preferenceStore: PreferenceStore = InMemoryPreferenceStore(),
     /** Tree-sitter grammars; without them, files are colored by the line lexer only. */
     private val grammars: GrammarStore? = null,
+    /** Services of the local server, restored when a remote session ends; null when the IDE started remotely. */
+    private val localServices: AppServices? = initialServices,
+    /** Creates SSH sessions; null in previews and tests that do not exercise remote development. */
+    private val remoteFactory: RemoteFactory? = null,
 ) {
     // Last preferences known: those of the open project are read live, these cover the welcome screen.
     private var preferences: Map<String, String> = preferenceStore.load()
+
+    /**
+     * Services of the server currently shown: the embedded one, or a remote one. A state, so that what reads it
+     * (the status bar's link, the welcome screen) follows a switch of server.
+     */
+    var services: AppServices by mutableStateOf(initialServices)
+        private set
 
     var screen: Screen by mutableStateOf(Screen.Welcome)
         private set
 
     val recentProjects = mutableStateListOf<String>()
+
+    /** The "Remote Development" dialog, when open. */
+    var remoteDialog: RemoteDialogState? by mutableStateOf(null)
+        private set
+
+    /** Hosts of the client's `~/.ssh/config`, shown in the remote dialog. */
+    var sshHosts: List<SshConfigHost> by mutableStateOf(emptyList())
+        private set
+
+    /** Whether `~/.ssh/config` is being read (it resolves each alias with `ssh -G`). */
+    var sshHostsLoading: Boolean by mutableStateOf(false)
+        private set
+
+    /** Remote folders already opened, newest first, searchable from the remote dialog. */
+    val remoteWorkspaces = mutableStateListOf<RemoteWorkspace>()
+
+    private val hostTags = mutableStateMapOf<String, List<String>>()
+
+    /** What the remote connection is doing, while it is being established. */
+    var remoteStatus: String? by mutableStateOf(null)
+        private set
+
+    // State: the welcome screen, the top bar and the status bar show whether the IDE is remote.
+    private var remoteSession: RemoteConnection? by mutableStateOf(null)
+    private var remoteJob: Job? = null
+
+    private var lastRemote: SshTarget? by mutableStateOf(RemotePreferenceKeys.read(preferences))
+
+    /** Whether the IDE shows a project on a remote server. */
+    val isRemote: Boolean get() = remoteSession != null
+
+    /** `user@host` of the remote session, or null when the server is local. */
+    val remoteLabel: String? get() = remoteSession?.label
+
+    /** Home directory of the SSH user, or null when the server is local. */
+    val remoteHome: String? get() = remoteSession?.home
+
+    /** Why the remote SSH tunnel refuses to connect, or null. */
+    val remoteFailure: StateFlow<String?> get() = remoteSession?.failure ?: noRemoteFailure
+
+    private val noRemoteFailure = MutableStateFlow<String?>(null)
 
     /** The link with the server (reconnecting after a network failure, ...). */
     val connection get() = services.connection
@@ -95,9 +154,221 @@ class AppState(
         }
 
     init {
+        remoteWorkspaces.addAll(
+            RemoteWorkspaceCodec.decode(preferences[RemotePreferenceKeys.WORKSPACES].orEmpty()),
+        )
+        hostTags.putAll(HostTagsCodec.decode(preferences[RemotePreferenceKeys.TAGS].orEmpty()))
         scope.launch { savePreferencesOnChange() }
-        scope.launch { runCatching { services.recentProjects.load() }.onSuccess { recentProjects.addAll(it) } }
-        scope.launch { serverHome = runCatching { services.places.home() }.getOrNull() }
+        reloadRecents()
+    }
+
+    /** Opens the "Remote Development" dialog, prefilled with the last connection and the SSH catalog. */
+    fun openRemoteDialog() {
+        val previousTarget = lastRemote
+        val prefilled = RemoteDialogState.from(previousTarget)
+        remoteDialog =
+            if (previousTarget == null) {
+                prefilled
+            } else {
+                prefilled.copy(tags = tagsFor(previousTarget.tagKey).joinToString(", "))
+            }
+        loadSshHosts()
+    }
+
+    private fun loadSshHosts() {
+        val factory = remoteFactory
+        if (factory == null) {
+            sshHosts = emptyList()
+            return
+        }
+        sshHostsLoading = true
+        scope.launch {
+            sshHosts = withContext(Dispatchers.IO) { runCatching { factory.sshHosts() }.getOrDefault(emptyList()) }
+            sshHostsLoading = false
+        }
+    }
+
+    /** A host of `~/.ssh/config` was picked: use the alias, and let ssh resolve user, port and key. */
+    fun selectSshHost(host: SshConfigHost) {
+        val dialog = remoteDialog ?: return
+        remoteDialog =
+            dialog.copy(
+                alias = host.alias,
+                host = host.alias,
+                user = host.user.orEmpty(),
+                port = host.port.toString(),
+                identityFile = "",
+                projectPath = "",
+                tags = tagsFor(host.alias).joinToString(", "),
+                manual = false,
+                selectedRow = "h:${host.alias}",
+                error = null,
+            )
+    }
+
+    /** A saved remote folder was picked: fill the connection and its path, ready to connect. */
+    fun selectRemoteWorkspace(workspace: RemoteWorkspace) {
+        val dialog = remoteDialog ?: return
+        remoteDialog =
+            dialog.copy(
+                alias = workspace.target.alias.orEmpty(),
+                host = workspace.target.host,
+                user = workspace.target.user.orEmpty(),
+                port = workspace.target.port.toString(),
+                identityFile = workspace.target.identityFile.orEmpty(),
+                projectPath = workspace.path,
+                tags = tagsFor(workspace.target.tagKey).joinToString(", "),
+                manual = false,
+                selectedRow = "w:${workspace.key}",
+                error = null,
+            )
+    }
+
+    /** Tags of a host, by alias or by host:port:user. */
+    fun tagsFor(key: String): List<String> = hostTags[key].orEmpty()
+
+    /** The tags field changed: kept in the dialog, and saved right away for a `~/.ssh/config` alias. */
+    fun editRemoteTags(text: String) {
+        val dialog = remoteDialog ?: return
+        remoteDialog = dialog.copy(tags = text)
+        val alias = dialog.alias.trim()
+        if (alias.isNotEmpty()) saveTags(alias, text)
+    }
+
+    /** Shows the manual form to add a host that is not in `~/.ssh/config`. */
+    fun addRemoteHost() {
+        val dialog = remoteDialog ?: return
+        remoteDialog =
+            dialog.copy(
+                manual = true,
+                host = "",
+                user = "",
+                port = "22",
+                identityFile = "",
+                projectPath = "",
+                alias = "",
+                tags = "",
+                selectedRow = "",
+                error = null,
+            )
+    }
+
+    /** Back to the lists; whatever was typed stays selected so it can still be connected. */
+    fun chooseRemoteHost() {
+        val dialog = remoteDialog ?: return
+        remoteDialog = dialog.copy(manual = false, error = null)
+    }
+
+    private fun saveTags(key: String, text: String) {
+        val tags = parseTags(text)
+        if (tags.isEmpty()) hostTags.remove(key) else hostTags[key] = tags
+    }
+
+    /** Updates the dialog while the user types. */
+    fun updateRemoteDialog(dialog: RemoteDialogState) {
+        remoteDialog = dialog
+    }
+
+    /** Closes the dialog and cancels a connection in progress. */
+    fun dismissRemoteDialog() {
+        remoteJob?.cancel()
+        remoteJob = null
+        remoteDialog = null
+        remoteStatus = null
+    }
+
+    /**
+     * Installs the server on [target], opens the SSH tunnel and switches the IDE to it. The project, when given,
+     * opens once the connection is ready; otherwise the remote welcome screen shows its recent projects.
+     */
+    @Suppress("TooGenericExceptionCaught") // every failure of the SSH flow belongs in the dialog
+    fun connectRemote(dialog: RemoteDialogState) {
+        val factory =
+            remoteFactory ?: run {
+                remoteDialog = dialog.copy(error = "Remote development is not available in this build")
+                return
+            }
+        val target =
+            dialog.toSshTarget().getOrElse {
+                remoteDialog = dialog.copy(error = it.message)
+                return
+            }
+        // A manual host's tags are saved when the target is confirmed; alias tags are saved as they are typed.
+        saveTags(target.tagKey, dialog.tags)
+        remoteJob?.cancel()
+        remoteDialog = dialog.copy(connecting = true, error = null)
+        remoteStatus = "Checking ${target.destination}"
+        remoteJob =
+            scope.launch {
+                // Set as soon as the connection exists: withContext drops its result when it is cancelled right
+                // as it returns, and the tunnel must not outlive a cancelled connection.
+                var connected: RemoteConnection? = null
+                try {
+                    withContext(Dispatchers.IO) {
+                        connected = factory.connect(target) { step -> scope.launch { remoteStatus = step } }
+                    }
+                    switchTo(checkNotNull(connected), target)
+                } catch (cancelled: CancellationException) {
+                    if (remoteSession !== connected) connected?.close()
+                    throw cancelled
+                } catch (e: Exception) {
+                    remoteStatus = null
+                    remoteDialog = dialog.copy(error = e.message ?: "Cannot connect to ${target.destination}")
+                }
+            }
+    }
+
+    /** Releases the remote tunnel when the IDE window goes away without [exit] (tests and previews). */
+    fun dispose() {
+        remoteJob?.cancel()
+        remoteJob = null
+        projectPickerOpen = false
+        remoteSession?.close()
+        remoteSession = null
+    }
+
+    /** Saves the open project, stops the remote session (its daemon keeps running) and shows the local server. */
+    fun disconnectRemote() {
+        val local = localServices ?: return
+        remoteJob?.cancel()
+        remoteJob = null
+        remoteDialog = null
+        remoteStatus = null
+        projectPickerOpen = false
+        scope.launch {
+            (screen as? Screen.Project)?.project?.let { saveAndDispose(it) }
+            remoteSession?.close()
+            remoteSession = null
+            services = local
+            screen = Screen.Welcome
+            reloadRecents()
+        }
+    }
+
+    private suspend fun switchTo(session: RemoteConnection, target: SshTarget) {
+        (screen as? Screen.Project)?.project?.let { saveAndDispose(it) }
+        remoteSession?.close()
+        remoteSession = session
+        services = session.services
+        lastRemote = target
+        remoteDialog = null
+        remoteStatus = null
+        screen = Screen.Welcome
+        // Load before opening the project, so its own addition to the list is not overwritten by the load.
+        loadRecentsNow()
+        if (target.projectPath != null) openProject(target.projectPath) else browseForProject()
+    }
+
+    private fun reloadRecents() {
+        scope.launch { loadRecentsNow() }
+    }
+
+    private suspend fun loadRecentsNow() {
+        val paths = runCatching { services.recentProjects.load() }.getOrDefault(emptyList())
+        recentProjects.clear()
+        recentProjects.addAll(paths)
+        // The home of the server shown now: the Open Project dialog starts there.
+        serverHome = runCatching { services.places.home() }.getOrNull()
     }
 
     fun zoomEditor(delta: Float) {
@@ -135,7 +406,7 @@ class AppState(
         }
     }
 
-    /** Opens the Open Project dialog, which browses the directories of the server's disk. */
+    /** Opens the Open Project dialog, which browses the directories of the server's disk, local or remote. */
     fun browseForProject() {
         projectPickerOpen = true
     }
@@ -158,14 +429,26 @@ class AppState(
     suspend fun pickerSubdirectories(directory: FileEntry): List<FileEntry> =
         services.fileSystem.list(directory).filter { it.isDirectory }
 
-    /** Remembers [path] as the last directory the Open Project dialog browsed (a preference). */
+    /** Remembers [path] as the last directory the Open Project dialog browsed (a preference of the local server). */
     fun rememberProjectPickerDirectory(path: String) {
-        if (path == lastPickerDirectory) return
+        // A remote path means nothing on the local disk, and the remote dialog starts from the project or home.
+        if (isRemote || path == lastPickerDirectory) return
         lastPickerDirectory = path
     }
 
-    /** Where the Open Project dialog starts: the last directory it browsed, the server's home, else the root. */
-    fun projectPickerStart(): String = lastPickerDirectory ?: serverHome ?: "/"
+    /**
+     * Where the Open Project dialog starts: on a remote server the open project, else the SSH user's home; on the
+     * local one the last directory it browsed, else the home; the root when nothing is known.
+     */
+    fun projectPickerStart(): String =
+        if (isRemote) {
+            (screen as? Screen.Project)?.project?.root?.path ?: projectPickerHome() ?: "/"
+        } else {
+            lastPickerDirectory ?: serverHome ?: "/"
+        }
+
+    /** The home directory of the server shown (the SSH user's on a remote one): the dialog's Home and `~`. */
+    fun projectPickerHome(): String? = if (isRemote) remoteHome ?: serverHome else serverHome
 
     fun removeRecent(path: String) {
         recentProjects.remove(path)
@@ -179,14 +462,14 @@ class AppState(
         screen = Screen.Welcome
     }
 
-    /** Saves everything, then calls [onDone] (used when the window is closed). */
+    /** Saves everything, stops the remote session, then calls [onDone] (used when the window is closed). */
     fun exit(onDone: () -> Unit) {
+        projectPickerOpen = false
         scope.launch {
-            (screen as? Screen.Project)?.project?.let {
-                runCatching { services.sessions.save(it.root.path, it.session()) }
-                runCatching { it.editor.flush() }
-            }
+            (screen as? Screen.Project)?.project?.let { saveAndDispose(it) }
             runCatching { preferenceStore.save(currentPreferences()) }
+            remoteSession?.close()
+            remoteSession = null
             onDone()
         }
     }
@@ -201,12 +484,17 @@ class AppState(
     // The open project's settings on top of the last known preferences.
     private fun currentPreferences(): Map<String, String> {
         val picker = lastPickerDirectory?.let { listOf(PreferenceKeys.PICKER_DIRECTORY to it) }.orEmpty()
-        val app =
-            preferences + picker + fontSizePreference() + (PreferenceKeys.AGENT_MODE to agentModeEnabled.toString())
+        val agentMode = PreferenceKeys.AGENT_MODE to agentModeEnabled.toString()
+        val app = preferences + picker + fontSizePreference() + agentMode + remotePreferences()
         val project = (screen as? Screen.Project)?.project ?: return app
         val autoSelect = PreferenceKeys.AUTO_SELECT_OPENED_FILE to project.autoSelectOpenedFile.toString()
         return app + project.toolWindows.toPreferences() + autoSelect
     }
+
+    private fun remotePreferences(): Map<String, String> =
+        lastRemote?.let(RemotePreferenceKeys::write).orEmpty() +
+            (RemotePreferenceKeys.WORKSPACES to RemoteWorkspaceCodec.encode(remoteWorkspaces)) +
+            (RemotePreferenceKeys.TAGS to HostTagsCodec.encode(hostTags))
 
     private fun fontSizePreference() = PreferenceKeys.EDITOR_FONT_SIZE to editorFontSize.toString()
 
@@ -224,24 +512,39 @@ class AppState(
         recentProjects.add(0, root.path)
         while (recentProjects.size > MAX_RECENT) recentProjects.removeAt(recentProjects.lastIndex)
         saveRecent()
-        (screen as? Screen.Project)?.project?.let { close(it) }
+        recordRemoteWorkspace(root.path)
+        (screen as? Screen.Project)?.project?.let { saveAndDispose(it) }
         val project = ProjectState(root, services, scope, preferences, grammars = grammars)
         runCatching { services.sessions.load(root.path) }.getOrNull()?.let(project::restoreSession)
         screen = Screen.Project(project)
     }
 
+    private fun recordRemoteWorkspace(path: String) {
+        if (!isRemote) return
+        val target = lastRemote?.copy(projectPath = null) ?: return
+        remoteWorkspaces.removeAll { it.matches(target, path) }
+        remoteWorkspaces.add(0, RemoteWorkspace(target, path, System.currentTimeMillis()))
+        while (remoteWorkspaces.size > RemoteWorkspaceCodec.MAX) {
+            remoteWorkspaces.removeAt(remoteWorkspaces.lastIndex)
+        }
+    }
+
     private fun saveRecent() {
         val recent = recentProjects.toList()
-        scope.launch { runCatching { services.recentProjects.save(recent) } }
+        val store = services.recentProjects
+        scope.launch { runCatching { store.save(recent) } }
     }
 
     private fun close(project: ProjectState) {
+        scope.launch { saveAndDispose(project) }
+    }
+
+    // Saves through the project's own services: the IDE may switch to another server right after.
+    private suspend fun saveAndDispose(project: ProjectState) {
         val session = project.session()
-        scope.launch {
-            runCatching { services.sessions.save(project.root.path, session) }
-            runCatching { project.editor.flush() }
-            project.dispose()
-        }
+        runCatching { project.services.sessions.save(project.root.path, session) }
+        runCatching { project.editor.flush() }
+        project.dispose()
     }
 
     companion object {

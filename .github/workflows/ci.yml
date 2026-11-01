@@ -102,7 +102,7 @@ jobs:
             apt-get update
           }
           apt-get install -y --no-install-recommends \
-            ca-certificates curl git tar unzip xz-utils \
+            ca-certificates curl git tar unzip xz-utils openssh-client fish tcsh \
             xvfb xauth x11-utils xwayland weston \
             libgl1 libx11-6 libxext6 libxrender1 libxtst6 libxi6 \
             fontconfig fonts-dejavu-core

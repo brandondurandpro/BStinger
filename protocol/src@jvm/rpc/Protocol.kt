@@ -48,6 +48,9 @@ object Protocol {
     /** Version announced in the handshake; client and server must speak the same one. */
     const val VERSION = 5
 
+    /** Version of the application, shown in the welcome screen and used to identify remote server bundles. */
+    const val APP_VERSION = "2026.1"
+
     /** Largest accepted message: anything bigger is treated as a corrupted stream. */
     const val MAX_FRAME = 512 * 1024 * 1024
 

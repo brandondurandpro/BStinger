@@ -10,6 +10,7 @@ pty4j21 = "0.22.2"
 jtreesitter = "0.26.1"
 tree-sitter-kotlin = "0.3.8.1"
 tree-sitter-json = "0.24.8"
+sshd = "2.20.1"
 
 [libraries]
 logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
@@ -22,9 +23,10 @@ kotlinx-coroutines-swing = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-
 zstd-jni = { module = "com.github.luben:zstd-jni", version.ref = "zstd" }
 # libghostty-vt: FFM bindings and the native library, generated per platform by GhosttyFX (MIT).
 # Only the bindings package is used; the JavaFX classes of the same project are not needed.
-# Amper cannot pick a JVM dependency per OS and the per-platform bindings clash: the Linux artifact is the dependency,
-# the Windows one is vendored as server/resources/ghostty/ghosttyfx-windows-x86_64.jar (see TerminalEngines).
-# Update both with this version.
+# Amper cannot pick a JVM dependency per OS and the per-platform bindings clash: the Linux x86_64 artifact is the
+# dependency, the other platforms are vendored as resources under server/resources/ghostty/ (Windows, Linux aarch64,
+# macOS x86_64 and aarch64), which also makes one server jar portable to every remote target (see TerminalEngines).
+# Update all of them with this version.
 ghostty-linux = { module = "io.github.vlaaad:ghosttyfx-linux-x86_64", version.ref = "ghostty" }
 pty4j21 = { module = "com.sshtools:pty4j21", version.ref = "pty4j21" }
 # tree-sitter: the official FFM binding. Its native runtime is built by tools/tree-sitter/build-runtime (bonede's
@@ -33,3 +35,6 @@ pty4j21 = { module = "com.sshtools:pty4j21", version.ref = "pty4j21" }
 jtreesitter = { module = "io.github.tree-sitter:jtreesitter", version.ref = "jtreesitter" }
 tree-sitter-kotlin = { module = "io.github.bonede:tree-sitter-kotlin", version.ref = "tree-sitter-kotlin" }
 tree-sitter-json = { module = "io.github.bonede:tree-sitter-json", version.ref = "tree-sitter-json" }
+# Test-only SSH server: the end-to-end tests connect the real OpenSSH client to it.
+sshd-core = { module = "org.apache.sshd:sshd-core", version.ref = "sshd" }
+sshd-sftp = { module = "org.apache.sshd:sshd-sftp", version.ref = "sshd" }

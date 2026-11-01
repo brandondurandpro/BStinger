@@ -1,6 +1,7 @@
 package org.example.kotlineditor.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -58,6 +60,9 @@ internal fun Toolbar(app: AppState, project: ProjectState) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         ProjectWidget(app, project)
+        if (app.isRemote) {
+            RemoteBadge(app)
+        }
         // In agent mode, the branch of the project the agent of the active conversation works on.
         val branchProject = if (project.agentMode) project.agent.current?.workspace else project
         if (branchProject?.gitBranch == null) {
@@ -75,6 +80,44 @@ internal fun Toolbar(app: AppState, project: ProjectState) {
 
 private val MENU_MIN_WIDTH = 320.dp
 private val MENU_MAX_WIDTH = 900.dp
+
+@Composable
+private fun RemoteBadge(app: AppState) {
+    var menuOpen by remember { mutableStateOf(false) }
+    val connection by app.connection.collectAsState()
+    val failure by app.remoteFailure.collectAsState()
+    val failing = failure != null || connection != ConnectionStatus.Connected
+    val border = if (failing) IdeColors.Error else IdeColors.Separator
+    val label = app.remoteLabel ?: "remote"
+    Box {
+        Row(
+            Modifier
+                .border(1.dp, border, RoundedCornerShape(50))
+                .clickable { menuOpen = true }
+                .testTag(Tags.TOP_REMOTE)
+                .padding(horizontal = 10.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Label("Remote", color = IdeColors.TextSecondary)
+            Label(
+                label,
+                color = if (failing) IdeColors.Error else IdeColors.Text,
+                modifier = Modifier.padding(start = 6.dp),
+            )
+            Chevron(expanded = false)
+        }
+        DropdownMenu(menuOpen, onDismissRequest = { menuOpen = false }) {
+            DropdownMenuItem(
+                text = { Text("Disconnect from $label", fontSize = 13.sp) },
+                onClick = {
+                    menuOpen = false
+                    app.disconnectRemote()
+                },
+                modifier = Modifier.testTag(Tags.REMOTE_DISCONNECT),
+            )
+        }
+    }
+}
 
 @Composable
 private fun ProjectWidget(app: AppState, project: ProjectState) {
@@ -216,7 +259,6 @@ private fun Hint(action: String, shortcut: String) {
 
 @Composable
 internal fun StatusBar(app: AppState, project: ProjectState) {
-    val connection by app.connection.collectAsState()
     val tab = project.editor.activeTab
     Row(
         Modifier
@@ -243,6 +285,14 @@ internal fun StatusBar(app: AppState, project: ProjectState) {
             color = IdeColors.TextSecondary,
             fontSize = 12.sp,
         )
+        app.remoteLabel?.let {
+            Label(
+                "Remote: $it",
+                Modifier.testTag(Tags.STATUS_REMOTE),
+                color = IdeColors.TextSecondary,
+                fontSize = 12.sp,
+            )
+        }
         app.opening?.let {
             Label(
                 "Opening ${pathName(it)}…",
@@ -254,15 +304,25 @@ internal fun StatusBar(app: AppState, project: ProjectState) {
         app.error?.let {
             Label(it, Modifier.testTag(Tags.STATUS_ERROR), color = IdeColors.Error, fontSize = 12.sp)
         }
-        if (connection != ConnectionStatus.Connected) {
-            Label(
-                if (connection == ConnectionStatus.Reconnecting) "Server: reconnecting…" else "Server: disconnected",
-                Modifier.testTag(Tags.STATUS_CONNECTION),
-                color = IdeColors.Error,
-                fontSize = 12.sp,
-            )
-        }
+        LinkStatus(app)
         if (!project.agentMode) tab?.document?.let { DocumentStatus(it) }
+    }
+}
+
+// What is wrong with the link to the server, if anything: SSH refusing the host first, then the protocol client.
+@Composable
+private fun LinkStatus(app: AppState) {
+    val connection by app.connection.collectAsState()
+    val remoteFailure by app.remoteFailure.collectAsState()
+    val message =
+        when {
+            remoteFailure != null -> "SSH: $remoteFailure"
+            connection == ConnectionStatus.Reconnecting -> "Server: reconnecting…"
+            connection != ConnectionStatus.Connected -> "Server: disconnected"
+            else -> null
+        }
+    message?.let {
+        Label(it, Modifier.testTag(Tags.STATUS_CONNECTION), color = IdeColors.Error, fontSize = 12.sp)
     }
 }
 

@@ -30,6 +30,14 @@ A lightweight IDE in the style of IntelliJ IDEA (New UI, dark theme), written wi
 ### Features
 
 - **Welcome screen**: recent projects (searchable, removable), *Open* to pick a project directory.
+- **Remote development**: *Remote Development* installs the server on a Linux or macOS host over SSH, starts its
+  per-user daemon on the host's loopback and tunnels to it. The dialog is a pick view: remote folders already
+  opened first, then the `~/.ssh/config` host catalog (alias, includes, `ssh -G` resolution) and tags like
+  production/dev/test, all searchable; a "New host…" button covers manual entries. Connecting without a project
+  opens the Open Project dialog on the host, in the SSH user's home (browse, go up or home, type a path or `~`,
+  then open the directory). Key/agent authentication, automatic tunnel reconnection, strict host-key checking, no Java
+  needed on the host (the bundle carries a jlink runtime).
+  (the bundle carries a jlink runtime). See [docs/REMOTE.md](docs/REMOTE.md).
 - **Project view**: lazily loaded, virtualized file tree (directories first), keyboard navigation (arrows, Enter),
   double click to open, right click for *New File / New Directory / Rename / Delete / Copy Path*, resizable and
   togglable (`Alt+1`), *Select in Project View* (`Alt+F1`).
@@ -80,9 +88,13 @@ All the logic on files runs in a **server**; the IDE is a client that only displ
 - `server` – `EditorServer` and the local services: file system, project search (Find in Files and symbols run
   next to the files, only results travel), Git, shells, sessions and recent projects.
 - `serverApp` – standalone server for remote use:
-  `./kotlin run -m serverApp -- --host 0.0.0.0 --port 7777 --token <secret>`.
+  `./kotlin run -m serverApp -- --host 0.0.0.0 --port 7777 --token <secret>`. It is also the daemon that remote
+  development installs and starts (`--token-file`/`--state-file`, `--version`).
 - `shared` – Compose UI and UI state; `desktopApp` – the IDE. By default it embeds a server on loopback; use
   `--server host:port --token <secret>` (or `KOTLIN_EDITOR_SERVER` / `KOTLIN_EDITOR_TOKEN`) for a remote one.
+- **Remote development** – `shared/src@jvm/remote` (SSH client, installer, tunnel supervisor) and
+  `shared/src/ui/RemoteDialog.kt`. Server bundles are built with `tools/remote-bundle.sh` and looked up in `remote/`
+  next to the application (see [docs/REMOTE.md](docs/REMOTE.md)).
 
 **Protocol.** JSON-RPC 2.0 over TCP (`TCP_NODELAY`), framed like LSP (`Content-Length` header, then the JSON body):
 named params, methods such as `fs/read`, `git/status` or `terminal/start`, standard error codes, answers in any order,

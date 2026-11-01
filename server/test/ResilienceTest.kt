@@ -120,4 +120,37 @@ class ResilienceTest {
             val file = fs.fileAt(project.resolve("a.txt").toString())!!
             assertEquals(listOf("after restart"), (fs.read(file) as FileContent.Text).lines)
         }
+
+    @Test
+    fun `a client refused after a restart with a new token connects again with it`() =
+        runBlocking {
+            project.resolve("b.txt").writeText("new secret")
+            client.awaitConnected()
+            val port = server.port
+            server.close()
+            delay(300)
+            server = EditorServer(LocalServices(data.toFile()), "another secret").start(port = port)
+            // The old token is refused: the client stops, as retrying with it would not help.
+            withTimeout(10_000) { client.status.first { it == ConnectionStatus.Disconnected } }
+
+            client.reconnectWith("another secret")
+            client.awaitConnected()
+            val file = fs.fileAt(project.resolve("b.txt").toString())!!
+            assertEquals(listOf("new secret"), (fs.read(file) as FileContent.Text).lines)
+        }
+
+    @Test
+    fun `a new token given before the restart is used at once`() =
+        runBlocking {
+            project.resolve("c.txt").writeText("ahead")
+            client.awaitConnected()
+            val port = server.port
+            client.reconnectWith("next secret")
+            server.close()
+            delay(300)
+            server = EditorServer(LocalServices(data.toFile()), "next secret").start(port = port)
+            val file = fs.fileAt(project.resolve("c.txt").toString())!!
+            assertEquals(listOf("ahead"), (fs.read(file) as FileContent.Text).lines)
+            assertEquals(ConnectionStatus.Connected, client.status.value)
+        }
 }

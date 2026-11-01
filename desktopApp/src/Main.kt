@@ -7,6 +7,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
+import org.example.kotlineditor.remote.JvmRemoteFactory
 import org.example.kotlineditor.rpc.Protocol
 import org.example.kotlineditor.rpc.RpcClient
 import org.example.kotlineditor.rpc.appServices
@@ -20,6 +21,7 @@ import java.io.File
 /**
  * The IDE is a client of the Kotlin Editor server. By default the server is embedded (started on loopback with a
  * random token); `--server host:port --token secret` (or KOTLIN_EDITOR_SERVER / KOTLIN_EDITOR_TOKEN) uses a remote one.
+ * Remote Development from the welcome screen installs and tunnels to a server on another machine.
  */
 fun main(args: Array<String>) {
     fun option(name: String) = args.indexOf("--$name").takeIf { it >= 0 }?.let { args.getOrNull(it + 1) }
@@ -34,10 +36,16 @@ fun main(args: Array<String>) {
             val port = remote.substringAfterLast(':', "").toIntOrNull() ?: Protocol.DEFAULT_PORT
             RpcClient(host, port, option("token") ?: System.getenv("KOTLIN_EDITOR_TOKEN").orEmpty())
         }
+    val services = client.appServices()
+    // Only an embedded server can be returned to when the remote session ends.
+    val localServices = services.takeIf { embedded != null }
 
     application {
         val scope = rememberCoroutineScope()
-        val state = remember { AppState(client.appServices(), scope, FilePreferenceStore(), grammarStore()) }
+        val state =
+            remember {
+                AppState(services, scope, FilePreferenceStore(), grammarStore(), localServices, JvmRemoteFactory)
+            }
         Window(
             onCloseRequest = {
                 state.exit {
