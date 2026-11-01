@@ -245,7 +245,8 @@ class TerminalKeyboardE2eTest {
                 val sent = sentDuring(app) { chord(key.code, key.charUnderCtrl(shift), held) }
                 val label = label(layout, held, key)
                 assertEquals("", sent.typed(), "$label must type nothing")
-                if (key.terminalKey != null && !(shift && key.code in CTRL_SHIFT_SHORTCUTS)) {
+                val shortcut = shift && key.code in CTRL_SHIFT_SHORTCUTS
+                if (key.terminalKey != null && !shortcut) {
                     val asCtrl = sent.any { it.key == key.terminalKey && it.control }
                     assertTrue(asCtrl, "$label must reach the shell as Ctrl")
                 }

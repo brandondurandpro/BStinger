@@ -152,12 +152,14 @@ private fun typedText(event: KeyEvent, key: TerminalKey?, ctrl: Boolean): String
 
 // A typed character, or null for a control character and for the undefined one that a modifier, a lock or a
 // function key reports (AWT's CHAR_UNDEFINED, U+FFFF).
-private fun printable(codePoint: Int): String? =
-    if (codePoint >= FIRST_PRINTABLE_CODE_POINT && codePoint != DELETE_CODE_POINT && codePoint != UNDEFINED_CHAR) {
+private fun printable(codePoint: Int): String? {
+    val control = codePoint < FIRST_PRINTABLE_CODE_POINT || codePoint == DELETE_CODE_POINT
+    return if (!control && codePoint != UNDEFINED_CHAR) {
         String(Character.toChars(codePoint))
     } else {
         null
     }
+}
 
 private fun baseText(key: TerminalKey, shift: Boolean): String {
     val name = key.name

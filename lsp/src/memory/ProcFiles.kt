@@ -83,8 +83,11 @@ internal fun parseSmapsRollup(bytes: ByteArray): Map<String, Long> {
 private fun rollupValue(bytes: ByteArray, start: Int, end: Int): Pair<String, Long>? {
     var colon = start
     while (colon < end && bytes[colon] != COLON) colon++
-    val endsWithKb = end - start >= KB_SUFFIX && bytes[end - 1] == UPPER_B && bytes[end - 2] == LOWER_K
-    if (colon == start || colon >= end || !endsWithKb) return null
+    val longEnough = end - start >= KB_SUFFIX
+    val endsWithKb = longEnough && bytes[end - 1] == UPPER_B && bytes[end - 2] == LOWER_K
+    val hasName = colon > start
+    val hasValue = colon < end && endsWithKb
+    if (!hasName || !hasValue) return null
     val name = String(bytes, start, colon - start, StandardCharsets.US_ASCII)
     val value = kbValue(bytes, colon + 1, end)
     return if (value >= 0) name to value * KIB else null
@@ -101,9 +104,9 @@ private fun matchesAt(bytes: ByteArray, index: Int, prefix: String): Boolean =
 // The value in KiB written after the colon of a /proc line, or -1 when there is no number there.
 private fun kbValue(bytes: ByteArray, from: Int, end: Int): Long {
     var index = from
-    while (index < end && (bytes[index] == SPACE || bytes[index] == TAB)) index++
+    while (index < end && bytes[index] in BLANKS) index++
     var value = 0L
-    while (index < end && bytes[index] >= DIGIT_ZERO && bytes[index] <= DIGIT_NINE) {
+    while (index < end && bytes[index] in DIGIT_ZERO..DIGIT_NINE) {
         value = value * DECIMAL + (bytes[index] - DIGIT_ZERO)
         index++
     }
@@ -111,6 +114,8 @@ private fun kbValue(bytes: ByteArray, from: Int, end: Int): Long {
 }
 
 private const val TAB: Byte = 9
+private val BLANKS = byteArrayOf(SPACE, TAB)
+private val TOKEN_ENDS = byteArrayOf(SPACE, LINE_FEED)
 private const val DECIMAL = 10L
 private const val DIGIT_NINE: Byte = 57
 
@@ -124,7 +129,7 @@ private fun skipToToken(bytes: ByteArray, index: Int): Int {
 // The index just past the token that starts at [index].
 private fun endOfToken(bytes: ByteArray, index: Int): Int {
     var end = index
-    while (end < bytes.size && bytes[end] != SPACE && bytes[end] != LINE_FEED) end++
+    while (end < bytes.size && bytes[end] !in TOKEN_ENDS) end++
     return end
 }
 

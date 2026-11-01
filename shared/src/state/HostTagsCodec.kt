@@ -22,7 +22,8 @@ object HostTagsCodec {
         val separator = line.indexOf('\t')
         val key = if (separator <= 0) "" else line.substring(0, separator).trim()
         val tags = if (separator > 0) parseTags(line.substring(separator + 1)) else emptyList()
-        val valid = separator > 0 && key.isNotEmpty() && !key.startsWith(":") && ' ' !in key && tags.isNotEmpty()
+        val validKey = key.isNotEmpty() && !key.startsWith(":") && ' ' !in key
+        val valid = separator > 0 && validKey && tags.isNotEmpty()
         return if (valid) key to tags else null
     }
 }

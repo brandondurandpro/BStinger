@@ -109,8 +109,10 @@ private suspend fun matches(project: ProjectState, query: String, recentOnly: Bo
     if (recentOnly) recentMatches(project, query) else project.fileIndex.searchFiles(query)
 
 // Like IntelliJ, Ctrl+E then Enter goes back to the previous file.
-private fun firstSelection(recentOnly: Boolean, query: String, results: List<FileMatch>): Int =
-    if (recentOnly && query.isBlank() && results.size > 1) 1 else 0
+private fun firstSelection(recentOnly: Boolean, query: String, results: List<FileMatch>): Int {
+    val recentList = recentOnly && query.isBlank()
+    return if (recentList && results.size > 1) 1 else 0
+}
 
 @Composable
 private fun FileMatchRow(match: FileMatch, selected: Boolean, onClick: () -> Unit) {

@@ -25,8 +25,10 @@ internal class KeyBinding<C>(
     private val alt: Boolean?,
     val action: C.(Modifiers) -> Unit,
 ) {
-    fun matches(key: Key, held: Modifiers): Boolean =
-        key in keys && ctrl.orAny(held.ctrl) && shift.orAny(held.shift) && alt.orAny(held.alt)
+    fun matches(key: Key, held: Modifiers): Boolean {
+        val modifiersMatch = ctrl.orAny(held.ctrl) && shift.orAny(held.shift) && alt.orAny(held.alt)
+        return key in keys && modifiersMatch
+    }
 
     private fun Boolean?.orAny(held: Boolean) = this == null || this == held
 }

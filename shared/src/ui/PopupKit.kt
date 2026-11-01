@@ -117,7 +117,8 @@ internal fun <T> ResultList(items: List<T>, selected: Int, row: @Composable (Int
     val listState = rememberLazyListState()
     LaunchedEffect(selected) {
         val visible = listState.layoutInfo.visibleItemsInfo
-        if (visible.isNotEmpty() && (selected < visible.first().index || selected > visible.last().index - 1)) {
+        val fullyShown = visible.firstOrNull()?.let { it.index until visible.last().index }
+        if (fullyShown != null && selected !in fullyShown) {
             listState.scrollToItem(maxOf(0, selected - visible.size + 2))
         }
     }

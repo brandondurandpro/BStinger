@@ -199,7 +199,8 @@ internal class ServerTerminal(
 
     private fun refresh() {
         synchronized(state) {
-            if (finished || destroyed || publishScheduled) return
+            val stopped = finished || destroyed
+            if (stopped || publishScheduled) return
             publishScheduled = true
             scheduler.schedule({ publishLatest() }, FRAME_INTERVAL_MS, TimeUnit.MILLISECONDS)
         }

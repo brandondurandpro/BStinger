@@ -67,6 +67,13 @@ jobs:
         with:
           path: .detekt
           key: detekt-${{ hashFiles('lint', 'detekt.yml') }}
+      # The project's own detekt rules are built with the project's toolchain.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cache/JetBrains/Kotlin
+            ~/.m2/repository
+          key: lint-${{ hashFiles('kotlin', 'libs.versions.toml', 'project.yaml', '**/module.yaml') }}
       - run: ./lint
 
   test-linux:

@@ -32,11 +32,9 @@ object ServerMain {
             println(Protocol.APP_VERSION)
             return
         }
-        val token =
-            options.tokenFile?.let(::readToken)
-                ?: options.token
-                ?: System.getenv("KOTLIN_EDITOR_TOKEN")
-                ?: EditorServer.newToken()
+        val fromFile = options.tokenFile?.let(::readToken)
+        val given = fromFile ?: options.token ?: System.getenv("KOTLIN_EDITOR_TOKEN")
+        val token = given ?: EditorServer.newToken()
         val services =
             LocalServices(
                 dataDirectory = options.dataDirectory ?: defaultDataDirectory(),

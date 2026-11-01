@@ -64,9 +64,7 @@ private fun nextHeader(outline: TreeOutline, scroll: TreeScroll, headers: List<I
     val self = scroll.top(index) < slotTop && outline.rows[index].expanded && outline.end[index] > index + 1
     var candidate = if (self) index else outline.parent[index]
     while (candidate >= 0 && outline.rows[candidate].depth > headers.size) candidate = outline.parent[candidate]
-    val valid =
-        candidate >= 0 &&
-            outline.rows[candidate].depth == headers.size &&
-            (headers.isEmpty() || outline.parent[candidate] == headers.last())
+    val found = candidate >= 0 && outline.rows[candidate].depth == headers.size
+    val valid = found && (headers.isEmpty() || outline.parent[candidate] == headers.last())
     return if (valid) candidate else -1
 }

@@ -108,7 +108,7 @@ class SshClient(private val target: SshTarget) {
 
     // ssh does not expand ~ in -i: it is a process argument, not a shell word.
     private fun expandHome(path: String): String =
-        if (path == "~" || path.startsWith("~/") || path.startsWith("~\\")) {
+        if (path == "~" || isUnderHome(path)) {
             System.getProperty("user.home") + path.substring(1)
         } else {
             path

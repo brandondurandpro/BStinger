@@ -171,5 +171,9 @@ private suspend fun ProjectState.reloadIfChanged(entry: FileEntry, document: Doc
             null // server unreachable: synchronized at the next focus
         }
     val lines = (content as? FileContent.Text)?.lines
-    if (lines != null && !document.isModified && lines != document.lines.toList()) document.reload(lines)
+    if (lines != null && isStale(document, lines)) document.reload(lines)
 }
+
+// The disk has other lines, and the document has no edit of its own to keep.
+private fun isStale(document: Document, lines: List<String>): Boolean =
+    !document.isModified && lines != document.lines.toList()

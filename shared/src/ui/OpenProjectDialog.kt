@@ -412,8 +412,10 @@ private class DirectoryBrowser(private val app: AppState, private val scope: Cor
      */
     val canOpen: Boolean
         get() {
-            val settled = current != null && !loading && !checking && error == null
-            return settled && (!editing || selection != null || showsTypedPath())
+            val idle = !loading && !checking
+            val settled = current != null && idle && error == null
+            val hasTarget = !editing || selection != null || showsTypedPath()
+            return settled && hasTarget
         }
 
     // Counted to let only the latest navigation apply.
@@ -506,8 +508,10 @@ private class DirectoryBrowser(private val app: AppState, private val scope: Cor
                 if (request == navigation) fail("Cannot reach the server: ${expected.message}")
                 null
             }
-        if (listing == null && request == navigation && error == null) fail("Directory not found: $path")
-        if (listing != null && request == navigation) show(listing)
+        val latest = request == navigation
+        val notFound = listing == null && error == null
+        if (latest && notFound) fail("Directory not found: $path")
+        if (listing != null && latest) show(listing)
     }
 
     // Applies the listing that won the navigation counter.
@@ -554,8 +558,11 @@ private class DirectoryBrowser(private val app: AppState, private val scope: Cor
         val WINDOWS_ABSOLUTE = Regex("^[A-Za-z]:[\\\\/].*")
 
         // Only a path the server can resolve as is: an absolute one, or one under `~`; not a fragment being typed.
-        fun isCheckable(path: String): Boolean =
-            path.startsWith("/") || path == "~" || path.startsWith("~/") || WINDOWS_ABSOLUTE.matches(path)
+        fun isCheckable(path: String): Boolean {
+            val absolute = path.startsWith("/") || WINDOWS_ABSOLUTE.matches(path)
+            val underHome = path == "~" || path.startsWith("~/")
+            return absolute || underHome
+        }
 
         fun sameDirectory(a: String, b: String): Boolean = a.trimEnd('/', '\\') == b.trimEnd('/', '\\')
     }

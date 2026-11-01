@@ -73,8 +73,8 @@ class SyntaxSession(val spec: GrammarSpec) {
 
     /** Asks for the colors of lines [first] to [last] (inclusive), drawn now; cheap when they are already known. */
     fun request(first: Int, last: Int) {
-        val window = highlights?.window
-        if (window != null && first in window && last in window) return
+        val window = highlights?.window ?: IntRange.EMPTY
+        if (first in window && last in window) return
         wanted.value = first..last
     }
 

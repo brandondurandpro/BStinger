@@ -73,7 +73,8 @@ class Document(initialLines: List<String>, val language: Language, val lineSepar
             val oneChar = removedNow.isEmpty() && typed.length == 1 && typed != "\n"
             val wasTyping = removed.isEmpty() && inserted.isNotEmpty() && '\n' !in inserted
             val sameKind = inserted.lastOrNull()?.isWordChar() == typed.firstOrNull()?.isWordChar()
-            return oneChar && wasTyping && sameKind && endOf(start, inserted) == at
+            val continues = sameKind && endOf(start, inserted) == at
+            return oneChar && wasTyping && continues
         }
     }
 

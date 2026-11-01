@@ -72,7 +72,8 @@ internal object RipgrepJson {
         val path = text(data["path"])
         val number = data["line_number"]?.jsonPrimitive?.intOrNull
         val raw = bytes(data["lines"])
-        if (path == null || number == null || raw == null) return null
+        val located = path != null && number != null
+        if (!located || raw == null) return null
         val bytes = withoutTerminator(raw)
         val ranges =
             data["submatches"]?.jsonArray.orEmpty().mapNotNull { element ->

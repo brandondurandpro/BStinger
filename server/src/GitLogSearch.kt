@@ -73,12 +73,11 @@ private fun records(reader: Reader): Sequence<String> =
     }
 
 private class SearchRecord(val commit: GitCommit, val body: String) {
-    fun matches(needle: String): Boolean =
-        needle.isEmpty() ||
-            commit.hash.startsWith(needle) ||
-            commit.author.lowercase().contains(needle) ||
-            commit.subject.lowercase().contains(needle) ||
-            body.lowercase().contains(needle)
+    fun matches(needle: String): Boolean {
+        if (needle.isEmpty() || commit.hash.startsWith(needle)) return true
+        val fields = listOf(commit.author, commit.subject, body)
+        return fields.any { it.lowercase().contains(needle) }
+    }
 }
 
 private fun parseSearchRecord(record: String): SearchRecord? {

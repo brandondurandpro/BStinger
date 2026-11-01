@@ -38,8 +38,9 @@ class DiffOpenFileE2eTest {
         awaitTag(Tags.tab(path))
         val editor = app.project.editor
         awaitCondition {
-            val tab = editor.activeTab
-            tab != null && !tab.isDiff && tab.relativePath == path && tab.document?.caret == TextPos(line, 0)
+            val tab = editor.activeTab?.takeIf { !it.isDiff }
+            val onLine = tab?.document?.caret == TextPos(line, 0)
+            tab?.relativePath == path && onLine
         }
     }
 

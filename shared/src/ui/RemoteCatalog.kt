@@ -106,7 +106,8 @@ private fun CatalogStatus(app: AppState, empty: Boolean, query: String) {
             modifier = Modifier.padding(top = 6.dp).testTag(Tags.REMOTE_HOSTS_LOADING),
         )
     }
-    if (!app.sshHostsLoading && empty && query.isNotBlank()) {
+    val noMatch = empty && query.isNotBlank()
+    if (!app.sshHostsLoading && noMatch) {
         Label(
             "No matching host or folder",
             color = IdeColors.TextSecondary,

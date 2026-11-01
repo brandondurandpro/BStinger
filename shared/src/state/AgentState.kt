@@ -160,7 +160,8 @@ class AgentState(private val project: ProjectState) {
      * the branch of the project. A worktree left stays on disk with its changes, and is reused when coming back.
      */
     fun setMode(conversation: Conversation, mode: WorkMode) {
-        if (conversation.mode == mode || conversation.busy || conversation.preparingWorktree) return
+        val working = conversation.busy || conversation.preparingWorktree
+        if (conversation.mode == mode || working) return
         val previous = conversation.mode
         conversation.mode = mode
         conversation.showsChat = true
@@ -252,7 +253,9 @@ class AgentState(private val project: ProjectState) {
                 .filterNotNull()
                 .collect { (conversation, workspace, tab) ->
                     val place = conversation to workspace
-                    if (previous == place && tab != null && project.agentMode) conversation.showsChat = false
+                    val revisited = previous == place
+                    val inAgentTab = tab != null && project.agentMode
+                    if (revisited && inAgentTab) conversation.showsChat = false
                     previous = place
                 }
         }

@@ -94,8 +94,11 @@ class TerminalTab(
         process.resize(columns, rows, cellWidth, cellHeight)
     }
 
-    private fun hasSize(columns: Int, rows: Int, width: Int, height: Int): Boolean =
-        columns == this.columns && rows == this.rows && width == cellWidth && height == cellHeight
+    private fun hasSize(columns: Int, rows: Int, width: Int, height: Int): Boolean {
+        val sameGrid = columns == this.columns && rows == this.rows
+        val sameCell = width == cellWidth && height == cellHeight
+        return sameGrid && sameCell
+    }
 
     /** Scrolls the viewport by [delta] rows, positive going up into the scrollback. */
     fun scroll(delta: Int) {
