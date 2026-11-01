@@ -199,3 +199,15 @@ private fun pushLabel(branch: GitBranchInfo): String =
         branch.ahead > 0 -> "Push ↑ ${branch.ahead}"
         else -> "Push"
     }
+
+/** The branch picker of the toolbar; closing it gives the focus back to the editor. */
+@Composable
+internal fun BranchPicker(project: ProjectState) {
+    BranchPickerPopup(project) {
+        project.branchPickerOpen = false
+        val pane = project.editor.activePane
+        if (project.editor.activeTab?.document != null) {
+            runCatching { pane.focusRequester.requestFocus() }
+        }
+    }
+}

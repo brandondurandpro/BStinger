@@ -63,10 +63,16 @@ internal fun Toolbar(app: AppState, project: ProjectState) {
         if (app.isRemote) {
             RemoteBadge(app)
         }
-        if (project.gitBranch == null) {
+        // In agent mode, the branch of the project the agent of the active conversation works on.
+        val branchProject = if (project.agentMode) project.agent.current?.workspace else project
+        if (branchProject?.gitBranch == null) {
             Spacer(Modifier.weight(1f))
         } else {
-            BranchWidget(project, Modifier.weight(1f).padding(start = 12.dp))
+            BranchWidget(branchProject, Modifier.weight(1f).padding(start = 12.dp))
+        }
+        if (app.agentModeEnabled) {
+            ModeSwitch(project)
+            Spacer(Modifier.width(10.dp))
         }
         IconButton({ project.showPopup(PopupKind.GotoFile) }) { SearchIcon(color = IdeColors.Text) }
     }
@@ -163,6 +169,18 @@ private fun ProjectMenuItems(app: AppState, close: () -> Unit) {
         },
         modifier = Modifier.testTag(Tags.PROJECT_CLOSE),
     )
+    // Feature flag of the experimental agent mode, saved with the preferences.
+    DropdownMenuItem(
+        text = {
+            val check = if (app.agentModeEnabled) "✓  " else "     "
+            Text("${check}Agent Mode (Experimental)", fontSize = 13.sp)
+        },
+        onClick = {
+            close()
+            app.enableAgentMode(!app.agentModeEnabled)
+        },
+        modifier = Modifier.testTag(Tags.PROJECT_AGENT_MODE),
+    )
     val others = app.otherProjects
     if (others.isNotEmpty()) {
         HorizontalDivider(color = IdeColors.Border)
@@ -241,8 +259,6 @@ private fun Hint(action: String, shortcut: String) {
 
 @Composable
 internal fun StatusBar(app: AppState, project: ProjectState) {
-    val connection by app.connection.collectAsState()
-    val remoteFailure by app.remoteFailure.collectAsState()
     val tab = project.editor.activeTab
     Row(
         Modifier
@@ -254,7 +270,15 @@ internal fun StatusBar(app: AppState, project: ProjectState) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        val path = listOf(project.name) + tab?.relativePath?.split('/').orEmpty()
+        val path =
+            if (project.agentMode) {
+                val active = project.agent.current
+                val editor = active?.workspace?.editor
+                val file = editor?.activeTab?.takeUnless { active.showsChat }
+                listOfNotNull(project.name, "Agent", active?.title) + file?.relativePath?.split('/').orEmpty()
+            } else {
+                listOf(project.name) + tab?.relativePath?.split('/').orEmpty()
+            }
         Label(
             path.joinToString("  ›  "),
             Modifier.weight(1f).testTag(Tags.STATUS_PATH),
@@ -280,22 +304,25 @@ internal fun StatusBar(app: AppState, project: ProjectState) {
         app.error?.let {
             Label(it, Modifier.testTag(Tags.STATUS_ERROR), color = IdeColors.Error, fontSize = 12.sp)
         }
-        if (remoteFailure != null) {
-            Label(
-                "SSH: $remoteFailure",
-                Modifier.testTag(Tags.STATUS_CONNECTION),
-                color = IdeColors.Error,
-                fontSize = 12.sp,
-            )
-        } else if (connection != ConnectionStatus.Connected) {
-            Label(
-                if (connection == ConnectionStatus.Reconnecting) "Server: reconnecting…" else "Server: disconnected",
-                Modifier.testTag(Tags.STATUS_CONNECTION),
-                color = IdeColors.Error,
-                fontSize = 12.sp,
-            )
+        LinkStatus(app)
+        if (!project.agentMode) tab?.document?.let { DocumentStatus(it) }
+    }
+}
+
+// What is wrong with the link to the server, if anything: SSH refusing the host first, then the protocol client.
+@Composable
+private fun LinkStatus(app: AppState) {
+    val connection by app.connection.collectAsState()
+    val remoteFailure by app.remoteFailure.collectAsState()
+    val message =
+        when {
+            remoteFailure != null -> "SSH: $remoteFailure"
+            connection == ConnectionStatus.Reconnecting -> "Server: reconnecting…"
+            connection != ConnectionStatus.Connected -> "Server: disconnected"
+            else -> null
         }
-        tab?.document?.let { DocumentStatus(it) }
+    message?.let {
+        Label(it, Modifier.testTag(Tags.STATUS_CONNECTION), color = IdeColors.Error, fontSize = 12.sp)
     }
 }
 

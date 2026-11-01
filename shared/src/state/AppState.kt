@@ -114,6 +114,13 @@ class AppState(
     /** Whether the devtools were opened (Ctrl+Alt+Shift+D) since the IDE started: shows their buttons. */
     var devtools by mutableStateOf(false)
 
+    /**
+     * Feature flag of agent mode (experimental, off by default): shows the IDE | Agent switch of the toolbar and its
+     * shortcuts. Turning it off brings the open project back to the editors.
+     */
+    var agentModeEnabled by mutableStateOf(preferences[PreferenceKeys.AGENT_MODE]?.toBooleanStrictOrNull() ?: false)
+        private set
+
     /** Editor font size in points, shared by every editor (Alt+Shift+. / Alt+Shift+, / Ctrl+wheel). */
     var editorFontSize by mutableFloatStateOf(savedFontSize())
         private set
@@ -359,6 +366,11 @@ class AppState(
         editorFontSize = (editorFontSize + delta).coerceIn(MIN_EDITOR_FONT_SIZE, MAX_EDITOR_FONT_SIZE)
     }
 
+    fun enableAgentMode(enabled: Boolean) {
+        agentModeEnabled = enabled
+        if (!enabled) (screen as? Screen.Project)?.project?.agentMode = false
+    }
+
     fun resetEditorZoom() {
         editorFontSize = DEFAULT_EDITOR_FONT_SIZE
     }
@@ -442,15 +454,11 @@ class AppState(
 
     // The open project's settings on top of the last known preferences.
     private fun currentPreferences(): Map<String, String> {
-        val project = (screen as? Screen.Project)?.project
-        val projectPreferences =
-            if (project == null) {
-                emptyMap()
-            } else {
-                project.toolWindows.toPreferences() +
-                    (PreferenceKeys.AUTO_SELECT_OPENED_FILE to project.autoSelectOpenedFile.toString())
-            }
-        return preferences + projectPreferences + fontSizePreference() + remotePreferences()
+        val agentMode = PreferenceKeys.AGENT_MODE to agentModeEnabled.toString()
+        val app = preferences + fontSizePreference() + agentMode + remotePreferences()
+        val project = (screen as? Screen.Project)?.project ?: return app
+        val autoSelect = PreferenceKeys.AUTO_SELECT_OPENED_FILE to project.autoSelectOpenedFile.toString()
+        return app + project.toolWindows.toPreferences() + autoSelect
     }
 
     private fun remotePreferences(): Map<String, String> =
@@ -476,7 +484,7 @@ class AppState(
         saveRecent()
         recordRemoteWorkspace(root.path)
         (screen as? Screen.Project)?.project?.let { saveAndDispose(it) }
-        val project = ProjectState(root, services, scope, preferences, grammars)
+        val project = ProjectState(root, services, scope, preferences, grammars = grammars)
         runCatching { services.sessions.load(root.path) }.getOrNull()?.let(project::restoreSession)
         screen = Screen.Project(project)
     }
