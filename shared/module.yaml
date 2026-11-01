@@ -4,6 +4,7 @@ product:
 dependencies:
   - //protocol: exported
   - //syntax: exported
+  - //client-state: exported
   - $compose.runtime
   - $compose.foundation
   - $compose.material3
@@ -25,6 +26,7 @@ test-dependencies:
   - //server
   - //lsp
   - //testkit
+  - //remote-ssh
   - $compose.uiTest
   - $compose.desktop.currentOs
   - $libs.tree.sitter.kotlin

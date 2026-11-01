@@ -2,6 +2,7 @@ product: jvm/app
 
 dependencies:
   - //shared
+  - //remote-ssh
   - //server
   - $compose.desktop.currentOs
   - $compose.preview

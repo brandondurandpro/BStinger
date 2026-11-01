@@ -1,11 +1,13 @@
 modules:
   - benchmark
+  - client-state
   - compression
   - desktopApp
   - detekt-rules
   - lsp
   - packaging
   - protocol
+  - remote-ssh
   - server
   - serverApp
   - shared

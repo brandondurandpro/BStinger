@@ -38,7 +38,7 @@ ghostty-linux = { module = "io.github.vlaaad:ghosttyfx-linux-x86_64", version.re
 pty4j21 = { module = "com.sshtools:pty4j21", version.ref = "pty4j21" }
 # tree-sitter: the official FFM binding. Its native runtime is built by tools/tree-sitter/build-runtime (bonede's
 # exports only JNI functions on Windows). Grammars are downloaded on demand (see GrammarStore); the two below are test
-# fixtures, and must keep the versions of shared/src/syntax/treesitter/GrammarCatalog.kt.
+# fixtures, and must keep the versions of syntax/src/treesitter/GrammarCatalog.kt.
 jtreesitter = { module = "io.github.tree-sitter:jtreesitter", version.ref = "jtreesitter" }
 tree-sitter-kotlin = { module = "io.github.bonede:tree-sitter-kotlin", version.ref = "tree-sitter-kotlin" }
 tree-sitter-json = { module = "io.github.bonede:tree-sitter-json", version.ref = "tree-sitter-json" }

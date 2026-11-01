@@ -1,0 +1,6 @@
+# Remote development over SSH: the system OpenSSH client, the server installer and the tunnel supervisor.
+product:
+  type: jvm/lib
+
+dependencies:
+  - //client-state: exported

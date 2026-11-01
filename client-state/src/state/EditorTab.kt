@@ -57,7 +57,7 @@ class HorizontalScroll {
  * with `/` separators: on Windows the tree lists `C:\p\a.kt` while a path rebuilt from Git (a diff, a commit) is
  * `C:\p/a.kt`, and both must open the same tab.
  */
-internal fun tabKey(entry: FileEntry, isDiff: Boolean, commit: CommitDiffTarget?): String {
+fun tabKey(entry: FileEntry, isDiff: Boolean, commit: CommitDiffTarget?): String {
     val path = entry.path.replace('\\', '/')
     return when {
         commit != null -> "diff@${commit.hash}:$path"
@@ -109,11 +109,9 @@ class EditorTab(
 
     /** Blame annotations of the lines, `null` until loaded; shown when [blameVisible]. */
     var blame by mutableStateOf<List<BlameLine>?>(null)
-        internal set
 
     /** Whether the gutter shows the blame annotations of this tab. */
     var blameVisible by mutableStateOf(false)
-        internal set
 
     /** Selection to apply once the content is loaded (opening a search result). */
     internal var pendingSelection: Pair<TextPos, TextPos>? = null

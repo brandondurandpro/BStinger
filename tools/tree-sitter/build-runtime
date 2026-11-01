@@ -1,6 +1,6 @@
 #!/bin/sh
 # Builds the tree-sitter runtime library for every platform the IDE runs on, with `zig cc` (cross-compiling from
-# Linux), into shared/resources/tree-sitter/runtime. jtreesitter calls its C API (`ts_*`), which every build exports;
+# Linux), into syntax/resources/tree-sitter/runtime. jtreesitter calls its C API (`ts_*`), which every build exports;
 # the libraries of other Java bindings only export their JNI functions on Windows. See tools/tree-sitter/README.md.
 #
 # Needs curl, tar (with xz) and, to check the exports, nm and objdump (binutils). Linux x86_64.
@@ -11,7 +11,7 @@ ZIG=0.17.0
 ZIG_SHA256=1cbe9df9f27e6b78d14ccbca43b6703a404ef79ef1c463de901d7f088d4e2026
 
 here=$(cd "$(dirname "$0")" && pwd)
-out="$here/../../shared/resources/tree-sitter/runtime"
+out="$here/../../syntax/resources/tree-sitter/runtime"
 cache="$HOME/.cache/kotlin-editor-tools/runtime"
 mkdir -p "$cache" "$out"
 

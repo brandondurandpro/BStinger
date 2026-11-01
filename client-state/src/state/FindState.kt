@@ -19,7 +19,7 @@ class FindState {
     var current by mutableIntStateOf(-1)
         private set
 
-    internal var pendingSelectNext = false
+    var pendingSelectNext = false
 
     /** Installs freshly computed [found] occurrences and makes the first one at/after [caret] current. */
     fun setMatches(found: List<TextPos>, caret: TextPos) {

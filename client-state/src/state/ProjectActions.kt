@@ -39,7 +39,7 @@ fun ProjectState.openFileOfDiff(tab: EditorTab) {
 }
 
 // Zero-based line of the first change in the new version: an added line, or where removed lines used to be.
-internal fun firstChangedLine(lines: List<DiffLine>): Int {
+fun firstChangedLine(lines: List<DiffLine>): Int {
     val first = lines.indexOfFirst { it.kind == DiffKind.Added || it.kind == DiffKind.Removed }
     if (first < 0) return 0
     val after = lines.drop(first).firstOrNull { it.newLine > 0 }

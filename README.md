@@ -92,7 +92,7 @@ All the logic on files runs in a **server**; the IDE is a client that only displ
   development installs and starts (`--token-file`/`--state-file`, `--version`).
 - `shared` – Compose UI and UI state; `desktopApp` – the IDE. By default it embeds a server on loopback; use
   `--server host:port --token <secret>` (or `KOTLIN_EDITOR_SERVER` / `KOTLIN_EDITOR_TOKEN`) for a remote one.
-- **Remote development** – `shared/src/remote` (SSH client, installer, tunnel supervisor) and
+- **Remote development** – `remote-ssh/src/remote` (SSH client, installer, tunnel supervisor) and
   `shared/src/ui/RemoteDialog.kt`. Server bundles are built with `tools/remote-bundle.sh` and looked up in `remote/`
   next to the application (see [docs/REMOTE.md](docs/REMOTE.md)).
 
