@@ -236,9 +236,10 @@ private fun Modifier.treePresses(
     awaitPointerEventScope {
         while (true) {
             val event = awaitPointerEvent()
-            val change = event.changes.firstOrNull()
+            val pressed = event.type == PointerEventType.Press
+            val change = event.changes.firstOrNull()?.takeIf { pressed }
             val hit = change?.let { scene.hitAt(it.position) }
-            if (event.type == PointerEventType.Press && change != null && hit != null) {
+            if (change != null && hit != null) {
                 if (event.button == PointerButton.Secondary || event.buttons.isSecondaryPressed) {
                     onContextMenu(hit, change.position)
                 } else {

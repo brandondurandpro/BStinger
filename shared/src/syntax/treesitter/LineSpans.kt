@@ -25,12 +25,12 @@ class LineSpans(val starts: IntArray, val ends: IntArray, val styles: IntArray) 
         )
     }
 
-    override fun equals(other: Any?): Boolean =
-        other is LineSpans &&
-            hash == other.hash &&
-            starts.contentEquals(other.starts) &&
-            ends.contentEquals(other.ends) &&
-            styles.contentEquals(other.styles)
+    override fun equals(other: Any?): Boolean {
+        if (other !is LineSpans || hash != other.hash) return false
+        val sameStarts = starts.contentEquals(other.starts)
+        val sameEnds = ends.contentEquals(other.ends)
+        return sameStarts && sameEnds && styles.contentEquals(other.styles)
+    }
 
     override fun hashCode(): Int = hash
 

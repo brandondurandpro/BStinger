@@ -134,8 +134,8 @@ class ToolWindowLayout {
             val name = window.name
             Dock.entries.find { it.name == preferences["$DOCK_KEY.$name"] }?.let { docks[window] = it }
             preferences["$VISIBLE_KEY.$name"]?.toBooleanStrictOrNull()?.let { shown[window] = it }
-            val weight = preferences["$WEIGHT_KEY.$name"]?.toFloatOrNull()
-            if (weight != null && weight.isFinite() && weight > 0f) weights[window] = weight
+            val weight = preferences["$WEIGHT_KEY.$name"]?.toFloatOrNull()?.takeIf { it.isFinite() && it > 0f }
+            if (weight != null) weights[window] = weight
         }
         Dock.entries.forEach { dock ->
             val size = preferences["$SIZE_KEY.${dock.name}"]?.toFloatOrNull()

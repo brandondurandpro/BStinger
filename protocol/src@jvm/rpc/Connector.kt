@@ -45,9 +45,15 @@ internal class Connector(
 
     @Volatile private var closed = false
 
+    // Neither closed nor rejected by the server, and still wanted.
+    private fun canRetry(scope: CoroutineScope): Boolean {
+        val open = !closed && rejection == null
+        return open && scope.isActive
+    }
+
     suspend fun run(scope: CoroutineScope) {
         var backoff = ClientOptions.MIN_BACKOFF_MS
-        while (!closed && scope.isActive && rejection == null) {
+        while (canRetry(scope)) {
             val opened = tryOpen()
             if (opened == null) {
                 if (rejection == null) status.value = ConnectionStatus.Reconnecting

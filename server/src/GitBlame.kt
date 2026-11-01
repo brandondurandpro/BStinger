@@ -45,11 +45,12 @@ internal fun parseBlame(output: String): List<BlameLine> {
 private fun parseBlameHeader(raw: String): Pair<String, Int>? {
     val parts = raw.split(' ')
     val hash = parts.firstOrNull()?.removePrefix("^")
+    val fullHash = hash?.takeIf { it.length == COMMIT_HASH_LENGTH }
     val finalLine = parts.getOrNull(2)?.toIntOrNull()
-    if (hash == null || hash.length != COMMIT_HASH_LENGTH || finalLine == null) {
+    if (fullHash == null || finalLine == null) {
         return null
     }
-    return hash.take(SHORT_HASH_LENGTH) to finalLine
+    return fullHash.take(SHORT_HASH_LENGTH) to finalLine
 }
 
 private fun dateOf(timestamp: Long, offset: ZoneOffset): String =

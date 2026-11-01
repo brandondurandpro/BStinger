@@ -114,7 +114,7 @@ object SshConfig {
     }
 
     private fun expandHome(value: String): String =
-        if (value == "~" || value.startsWith("~/") || value.startsWith("~\\")) {
+        if (value == "~" || isUnderHome(value)) {
             System.getProperty("user.home") + value.substring(1)
         } else {
             value
@@ -122,6 +122,12 @@ object SshConfig {
 
     private fun unquote(value: String): String = value.removeSurrounding("\"").removeSurrounding("'")
 
-    private fun isConcreteAlias(alias: String): Boolean =
-        alias.isNotEmpty() && '*' !in alias && '?' !in alias && '!' !in alias && !alias.startsWith("-")
+    private fun isConcreteAlias(alias: String): Boolean {
+        val pattern = alias.any { it in "*?!" }
+        val option = alias.startsWith("-")
+        return alias.isNotEmpty() && !pattern && !option
+    }
 }
+
+// `~/…` or `~\…`: a path under the home directory.
+internal fun isUnderHome(path: String): Boolean = path.startsWith("~/") || path.startsWith("~\\")

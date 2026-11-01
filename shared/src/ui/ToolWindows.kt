@@ -91,7 +91,8 @@ internal class ToolWindowDrag {
     /** Dock under the pointer, or `null` when dropped in the middle of the editors (no move). */
     fun targetDock(): Dock? {
         val area = workspace
-        if (window == null || !moved || area.width <= 0f) return null
+        val dragging = window != null && moved
+        if (!dragging || area.width <= 0f) return null
         return when {
             position.x < area.left + area.width * DOCK_EDGE_FRACTION -> Dock.Left
             position.x > area.right - area.width * DOCK_EDGE_FRACTION -> Dock.Right

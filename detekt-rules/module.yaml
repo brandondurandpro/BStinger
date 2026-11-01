@@ -1,0 +1,12 @@
+# The project's own detekt rules, loaded by `./lint` as a plugin: what the built-in rules cannot check (see
+# AGENTS.md, "Kotlin Coding Guidelines").
+product:
+  type: kmp/lib
+  platforms: [jvm]
+
+dependencies:
+  # Provided by the detekt command line at run time.
+  - dev.detekt:detekt-api:2.0.0-alpha.6: compile-only
+
+test-dependencies:
+  - dev.detekt:detekt-test:2.0.0-alpha.6

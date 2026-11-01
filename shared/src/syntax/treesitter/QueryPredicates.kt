@@ -196,7 +196,7 @@ internal class QueryTokens(private val text: String) {
 
     private fun readWord(): String {
         val start = i
-        while (i < text.length && !text[i].isWhitespace() && text[i] !in "()\"@;") i++
+        while (i < text.length && isQueryWordChar(text[i])) i++
         return text.substring(start, i)
     }
 
@@ -231,3 +231,5 @@ internal class QueryTokens(private val text: String) {
         while (i < text.length && text[i].isWhitespace()) i++
     }
 }
+
+private fun isQueryWordChar(c: Char): Boolean = !c.isWhitespace() && c !in "()\"@;"

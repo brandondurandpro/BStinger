@@ -185,7 +185,7 @@ internal class RipgrepProvisioner(
         fun extract(tar: InputStream, entry: String, output: OutputStream): Boolean {
             val header = ByteArray(BLOCK)
             var found = false
-            while (!found && tar.readNBytes(header, 0, BLOCK) == BLOCK && header.any { it != 0.toByte() }) {
+            while (!found && readHeader(tar, header)) {
                 val prefix = text(header, PREFIX_OFFSET, PREFIX_LENGTH)
                 val name = text(header, 0, NAME_LENGTH).let { if (prefix.isEmpty()) it else "$prefix/$it" }
                 val declared = text(header, SIZE_OFFSET, SIZE_LENGTH).trim().toLongOrNull(OCTAL)
@@ -199,6 +199,12 @@ internal class RipgrepProvisioner(
                 }
             }
             return found
+        }
+
+        // Reads the next header; false at the end of the archive (a short read or a block of zeros).
+        private fun readHeader(tar: InputStream, header: ByteArray): Boolean {
+            val complete = tar.readNBytes(header, 0, BLOCK) == BLOCK
+            return complete && header.any { it != 0.toByte() }
         }
 
         private fun text(header: ByteArray, offset: Int, length: Int): String {

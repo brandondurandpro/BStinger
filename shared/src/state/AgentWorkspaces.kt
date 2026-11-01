@@ -27,5 +27,6 @@ internal suspend fun ProjectState.openWorktree(branch: String): ProjectState {
 internal fun Conversation.show(workspace: ProjectState, project: ProjectState) {
     val old = this.workspace
     this.workspace = workspace
-    if (old != null && old !== project && old !== workspace) old.dispose()
+    val replaced = old !== project && old !== workspace
+    if (old != null && replaced) old.dispose()
 }

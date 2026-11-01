@@ -32,7 +32,7 @@ internal class TreeSitterHighlighter(private val grammar: LoadedGrammar) : AutoC
     /** Parses [newLines], reusing the previous tree for the lines that did not change. */
     fun update(newLines: List<String>) {
         val old = tree
-        if (old != null && newLines.size == lines.size && sameLines(newLines)) return
+        if (old != null && isSameText(newLines)) return
         val starts = IntArray(newLines.size)
         var offset = 0
         newLines.forEachIndexed { index, line ->
@@ -116,7 +116,10 @@ internal class TreeSitterHighlighter(private val grammar: LoadedGrammar) : AutoC
         }
     }
 
-    private fun sameLines(newLines: List<String>): Boolean = newLines.indices.all { newLines[it] == lines[it] }
+    private fun isSameText(newLines: List<String>): Boolean {
+        if (newLines.size != lines.size) return false
+        return newLines.indices.all { newLines[it] == lines[it] }
+    }
 
     // The change from `lines` to `newLines`, as whole lines: those between the common first and last lines.
     private fun edit(newLines: List<String>, newStarts: IntArray, newLength: Int): InputEdit {

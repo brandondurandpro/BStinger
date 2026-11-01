@@ -46,8 +46,10 @@ class ZstdBodyCodec(
     override fun compress(body: ByteArray, code: Boolean): ByteArray? {
         if (body.size < threshold) return null
         val plain = encode(plainEncoder, body)
+        val fitsDictionary = body.size <= dictionaryLimit
+        val triesDictionary = code && fitsDictionary
         val best =
-            if (code && dictionaryEncoder != null && body.size <= dictionaryLimit) {
+            if (triesDictionary && dictionaryEncoder != null) {
                 val withDictionary = encode(dictionaryEncoder, body)
                 if (withDictionary.size < plain.size) withDictionary else plain
             } else {

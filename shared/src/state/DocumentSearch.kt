@@ -70,15 +70,16 @@ private fun Document.matchOf(from: TextPos, maxLines: Int): TextPos? {
     var depth = 0
     var position: TextPos? = from
     var found: TextPos? = null
-    while (position != null && found == null && abs(position.line - from.line) <= maxLines) {
+    while (found == null) {
+        val current = position?.takeIf { abs(it.line - from.line) <= maxLines } ?: break
         depth +=
-            when (lines[position.line][position.column]) {
+            when (lines[current.line][current.column]) {
                 bracket -> 1
                 partner -> -1
                 else -> 0
             }
-        if (depth == 0) found = position
-        position = stepped(position, step)
+        if (depth == 0) found = current
+        position = stepped(current, step)
     }
     return found
 }

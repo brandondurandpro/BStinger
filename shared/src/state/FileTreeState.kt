@@ -78,7 +78,7 @@ class FileTreeState(val root: FileEntry, private val fileSystem: ProjectFileSyst
     fun reveal(path: String) {
         scope.launch {
             var current: FileEntry? = root
-            while (current != null && current.path != path && path.startsWith(current.path)) {
+            while (current != null && current.leadsTo(path)) {
                 val directory: FileEntry = current
                 expand(directory)
                 directories[directory.path] = directory
@@ -122,3 +122,6 @@ class FileTreeState(val root: FileEntry, private val fileSystem: ProjectFileSyst
 
 private fun isSelfOrAncestor(candidate: String, path: String): Boolean =
     path == candidate || path.startsWith("$candidate/") || path.startsWith("$candidate\\")
+
+// [path] is under this directory, deeper than it.
+private fun FileEntry.leadsTo(target: String): Boolean = path != target && target.startsWith(path)

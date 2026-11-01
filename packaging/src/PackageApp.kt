@@ -75,7 +75,9 @@ fun packageApp(
     if (aot) addAotCache(app, image, aotTrainingSeconds)
     archive(app, image, withInstaller = installer)
     if (Os.current == Os.LINUX && appImage) buildAppImage(app, image)
-    if (installer && !console && Os.current != Os.WINDOWS) {
+    val hasNativeInstaller = Os.current != Os.WINDOWS
+    val wantsInstaller = installer && !console
+    if (wantsInstaller && hasNativeInstaller) {
         buildInstaller(jdk, app, image)
         app.dist
             .listDirectoryEntries()

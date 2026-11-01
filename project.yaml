@@ -2,6 +2,7 @@ modules:
   - benchmark
   - compression
   - desktopApp
+  - detekt-rules
   - lsp
   - packaging
   - protocol

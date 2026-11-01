@@ -123,7 +123,8 @@ private fun writeLinuxTemplates(jdk: Jdk, resources: Path, linuxPackage: String)
  */
 internal fun buildAppImage(app: App, image: Path) {
     val runtime = System.getenv("APPIMAGE_RUNTIME")?.let { Path.of(it) }
-    if (runtime == null || !runtime.exists() || !isOnPath("mksquashfs")) {
+    val hasRuntime = runtime != null && runtime.exists()
+    if (!hasRuntime || !isOnPath("mksquashfs")) {
         println("[packaging] No AppImage: needs APPIMAGE_RUNTIME (type 2 runtime) and mksquashfs")
         return
     }

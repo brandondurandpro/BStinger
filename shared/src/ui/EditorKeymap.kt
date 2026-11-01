@@ -124,7 +124,9 @@ private fun typedChar(event: KeyEvent): Char? {
     val ctrlAlone = event.isCtrlPressed && !event.isAltPressed
     val command = ctrlAlone || event.isMetaPressed
     val code = if (event.key == Key.Spacebar) ' '.code else event.utf16CodePoint
-    val printable = code >= ' '.code && code != DELETE_CHAR && code != CHAR_UNDEFINED && code !in SURROGATES
+    val control = code < ' '.code || code == DELETE_CHAR
+    val notAChar = code == CHAR_UNDEFINED || code in SURROGATES
+    val printable = !control && !notAChar
     return if (!command && printable) Char(code) else null
 }
 

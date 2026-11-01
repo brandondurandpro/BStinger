@@ -30,7 +30,15 @@ fetch() { # artifact, expected sha1, destination
 fetch "detekt-cli/$DETEKT_VERSION/detekt-cli-$DETEKT_VERSION-all.jar" "$DETEKT_SHA1" "$tools/detekt-cli.jar"
 fetch "detekt-rules-ktlint-wrapper/$DETEKT_VERSION/detekt-rules-ktlint-wrapper-$DETEKT_VERSION.jar" "$KTLINT_SHA1" "$tools/ktlint.jar"
 
-sources="lsp/src:lsp/test:protocol/src:protocol/src@jvm:compression/src@jvm:compression/test@jvm:server/src:server/test:serverApp/src:shared/src:shared/src@jvm:shared/test@jvm:desktopApp/src:packaging/src"
+# The project's own rules (detekt-rules, see AGENTS.md): built with the project's toolchain, loaded as a plugin.
+./kotlin build -m detekt-rules > "$tools/detekt-rules-build.log" 2>&1 || {
+    cat "$tools/detekt-rules-build.log" >&2
+    echo "Cannot build the detekt-rules module" >&2
+    exit 1
+}
+rules="build/tasks/_detekt-rules_jarJvm/detekt-rules-jvm.jar"
+
+sources="detekt-rules/src:detekt-rules/test:lsp/src:lsp/test:protocol/src:protocol/src@jvm:compression/src@jvm:compression/test@jvm:server/src:server/test:serverApp/src:shared/src:shared/src@jvm:shared/test@jvm:desktopApp/src:packaging/src"
 
 # Fingerprint of every source file, to know when the automatic corrections stop changing anything.
 snapshot() {
@@ -44,22 +52,27 @@ detekt() {
         --config detekt.yml \
         --build-upon-default-config \
         --all-rules \
-        --plugins "$tools/ktlint.jar" \
+        --plugins "$tools/ktlint.jar:$rules" \
         --base-path "$(pwd)" \
         --fail-on-severity Info \
         "$@"
 }
 
 # detekt 2.0.0-alpha.6's automatic correction sometimes corrupts a file (truncated header, U+FFFF characters
-# after a KDoc): every pass is checked and undone if it damaged anything.
+# after a KDoc): every pass is checked against the copy made before it ($1) and undone if it damaged anything. Only
+# what the pass changed counts: a file may start with a comment, or hold such characters on purpose.
 corrupted() {
     invalid=$(printf '\357\277\277\|\357\277\275')
     # shellcheck disable=SC2046 # word splitting of the source list is intended
     for file in $(find $(echo "$sources" | tr ':' ' ') -name '*.kt'); do
-        # A truncated header loses the package line: it must come first, after optional @file annotations.
-        header=$(awk 'NF && !/^@file:/ { print; exit }' "$file")
-        case "$header" in package\ *) ;; *) echo "$file"; continue ;; esac
-        if LC_ALL=C grep -q "$invalid" "$file"; then echo "$file"; fi
+        before="$1/$file"
+        [ -f "$before" ] || continue
+        cmp -s "$file" "$before" && continue
+        # A truncated header loses the package line.
+        if grep -q '^package ' "$before" && ! grep -q '^package ' "$file"; then echo "$file"; continue; fi
+        if [ "$(LC_ALL=C grep -c "$invalid" "$file")" -gt "$(LC_ALL=C grep -c "$invalid" "$before")" ]; then
+            echo "$file"
+        fi
     done
 }
 
@@ -70,7 +83,7 @@ if [ "${1:-}" = "--fix" ]; then
         for dir in $(echo "$sources" | tr ':' ' '); do mkdir -p "$backup/$dir" && cp -R "$dir/." "$backup/$dir/"; done
         before=$(snapshot)
         detekt --auto-correct > /dev/null 2>&1 || true
-        damaged=$(corrupted)
+        damaged=$(corrupted "$backup")
         if [ -n "$damaged" ]; then
             for dir in $(echo "$sources" | tr ':' ' '); do cp -R "$backup/$dir/." "$dir/"; done
             rm -rf "$backup"

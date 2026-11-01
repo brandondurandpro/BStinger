@@ -116,7 +116,7 @@ internal class LineLexer(
 
     private fun word() {
         var j = i + 1
-        while (j < line.length && (line[j].isJavaIdentifierPart() || line[j] == '`')) j++
+        while (j < line.length && isWordPart(line[j])) j++
         if (collect) {
             val word = line.substring(i, j)
             when {
@@ -139,3 +139,5 @@ internal class LineLexer(
         if (collect && end > start) tokens += Token(kind, start, end)
     }
 }
+
+private fun isWordPart(c: Char): Boolean = c.isJavaIdentifierPart() || c == '`'

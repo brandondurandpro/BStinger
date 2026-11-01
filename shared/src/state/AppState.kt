@@ -450,12 +450,11 @@ class AppState(
      * Where the Open Project dialog starts: on a remote server the open project, else the SSH user's home; on the
      * local one the last directory it browsed, else the home; the root when nothing is known.
      */
-    fun projectPickerStart(): String =
-        if (isRemote) {
-            (screen as? Screen.Project)?.project?.root?.path ?: projectPickerHome() ?: "/"
-        } else {
-            lastPickerDirectory ?: serverHome ?: "/"
-        }
+    fun projectPickerStart(): String {
+        if (!isRemote) return lastPickerDirectory ?: serverHome ?: "/"
+        val project = (screen as? Screen.Project)?.project
+        return project?.root?.path ?: projectPickerHome() ?: "/"
+    }
 
     /** The home directory of the server shown (the SSH user's on a remote one): the dialog's Home and `~`. */
     fun projectPickerHome(): String? = if (isRemote) remoteHome ?: serverHome else serverHome

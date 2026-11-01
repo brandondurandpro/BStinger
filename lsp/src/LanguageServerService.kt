@@ -282,7 +282,7 @@ class LanguageServerService(private val settings: LanguageServerSettings) : Clos
         val marker = Languages.rootMarkerOf(language) ?: return project
         val top = Paths.get(project).toAbsolutePath().normalize()
         var directory = absolute(file).parent
-        while (directory != null && directory.startsWith(top) && !Files.isRegularFile(directory.resolve(marker))) {
+        while (directory != null && isSearched(directory, top, marker)) {
             directory = directory.parent
         }
         val found = directory?.takeIf { it.startsWith(top) && it != top }
@@ -298,11 +298,13 @@ class LanguageServerService(private val settings: LanguageServerSettings) : Clos
             val runtime = Runtime.getRuntime()
             val heapUsed = runtime.totalMemory() - runtime.freeMemory()
             val server = ServerMemory(heapUsed, runtime.maxMemory(), self.residentBytes)
-            val changed =
-                servers.map(::withoutMemory) != last.servers.map(::withoutMemory) ||
-                    servers.any { now -> moved(privateOf(last, now.id), now.memory?.privateBytes) } ||
-                    moved(last.server.residentBytes, server.residentBytes) ||
-                    moved(last.server.heapUsedBytes, server.heapUsedBytes)
+            val serversChanged = servers.map(::withoutMemory) != last.servers.map(::withoutMemory)
+            val serverMemoryMoved =
+                servers.any { now -> moved(privateOf(last, now.id), now.memory?.privateBytes) }
+            val residentMoved = moved(last.server.residentBytes, server.residentBytes)
+            val heapMoved = moved(last.server.heapUsedBytes, server.heapUsedBytes)
+            val ownMemoryMoved = residentMoved || heapMoved
+            val changed = serversChanged || serverMemoryMoved || ownMemoryMoved
             if (changed) published.value = LanguageServersStatus(last.version + 1, server, servers)
         }
     }
@@ -310,6 +312,13 @@ class LanguageServerService(private val settings: LanguageServerSettings) : Clos
     private fun privateOf(status: LanguageServersStatus, id: String): Long? {
         val server = status.servers.firstOrNull { it.id == id }
         return server?.memory?.privateBytes
+    }
+
+    // Still inside the project, and without the marker: the search goes on to the parent directory.
+    private fun isSearched(directory: Path, top: Path, marker: String): Boolean {
+        val insideProject = directory.startsWith(top)
+        val hasMarker = Files.isRegularFile(directory.resolve(marker))
+        return insideProject && !hasMarker
     }
 
     private fun absolute(path: String): Path {

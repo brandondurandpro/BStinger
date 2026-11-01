@@ -257,7 +257,8 @@ internal class ManagedServer(
     private fun onWanted() {
         waitJob?.takeIf { it.isActive && pendingIdle }?.cancel()
         pendingIdle = false
-        if (!userStopped && process == null && state == LanguageServerState.Stopped) launchStart()
+        val stopped = process == null && state == LanguageServerState.Stopped
+        if (!userStopped && stopped) launchStart()
     }
 
     private fun onUnused() {
@@ -272,7 +273,8 @@ internal class ManagedServer(
 
     // Forgotten first: a user arriving from now on gets a new server instead of this closing one.
     private suspend fun retire(force: Boolean) {
-        if ((force || pendingIdle) && onForgotten(this)) {
+        val retiring = force || pendingIdle
+        if (retiring && onForgotten(this)) {
             stopProcess(graceful = true)
             commands.close()
         }

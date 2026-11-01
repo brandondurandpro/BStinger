@@ -37,6 +37,9 @@ style:
     excludes: *tests
 
 complexity:
+  ComplexCondition:
+    # At most two conditions in an if or a while (AGENTS.md, "Mandatory Code Decomposition"): name the others.
+    allowedConditions: 2
   TooManyFunctions:
     excludes: *tests
   StringLiteralDuplication:
@@ -51,3 +54,10 @@ comments:
     excludes: ['**/shared/**', '**/desktopApp/**', '**/test/**', '**/test@jvm/**']
   UndocumentedPublicProperty:
     excludes: ['**/shared/**', '**/desktopApp/**', '**/test/**', '**/test@jvm/**']
+
+# The project's own rules (module detekt-rules), see AGENTS.md, "Kotlin Coding Guidelines".
+kotlin-editor:
+  active: true
+  DenseExpression:
+    active: true
+    maxOperators: 2
