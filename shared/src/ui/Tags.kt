@@ -39,6 +39,14 @@ object Tags {
     const val FOLDER_PICKER_COUNT = "folder.picker.count"
     const val FOLDER_PICKER_LOADING = "folder.picker.loading"
     const val FOLDER_PICKER_CHECKING = "folder.picker.checking"
+    const val OPEN_PROJECT = "openProject"
+    const val OPEN_PROJECT_PATH = "openProject.path"
+    const val OPEN_PROJECT_UP = "openProject.up"
+    const val OPEN_PROJECT_OPEN = "openProject.open"
+    const val OPEN_PROJECT_CANCEL = "openProject.cancel"
+    const val OPEN_PROJECT_ERROR = "openProject.error"
+    const val OPEN_PROJECT_EMPTY = "openProject.empty"
+    const val OPEN_PROJECT_LOADING = "openProject.loading"
     const val PROJECT = "project"
     const val PROJECT_WIDGET = "project.widget"
     const val PROJECT_CLOSE = "project.close"
@@ -288,6 +296,9 @@ object ItemTags {
     fun remoteWorkspace(destination: String, path: String) = "remote.workspace:$destination:$path"
 
     fun remoteTag(hostKey: String, tag: String) = "remote.tag:$hostKey:$tag"
+
+    /** A directory shown by the Open Project dialog, as an absolute path. */
+    fun pickerDirectory(path: String) = "openProject.dir:$path"
 
     /** A recent project in the menu of the toolbar's project name, which switches to it. */
     fun switchProject(path: String) = "project.switch:$path"

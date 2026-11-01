@@ -17,7 +17,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import org.example.kotlineditor.model.AppServices
 import org.example.kotlineditor.model.ConnectionStatus
-import org.example.kotlineditor.model.DirectoryPicker
 import org.example.kotlineditor.rpc.ClientOptions
 import org.example.kotlineditor.rpc.RpcClient
 import org.example.kotlineditor.rpc.appServices
@@ -39,8 +38,6 @@ class RemoteSession(
     val server: RemoteServerInfo,
     val tunnel: RemoteTunnel,
     val client: RpcClient,
-    /** Menus and pickers that ask for a path, answered by the server. */
-    val directoryPicker: DirectoryPicker,
     private val installer: RemoteInstaller,
 ) : RemoteConnection {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -48,7 +45,7 @@ class RemoteSession(
 
     val remote: RemoteTarget get() = host.target
 
-    override val services: AppServices by lazy { client.appServices(directoryPicker) }
+    override val services: AppServices by lazy { client.appServices() }
 
     override val label: String get() = target.destination
 
@@ -119,7 +116,6 @@ class RemoteSession(
         @Suppress("TooGenericExceptionCaught", "ThrowsCount") // wraps every transport failure into a user message
         suspend fun connect(
             target: SshTarget,
-            directoryPicker: DirectoryPicker,
             onProgress: (String) -> Unit = {},
             options: ClientOptions = ClientOptions(heartbeatMs = 5_000, deadAfterMs = 15_000, maxBackoffMs = 2_000),
         ): RemoteSession {
@@ -148,7 +144,7 @@ class RemoteSession(
                     client.awaitConnected()
                     currentCoroutineContext().ensureActive()
                     onProgress("Connected")
-                    return RemoteSession(target, host, server, tunnel, client, directoryPicker, installer)
+                    return RemoteSession(target, host, server, tunnel, client, installer)
                 } catch (e: Exception) {
                     client.close()
                     throw e
@@ -171,7 +167,7 @@ class RemoteSession(
 /** OpenSSH implementation used by the desktop application and the end-to-end tests. */
 object JvmRemoteFactory : RemoteFactory {
     override suspend fun connect(target: SshTarget, onProgress: (String) -> Unit): RemoteConnection =
-        RemoteSession.connect(target, ServerPathPicker(target.destination), onProgress)
+        RemoteSession.connect(target, onProgress)
 
     override suspend fun sshHosts(): List<SshConfigHost> = SshConfig.load()
 }

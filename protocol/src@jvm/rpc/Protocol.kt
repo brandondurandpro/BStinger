@@ -221,6 +221,9 @@ enum class Method(
     /** Path to directory entry, if it is a directory. */
     ResolveDirectory("fs/resolveDirectory"),
 
+    /** Home directory of the user running the server, for the Open Project dialog. */
+    UserHome("fs/userHome"),
+
     /** Children of a directory. */
     ListDirectory("fs/list"),
 

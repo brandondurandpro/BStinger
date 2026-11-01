@@ -43,6 +43,7 @@ private fun fileHandlers(services: LocalServices): Map<Method, Handler> {
     val fs = services.fileSystem
     return mapOf(
         Method.ResolveDirectory to { fs.resolveDirectory(params.string(PATH)).toJsonOrNull() },
+        Method.UserHome to { JsonPrimitive(services.places.home()) },
         Method.ListDirectory to { fs.list(entry(DIRECTORY)).toJson() },
         Method.Read to {
             code = true

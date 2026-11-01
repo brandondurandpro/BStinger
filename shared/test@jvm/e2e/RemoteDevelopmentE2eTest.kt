@@ -116,8 +116,8 @@ class RemoteDevelopmentE2eTest {
             onNodeWithTag(Tags.REMOTE_DISCONNECT).performClick()
             awaitCondition { !app.state.isRemote }
 
-            app.picker.next = project.path
-            onNodeWithTag(Tags.WELCOME_OPEN).performClick()
+            // The Open Project dialog browses the local server again.
+            openProjectDirectoryFromWelcome(project.path)
             awaitTag(Tags.treeRow("src"))
             assertFalse(app.state.isRemote)
         }

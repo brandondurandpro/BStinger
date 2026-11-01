@@ -8,7 +8,6 @@ import org.example.kotlineditor.model.FileContent
 import org.example.kotlineditor.remote.RemoteBundles
 import org.example.kotlineditor.remote.RemoteException
 import org.example.kotlineditor.remote.RemoteSession
-import org.example.kotlineditor.remote.ServerPathPicker
 import org.example.kotlineditor.remote.SshTarget
 import org.example.kotlineditor.remote.explainSshError
 import java.nio.file.Files
@@ -79,7 +78,7 @@ class RemoteTransportTest {
             val failure =
                 assertFailsWith<RemoteException> {
                     runBlocking {
-                        RemoteSession.connect(target(environment, project), ServerPathPicker("tester@127.0.0.1"))
+                        RemoteSession.connect(target(environment, project))
                     }
                 }
             val message = failure.message.orEmpty()
@@ -101,7 +100,7 @@ class RemoteTransportTest {
 
     private fun connect(environment: RemoteTestEnvironment, project: SampleProject): RemoteSession =
         runBlocking {
-            RemoteSession.connect(target(environment, project), ServerPathPicker("tester@127.0.0.1"))
+            RemoteSession.connect(target(environment, project))
         }
 
     private fun target(environment: RemoteTestEnvironment, project: SampleProject): SshTarget =

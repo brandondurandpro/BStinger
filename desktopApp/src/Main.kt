@@ -8,7 +8,6 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import org.example.kotlineditor.remote.JvmRemoteFactory
-import org.example.kotlineditor.remote.ServerPathPicker
 import org.example.kotlineditor.rpc.Protocol
 import org.example.kotlineditor.rpc.RpcClient
 import org.example.kotlineditor.rpc.appServices
@@ -18,7 +17,6 @@ import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.FilePreferenceStore
 import org.example.kotlineditor.syntax.treesitter.GrammarStore
 import java.io.File
-import javax.swing.UIManager
 
 /**
  * The IDE is a client of the Kotlin Editor server. By default the server is embedded (started on loopback with a
@@ -27,8 +25,6 @@ import javax.swing.UIManager
  */
 fun main(args: Array<String>) {
     fun option(name: String) = args.indexOf("--$name").takeIf { it >= 0 }?.let { args.getOrNull(it + 1) }
-    // Native look for the Swing dialogs.
-    runCatching { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()) }
 
     val remote = option("server") ?: System.getenv("KOTLIN_EDITOR_SERVER")
     val embedded = if (remote == null) EditorServer(LocalServices()).start() else null
@@ -40,9 +36,7 @@ fun main(args: Array<String>) {
             val port = remote.substringAfterLast(':', "").toIntOrNull() ?: Protocol.DEFAULT_PORT
             RpcClient(host, port, option("token") ?: System.getenv("KOTLIN_EDITOR_TOKEN").orEmpty())
         }
-    // A remote project lives on the server's disk: ask for its path instead of browsing the local disk.
-    val picker = if (embedded != null) SwingDirectoryPicker() else ServerPathPicker(remote!!)
-    val services = client.appServices(picker)
+    val services = client.appServices()
     // Only an embedded server can be returned to when the remote session ends.
     val localServices = services.takeIf { embedded != null }
 

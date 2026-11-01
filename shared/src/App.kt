@@ -9,6 +9,7 @@ import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.Screen
 import org.example.kotlineditor.ui.FolderPickerDialog
 import org.example.kotlineditor.ui.IdeTheme
+import org.example.kotlineditor.ui.OpenProjectDialog
 import org.example.kotlineditor.ui.ProjectScreen
 import org.example.kotlineditor.ui.RemoteDialog
 import org.example.kotlineditor.ui.WelcomeScreen
@@ -24,5 +25,6 @@ fun App(state: AppState) {
             state.remoteDialog?.let { RemoteDialog(state, it) }
             state.folderPicker?.let { FolderPickerDialog(state, it) }
         }
+        if (state.projectPickerOpen) OpenProjectDialog(state)
     }
 }

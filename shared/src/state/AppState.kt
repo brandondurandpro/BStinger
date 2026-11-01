@@ -108,6 +108,17 @@ class AppState(
     var opening: String? by mutableStateOf(null)
         private set
 
+    /** Whether the Open Project dialog is open (from the welcome screen or the project menu). */
+    var projectPickerOpen: Boolean by mutableStateOf(false)
+        private set
+
+    /** Home directory of the server, where the Open Project dialog starts; null until it is known. */
+    var serverHome: String? by mutableStateOf(null)
+        private set
+
+    // Last directory the Open Project dialog browsed (a preference), or null while unknown.
+    private var lastPickerDirectory: String? = preferences[PreferenceKeys.PICKER_DIRECTORY]
+
     // Only the latest request opens its project: a late answer must not replace a project chosen after it.
     private var openRequest = 0
 
@@ -360,6 +371,8 @@ class AppState(
         val paths = runCatching { services.recentProjects.load() }.getOrDefault(emptyList())
         recentProjects.clear()
         recentProjects.addAll(paths)
+        // The home of the server shown now: the Open Project dialog starts there.
+        serverHome = runCatching { services.places.home() }.getOrNull()
     }
 
     fun zoomEditor(delta: Float) {
@@ -398,8 +411,8 @@ class AppState(
     }
 
     /**
-     * Opens a project: the native chooser for the local server, or the remote folder browser (starting in the SSH
-     * user's home, or in the open project) for a remote one.
+     * Opens a project: the Open Project dialog, which browses the server's disk, or for a remote server the
+     * remote folder browser (starting in the SSH user's home, or in the open project).
      */
     fun browseForProject() {
         if (isRemote) {
@@ -407,7 +420,7 @@ class AppState(
             val start = (screen as? Screen.Project)?.project?.root?.path ?: remoteHome ?: "/"
             folderPicker = FolderPickerState(services.fileSystem, scope, start, remoteHome)
         } else {
-            scope.launch { services.directoryPicker.pickDirectory()?.let(::openProject) }
+            projectPickerOpen = true
         }
     }
 
@@ -420,6 +433,33 @@ class AppState(
         closeFolderPicker()
         openProject(path)
     }
+
+    /** Closes the Open Project dialog without opening anything (its Cancel, Escape or the backdrop). */
+    fun closeProjectPicker() {
+        projectPickerOpen = false
+    }
+
+    /** Opens [path] as the project of a confirmed Open Project dialog. */
+    fun openFromProjectPicker(path: String) {
+        projectPickerOpen = false
+        openProject(path)
+    }
+
+    /** Resolves [path] on the server's disk to a directory, or `null` when there is no such directory. */
+    suspend fun resolvePickerDirectory(path: String): FileEntry? = services.fileSystem.resolveDirectory(path)
+
+    /** The directories inside [directory], sorted as the server lists them (directories first, by name). */
+    suspend fun pickerSubdirectories(directory: FileEntry): List<FileEntry> =
+        services.fileSystem.list(directory).filter { it.isDirectory }
+
+    /** Remembers [path] as the last directory the Open Project dialog browsed (a preference). */
+    fun rememberProjectPickerDirectory(path: String) {
+        if (path == lastPickerDirectory) return
+        lastPickerDirectory = path
+    }
+
+    /** Where the Open Project dialog starts: the last directory it browsed, the server's home, else the root. */
+    fun projectPickerStart(): String = lastPickerDirectory ?: serverHome ?: "/"
 
     fun removeRecent(path: String) {
         recentProjects.remove(path)
@@ -454,8 +494,9 @@ class AppState(
 
     // The open project's settings on top of the last known preferences.
     private fun currentPreferences(): Map<String, String> {
+        val picker = lastPickerDirectory?.let { listOf(PreferenceKeys.PICKER_DIRECTORY to it) }.orEmpty()
         val agentMode = PreferenceKeys.AGENT_MODE to agentModeEnabled.toString()
-        val app = preferences + fontSizePreference() + agentMode + remotePreferences()
+        val app = preferences + picker + fontSizePreference() + agentMode + remotePreferences()
         val project = (screen as? Screen.Project)?.project ?: return app
         val autoSelect = PreferenceKeys.AUTO_SELECT_OPENED_FILE to project.autoSelectOpenedFile.toString()
         return app + project.toolWindows.toPreferences() + autoSelect

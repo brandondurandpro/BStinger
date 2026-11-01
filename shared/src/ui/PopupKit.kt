@@ -3,8 +3,6 @@ package org.example.kotlineditor.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -45,24 +43,25 @@ import org.example.kotlineditor.syntax.DeclarationKind
 
 private const val MAX_PREVIEW = 300
 
-/** Popup frame: dimmed backdrop (click closes), panel anchored near the top like IntelliJ's popups. */
+/** Popup frame: dimmed backdrop (click closes) and panel anchored near the top, like IntelliJ's popups. */
 @Composable
 internal fun PopupFrame(tag: String, onClose: () -> Unit, width: Int = 640, content: @Composable () -> Unit) {
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(Color(0x33000000))
-            .pointerInput(onClose) { detectTapGestures { onClose() } },
-        contentAlignment = Alignment.TopCenter,
-    ) {
+    // The backdrop is a sibling of the panel, not its parent, so a click inside the panel is never offered to
+    // the backdrop to close it (and pointer consumption is not needed, which would break the children's taps).
+    Box(Modifier.fillMaxSize()) {
         Box(
             Modifier
+                .fillMaxSize()
+                .background(Color(0x33000000))
+                .pointerInput(onClose) { detectTapGestures { onClose() } },
+        )
+        Box(
+            Modifier
+                .align(Alignment.TopCenter)
                 .padding(top = 90.dp)
                 .width(width.dp)
                 .background(IdeColors.Popup, RoundedCornerShape(8.dp))
                 .border(1.dp, IdeColors.Separator, RoundedCornerShape(8.dp))
-                // Swallow presses so they do not reach the backdrop (without merging the panel's semantics).
-                .pointerInput(Unit) { awaitEachGesture { awaitFirstDown().consume() } }
                 .testTag(tag)
                 .padding(10.dp),
         ) {
