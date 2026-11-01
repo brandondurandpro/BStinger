@@ -84,7 +84,8 @@ class ProcessMemorySamplerTest {
         if (!supported) return
         val parent = hog(0, childMegabytes = HOG_MB)
         val history = sampler().track("php", parent.toHandle())
-        val sample = awaitSample(history) { it.processCount == 2 }
+        // At least the hog and its child: on Windows, a console host may come with each of them.
+        val sample = awaitSample(history) { it.processCount >= 2 && it.privateBytes >= HOG_MB * MB * 8 / 10 }
         assertTrue(sample.privateBytes >= HOG_MB * MB * 8 / 10, "tree holds ${sample.privateBytes / MB} MB")
     }
 
@@ -193,11 +194,11 @@ class ProcessMemorySamplerTest {
     }
 
     private fun awaitCondition(what: String, condition: () -> Boolean) {
-        val deadline = System.nanoTime() + 20_000_000_000L
+        // Slept, not spun: a spinning test starves the processes it waits for on a two-core CI runner.
+        val deadline = System.nanoTime() + 60_000_000_000L
         while (!condition()) {
             if (System.nanoTime() > deadline) fail("Timed out waiting for $what")
-            Thread.onSpinWait()
-            Thread.yield()
+            Thread.sleep(20)
         }
     }
 

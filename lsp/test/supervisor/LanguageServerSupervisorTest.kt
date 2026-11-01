@@ -163,8 +163,8 @@ class LanguageServerSupervisorTest {
         await("the first failure") { server(target.id)!!.message.orEmpty().contains("No answer to initialize") }
         supervisor.stop(target.id)
         awaitState(target.id, LanguageServerState.Stopped)
-        Thread.sleep(200)
-        assertTrue(liveFakes().isEmpty(), "left running: ${liveFakes()}")
+        // A kill is asynchronous (Windows in particular): waited for, not slept on.
+        awaitNoFake()
     }
 
     @Test
@@ -254,12 +254,35 @@ class LanguageServerSupervisorTest {
         supervisor.use("a", targets)
         targets.forEach { awaitState(it.id, LanguageServerState.Running) }
         supervisor.close()
-        await("every process to exit") { liveFakes().isEmpty() }
+        awaitNoFake()
     }
 
+    private fun awaitNoFake() {
+        val deadline = System.currentTimeMillis() + WAIT_MS
+        while (liveFakes().isNotEmpty()) {
+            val left = liveFakes().map { pid -> "$pid ${commandOf(pid)}" }
+            check(System.currentTimeMillis() < deadline) { "Left running: $left" }
+            Thread.sleep(20)
+        }
+    }
+
+    // The fake servers and their children; not Windows' console hosts, which belong to the console of a process.
     private fun liveFakes(): List<Long> {
-        val children = ProcessHandle.current().descendants().use { stream -> stream.map { it.pid() }.toList() }
-        return seen.filter { !gone(it) } + children
+        val children =
+            ProcessHandle.current().descendants().use { stream ->
+                stream.filter { !isConsoleHost(it) }.map { it.pid() }.toList()
+            }
+        return (seen.filter { !gone(it) } + children).distinct()
+    }
+
+    private fun isConsoleHost(process: ProcessHandle): Boolean {
+        val command = process.info().command()
+        return command.map { it.lowercase().endsWith("conhost.exe") }.orElse(false)
+    }
+
+    private fun commandOf(pid: Long): String {
+        val process = ProcessHandle.of(pid)
+        return process.flatMap { it.info().command() }.orElse("?")
     }
 }
 
