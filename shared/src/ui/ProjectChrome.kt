@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
@@ -46,12 +47,52 @@ internal fun Toolbar(app: AppState, project: ProjectState) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         ProjectWidget(app, project)
+        if (app.isRemote) {
+            RemoteBadge(app)
+        }
         if (project.gitBranch == null) {
             Spacer(Modifier.weight(1f))
         } else {
             BranchWidget(project, Modifier.weight(1f).padding(start = 12.dp))
         }
         IconButton({ project.showPopup(PopupKind.GotoFile) }) { SearchIcon(color = IdeColors.Text) }
+    }
+}
+
+@Composable
+private fun RemoteBadge(app: AppState) {
+    var menuOpen by remember { mutableStateOf(false) }
+    val connection by app.connection.collectAsState()
+    val failure by app.remoteFailure.collectAsState()
+    val failing = failure != null || connection != ConnectionStatus.Connected
+    val accent = if (failing) IdeColors.Error else IdeColors.Accent
+    val label = app.remoteLabel ?: "remote"
+    Box {
+        Row(
+            Modifier
+                .background(accent.copy(alpha = 0.15f), RoundedCornerShape(4.dp))
+                .clickable { menuOpen = true }
+                .testTag(Tags.TOP_REMOTE)
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Label(
+                "Remote  ·  $label",
+                color = accent,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Chevron(expanded = false)
+        }
+        DropdownMenu(menuOpen, onDismissRequest = { menuOpen = false }) {
+            DropdownMenuItem(
+                text = { Text("Disconnect from $label", fontSize = 13.sp) },
+                onClick = {
+                    menuOpen = false
+                    app.disconnectRemote()
+                },
+                modifier = Modifier.testTag(Tags.REMOTE_DISCONNECT),
+            )
+        }
     }
 }
 

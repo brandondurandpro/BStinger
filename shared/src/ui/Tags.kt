@@ -27,6 +27,7 @@ object Tags {
     const val REMOTE_TAGS = "remote.tags"
     const val REMOTE_SELECTED = "remote.selected"
     const val STATUS_REMOTE = "status.remote"
+    const val TOP_REMOTE = "toolbar.remote"
     const val FOLDER_PICKER = "folder.picker"
     const val FOLDER_PICKER_PATH = "folder.picker.path"
     const val FOLDER_PICKER_UP = "folder.picker.up"

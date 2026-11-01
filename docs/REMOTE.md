@@ -18,6 +18,9 @@ behind a **New host…** button, which also collapses back to the pick view.
 Hosts can be **tagged** (production, dev, test…): enter comma-separated tags on the selected host, or click a
 tag chip on another row to filter the lists by it. Tags live in the client's preferences and survive restarts.
 
+Once connected, the **project toolbar** shows a `Remote · user@host` badge in blue (red while the SSH link is
+failing); click it to disconnect.
+
 
 The first connection installs the matching server under `~/.kotlin-editor/server` on the host, starts a per-user
 daemon and opens an SSH tunnel. Later connections reuse the daemon; the SSH link is supervised and restarted when

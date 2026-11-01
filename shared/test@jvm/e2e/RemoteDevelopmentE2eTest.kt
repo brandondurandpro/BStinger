@@ -78,6 +78,21 @@ class RemoteDevelopmentE2eTest {
         }
 
     @Test
+    fun `the top bar shows the remote host and disconnects from it`() =
+        remoteUiTest {
+            val app = launchApp()
+            connectRemoteTo(RemoteTestEnvironment, project.path)
+            awaitTag(Tags.treeRow("src"), timeout = 60_000)
+            onNodeWithTag(Tags.TOP_REMOTE).assertTextContains("tester@127.0.0.1", substring = true)
+
+            onNodeWithTag(Tags.TOP_REMOTE).performClick()
+            awaitTag(Tags.REMOTE_DISCONNECT).performClick()
+            awaitTag(Tags.WELCOME)
+            awaitCondition { !app.state.isRemote }
+            awaitNoTag(Tags.TOP_REMOTE)
+        }
+
+    @Test
     fun `a missing identity file is reported in the dialog`() =
         remoteUiTest {
             val app = launchApp()
