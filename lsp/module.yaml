@@ -1,0 +1,21 @@
+# Language servers (LSP): process supervision, memory sampling, leak detection, server specs. Runs in the server,
+# never in the UI; kept out of `server` and `shared` so it compiles and tests on its own (`./kotlin test -m lsp`).
+product:
+  type: kmp/lib
+  platforms: [jvm]
+
+dependencies:
+  - //protocol: exported
+  - $libs.kotlinx.coroutines.core
+  # Only the JsonElement tree is used: LSP messages are read and built by hand, no compiler plugin needed.
+  - $libs.kotlinx.serialization.json
+
+test-dependencies:
+  - //testkit
+
+# The Windows memory sampler calls kernel32 through the Foreign Function & Memory API.
+test-settings:
+  jvm:
+    test:
+      freeJvmArgs:
+        - --enable-native-access=ALL-UNNAMED
