@@ -60,6 +60,24 @@ class OpenProjectDialogChaosE2eTest {
         }
 
     @Test
+    fun `on a slow link the Open button pressed right after Enter does not open the directory shown before`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, chaos = true)
+            openFromProjectMenu()
+            showDirectoryInProjectPicker(other.path)
+            app.network.latencyMs = 400
+            navigateToInProjectPicker(project.path)
+            // The listing of the typed path is still in the air: Open waits for it, it does not open the other one.
+            onNodeWithTag(Tags.OPEN_PROJECT_OPEN).performClick()
+            onNodeWithTag(Tags.OPEN_PROJECT).assertExists()
+            awaitTag(srcRowOf(project))
+            onNodeWithTag(Tags.OPEN_PROJECT_OPEN).performClick()
+            awaitNoTag(Tags.OPEN_PROJECT)
+            awaitTag(Tags.treeRow("src"))
+            onNodeWithTag(Tags.treeRow("Other.kt")).assertDoesNotExist()
+        }
+
+    @Test
     fun `the dialog still navigates after the server lost its session and restarted`() =
         runComposeUiTest {
             val app = launchWithProject(project, chaos = true)

@@ -7,6 +7,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.doubleClick
 import androidx.compose.ui.test.hasTestTag
@@ -238,7 +239,13 @@ fun ComposeUiTest.navigateToInProjectPicker(path: String) {
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.showDirectoryInProjectPicker(path: String) {
     navigateToInProjectPicker(path)
-    awaitCondition { shownDirectoryInProjectPicker() == path }
+    // Lets the Enter start its navigation: until then the field already shows the typed path while the list, still
+    // the previous one, is not loading, so the wait below would end at once on the previous directory.
+    waitForIdle()
+    awaitCondition {
+        shownDirectoryInProjectPicker() == path &&
+            onAllNodes(hasTestTag(Tags.OPEN_PROJECT_LOADING)).fetchSemanticsNodes().isEmpty()
+    }
 }
 
 /** Chooses [path] as the new project through the Open Project dialog, starting from the welcome screen. */
@@ -246,6 +253,8 @@ fun ComposeUiTest.showDirectoryInProjectPicker(path: String) {
 fun ComposeUiTest.openProjectDirectoryFromWelcome(path: String) {
     openProjectPickerFromWelcome()
     showDirectoryInProjectPicker(path)
+    // A click on the disabled button is lost: wait for the listing to have enabled it.
+    awaitCondition { runCatching { onNodeWithTag(Tags.OPEN_PROJECT_OPEN).assertIsEnabled() }.isSuccess }
     onNodeWithTag(Tags.OPEN_PROJECT_OPEN).performClick()
 }
 

@@ -386,15 +386,18 @@ private class DirectoryBrowser(private val app: AppState, private val scope: Cor
         (selection ?: current)?.let { app.openFromProjectPicker(it.path) }
     }
 
-    /** Shows the directory at [path] and lists the directories it contains. */
+    /**
+     * Shows the directory at [path] and lists the directories it contains. The navigation starts loading right
+     * away, before its coroutine runs: an Open pressed in between must not open the directory shown before.
+     */
     fun show(path: String) {
-        scope.launch { navigate(path) }
-    }
-
-    private suspend fun navigate(path: String) {
         val request = ++navigation
         loading = true
         error = null
+        scope.launch { navigate(path, request) }
+    }
+
+    private suspend fun navigate(path: String, request: Int) {
         val listing =
             try {
                 listDirectory(path)
