@@ -29,16 +29,15 @@ import org.example.kotlineditor.model.GitFileStatus
 import org.example.kotlineditor.state.ProjectState
 import org.example.kotlineditor.state.ToolWindow
 import org.example.kotlineditor.state.openDiff
-import org.example.kotlineditor.state.toggleBlame
 
 /** Git tool window: branch and commit actions, then the changed files split into the checked ones and the others. */
 @Composable
 fun GitPanel(project: ProjectState, drag: ToolWindowDrag, modifier: Modifier = Modifier) {
-    val changes = project.gitStatus.entries.sortedBy { it.key }
+    val changes = project.git.status.entries.sortedBy { it.key }
     Column(modifier.fillMaxSize().background(IdeColors.Editor).testTag(GitTags.GIT_PANEL)) {
         ToolWindowHeader("Git", ToolWindow.Git, project, drag) {
             BlameToggle(project)
-            IconButton(project::refreshGitStatus, Modifier.testTag(GitTags.GIT_REFRESH)) {
+            IconButton(project.git::refreshStatus, Modifier.testTag(GitTags.GIT_REFRESH)) {
                 Label("⟳", color = IdeColors.TextSecondary)
             }
             IconButton(
@@ -46,7 +45,7 @@ fun GitPanel(project: ProjectState, drag: ToolWindowDrag, modifier: Modifier = M
                 Modifier.testTag(GitTags.GIT_HIDE),
             ) { CloseIcon() }
         }
-        if (project.isGitRepository) {
+        if (project.git.isRepository) {
             GitActionsBar(project)
             Box(Modifier.fillMaxWidth().height(1.dp).background(IdeColors.Border))
             if (changes.isEmpty()) {
@@ -70,7 +69,7 @@ private fun BlameToggle(project: ProjectState) {
         Modifier
             .padding(end = 2.dp)
             .background(if (active) IdeColors.Selection else Color.Transparent, RoundedCornerShape(4.dp))
-            .clickable(enabled = enabled) { project.toggleBlame() }
+            .clickable(enabled = enabled) { project.git.toggleBlame() }
             .padding(horizontal = 5.dp, vertical = 3.dp)
             .testTag(GitTags.GIT_BLAME),
         contentAlignment = Alignment.Center,
@@ -94,7 +93,7 @@ private fun Message(text: String, tag: String) {
 // partial selection of IntelliJ's checkboxes, and its label tells how many changes are listed.
 @Composable
 private fun SelectAll(project: ProjectState, changes: Int) {
-    val checked = project.selectedForCommit.size
+    val checked = project.git.selectedForCommit.size
     val allChecked = checked == changes && changes > 0
     val someChecked = checked in 1 until changes
     Row(
@@ -104,7 +103,7 @@ private fun SelectAll(project: ProjectState, changes: Int) {
             .clickable(
                 remember { MutableInteractionSource() },
                 indication = null,
-            ) { project.toggleAllCommitSelection() }
+            ) { project.git.toggleAllCommitSelection() }
             .background(IdeColors.Panel)
             .padding(start = 9.dp, top = 3.dp, bottom = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -144,7 +143,7 @@ private fun SelectAll(project: ProjectState, changes: Int) {
 private fun ChangeList(project: ProjectState, changes: List<Map.Entry<String, GitFileStatus>>) {
     LazyColumn(Modifier.fillMaxSize()) {
         items(changes, key = { it.key }) { (path, status) ->
-            ChangeRow(project, path, status, checked = path in project.selectedForCommit)
+            ChangeRow(project, path, status, checked = path in project.git.selectedForCommit)
         }
     }
 }
@@ -159,7 +158,7 @@ private fun ChangeRow(project: ProjectState, path: String, status: GitFileStatus
             checked,
             Modifier.padding(start = 9.dp).testTag(GitTags.gitChangeCheck(path)),
             size = 14.dp,
-        ) { project.toggleCommitSelection(path) }
+        ) { project.git.toggleCommitSelection(path) }
         Row(
             Modifier
                 .weight(1f)

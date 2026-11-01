@@ -156,7 +156,7 @@ private fun ProjectState.fileOperation(block: suspend () -> Unit) {
 fun ProjectState.synchronize() {
     tree.refresh()
     fileIndex.invalidate()
-    refreshGit()
+    git.refresh()
     for (tab in editor.allTabs.filterNot { it.isDiff }.distinctBy { it.entry.path }) {
         val document = tab.document
         if (document != null && !document.isModified) scope.launch { reloadIfChanged(tab.entry, document) }

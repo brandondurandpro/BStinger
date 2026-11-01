@@ -69,11 +69,11 @@ class PinnedBranchActionsE2eTest {
     }
 
     private fun ComposeUiTest.pin(app: E2eApp, branch: String) {
-        awaitCondition { app.project.gitBranchInfos.any { it.name == branch } }
+        awaitCondition { app.project.git.branchInfos.any { it.name == branch } }
         onNodeWithTag(GitTags.GIT_BRANCH).performClick()
         awaitTag(GitTags.BRANCH_PICKER)
         onNodeWithTag(GitTags.branchPin(branch)).performClick()
-        awaitCondition { branch in app.project.selectedBranches }
+        awaitCondition { branch in app.project.git.selectedBranches }
         onNodeWithTag(GitTags.BRANCH_SEARCH).performClick()
         onNodeWithTag(GitTags.BRANCH_SEARCH).performKeyInput { pressKey(Key.Escape) }
         awaitNoTag(GitTags.BRANCH_PICKER)
@@ -112,7 +112,7 @@ class PinnedBranchActionsE2eTest {
             assertEquals(project.git("rev-parse", "feature").trim(), gitIn(remote, "rev-parse", "feature").trim())
             // The chip no longer shows a commit to push, and the current branch did not change.
             awaitNoTag(GitTags.branchAhead("feature"))
-            assertEquals(default, app.project.gitBranch)
+            assertEquals(default, app.project.git.currentBranch)
             onNodeWithTag(GitTags.BRANCH_SYNC_DISMISS).performClick()
             awaitNoTag(GitTags.BRANCH_SYNC_STATUS)
         }
@@ -133,7 +133,7 @@ class PinnedBranchActionsE2eTest {
             awaitSyncStatus("Pulled feature")
             assertEquals(gitIn(remote, "rev-parse", "feature").trim(), project.git("rev-parse", "feature").trim())
             awaitNoTag(GitTags.branchBehind("feature"))
-            assertEquals(default, app.project.gitBranch)
+            assertEquals(default, app.project.git.currentBranch)
             assertFalse(project.root.resolve("remote.txt").exists(), "the checked-out files must not change")
         }
 
@@ -150,12 +150,12 @@ class PinnedBranchActionsE2eTest {
             menuItem("feature", GitTags.branchMenuPull("feature"))
             onNodeWithTag(GitTags.branchMenuPull("feature")).performClick()
             awaitSyncStatus("Cannot pull feature")
-            assertTrue(app.project.branchSync?.isError == true)
+            assertTrue(app.project.git.branchSync?.isError == true)
             assertEquals(before, project.git("rev-parse", "feature").trim())
             // Dismissing the error clears it; nothing stays pretending to work.
             onNodeWithTag(GitTags.BRANCH_SYNC_DISMISS).performClick()
             awaitNoTag(GitTags.BRANCH_SYNC_STATUS)
-            assertFalse(app.project.gitBusy)
+            assertFalse(app.project.git.busy)
         }
 
     @Test
@@ -173,7 +173,7 @@ class PinnedBranchActionsE2eTest {
 
             awaitSyncStatus("Pushed fresh")
             assertEquals("origin/fresh", project.git("rev-parse", "--abbrev-ref", "fresh@{upstream}").trim())
-            awaitCondition { app.project.gitBranchInfos.any { it.name == "fresh" && it.hasUpstream } }
+            awaitCondition { app.project.git.branchInfos.any { it.name == "fresh" && it.hasUpstream } }
         }
 
     @Test
@@ -196,6 +196,6 @@ class PinnedBranchActionsE2eTest {
             pin(app, "feature")
             menuItem("feature", GitTags.branchMenuCheckout("feature"))
             onNodeWithTag(GitTags.branchMenuCheckout("feature")).performClick()
-            awaitCondition { app.project.gitBranch == "feature" }
+            awaitCondition { app.project.git.currentBranch == "feature" }
         }
 }

@@ -41,9 +41,9 @@ class GitCommitSelectionE2eTest {
             awaitTag(GitTags.gitChange("README.md"))
             awaitTag(GitTags.gitChange("notes.txt"))
             awaitTag(GitTags.gitChangeCheck("README.md")).performClick()
-            awaitCondition { app.project.selectedForCommit == setOf("README.md") }
+            awaitCondition { app.project.git.selectedForCommit == setOf("README.md") }
             awaitTag(GitTags.gitChangeCheck("README.md")).performClick()
-            awaitCondition { app.project.selectedForCommit.isEmpty() }
+            awaitCondition { app.project.git.selectedForCommit.isEmpty() }
         }
 
     @Test
@@ -56,13 +56,13 @@ class GitCommitSelectionE2eTest {
             val app = openGit()
             awaitTag(GitTags.gitChangeCheck("README.md")).performClick()
             awaitTag(GitTags.gitChangeCheck("notes.txt")).performClick()
-            assertEquals(setOf("README.md", "notes.txt"), app.project.selectedForCommit)
+            assertEquals(setOf("README.md", "notes.txt"), app.project.git.selectedForCommit)
             awaitTag(GitTags.GIT_COMMIT_MESSAGE).performTextInput("Two files")
             onNodeWithTag(GitTags.GIT_COMMIT).performClick()
-            awaitCondition { !app.project.gitBusy && app.project.gitStatus.keys == setOf("build.gradle.kts") }
-            assertEquals("Committed 2 files", app.project.gitMessage)
+            awaitCondition { !app.project.git.busy && app.project.git.status.keys == setOf("build.gradle.kts") }
+            assertEquals("Committed 2 files", app.project.git.message)
             assertEquals("Two files", project.lastCommitSubject())
-            assertEquals(0, app.project.selectedForCommit.size)
+            assertEquals(0, app.project.git.selectedForCommit.size)
         }
 
     @Test
@@ -75,12 +75,12 @@ class GitCommitSelectionE2eTest {
             // A blank message fails, and the checked file stays checked for the next try.
             onNodeWithTag(GitTags.GIT_COMMIT).performClick()
             awaitTag(GitTags.GIT_MESSAGE)
-            assertEquals("A commit message is required", app.project.gitMessage)
-            assertEquals(setOf("README.md"), app.project.selectedForCommit)
+            assertEquals("A commit message is required", app.project.git.message)
+            assertEquals(setOf("README.md"), app.project.git.selectedForCommit)
             // The same selection then commits without ticking again.
             awaitTag(GitTags.GIT_COMMIT_MESSAGE).performTextInput("Update the readme")
             onNodeWithTag(GitTags.GIT_COMMIT).performClick()
-            awaitCondition { !app.project.gitBusy && app.project.gitStatus.isEmpty() }
+            awaitCondition { !app.project.git.busy && app.project.git.status.isEmpty() }
             assertEquals("Update the readme", project.lastCommitSubject())
         }
 
@@ -93,12 +93,12 @@ class GitCommitSelectionE2eTest {
             val app = openGit()
             awaitTag(GitTags.gitChangeCheck("README.md")).performClick()
             awaitTag(GitTags.gitChangeCheck("notes.txt")).performClick()
-            assertEquals(setOf("README.md", "notes.txt"), app.project.selectedForCommit)
+            assertEquals(setOf("README.md", "notes.txt"), app.project.git.selectedForCommit)
             // Another program reverts the file on disk; the refresh of the panel drops it from the selection.
             project.git("checkout", "--", "README.md")
             onNodeWithTag(GitTags.GIT_REFRESH).performClick()
-            awaitCondition { app.project.selectedForCommit == setOf("notes.txt") }
-            awaitCondition { app.project.gitStatus.keys == setOf("notes.txt") }
+            awaitCondition { app.project.git.selectedForCommit == setOf("notes.txt") }
+            awaitCondition { app.project.git.status.keys == setOf("notes.txt") }
         }
 
     @Test
@@ -112,7 +112,7 @@ class GitCommitSelectionE2eTest {
             awaitTag(GitTags.gitChangeCheck("notes.txt")).performClick()
             awaitTag(GitTags.GIT_COMMIT_MESSAGE).performTextInput("Reshape the project")
             onNodeWithTag(GitTags.GIT_COMMIT).performClick()
-            awaitCondition { !app.project.gitBusy && app.project.gitStatus.isEmpty() }
+            awaitCondition { !app.project.git.busy && app.project.git.status.isEmpty() }
             assertEquals("Reshape the project", project.lastCommitSubject())
             // The committed files carry the deletion and the addition, nothing of another file.
             val names = project.git("show", "--name-status", "--format=").trim().lines()
@@ -129,13 +129,13 @@ class GitCommitSelectionE2eTest {
             val app = openGit()
             // One row is ticked first: the master checkbox then ticks only what is left.
             awaitTag(GitTags.gitChangeCheck("README.md")).performClick()
-            awaitCondition { app.project.selectedForCommit == setOf("README.md") }
+            awaitCondition { app.project.git.selectedForCommit == setOf("README.md") }
             awaitTag(GitTags.GIT_SELECT_ALL).performClick()
             awaitCondition {
-                app.project.selectedForCommit == setOf("README.md", "build.gradle.kts", "notes.txt")
+                app.project.git.selectedForCommit == setOf("README.md", "build.gradle.kts", "notes.txt")
             }
             awaitTag(GitTags.GIT_SELECT_ALL).performClick()
-            awaitCondition { app.project.selectedForCommit.isEmpty() }
+            awaitCondition { app.project.git.selectedForCommit.isEmpty() }
         }
 
     @Test
@@ -149,7 +149,7 @@ class GitCommitSelectionE2eTest {
             onNodeWithTag(GitTags.GIT_COMMIT).assertIsNotEnabled()
             awaitNoTag(GitTags.GIT_MESSAGE)
             awaitTag(GitTags.gitChangeCheck("README.md")).performClick()
-            awaitCondition { app.project.selectedForCommit == setOf("README.md") }
-            assertEquals("Update the readme", app.project.commitMessage)
+            awaitCondition { app.project.git.selectedForCommit == setOf("README.md") }
+            assertEquals("Update the readme", app.project.git.commitMessage)
         }
 }

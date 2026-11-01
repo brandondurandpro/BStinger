@@ -44,7 +44,7 @@ class GitPanelPerformanceE2eTest {
             // After the commit, every file of the directory is modified: the status lists all of them.
             files.forEach { project.file(it, "two\n") }
             val app = launchWithProject(project)
-            awaitCondition { app.project.gitStatus.size == CHANGES }
+            awaitCondition { app.project.git.status.size == CHANGES }
 
             measure("open the Git panel on $CHANGES changes", budgetMillis = 8_000, budgetMegabytes = 200) {
                 onNodeWithTag(AppTags.TOOL_GIT).performClick()
@@ -56,20 +56,20 @@ class GitPanelPerformanceE2eTest {
             // A tick is read per row: only the ticked row recomposes, not the list.
             measure("tick one of $CHANGES changes", budgetMillis = 2_000, budgetMegabytes = 50) {
                 onNodeWithTag(GitTags.gitChangeCheck(name(0))).performClick()
-                awaitCondition { app.project.selectedForCommit == setOf(name(0)) }
+                awaitCondition { app.project.git.selectedForCommit == setOf(name(0)) }
                 renderFrame()
             }
             assertTrue(composedCheckboxes() < MAX_COMPOSED_ROWS, "composed checkboxes: ${composedCheckboxes()}")
 
             measure("untick it again", budgetMillis = 2_000, budgetMegabytes = 50) {
                 onNodeWithTag(GitTags.gitChangeCheck(name(0))).performClick()
-                awaitCondition { app.project.selectedForCommit.isEmpty() }
+                awaitCondition { app.project.git.selectedForCommit.isEmpty() }
                 renderFrame()
             }
 
             measure("tick all of $CHANGES changes at once", budgetMillis = 2_000, budgetMegabytes = 50) {
                 onNodeWithTag(GitTags.GIT_SELECT_ALL).performClick()
-                awaitCondition { app.project.selectedForCommit.size == CHANGES }
+                awaitCondition { app.project.git.selectedForCommit.size == CHANGES }
                 renderFrame()
             }
         }
@@ -91,9 +91,9 @@ class GitPanelPerformanceE2eTest {
 
             measure("tick one of 3 changes, frame drawn", budgetMillis = 200, budgetMegabytes = 10) {
                 onNodeWithTag(GitTags.gitChangeCheck("README.md")).performClick()
-                awaitCondition { app.project.selectedForCommit == setOf("README.md") }
+                awaitCondition { app.project.git.selectedForCommit == setOf("README.md") }
                 onNodeWithTag(GitTags.gitChangeCheck("README.md")).performClick()
-                awaitCondition { app.project.selectedForCommit.isEmpty() }
+                awaitCondition { app.project.git.selectedForCommit.isEmpty() }
                 renderFrame()
             }
         }

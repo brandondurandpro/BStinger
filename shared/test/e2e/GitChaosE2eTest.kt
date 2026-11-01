@@ -54,7 +54,7 @@ class GitChaosE2eTest {
             project.commitAll()
             project.git("branch", "feature")
             val app = launchWithProject(project, chaos = true)
-            awaitCondition { app.project.gitBranchInfos.any { it.name == "feature" } }
+            awaitCondition { app.project.git.branchInfos.any { it.name == "feature" } }
             app.network.goDown()
             awaitReconnecting()
             onNodeWithTag(GitTags.GIT_BRANCH).performClick()
@@ -64,7 +64,7 @@ class GitChaosE2eTest {
             onNodeWithTag(GitTags.BRANCH_REFRESH).performClick()
             app.network.comeBack()
             awaitReconnected()
-            awaitCondition { app.project.gitBranchInfos.any { it.name == "feature" } }
+            awaitCondition { app.project.git.branchInfos.any { it.name == "feature" } }
             awaitTag(GitTags.branchItem("feature"))
         }
 
@@ -73,7 +73,7 @@ class GitChaosE2eTest {
         runComposeUiTest {
             project.commitAll()
             val app = launchWithProject(project, chaos = true)
-            awaitCondition { app.project.gitBranchInfos.isNotEmpty() }
+            awaitCondition { app.project.git.branchInfos.isNotEmpty() }
             onNodeWithTag(GitTags.GIT_BRANCH).performClick()
             awaitTag(GitTags.BRANCH_PICKER)
             project.git("branch", "after-restart")
@@ -92,7 +92,7 @@ class GitChaosE2eTest {
             project.commitAll()
             val default = project.git("rev-parse", "--abbrev-ref", "HEAD").trim()
             val app = launchWithProject(project, chaos = true)
-            awaitCondition { app.project.gitBranchInfos.any { it.name == default } }
+            awaitCondition { app.project.git.branchInfos.any { it.name == default } }
             project.git("branch", "slow-link")
             app.network.latencyMs = SLOW_BRANCH_LINK_MS
 
@@ -116,7 +116,7 @@ class GitChaosE2eTest {
 
     // Opens the cleanup dialog of the branch picker on the branches `a` and `b`, which have no remote.
     private fun ComposeUiTest.openCleanup(app: E2eApp) {
-        awaitCondition { app.project.gitBranchInfos.count { it.name == "a" || it.name == "b" } == 2 }
+        awaitCondition { app.project.git.branchInfos.count { it.name == "a" || it.name == "b" } == 2 }
         onNodeWithTag(GitTags.GIT_BRANCH).performClick()
         awaitTag(GitTags.BRANCH_PICKER)
         onNodeWithTag(GitTags.BRANCH_CLEANUP).performClick()
@@ -141,8 +141,8 @@ class GitChaosE2eTest {
             app.network.dropFromServer = false
             awaitTag(GitTags.BRANCH_DONE)
             awaitNoTag(GitTags.BRANCH_ERROR)
-            assertEquals("2 branches deleted", app.project.gitMessage)
-            assertFalse(app.project.gitMessageIsError)
+            assertEquals("2 branches deleted", app.project.git.message)
+            assertFalse(app.project.git.messageIsError)
             awaitNoTag(GitTags.branchItem("a"))
         }
 
@@ -195,7 +195,7 @@ class GitChaosE2eTest {
         project.git("commit", "-q", "--allow-empty", "-m", "local work")
         project.git("checkout", "-q", default)
         val app = launchWithProject(project, chaos = true)
-        awaitCondition { app.project.gitBranchInfos.any { it.name == "feature" && it.ahead == 1 } }
+        awaitCondition { app.project.git.branchInfos.any { it.name == "feature" && it.ahead == 1 } }
         onNodeWithTag(GitTags.GIT_BRANCH).performClick()
         awaitTag(GitTags.BRANCH_PICKER)
         onNodeWithTag(GitTags.branchPin("feature")).performClick()
@@ -224,8 +224,8 @@ class GitChaosE2eTest {
                 }
                 app.network.cutAll()
                 app.network.dropFromServer = false
-                awaitCondition { app.project.branchSync?.running == false }
-                assertEquals(false, app.project.branchSync?.isError, app.project.branchSync?.text)
+                awaitCondition { app.project.git.branchSync?.running == false }
+                assertEquals(false, app.project.git.branchSync?.isError, app.project.git.branchSync?.text)
                 awaitNoTag(GitTags.branchAhead("feature"))
             } finally {
                 remote.toFile().deleteRecursively()
@@ -242,11 +242,11 @@ class GitChaosE2eTest {
                 awaitReconnecting()
                 pushFeatureFromItsChip()
                 awaitTag(GitTags.BRANCH_SYNC_STATUS)
-                assertEquals(true, app.project.branchSync?.running)
+                assertEquals(true, app.project.git.branchSync?.running)
                 app.network.comeBack()
                 awaitReconnected()
-                awaitCondition { app.project.branchSync?.running == false }
-                assertEquals(false, app.project.branchSync?.isError, app.project.branchSync?.text)
+                awaitCondition { app.project.git.branchSync?.running == false }
+                assertEquals(false, app.project.git.branchSync?.isError, app.project.git.branchSync?.text)
                 assertEquals(project.git("rev-parse", "feature").trim(), gitIn(remote, "rev-parse", "feature").trim())
             } finally {
                 remote.toFile().deleteRecursively()
@@ -270,8 +270,8 @@ class GitChaosE2eTest {
             awaitCondition { project.lastCommitSubject() == "Update the readme" }
             app.network.cutAll()
             app.network.dropFromServer = false
-            awaitCondition { !app.project.gitBusy && app.project.gitStatus.keys == setOf("notes.txt") }
-            assertEquals("Committed 1 file", app.project.gitMessage)
+            awaitCondition { !app.project.git.busy && app.project.git.status.keys == setOf("notes.txt") }
+            assertEquals("Committed 1 file", app.project.git.message)
             assertEquals(2, project.commitCount(), "the retried commit must not run twice")
         }
 

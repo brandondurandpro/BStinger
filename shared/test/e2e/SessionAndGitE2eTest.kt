@@ -116,6 +116,6 @@ class SessionAndGitE2eTest {
                 withKeyDown(Key.CtrlLeft) { pressKey(Key.S) }
             }
             awaitTag(TreeTags.treeGitStatus("build.gradle.kts", "Modified"))
-            assertEquals(null, app.project.gitStatus["src/main/kotlin/App.kt"])
+            assertEquals(null, app.project.git.status["src/main/kotlin/App.kt"])
         }
 }

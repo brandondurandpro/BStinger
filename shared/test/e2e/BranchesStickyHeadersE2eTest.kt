@@ -48,12 +48,12 @@ class BranchesStickyHeadersE2eTest {
     }
 
     private fun ComposeUiTest.openBranches(app: E2eApp) {
-        awaitCondition { app.project.gitBranchInfos.size > LOCALS }
+        awaitCondition { app.project.git.branchInfos.size > LOCALS }
         onNodeWithTag(AppTags.TOOL_BRANCHES).performClick()
         awaitTag(GitTags.BRANCHES_PANEL)
         awaitTag(GitTags.historyBranch("local-000"))
         // The remote branches are loaded by their own request; wait for them before scrolling to their section.
-        awaitCondition { app.project.history.remoteBranches.size > LOCALS }
+        awaitCondition { app.project.git.history.remoteBranches.size > LOCALS }
     }
 
     private fun ComposeUiTest.topOf(tag: String): Dp = onNodeWithTag(tag).getBoundsInRoot().top
@@ -117,7 +117,7 @@ class BranchesStickyHeadersE2eTest {
 
             // One local and one remote branch left: the list no longer scrolls, the header is back in place.
             onNodeWithTag(GitTags.HISTORY_BRANCH_SEARCH).performTextInput("local-003")
-            awaitCondition { app.project.history.branchQuery == "local-003" }
+            awaitCondition { app.project.git.history.branchQuery == "local-003" }
             waitForIdle()
             onNodeWithTag(local).assertTextContains("1", substring = true)
             assertSameTop(top, local)
@@ -125,7 +125,7 @@ class BranchesStickyHeadersE2eTest {
             // A filter that matches nothing keeps both headers, with no rows under them.
             onNodeWithTag(GitTags.HISTORY_BRANCH_SEARCH).performTextInput("nothing matches this")
             awaitCondition {
-                app.project.history.branchQuery
+                app.project.git.history.branchQuery
                     .endsWith("nothing matches this")
             }
             waitForIdle()
@@ -169,7 +169,7 @@ class BranchesStickyHeadersE2eTest {
             val list = onNodeWithTag(GitTags.HISTORY_BRANCH_LIST)
 
             onNodeWithTag(GitTags.HISTORY_BRANCH_SEARCH).performTextInput("local-00")
-            awaitCondition { app.project.history.branchQuery == "local-00" }
+            awaitCondition { app.project.git.history.branchQuery == "local-00" }
             waitForIdle()
             onNodeWithTag(local).assertTextContains("10", substring = true)
 

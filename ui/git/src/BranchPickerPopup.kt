@@ -45,7 +45,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.example.kotlineditor.model.GitBranchInfo
 import org.example.kotlineditor.state.ProjectState
-import org.example.kotlineditor.state.checkoutBranch
 
 /**
  * The branch picker of the toolbar: search every local branch, pin one or several in the toolbar, and see how far
@@ -58,7 +57,7 @@ internal fun BranchPickerPopup(project: ProjectState, onClose: () -> Unit) {
     val status = remember { BranchPickerStatus() }
     val cursor = remember { ListCursor() }
     val focus = remember { FocusRequester() }
-    val branches = project.gitBranchInfos
+    val branches = project.git.branchInfos
     val matches = remember(branches, query) { filterBranches(branches, query) }
     BranchPickerFocus(project, query, branches, matches, cursor, focus, searching = status.deletion == null)
     val choose = { branch: GitBranchInfo? -> status.checkout(project, branch, onClose) }
@@ -83,7 +82,7 @@ internal fun BranchPickerPopup(project: ProjectState, onClose: () -> Unit) {
                     onCleanup = { status.deletion = BranchDeletion.ofWithoutRemote(project) },
                 )
                 BranchResults(project, branches, matches, query, cursor, choose)
-                BranchPickerFooter(project.selectedBranches.size)
+                BranchPickerFooter(project.git.selectedBranches.size)
             }
         }
     }
@@ -98,7 +97,7 @@ private class BranchPickerStatus {
 
     fun checkout(project: ProjectState, branch: GitBranchInfo?, onClose: () -> Unit) {
         when {
-            branch == null || project.gitBusy || checkingOut != null -> {
+            branch == null || project.git.busy || checkingOut != null -> {
                 Unit
             }
 
@@ -112,12 +111,12 @@ private class BranchPickerStatus {
                 done = null
                 // Keep the panel open until Git answers: a checkout can fail (local changes would be overwritten),
                 // and closing first would leave the user with no explanation outside the Git tool window.
-                project.checkoutBranch(branch.name) { checkedOut ->
+                project.git.checkoutBranch(branch.name) { checkedOut ->
                     checkingOut = null
                     if (checkedOut) {
                         onClose()
                     } else {
-                        failure = "Cannot check out ${branch.name}: ${project.gitMessage ?: "Git command failed"}"
+                        failure = "Cannot check out ${branch.name}: ${project.git.message ?: "Git command failed"}"
                     }
                 }
             }
@@ -170,7 +169,7 @@ private fun BranchPickerFocus(
     focus: FocusRequester,
     searching: Boolean,
 ) {
-    LaunchedEffect(Unit) { project.refreshBranches() }
+    LaunchedEffect(Unit) { project.git.refreshBranches() }
     // Back from the deletion dialog, the keyboard goes to the search field again.
     LaunchedEffect(searching) { if (searching) focus.requestFocus() }
     LaunchedEffect(query, branches) {
@@ -217,8 +216,8 @@ private fun BranchResults(
 
 @Composable
 private fun BranchPickerHeader(project: ProjectState, count: Int, onClose: () -> Unit) {
-    val behind = project.gitBranchInfos.count { it.behind > 0 }
-    val ahead = project.gitBranchInfos.count { it.ahead > 0 }
+    val behind = project.git.branchInfos.count { it.behind > 0 }
+    val ahead = project.git.branchInfos.count { it.ahead > 0 }
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
             Modifier.size(30.dp).background(IdeColors.Accent.copy(alpha = 0.16f), RoundedCornerShape(8.dp)),
@@ -239,7 +238,7 @@ private fun BranchPickerHeader(project: ProjectState, count: Int, onClose: () ->
             )
         }
         Spacer(Modifier.weight(1f))
-        val pinned = project.selectedBranches.size
+        val pinned = project.git.selectedBranches.size
         if (pinned > 0) {
             Box(
                 Modifier
@@ -250,7 +249,7 @@ private fun BranchPickerHeader(project: ProjectState, count: Int, onClose: () ->
                 Label("$pinned pinned", color = IdeColors.Accent, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
             }
         }
-        IconButton({ project.refreshBranches() }, Modifier.testTag(GitTags.BRANCH_REFRESH)) {
+        IconButton({ project.git.refreshBranches() }, Modifier.testTag(GitTags.BRANCH_REFRESH)) {
             Label("⟳", color = IdeColors.TextSecondary, fontSize = 16.sp)
         }
         IconButton(onClose) { CloseIcon() }
@@ -308,8 +307,8 @@ private fun BranchRow(
             .padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        BranchCheckbox(branch.name in project.pickedBranches, Modifier.testTag(GitTags.branchSelect(branch.name))) {
-            project.toggleBranchPick(branch.name)
+        BranchCheckbox(branch.name in project.git.pickedBranches, Modifier.testTag(GitTags.branchSelect(branch.name))) {
+            project.git.toggleBranchPick(branch.name)
         }
         BranchIcon(
             Modifier.padding(start = 10.dp),
@@ -317,9 +316,9 @@ private fun BranchRow(
         )
         BranchName(branch, query, Modifier.weight(1f).padding(start = 8.dp))
         BranchSyncBadge(branch, modifier = Modifier.padding(start = 10.dp))
-        val pinned = branch.name in project.selectedBranches
+        val pinned = branch.name in project.git.selectedBranches
         IconButton(
-            { project.toggleBranchSelection(branch.name) },
+            { project.git.toggleBranchSelection(branch.name) },
             Modifier.padding(start = 8.dp).testTag(GitTags.branchPin(branch.name)),
         ) {
             PinIcon(pinned, color = if (pinned) IdeColors.Accent else IdeColors.TextSecondary)

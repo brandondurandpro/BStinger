@@ -191,7 +191,7 @@ private fun rememberTreeScene(project: ProjectState, focused: () -> Boolean): Tr
     val outline = remember(tree) { derivedStateOf { TreeOutline(tree.rows) } }
     val sticky = rememberStickyHeaders(outline, scroll, geometry.rowHeight)
     return remember(project, scroll, geometry, cache, sticky) {
-        TreeScene(tree, scroll, geometry, cache, { project.gitStatus }, focused) { sticky.value }
+        TreeScene(tree, scroll, geometry, cache, { project.git.status }, focused) { sticky.value }
     }
 }
 

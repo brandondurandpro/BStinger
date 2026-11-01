@@ -22,10 +22,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.example.kotlineditor.state.ProjectState
-import org.example.kotlineditor.state.checkoutBranch
-import org.example.kotlineditor.state.commitChanges
-import org.example.kotlineditor.state.pull
-import org.example.kotlineditor.state.push
 
 /** Commit, branch switch, pull and push, at the top of the Git panel (IntelliJ's commit area). */
 @Composable
@@ -34,34 +30,34 @@ internal fun GitActionsBar(project: ProjectState) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             BranchMenu(project)
             Spacer(Modifier.weight(1f))
-            IdeButton("Pull", { project.pull() }, Modifier.testTag(GitTags.GIT_PULL), enabled = !project.gitBusy)
+            IdeButton("Pull", { project.git.pull() }, Modifier.testTag(GitTags.GIT_PULL), enabled = !project.git.busy)
             IdeButton(
                 "Push",
-                { project.push() },
+                { project.git.push() },
                 Modifier.padding(start = 6.dp).testTag(GitTags.GIT_PUSH),
-                enabled = !project.gitBusy,
+                enabled = !project.git.busy,
             )
         }
         Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             IdeTextField(
-                project.commitMessage,
-                { project.commitMessage = it },
+                project.git.commitMessage,
+                { project.git.commitMessage = it },
                 Modifier.weight(1f).testTag(GitTags.GIT_COMMIT_MESSAGE),
                 placeholder = "Commit message",
             )
             IdeButton(
                 "Commit",
-                { project.commitChanges(project.commitMessage) },
+                { project.git.commit(project.git.commitMessage) },
                 Modifier.padding(start = 6.dp).testTag(GitTags.GIT_COMMIT),
                 primary = true,
-                enabled = !project.gitBusy && project.selectedForCommit.isNotEmpty(),
+                enabled = !project.git.busy && project.git.selectedForCommit.isNotEmpty(),
             )
         }
-        project.gitMessage?.let { message ->
+        project.git.message?.let { message ->
             Label(
                 message,
                 Modifier.padding(top = 6.dp).testTag(GitTags.GIT_MESSAGE),
-                color = if (project.gitMessageIsError) IdeColors.Error else IdeColors.GitAdded,
+                color = if (project.git.messageIsError) IdeColors.Error else IdeColors.GitAdded,
                 fontSize = 11.sp,
             )
         }
@@ -74,22 +70,22 @@ private fun BranchMenu(project: ProjectState) {
     Box {
         Row(
             Modifier
-                .clickable(enabled = !project.gitBusy && project.gitBranches.isNotEmpty()) { open = true }
+                .clickable(enabled = !project.git.busy && project.git.branches.isNotEmpty()) { open = true }
                 .testTag(GitTags.GIT_BRANCH_BUTTON)
                 .padding(vertical = 4.dp, horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             BranchIcon()
-            Label(project.gitBranch ?: "No branch", Modifier.padding(start = 4.dp), fontSize = 12.sp)
+            Label(project.git.currentBranch ?: "No branch", Modifier.padding(start = 4.dp), fontSize = 12.sp)
             Chevron(expanded = false)
         }
         DropdownMenu(open, onDismissRequest = { open = false }) {
-            project.gitBranches.forEach { branch ->
+            project.git.branches.forEach { branch ->
                 DropdownMenuItem(
                     text = { Text(branch, fontSize = 13.sp) },
                     onClick = {
                         open = false
-                        project.checkoutBranch(branch)
+                        project.git.checkoutBranch(branch)
                     },
                     modifier = Modifier.testTag(GitTags.gitBranch(branch)),
                 )

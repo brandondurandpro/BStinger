@@ -61,7 +61,7 @@ class BranchesHistoryE2eTest {
             project.git("commit", "-q", "-m", "Add a class\n\nAnd remove the readme.")
             project.git("tag", "v1")
             val app = launchWithProject(project)
-            awaitCondition { app.project.gitBranch == default }
+            awaitCondition { app.project.git.currentBranch == default }
             openBranches()
 
             awaitTitle(default)
@@ -101,7 +101,7 @@ class BranchesHistoryE2eTest {
             project.git("checkout", "-q", default)
             project.git("commit", "-q", "--allow-empty", "-m", "Only on the default branch")
             val app = launchWithProject(project)
-            awaitCondition { app.project.gitBranchInfos.size == 2 }
+            awaitCondition { app.project.git.branchInfos.size == 2 }
             openBranches()
             awaitTag(GitTags.historyBranch("origin/$default"))
 
@@ -129,7 +129,7 @@ class BranchesHistoryE2eTest {
             project.commitAll()
             project.git("branch", "feature")
             val app = launchWithProject(project)
-            awaitCondition { app.project.gitBranchInfos.any { it.name == "feature" } }
+            awaitCondition { app.project.git.branchInfos.any { it.name == "feature" } }
             onNodeWithTag(GitTags.GIT_BRANCH).performClick()
             awaitTag(GitTags.BRANCH_PICKER)
             onNodeWithTag(GitTags.branchPin("feature")).performClick()
@@ -151,23 +151,23 @@ class BranchesHistoryE2eTest {
             val total = HISTORY_PAGE * 2 + 20
             repeat(total - 1) { project.git("commit", "-q", "--allow-empty", "-m", "commit $it") }
             val app = launchWithProject(project)
-            awaitCondition { app.project.gitBranch != null }
+            awaitCondition { app.project.git.currentBranch != null }
             openBranches()
-            awaitCondition { app.project.history.commits.size == HISTORY_PAGE }
-            assertTrue(!app.project.history.complete)
+            awaitCondition { app.project.git.history.commits.size == HISTORY_PAGE }
+            assertTrue(!app.project.git.history.complete)
 
             val list = onNode(hasScrollToIndexInHistory())
             // Each page is asked for once the end of the previous one is in view.
             repeat(3) {
-                awaitCondition { !app.project.history.loading }
-                list.performScrollToIndex(app.project.history.commits.size - 1)
+                awaitCondition { !app.project.git.history.loading }
+                list.performScrollToIndex(app.project.git.history.commits.size - 1)
             }
-            awaitCondition { app.project.history.complete }
+            awaitCondition { app.project.git.history.complete }
             list.performScrollToIndex(total)
             awaitTag(GitTags.HISTORY_END)
             onNodeWithTag(GitTags.HISTORY_END).assertTextContains("$total commits")
             // Each commit once, newest first, down to the first one.
-            val commits = app.project.history.commits
+            val commits = app.project.git.history.commits
             assertEquals(total, commits.map { it.hash }.distinct().size)
             assertEquals("init", commits.last().subject)
         }
@@ -178,7 +178,7 @@ class BranchesHistoryE2eTest {
             project.commitAll()
             project.git("branch", "doomed")
             val app = launchWithProject(project)
-            awaitCondition { app.project.gitBranchInfos.any { it.name == "doomed" } }
+            awaitCondition { app.project.git.branchInfos.any { it.name == "doomed" } }
             openBranches()
             onNodeWithTag(GitTags.historyBranch("doomed")).performClick()
             awaitTitle("doomed")
@@ -196,7 +196,7 @@ class BranchesHistoryE2eTest {
     fun `outside a repository the window says so`() =
         runComposeUiTest {
             val app = launchWithProject(project)
-            awaitCondition { !app.project.isGitRepository }
+            awaitCondition { !app.project.git.isRepository }
             openBranches()
             awaitCondition {
                 onAllNodes(hasText("Not a Git repository") and hasAnyAncestor(hasTestTag(GitTags.BRANCHES_PANEL)))

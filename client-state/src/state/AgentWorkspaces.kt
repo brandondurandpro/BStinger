@@ -18,7 +18,7 @@ internal suspend fun ProjectState.openWorktree(branch: String): ProjectState {
     // Same tool windows open, whether the agent works on the project or in its worktree.
     val worktree = ProjectState(directory, services, scope, toolWindows = toolWindows, grammars = grammars)
     withTimeoutOrNull(WORKTREE_LOAD_MILLIS) {
-        snapshotFlow { worktree.tree.rows.size > 1 && worktree.gitBranch != null }.first { it }
+        snapshotFlow { worktree.tree.rows.size > 1 && worktree.git.currentBranch != null }.first { it }
     }
     return worktree
 }

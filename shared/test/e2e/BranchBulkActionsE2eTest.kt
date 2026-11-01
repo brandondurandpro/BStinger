@@ -45,7 +45,7 @@ class BranchBulkActionsE2eTest {
 
     private fun ComposeUiTest.openPicker(app: E2eApp, vararg branches: String) {
         val names = branches.toList()
-        awaitCondition { app.project.gitBranchInfos.count { it.name in names } == names.size }
+        awaitCondition { app.project.git.branchInfos.count { it.name in names } == names.size }
         onNodeWithTag(GitTags.GIT_BRANCH).performClick()
         awaitTag(GitTags.BRANCH_PICKER)
         branches.forEach { awaitTag(GitTags.branchItem(it)) }
@@ -85,28 +85,28 @@ class BranchBulkActionsE2eTest {
             onNodeWithTag(GitTags.BRANCH_SEARCH).performTextInput("feature")
             awaitNoTag(GitTags.branchItem("release"))
             onNodeWithTag(GitTags.BRANCH_SELECT_ALL).performClick()
-            awaitCondition { app.project.pickedBranches == setOf("feature/login", "feature/search-ui") }
+            awaitCondition { app.project.git.pickedBranches == setOf("feature/login", "feature/search-ui") }
             onNodeWithTag(GitTags.BRANCH_PICK_COUNT, useUnmergedTree = true).assertTextContains("2 selected")
             onNodeWithTag(GitTags.BRANCH_UNPIN_PICKED).assertIsNotEnabled()
 
             onNodeWithTag(GitTags.BRANCH_PIN_PICKED).performClick()
-            awaitCondition { app.project.selectedBranches == setOf("feature/login", "feature/search-ui") }
+            awaitCondition { app.project.git.selectedBranches == setOf("feature/login", "feature/search-ui") }
             // The action is done: the ticks are cleared, the pins stay.
             awaitNoTag(GitTags.BRANCH_PICK_COUNT)
-            assertTrue(app.project.pickedBranches.isEmpty())
+            assertTrue(app.project.git.pickedBranches.isEmpty())
 
             onNodeWithTag(GitTags.branchSelect("feature/login")).performClick()
             awaitTag(GitTags.BRANCH_PICK_COUNT)
             onNodeWithTag(GitTags.BRANCH_PIN_PICKED).assertIsNotEnabled()
             onNodeWithTag(GitTags.BRANCH_UNPIN_PICKED).performClick()
-            awaitCondition { app.project.selectedBranches == setOf("feature/search-ui") }
+            awaitCondition { app.project.git.selectedBranches == setOf("feature/search-ui") }
 
             // Clear unticks without acting.
             onNodeWithTag(GitTags.branchSelect("feature/search-ui")).performClick()
             awaitTag(GitTags.BRANCH_PICK_COUNT)
             onNodeWithTag(GitTags.BRANCH_CLEAR_PICKS).performClick()
             awaitNoTag(GitTags.BRANCH_PICK_COUNT)
-            assertEquals(setOf("feature/search-ui"), app.project.selectedBranches)
+            assertEquals(setOf("feature/search-ui"), app.project.git.selectedBranches)
             onNodeWithTag(GitTags.BRANCH_SEARCH).performKeyInput { pressKey(Key.Escape) }
             awaitTag(GitTags.pinnedBranch("feature/search-ui"))
         }
@@ -123,7 +123,7 @@ class BranchBulkActionsE2eTest {
             listOf(default, "feature/login", "feature/search-ui").forEach {
                 onNodeWithTag(GitTags.branchSelect(it)).performClick()
             }
-            awaitCondition { app.project.pickedBranches.size == 3 }
+            awaitCondition { app.project.git.pickedBranches.size == 3 }
 
             onNodeWithTag(GitTags.BRANCH_DELETE_PICKED).performClick()
             awaitTag(GitTags.BRANCH_DELETE_DIALOG)
@@ -154,8 +154,8 @@ class BranchBulkActionsE2eTest {
             awaitNoTag(GitTags.branchItem("feature/login"))
             awaitTag(GitTags.branchItem("feature/search-ui"))
             // The deleted branch leaves the toolbar too, and the ticks are gone with it.
-            awaitCondition { "feature/login" !in app.project.selectedBranches }
-            awaitCondition { "feature/login" !in app.project.pickedBranches }
+            awaitCondition { "feature/login" !in app.project.git.selectedBranches }
+            awaitCondition { "feature/login" !in app.project.git.pickedBranches }
         }
 
     @Test
@@ -163,7 +163,7 @@ class BranchBulkActionsE2eTest {
         runComposeUiTest {
             val default = repositoryWithRemote()
             val app = launchWithProject(project)
-            awaitCondition { app.project.gitBranchInfos.any { it.name == "feature/old" && it.upstreamGone } }
+            awaitCondition { app.project.git.branchInfos.any { it.name == "feature/old" && it.upstreamGone } }
             openPicker(app, "feature/tracked", "feature/old", "local-only")
             onNodeWithTag(GitTags.BRANCH_CLEANUP).assertIsEnabled()
             onNodeWithTag(GitTags.BRANCH_CLEANUP).assertTextContains("Clean up 2 without remote…")
@@ -182,7 +182,7 @@ class BranchBulkActionsE2eTest {
             awaitTag(GitTags.BRANCH_DONE)
             assertEquals(setOf(default, "feature/tracked"), localBranches())
             // Nothing is left to clean up; the remote kept its branches.
-            awaitCondition { app.project.branchesWithoutRemote().isEmpty() }
+            awaitCondition { app.project.git.branchesWithoutRemote().isEmpty() }
             onNodeWithTag(GitTags.BRANCH_CLEANUP).assertIsNotEnabled()
             onNodeWithTag(GitTags.BRANCH_CLEANUP).assertTextContains("No branch without remote")
             assertTrue("feature/tracked" in project.git("ls-remote", "--heads", "origin"))
@@ -259,6 +259,6 @@ class BranchBulkActionsE2eTest {
             awaitTag(GitTags.BRANCH_DONE)
             awaitNoTag(GitTags.BRANCH_ERROR)
             assertEquals(setOf(default), localBranches())
-            assertTrue(!app.project.gitMessageIsError)
+            assertTrue(!app.project.git.messageIsError)
         }
 }

@@ -42,7 +42,7 @@ class BranchesSearchE2eTest {
     }
 
     private fun ComposeUiTest.openBranches(app: E2eApp) {
-        awaitCondition { app.project.gitBranch != null }
+        awaitCondition { app.project.git.currentBranch != null }
         onNodeWithTag(AppTags.TOOL_BRANCHES).performClick()
         awaitTag(GitTags.BRANCHES_PANEL)
         awaitTag(GitTags.historyCommit(hashOf("HEAD")))
@@ -95,7 +95,7 @@ class BranchesSearchE2eTest {
             onNodeWithTag(GitTags.HISTORY_SEARCH).performKeyInput { pressKey(Key.Escape) }
             awaitTag(GitTags.historyCommit(hashOf("HEAD")))
             awaitFooter(GitTags.HISTORY_END, "4 commits")
-            assertEquals("", app.project.history.commitQuery)
+            assertEquals("", app.project.git.history.commitQuery)
             // The window is still open: Escape only cleared the search.
             awaitTag(GitTags.BRANCHES_PANEL)
         }
@@ -119,7 +119,7 @@ class BranchesSearchE2eTest {
             // The fix of the login is an ancestor of the feature branch; the refactor is not.
             awaitTag(GitTags.historyCommit(hashOf("HEAD~2")))
             awaitNoTag(GitTags.historyCommit(hashOf("HEAD~1")))
-            assertEquals("login", app.project.history.appliedQuery)
+            assertEquals("login", app.project.git.history.appliedQuery)
         }
 
     @Test
@@ -133,13 +133,13 @@ class BranchesSearchE2eTest {
             openBranches(app)
 
             onNodeWithTag(GitTags.HISTORY_SEARCH).performTextInput("match")
-            val history = app.project.history
+            val history = app.project.git.history
             awaitCondition { history.appliedQuery == "match" && history.commits.size == HISTORY_PAGE }
             val list = onNode(hasScrollToIndexInHistory())
-            awaitCondition { !app.project.history.loading }
-            list.performScrollToIndex(app.project.history.commits.size - 1)
-            awaitCondition { app.project.history.complete }
-            val commits = app.project.history.commits
+            awaitCondition { !app.project.git.history.loading }
+            list.performScrollToIndex(app.project.git.history.commits.size - 1)
+            awaitCondition { app.project.git.history.complete }
+            val commits = app.project.git.history.commits
             assertEquals(total, commits.size)
             assertTrue(commits.all { it.subject.startsWith("match") })
         }
@@ -161,6 +161,6 @@ class BranchesSearchE2eTest {
             awaitTag(GitTags.HISTORY_DETAILS)
             awaitTag(GitTags.historyCommit(fix))
             awaitNoTag(GitTags.historyCommit(hashOf("HEAD")))
-            assertEquals("login", app.project.history.commitQuery)
+            assertEquals("login", app.project.git.history.commitQuery)
         }
 }

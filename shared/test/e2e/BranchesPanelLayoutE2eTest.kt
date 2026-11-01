@@ -51,7 +51,7 @@ class BranchesPanelLayoutE2eTest {
     }
 
     private fun ComposeUiTest.openBranches(app: E2eApp, default: String) {
-        awaitCondition { app.project.gitBranchInfos.size == 2 }
+        awaitCondition { app.project.git.branchInfos.size == 2 }
         onNodeWithTag(AppTags.TOOL_BRANCHES).performClick()
         awaitTag(GitTags.BRANCHES_PANEL)
         awaitTag(GitTags.historyBranch("origin/$default"))
@@ -162,6 +162,6 @@ class BranchesPanelLayoutE2eTest {
             awaitTag(GitTags.historyBranch("feature/login"))
             awaitNoTag(GitTags.historyBranch("origin/$default"))
             // The selection does not depend on the folding: the history still shows the current branch.
-            assertEquals(default, app.project.history.selectedRef)
+            assertEquals(default, app.project.git.history.selectedRef)
         }
 }

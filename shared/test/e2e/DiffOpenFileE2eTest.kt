@@ -85,7 +85,7 @@ class DiffOpenFileE2eTest {
             project.git("commit", "-q", "-am", "Add a line")
             val commit = project.git("rev-parse", "HEAD").trim()
             val app = launchWithProject(project)
-            awaitCondition { app.project.gitBranch != null }
+            awaitCondition { app.project.git.currentBranch != null }
             onNodeWithTag(AppTags.TOOL_BRANCHES).performClick()
             awaitTag(GitTags.historyCommit(commit)).performClick()
             awaitTag(GitTags.historyFile("README.md")).performClick()
@@ -109,7 +109,7 @@ class DiffOpenFileE2eTest {
             project.git("commit", "-q", "-m", "Drop the build")
             val commit = project.git("rev-parse", "HEAD").trim()
             val app = launchWithProject(project)
-            awaitCondition { app.project.gitBranch != null }
+            awaitCondition { app.project.git.currentBranch != null }
             onNodeWithTag(AppTags.TOOL_BRANCHES).performClick()
             awaitTag(GitTags.historyCommit(commit)).performClick()
             awaitTag(GitTags.historyFile("build.gradle.kts")).performClick()

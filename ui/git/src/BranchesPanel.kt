@@ -80,14 +80,14 @@ private const val MIN_COMMITS_WIDTH = 200f
  */
 @Composable
 fun BranchesPanel(project: ProjectState, drag: ToolWindowDrag, modifier: Modifier = Modifier) {
-    val history = project.history
+    val history = project.git.history
     // The first time, the history opens on the current branch, as soon as it is known.
-    LaunchedEffect(project.gitBranch) { history.selectIfNone(project.gitBranch) }
+    LaunchedEffect(project.git.currentBranch) { history.selectIfNone(project.git.currentBranch) }
     Column(modifier.fillMaxSize().background(IdeColors.Editor).testTag(GitTags.BRANCHES_PANEL)) {
         ToolWindowHeader("Branches", ToolWindow.Branches, project, drag) {
             IconButton(
                 {
-                    project.refreshBranches()
+                    project.git.refreshBranches()
                     history.reload()
                 },
                 Modifier.testTag(GitTags.HISTORY_REFRESH),
@@ -102,7 +102,7 @@ fun BranchesPanel(project: ProjectState, drag: ToolWindowDrag, modifier: Modifie
                 MinimizeIcon()
             }
         }
-        if (!project.isGitRepository) {
+        if (!project.git.isRepository) {
             Box(Modifier.fillMaxSize().padding(12.dp)) {
                 Label("Not a Git repository", color = IdeColors.TextSecondary)
             }
@@ -149,7 +149,7 @@ private fun HistoryColumns(project: ProjectState, history: BranchHistoryState) {
 @Composable
 private fun BranchColumn(project: ProjectState, history: BranchHistoryState, modifier: Modifier) {
     val query = history.branchQuery.trim()
-    val locals = project.gitBranchInfos
+    val locals = project.git.branchInfos
     val remotes = history.remoteBranches
     val shownLocals = remember(locals, query) { locals.filter { it.name.contains(query, ignoreCase = true) } }
     val shownRemotes = remember(remotes, query) { remotes.filter { it.contains(query, ignoreCase = true) } }

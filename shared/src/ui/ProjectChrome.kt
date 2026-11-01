@@ -65,7 +65,7 @@ internal fun Toolbar(app: AppState, project: ProjectState) {
         }
         // In agent mode, the branch of the project the agent of the active conversation works on.
         val branchProject = if (project.agentMode) project.agent.current?.workspace else project
-        if (branchProject?.gitBranch == null) {
+        if (branchProject == null || branchProject.git.currentBranch == null) {
             Spacer(Modifier.weight(1f))
         } else {
             BranchWidget(branchProject, Modifier.weight(1f).padding(start = 12.dp))

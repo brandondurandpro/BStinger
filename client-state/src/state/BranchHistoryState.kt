@@ -26,7 +26,7 @@ const val SEARCH_DELAY_MS = 250L
  */
 @Stable
 class BranchHistoryState(private val root: String, private val git: GitClient, private val scope: CoroutineScope) {
-    /** Remote-tracking branches (`origin/main`); local ones come from [ProjectState.gitBranchInfos]. */
+    /** Remote-tracking branches (`origin/main`); local ones come from [GitState.branchInfos]. */
     var remoteBranches: List<String> by mutableStateOf(emptyList())
         private set
 

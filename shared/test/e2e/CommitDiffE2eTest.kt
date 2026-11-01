@@ -30,7 +30,7 @@ class CommitDiffE2eTest {
     private fun hashOf(ref: String) = project.git("rev-parse", ref).trim()
 
     private fun ComposeUiTest.openCommit(app: E2eApp, hash: String) {
-        awaitCondition { app.project.gitBranch != null }
+        awaitCondition { app.project.git.currentBranch != null }
         if (!app.project.toolWindows.isVisible(org.example.kotlineditor.state.ToolWindow.Branches)) {
             onNodeWithTag(AppTags.TOOL_BRANCHES).performClick()
         }
@@ -116,7 +116,7 @@ class CommitDiffE2eTest {
 
             openCommit(app, head)
             // Listed as a rename: Git saw the same file under a new name.
-            val history = app.project.history
+            val history = app.project.git.history
             awaitCondition {
                 history.details
                     ?.files
@@ -149,8 +149,8 @@ class CommitDiffE2eTest {
             project.file("README.md", textOf("# Demo", "Committed", "Later", ""))
             project.git("commit", "-q", "-am", "Later")
             onNodeWithTag(GitTags.HISTORY_REFRESH).performClick()
-            app.project.refreshGitStatus()
-            val history = app.project.history
+            app.project.git.refreshStatus()
+            val history = app.project.git.history
             awaitCondition { history.commits.firstOrNull()?.subject == "Later" }
             onNodeWithTag(EditorTags.commitDiffTab(head, "README.md")).performClick()
             assertEquals(before, diffOf(app, head, "README.md"))

@@ -119,7 +119,7 @@ class BranchPickerPerformanceE2eTest {
             project.commitAll()
             createBranches()
             val app = launchWithProject(project)
-            awaitCondition { app.project.gitBranchInfos.size > BRANCHES }
+            awaitCondition { app.project.git.branchInfos.size > BRANCHES }
             onNodeWithTag(GitTags.GIT_BRANCH).performClick()
             awaitTag(GitTags.BRANCH_PICKER)
             awaitTag(GitTags.branchItem("monitored/branch-0000"))
@@ -135,7 +135,7 @@ class BranchPickerPerformanceE2eTest {
                 renderFrame()
             }
             // Select all ticked the current branch too.
-            assertEquals(BRANCHES + 1, app.project.selectedBranches.size)
+            assertEquals(BRANCHES + 1, app.project.git.selectedBranches.size)
             val chips = onAllNodes(hasTestTagPrefix("branch.pinned:")).fetchSemanticsNodes().size
             assertTrue(chips < MAX_COMPOSED_ROWS, "composed toolbar chips: $chips")
 
@@ -156,7 +156,7 @@ class BranchPickerPerformanceE2eTest {
             }
             assertTrue(localBranchCount() == 1, "branches left: ${localBranchCount()}")
             // Only the current branch, which cannot be deleted, stays pinned.
-            awaitCondition { app.project.selectedBranches.size == 1 }
+            awaitCondition { app.project.git.selectedBranches.size == 1 }
         }
 
     @Test
@@ -169,7 +169,7 @@ class BranchPickerPerformanceE2eTest {
                 gitIn(remote, "init", "-q", "--bare")
                 project.git("remote", "add", "origin", remote.toString())
                 val app = launchWithProject(project)
-                awaitCondition { app.project.gitBranchInfos.size > BRANCHES }
+                awaitCondition { app.project.git.branchInfos.size > BRANCHES }
                 onNodeWithTag(GitTags.GIT_BRANCH).performClick()
                 awaitTag(GitTags.BRANCH_PICKER)
                 onNodeWithTag(GitTags.BRANCH_SELECT_ALL).performClick()
@@ -189,11 +189,11 @@ class BranchPickerPerformanceE2eTest {
                 // The push itself is one Git process; what is measured is the refresh of $BRANCHES branches after it.
                 measure("push a pinned branch, then refresh", budgetMillis = 10_000, budgetMegabytes = 150) {
                     onNodeWithTag(GitTags.branchMenuPush(first)).performClick()
-                    awaitCondition(timeout = 20_000) { app.project.branchSync?.running == false }
-                    awaitCondition { app.project.gitBranchInfos.any { it.name == first && it.hasUpstream } }
+                    awaitCondition(timeout = 20_000) { app.project.git.branchSync?.running == false }
+                    awaitCondition { app.project.git.branchInfos.any { it.name == first && it.hasUpstream } }
                     renderFrame()
                 }
-                assertEquals(false, app.project.branchSync?.isError, app.project.branchSync?.text)
+                assertEquals(false, app.project.git.branchSync?.isError, app.project.git.branchSync?.text)
                 val chips = onAllNodes(hasTestTagPrefix("branch.pinned:")).fetchSemanticsNodes().size
                 assertTrue(chips < MAX_COMPOSED_ROWS, "composed toolbar chips: $chips")
             } finally {
@@ -207,7 +207,7 @@ class BranchPickerPerformanceE2eTest {
             project.commitAll()
             createBranches()
             val app = launchWithProject(project)
-            awaitCondition { app.project.gitBranchInfos.size > BRANCHES }
+            awaitCondition { app.project.git.branchInfos.size > BRANCHES }
 
             measure("open the branch picker with $BRANCHES branches", budgetMillis = 10_000, budgetMegabytes = 100) {
                 onNodeWithTag(GitTags.GIT_BRANCH).performClick()

@@ -81,17 +81,17 @@ class BranchesHistoryPerformanceE2eTest {
         measure("search the oldest of $COMMITS commits", budgetMillis = 5_000, budgetMegabytes = 50) {
             onNodeWithTag(GitTags.HISTORY_SEARCH).performTextInput("commit 0 of the long history")
             awaitCondition(timeout = 20_000) {
-                val history = app.project.history
+                val history = app.project.git.history
                 history.appliedQuery.isNotEmpty() && history.complete
             }
             renderFrame()
         }
-        assertEquals(1, app.project.history.commits.size)
+        assertEquals(1, app.project.git.history.commits.size)
         measure("search the $COMMITS commits, every one matching", budgetMillis = 5_000, budgetMegabytes = 100) {
             onNodeWithTag(GitTags.HISTORY_SEARCH_CLEAR).performClick()
             onNodeWithTag(GitTags.HISTORY_SEARCH).performTextInput("long history")
             awaitCondition(timeout = 20_000) {
-                app.project.history.appliedQuery == "long history" && !app.project.history.loading
+                app.project.git.history.appliedQuery == "long history" && !app.project.git.history.loading
             }
             renderFrame()
         }
@@ -181,7 +181,7 @@ class BranchesHistoryPerformanceE2eTest {
         runComposeUiTest {
             createHistory()
             val app = launchWithProject(project)
-            awaitCondition { app.project.gitBranchInfos.size > BRANCHES }
+            awaitCondition { app.project.git.branchInfos.size > BRANCHES }
             val newest = project.git("rev-parse", "HEAD").trim()
 
             measure("open the Branches window on $COMMITS commits", budgetMillis = 5_000, budgetMegabytes = 100) {
@@ -194,17 +194,17 @@ class BranchesHistoryPerformanceE2eTest {
             val list = onNode(hasScrollToIndexInHistory())
             measure("scroll the whole history, page by page", budgetMillis = 30_000, budgetMegabytes = 600) {
                 repeat(SCROLL_STEPS) { step ->
-                    awaitCondition { !app.project.history.loading }
+                    awaitCondition { !app.project.git.history.loading }
                     val target = (step + 1) * (COMMITS / SCROLL_STEPS)
-                    list.performScrollToIndex(minOf(target, app.project.history.commits.size - 1))
+                    list.performScrollToIndex(minOf(target, app.project.git.history.commits.size - 1))
                     renderFrame()
                 }
-                awaitCondition(timeout = 20_000) { app.project.history.complete }
+                awaitCondition(timeout = 20_000) { app.project.git.history.complete }
             }
-            assertTrue(app.project.history.commits.size > COMMITS, "loaded: ${app.project.history.commits.size}")
+            assertTrue(app.project.git.history.commits.size > COMMITS, "loaded: ${app.project.git.history.commits.size}")
             assertTrue(composedCommitRows() < MAX_COMPOSED_ROWS, "composed after scrolling: ${composedCommitRows()}")
 
-            val oldest = app.project.history.commits[COMMITS / 2]
+            val oldest = app.project.git.history.commits[COMMITS / 2]
             measure("select a commit and show its files", budgetMillis = 3_000, budgetMegabytes = 50) {
                 list.performScrollToIndex(COMMITS / 2)
                 onNodeWithTag(GitTags.historyCommit(oldest.hash)).performClick()
@@ -237,7 +237,7 @@ class BranchesHistoryPerformanceE2eTest {
             project.git("commit", "-q", "-am", "rewrite")
             val head = project.git("rev-parse", "HEAD").trim()
             val app = launchWithProject(project)
-            awaitCondition { app.project.gitBranch != null }
+            awaitCondition { app.project.git.currentBranch != null }
             onNodeWithTag(AppTags.TOOL_BRANCHES).performClick()
             awaitTag(GitTags.historyCommit(head)).performClick()
             awaitTag(GitTags.historyFile("big.txt"))

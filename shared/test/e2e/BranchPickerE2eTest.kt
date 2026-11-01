@@ -59,7 +59,7 @@ class BranchPickerE2eTest {
         runComposeUiTest {
             val default = remoteWithOneNewCommit()
             val app = launchWithProject(project)
-            awaitCondition { app.project.gitBranchInfos.any { it.name == default && it.behind == 1 } }
+            awaitCondition { app.project.git.branchInfos.any { it.name == default && it.behind == 1 } }
             // At a glance, without opening anything: the toolbar shows the current branch behind by one commit.
             awaitTag(GitTags.branchBehind(default), unmerged = true)
         }
@@ -81,7 +81,7 @@ class BranchPickerE2eTest {
             project.git("checkout", "-q", default)
 
             val app = launchWithProject(project)
-            awaitCondition { app.project.gitBranchInfos.any { it.name == "feature/ahead" && it.ahead == 1 } }
+            awaitCondition { app.project.git.branchInfos.any { it.name == "feature/ahead" && it.ahead == 1 } }
             onNodeWithTag(GitTags.GIT_BRANCH).performClick()
             awaitTag(GitTags.BRANCH_PICKER)
             awaitTag(GitTags.branchAhead("feature/ahead"), unmerged = true)
@@ -94,7 +94,7 @@ class BranchPickerE2eTest {
         runComposeUiTest {
             remoteWithOneNewCommit()
             val app = launchWithProject(project)
-            awaitCondition { app.project.gitBranchInfos.any { it.name == "feature/search-ui" } }
+            awaitCondition { app.project.git.branchInfos.any { it.name == "feature/search-ui" } }
             onNodeWithTag(GitTags.GIT_BRANCH).performClick()
             awaitTag(GitTags.BRANCH_PICKER)
             awaitTag(GitTags.branchItem("feature/login"))
@@ -105,8 +105,8 @@ class BranchPickerE2eTest {
             awaitTag(GitTags.branchItem("feature/search-ui"))
             onNodeWithTag(GitTags.branchItem("feature/search-ui")).performClick()
             awaitNoTag(GitTags.BRANCH_PICKER)
-            awaitCondition { app.project.gitBranch == "feature/search-ui" }
-            assertEquals("Switched to feature/search-ui", app.project.gitMessage)
+            awaitCondition { app.project.git.currentBranch == "feature/search-ui" }
+            assertEquals("Switched to feature/search-ui", app.project.git.message)
         }
 
     @Test
@@ -115,12 +115,12 @@ class BranchPickerE2eTest {
             project.commitAll()
             project.git("branch", "local-only")
             val app = launchWithProject(project)
-            awaitCondition { app.project.gitBranchInfos.any { it.name == "local-only" } }
+            awaitCondition { app.project.git.branchInfos.any { it.name == "local-only" } }
             onNodeWithTag(GitTags.GIT_BRANCH).performClick()
             awaitTag(GitTags.BRANCH_PICKER)
             awaitTag(GitTags.branchItem("local-only"))
             onAllNodesWithText("no remote tracking branch").onFirst().assertIsDisplayed()
-            val branch = app.project.gitBranchInfos.single { it.name == "local-only" }
+            val branch = app.project.git.branchInfos.single { it.name == "local-only" }
             assertTrue(branch.upstream == null && branch.behind == 0)
         }
 
@@ -131,14 +131,14 @@ class BranchPickerE2eTest {
             project.git("branch", "feature/login")
             project.git("branch", "feature/search-ui")
             val app = launchWithProject(project)
-            awaitCondition { app.project.gitBranchInfos.size == 3 }
+            awaitCondition { app.project.git.branchInfos.size == 3 }
             onNodeWithTag(GitTags.GIT_BRANCH).performClick()
             awaitTag(GitTags.BRANCH_PICKER)
 
             onNodeWithTag(GitTags.branchPin("feature/login")).performClick()
             onNodeWithTag(GitTags.branchPin("feature/search-ui")).performClick()
             awaitCondition {
-                app.project.selectedBranches == setOf("feature/login", "feature/search-ui")
+                app.project.git.selectedBranches == setOf("feature/login", "feature/search-ui")
             }
             awaitTag(GitTags.BRANCH_SELECTION_COUNT)
 
@@ -152,12 +152,12 @@ class BranchPickerE2eTest {
             awaitTag(GitTags.pinnedBranch("feature/login"))
             awaitTag(GitTags.pinnedBranch("feature/search-ui"))
             onNodeWithTag(GitTags.unpinnedBranch("feature/login")).performClick()
-            awaitCondition { app.project.selectedBranches == setOf("feature/search-ui") }
+            awaitCondition { app.project.git.selectedBranches == setOf("feature/search-ui") }
             awaitNoTag(GitTags.pinnedBranch("feature/login"))
 
             // A chip checks its branch out, like its row in the picker.
             onNodeWithTag(GitTags.pinnedBranch("feature/search-ui")).performClick()
-            awaitCondition { app.project.gitBranch == "feature/search-ui" }
+            awaitCondition { app.project.git.currentBranch == "feature/search-ui" }
         }
 
     @Test
@@ -176,7 +176,7 @@ class BranchPickerE2eTest {
             project.git("fetch", "-q", "--prune")
 
             val app = launchWithProject(project)
-            awaitCondition { app.project.gitBranchInfos.any { it.name == "feature/old" && it.upstreamGone } }
+            awaitCondition { app.project.git.branchInfos.any { it.name == "feature/old" && it.upstreamGone } }
             onNodeWithTag(GitTags.GIT_BRANCH).performClick()
             awaitTag(GitTags.BRANCH_PICKER)
             onNodeWithTag(GitTags.branchItem("feature/old")).assertIsDisplayed()
@@ -197,7 +197,7 @@ class BranchPickerE2eTest {
             project.file("README.md", "# Uncommitted local edit\n")
 
             val app = launchWithProject(project)
-            awaitCondition { app.project.gitBranchInfos.any { it.name == "feature/conflict" } }
+            awaitCondition { app.project.git.branchInfos.any { it.name == "feature/conflict" } }
             onNodeWithTag(GitTags.GIT_BRANCH).performClick()
             awaitTag(GitTags.BRANCH_PICKER)
             onNodeWithTag(GitTags.branchItem("feature/conflict")).performClick()
@@ -205,8 +205,8 @@ class BranchPickerE2eTest {
             // The panel stays open, says why, and the checkout did not happen: no silent failure behind the Git panel.
             awaitTag(GitTags.BRANCH_ERROR)
             awaitTag(GitTags.BRANCH_PICKER)
-            assertEquals(default, app.project.gitBranch)
-            assertTrue(app.project.gitMessageIsError)
+            assertEquals(default, app.project.git.currentBranch)
+            assertTrue(app.project.git.messageIsError)
             onNodeWithTag(GitTags.BRANCH_SEARCH).performClick()
             onNodeWithTag(GitTags.BRANCH_SEARCH).performKeyInput { pressKey(Key.Escape) }
             awaitNoTag(GitTags.BRANCH_PICKER)
@@ -218,20 +218,20 @@ class BranchPickerE2eTest {
             project.commitAll()
             project.git("branch", "feature/gone")
             val app = launchWithProject(project)
-            awaitCondition { app.project.gitBranchInfos.any { it.name == "feature/gone" } }
+            awaitCondition { app.project.git.branchInfos.any { it.name == "feature/gone" } }
             onNodeWithTag(GitTags.GIT_BRANCH).performClick()
             awaitTag(GitTags.BRANCH_PICKER)
             onNodeWithTag(GitTags.branchPin("feature/gone")).performClick()
             onNodeWithTag(GitTags.branchSelect("feature/gone")).performClick()
-            awaitCondition { "feature/gone" in app.project.selectedBranches }
-            awaitCondition { "feature/gone" in app.project.pickedBranches }
+            awaitCondition { "feature/gone" in app.project.git.selectedBranches }
+            awaitCondition { "feature/gone" in app.project.git.pickedBranches }
 
             // Another program deletes the branch while the picker is open.
             project.git("branch", "-D", "feature/gone")
             onNodeWithTag(GitTags.BRANCH_REFRESH).performClick()
             awaitNoTag(GitTags.branchItem("feature/gone"))
             awaitNoTag(GitTags.pinnedBranch("feature/gone"))
-            awaitCondition { "feature/gone" !in app.project.selectedBranches }
-            awaitCondition { "feature/gone" !in app.project.pickedBranches }
+            awaitCondition { "feature/gone" !in app.project.git.selectedBranches }
+            awaitCondition { "feature/gone" !in app.project.git.pickedBranches }
         }
 }

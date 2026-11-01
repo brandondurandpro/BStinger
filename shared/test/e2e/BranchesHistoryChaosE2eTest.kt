@@ -42,7 +42,7 @@ class BranchesHistoryChaosE2eTest {
     }
 
     private fun ComposeUiTest.openBranches(app: E2eApp) {
-        awaitCondition { app.project.gitBranchInfos.size == 3 }
+        awaitCondition { app.project.git.branchInfos.size == 3 }
         onNodeWithTag(AppTags.TOOL_BRANCHES).performClick()
         awaitTag(GitTags.BRANCHES_PANEL)
         awaitTag(GitTags.historyBranch("second"))
@@ -59,12 +59,12 @@ class BranchesHistoryChaosE2eTest {
             onNodeWithTag(GitTags.historyBranch("second")).performClick()
 
             awaitTag(GitTags.historyCommit(hashOf("second")), timeout = 15_000)
-            awaitCondition(timeout = 15_000) { !app.project.history.loading }
+            awaitCondition(timeout = 15_000) { !app.project.git.history.loading }
             // The answer for "first" arrived late, and was dropped.
             awaitNoTag(GitTags.historyCommit(hashOf("first")))
-            assertEquals("second", app.project.history.selectedRef)
+            assertEquals("second", app.project.git.history.selectedRef)
             val left = hashOf("first")
-            val shown = app.project.history.commits
+            val shown = app.project.git.history.commits
             assertTrue(shown.none { it.hash == left })
         }
 
@@ -109,13 +109,13 @@ class BranchesHistoryChaosE2eTest {
             app.network.latencyMs = SLOW_LINK_MS
 
             onNodeWithTag(GitTags.HISTORY_SEARCH).performTextInput("only")
-            awaitCondition { app.project.history.appliedQuery == "only" }
+            awaitCondition { app.project.git.history.appliedQuery == "only" }
             // A second search before the first one answered: its results are the only ones shown.
             onNodeWithTag(GitTags.HISTORY_SEARCH).performTextInput(" on first")
             awaitCondition(timeout = 15_000) {
-                app.project.history.appliedQuery == "only on first" && app.project.history.complete
+                app.project.git.history.appliedQuery == "only on first" && app.project.git.history.complete
             }
-            val history = app.project.history
+            val history = app.project.git.history
             val subjects = history.commits.map { it.subject }
             assertEquals(listOf("only on first"), subjects)
             awaitNoTag(GitTags.historyCommit(hashOf("HEAD")))

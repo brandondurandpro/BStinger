@@ -275,7 +275,7 @@ class GitPanelE2eTest {
                 pressKey(Key.X)
                 withKeyDown(Key.CtrlLeft) { pressKey(Key.S) }
             }
-            awaitCondition { app.project.gitStatus["build.gradle.kts"] != null }
+            awaitCondition { app.project.git.status["build.gradle.kts"] != null }
             awaitCondition {
                 app.project.editor.activeTab
                     ?.lineChanges
@@ -326,11 +326,11 @@ class GitPanelE2eTest {
             awaitTag(GitTags.gitChange("notes.txt"))
             onNodeWithTag(GitTags.GIT_COMMIT).assertIsNotEnabled()
             awaitTag(GitTags.gitChangeCheck("README.md")).performClick()
-            awaitCondition { app.project.selectedForCommit == setOf("README.md") }
+            awaitCondition { app.project.git.selectedForCommit == setOf("README.md") }
             awaitTag(GitTags.GIT_COMMIT_MESSAGE).performTextInput("Update the readme")
             onNodeWithTag(GitTags.GIT_COMMIT).performClick()
-            awaitCondition { !app.project.gitBusy && app.project.gitStatus.keys == setOf("notes.txt") }
-            assertEquals("Committed 1 file", app.project.gitMessage)
+            awaitCondition { !app.project.git.busy && app.project.git.status.keys == setOf("notes.txt") }
+            assertEquals("Committed 1 file", app.project.git.message)
             assertEquals("Update the readme", project.lastCommitSubject())
         }
 
@@ -341,11 +341,11 @@ class GitPanelE2eTest {
             project.git("branch", "feature")
             val app = launchWithProject(project)
             onNodeWithTag(AppTags.TOOL_GIT).performClick()
-            awaitCondition { app.project.gitBranches.contains("feature") }
+            awaitCondition { app.project.git.branches.contains("feature") }
             awaitTag(GitTags.GIT_BRANCH_BUTTON).performClick()
             awaitTag(GitTags.gitBranch("feature")).performClick()
-            awaitCondition { app.project.gitBranch == "feature" }
-            assertEquals("Switched to feature", app.project.gitMessage)
+            awaitCondition { app.project.git.currentBranch == "feature" }
+            assertEquals("Switched to feature", app.project.git.message)
         }
 
     @Test

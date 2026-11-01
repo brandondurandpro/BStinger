@@ -42,7 +42,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.example.kotlineditor.model.GitBranchInfo
 import org.example.kotlineditor.state.ProjectState
-import org.example.kotlineditor.state.deleteBranches
 
 // Bulk actions of the branch picker: tick several branches to pin, unpin or delete them, and the shortcut that
 // deletes the branches without a remote. Every deletion goes through a confirmation listing what will be deleted.
@@ -55,8 +54,8 @@ internal fun BranchBulkBar(
     onDelete: () -> Unit,
     onCleanup: () -> Unit,
 ) {
-    val picked = project.pickedBranches
-    val withoutRemote = project.branchesWithoutRemote().size
+    val picked = project.git.pickedBranches
+    val withoutRemote = project.git.branchesWithoutRemote().size
     val active = picked.isNotEmpty()
     val barColor = if (active) IdeColors.Accent.copy(alpha = 0.10f) else Color.Transparent
     Row(
@@ -77,31 +76,31 @@ internal fun BranchBulkBar(
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,
             )
-            BarButton("Pin", GitTags.BRANCH_PIN_PICKED, enabled = !project.selectedBranches.containsAll(picked)) {
-                project.pinPickedBranches()
-                project.clearBranchPicks()
+            BarButton("Pin", GitTags.BRANCH_PIN_PICKED, enabled = !project.git.selectedBranches.containsAll(picked)) {
+                project.git.pinPickedBranches()
+                project.git.clearBranchPicks()
             }
-            BarButton("Unpin", GitTags.BRANCH_UNPIN_PICKED, enabled = picked.any { it in project.selectedBranches }) {
-                project.unpinPickedBranches()
-                project.clearBranchPicks()
+            BarButton("Unpin", GitTags.BRANCH_UNPIN_PICKED, enabled = picked.any { it in project.git.selectedBranches }) {
+                project.git.unpinPickedBranches()
+                project.git.clearBranchPicks()
             }
-            val deletable = picked.any { it != project.gitBranch }
-            BarButton("Delete…", GitTags.BRANCH_DELETE_PICKED, enabled = deletable && !project.gitBusy, danger = true) {
+            val deletable = picked.any { it != project.git.currentBranch }
+            BarButton("Delete…", GitTags.BRANCH_DELETE_PICKED, enabled = deletable && !project.git.busy, danger = true) {
                 onDelete()
             }
-            BarButton("Clear", GitTags.BRANCH_CLEAR_PICKS) { project.clearBranchPicks() }
+            BarButton("Clear", GitTags.BRANCH_CLEAR_PICKS) { project.git.clearBranchPicks() }
         } else {
             Label("Tick branches to pin or delete several at once", color = IdeColors.TextSecondary, fontSize = 11.sp)
         }
         Spacer(Modifier.weight(1f))
         val unpicked = matches.any { it.name !in picked }
         BarButton("Select all", GitTags.BRANCH_SELECT_ALL, enabled = unpicked) {
-            project.pickBranches(matches.map { it.name })
+            project.git.pickBranches(matches.map { it.name })
         }
         BarButton(
             if (withoutRemote == 0) "No branch without remote" else "Clean up $withoutRemote without remote…",
             GitTags.BRANCH_CLEANUP,
-            enabled = withoutRemote > 0 && !project.gitBusy,
+            enabled = withoutRemote > 0 && !project.git.busy,
             danger = true,
         ) { onCleanup() }
     }
@@ -122,7 +121,7 @@ internal fun BranchDeleteDialog(
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focus.requestFocus() }
     // A branch deleted meanwhile (by a partial failure, or another program) leaves the list.
-    val existing = project.gitBranchInfos.mapTo(HashSet()) { it.name }
+    val existing = project.git.branchInfos.mapTo(HashSet()) { it.name }
     val candidates = request.candidates.filter { it.name in existing }
     val toDelete = candidates.filter { it.name !in progress.unticked }.map { it.name }
     val cancel = { if (!progress.deleting) onCancel() }
@@ -168,7 +167,7 @@ internal fun BranchDeleteDialog(
                 { progress.delete(project, toDelete, onDeleted) },
                 Modifier.testTag(GitTags.BRANCH_DELETE_CONFIRM),
                 primary = true,
-                enabled = toDelete.isNotEmpty() && !progress.deleting && !project.gitBusy,
+                enabled = toDelete.isNotEmpty() && !progress.deleting && !project.git.busy,
             )
         }
     }
@@ -194,12 +193,12 @@ private class DeletionProgress {
     fun delete(project: ProjectState, names: List<String>, onDeleted: (String) -> Unit) {
         deleting = true
         failure = null
-        project.deleteBranches(names) { deleted ->
+        project.git.deleteBranches(names) { deleted ->
             deleting = false
             if (deleted) {
                 onDeleted("${plural(names.size, "branch", "branches")} deleted")
             } else {
-                failure = "Cannot delete every branch: ${project.gitMessage ?: "Git command failed"}"
+                failure = "Cannot delete every branch: ${project.git.message ?: "Git command failed"}"
             }
         }
     }
@@ -299,7 +298,7 @@ internal class BranchDeletion(
 ) {
     companion object {
         fun ofPicked(project: ProjectState): BranchDeletion {
-            val picked = project.gitBranchInfos.filter { it.name in project.pickedBranches }
+            val picked = project.git.branchInfos.filter { it.name in project.git.pickedBranches }
             val candidates = picked.filter { !it.current }
             return BranchDeletion(
                 title = "Delete ${plural(candidates.size, "selected branch", "selected branches")}?",
@@ -310,7 +309,7 @@ internal class BranchDeletion(
         }
 
         fun ofWithoutRemote(project: ProjectState): BranchDeletion {
-            val candidates = project.branchesWithoutRemote()
+            val candidates = project.git.branchesWithoutRemote()
             return BranchDeletion(
                 title = "Delete ${plural(candidates.size, "branch", "branches")} without a remote?",
                 reason = "These local branches track no remote branch, or one that was deleted on the remote.",

@@ -32,20 +32,18 @@ import org.example.kotlineditor.model.GitBranchInfo
 import org.example.kotlineditor.state.BranchSync
 import org.example.kotlineditor.state.ProjectState
 import org.example.kotlineditor.state.ToolWindow
-import org.example.kotlineditor.state.checkoutBranch
-import org.example.kotlineditor.state.syncBranch
 
 // The branch widget of the toolbar: the current branch (opens the branch picker), the pinned branches and their
 // menu (checkout, pull, push, changes), and the result of the last pull or push.
 
 @Composable
 fun BranchWidget(project: ProjectState, modifier: Modifier = Modifier) {
-    val current = project.gitBranchInfos.firstOrNull { it.current }
-    val infos = project.gitBranchInfos
-    val selected = project.selectedBranches
+    val current = project.git.branchInfos.firstOrNull { it.current }
+    val infos = project.git.branchInfos
+    val selected = project.git.selectedBranches
     // In the picker's order, without the current branch; computed once per change, not per frame.
     val pinned = remember(infos, selected) { infos.filter { it.name in selected && !it.current } }
-    val background = if (project.branchPickerOpen) IdeColors.Selection else Color.Transparent
+    val background = if (project.git.branchPickerOpen) IdeColors.Selection else Color.Transparent
     Row(
         modifier,
         verticalAlignment = Alignment.CenterVertically,
@@ -54,14 +52,14 @@ fun BranchWidget(project: ProjectState, modifier: Modifier = Modifier) {
         Row(
             Modifier
                 .background(background, RoundedCornerShape(5.dp))
-                .clickable { project.branchPickerOpen = true }
+                .clickable { project.git.branchPickerOpen = true }
                 .testTag(GitTags.GIT_BRANCH)
                 .padding(horizontal = 6.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            BranchIcon(color = if (project.branchPickerOpen) IdeColors.Accent else IdeColors.TextSecondary)
+            BranchIcon(color = if (project.git.branchPickerOpen) IdeColors.Accent else IdeColors.TextSecondary)
             Label(
-                project.gitBranch.orEmpty(),
+                project.git.currentBranch.orEmpty(),
                 Modifier.padding(start = 5.dp),
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
@@ -77,7 +75,7 @@ fun BranchWidget(project: ProjectState, modifier: Modifier = Modifier) {
         ) {
             items(pinned, key = { it.name }) { branch -> PinnedBranchChip(project, branch) }
         }
-        project.branchSync?.let { BranchSyncStatus(project, it) }
+        project.git.branchSync?.let { BranchSyncStatus(project, it) }
     }
 }
 
@@ -101,7 +99,7 @@ private fun BranchSyncStatus(project: ProjectState, sync: BranchSync) {
             Box(
                 Modifier
                     .size(18.dp)
-                    .clickable { project.branchSync = null }
+                    .clickable { project.git.branchSync = null }
                     .testTag(GitTags.BRANCH_SYNC_DISMISS),
                 contentAlignment = Alignment.Center,
             ) {
@@ -118,7 +116,7 @@ private fun PinnedBranchChip(project: ProjectState, branch: GitBranchInfo) {
             .height(22.dp)
             .background(IdeColors.Editor, RoundedCornerShape(5.dp))
             .border(1.dp, IdeColors.Separator, RoundedCornerShape(5.dp))
-            .clickable { project.checkoutBranch(branch.name) }
+            .clickable { project.git.checkoutBranch(branch.name) }
             .testTag(GitTags.pinnedBranch(branch.name))
             .padding(start = 6.dp, end = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -134,7 +132,7 @@ private fun PinnedBranchChip(project: ProjectState, branch: GitBranchInfo) {
         Box(
             Modifier
                 .size(18.dp)
-                .clickable { project.toggleBranchSelection(branch.name) }
+                .clickable { project.git.toggleBranchSelection(branch.name) }
                 .testTag(GitTags.unpinnedBranch(branch.name)),
             contentAlignment = Alignment.Center,
         ) {
@@ -169,19 +167,19 @@ private fun PinnedBranchMenu(project: ProjectState, branch: GitBranchInfo) {
                     modifier = Modifier.testTag(tag),
                 )
             }
-            val idle = !project.gitBusy
-            item("Checkout", GitTags.branchMenuCheckout(branch.name), idle) { project.checkoutBranch(branch.name) }
+            val idle = !project.git.busy
+            item("Checkout", GitTags.branchMenuCheckout(branch.name), idle) { project.git.checkoutBranch(branch.name) }
             item(pullLabel(branch), GitTags.branchMenuPull(branch.name), idle && branch.hasUpstream) {
-                project.syncBranch(branch.name, BranchSync.Action.Pull)
+                project.git.syncBranch(branch.name, BranchSync.Action.Pull)
             }
             item(pushLabel(branch), GitTags.branchMenuPush(branch.name), idle) {
-                project.syncBranch(branch.name, BranchSync.Action.Push)
+                project.git.syncBranch(branch.name, BranchSync.Action.Push)
             }
             item("Show Changes", GitTags.branchMenuChanges(branch.name), true) {
                 project.showToolWindow(ToolWindow.Git)
             }
             item("Show History", GitTags.branchMenuHistory(branch.name), true) { project.showHistory(branch.name) }
-            item("Unpin", GitTags.branchMenuUnpin(branch.name), true) { project.toggleBranchSelection(branch.name) }
+            item("Unpin", GitTags.branchMenuUnpin(branch.name), true) { project.git.toggleBranchSelection(branch.name) }
         }
     }
 }
@@ -204,7 +202,7 @@ private fun pushLabel(branch: GitBranchInfo): String =
 @Composable
 fun BranchPicker(project: ProjectState) {
     BranchPickerPopup(project) {
-        project.branchPickerOpen = false
+        project.git.branchPickerOpen = false
         val pane = project.editor.activePane
         if (project.editor.activeTab?.document != null) {
             runCatching { pane.focusRequester.requestFocus() }
