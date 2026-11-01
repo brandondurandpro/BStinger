@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
 import org.example.kotlineditor.model.ConnectionStatus
+import org.example.kotlineditor.model.LanguageServerCandidateInfo
 import org.example.kotlineditor.model.LanguageServerChoice
 import org.example.kotlineditor.model.LanguageServerInfo
 import org.example.kotlineditor.model.LanguageServerState
@@ -59,8 +60,16 @@ class LanguageServersState(
     var status by mutableStateOf(LanguageServersStatus.Empty)
         private set
 
-    /** The choice panel shown, null when none. */
+    /** The choice offered (the banner above the editors), null when none. */
     var choice: LanguageServerChoice? by mutableStateOf(null)
+        private set
+
+    /** The choice dialog is open over the banner. */
+    var choiceDialogOpen by mutableStateOf(false)
+        private set
+
+    /** The server selected in the choice dialog. */
+    var selectedCandidate: String? by mutableStateOf(null)
         private set
 
     /** A choice is being saved. */
@@ -117,6 +126,7 @@ class LanguageServersState(
             try {
                 servers.choose(shown.language, project, candidate)
                 choice = null
+                choiceDialogOpen = false
                 declared?.let { send(it) }
             } catch (failure: IOException) {
                 error = "Could not save the choice: ${failure.message}"
@@ -126,14 +136,43 @@ class LanguageServersState(
         }
     }
 
-    /** Shows the choice panel for [language] again, to change the server. */
+    /** Opens the choice dialog for [language] again, to change the server. */
     fun offerChoice(language: String, project: String) =
-        control { choice = servers.choice(language, project).takeIf { it.candidates.isNotEmpty() } }
+        control {
+            val offered = servers.choice(language, project).takeIf { it.candidates.isNotEmpty() }
+            choice = offered
+            if (offered != null) openChoiceDialog()
+        }
 
-    /** Closes the choice panel without choosing: no server for that language until the IDE restarts. */
+    /** Opens the choice dialog on the current server, else the recommended one. */
+    fun openChoiceDialog() {
+        val shown = choice ?: return
+        selectedCandidate = shown.chosen ?: recommendedOf(shown)?.id ?: shown.candidates.first().id
+        choiceDialogOpen = true
+    }
+
+    /** Selects [candidate] in the choice dialog. */
+    fun select(candidate: String) {
+        selectedCandidate = candidate
+    }
+
+    /** Selects the next ([delta] 1) or previous (-1) server of the dialog, wrapping around. */
+    fun moveSelection(delta: Int) {
+        val candidates = choice?.candidates ?: return
+        val index = candidates.indexOfFirst { it.id == selectedCandidate }
+        selectedCandidate = candidates[(index + delta).mod(candidates.size)].id
+    }
+
+    /** Closes the choice dialog; the banner stays. */
+    fun closeChoiceDialog() {
+        choiceDialogOpen = false
+    }
+
+    /** Closes the choice without choosing: no server for that language until the IDE restarts. */
     fun notNow() {
         choice?.let { dismissed += it.language }
         choice = null
+        choiceDialogOpen = false
     }
 
     /** Stops polling and controlling this server: the IDE switched to another one. */
@@ -228,3 +267,7 @@ fun memoryText(bytes: Long): String {
     val mb = bytes / BYTES_PER_MB
     return if (mb >= MB_PER_GB) "%.1f GB".format(mb / MB_PER_GB) else "${mb.toLong()} MB"
 }
+
+/** The server offered first: the first one that can run on the server machine. */
+fun recommendedOf(choice: LanguageServerChoice): LanguageServerCandidateInfo? =
+    choice.candidates.firstOrNull { it.available }

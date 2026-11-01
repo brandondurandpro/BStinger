@@ -77,7 +77,6 @@ fun ProjectScreen(app: AppState, project: ProjectState) {
     ) {
         Toolbar(app, project)
         Box(Modifier.fillMaxWidth().height(1.dp).background(IdeColors.Border))
-        if (!project.agentMode) LanguageServerChoicePanel(project)
         Box(Modifier.weight(1f)) {
             if (project.agentMode) {
                 AgentWorkspace(app, project)
@@ -89,6 +88,7 @@ fun ProjectScreen(app: AppState, project: ProjectState) {
             project.fileDialog?.let { dialog ->
                 FileDialogPopup(project, dialog, onClose = { project.fileDialog = null })
             }
+            if (!project.agentMode) LanguageServerChoiceDialog(project)
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(IdeColors.Border))
         StatusBar(app, project)
@@ -125,7 +125,10 @@ private fun ProjectBody(app: AppState, project: ProjectState, findFocus: FocusRe
             Column(Modifier.weight(1f).fillMaxHeight()) {
                 Row(Modifier.weight(1f).fillMaxWidth()) {
                     ToolDock(project, Dock.Left, drag)
-                    EditorArea(app, project, findFocus, Modifier.weight(1f))
+                    Column(Modifier.weight(1f)) {
+                        LanguageServerChoiceBanner(project)
+                        EditorArea(app, project, findFocus, Modifier.weight(1f))
+                    }
                     ToolDock(project, Dock.Right, drag)
                 }
                 ToolDock(project, Dock.Bottom, drag)

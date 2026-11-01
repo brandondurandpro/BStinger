@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -35,8 +34,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import org.example.kotlineditor.model.LanguageServerCandidateInfo
-import org.example.kotlineditor.model.LanguageServerChoice
 import org.example.kotlineditor.model.LanguageServerInfo
 import org.example.kotlineditor.model.LanguageServerState
 import org.example.kotlineditor.model.ServerMemory
@@ -106,80 +103,6 @@ private fun MultilineTooltip(text: String, modifier: Modifier = Modifier) {
             .padding(8.dp),
     ) {
         Label(text, fontSize = 12.sp, maxLines = 12)
-    }
-}
-
-/**
- * The choice of a server for a language, above the editors when a file needs one and none is chosen: each server
- * with its strengths, drawbacks and what was found on the server machine. Nothing is blocked while it is shown.
- */
-@Composable
-internal fun LanguageServerChoicePanel(project: ProjectState) {
-    val state = project.languageServers ?: return
-    val choice = state.choice ?: return
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .background(IdeColors.Panel)
-            .padding(horizontal = 16.dp, vertical = 12.dp)
-            .testTag(Tags.LSP_CHOICE),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Label("Choose a language server for ${choice.languageName}", fontWeight = FontWeight.Bold)
-            Spacer(Modifier.weight(1f))
-            IdeButton("Not now", state::notNow, Modifier.testTag(Tags.LSP_CHOICE_NOT_NOW))
-        }
-        Label(
-            "It runs on the server machine and analyses ${choice.languageName} files. " +
-                "You can change it later in the Language Servers window." +
-                (choice.chosen?.let { " Current: $it." } ?: ""),
-            color = IdeColors.TextSecondary,
-            fontSize = 12.sp,
-            maxLines = 2,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            for (candidate in choice.candidates) {
-                CandidateCard(state, choice, candidate, Modifier.weight(1f))
-            }
-        }
-    }
-}
-
-@Composable
-private fun CandidateCard(
-    state: LanguageServersState,
-    choice: LanguageServerChoice,
-    candidate: LanguageServerCandidateInfo,
-    modifier: Modifier,
-) {
-    Column(
-        modifier
-            .border(1.dp, IdeColors.Separator, RoundedCornerShape(6.dp))
-            .padding(12.dp)
-            .testTag(Tags.lspChoiceOption(candidate.id)),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Label(candidate.displayName, fontWeight = FontWeight.Bold)
-            Label("  ${candidate.licence}", color = IdeColors.TextSecondary, fontSize = 12.sp)
-        }
-        candidate.strengths.forEach { Label("✓ $it", color = Good, fontSize = 12.sp, maxLines = 2) }
-        candidate.drawbacks.forEach { Label("– $it", color = Warning, fontSize = 12.sp, maxLines = 2) }
-        Label(
-            candidate.details.joinToString("\n"),
-            Modifier.padding(top = 4.dp).testTag(Tags.lspChoiceDetail(candidate.id)),
-            color = if (candidate.available) IdeColors.TextSecondary else IdeColors.Error,
-            fontSize = 12.sp,
-            maxLines = 4,
-        )
-        IdeButton(
-            if (choice.chosen == candidate.id) "Keep ${candidate.displayName}" else "Use ${candidate.displayName}",
-            { state.choose(candidate.id) },
-            Modifier.padding(top = 4.dp).testTag(Tags.lspChoiceUse(candidate.id)),
-            primary = candidate.available,
-            enabled = candidate.available && !state.choosing,
-        )
     }
 }
 

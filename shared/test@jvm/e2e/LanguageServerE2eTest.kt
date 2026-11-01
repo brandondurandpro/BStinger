@@ -1,9 +1,12 @@
 package org.example.kotlineditor.e2e
 
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.e2e.FakePhpServers.Companion.FAKE
 import org.example.kotlineditor.e2e.FakePhpServers.Companion.NEEDS_NODE
@@ -42,13 +45,19 @@ class LanguageServerE2eTest {
 
             openFromTree("src/index.php")
             awaitTag(Tags.LSP_CHOICE)
-            awaitTag(Tags.lspChoiceOption(FAKE))
-            assertContains(textOf(Tags.lspChoiceOption(FAKE)), "Starts in a second")
-            assertContains(textOf(Tags.lspChoiceDetail(NEEDS_NODE)), "Node.js not found")
+            awaitTag(Tags.LSP_CHOICE_OPEN).performClick()
+            awaitTag(Tags.LSP_CHOICE_DIALOG)
+            // The recommended server, the first that can run, is selected: its advantages are shown.
+            assertContains(textOf(Tags.LSP_CHOICE_DETAILS), "Starts in a second")
+            assertContains(textOf(Tags.lspChoiceOption(NEEDS_NODE)), "Node.js not found")
+            onNodeWithTag(Tags.lspChoiceOption(NEEDS_NODE)).performClick()
+            awaitCondition { textOf(Tags.lspChoiceDetail(NEEDS_NODE)).contains("Node.js not found") }
             onNodeWithTag(Tags.lspChoiceUse(NEEDS_NODE)).assertIsNotEnabled()
             assertTrue(app.languageServers.isEmpty(), "nothing starts before the choice")
 
-            onNodeWithTag(Tags.lspChoiceUse(FAKE)).performClick()
+            onNodeWithTag(Tags.lspChoiceOption(FAKE)).performClick()
+            awaitTag(Tags.lspChoiceUse(FAKE)).performClick()
+            awaitNoTag(Tags.LSP_CHOICE_DIALOG)
             awaitNoTag(Tags.LSP_CHOICE)
             val running = awaitServer(app) { it.state == LanguageServerState.Running && it.memory != null }
             assertEquals(project.path, running.root)
@@ -56,6 +65,50 @@ class LanguageServerE2eTest {
             assertContains(servers.saved(), "php=fake")
             awaitCondition { textOf(Tags.statusLanguageServer(running.id)).matches(Regex("PHP · \\d+ MB")) }
             awaitCondition { textOf(Tags.STATUS_SERVER_MEMORY).matches(Regex("Server \\d+ MB")) }
+        }
+
+    @Test
+    fun `the banner uses the recommended server in one click`() =
+        runComposeUiTest {
+            val servers = servers()
+            val app = launchWithProject(project, languageServers = servers.settings)
+            openFromTree("src/index.php")
+            awaitTag(Tags.LSP_CHOICE_QUICK).performClick()
+            awaitNoTag(Tags.LSP_CHOICE)
+            awaitServer(app) { it.isRunning() }
+            assertContains(servers.saved(), "php=fake")
+        }
+
+    @Test
+    fun `the dialog is driven with the keyboard, and Escape keeps the banner`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, languageServers = servers().settings)
+            openFromTree("src/index.php")
+            awaitTag(Tags.LSP_CHOICE_OPEN).performClick()
+            val dialog = awaitTag(Tags.LSP_CHOICE_DIALOG)
+            dialog.performKeyInput { pressKey(Key.DirectionDown) }
+            awaitTag(Tags.lspChoiceDetail(NEEDS_NODE))
+            dialog.performKeyInput { pressKey(Key.Escape) }
+            awaitNoTag(Tags.LSP_CHOICE_DIALOG)
+            awaitTag(Tags.LSP_CHOICE)
+            assertTrue(app.languageServers.isEmpty())
+
+            awaitTag(Tags.LSP_CHOICE_OPEN).performClick()
+            awaitTag(Tags.LSP_CHOICE_DIALOG).performKeyInput { pressKey(Key.Enter) }
+            awaitNoTag(Tags.LSP_CHOICE)
+            awaitServer(app) { it.isRunning() }
+        }
+
+    @Test
+    fun `cancel closes the dialog without choosing`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, languageServers = servers().settings)
+            openFromTree("src/index.php")
+            awaitTag(Tags.LSP_CHOICE_OPEN).performClick()
+            awaitTag(Tags.LSP_CHOICE_CANCEL).performClick()
+            awaitNoTag(Tags.LSP_CHOICE_DIALOG)
+            awaitTag(Tags.LSP_CHOICE)
+            assertTrue(app.languageServers.isEmpty())
         }
 
     @Test
