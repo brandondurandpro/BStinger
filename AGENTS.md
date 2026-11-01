@@ -19,6 +19,24 @@ Use `./kotlin` (`kotlin.bat` on Windows); it downloads the toolchain on first us
 - One test class: `./kotlin test -m shared --include-classes='*EditorTabsE2eTest'`; one test: `--include-test=<fqn>.method`.
 - Lint: `./lint`.
 
+## Run the CI locally
+
+The CI can run on your machine, on the current working tree (uncommitted files included), without pushing:
+
+- `./ci [args]`: the whole CI, one step after the other: `./lint`, the Linux matrix and the Windows job, then a
+  summary; `args` go to `./kotlin test` (e.g. `./ci -m server`). `--no-lint`, `--no-linux`, `--no-windows` skip a
+  step, `--ubuntu`/`--session` narrow the Linux matrix, `--parallel` runs Windows during the Linux matrix.
+- `./linux-vm test [args]`: the Linux matrix (Ubuntu 20.04, 22.04, 24.04 × X11, Wayland) in Docker containers with
+  the CI's packages and display sessions, narrowed with `--ubuntu 20.04` and `--session wayland`; logs in
+  `~/.cache/kotlin-editor/linux-vm/logs`. `./linux-vm shell` opens a shell in such a container, to debug a failure
+  that only happens on one version or session.
+- `./windows-vm test [args]`: the Windows job in a local Windows Server VM (`./windows-vm start` first; the first
+  start installs Windows, 20 to 60 minutes).
+- They need Docker, and KVM for Windows. Run `./ci` before opening a pull request that touches platform-specific
+  code (processes, shells, terminal, file paths, display), and to reproduce a red CI job.
+- One run at a time: the Linux runs share their snapshot and build directories (`./linux-vm` refuses a second
+  one), and the Windows VM has one runner.
+
 ## Every feature needs end-to-end tests
 
 A feature, or a fix of user-visible behavior, is not done until an e2e test exercises it through the real UI.
@@ -89,4 +107,5 @@ tests, which check what the user sees when the network or the server fails.
 
 - `./lint` (detekt + ktlint) passes.
 - `./kotlin test` passes; `./kotlin test -m <module>` runs a single module while iterating.
+- `./ci` passes when the change can behave differently on another platform (see above).
 - `main` only accepts squash or rebase merges, once the Lint, Linux and Windows CI checks are green.

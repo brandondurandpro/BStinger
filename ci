@@ -1,0 +1,106 @@
+#!/bin/sh
+#
+# Runs the whole CI on your machine, on the current working tree (uncommitted files included), without waiting for
+# GitHub: the lint, the Linux matrix (./linux-vm) and the Windows job (./windows-vm), then prints a summary.
+#
+#   ./ci [options] [args...]   args go to `./kotlin test` on every platform (e.g. ./ci -m server); without args the
+#                              whole suite runs and the Linux runs also check that the desktop app starts
+#
+# Options:
+#   --no-lint                skip ./lint
+#   --no-linux               skip the Linux matrix
+#   --no-windows             skip the Windows VM
+#   --ubuntu V[,V...]        Ubuntu versions of the Linux matrix (default: all, see ./linux-vm)
+#   --session S[,S...]       display sessions of the Linux matrix (default: x11,wayland)
+#   --parallel               run the Windows VM at the same time as the Linux matrix (its output then goes to
+#                            ~/.cache/kotlin-editor/ci/windows.log); faster, but the timing budgets of the
+#                            performance tests get tighter on a loaded machine
+#
+# The Windows VM is started when it is not running (the first time, Windows downloads and installs: 20-60 min) and
+# left running afterwards: ./windows-vm stop shuts it down. Every step runs even when an earlier one failed; the
+# exit code is 0 only when all of them passed.
+#
+set -eu
+
+cd "$(dirname "$0")"
+lint=yes linux=yes windows=yes parallel=no
+linux_options=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --no-lint) lint=no; shift ;;
+        --no-linux) linux=no; shift ;;
+        --no-windows) windows=no; shift ;;
+        --parallel) parallel=yes; shift ;;
+        --ubuntu | --session)
+            [ $# -ge 2 ] || { echo "ci: $1 needs a value" >&2; exit 2; }
+            linux_options="$linux_options $1=$2"
+            shift 2
+            ;;
+        --ubuntu=* | --session=*) linux_options="$linux_options $1"; shift ;;
+        -h | --help) sed -n '3,22p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        --) shift; break ;;
+        *) break ;;
+    esac
+done
+
+logs=${CI_DIR:-$HOME/.cache/kotlin-editor/ci}
+mkdir -p "$logs"
+summary=""
+failed=0
+
+record() { # step, exit code, seconds
+    if [ "$2" -eq 0 ]; then result=passed; else result="FAILED ($2)"; failed=1; fi
+    summary="$summary$(printf '  %-10s %-12s %dm%02ds' "$1" "$result" $(($3 / 60)) $(($3 % 60)))
+"
+}
+
+step() { # name, command...
+    name=$1
+    shift
+    echo
+    echo "##### $name"
+    start=$(date +%s)
+    code=0
+    "$@" || code=$?
+    record "$name" "$code" $(($(date +%s) - start))
+}
+
+windows_() {
+    if [ "$(./windows-vm status)" != "running, runner ready" ]; then
+        ./windows-vm start || return $?
+    fi
+    ./windows-vm test "$@"
+}
+
+[ "$lint" = yes ] && step lint ./lint
+
+if [ "$windows" = yes ] && [ "$parallel" = yes ] && [ "$linux" = yes ]; then
+    echo
+    echo "##### windows (in the background, log: $logs/windows.log)"
+    windows_start=$(date +%s)
+    rm -f "$logs/windows.exit"
+    { code=0; windows_ "$@" > "$logs/windows.log" 2>&1 || code=$?; echo "$code" > "$logs/windows.exit"; } &
+    windows_pid=$!
+    trap 'kill $windows_pid 2> /dev/null; exit 130' INT TERM
+fi
+
+# shellcheck disable=SC2086 # the options are words
+[ "$linux" = yes ] && step linux ./linux-vm test $linux_options "$@"
+
+if [ "$windows" = yes ]; then
+    if [ -n "${windows_pid:-}" ]; then
+        echo
+        echo "##### windows: waiting for the background run"
+        wait "$windows_pid" || true
+        tail -n 30 "$logs/windows.log"
+        record windows "$(cat "$logs/windows.exit" 2> /dev/null || echo 1)" $(($(date +%s) - windows_start))
+    else
+        step windows windows_ "$@"
+    fi
+fi
+
+echo
+echo "ci: ./kotlin test $*"
+printf '%s' "$summary"
+[ "$linux" = yes ] && echo "  (Linux details above, and in ~/.cache/kotlin-editor/linux-vm/logs)"
+exit "$failed"

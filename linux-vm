@@ -1,0 +1,206 @@
+#!/bin/sh
+#
+# Runs the tests in local Linux containers, like the test-linux jobs of the CI, without waiting for GitHub.
+#
+#   ./linux-vm test [options] [args...]   run `./kotlin build`, then `./kotlin test [args...]` on the current working
+#                                         tree, uncommitted files included, on every Ubuntu version and session of
+#                                         the CI matrix, one after the other; without args, also check that the
+#                                         desktop app starts, as the CI does. Exits with 0 when every run passed
+#                                         (e.g. ./linux-vm test --ubuntu 20.04 --session wayland -m server)
+#   ./linux-vm shell [options]            a shell in a container, in the checked-out working tree, with the display
+#                                         session started (the first Ubuntu version and session given)
+#   ./linux-vm clean                      delete the images, the build directories and the caches
+#
+# Options:
+#   --ubuntu V[,V...]     Ubuntu versions (default 20.04,22.04,24.04)
+#   --session S[,S...]    display sessions: x11 (Xvfb), wayland (headless Weston + XWayland) (default x11,wayland)
+#
+# Each run is a new container of the official Ubuntu image (with an init as PID 1 and the CI's packages, see
+# tools/linux-vm/Dockerfile) that checks out a snapshot of the working tree and runs tools/linux-vm/run.sh. The
+# build directory is kept per Ubuntu version, and the toolchain, Maven and ripgrep caches are shared, in Docker
+# volumes. Logs go to $LINUX_VM_DIR/logs/<version>-<session>.log.
+#
+# Needs Docker. Settings, through the environment:
+#   LINUX_VM_DIR       where the snapshot and the logs live (default ~/.cache/kotlin-editor/linux-vm)
+#   LINUX_VM_TIMEOUT   minutes a run may take (default 45, as on the CI)
+#
+set -eu
+
+PREFIX=kotlin-editor-linux
+VERSIONS=20.04,22.04,24.04
+SESSIONS=x11,wayland
+
+cd "$(dirname "$0")"
+dir=${LINUX_VM_DIR:-$HOME/.cache/kotlin-editor/linux-vm}
+run="$dir/run"
+logs="$dir/logs"
+
+die() {
+    echo "linux-vm: $*" >&2
+    exit 1
+}
+
+usage() {
+    sed -n '3,26p' "$0" | sed 's/^# \{0,1\}//'
+    exit 2
+}
+
+# The working tree as a commit (uncommitted and untracked files included, ignored ones not), without touching
+# the index, the branch or the stash: a temporary index builds the tree.
+snapshot() {
+    mkdir -p "$run" "$logs"
+    index=$(mktemp)
+    GIT_INDEX_FILE=$index git read-tree HEAD
+    GIT_INDEX_FILE=$index git add -A
+    tree=$(GIT_INDEX_FILE=$index git write-tree)
+    rm -f "$index"
+    commit=$(git commit-tree "$tree" -p HEAD -m "linux-vm snapshot")
+    git update-ref refs/linux-vm/snapshot "$commit"
+    git bundle create "$run/snapshot.bundle.part" refs/linux-vm/snapshot 2> /dev/null
+    git update-ref -d refs/linux-vm/snapshot
+    mv "$run/snapshot.bundle.part" "$run/snapshot.bundle"
+    echo "Snapshot $(git rev-parse --short HEAD)$(git diff --quiet HEAD && echo '' || echo ' + local changes')"
+}
+
+image() { # version
+    echo "Preparing the Ubuntu $1 image"
+    docker build -q -t "$PREFIX:$1" --build-arg UBUNTU="$1" - < tools/linux-vm/Dockerfile > /dev/null
+}
+
+# The containers of this run, labelled with its pid.
+ours() { docker ps -aq --filter "label=$PREFIX=$$"; }
+
+# Runs share their snapshot and build directories: a second one would check its tree out under the running tests.
+# The lock holds the pid of the run; a lock left by a run that died is taken over.
+alone() {
+    mkdir -p "$dir"
+    lock="$dir/lock"
+    until mkdir "$lock" 2> /dev/null; do
+        owner=$(cat "$lock/pid" 2> /dev/null || true)
+        if [ -z "$owner" ]; then # the owner may still be writing its pid
+            sleep 1
+            owner=$(cat "$lock/pid" 2> /dev/null || true)
+        fi
+        if [ -n "$owner" ] && kill -0 "$owner" 2> /dev/null; then
+            die "another run is in progress (pid $owner): wait for it, or stop it with Ctrl-C"
+        fi
+        rm -rf "$lock"
+    done
+    echo $$ > "$lock/pid"
+    trap 'rm -rf "$lock"' EXIT
+}
+
+check() {
+    command -v docker > /dev/null || die "Docker is not installed"
+    docker info > /dev/null 2>&1 || die "Docker does not answer: is the daemon running, and are you in the docker group?"
+    alone
+    for v in $(echo "$versions" | tr ',' ' '); do
+        case "$v" in 20.04 | 22.04 | 24.04) ;; *) die "unsupported Ubuntu version $v (20.04, 22.04 or 24.04)" ;; esac
+    done
+    for s in $(echo "$sessions" | tr ',' ' '); do
+        case "$s" in x11 | wayland) ;; *) die "unknown session $s (x11 or wayland)" ;; esac
+    done
+}
+
+# A container that checks the snapshot out in /work (its build directory is kept between runs), then runs run.sh.
+container() { # flags, version, session, run.sh args...
+    flags=$1 v=$2 s=$3
+    shift 3
+    name="$PREFIX-$v-$s"
+    docker rm -f "$name" > /dev/null 2>&1 || true
+    # shellcheck disable=SC2086 # the flags are words
+    docker run --rm --init $flags --name "$name" --label "$PREFIX=$$" --hostname "ubuntu-$v-$s" \
+        -v "$PREFIX-work-$v:/work" \
+        -v "$PREFIX-kotlin:/root/.cache/JetBrains" \
+        -v "$PREFIX-m2:/root/.m2" \
+        -v "$PREFIX-tools:/root/.kotlin-editor/tools" \
+        -v "$run:/snapshot:ro" \
+        -w /work \
+        "$PREFIX:$v" sh -c '
+            set -e
+            git init -q /work
+            git fetch -q /snapshot/snapshot.bundle refs/linux-vm/snapshot
+            git checkout -q -f --detach FETCH_HEAD
+            git clean -q -fd
+            exec "$@"' sh "$@"
+}
+
+test_() {
+    check
+    snapshot
+    limit=$((${LINUX_VM_TIMEOUT:-45} * 60))
+    app=no
+    [ $# -eq 0 ] && app=yes
+    summary=""
+    failed=0
+    for v in $(echo "$versions" | tr ',' ' '); do
+        image "$v"
+        for s in $(echo "$sessions" | tr ',' ' '); do
+            log="$logs/$v-$s.log"
+            echo "=== Ubuntu $v · $s: ./kotlin test $* (log: $log)"
+            start=$(date +%s)
+            status="$run/$v-$s.exit"
+            rm -f "$status"
+            {
+                code=0
+                container "" "$v" "$s" timeout -k 30 "$limit" sh tools/linux-vm/run.sh test "$s" "$app" "$@" || code=$?
+                echo "$code" > "$status"
+            } 2>&1 | tee "$log"
+            code=$(cat "$status" 2> /dev/null || echo 1)
+            took=$(($(date +%s) - start))
+            if [ "$code" -eq 0 ]; then result=passed; else result="FAILED ($code)"; failed=1; fi
+            [ "$code" -eq 124 ] && result="TIMED OUT after ${LINUX_VM_TIMEOUT:-45} min"
+            line=$(printf '  Ubuntu %-6s %-8s %-28s %dm%02ds' "$v" "$s" "$result" $((took / 60)) $((took % 60)))
+            summary="$summary$line
+"
+        done
+    done
+    echo
+    echo "linux-vm: ./kotlin test $*"
+    printf '%s' "$summary"
+    exit "$failed"
+}
+
+shell_() {
+    check
+    snapshot
+    v=${versions%%,*}
+    s=${sessions%%,*}
+    image "$v"
+    flags=-i
+    [ -t 0 ] && flags=-it
+    container "$flags" "$v" "$s" sh tools/linux-vm/run.sh shell "$s"
+}
+
+clean() {
+    alone
+    for v in $(echo "$VERSIONS" | tr ',' ' '); do docker rmi "$PREFIX:$v" > /dev/null 2>&1 || true; done
+    for volume in $(docker volume ls -q --filter "name=^$PREFIX-"); do docker volume rm "$volume" > /dev/null; done
+    rm -rf "$dir"
+    echo "deleted"
+}
+
+command=${1:-}
+[ $# -gt 0 ] && shift
+versions=$VERSIONS
+sessions=$SESSIONS
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --ubuntu) [ $# -ge 2 ] || usage; versions=$2; shift 2 ;;
+        --ubuntu=*) versions=${1#*=}; shift ;;
+        --session) [ $# -ge 2 ] || usage; sessions=$2; shift 2 ;;
+        --session=*) sessions=${1#*=}; shift ;;
+        --) shift; break ;;
+        *) break ;;
+    esac
+done
+
+# Ctrl-C stops the container of this run, not those of another one.
+trap 'ours | xargs -r docker rm -f > /dev/null; exit 130' INT TERM
+
+case "$command" in
+    test) test_ "$@" ;;
+    shell) shell_ ;;
+    clean) clean ;;
+    *) usage ;;
+esac
