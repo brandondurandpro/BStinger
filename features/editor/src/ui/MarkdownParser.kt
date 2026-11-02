@@ -64,10 +64,20 @@ private class MarkdownParser(private val lines: List<String>) {
             fence != null -> code(fence.groupValues[1], fence.groupValues[2].trim())
             trimmed.isEmpty() -> flush()
             RULE.matches(trimmed) -> add(MarkdownBlock.Rule)
-            heading != null -> add(MarkdownBlock.Heading(heading.groupValues[1].length, heading.groupValues[2].trim()))
-            item != null -> add(MarkdownBlock.Item(item.groupValues[2], item.groupValues[3].trim()))
+            heading != null -> add(headingOf(heading))
+            item != null -> add(itemOf(item))
             else -> paragraph += line
         }
+    }
+
+    private fun headingOf(match: MatchResult): MarkdownBlock {
+        val (marks, text) = match.destructured
+        return MarkdownBlock.Heading(marks.length, text.trim())
+    }
+
+    private fun itemOf(match: MatchResult): MarkdownBlock {
+        val (_, marker, text) = match.destructured
+        return MarkdownBlock.Item(marker, text.trim())
     }
 
     // The lines up to the closing fence (or the end of the text).

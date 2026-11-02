@@ -53,14 +53,11 @@ fun TextRange.toJson(): JsonArray = JsonArray(listOf(startLine, startColumn, end
 
 /** Reads a range. */
 fun JsonElement.textRange(): TextRange {
-    val fields = jsonArray
+    val fields = jsonArray.map { it.jsonPrimitive.int }
     require(fields.size == RANGE_FIELDS) { "A range has $RANGE_FIELDS fields" }
-    return TextRange(
-        fields[0].jsonPrimitive.int,
-        fields[1].jsonPrimitive.int,
-        fields[2].jsonPrimitive.int,
-        fields[3].jsonPrimitive.int,
-    )
+    val (startLine, startColumn) = fields
+    val (endLine, endColumn) = fields.drop(2)
+    return TextRange(startLine, startColumn, endLine, endColumn)
 }
 
 private fun JsonObject.rangeOrNull(key: String = RANGE): TextRange? = get(key)?.takeIf { it != JsonNull }?.textRange()

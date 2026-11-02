@@ -26,13 +26,15 @@ class LspTranslationsTest {
         val links =
             locationsOf(
                 json(
-                    """[{"targetUri":"$uri","targetRange":${range(
+                    """
+                    [{"targetUri":"$uri","targetRange":${range(
                         0,
                         0,
                         9,
                         1,
                     )},"targetSelectionRange":${range(2, 6, 2, 13)}},
-                       {"uri":"phar:///x.phar/stubs.php","range":${range(1, 0, 1, 1)}}]""",
+                       {"uri":"phar:///x.phar/stubs.php","range":${range(1, 0, 1, 1)}}]
+                    """.trimIndent(),
                 ),
             )
         assertEquals(listOf(TextRange(2, 6, 2, 13)), links.map { it.range })
@@ -42,9 +44,12 @@ class LspTranslationsTest {
     @Test
     fun `hover contents of every shape become Markdown`() {
         assertEquals("# Title", hoverMarkdown(json("""{"contents":{"kind":"markdown","value":"# Title"}}""")))
-        assertEquals("a\\*b  \nc", hoverMarkdown(json("""{"contents":{"kind":"plaintext","value":"a*b\nc"}}""")))
         assertEquals(
-            "```php\nfunction f()\n```\n\n---\n\nDoes things",
+            """a\*b  """ + "\n" + "c",
+            hoverMarkdown(json("""{"contents":{"kind":"plaintext","value":"a*b\nc"}}""")),
+        )
+        assertEquals(
+            listOf("```php", "function f()", "```", "", "---", "", "Does things").joinToString("\n"),
             hoverMarkdown(json("""{"contents":[{"language":"php","value":"function f()"},"Does things"]}""")),
         )
         assertNull(hoverMarkdown(json("""{"contents":""}""")))
@@ -58,14 +63,16 @@ class LspTranslationsTest {
         val documentChanges =
             workspaceEditOf(
                 json(
-                    """{"documentChanges":[
+                    """
+                    {"documentChanges":[
                         {"kind":"create","uri":"$uri"},
                         {"textDocument":{"uri":"$uri","version":null},"edits":[{"range":${range(
                         0,
                         0,
                         0,
                         0,
-                    )},"newText":"<?php"}]}]}""",
+                    )},"newText":"<?php"}]}]}
+                    """.trimIndent(),
                 ),
             )!!
         assertTrue(documentChanges.single().create)
@@ -85,8 +92,10 @@ class LspTranslationsTest {
         val help =
             signatureHelpOf(
                 json(
-                    """{"signatures":[{"label":"f(int ${'$'}a, int ${'$'}b)","parameters":[{"label":"int ${'$'}a"},{"label":[9,15]}]}],
-                        "activeSignature":0,"activeParameter":1}""",
+                    """
+                    {"signatures":[{"label":"f(int ${'$'}a, int ${'$'}b)","parameters":[{"label":"int ${'$'}a"},{"label":[9,15]}]}],
+                    "activeSignature":0,"activeParameter":1}
+                    """.trimIndent(),
                 ),
             )
         val parameters = help.signatures.single().parameters
@@ -99,7 +108,8 @@ class LspTranslationsTest {
         val symbols =
             countedSymbolsOf(
                 json(
-                    """[{"name":"Greeter","kind":5,"range":${range(0, 0, 9, 1)},"selectionRange":${range(0, 6, 0, 13)},
+                    """
+                    [{"name":"Greeter","kind":5,"range":${range(0, 0, 9, 1)},"selectionRange":${range(0, 6, 0, 13)},
                         "children":[{"name":"greet","kind":6,"range":${range(
                         2,
                         4,
@@ -111,7 +121,8 @@ class LspTranslationsTest {
                         0,
                         3,
                         1,
-                    )},"selectionRange":${range(3, 0, 3, 1)}}]}]""",
+                    )},"selectionRange":${range(3, 0, 3, 1)}}]}]
+                    """.trimIndent(),
                 ),
             )
         assertEquals(listOf("Greeter", "greet"), symbols.map { it.name })
@@ -122,9 +133,11 @@ class LspTranslationsTest {
         val diagnostics =
             diagnosticsOf(
                 json(
-                    """{"uri":"$uri","diagnostics":[
-                        {"range":${range(3, 0, 3, 2)},"severity":2,"message":"unused","tags":[1]},
-                        {"range":${range(1, 0, 1, 2)},"message":"  boom  ","code":42}]}""",
+                    """
+                    {"uri":"$uri","diagnostics":[
+                    {"range":${range(3, 0, 3, 2)},"severity":2,"message":"unused","tags":[1]},
+                    {"range":${range(1, 0, 1, 2)},"message":"  boom  ","code":42}]}
+                    """.trimIndent(),
                 ) as JsonObject,
             )
         assertEquals(listOf("boom", "unused"), diagnostics.map { it.message })
@@ -133,8 +146,10 @@ class LspTranslationsTest {
         val actions =
             codeActionsOf(
                 json(
-                    """[{"title":"Extract","kind":"refactor.extract"},{"title":"Import","kind":"quickfix.import","isPreferred":true},
-                        {"title":"Disabled","disabled":{"reason":"no"}},{"title":"Run","command":"run"}]""",
+                    """
+                    [{"title":"Extract","kind":"refactor.extract"},{"title":"Import","kind":"quickfix.import","isPreferred":true},
+                    {"title":"Disabled","disabled":{"reason":"no"}},{"title":"Run","command":"run"}]
+                    """.trimIndent(),
                 ),
             )
         assertEquals(listOf("Import", "Extract", "Run"), actions.map { it.first.title })

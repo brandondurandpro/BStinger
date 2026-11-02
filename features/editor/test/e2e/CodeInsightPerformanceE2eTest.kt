@@ -41,7 +41,8 @@ class CodeInsightPerformanceE2eTest {
     private val project =
         SampleProject().apply {
             file("composer.json", "{}\n")
-            file("src/big.php", "<?php\nfunction common() {}\n$declarations\n$calls\n$unknown\n$common\n")
+            val parts = listOf("<?php", "function common() {}", declarations, calls, unknown, common, "")
+            file("src/big.php", parts.joinToString("\n"))
         }
     private val servers = FakePhpServers().chosen()
 

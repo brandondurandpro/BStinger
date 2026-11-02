@@ -15,6 +15,8 @@ import java.io.File
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 
+private const val REV_PARSE = "rev-parse"
+
 /** Git through its command line; no repository or no git means no status. */
 @Suppress("TooManyFunctions")
 class CliGitClient :
@@ -221,7 +223,7 @@ class CliGitClient :
         withContext(Dispatchers.IO) {
             require(hash.matches(HASH)) { "Not a commit hash: $hash" }
             // A short hash (from the blame) is answered with the full one, the identity of the commit everywhere.
-            val full = gitOutput(root, "rev-parse", VERIFY, QUIET, "$hash^{commit}")?.firstOrNull()?.trim() ?: hash
+            val full = gitOutput(root, REV_PARSE, VERIFY, QUIET, "$hash^{commit}")?.firstOrNull()?.trim() ?: hash
             val message = runGit(root, "log", "-1", "--format=%B", hash).trimEnd()
             // `-z`: paths as they are (no quoting of spaces or accents); `--root` lists the files of a first commit.
             val raw = runGit(root, "diff-tree", "--no-commit-id", "-r", "-M", "--root", "--name-status", "-z", hash)
@@ -235,7 +237,7 @@ class CliGitClient :
         withContext(Dispatchers.IO) {
             require(hash.matches(HASH)) { "Not a commit hash: $hash" }
             val paths = listOfNotNull(oldPath, path).distinct()
-            val parent = gitOutput(root, "rev-parse", VERIFY, QUIET, "$hash^1")?.firstOrNull()?.trim()
+            val parent = gitOutput(root, REV_PARSE, VERIFY, QUIET, "$hash^1")?.firstOrNull()?.trim()
             val range = if (parent == null) listOf("--root", hash) else listOf(parent, hash)
             val options = listOf("-p", "-M", "--no-commit-id", NO_COLOR, "-U3")
             val args = listOf("diff-tree") + options + range + "--" + paths
@@ -319,7 +321,7 @@ class CliGitClient :
                 emptyList()
             } else {
                 val file = File(root, path)
-                val head = gitOutput(root, "rev-parse", "HEAD")?.firstOrNull()
+                val head = gitOutput(root, REV_PARSE, "HEAD")?.firstOrNull()
                 val version = BlameVersion(head, file.lastModified(), file.length())
                 val cached = blames[file.absolutePath]?.takeIf { it.version == version }
                 cached?.lines ?: freshBlame(root, path, file.absolutePath, version)

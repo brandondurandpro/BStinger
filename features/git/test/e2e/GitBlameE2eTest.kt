@@ -69,7 +69,7 @@ class GitBlameE2eTest {
             assertEquals("init", textOf(EditorTags.DIFF_COMMIT_MESSAGE))
             // Back to the file, changed but not saved to a commit: its new line has no commit.
             openFromTree("README.md")
-            project.file("README.md", "# Sample\nHow to build it.\nNot committed.\n")
+            project.file("README.md", listOf("# Sample", "How to build it.", "Not committed.", "").joinToString("\n"))
             app.project.editor.reloadBlames()
             awaitTag(EditorTags.blame(2), unmerged = true)
             val tabs = app.project.editor.allTabs.size

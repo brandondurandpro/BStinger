@@ -28,6 +28,12 @@ import org.example.kotlineditor.model.TextRange
 import java.net.URI
 import java.nio.file.Paths
 
+private const val RANGE = "range"
+private const val KIND = "kind"
+private const val LINE = "line"
+private const val CHARACTER = "character"
+private const val URI = "uri"
+
 // Readers of what language servers answer, written for what servers really send: a Location or an array of them,
 // LocationLinks, MarkedStrings or MarkupContent, TextEdits or documentChanges. Anything malformed is skipped.
 
@@ -39,7 +45,11 @@ private const val TAG_DEPRECATED = 2
 private const val HIGHLIGHT_READ = 2
 private const val HIGHLIGHT_WRITE = 3
 
-/** The declarations whose usages are counted: classes, methods, properties, functions, constants... */
+private const val RANGE_NUMBERS = 4
+private val MARKDOWN_RULE = listOf("", "", "---", "", "").joinToString("\n")
+private val BY_RANGE_START = compareBy<CountedSymbol>({ it.range.startLine }, { it.range.startColumn })
+
+// The declarations whose usages are counted: classes, methods, properties, functions, constants...
 private val COUNTED_SYMBOL_KINDS = setOf(5, 6, 7, 8, 10, 11, 12, 14, 22, 23)
 
 internal fun JsonObject.string(key: String): String? =
@@ -61,26 +71,29 @@ fun pathOfUri(uri: String): String? {
 fun lspRange(range: TextRange): JsonObject =
     buildJsonObject {
         putJsonObject("start") {
-            put("line", range.startLine)
-            put("character", range.startColumn)
+            put(LINE, range.startLine)
+            put(CHARACTER, range.startColumn)
         }
         putJsonObject("end") {
-            put("line", range.endLine)
-            put("character", range.endColumn)
+            put(LINE, range.endLine)
+            put(CHARACTER, range.endColumn)
         }
     }
 
 /** Reads an LSP range. */
 fun JsonElement?.textRange(): TextRange? {
-    val range = this as? JsonObject ?: return null
-    val start = range.obj("start")
-    val end = range.obj("end")
-    val startLine = start?.int("line")
-    val startColumn = start?.int("character")
-    val endLine = end?.int("line")
-    val endColumn = end?.int("character")
-    val complete = startLine != null && startColumn != null && endLine != null && endColumn != null
-    return if (complete) TextRange(startLine!!, startColumn!!, endLine!!, endColumn!!) else null
+    val range = this as? JsonObject
+    val start = range?.obj("start")
+    val end = range?.obj("end")
+    val numbers = listOfNotNull(start?.int(LINE), start?.int(CHARACTER), end?.int(LINE), end?.int(CHARACTER))
+    return numbers.takeIf { it.size == RANGE_NUMBERS }?.let(::rangeOf)
+}
+
+// Start line and column, end line and column.
+private fun rangeOf(numbers: List<Int>): TextRange {
+    val (startLine, startColumn) = numbers
+    val (endLine, endColumn) = numbers.drop(2)
+    return TextRange(startLine, startColumn, endLine, endColumn)
 }
 
 /**
@@ -98,13 +111,11 @@ fun locationsOf(answer: JsonElement?): List<SourceLocation> {
 }
 
 private fun locationOf(element: JsonObject?): SourceLocation? {
-    if (element == null) return null
     // A LocationLink goes to its target, preferably to the name (selection range).
-    val uri = element.string("uri") ?: element.string("targetUri") ?: return null
-    val range =
-        element["range"].textRange() ?: element["targetSelectionRange"].textRange()
-            ?: element["targetRange"].textRange()
-    val path = pathOfUri(uri)
+    val uri = element?.string(URI) ?: element?.string("targetUri")
+    val target = element?.get("targetSelectionRange").textRange() ?: element?.get("targetRange").textRange()
+    val range = element?.get(RANGE).textRange() ?: target
+    val path = uri?.let(::pathOfUri)
     return if (path != null && range != null) SourceLocation(path, range) else null
 }
 
@@ -126,13 +137,8 @@ fun contentsMarkdown(contents: JsonElement?): String? =
         }
 
         is JsonArray -> {
-            contents
-                .mapNotNull {
-                    contentsMarkdown(
-                        it,
-                    )
-                }.filter { it.isNotBlank() }
-                .joinToString("\n\n---\n\n")
+            val parts = contents.mapNotNull(::contentsMarkdown)
+            parts.filter { it.isNotBlank() }.joinToString(MARKDOWN_RULE)
         }
 
         is JsonObject -> {
@@ -147,7 +153,7 @@ fun contentsMarkdown(contents: JsonElement?): String? =
 private fun objectMarkdown(contents: JsonObject): String? {
     val value = contents.string("value") ?: return null
     val language = contents.string("language")
-    val kind = contents.string("kind")
+    val kind = contents.string(KIND)
     return when {
         language != null -> "```$language\n$value\n```"
         kind == "plaintext" -> escapeMarkdown(value)
@@ -166,9 +172,9 @@ fun highlightsOf(answer: JsonElement?): List<SymbolHighlight> {
     val items = answer as? JsonArray ?: return emptyList()
     return items.mapNotNull { element ->
         val item = element as? JsonObject
-        val range = item?.get("range").textRange()
+        val range = item?.get(RANGE).textRange()
         val kind =
-            when (item?.int("kind")) {
+            when (item?.int(KIND)) {
                 HIGHLIGHT_READ -> HighlightKind.Read
                 HIGHLIGHT_WRITE -> HighlightKind.Write
                 else -> HighlightKind.Text
@@ -237,7 +243,12 @@ private fun parameterBounds(label: JsonElement?, signature: String, from: Int): 
     }
 
 /** A declaration of a document whose usages are counted. */
-data class CountedSymbol(val name: String, val range: TextRange)
+data class CountedSymbol(
+    /** Its name. */
+    val name: String,
+    /** The range of its name. */
+    val range: TextRange,
+)
 
 /**
  * The declarations of a documentSymbol answer (DocumentSymbols with children, or SymbolInformations), in document
@@ -249,38 +260,39 @@ fun countedSymbolsOf(answer: JsonElement?): List<CountedSymbol> {
     fun visit(element: JsonElement) {
         val symbol = element as? JsonObject ?: return
         val name = symbol.string("name")
-        val kind = symbol.int("kind")
+        val kind = symbol.int(KIND)
         val location = symbol.obj("location")
-        val range = symbol["selectionRange"].textRange() ?: location?.get("range").textRange()
-        if (name != null && range != null && kind in COUNTED_SYMBOL_KINDS) found += CountedSymbol(name, range)
+        val range = symbol["selectionRange"].textRange() ?: location?.get(RANGE).textRange()
+        val counted = kind in COUNTED_SYMBOL_KINDS
+        if (counted && name != null) range?.let { found += CountedSymbol(name, it) }
         symbol.array("children")?.forEach(::visit)
     }
     (answer as? JsonArray)?.forEach(::visit)
-    return found.sortedWith(compareBy({ it.range.startLine }, { it.range.startColumn }))
+    return found.sortedWith(BY_RANGE_START)
 }
 
 /** The diagnostics of a publishDiagnostics notification. */
-fun diagnosticsOf(params: JsonObject): List<Diagnostic> =
-    params
-        .array("diagnostics")
-        .orEmpty()
-        .mapNotNull { element ->
-            val diagnostic = element as? JsonObject
-            val range = diagnostic?.get("range").textRange()
-            val message = diagnostic?.string("message")?.trim()
-            if (range == null || message.isNullOrEmpty()) return@mapNotNull null
-            val tags = diagnostic.array("tags").orEmpty().mapNotNull { (it as? JsonPrimitive)?.intOrNull }
-            val code = diagnostic["code"] as? JsonPrimitive
-            Diagnostic(
-                range = range,
-                severity = severityOf(diagnostic.int("severity")),
-                message = message,
-                source = diagnostic.string("source"),
-                code = code?.contentOrNull,
-                unnecessary = TAG_UNNECESSARY in tags,
-                deprecated = TAG_DEPRECATED in tags,
-            )
-        }.sortedWith(compareBy({ it.range.startLine }, { it.range.startColumn }))
+fun diagnosticsOf(params: JsonObject): List<Diagnostic> {
+    val diagnostics = params.array("diagnostics").orEmpty().mapNotNull { diagnosticOf(it as? JsonObject) }
+    return diagnostics.sortedWith(compareBy({ it.range.startLine }, { it.range.startColumn }))
+}
+
+private fun diagnosticOf(diagnostic: JsonObject?): Diagnostic? {
+    val range = diagnostic?.get(RANGE).textRange()
+    val message = diagnostic?.string("message")?.trim()?.takeIf { it.isNotEmpty() }
+    val tags = diagnostic?.array("tags").orEmpty().mapNotNull { (it as? JsonPrimitive)?.intOrNull }
+    val code = diagnostic?.get("code") as? JsonPrimitive
+    if (range == null || message == null) return null
+    return Diagnostic(
+        range = range,
+        severity = severityOf(diagnostic.int("severity")),
+        message = message,
+        source = diagnostic.string("source"),
+        code = code?.contentOrNull,
+        unnecessary = TAG_UNNECESSARY in tags,
+        deprecated = TAG_DEPRECATED in tags,
+    )
+}
 
 private fun severityOf(severity: Int?): DiagnosticSeverity =
     when (severity) {
@@ -290,12 +302,14 @@ private fun severityOf(severity: Int?): DiagnosticSeverity =
         else -> DiagnosticSeverity.Hint
     }
 
-/** A TextEdit as the change of a document. */
+// A TextEdit as the change of a document. An AnnotatedTextEdit is a TextEdit; a SnippetTextEdit has a snippet
+// instead of newText.
 private fun textChangeOf(edit: JsonElement): TextChange? {
-    val fields = edit as? JsonObject ?: return null
-    // An AnnotatedTextEdit is a TextEdit; a SnippetTextEdit has a snippet instead of newText.
-    val range = fields["range"].textRange() ?: return null
-    val text = fields.string("newText") ?: fields.obj("snippet")?.string("value") ?: return null
+    val fields = edit as? JsonObject
+    val range = fields?.get(RANGE).textRange()
+    val snippet = fields?.obj("snippet")?.string("value")
+    val text = fields?.string("newText") ?: snippet
+    if (range == null || text == null) return null
     return TextChange(range.startLine, range.startColumn, range.endLine, range.endColumn, text)
 }
 
@@ -329,10 +343,10 @@ fun workspaceEditOf(edit: JsonElement?): List<FileChange>? {
 
 private fun addDocumentChange(change: JsonObject?, add: (String?, List<TextChange>, Boolean) -> Boolean): Boolean {
     if (change == null) return false
-    val kind = change.string("kind")
+    val kind = change.string(KIND)
     return when (kind) {
-        null -> add(change.obj("textDocument")?.string("uri"), textChangesOf(change["edits"]), false)
-        "create" -> add(change.string("uri"), emptyList(), true)
+        null -> add(change.obj("textDocument")?.string(URI), textChangesOf(change["edits"]), false)
+        "create" -> add(change.string(URI), emptyList(), true)
         else -> false
     }
 }
@@ -342,10 +356,9 @@ fun codeActionsOf(answer: JsonElement?): List<Pair<CodeActionInfo, JsonObject>> 
     val items = (answer as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
     val enabled = items.filter { it["disabled"] == null }
     val actions =
-        enabled.mapNotNull { action ->
-            val title = action.string("title") ?: return@mapNotNull null
+        enabled.filter { it.string("title") != null }.map { action ->
             val preferred = (action["isPreferred"] as? JsonPrimitive)?.booleanOrNull == true
-            CodeActionInfo(title, action.string("kind"), preferred) to action
+            CodeActionInfo(action.string("title").orEmpty(), action.string(KIND), preferred) to action
         }
     // Preferred first, then quick fixes, then the rest, each in the server's order.
     return actions.sortedBy { (info, _) ->

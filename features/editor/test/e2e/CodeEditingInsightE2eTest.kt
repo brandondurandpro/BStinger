@@ -184,7 +184,7 @@ class CodeEditingInsightE2eTest {
     fun `Ctrl+Alt+L reformats the file, and an undo brings it back`() =
         runComposeUiTest {
             val app = open()
-            TextClipboard.set("if (true) {\n\techo 1;   \n}")
+            TextClipboard.set(listOf("if (true) {", "\techo 1;   ", "}").joinToString("\n"))
             editorKeys { withKeyDown(Key.CtrlLeft) { pressKey(Key.V) } }
             editorKeys { withKeyDown(Key.CtrlLeft) { withKeyDown(Key.AltLeft) { pressKey(Key.L) } } }
             awaitCondition(SERVER_START_MS) { app.document().lines[5] == "    echo 1;" }

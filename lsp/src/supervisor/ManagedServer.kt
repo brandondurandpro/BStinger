@@ -50,6 +50,8 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
+private const val CAPABILITIES = "capabilities"
+
 /** What a [ManagedServer] is asked to do; its coroutine handles them one at a time, in order. */
 internal sealed interface Command {
     /** A user appeared: start unless stopped by the user. */
@@ -231,10 +233,10 @@ internal class ManagedServer(
      * is ready.
      */
     fun supports(capability: String): Boolean? {
-        val current = capabilities ?: return null
-        val value = current[capability] ?: return false
+        // Absent: not offered.
+        val value = capabilities?.let { it[capability] ?: JsonNull }
         val disabled = value is JsonPrimitive && value.booleanOrNull == false
-        return value != JsonNull && !disabled
+        return value?.let { it != JsonNull && !disabled }
     }
 
     /** The value of capability [name] of the ready process, null when it has none or no process is ready. */
@@ -437,7 +439,8 @@ internal class ManagedServer(
 
     private fun ready(launched: Process, link: LspConnection, initialized: JsonElement?) {
         val answer = initialized as? JsonObject
-        capabilities = (answer?.get("capabilities") as? JsonObject) ?: JsonObject(emptyMap())
+        val offered = answer?.get(CAPABILITIES) as? JsonObject
+        capabilities = offered ?: JsonObject(emptyMap())
         hooks.onRestarted(id)
         runCatching { link.notify("initialized", JsonObject(emptyMap())) }
         openDocuments(DocumentOutbox(link, scope, syncKindOf(initialized)))
@@ -616,84 +619,10 @@ internal class ManagedServer(
             put("rootUri", rootUri())
             put("rootPath", target.root)
             putJsonArray("workspaceFolders") { add(folder()) }
-            putJsonObject("capabilities") {
+            putJsonObject(CAPABILITIES) {
                 putJsonObject("window") { put("workDoneProgress", true) }
-                putJsonObject("workspace") {
-                    put("configuration", true)
-                    put("workspaceFolders", true)
-                    put("applyEdit", true)
-                    putJsonObject("workspaceEdit") {
-                        put("documentChanges", true)
-                        putJsonArray("resourceOperations") { add("create") }
-                    }
-                    putJsonObject("executeCommand") { put("dynamicRegistration", false) }
-                }
-                putJsonObject("textDocument") {
-                    putJsonObject("synchronization") { put("dynamicRegistration", false) }
-                    putJsonObject("publishDiagnostics") {
-                        put("relatedInformation", false)
-                        putJsonObject("tagSupport") {
-                            putJsonArray("valueSet") {
-                                add(1)
-                                add(2)
-                            }
-                        }
-                        put("versionSupport", true)
-                    }
-                    putJsonObject("hover") {
-                        putJsonArray("contentFormat") {
-                            add("markdown")
-                            add("plaintext")
-                        }
-                    }
-                    putJsonObject("definition") { put("linkSupport", true) }
-                    putJsonObject("typeDefinition") { put("linkSupport", true) }
-                    putJsonObject("implementation") { put("linkSupport", true) }
-                    putJsonObject("references") {}
-                    putJsonObject("documentHighlight") {}
-                    putJsonObject("documentSymbol") { put("hierarchicalDocumentSymbolSupport", true) }
-                    putJsonObject("signatureHelp") {
-                        putJsonObject("signatureInformation") {
-                            putJsonArray("documentationFormat") {
-                                add("markdown")
-                                add("plaintext")
-                            }
-                            putJsonObject("parameterInformation") { put("labelOffsetSupport", true) }
-                            put("activeParameterSupport", true)
-                        }
-                    }
-                    putJsonObject("rename") { put("prepareSupport", true) }
-                    putJsonObject("formatting") {}
-                    putJsonObject("rangeFormatting") {}
-                    putJsonObject("codeAction") {
-                        put("isPreferredSupport", true)
-                        putJsonObject("disabledSupport") {}
-                        putJsonObject("codeActionLiteralSupport") {
-                            putJsonObject("codeActionKind") {
-                                putJsonArray("valueSet") {
-                                    listOf(
-                                        "",
-                                        "quickfix",
-                                        "refactor",
-                                        "refactor.extract",
-                                        "refactor.inline",
-                                        "refactor.rewrite",
-                                        "source",
-                                        "source.organizeImports",
-                                    ).forEach { add(it) }
-                                }
-                            }
-                        }
-                    }
-                    putJsonObject("completion") {
-                        put("contextSupport", false)
-                        putJsonObject("completionItem") {
-                            // The editor inserts plain text: no tab stops to fill.
-                            put("snippetSupport", false)
-                            put("insertReplaceSupport", false)
-                        }
-                    }
-                }
+                put("workspace", WORKSPACE_CAPABILITIES)
+                put("textDocument", TEXT_DOCUMENT_CAPABILITIES)
             }
             target.spec.initializationOptions?.let { put("initializationOptions", it) }
         }
@@ -701,7 +630,7 @@ internal class ManagedServer(
     // textDocumentSync is a number or an object whose change is one; Full is 1, Incremental 2, None 0.
     private fun syncKindOf(initialized: JsonElement?): SyncKind {
         val initializeResult = initialized as? JsonObject
-        val capabilities = initializeResult?.get("capabilities") as? JsonObject
+        val capabilities = initializeResult?.get(CAPABILITIES) as? JsonObject
         val syncElement = capabilities?.get("textDocumentSync")
 
         val syncAsPrimitive = syncElement as? JsonPrimitive

@@ -139,20 +139,20 @@ class CodeIntelligenceTest {
             }
         }
 
-    private fun at(line: Int, column: Int, path: String = main, version: Int = 1) =
+    private fun position(line: Int, column: Int, path: String = main, version: Int = 1) =
         DocumentPosition(path, version, line, column)
 
     @Test
     fun `hover shows the docblock and the signature of a method declared in a file that is not open`() {
         openMain()
-        val hover = ready({ it.status }) { intelligence.hover(SESSION, at(2, 18)) }
+        val hover = ready({ it.status }) { intelligence.hover(SESSION, position(2, 18)) }
         val markdown = assertNotNull(hover.markdown)
         assertTrue(markdown.startsWith("### Greeter # greet"), markdown)
         assertTrue("Says hello to someone." in markdown, markdown)
         assertTrue("- **\$name**: *string* Who to greet." in markdown, markdown)
         assertTrue("```php\n<?php public function greet(string \$name, int \$times): string\n```" in markdown, markdown)
         assertEquals(TextRange(2, 15, 2, 20), hover.range)
-        val nothing = runBlocking { intelligence.hover(SESSION, at(0, 0)) }
+        val nothing = runBlocking { intelligence.hover(SESSION, position(0, 0)) }
         assertEquals(FeatureStatus.Ready, nothing.status)
         assertNull(nothing.markdown)
     }
@@ -160,14 +160,24 @@ class CodeIntelligenceTest {
     @Test
     fun `definition, type definition and implementations go to the declarations, with a preview`() {
         openMain()
-        val definition = ready({ it.status }) { intelligence.navigate(SESSION, at(2, 18), NavigationKind.Definition) }
+        val definition =
+            ready(
+                { it.status },
+            ) { intelligence.navigate(SESSION, position(2, 18), NavigationKind.Definition) }
         val location = definition.locations.single()
         assertEquals(greeter, location.path)
         assertEquals(13, location.range.startLine)
         assertEquals("    public function greet(string \$name, int \$times): string", location.preview)
-        val type = runBlocking { intelligence.navigate(SESSION, at(2, 7), NavigationKind.TypeDefinition) }
+        val type = runBlocking { intelligence.navigate(SESSION, position(2, 7), NavigationKind.TypeDefinition) }
         assertEquals(TextRange(5, 6, 5, 13), type.locations.single().range)
-        val implementations = runBlocking { intelligence.navigate(SESSION, at(2, 7), NavigationKind.Implementation) }
+        val implementations =
+            runBlocking {
+                intelligence.navigate(
+                    SESSION,
+                    position(2, 7),
+                    NavigationKind.Implementation,
+                )
+            }
         assertEquals(FeatureStatus.Ready, implementations.status)
         assertTrue(implementations.locations.isEmpty())
     }
@@ -175,10 +185,20 @@ class CodeIntelligenceTest {
     @Test
     fun `references find the usages in every file, without the declaration unless asked`() {
         openMain()
-        val usages = ready({ it.status }) { intelligence.references(SESSION, at(2, 18), includeDeclaration = false) }
+        val usages =
+            ready(
+                { it.status },
+            ) { intelligence.references(SESSION, position(2, 18), includeDeclaration = false) }
         assertEquals(listOf(main to 2, main to 3), usages.locations.map { it.path to it.range.startLine })
         assertEquals("echo \$greeter->greet(\"world\", 1);", usages.locations.first().preview)
-        val withDeclaration = runBlocking { intelligence.references(SESSION, at(2, 18), includeDeclaration = true) }
+        val withDeclaration =
+            runBlocking {
+                intelligence.references(
+                    SESSION,
+                    position(2, 18),
+                    includeDeclaration = true,
+                )
+            }
         assertEquals(3, withDeclaration.locations.size)
     }
 
@@ -242,33 +262,29 @@ class CodeIntelligenceTest {
     @Test
     fun `rename edits every file, the open one named as the client names it`() {
         openMain()
-        val target = ready({ it.status }) { intelligence.prepareRename(SESSION, at(2, 18)) }
+        val target = ready({ it.status }) { intelligence.prepareRename(SESSION, position(2, 18)) }
         assertEquals(TextRange(2, 15, 2, 20), target.range)
         assertEquals("greet", target.placeholder)
-        val edit = runBlocking { intelligence.rename(SESSION, at(2, 18), "welcome") }
+        val edit = runBlocking { intelligence.rename(SESSION, position(2, 18), "welcome") }
         assertEquals(setOf(main, greeter), edit.changes.map { it.path }.toSet())
-        assertEquals(
-            2,
-            edit.changes
-                .single { it.path == main }
-                .edits.size,
-        )
+        val mainEdits = edit.changes.single { it.path == main }.edits
+        assertEquals(2, mainEdits.size)
         assertTrue(edit.changes.flatMap { it.edits }.all { it.text == "welcome" })
-        val nothing = runBlocking { intelligence.prepareRename(SESSION, at(1, 12)) }
+        val nothing = runBlocking { intelligence.prepareRename(SESSION, position(1, 12)) }
         assertNull(nothing.range)
     }
 
     @Test
     fun `formatting is unsupported when the server does not offer it`() {
         options = arrayOf("--without", "formatting,rangeFormatting")
-        openMain("<?php\n\techo 1;   \n")
+        openMain(php("\techo 1;   "))
         val result = ready({ it.status }) { intelligence.format(SESSION, main, 1, null, FormatOptions()) }
         assertEquals(FeatureStatus.Unsupported, result.status)
     }
 
     @Test
     fun `formatting edits the lines that change`() {
-        openMain("<?php\n\techo 1;   \necho 2;\n")
+        openMain(php("\techo 1;   ", "echo 2;"))
         val result = ready({ it.status }) { intelligence.format(SESSION, main, 1, null, FormatOptions()) }
         assertEquals(listOf(TextChange(1, 0, 1, 11, "    echo 1;")), result.changes.single().edits)
         val range = runBlocking { intelligence.format(SESSION, main, 1, TextRange(2, 0, 2, 7), FormatOptions()) }
@@ -277,7 +293,7 @@ class CodeIntelligenceTest {
 
     @Test
     fun `code actions apply an edit, or run a command whose edits come back to the client`() {
-        openMain("<?php\nmissing_function();\nfunction documented() {}\n")
+        openMain(php("missing_function();", "function documented() {}"))
         // The diagnostics are what the server fixes: wait for them first.
         runBlocking {
             withTimeout(WAIT_MS) {
@@ -296,7 +312,7 @@ class CodeIntelligenceTest {
         assertTrue(fixes.actions.single().preferred)
         val created = runBlocking { intelligence.applyCodeAction(SESSION, fixes.token, 0) }
         assertEquals(
-            "\nfunction missing_function()\n{\n}\n",
+            listOf("", "function missing_function()", "{", "}", "").joinToString("\n"),
             created.changes
                 .single()
                 .edits
@@ -308,7 +324,7 @@ class CodeIntelligenceTest {
         assertEquals(listOf("Add docblock"), refactorings.actions.map { it.title })
         val docblock = runBlocking { intelligence.applyCodeAction(SESSION, refactorings.token, 0) }
         assertEquals(
-            TextChange(2, 0, 2, 0, "/**\n * TODO\n */\n"),
+            TextChange(2, 0, 2, 0, listOf("/**", " * TODO", " */", "").joinToString("\n")),
             docblock.changes
                 .single()
                 .edits
@@ -324,7 +340,7 @@ class CodeIntelligenceTest {
     @Test
     fun `signature help and highlights`() {
         openMain()
-        val help = ready({ it.status }) { intelligence.signatureHelp(SESSION, at(2, 31)) }
+        val help = ready({ it.status }) { intelligence.signatureHelp(SESSION, position(2, 31)) }
         val signature = help.signatures.single()
         assertEquals("greet(string \$name, int \$times): string", signature.label)
         assertEquals(1, help.activeParameter)
@@ -332,20 +348,26 @@ class CodeIntelligenceTest {
             "int \$times",
             signature.label.substring(signature.parameters[1].start, signature.parameters[1].end),
         )
-        val highlights = runBlocking { intelligence.highlights(SESSION, at(2, 7)) }
+        val highlights = runBlocking { intelligence.highlights(SESSION, position(2, 7)) }
         assertEquals(listOf(HighlightKind.Write, HighlightKind.Read, HighlightKind.Read), highlights.map { it.kind })
     }
 
     @Test
     fun `nothing is ready without a server, nor for a file no server handles`() {
         runBlocking {
-            assertEquals(FeatureStatus.NotReady, intelligence.hover(SESSION, at(0, 0)).status)
+            assertEquals(FeatureStatus.NotReady, intelligence.hover(SESSION, position(0, 0)).status)
             service.openDocument(SESSION, project.toString(), main, 1, "<?php\n")
             assertEquals(
                 FeatureStatus.NotReady,
-                intelligence.navigate(SESSION, at(0, 0), NavigationKind.Definition).status,
+                intelligence.navigate(SESSION, position(0, 0), NavigationKind.Definition).status,
             )
-            assertEquals(FeatureStatus.NotReady, intelligence.references(SESSION, at(0, 0, version = 2), true).status)
+            assertEquals(
+                FeatureStatus.NotReady,
+                intelligence.references(SESSION, position(0, 0, version = 2), true).status,
+            )
         }
     }
 }
+
+// A PHP file of [lines], after its opening tag.
+private fun php(vararg lines: String): String = (listOf("<?php") + lines + "").joinToString("\n")

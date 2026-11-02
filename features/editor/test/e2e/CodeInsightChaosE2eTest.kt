@@ -120,11 +120,8 @@ class CodeInsightChaosE2eTest {
                 SERVER_START_MS,
             ) { "public function welcome(" in Files.readString(project.root.resolve("src/Greeter.php")) }
             assertEquals("echo \$greeter->welcome(\"world\", 1);", app.document().lines[2])
-            val declaration =
-                Files
-                    .readAllLines(
-                        project.root.resolve("src/Greeter.php"),
-                    ).count { "function welcome(" in it }
+            val greeter = Files.readAllLines(project.root.resolve("src/Greeter.php"))
+            val declaration = greeter.count { "function welcome(" in it }
             assertEquals(1, declaration)
         }
 

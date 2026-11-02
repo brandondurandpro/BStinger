@@ -18,6 +18,8 @@ import org.example.kotlineditor.rpc.textChanges
 import org.example.kotlineditor.rpc.textRange
 import org.example.kotlineditor.rpc.toJson
 
+private const val RANGE = "range"
+
 private const val ID = "id"
 private const val LANGUAGE = "language"
 private const val PROJECT = "project"
@@ -76,7 +78,7 @@ internal fun languageServerHandlers(services: LocalServices): Map<Method, Handle
     ) +
         codeIntelligenceHandlers(services)
 
-/** The code intelligence methods: hover, navigation, usages, diagnostics, edits. */
+// The code intelligence methods: hover, navigation, usages, diagnostics, edits.
 private fun codeIntelligenceHandlers(services: LocalServices): Map<Method, Handler> {
     val intelligence = { services.languageServers.intelligence }
     return mapOf<Method, Handler>(
@@ -103,12 +105,12 @@ private fun codeIntelligenceHandlers(services: LocalServices): Map<Method, Handl
             intelligence().rename(session, params.documentPosition(), params.string("newName")).toJson()
         },
         Method.LspFormat to {
-            val range = params["range"]?.takeIf { it != JsonNull }?.let { params.read("range") { it.textRange() } }
+            val range = params[RANGE]?.takeIf { it != JsonNull }?.let { params.read(RANGE) { it.textRange() } }
             val options = params.read("options") { it.formatOptions() }
             intelligence().format(session, params.string(PATH), params.int(VERSION), range, options).toJson()
         },
         Method.LspCodeActions to {
-            val range = params.read("range") { it.textRange() }
+            val range = params.read(RANGE) { it.textRange() }
             intelligence().codeActions(session, params.string(PATH), params.int(VERSION), range).toJson()
         },
         Method.LspApplyCodeAction to {
