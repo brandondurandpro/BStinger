@@ -119,7 +119,8 @@ class CodeInsightChaosE2eTest {
             awaitCondition(
                 SERVER_START_MS,
             ) { "public function welcome(" in Files.readString(project.root.resolve("src/Greeter.php")) }
-            assertEquals("echo \$greeter->welcome(\"world\", 1);", app.document().lines[2])
+            // The open file is edited by the UI, the closed one on disk: not at the same moment.
+            awaitCondition { app.document().lines[2] == "echo \$greeter->welcome(\"world\", 1);" }
             val greeter = Files.readAllLines(project.root.resolve("src/Greeter.php"))
             val declaration = greeter.count { "function welcome(" in it }
             assertEquals(1, declaration)

@@ -12,7 +12,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -22,6 +24,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 import org.example.kotlineditor.state.FileIndex
 import org.example.kotlineditor.state.FileMatch
 import org.example.kotlineditor.state.TreeHost
@@ -34,7 +37,8 @@ fun GotoFilePopup(project: TreeHost, onClose: () -> Unit, recentOnly: Boolean = 
     val found = remember { FoundFiles() }
     val cursor = found.cursor
     val focus = remember { FocusRequester() }
-    val indexed = if (recentOnly) emptyList() else project.fileIndex.files
+    val scope = rememberCoroutineScope()
+    val indexed = indexedOf(project, recentOnly)
     val open: (FileMatch) -> Unit = { match ->
         onClose()
         project.editor.open(match.entry)
@@ -60,7 +64,7 @@ fun GotoFilePopup(project: TreeHost, onClose: () -> Unit, recentOnly: Boolean = 
                     .testTag(TreeTags.GOTO_FILE_INPUT)
                     .focusRequester(focus)
                     .popupKeys(
-                        { found.enter(query, indexed, open) },
+                        { scope.launch { enterNextFrame(found, { query }, { indexedOf(project, recentOnly) }, open) } },
                         onClose,
                     ) { cursor.move(it, results.size) },
                 placeholder = "Type a file name",
@@ -107,6 +111,21 @@ private class FoundFiles {
     }
 
     private fun selected(): FileMatch? = results.getOrNull(cursor.selected)
+}
+
+// The files searched: none for Recent Files, null while the index is built.
+private fun indexedOf(project: TreeHost, recentOnly: Boolean): List<*>? =
+    if (recentOnly) emptyList<Any>() else project.fileIndex.files
+
+// Enter: the text typed just before it reaches the query at the next frame, and is the one opened.
+private suspend fun enterNextFrame(
+    found: FoundFiles,
+    query: () -> String,
+    indexed: () -> List<*>?,
+    open: (FileMatch) -> Unit,
+) {
+    withFrameNanos { }
+    found.enter(query(), indexed(), open)
 }
 
 private suspend fun matches(project: TreeHost, query: String, recentOnly: Boolean): List<FileMatch> =
