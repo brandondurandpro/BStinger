@@ -76,6 +76,17 @@ class PhpDiskChangesE2eTest {
         closeSymbols()
     }
 
+    // The text of [path] on disk; empty while another process holds it (Windows refuses to share a file being written).
+    private fun diskText(path: String): String =
+        try {
+            project.root
+                .resolve(path)
+                .toFile()
+                .readText()
+        } catch (_: java.io.IOException) {
+            ""
+        }
+
     private fun ComposeUiTest.treeAction(row: String, action: String) {
         rightClickOn(TreeTags.treeRow(row))
         awaitTag(action).performClick()
@@ -94,11 +105,7 @@ class PhpDiskChangesE2eTest {
             typeCode(listOf("<?php", "function addedLater() {}", "").joinToString("\n"))
             editorKeys { withKeyDown(Key.CtrlLeft) { pressKey(Key.S) } }
             awaitCondition {
-                "addedLater" in
-                    project.root
-                        .resolve("src/Added.php")
-                        .toFile()
-                        .readText()
+                "addedLater" in diskText("src/Added.php")
             }
             // Closed, the file is known only from the index.
             onNodeWithTag(EditorTags.tabClose("src/Added.php"), useUnmergedTree = true).performClick()
@@ -153,11 +160,7 @@ class PhpDiskChangesE2eTest {
             typeCode("// edited\n")
             editorKeys { withKeyDown(Key.CtrlLeft) { pressKey(Key.S) } }
             awaitCondition {
-                "// edited" in
-                    project.root
-                        .resolve("src/index.php")
-                        .toFile()
-                        .readText()
+                "// edited" in diskText("src/index.php")
             }
             val server = awaitServer(app) { it.isRunning() }
             awaitTag(LanguageServerTags.statusLanguageServer(server.id)).performClick()

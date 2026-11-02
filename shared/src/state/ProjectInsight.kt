@@ -89,9 +89,10 @@ internal fun ProjectState.followInsight() {
         }.distinctUntilChanged().collect { insight.track(it) }
     }
     scope.launch { snapshotFlow { servers.diagnostics }.collect { insight.applyDiagnostics(it) } }
-    // A new process (a restart, another server chosen) knows nothing of the previous counts.
+    // A new process (a restart, another server chosen) knows nothing of the previous counts. After a restart of the IDE
+    // server its language servers start again at the same generation: their pid tells the new processes apart.
     scope.launch {
-        snapshotFlow { servers.status.servers.map { it.id to it.generation } }
+        snapshotFlow { servers.status.servers.map { Triple(it.id, it.generation, it.pid) } }
             .distinctUntilChanged()
             .collect { insight.refreshAll() }
     }
