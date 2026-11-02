@@ -185,9 +185,12 @@ internal class FakePhpCode(private val open: Map<String, List<String>>, private 
                 .take(MAX_DISK_FILES)
         // Named like the client names them: Path.toUri, as the IDE server does.
         // A file deleted while the directory is read is left out, as a real server would.
-        val read = files.mapNotNull { file -> runCatching { file.toPath().toUri().toString() to file.readLines() }.getOrNull() }
+        val read = files.mapNotNull { file -> runCatching { file.toPath().toUri().toString() to readShared(file) }.getOrNull() }
         return read.toMap()
     }
+
+    // NIO opens files sharing their deletion on Windows (java.io does not): the IDE can still delete them meanwhile.
+    private fun readShared(file: File): List<String> = java.nio.file.Files.readAllLines(file.toPath())
 
     companion object {
         const val CLASS = 5
