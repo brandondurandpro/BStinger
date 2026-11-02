@@ -122,12 +122,21 @@ class PhpSelectionChaosE2eTest {
             awaitReconnected()
             awaitServer(app) { it.isRunning() }
             awaitServerSelection(app)
-            // Elsewhere, so that the server is asked again: `greet`, its line, then the method from its modifiers.
-            clickAt(13, 22)
-            listOf(span(13, 20, 13, 25), span(13, 4, 13, 59), NAME_STEPS[2]).forEach { step ->
-                extendSelection()
-                awaitCondition(SERVER_START_MS) { app.selection() == step }
+            // Elsewhere, so that the server is asked again: `greet`, its line, then the method from its modifiers. A
+            // press the busy server answers after 1.5 s gets the editor's own step: the presses start again then.
+            val steps = listOf(span(13, 20, 13, 25), span(13, 4, 13, 59), NAME_STEPS[2])
+            var grown = false
+            var attempt = 0
+            while (!grown && attempt < RESTART_ATTEMPTS) {
+                attempt++
+                clickAt(13, 22)
+                grown =
+                    steps.all { step ->
+                        extendSelection()
+                        runCatching { awaitCondition(ATTEMPT_MS) { app.selection() == step } }.isSuccess
+                    }
             }
+            assertTrue(grown, "Ctrl+W never grew through the restarted server's ranges")
         }
 }
 

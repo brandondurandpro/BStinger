@@ -69,6 +69,8 @@ internal val TEXT_DOCUMENT_CAPABILITIES: JsonObject =
         putJsonObject("selectionRange") {}
         putJsonObject("foldingRange") { put("lineFoldingOnly", true) }
         putJsonObject("inlayHint") {}
+        putJsonObject("callHierarchy") {}
+        putJsonObject("typeHierarchy") {}
         put("signatureHelp", SIGNATURE_HELP)
         putJsonObject("rename") { put("prepareSupport", true) }
         putJsonObject("formatting") {}

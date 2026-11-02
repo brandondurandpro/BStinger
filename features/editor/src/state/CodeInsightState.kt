@@ -83,6 +83,10 @@ class CodeInsightState(
     var problems: ProblemsList? by mutableStateOf(null)
         internal set
 
+    /** The call or type hierarchy shown, null when none. */
+    var hierarchy: HierarchyPopup? by mutableStateOf(null)
+        internal set
+
     /**
      * How the inlay hints are shown; changing it shows those already known the new way. Chosen in the Language
      * Servers window, saved with the preferences.
@@ -585,8 +589,10 @@ class CodeInsightState(
 
     /** Escape: closes what is shown over the code; false when nothing was. */
     fun escape(): Boolean {
-        val shown = listOf(hover, locations, signature, codeActions, notice, rename, problems).any { it != null }
+        val popups = listOf(hover, locations, signature, codeActions, notice, rename, problems, hierarchy)
+        val shown = popups.any { it != null }
         problems = null
+        hierarchy = null
         dismissHover()
         locations = null
         dismissSignature()

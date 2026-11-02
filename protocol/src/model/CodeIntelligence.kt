@@ -355,6 +355,13 @@ interface CodeIntelligence {
     /** The declarations of [path] at [version] (File Structure). */
     suspend fun outline(path: String, version: Int): OutlineResult = OutlineResult.NotReady
 
+    /** The function or type at [at], root of the call or type hierarchy [kind]; none when it is neither. */
+    suspend fun prepareHierarchy(at: DocumentPosition, kind: HierarchyKind): HierarchyResult = HierarchyResult.NotReady
+
+    /** The items on side [direction] of [item], found from the document [path] (the one the hierarchy started in). */
+    suspend fun hierarchyChildren(path: String, item: HierarchyItem, direction: HierarchyDirection): HierarchyResult =
+        HierarchyResult.NotReady
+
     /** The inlay hints of version [version] of [path]: parameter names, types. */
     suspend fun inlayHints(path: String, version: Int): InlayHintsResult = InlayHintsResult.NotReady
 

@@ -1,14 +1,18 @@
 package org.example.kotlineditor.server
 
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import org.example.kotlineditor.model.HierarchyDirection
+import org.example.kotlineditor.model.HierarchyKind
 import org.example.kotlineditor.model.NavigationKind
 import org.example.kotlineditor.rpc.InvalidParamsException
 import org.example.kotlineditor.rpc.Method
 import org.example.kotlineditor.rpc.bool
 import org.example.kotlineditor.rpc.documentPosition
 import org.example.kotlineditor.rpc.formatOptions
+import org.example.kotlineditor.rpc.hierarchyItem
 import org.example.kotlineditor.rpc.highlightsJson
 import org.example.kotlineditor.rpc.int
 import org.example.kotlineditor.rpc.languageServerChoiceJson
@@ -83,7 +87,8 @@ internal fun languageServerHandlers(services: LocalServices): Map<Method, Handle
             buildJsonObject { documentation?.let { put("documentation", it) } }
         },
     ) +
-        codeIntelligenceHandlers(services)
+        codeIntelligenceHandlers(services) +
+        structureHandlers(services)
 
 // The code intelligence methods: hover, navigation, usages, diagnostics, edits.
 private fun codeIntelligenceHandlers(services: LocalServices): Map<Method, Handler> {
@@ -106,18 +111,6 @@ private fun codeIntelligenceHandlers(services: LocalServices): Map<Method, Handl
         Method.LspUsageCounts to {
             intelligence().usageCounts(session, params.string(PATH), params.int(VERSION)).toJson()
         },
-        Method.LspOutline to {
-            intelligence().outline(session, params.string(PATH), params.int(VERSION)).toJson()
-        },
-        Method.LspInlayHints to {
-            intelligence().inlayHints(session, params.string(PATH), params.int(VERSION)).toJson()
-        },
-        Method.LspFoldingRanges to {
-            intelligence().foldingRanges(session, params.string(PATH), params.int(VERSION)).toJson()
-        },
-        Method.LspSelectionRanges to {
-            intelligence().selectionRanges(session, params.documentPosition()).toJson()
-        },
         Method.LspWorkspaceSymbols to { intelligence().workspaceSymbols(session, params.string("query")).toJson() },
         Method.LspDiagnostics to { intelligence().diagnostics(session, params.long("since")).toJson() },
         Method.LspPrepareRename to { intelligence().prepareRename(session, params.documentPosition()).toJson() },
@@ -137,4 +130,38 @@ private fun codeIntelligenceHandlers(services: LocalServices): Map<Method, Handl
             intelligence().applyCodeAction(session, params.string("token"), params.int("index")).toJson()
         },
     )
+}
+
+// What the language server knows of the structure of the code: outline, hierarchies, hints, folding, selection.
+private fun structureHandlers(services: LocalServices): Map<Method, Handler> {
+    val intelligence = { services.languageServers.intelligence }
+    return mapOf<Method, Handler>(
+        Method.LspOutline to {
+            intelligence().outline(session, params.string(PATH), params.int(VERSION)).toJson()
+        },
+        Method.LspPrepareHierarchy to {
+            val kind = params.enumValue("kind", HierarchyKind.entries)
+            intelligence().prepareHierarchy(session, params.documentPosition(), kind).toJson()
+        },
+        Method.LspHierarchyChildren to {
+            val item = params.getValue("item").hierarchyItem()
+            val direction = params.enumValue("direction", HierarchyDirection.entries)
+            intelligence().hierarchyChildren(params.string(PATH), item, direction).toJson()
+        },
+        Method.LspInlayHints to {
+            intelligence().inlayHints(session, params.string(PATH), params.int(VERSION)).toJson()
+        },
+        Method.LspFoldingRanges to {
+            intelligence().foldingRanges(session, params.string(PATH), params.int(VERSION)).toJson()
+        },
+        Method.LspSelectionRanges to {
+            intelligence().selectionRanges(session, params.documentPosition()).toJson()
+        },
+    )
+}
+
+// The entry of [entries] named by the string [key]; an unknown name is invalid params.
+private fun <T : Enum<T>> JsonObject.enumValue(key: String, entries: List<T>): T {
+    val name = string(key)
+    return entries.firstOrNull { it.name == name } ?: throw InvalidParamsException("Unknown $key $name")
 }

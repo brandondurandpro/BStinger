@@ -88,4 +88,11 @@ internal class ServerRequests(
             }
         return document.takeIf { arrived != null }
     }
+
+    /** The ready server of the open document [path] that offers [capability]; null when there is none. */
+    fun serverOf(path: String, capability: String): ManagedServer? {
+        val document = documents.get(path)
+        val servers = document?.let { serversOf(it) }.orEmpty()
+        return servers.firstOrNull { it.supports(capability) == true }
+    }
 }

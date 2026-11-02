@@ -416,6 +416,12 @@ enum class Method(
     /** Declarations of a document, nested. */
     LspOutline("lsp/outline"),
 
+    /** The root of a call or type hierarchy. */
+    LspPrepareHierarchy("lsp/prepareHierarchy"),
+
+    /** The callers, callees, supertypes or subtypes of a hierarchy item. */
+    LspHierarchyChildren("lsp/hierarchyChildren"),
+
     /** Inlay hints of a document. */
     LspInlayHints("lsp/inlayHints"),
 

@@ -9,6 +9,10 @@ import org.example.kotlineditor.model.DocumentPosition
 import org.example.kotlineditor.model.EditResult
 import org.example.kotlineditor.model.FoldingRangesResult
 import org.example.kotlineditor.model.FormatOptions
+import org.example.kotlineditor.model.HierarchyDirection
+import org.example.kotlineditor.model.HierarchyItem
+import org.example.kotlineditor.model.HierarchyKind
+import org.example.kotlineditor.model.HierarchyResult
 import org.example.kotlineditor.model.HoverResult
 import org.example.kotlineditor.model.InlayHintsResult
 import org.example.kotlineditor.model.LanguageServerChoice
@@ -156,6 +160,29 @@ class RemoteLanguageServers(private val client: RpcClient) : LanguageServers {
                 put(VERSION, version)
             }
         return result.outlineResult()
+    }
+
+    override suspend fun prepareHierarchy(at: DocumentPosition, kind: HierarchyKind): HierarchyResult {
+        val result =
+            client.call(Method.LspPrepareHierarchy) {
+                putPosition(at)
+                put("kind", kind.name)
+            }
+        return result.hierarchyResult()
+    }
+
+    override suspend fun hierarchyChildren(
+        path: String,
+        item: HierarchyItem,
+        direction: HierarchyDirection,
+    ): HierarchyResult {
+        val result =
+            client.call(Method.LspHierarchyChildren) {
+                put(PATH, path)
+                put("item", item.toJson())
+                put("direction", direction.name)
+            }
+        return result.hierarchyResult()
     }
 
     override suspend fun inlayHints(path: String, version: Int): InlayHintsResult {

@@ -205,8 +205,11 @@ object FakeLanguageServer {
         private val pendingCommands = HashMap<String, JsonElement>()
         private var nextEditId = 0
 
-        private fun intelligence() =
-            FakeIntelligence(FakePhpCode(documents.mapValues { it.value.toList() }, rootUri, disk()))
+        private fun intelligence() = FakeIntelligence(phpCode())
+
+        private fun hierarchy() = FakeHierarchy(phpCode())
+
+        private fun phpCode() = FakePhpCode(documents.mapValues { it.value.toList() }, rootUri, disk())
 
         private fun disk(): Map<String, List<String>>? =
             if (options.index) indexed ?: FakePhpCode.readDisk(rootUri).toMutableMap().also { indexed = it } else null
@@ -288,6 +291,12 @@ object FakeLanguageServer {
                 "textDocument/selectionRange" -> reply(id, intelligence().selectionRanges(message["params"]))
                 "textDocument/foldingRange" -> reply(id, intelligence().foldingRanges(message["params"]))
                 "textDocument/inlayHint" -> reply(id, intelligence().inlayHints(message["params"]))
+                "textDocument/prepareCallHierarchy" -> reply(id, hierarchy().prepareCalls(message["params"]))
+                "callHierarchy/incomingCalls" -> reply(id, hierarchy().incomingCalls(message["params"]))
+                "callHierarchy/outgoingCalls" -> reply(id, hierarchy().outgoingCalls(message["params"]))
+                "textDocument/prepareTypeHierarchy" -> reply(id, hierarchy().prepareTypes(message["params"]))
+                "typeHierarchy/supertypes" -> reply(id, hierarchy().supertypes(message["params"]))
+                "typeHierarchy/subtypes" -> reply(id, hierarchy().subtypes(message["params"]))
                 "textDocument/signatureHelp" -> reply(id, intelligence().signatureHelp(message["params"]))
                 "textDocument/prepareRename" -> reply(id, intelligence().prepareRename(message["params"]))
                 "textDocument/rename" -> reply(id, intelligence().rename(message["params"]))
@@ -364,6 +373,8 @@ object FakeLanguageServer {
                     put("selectionRangeProvider", provided("selectionRange"))
                     put("foldingRangeProvider", provided("foldingRange"))
                     put("inlayHintProvider", provided("inlayHint"))
+                    put("callHierarchyProvider", provided("callHierarchy"))
+                    put("typeHierarchyProvider", provided("typeHierarchy"))
                     put("documentFormattingProvider", provided("formatting"))
                     put("documentRangeFormattingProvider", provided("rangeFormatting"))
                     if (provided("rename")) putJsonObject("renameProvider") { put("prepareProvider", true) }

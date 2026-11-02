@@ -35,10 +35,6 @@ import org.example.kotlineditor.state.Document
 import org.example.kotlineditor.state.EditorTab
 import org.example.kotlineditor.state.LinkTarget
 import org.example.kotlineditor.state.TextPos
-import org.example.kotlineditor.state.applyCodeAction
-import org.example.kotlineditor.state.closeProblems
-import org.example.kotlineditor.state.goToProblem
-import org.example.kotlineditor.state.moveProblemSelection
 import org.example.kotlineditor.state.screenLine
 import org.example.kotlineditor.state.toggleProblems
 
@@ -67,6 +63,7 @@ internal fun BoxScope.InsightLayer(
     FollowInsight(insight, path, document)
     CodeInsightOverlays(insight, tab, document, metrics, focusRequester, viewport)
     ProblemsListView(insight, document)
+    HierarchyView(insight, document)
     insight.insightOf(document)?.let { shown ->
         val toggle = { insight.toggleProblems(document) }
         ProblemsWidget(shown, toggle, Modifier.align(Alignment.TopEnd).padding(end = 12.dp))
@@ -161,47 +158,6 @@ internal fun hintClicked(
 internal fun ctrlKey(event: KeyEvent, insight: CodeInsightState) {
     val ctrl = event.key == Key.CtrlLeft || event.key == Key.CtrlRight
     if (ctrl && event.type == KeyEventType.KeyUp) insight.ctrlReleased()
-}
-
-/** The keys of the lists of places and quick fixes while one is shown, and Escape for whatever is shown. */
-internal fun insightKey(event: KeyEvent, insight: CodeInsightState, document: Document): Boolean {
-    val down = event.type == KeyEventType.KeyDown
-    val listShown = insight.locations?.document === document || insight.codeActions?.document === document
-    val plain = !event.isCtrlPressed && !event.isAltPressed
-    val list = down && listShown && plain
-    val problems = down && plain && insight.problems?.document === document
-    return when {
-        problems -> problemsKey(event.key, insight)
-        list -> listKey(event.key, insight)
-        down && event.key == Key.Escape -> insight.escape()
-        else -> false
-    }
-}
-
-// The problems list owns the arrows, Enter and Escape; other keys still edit the code below.
-private fun problemsKey(key: Key, insight: CodeInsightState): Boolean {
-    val enter = key == Key.Enter || key == Key.NumPadEnter
-    when {
-        key == Key.DirectionDown -> insight.moveProblemSelection(1)
-        key == Key.DirectionUp -> insight.moveProblemSelection(-1)
-        enter -> insight.problems?.let { insight.goToProblem(it.selected) }
-        key == Key.Escape -> insight.closeProblems()
-        else -> return false
-    }
-    return true
-}
-
-private fun listKey(key: Key, insight: CodeInsightState): Boolean {
-    val enter = key == Key.Enter || key == Key.NumPadEnter
-    when {
-        key == Key.DirectionDown -> insight.moveSelection(1)
-        key == Key.DirectionUp -> insight.moveSelection(-1)
-        enter && insight.locations != null -> insight.openLocation()
-        enter -> insight.applyCodeAction()
-        key == Key.Escape -> insight.escape()
-        else -> return false
-    }
-    return true
 }
 
 /** Ctrl+W, which the language server's selection ranges answer in a file it serves. */

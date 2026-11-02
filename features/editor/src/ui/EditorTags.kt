@@ -44,6 +44,13 @@ object EditorTags {
     const val PROBLEMS_LIST_EMPTY = "problems.list.empty"
     const val PROBLEMS_LIST_TITLE = "problems.list.title"
     const val INLAY_HINTS_POPUP = "inlayHints.popup"
+    const val HIERARCHY = "hierarchy"
+    const val HIERARCHY_SCRIM = "hierarchy.scrim"
+    const val HIERARCHY_TITLE = "hierarchy.title"
+    const val HIERARCHY_SWITCH = "hierarchy.switch"
+    const val HIERARCHY_LOADING = "hierarchy.loading"
+    const val HIERARCHY_FAILED = "hierarchy.failed"
+    const val HIERARCHY_EMPTY = "hierarchy.empty"
     const val PROBLEMS_SCRIM = "problems.scrim"
 
     const val LINK = "editor.link"
@@ -107,6 +114,12 @@ object EditorTags {
 
     /** An occurrence of the symbol at the caret highlighted by the language server, on [line]. */
     fun symbolHighlight(line: Int, kind: String) = "editor.highlight:$line:$kind"
+
+    /** Row [index] of the call or type hierarchy. */
+    fun hierarchyRow(index: Int) = "hierarchy.row:$index"
+
+    /** The arrow that expands or collapses row [index] of the hierarchy. */
+    fun hierarchyToggle(index: Int) = "hierarchy.toggle:$index"
 
     /** The inlay hint drawn before the character at [column] of [line]. */
     fun inlayHint(line: Int, column: Int) = "inlayHint:$line:$column"

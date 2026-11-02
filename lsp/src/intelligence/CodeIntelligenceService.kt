@@ -35,6 +35,10 @@ import org.example.kotlineditor.model.FileChange
 import org.example.kotlineditor.model.FileDiagnostics
 import org.example.kotlineditor.model.FoldingRangesResult
 import org.example.kotlineditor.model.FormatOptions
+import org.example.kotlineditor.model.HierarchyDirection
+import org.example.kotlineditor.model.HierarchyItem
+import org.example.kotlineditor.model.HierarchyKind
+import org.example.kotlineditor.model.HierarchyResult
 import org.example.kotlineditor.model.HoverResult
 import org.example.kotlineditor.model.InlayHintsResult
 import org.example.kotlineditor.model.LocationsResult
@@ -102,6 +106,7 @@ class CodeIntelligenceService internal constructor(
 ) {
     private val requests = ServerRequests(documents, serversOf, settings)
     private val structure = DocumentStructureRequests(documents, requests)
+    private val hierarchy = HierarchyRequests(requests) { withPreviews(it) }
     private val diagnostics = ConcurrentHashMap<String, Published>()
     private val diagnosticsVersion = MutableStateFlow(1L)
     private val offered = ConcurrentHashMap<String, OfferedActions>()
@@ -196,6 +201,14 @@ class CodeIntelligenceService internal constructor(
     /** The declarations of [path] at [version], nested, for File Structure. */
     suspend fun outline(session: String, path: String, version: Int): OutlineResult =
         structure.outline(session, path, version)
+
+    /** The function or type at [at], root of the call or type hierarchy [kind]. */
+    suspend fun prepareHierarchy(session: String, at: DocumentPosition, kind: HierarchyKind): HierarchyResult =
+        hierarchy.prepare(session, at, kind)
+
+    /** The callers, callees, supertypes or subtypes of [item], from the server of the open document [path]. */
+    suspend fun hierarchyChildren(path: String, item: HierarchyItem, direction: HierarchyDirection): HierarchyResult =
+        hierarchy.children(path, item, direction)
 
     /** The inlay hints of version [version] of [path], over the whole document. */
     suspend fun inlayHints(session: String, path: String, version: Int): InlayHintsResult =

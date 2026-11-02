@@ -108,14 +108,14 @@ fun JsonElement.hoverResult(): HoverResult {
     return HoverResult(fields.status(), fields.stringOrNull("markdown"), fields.rangeOrNull())
 }
 
-private fun SourceLocation.toJson(): JsonObject =
+internal fun SourceLocation.toJson(): JsonObject =
     buildJsonObject {
         put(PATH, path)
         put(RANGE, range.toJson())
         preview?.let { put("preview", it) }
     }
 
-private fun JsonObject.sourceLocation() =
+internal fun JsonObject.sourceLocation() =
     SourceLocation(string(PATH), getValue(RANGE).textRange(), stringOrNull("preview"))
 
 /** A navigation or usages answer. */

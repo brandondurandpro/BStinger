@@ -6,6 +6,7 @@ import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
+import org.example.kotlineditor.model.HierarchyKind
 import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.PopupKind
 import org.example.kotlineditor.state.ProjectState
@@ -19,6 +20,7 @@ import org.example.kotlineditor.state.selectNext
 import org.example.kotlineditor.state.selectPrevious
 import org.example.kotlineditor.state.selectedText
 import org.example.kotlineditor.state.showCodeActions
+import org.example.kotlineditor.state.showHierarchy
 import org.example.kotlineditor.state.startRename
 import org.example.kotlineditor.state.withInsight
 
@@ -106,6 +108,15 @@ private val IDE_SHORTCUTS =
             ctrl = null,
             alt = true,
         ) { project.withInsight { path, document -> showUsages(path, document, document.caret) } },
+        bind(
+            setOf(Key.H),
+            ctrl = true,
+            alt = true,
+        ) { project.withInsight { path, document -> showHierarchy(path, document, HierarchyKind.Calls) } },
+        bind(
+            setOf(Key.H),
+            ctrl = true,
+        ) { project.withInsight { path, document -> showHierarchy(path, document, HierarchyKind.Types) } },
         bind(setOf(Key.F6), shift = true) { project.withInsight { path, document -> startRename(path, document) } },
         bind(
             setOf(Key.L),
