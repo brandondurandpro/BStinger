@@ -209,8 +209,10 @@ jobs:
       - name: Build
         shell: cmd
         run: kotlin.bat build
+      # Below the job's limit: a test that hangs fails this step, whose log is kept (a job out of time loses it).
       - name: Test
         shell: cmd
+        timeout-minutes: 35
         run: run-tests.bat
 
   # The only required check: green when every job passed or was skipped.
