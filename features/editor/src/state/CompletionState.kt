@@ -34,9 +34,21 @@ class CompletionPopup internal constructor(
     var selected by mutableIntStateOf(0)
         internal set
 
+    // Chosen with the arrows: a newer answer keeps it rather than its best item.
+    internal var chosenByUser = false
+        private set
+
     /** The text between [replaceFrom] and the caret, which the items match. */
     var typed by mutableStateOf("")
         private set
+
+    // The label of the item chosen with the arrows, if any.
+    internal fun chosenLabel(): String? = items.getOrNull(selected)?.label?.takeIf { chosenByUser }
+
+    internal fun choose(index: Int) {
+        selected = index
+        chosenByUser = true
+    }
 
     internal fun refilter() {
         val caret = document.caret
@@ -46,7 +58,8 @@ class CompletionPopup internal constructor(
         val now = current.substring(typedStart, typedEnd)
         val unchanged = now == typed && items.isNotEmpty()
         if (unchanged) return
-        val previous = items.getOrNull(selected)
+        // The item chosen with the arrows stays chosen; otherwise the best match is.
+        val previous = items.getOrNull(selected)?.takeIf { chosenByUser }
         typed = now
         // Best match first; among equal matches, the server's order.
         val matching =
@@ -148,13 +161,14 @@ class CompletionState(
     /** Moves the selection by [delta] rows, wrapping around. */
     fun move(delta: Int) {
         val shown = popup ?: return
-        if (shown.items.isNotEmpty()) shown.selected = (shown.selected + delta).mod(shown.items.size)
+        if (shown.items.isNotEmpty()) shown.choose((shown.selected + delta).mod(shown.items.size))
     }
 
     /** Moves the selection by a page, without wrapping. */
     fun page(direction: Int) {
         val shown = popup ?: return
-        shown.selected = (shown.selected + direction * PAGE_ROWS).coerceIn(0, (shown.items.size - 1).coerceAtLeast(0))
+        val last = (shown.items.size - 1).coerceAtLeast(0)
+        shown.choose((shown.selected + direction * PAGE_ROWS).coerceIn(0, last))
     }
 
     /**
@@ -200,7 +214,12 @@ class CompletionState(
             popup = null
             return
         }
-        popup = CompletionPopup(document, caret.line, result.replaceFrom, result.items).apply { refilter() }
+        val chosen = popup?.takeIf { it.document === document }?.chosenLabel()
+        val next = CompletionPopup(document, caret.line, result.replaceFrom, result.items).apply { refilter() }
+        // A late answer keeps the item chosen with the arrows meanwhile.
+        val kept = next.items.indexOfFirst { it.label == chosen }
+        if (kept >= 0) next.choose(kept)
+        popup = next
     }
 
     private fun isWordChar(c: Char) = c.isLetterOrDigit() || c == '_' || c == '$'

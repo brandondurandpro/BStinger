@@ -8,6 +8,7 @@ import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.LinkedBlockingQueue
 import kotlin.concurrent.thread
 
 private const val BUFFER_SIZE = 16 * 1024
@@ -20,7 +21,8 @@ private const val BUFFER_SIZE = 16 * 1024
  * - [dropFromServer]: requests reach the server but its answers are lost on the way back (follow it with [cutAll]:
  *   on a live TCP connection nothing is lost, an answer is lost because the connection breaks);
  * - [cutOnNextServerData]: the next bytes from the server cut the connection instead of being delivered;
- * - [latencyMs]: every chunk is delayed, like a slow remote link.
+ * - [latencyMs]: every chunk arrives that much later, like a slow remote link (the chunks in flight do not wait for
+ *   each other: latency, not a narrow bandwidth).
  */
 class ChaosProxy(private val targetPort: Int) : Closeable {
     private val server = ServerSocket().apply { bind(InetSocketAddress("127.0.0.1", 0)) }
@@ -74,6 +76,7 @@ class ChaosProxy(private val targetPort: Int) : Closeable {
     }
 
     private fun pump(input: InputStream, output: OutputStream, link: Pair<Socket, Socket>, fromServer: Boolean) {
+        val delayed = DelayedOutput(output) { close(link) }
         thread(isDaemon = true, name = "chaos-pump") {
             val buffer = ByteArray(BUFFER_SIZE)
             try {
@@ -83,15 +86,13 @@ class ChaosProxy(private val targetPort: Int) : Closeable {
                     val cut = fromServer && cutOnNextServerData
                     if (cut) cutOnNextServerData = false
                     open = n >= 0 && !cut
-                    if (open && !blackHole && !(fromServer && dropFromServer)) {
-                        latencyMs.takeIf { it > 0 }?.let(Thread::sleep)
-                        output.write(buffer, 0, n)
-                        output.flush()
-                    }
+                    val swallowed = blackHole || (fromServer && dropFromServer)
+                    if (open && !swallowed) delayed.send(buffer.copyOf(n), latencyMs)
                 }
             } catch (ignored: IOException) {
                 // a socket of the link was closed: the link is over
             } finally {
+                delayed.close()
                 close(link)
             }
         }
@@ -120,5 +121,46 @@ class ChaosProxy(private val targetPort: Int) : Closeable {
     override fun close() {
         server.close()
         cutAll()
+    }
+}
+
+// Writes each chunk once its latency has passed, in the order it was read, while the next chunks are read.
+private class DelayedOutput(private val output: OutputStream, private val onBroken: () -> Unit) {
+    private class Chunk(val bytes: ByteArray, val dueNanos: Long)
+
+    private val queue = LinkedBlockingQueue<Chunk>()
+
+    // An empty chunk ends the writer.
+    private val end = Chunk(ByteArray(0), 0)
+
+    init {
+        thread(isDaemon = true, name = "chaos-delay") { write() }
+    }
+
+    fun send(bytes: ByteArray, latencyMs: Long) {
+        queue.put(Chunk(bytes, System.nanoTime() + latencyMs * NANOS_PER_MILLI))
+    }
+
+    fun close() {
+        queue.put(end)
+    }
+
+    private fun write() {
+        try {
+            var chunk = queue.take()
+            while (chunk !== end) {
+                val waitMs = (chunk.dueNanos - System.nanoTime()) / NANOS_PER_MILLI
+                if (waitMs > 0) Thread.sleep(waitMs)
+                output.write(chunk.bytes)
+                output.flush()
+                chunk = queue.take()
+            }
+        } catch (ignored: IOException) {
+            onBroken()
+        }
+    }
+
+    private companion object {
+        const val NANOS_PER_MILLI = 1_000_000L
     }
 }

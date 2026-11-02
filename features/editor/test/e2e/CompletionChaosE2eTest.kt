@@ -3,6 +3,7 @@ package org.example.kotlineditor.e2e
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.pressKey
@@ -83,6 +84,26 @@ class CompletionChaosE2eTest {
                     .document!!
                     .lines[2],
             )
+        }
+
+    @Test
+    fun `on a slow link a late answer keeps the item chosen with the arrows`() =
+        runComposeUiTest {
+            val app = openPhp()
+            typeCode("str")
+            awaitCompletion("strlen")
+            app.network.latencyMs = 400
+            // Narrowed, then widened again by the popup itself, before the server answers.
+            typeCode("t")
+            awaitCondition { completionLabels() == listOf("strtoupper") }
+            editorKeys { pressKey(Key.Backspace) }
+            awaitCondition { completionLabels().size == 3 }
+            val narrowed = app.project.completion.popup
+            editorKeys { pressKey(Key.DirectionDown) }
+            // The answer for "str" arrives after the arrow was pressed.
+            awaitCondition { app.project.completion.popup !== narrowed }
+            waitForIdle()
+            onNodeWithTag(EditorTags.completionItem("strlen"), useUnmergedTree = true).assertIsSelected()
         }
 
     @Test
