@@ -6,6 +6,7 @@ import org.example.kotlineditor.model.CodeActionsResult
 import org.example.kotlineditor.model.CodeLensesResult
 import org.example.kotlineditor.model.CompletionResult
 import org.example.kotlineditor.model.DiagnosticsSnapshot
+import org.example.kotlineditor.model.DocumentLinksResult
 import org.example.kotlineditor.model.DocumentPosition
 import org.example.kotlineditor.model.EditResult
 import org.example.kotlineditor.model.FoldingRangesResult
@@ -196,6 +197,15 @@ class RemoteLanguageServers(private val client: RpcClient) : LanguageServers {
                 put(VERSION, version)
             }
         return result.semanticTokensResult()
+    }
+
+    override suspend fun documentLinks(path: String, version: Int): DocumentLinksResult {
+        val result =
+            client.call(Method.LspDocumentLinks) {
+                put(PATH, path)
+                put(VERSION, version)
+            }
+        return result.documentLinksResult()
     }
 
     override suspend fun codeLenses(path: String, version: Int): CodeLensesResult {

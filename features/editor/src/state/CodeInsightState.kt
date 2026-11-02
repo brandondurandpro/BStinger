@@ -112,7 +112,7 @@ class CodeInsightState(
 
     /** The word underlined under the mouse while Ctrl is held. */
     var link: LinkTarget? by mutableStateOf(null)
-        private set
+        internal set
 
     /** Whether the mouse is over the documentation popup: it stays while it is. */
     var hoverPopupHovered = false
@@ -186,6 +186,7 @@ class CodeInsightState(
                 if (delayed) delay(USAGES_DELAY_MS)
                 countUsages(insight)
                 codeLensesFromServer(insight)
+                documentLinksFromServer(insight)
                 foldingFromServer(insight)
                 inlayHintsFromServer(insight)
                 semanticTokensFromServer(insight)
@@ -255,7 +256,9 @@ class CodeInsightState(
      */
     fun mouseAt(path: String, document: Document, pos: TextPos?, ctrl: Boolean) {
         val word = pos?.let { wordRange(document, it) }
-        val linked = word?.takeIf { ctrl }
+        // With Ctrl, a link of the server is underlined whole (a path, an address), otherwise the word.
+        val linkRange = pos?.let { linkAt(document, it) }?.range
+        val linked = (linkRange ?: word)?.takeIf { ctrl }
         link = linked?.let { LinkTarget(document, it.startLine, it.startColumn, it.endColumn) }
         val previous = hoverWord
         val sameWord = word != null && previous?.first === document && previous.second == word

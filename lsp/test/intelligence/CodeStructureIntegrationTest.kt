@@ -347,4 +347,34 @@ class CodeStructureIntegrationTest {
         val run = runBlocking { intelligence.runCodeLens(SESSION, "unknown", 0) }
         assertEquals("This lens is no longer available", run.message)
     }
+
+    @Test
+    fun `document links give the required files once resolved, and the web addresses at once`() {
+        val app = project.resolve("app.php").toString()
+        val text =
+            listOf(
+                "<?php",
+                "// https://example.com/docs",
+                "require __DIR__ . '/Greeter.php';",
+                "",
+            ).joinToString("\n")
+        Files.writeString(Paths.get(app), text)
+        openMain()
+        service.openDocument(SESSION, project.toString(), app, 1, text)
+        val links = ready({ it.status }) { intelligence.documentLinks(SESSION, app, 1) }.links
+        assertEquals(listOf(1, 2), links.map { it.range.startLine })
+        assertEquals("https://example.com/docs", links.firstOrNull()?.url)
+        val required = links.getOrNull(1)
+        assertEquals(project.resolve("Greeter.php").toString(), required?.path)
+        assertEquals("Open the required file", required?.tooltip)
+    }
+
+    @Test
+    fun `without document links the server says so`() {
+        options = arrayOf("--without", "documentLink")
+        openMain()
+        ready({ it.status }) { intelligence.outline(SESSION, main, 1) }
+        val result = runBlocking { intelligence.documentLinks(SESSION, main, 1) }
+        assertEquals(FeatureStatus.Unsupported, result.status)
+    }
 }

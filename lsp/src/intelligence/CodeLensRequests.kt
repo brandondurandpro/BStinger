@@ -1,13 +1,8 @@
 package org.example.kotlineditor.lsp.intelligence
 
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
@@ -57,7 +52,14 @@ internal class CodeLensRequests(
             val params = buildJsonObject { putJsonObject("textDocument") { put("uri", document.uri) } }
             val answer = request("textDocument/codeLens", params) as? JsonArray
             val raw = answer.orEmpty().mapNotNull { it as? JsonObject }
-            val shown = resolved(server, raw, request).mapNotNull { lens -> lensOf(server, lens) }
+            val resolution = Resolution(server, CODE_LENS_PROVIDER, "codeLens/resolve", maxResolved)
+            val shown =
+                resolution
+                    .resolved(
+                        raw,
+                        request,
+                    ) { it[COMMAND] == null }
+                    .mapNotNull { lens -> lensOf(server, lens) }
             val sorted = shown.sortedWith(compareBy({ it.first.range.startLine }, { it.first.range.startColumn }))
             val token = offer(session, path, server, sorted.map { it.second })
             CodeLensesResult(FeatureStatus.Ready, token, sorted.map { it.first })
@@ -86,26 +88,6 @@ internal class CodeLensRequests(
         offered[token] = OfferedLenses(session, server, commands)
         latest.put("$session $path", token)?.let { offered.remove(it) }
         return token
-    }
-
-    // The lenses without a command are resolved, at once, when the server can; the first [maxResolved] only.
-    private suspend fun resolved(
-        server: ManagedServer,
-        lenses: List<JsonObject>,
-        request: suspend (String, JsonObject) -> JsonElement?,
-    ): List<JsonObject> {
-        val provider = server.capability(CODE_LENS_PROVIDER) as? JsonObject
-        val resolves = (provider?.get("resolveProvider") as? JsonPrimitive)?.booleanOrNull == true
-        if (!resolves) return lenses
-        var left = maxResolved
-        return coroutineScope {
-            val answers =
-                lenses.map { lens ->
-                    val resolve = lens[COMMAND] == null && left-- > 0
-                    async { if (resolve) request("codeLens/resolve", lens) as? JsonObject else null }
-                }
-            answers.awaitAll().zip(lenses) { answer, lens -> answer ?: lens }
-        }
     }
 
     // A lens with a title, and the command a click runs; null when it has no command yet.

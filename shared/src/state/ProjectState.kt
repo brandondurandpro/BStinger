@@ -71,6 +71,9 @@ class ProjectState(
             resolve = { token, index -> languageServers?.resolveCompletion(token, index) },
         ) { path, document -> languageServers?.complete(path, document) ?: CompletionResult.NotReady }
 
+    /** Opens a web address in the browser of the machine of the IDE; tests replace it. */
+    var openUrl: (String) -> Unit = ::openInBrowser
+
     /** Hover, navigation, usages, problems, rename, reformat and quick fixes, from the language servers. */
     val insight = CodeInsightState(scope, { insightBackend() }, ProjectInsightHost { this })
     val terminal = TerminalState(root.path, services.terminal, scope)

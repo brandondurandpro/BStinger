@@ -29,6 +29,7 @@ import org.example.kotlineditor.model.CodeActionsResult
 import org.example.kotlineditor.model.CodeLensesResult
 import org.example.kotlineditor.model.Diagnostic
 import org.example.kotlineditor.model.DiagnosticsSnapshot
+import org.example.kotlineditor.model.DocumentLinksResult
 import org.example.kotlineditor.model.DocumentPosition
 import org.example.kotlineditor.model.EditResult
 import org.example.kotlineditor.model.FeatureStatus
@@ -109,6 +110,7 @@ class CodeIntelligenceService internal constructor(
     private val requests = ServerRequests(documents, serversOf, settings)
     private val structure = DocumentStructureRequests(documents, requests)
     private val hierarchy = HierarchyRequests(requests) { withPreviews(it) }
+    private val links = DocumentLinkRequests(requests)
     private val lenses =
         CodeLensRequests(
             requests,
@@ -546,6 +548,10 @@ class CodeIntelligenceService internal constructor(
             ) ?: return EditResult(FeatureStatus.Ready, emptyList(), "This action is no longer available")
         return runSafely { run(list.server, resolved(list.server, action)) }
     }
+
+    /** The links of version [version] of [path]. */
+    suspend fun documentLinks(session: String, path: String, version: Int): DocumentLinksResult =
+        links.documentLinks(session, path, version)
 
     /** The code lenses of version [version] of [path]. */
     suspend fun codeLenses(session: String, path: String, version: Int): CodeLensesResult =

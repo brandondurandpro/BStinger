@@ -3,6 +3,8 @@ package org.example.kotlineditor.rpc
 import org.example.kotlineditor.model.CodeLensAction
 import org.example.kotlineditor.model.CodeLensInfo
 import org.example.kotlineditor.model.CodeLensesResult
+import org.example.kotlineditor.model.DocumentLinkInfo
+import org.example.kotlineditor.model.DocumentLinksResult
 import org.example.kotlineditor.model.FeatureStatus
 import org.example.kotlineditor.model.HierarchyItem
 import org.example.kotlineditor.model.HierarchyResult
@@ -59,5 +61,17 @@ class StructureCodecsTest {
         val result = CodeLensesResult(FeatureStatus.Ready, "t-1", lenses)
         assertEquals(result, result.toJson().codeLensesResult())
         assertEquals(CodeLensesResult.NotReady, CodeLensesResult.NotReady.toJson().codeLensesResult())
+    }
+
+    @Test
+    fun `document links travel with their file, line or address`() {
+        val links =
+            listOf(
+                DocumentLinkInfo(TextRange(1, 3, 1, 27), url = "https://example.com", tooltip = "Docs"),
+                DocumentLinkInfo(TextRange(2, 19, 2, 31), path = "/p/Greeter.php", line = 4),
+            )
+        val result = DocumentLinksResult(FeatureStatus.Ready, links)
+        assertEquals(result, result.toJson().documentLinksResult())
+        assertEquals(DocumentLinksResult.NotReady, DocumentLinksResult.NotReady.toJson().documentLinksResult())
     }
 }

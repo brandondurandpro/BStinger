@@ -425,6 +425,9 @@ enum class Method(
     /** Semantic tokens of a document. */
     LspSemanticTokens("lsp/semanticTokens"),
 
+    /** Links of a document. */
+    LspDocumentLinks("lsp/documentLinks"),
+
     /** Code lenses of a document. */
     LspCodeLenses("lsp/codeLenses"),
 

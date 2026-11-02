@@ -352,6 +352,9 @@ interface CodeIntelligence {
     /** The edits of action [index] of the list [token] (running its command on the server when it has one). */
     suspend fun applyCodeAction(token: String, index: Int): EditResult = EditResult.NotReady
 
+    /** The links of [path] at [version] (a required file, a web address), which Ctrl+click follows. */
+    suspend fun documentLinks(path: String, version: Int): DocumentLinksResult = DocumentLinksResult.NotReady
+
     /** The code lenses of [path] at [version] (`2 implementations`, `Run test`). */
     suspend fun codeLenses(path: String, version: Int): CodeLensesResult = CodeLensesResult.NotReady
 

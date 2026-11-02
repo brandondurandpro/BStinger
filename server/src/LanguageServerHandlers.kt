@@ -131,6 +131,9 @@ private fun codeIntelligenceHandlers(services: LocalServices): Map<Method, Handl
         Method.LspApplyCodeAction to {
             intelligence().applyCodeAction(session, params.string(TOKEN), params.int(INDEX)).toJson()
         },
+        Method.LspDocumentLinks to {
+            intelligence().documentLinks(session, params.string(PATH), params.int(VERSION)).toJson()
+        },
         Method.LspCodeLenses to {
             intelligence().codeLenses(session, params.string(PATH), params.int(VERSION)).toJson()
         },

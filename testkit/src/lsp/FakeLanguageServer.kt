@@ -294,6 +294,8 @@ object FakeLanguageServer {
                 "textDocument/inlayHint" -> reply(id, intelligence().inlayHints(message["params"]))
                 "textDocument/codeLens" -> reply(id, FakeCodeLens(phpCode()).lenses(message["params"]))
                 "codeLens/resolve" -> reply(id, FakeCodeLens(phpCode()).resolve(message["params"]))
+                "textDocument/documentLink" -> reply(id, FakeDocumentLinks(phpCode()).links(message["params"]))
+                "documentLink/resolve" -> reply(id, FakeDocumentLinks(phpCode()).resolve(message["params"]))
                 "textDocument/semanticTokens/full" -> reply(id, FakeSemanticTokens(phpCode()).tokens(message["params"]))
                 "textDocument/semanticTokens/range" -> reply(id, FakeSemanticTokens(phpCode()).tokens(message["params"]))
                 "textDocument/prepareCallHierarchy" -> reply(id, hierarchy().prepareCalls(message["params"]))
@@ -392,6 +394,7 @@ object FakeLanguageServer {
                     }
                     if (provided("codeAction")) putJsonObject("codeActionProvider") { put("resolveProvider", false) }
                     if (provided("codeLens")) putJsonObject("codeLensProvider") { put("resolveProvider", true) }
+                    if (provided("documentLink")) putJsonObject("documentLinkProvider") { put("resolveProvider", true) }
                     putJsonObject("executeCommandProvider") {
                         put("commands", buildJsonArray { add(JsonPrimitive("add_docblock")) })
                     }

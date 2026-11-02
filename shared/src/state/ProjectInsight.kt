@@ -34,6 +34,8 @@ internal class ProjectInsightHost(private val project: () -> ProjectState) : Ins
 
     override suspend fun declarationByName(at: TextPos) = project().goToDeclarationByName(at)
 
+    override fun openUrl(url: String) = project().openUrl(url)
+
     override fun relativePath(path: String): String {
         val root = normalized(project().root.path)
         val file = normalized(path)

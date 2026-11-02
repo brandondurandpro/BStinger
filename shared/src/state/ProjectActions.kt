@@ -57,10 +57,17 @@ fun ProjectState.navigateBack() {
  * server of the file finds it when there is one (its usages when already on it); otherwise it is searched by name.
  */
 fun ProjectState.gotoDeclaration(at: TextPos? = null) {
-    val tab = editor.activeTab ?: return
-    val document = tab.document ?: return
+    val tab = editor.activeTab
+    val document = tab?.document ?: return
     val pos = at ?: document.caret
-    if (hasInsight(tab)) insight.gotoDeclaration(tab.entry.path, document, pos) else declarationByName(pos)
+    val insightful = hasInsight(tab)
+    // A link of the language server (a required file, an address) is followed rather than the word in it.
+    val followed = insightful && insight.followLink(document, pos)
+    when {
+        followed -> Unit
+        insightful -> insight.gotoDeclaration(tab.entry.path, document, pos)
+        else -> declarationByName(pos)
+    }
 }
 
 /**

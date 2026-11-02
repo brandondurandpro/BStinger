@@ -12,6 +12,7 @@ import org.example.kotlineditor.model.CodeIntelligence
 import org.example.kotlineditor.model.CodeLensInfo
 import org.example.kotlineditor.model.Diagnostic
 import org.example.kotlineditor.model.DiagnosticSeverity
+import org.example.kotlineditor.model.DocumentLinkInfo
 import org.example.kotlineditor.model.EditResult
 import org.example.kotlineditor.model.InlayHint
 import org.example.kotlineditor.model.SemanticToken
@@ -42,6 +43,9 @@ interface InsightHost {
     /** Ctrl+B without a ready language server: goes to the declaration found by name in the project; false if none. */
     suspend fun declarationByName(at: TextPos): Boolean
 
+    /** Opens a web address in the browser. */
+    fun openUrl(url: String)
+
     /** Path of [path] relative to the project, for the lists of places. */
     fun relativePath(path: String): String
 }
@@ -55,6 +59,10 @@ class DocumentInsight internal constructor(val document: Document) {
 
     /** The usage count of each declaration. */
     var usageCounts: List<UsageCount> by mutableStateOf(emptyList())
+        internal set
+
+    /** The links (a required file, a web address) Ctrl+click follows, in document order. */
+    var links: List<DocumentLinkInfo> by mutableStateOf(emptyList())
         internal set
 
     /** The code lenses (`2 implementations`, `Run test`), in document order. */
@@ -95,6 +103,7 @@ class DocumentInsight internal constructor(val document: Document) {
                 )?.let { diagnostic.copy(range = it) }
             }
         usageCounts = usageCounts.mapNotNull { count -> shifted(count.range, change)?.let { count.copy(range = it) } }
+        links = links.mapNotNull { link -> shifted(link.range, change)?.let { link.copy(range = it) } }
         codeLenses = codeLenses.mapNotNull { lens -> shifted(lens.range, change)?.let { lens.copy(range = it) } }
         inlayHints = inlayHints.mapNotNull { shiftedHint(it, change) }
         semanticTokens = semanticTokens.mapNotNull { shiftedToken(it, change) }
