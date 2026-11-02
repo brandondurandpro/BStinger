@@ -1,6 +1,7 @@
 package org.example.kotlineditor.testkit.lsp
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -101,6 +102,8 @@ object FakeLanguageServer {
         val completionItems: Int = 0,
         val fullSync: Boolean = false,
         val noCompletion: Boolean = false,
+        val without: Set<String> = emptySet(),
+        val noDiagnostics: Boolean = false,
     ) {
         val allocates get() = leakMbPerSecond > 0 || sawtooth != null || spikeThenPlateau != null
 
@@ -135,6 +138,8 @@ object FakeLanguageServer {
                     completionItems = int("completion-items") ?: 0,
                     fullSync = "full-sync" in values,
                     noCompletion = "no-completion" in values,
+                    without = values["without"]?.split(',')?.toSet().orEmpty(),
+                    noDiagnostics = "no-diagnostics" in values,
                 )
             }
 
@@ -150,6 +155,7 @@ object FakeLanguageServer {
                     "latency-ms",
                     "progress",
                     "completion-items",
+                    "without",
                 )
         }
     }
@@ -185,6 +191,13 @@ object FakeLanguageServer {
         private var shutdown = false
         private var child: Process? = null
         private val documents = HashMap<String, MutableList<String>>()
+        private var rootUri: String? = null
+
+        // executeCommand requests waiting for the answer to the applyEdit they sent, by the applyEdit's id.
+        private val pendingCommands = HashMap<String, JsonElement>()
+        private var nextEditId = 0
+
+        private fun intelligence() = FakeIntelligence(FakePhpCode(documents.mapValues { it.value.toList() }, rootUri))
 
         fun run() {
             if (options.stderrFlood) thread(isDaemon = true, name = "stderr-flood") { flood() }
@@ -206,6 +219,8 @@ object FakeLanguageServer {
             if (method == null) {
                 log.println("response ${message["id"]}: ${message["result"] ?: message["error"]}")
                 log.flush()
+                val answered = (message["id"] as? JsonPrimitive)?.contentOrNull
+                pendingCommands.remove(answered)?.let { command -> reply(command, JsonNull) }
                 return
             }
             if (id != null) {
@@ -214,7 +229,10 @@ object FakeLanguageServer {
             }
             if (options.latencyMs > 0) Thread.sleep(options.latencyMs)
             when (method) {
-                "initialize" -> if (!options.hangOnInitialize) reply(id, capabilities())
+                "initialize" -> {
+                    rootUri = (message["params"] as? JsonObject)?.get("rootUri")?.let { (it as? JsonPrimitive)?.contentOrNull }
+                    if (!options.hangOnInitialize) reply(id, capabilities())
+                }
                 "initialized" -> {
                     if (options.askConfiguration) askConfiguration()
                     options.progressSeconds?.let { seconds -> thread(isDaemon = true) { reportProgress(seconds) } }
@@ -224,10 +242,26 @@ object FakeLanguageServer {
                 "textDocument/hover" -> reply(id, hover(message["params"]))
                 "textDocument/didOpen" -> {
                     opened(message["params"])
-                    if (options.diagnostics) publishDiagnostics(message["params"])
+                    if (options.diagnostics) publishDiagnostics(message["params"]) else publishProblems()
                 }
-                "textDocument/didChange" -> changed(message["params"])
+                "textDocument/didChange" -> {
+                    changed(message["params"])
+                    if (!options.diagnostics) publishProblems()
+                }
                 "textDocument/didClose" -> documents.remove(uriOf(message["params"]))
+                "textDocument/definition" -> reply(id, intelligence().definition(message["params"]))
+                "textDocument/typeDefinition" -> reply(id, intelligence().typeDefinition(message["params"]))
+                "textDocument/implementation" -> reply(id, intelligence().implementation(message["params"]))
+                "textDocument/references" -> reply(id, intelligence().references(message["params"]))
+                "textDocument/documentHighlight" -> reply(id, intelligence().highlights(message["params"]))
+                "textDocument/documentSymbol" -> reply(id, intelligence().documentSymbols(message["params"]))
+                "textDocument/signatureHelp" -> reply(id, intelligence().signatureHelp(message["params"]))
+                "textDocument/prepareRename" -> reply(id, intelligence().prepareRename(message["params"]))
+                "textDocument/rename" -> reply(id, intelligence().rename(message["params"]))
+                "textDocument/formatting" -> reply(id, intelligence().format(message["params"], range = false))
+                "textDocument/rangeFormatting" -> reply(id, intelligence().format(message["params"], range = true))
+                "textDocument/codeAction" -> reply(id, intelligence().codeActions(message["params"]))
+                "workspace/executeCommand" -> executeCommand(id!!, message["params"])
                 "textDocument/completion" ->
                     if (options.noCompletion) {
                         error(id!!, CONTENT_MODIFIED, "Content modified")
@@ -247,11 +281,59 @@ object FakeLanguageServer {
             exitProcess(code)
         }
 
+        // `add_docblock` asks the client to apply its edit, and answers once the client did.
+        private fun executeCommand(id: JsonElement, params: JsonElement?) {
+            val fields = params as? JsonObject
+            val name = (fields?.get("command") as? JsonPrimitive)?.contentOrNull
+            val edit = if (name == "add_docblock") intelligence().docblockEdit(fields["arguments"] as? JsonArray) else null
+            if (edit == null) {
+                reply(id, JsonNull)
+                return
+            }
+            val editId = "apply-${++nextEditId}"
+            pendingCommands[editId] = id
+            send(request(editId, "workspace/applyEdit", edit))
+        }
+
+        private fun publishProblems() {
+            if (options.noDiagnostics) return
+            val intelligence = intelligence()
+            for (uri in documents.keys) {
+                notify(
+                    "textDocument/publishDiagnostics",
+                    buildJsonObject {
+                        put("uri", uri)
+                        put("diagnostics", intelligence.diagnostics(uri))
+                    },
+                )
+            }
+        }
+
+        private fun provided(name: String) = name !in options.without
+
         private fun capabilities() =
             buildJsonObject {
                 putJsonObject("capabilities") {
                     put("textDocumentSync", if (options.fullSync) 1 else 2)
-                    put("hoverProvider", true)
+                    put("hoverProvider", provided("hover"))
+                    put("definitionProvider", provided("definition"))
+                    put("typeDefinitionProvider", provided("typeDefinition"))
+                    put("implementationProvider", provided("implementation"))
+                    put("referencesProvider", provided("references"))
+                    put("documentHighlightProvider", provided("documentHighlight"))
+                    put("documentSymbolProvider", provided("documentSymbol"))
+                    put("documentFormattingProvider", provided("formatting"))
+                    put("documentRangeFormattingProvider", provided("rangeFormatting"))
+                    if (provided("rename")) putJsonObject("renameProvider") { put("prepareProvider", true) }
+                    if (provided("signatureHelp")) {
+                        putJsonObject("signatureHelpProvider") {
+                            put("triggerCharacters", buildJsonArray { add(JsonPrimitive("(")); add(JsonPrimitive(",")) })
+                        }
+                    }
+                    if (provided("codeAction")) putJsonObject("codeActionProvider") { put("resolveProvider", false) }
+                    putJsonObject("executeCommandProvider") {
+                        put("commands", buildJsonArray { add(JsonPrimitive("add_docblock")) })
+                    }
                     putJsonObject("completionProvider") {
                         put("triggerCharacters", buildJsonArray { add(JsonPrimitive("$")) })
                     }
@@ -263,6 +345,7 @@ object FakeLanguageServer {
             }
 
         private fun hover(params: JsonElement?): JsonElement {
+            if (options.hugeMessageMb == null && uriOf(params) in documents) return intelligence().hover(params)
             val huge = options.hugeMessageMb
             val text =
                 if (huge != null) {
