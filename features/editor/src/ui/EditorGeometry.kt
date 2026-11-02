@@ -39,6 +39,9 @@ private const val MEASURED_CHARS = 100
 private const val MIN_LINE_NUMBER_DIGITS = 3
 private const val SLACK_COLUMNS = 8
 private const val MULTI_CLICK_MILLIS = 400L
+
+// How far the mouse may move between the clicks of a double click, like the systems' own tolerance.
+private const val MULTI_CLICK_SLOP_PX = 6f
 private val GUTTER_PADDING = 28.dp
 private val BLAME_WIDTH = 170.dp
 private val BLAME_FONT_SIZE = 10.sp
@@ -130,13 +133,16 @@ internal fun rememberEditorMetrics(lineCount: Int, fontSize: Float, blameVisible
 /** Counts successive clicks on the same line: 1 places the caret, 2 selects a word, 3 the line. */
 internal class ClickCounter {
     private var lastTime = 0L
-    private var lastLine = -1
+    private var lastPosition: Offset? = null
     private var count = 0
 
-    fun register(time: Long, line: Int): Int {
-        count = if (time - lastTime < MULTI_CLICK_MILLIS && line == lastLine) count + 1 else 1
+    /** A press at [position]: 2 for a double click, 3 for a triple one, when quick and at the same place. */
+    fun register(time: Long, position: Offset): Int {
+        val quick = time - lastTime < MULTI_CLICK_MILLIS
+        val samePlace = lastPosition?.let { (it - position).getDistance() <= MULTI_CLICK_SLOP_PX } == true
+        count = if (quick && samePlace) count + 1 else 1
         lastTime = time
-        lastLine = line
+        lastPosition = position
         return count
     }
 }
@@ -193,7 +199,7 @@ private suspend fun AwaitPointerEventScope.click(
     shift: Boolean,
 ) {
     val document = target.document
-    when (target.clicks.register(down.uptimeMillis, pos.line)) {
+    when (target.clicks.register(down.uptimeMillis, down.position)) {
         1 -> {
             document.moveTo(pos, extendSelection = shift)
             drag(target)

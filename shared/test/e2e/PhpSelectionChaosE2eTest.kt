@@ -9,9 +9,13 @@ import androidx.compose.ui.test.withKeyDown
 import org.example.kotlineditor.ui.EditorTags
 import kotlin.test.AfterTest
 import kotlin.test.Test
+import kotlin.test.assertTrue
 
 private const val RETURN_LINE = 15
 private const val NAME_COLUMN = 38
+
+private const val RESTART_ATTEMPTS = 12
+private const val ATTEMPT_MS = 2_000L
 
 // The editor's own first step on `$name`: the word, without its dollar.
 private val WORD_WITHOUT_DOLLAR = span(RETURN_LINE, 38, RETURN_LINE, 42)
@@ -41,6 +45,20 @@ class PhpSelectionChaosE2eTest {
         clickAt(RETURN_LINE, NAME_COLUMN)
         extendSelection()
         awaitCondition(SERVER_START_MS) { app.selection() == NAME_STEPS.first() }
+    }
+
+    // A restarted server has the documents again only after a while: until then Ctrl+W uses the editor's own steps,
+    // and the `$` of `$name` says the server answered.
+    private fun ComposeUiTest.awaitServerSelection(app: E2eApp) {
+        var served = false
+        var attempts = 0
+        while (!served && attempts < RESTART_ATTEMPTS) {
+            attempts++
+            clickAt(RETURN_LINE, NAME_COLUMN)
+            extendSelection()
+            served = runCatching { awaitCondition(ATTEMPT_MS) { app.selection() == NAME_STEPS.first() } }.isSuccess
+        }
+        assertTrue(served, "Ctrl+W never used the restarted server's ranges")
     }
 
     @Test
@@ -101,6 +119,7 @@ class PhpSelectionChaosE2eTest {
             app.process.restart()
             awaitReconnected()
             awaitServer(app) { it.isRunning() }
+            awaitServerSelection(app)
             // Elsewhere, so that the server is asked again: `greet`, its line, then the method from its modifiers.
             clickAt(13, 22)
             listOf(span(13, 20, 13, 25), span(13, 4, 13, 59), NAME_STEPS[2]).forEach { step ->

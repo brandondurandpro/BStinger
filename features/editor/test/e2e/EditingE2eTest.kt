@@ -176,6 +176,26 @@ class EditingE2eTest {
         }
 
     @Test
+    fun `two quick clicks at different places of a line move the caret twice, without selecting a word`() =
+        runComposeUiTest {
+            val app = launchWithProject(project)
+            openFromTree("docs/guide.md")
+            val doc = app.document()
+            val line = onNodeWithTag(EditorTags.line(1))
+            line.performMouseInput { click(Offset(centerX / 4, centerY)) }
+            val first = doc.caret
+            line.performMouseInput { click(Offset(centerX / 2, centerY)) }
+            waitForIdle()
+            assertTrue(doc.caret.column > first.column, "${doc.caret} after $first")
+            assertEquals("", doc.selectedText())
+            // At the same place, the same two clicks are a double click.
+            mainClock.advanceTimeBy(1_000)
+            line.performMouseInput { doubleClick(Offset(centerX / 2, centerY)) }
+            waitForIdle()
+            assertTrue(doc.selectedText().isNotEmpty(), doc.selectedText())
+        }
+
+    @Test
     fun `typing at the end of a long file keeps the caret visible`() =
         runComposeUiTest {
             project.file("Long.kt", (1..3000).joinToString("\n") { "val v$it = $it" })

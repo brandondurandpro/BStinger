@@ -29,6 +29,7 @@ import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.drop
+import org.example.kotlineditor.model.UsageCount
 import org.example.kotlineditor.state.CodeInsightState
 import org.example.kotlineditor.state.Document
 import org.example.kotlineditor.state.EditorTab
@@ -116,6 +117,25 @@ internal class HintTarget(
     val marks: InsightMarks,
 )
 
+/** The declaration whose "3 usages" hint is at [offset] (on the row of [pos]), null when the mouse is not on one. */
+internal fun hintAt(
+    target: HintTarget,
+    metrics: EditorMetrics,
+    tab: EditorTab,
+    pos: TextPos,
+    offset: Offset,
+): UsageCount? {
+    val insight = target.insight ?: return null
+    val hint = target.marks.hints[pos.line]
+    val document = target.document
+    val declaration = insight.insightOf(document)?.usageCounts?.firstOrNull { it.range.startLine == pos.line }
+    val line = document.lines[pos.line]
+    val left = metrics.gutterPx + metrics.paddingPx - tab.horizontalScroll.offset + hintColumn(line) * metrics.charWidth
+    val right = left + (hint?.length ?: 0) * metrics.charWidth
+    val onHint = hint != null && target.path != null && offset.x in left..right
+    return declaration?.takeIf { onHint }
+}
+
 /** A click on the "3 usages" hint of a line shows the usages of its declaration; true when it was on one. */
 internal fun hintClicked(
     target: HintTarget,
@@ -124,21 +144,11 @@ internal fun hintClicked(
     pos: TextPos,
     offset: Offset,
 ): Boolean {
-    val insight = target.insight
+    val declaration = hintAt(target, metrics, tab, pos, offset)
+    val start = declaration?.let { TextPos(it.range.startLine, it.range.startColumn) }
     val path = target.path
-    val hint = target.marks.hints[pos.line]
-    val document = target.document
-    val counts = insight?.insightOf(document)?.usageCounts.orEmpty()
-    val declaration = counts.firstOrNull { it.range.startLine == pos.line }
-    val line = document.lines[pos.line]
-    val left = metrics.gutterPx + metrics.paddingPx - tab.horizontalScroll.offset + hintColumn(line) * metrics.charWidth
-    val right = left + (hint?.length ?: 0) * metrics.charWidth
-    val onHint = hint != null && offset.x in left..right
-    val usable = onHint && insight != null && path != null
-    if (usable && declaration != null) {
-        insight.showUsages(path, document, TextPos(declaration.range.startLine, declaration.range.startColumn))
-    }
-    return usable && declaration != null
+    if (start != null && path != null) target.insight?.showUsages(path, target.document, start)
+    return start != null
 }
 
 /** Releasing Ctrl ends the link under the mouse. */

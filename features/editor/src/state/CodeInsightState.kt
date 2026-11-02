@@ -79,6 +79,9 @@ class CodeInsightState(
     var codeActions: CodeActionsPopup? by mutableStateOf(null)
         internal set
 
+    /** The document whose "3 usages" hint is under the mouse (the pointer is a hand over it), null when none. */
+    var hintUnderMouse: Document? by mutableStateOf(null)
+
     /** The ranges Ctrl+W walks through, from the last answer of the server (see `SmartSelection.kt`). */
     internal var selectionSteps: SelectionSteps? = null
 

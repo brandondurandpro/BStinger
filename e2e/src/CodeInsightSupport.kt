@@ -91,6 +91,20 @@ fun ComposeUiTest.ctrlClickAt(line: Int, column: Int) {
     waitForIdle()
 }
 
+/**
+ * A click just right of the boundary before [column] of [line]: the caret goes there whatever the zoom (a click in
+ * the middle of a character is as close to both of its boundaries).
+ */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.clickBefore(line: Int, column: Int) {
+    val middle = cellOffset(line, column)
+    val node = onNodeWithTag(EditorTags.lineText(line), useUnmergedTree = true)
+    val charWidth = middle.x / (column + 0.5f)
+    val offset = Offset((column + 0.2f) * charWidth, middle.y)
+    node.performMouseInput { click(offset) }
+    waitForIdle()
+}
+
 /** Puts the caret on the character at [column] of [line] with a click. */
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.clickAt(line: Int, column: Int) {

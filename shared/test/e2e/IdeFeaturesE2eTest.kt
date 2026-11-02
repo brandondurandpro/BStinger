@@ -16,6 +16,7 @@ import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.test.withKeyDown
 import org.example.kotlineditor.state.Screen
+import org.example.kotlineditor.state.TextPos
 import org.example.kotlineditor.state.delete
 import org.example.kotlineditor.state.synchronize
 import org.example.kotlineditor.ui.AppTags
@@ -270,6 +271,40 @@ class IdeFeaturesE2eTest {
             awaitCondition { app.state.editorFontSize == 13f }
             waitForIdle()
             assertEquals(before, onNodeWithTag(EditorTags.line(0)).fetchSemanticsNode().size.height)
+        }
+
+    @Test
+    fun `after zooming in or out a click puts the caret on the character under the mouse`() =
+        runComposeUiTest {
+            val app = launchWithProject(project)
+            openFromTree("README.md")
+            val document = {
+                app.project.editor.activeTab
+                    ?.document
+            }
+            // "A sample project.": the `p` of `project`, then the `s` of `sample`.
+            clickBefore(2, 9)
+            awaitCondition { document()?.caret == TextPos(2, 9) }
+            repeat(4) {
+                onNodeWithTag(EditorTags.EDITOR).performKeyInput {
+                    withKeyDown(Key.AltLeft) { withKeyDown(Key.ShiftLeft) { pressKey(Key.Period) } }
+                }
+            }
+            awaitCondition { app.state.editorFontSize == 17f }
+            waitForIdle()
+            clickBefore(2, 2)
+            awaitCondition { document()?.caret == TextPos(2, 2) }
+            clickBefore(2, 12)
+            awaitCondition { document()?.caret == TextPos(2, 12) }
+            repeat(7) {
+                onNodeWithTag(EditorTags.EDITOR).performKeyInput {
+                    withKeyDown(Key.AltLeft) { withKeyDown(Key.ShiftLeft) { pressKey(Key.Comma) } }
+                }
+            }
+            awaitCondition { app.state.editorFontSize == 10f }
+            waitForIdle()
+            clickBefore(2, 14)
+            awaitCondition { document()?.caret == TextPos(2, 14) }
         }
 
     @Test

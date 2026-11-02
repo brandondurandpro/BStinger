@@ -7,6 +7,7 @@ import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.test.withKeyDown
@@ -157,6 +158,23 @@ class CodeInsightE2eTest {
             onNodeWithTag(EditorTags.location(0)).performClick()
             awaitCondition { app.activePath() == "src/index.php" }
             awaitCondition { app.caret() == TextPos(2, 15) }
+        }
+
+    @Test
+    fun `the pointer is a hand over a usage hint, and the text cursor elsewhere`() =
+        runComposeUiTest {
+            val app = open("src/Greeter.php")
+            awaitTag(EditorTags.usageHint(13), timeout = SERVER_START_MS, unmerged = true)
+            val hint = onNodeWithTag(EditorTags.usageHint(13), useUnmergedTree = true)
+            hint.performMouseInput { moveTo(center) }
+            awaitCondition { app.project.insight.hintUnderMouse === app.document() }
+            // On the code of the same line: not a link.
+            hoverAt(13, 10)
+            awaitCondition { app.project.insight.hintUnderMouse == null }
+            hint.performMouseInput { moveTo(center) }
+            awaitCondition { app.project.insight.hintUnderMouse === app.document() }
+            mouseOutOfEditor()
+            awaitCondition { app.project.insight.hintUnderMouse == null }
         }
 
     @Test
