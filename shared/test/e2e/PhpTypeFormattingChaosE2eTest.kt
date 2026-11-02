@@ -47,10 +47,10 @@ class PhpTypeFormattingChaosE2eTest {
     fun `on a slow link, an answer arriving after more typing is dropped`() =
         runComposeUiTest {
             val app = open()
-            app.network.latencyMs = 800
+            app.network.latencyMs = 400
             typeCode(" ;")
             typeCode(" x")
-            mainClock.advanceTimeBy(2_500)
+            mainClock.advanceTimeBy(1_500)
             waitForIdle()
             app.network.latencyMs = 0
             awaitCondition { app.lines().getOrNull(STATEMENT_LINE) == "    \$a = 1 ; x" }

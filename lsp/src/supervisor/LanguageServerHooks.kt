@@ -8,6 +8,8 @@ class LanguageServerHooks(
     val onDiagnostics: (server: String, params: JsonObject) -> Unit = { _, _ -> },
     /** A `workspace/applyEdit` request: true when the edit is taken (it reaches the client that asked for it). */
     val onApplyEdit: (server: String, params: JsonObject) -> Boolean = { _, _ -> false },
+    /** A `workspace/diagnostic/refresh` request: the diagnostics the server gives when asked are asked again. */
+    val onDiagnosticsRefresh: (server: String) -> Unit = {},
     /** A new process of the server is ready: what the previous one published is obsolete. */
     val onRestarted: (server: String) -> Unit = {},
 )

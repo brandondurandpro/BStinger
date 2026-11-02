@@ -3,6 +3,7 @@ package org.example.kotlineditor.lsp.intelligence
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import org.example.kotlineditor.lsp.DiskChange
 import org.example.kotlineditor.lsp.LanguageServerService
 import org.example.kotlineditor.lsp.LanguageServerSettings
 import org.example.kotlineditor.lsp.provision.CandidateRegistry
@@ -10,6 +11,7 @@ import org.example.kotlineditor.lsp.provision.LanguageServerCandidate
 import org.example.kotlineditor.lsp.provision.RuntimeDetector
 import org.example.kotlineditor.lsp.supervisor.SupervisorTimings
 import org.example.kotlineditor.model.DiagnosticSeverity
+import org.example.kotlineditor.model.DiagnosticsSnapshot
 import org.example.kotlineditor.model.DocumentPosition
 import org.example.kotlineditor.model.FeatureStatus
 import org.example.kotlineditor.model.FormatOptions
@@ -366,6 +368,37 @@ class CodeIntelligenceTest {
                 intelligence.references(SESSION, position(0, 0, version = 2), true).status,
             )
         }
+    }
+
+    // The diagnostics of the session until [done] holds.
+    private fun diagnosticsUntil(since: Long, done: (DiagnosticsSnapshot) -> Boolean): DiagnosticsSnapshot =
+        runBlocking {
+            withTimeout(WAIT_MS) {
+                var snapshot = intelligence.diagnostics(SESSION, since)
+                while (!done(snapshot)) snapshot = intelligence.diagnostics(SESSION, snapshot.version)
+                snapshot
+            }
+        }
+
+    @Test
+    fun `diagnostics a server gives when asked are pulled after each edit, and again when it asks`() {
+        options = arrayOf("--pull-diagnostics")
+        openMain()
+        val first = diagnosticsUntil(0) { snapshot -> snapshot.files.any { it.diagnostics.isNotEmpty() } }
+        val problem =
+            first.files
+                .firstOrNull { it.path == main }
+                ?.diagnostics
+                ?.singleOrNull()
+        assertEquals("Function \"missing_function\" not found", problem?.message)
+        // Another call of the unknown function, typed: pulled again.
+        service.changeDocument(SESSION, main, 2, listOf(TextChange(4, 0, 4, 0, "missing_function();\n")))
+        val twice = diagnosticsUntil(first.version) { snapshot -> snapshot.files.sumOf { it.diagnostics.size } == 2 }
+        // The function is declared in a new file: the server asks for its diagnostics to be pulled again.
+        val declared = project.resolve("missing.php")
+        Files.writeString(declared, php("function missing_function()", "{", "}"))
+        service.diskChanged(listOf(declared.toString() to DiskChange.Created))
+        diagnosticsUntil(twice.version) { snapshot -> snapshot.files.all { it.diagnostics.isEmpty() } }
     }
 }
 

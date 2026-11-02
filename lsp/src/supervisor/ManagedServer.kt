@@ -545,6 +545,11 @@ internal class ManagedServer(
                 buildJsonArray { add(folder()) }
             }
 
+            "workspace/diagnostic/refresh" -> {
+                hooks.onDiagnosticsRefresh(id)
+                JsonNull
+            }
+
             "workspace/applyEdit" -> {
                 val edit = params as? JsonObject
                 val applied = edit != null && hooks.onApplyEdit(id, edit)
@@ -553,7 +558,7 @@ internal class ManagedServer(
 
             "window/workDoneProgress/create", "client/registerCapability", "client/unregisterCapability",
             "window/showMessageRequest", "workspace/semanticTokens/refresh", "workspace/inlayHint/refresh",
-            "workspace/diagnostic/refresh", "workspace/codeLens/refresh",
+            "workspace/codeLens/refresh",
             -> {
                 JsonNull
             }

@@ -271,9 +271,9 @@ fun countedSymbolsOf(answer: JsonElement?): List<CountedSymbol> {
     return found.sortedWith(BY_RANGE_START)
 }
 
-/** The diagnostics of a publishDiagnostics notification. */
-fun diagnosticsOf(params: JsonObject): List<Diagnostic> {
-    val diagnostics = params.array("diagnostics").orEmpty().mapNotNull { diagnosticOf(it as? JsonObject) }
+/** The diagnostics of a publishDiagnostics notification, or the `items` of a pulled report ([key]). */
+fun diagnosticsOf(params: JsonObject, key: String = "diagnostics"): List<Diagnostic> {
+    val diagnostics = params.array(key).orEmpty().mapNotNull { diagnosticOf(it as? JsonObject) }
     return diagnostics.sortedWith(compareBy({ it.range.startLine }, { it.range.startColumn }))
 }
 

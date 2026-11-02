@@ -1,5 +1,8 @@
 package org.example.kotlineditor.lsp.intelligence
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -107,11 +110,13 @@ class CodeIntelligenceService internal constructor(
     private val serversOf: (MirroredDocument) -> List<ManagedServer>,
     private val settings: IntelligenceSettings = IntelligenceSettings(),
     private val serversOfSession: (String) -> List<ManagedServer> = { emptyList() },
+    scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
 ) {
     private val requests = ServerRequests(documents, serversOf, settings)
     private val structure = DocumentStructureRequests(documents, requests)
     private val hierarchy = HierarchyRequests(requests) { withPreviews(it) }
     private val links = DocumentLinkRequests(requests)
+    private val pulls = DiagnosticPulls(scope, serversOf, documents::all, settings.timeoutMs, ::pulled)
     private val typing = TypeFormattingRequests(requests) { refusedEdit(it) }
     private val lenses =
         CodeLensRequests(
@@ -641,15 +646,29 @@ class CodeIntelligenceService internal constructor(
         diagnosticsVersion.value++
     }
 
+    // Diagnostics a server gave when asked: they replace its previous ones for the document, like a publication.
+    private fun pulled(server: String, document: MirroredDocument, found: List<Diagnostic>) {
+        diagnostics["$server ${document.uri}"] = Published(server, document.uri, found)
+        diagnosticsVersion.value++
+    }
+
+    /** [document] was opened or changed: the servers that give diagnostics when asked are asked. */
+    internal fun changed(document: MirroredDocument) = pulls.changed(document)
+
+    /** [server] asked for its diagnostics to be pulled again (`workspace/diagnostic/refresh`). */
+    internal fun diagnosticsRefresh(server: String) = pulls.refresh(server)
+
     /** A new process of [server] is ready: the diagnostics of the previous one are obsolete. */
     internal fun restarted(server: String) {
         val removed = diagnostics.keys.removeIf { it.startsWith("$server ") }
         usageCache.clear()
         if (removed) diagnosticsVersion.value++
+        pulls.refresh(server)
     }
 
     /** [document] is not open any more. */
     internal fun closed(document: MirroredDocument) {
+        pulls.closed(document)
         val removed = diagnostics.values.removeIf { it.uri == document.uri }
         usageCache.remove(document.uri)
         if (removed) diagnosticsVersion.value++

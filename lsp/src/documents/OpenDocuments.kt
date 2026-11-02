@@ -188,6 +188,9 @@ class OpenDocuments {
         }
     }
 
+    /** Every open document. */
+    fun all(): List<MirroredDocument> = synchronized(lock) { documents.values.toList() }
+
     /** The documents [session] has open. */
     fun openedBy(session: String): List<MirroredDocument> =
         synchronized(lock) { documents.values.filter { session in it.openers }.sortedBy { it.path } }

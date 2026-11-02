@@ -106,6 +106,8 @@ object FakeLanguageServer {
         val noCompletion: Boolean = false,
         val without: Set<String> = emptySet(),
         val noDiagnostics: Boolean = false,
+        // Gives the diagnostics when asked (textDocument/diagnostic) instead of publishing them.
+        val pullDiagnostics: Boolean = false,
         // Reads the files on disk once, like a server that indexes them, then only what didChangeWatchedFiles names.
         val index: Boolean = false,
     ) {
@@ -144,6 +146,7 @@ object FakeLanguageServer {
                     noCompletion = "no-completion" in values,
                     without = values["without"]?.split(',')?.toSet().orEmpty(),
                     noDiagnostics = "no-diagnostics" in values,
+                    pullDiagnostics = "pull-diagnostics" in values,
                     index = "index" in values,
                 )
             }
@@ -280,7 +283,11 @@ object FakeLanguageServer {
                 }
                 "textDocument/didClose" -> documents.remove(uriOf(message["params"]))
                 "textDocument/didSave" -> log.println("saved ${uriOf(message["params"])}").also { log.flush() }
-                "workspace/didChangeWatchedFiles" -> watchedFilesChanged(message["params"])
+                "workspace/didChangeWatchedFiles" -> {
+                    watchedFilesChanged(message["params"])
+                    refreshPulledDiagnostics()
+                }
+                "textDocument/diagnostic" -> reply(id, diagnosticReport(message["params"]))
                 "textDocument/definition" -> reply(id, intelligence().definition(message["params"]))
                 "textDocument/declaration" -> reply(id, intelligence().definition(message["params"]))
                 "textDocument/typeDefinition" -> reply(id, intelligence().typeDefinition(message["params"]))
@@ -346,8 +353,32 @@ object FakeLanguageServer {
             send(request(editId, "workspace/applyEdit", edit))
         }
 
+        // A pulled report: unchanged when the text is the one of [previousResultId].
+        private fun diagnosticReport(params: JsonElement?): JsonObject {
+            val uri = uriOf(params).orEmpty()
+            val resultId = documents[uri]?.joinToString("\n").hashCode().toString()
+            val previous = ((params as? JsonObject)?.get("previousResultId") as? JsonPrimitive)?.contentOrNull
+            log.println("pulled diagnostics of $uri, ${if (previous == resultId) "unchanged" else "full"}")
+            log.flush()
+            return buildJsonObject {
+                put("resultId", resultId)
+                if (previous == resultId) {
+                    put("kind", "unchanged")
+                } else {
+                    put("kind", "full")
+                    put("items", intelligence().diagnostics(uri))
+                }
+            }
+        }
+
+        // Files changed on disk may declare what was missing: the client pulls the diagnostics again.
+        private fun refreshPulledDiagnostics() {
+            if (!options.pullDiagnostics) return
+            send(request("refresh-${++nextEditId}", "workspace/diagnostic/refresh", JsonObject(emptyMap())))
+        }
+
         private fun publishProblems() {
-            if (options.noDiagnostics) return
+            if (options.noDiagnostics || options.pullDiagnostics) return
             val intelligence = intelligence()
             for (uri in documents.keys) {
                 notify(
@@ -394,6 +425,12 @@ object FakeLanguageServer {
                         }
                     }
                     if (provided("codeAction")) putJsonObject("codeActionProvider") { put("resolveProvider", false) }
+                    if (options.pullDiagnostics) {
+                        putJsonObject("diagnosticProvider") {
+                            put("interFileDependencies", true)
+                            put("workspaceDiagnostics", false)
+                        }
+                    }
                     if (provided("codeLens")) putJsonObject("codeLensProvider") { put("resolveProvider", true) }
                     if (provided("onTypeFormatting")) {
                         putJsonObject("documentOnTypeFormattingProvider") {

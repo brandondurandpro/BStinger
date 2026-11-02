@@ -92,7 +92,7 @@ class LanguageServerService(private val settings: LanguageServerSettings) : Clos
 
     /** Hover, navigation, usages, diagnostics, rename, formatting and code actions of the open documents. */
     val intelligence: CodeIntelligenceService =
-        CodeIntelligenceService(documents, ::serversOf, settings.intelligence, ::serversOfSession)
+        CodeIntelligenceService(documents, ::serversOf, settings.intelligence, ::serversOfSession, scope)
     private val supervisor =
         LanguageServerSupervisor(
             scope,
@@ -106,6 +106,7 @@ class LanguageServerService(private val settings: LanguageServerSettings) : Clos
                 onDiagnostics = intelligence::published,
                 onApplyEdit = intelligence::applyEdit,
                 onRestarted = intelligence::restarted,
+                onDiagnosticsRefresh = intelligence::diagnosticsRefresh,
             ),
         )
 
@@ -155,6 +156,7 @@ class LanguageServerService(private val settings: LanguageServerSettings) : Clos
                 server.didOpen(document)
             }
         }
+        documents.get(path)?.let(intelligence::changed)
     }
 
     /** Applies the edits of [session] to [path]; throws [org.example.kotlineditor.lsp.documents.OutOfSyncException]. */
@@ -163,6 +165,8 @@ class LanguageServerService(private val settings: LanguageServerSettings) : Clos
         documents.change(session, path, version, changes) { document ->
             serversOf(document).forEach { it.didChange(document, changes) }
         }
+        // Outside the lock of the documents.
+        documents.get(path)?.let(intelligence::changed)
     }
 
     /** [session] closed [path]. */

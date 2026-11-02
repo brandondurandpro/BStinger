@@ -43,6 +43,7 @@ internal val WORKSPACE_CAPABILITIES: JsonObject =
         }
         putJsonObject("executeCommand") { put(DYNAMIC_REGISTRATION, false) }
         putJsonObject("symbol") { put(DYNAMIC_REGISTRATION, false) }
+        putJsonObject("diagnostics") { put("refreshSupport", true) }
         putJsonObject("didChangeWatchedFiles") { put(DYNAMIC_REGISTRATION, false) }
     }
 
@@ -55,6 +56,10 @@ internal val TEXT_DOCUMENT_CAPABILITIES: JsonObject =
         }
         putJsonObject("codeLens") { put(DYNAMIC_REGISTRATION, false) }
         putJsonObject("onTypeFormatting") { put(DYNAMIC_REGISTRATION, false) }
+        putJsonObject("diagnostic") {
+            put(DYNAMIC_REGISTRATION, false)
+            put("relatedDocumentSupport", false)
+        }
         putJsonObject("documentLink") {
             put(DYNAMIC_REGISTRATION, false)
             put("tooltipSupport", true)
