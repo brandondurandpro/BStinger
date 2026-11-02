@@ -79,6 +79,10 @@ class CodeInsightState(
     var codeActions: CodeActionsPopup? by mutableStateOf(null)
         internal set
 
+    /** The list of the problems of a document, null when none is shown (see `ProblemsList.kt`). */
+    var problems: ProblemsList? by mutableStateOf(null)
+        internal set
+
     /** The document whose "3 usages" hint is under the mouse (the pointer is a hand over it), null when none. */
     var hintUnderMouse: Document? by mutableStateOf(null)
 
@@ -547,7 +551,8 @@ class CodeInsightState(
 
     /** Escape: closes what is shown over the code; false when nothing was. */
     fun escape(): Boolean {
-        val shown = listOf(hover, locations, signature, codeActions, notice, rename).any { it != null }
+        val shown = listOf(hover, locations, signature, codeActions, notice, rename, problems).any { it != null }
+        problems = null
         dismissHover()
         locations = null
         dismissSignature()

@@ -119,12 +119,12 @@ private fun Anchored(
     ) { content() }
 }
 
-private fun Modifier.popupFrame() =
+internal fun Modifier.popupFrame() =
     background(IdeColors.Popup, POPUP_SHAPE)
         .border(1.dp, IdeColors.Separator, POPUP_SHAPE)
 
 // Clicks on an overlay stay on it: they must not move the caret of the editor below.
-private fun Modifier.swallowClicks() = pointerInput(Unit) { detectTapGestures { } }
+internal fun Modifier.swallowClicks() = pointerInput(Unit) { detectTapGestures { } }
 
 /** Everything code intelligence shows over [document]: documentation, lists, parameter info, rename, messages. */
 @Composable

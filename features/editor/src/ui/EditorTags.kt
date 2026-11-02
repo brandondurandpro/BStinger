@@ -40,6 +40,11 @@ object EditorTags {
     const val PROBLEMS = "problems"
     const val PROBLEMS_ERRORS = "problems.errors"
     const val PROBLEMS_WARNINGS = "problems.warnings"
+    const val PROBLEMS_LIST = "problems.list"
+    const val PROBLEMS_LIST_EMPTY = "problems.list.empty"
+    const val PROBLEMS_LIST_TITLE = "problems.list.title"
+    const val PROBLEMS_SCRIM = "problems.scrim"
+
     const val LINK = "editor.link"
     const val FIND_BAR = "findBar"
     const val FIND_BAR_INPUT = "findBar.input"
@@ -101,4 +106,10 @@ object EditorTags {
 
     /** An occurrence of the symbol at the caret highlighted by the language server, on [line]. */
     fun symbolHighlight(line: Int, kind: String) = "editor.highlight:$line:$kind"
+
+    /** Row [index] of the problems list. */
+    fun problem(index: Int) = "problems.list:$index"
+
+    /** The "go to" arrow of row [index] of the problems list. */
+    fun problemGo(index: Int) = "problems.go:$index"
 }

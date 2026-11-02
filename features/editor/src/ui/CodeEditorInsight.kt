@@ -36,6 +36,10 @@ import org.example.kotlineditor.state.EditorTab
 import org.example.kotlineditor.state.LinkTarget
 import org.example.kotlineditor.state.TextPos
 import org.example.kotlineditor.state.applyCodeAction
+import org.example.kotlineditor.state.closeProblems
+import org.example.kotlineditor.state.goToProblem
+import org.example.kotlineditor.state.moveProblemSelection
+import org.example.kotlineditor.state.toggleProblems
 
 // What code intelligence adds to the code editor: the popups over the code, the mouse, the keys of its lists.
 
@@ -61,9 +65,10 @@ internal fun BoxScope.InsightLayer(
 ) {
     FollowInsight(insight, path, document)
     CodeInsightOverlays(insight, tab, document, metrics, focusRequester, viewport)
+    ProblemsListView(insight, document)
     insight.insightOf(document)?.let { shown ->
-        val next = { insight.nextProblem(document) }
-        ProblemsWidget(shown, next, Modifier.align(Alignment.TopEnd).padding(end = 12.dp))
+        val toggle = { insight.toggleProblems(document) }
+        ProblemsWidget(shown, toggle, Modifier.align(Alignment.TopEnd).padding(end = 12.dp))
     }
 }
 
@@ -163,11 +168,26 @@ internal fun insightKey(event: KeyEvent, insight: CodeInsightState, document: Do
     val listShown = insight.locations?.document === document || insight.codeActions?.document === document
     val plain = !event.isCtrlPressed && !event.isAltPressed
     val list = down && listShown && plain
+    val problems = down && plain && insight.problems?.document === document
     return when {
+        problems -> problemsKey(event.key, insight)
         list -> listKey(event.key, insight)
         down && event.key == Key.Escape -> insight.escape()
         else -> false
     }
+}
+
+// The problems list owns the arrows, Enter and Escape; other keys still edit the code below.
+private fun problemsKey(key: Key, insight: CodeInsightState): Boolean {
+    val enter = key == Key.Enter || key == Key.NumPadEnter
+    when {
+        key == Key.DirectionDown -> insight.moveProblemSelection(1)
+        key == Key.DirectionUp -> insight.moveProblemSelection(-1)
+        enter -> insight.problems?.let { insight.goToProblem(it.selected) }
+        key == Key.Escape -> insight.closeProblems()
+        else -> return false
+    }
+    return true
 }
 
 private fun listKey(key: Key, insight: CodeInsightState): Boolean {

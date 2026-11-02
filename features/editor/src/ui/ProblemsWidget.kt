@@ -10,6 +10,8 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
@@ -22,16 +24,17 @@ private val WIDGET_SHAPE = RoundedCornerShape(4.dp)
 private val COUNT_STYLE = TextStyle(color = IdeColors.Text, fontSize = 12.sp)
 private const val WIDGET_ALPHA = 0.85f
 
-/** The problems of the document at the top right, like IntelliJ's: a click goes to the next one (F2). */
+/** The problems of the document at the top right, like IntelliJ's: a click lists them (F2 goes to the next one). */
 @Composable
-internal fun ProblemsWidget(insight: DocumentInsight, onNext: () -> Unit, modifier: Modifier = Modifier) {
+internal fun ProblemsWidget(insight: DocumentInsight, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val errors = insight.errorCount
     val warnings = insight.warningCount
     Row(
         modifier
             .padding(6.dp)
             .background(IdeColors.Editor.copy(alpha = WIDGET_ALPHA), WIDGET_SHAPE)
-            .pointerInput(Unit) { detectTapGestures { onNext() } }
+            .pointerInput(Unit) { detectTapGestures { onClick() } }
+            .pointerHoverIcon(PointerIcon.Hand)
             .padding(horizontal = 6.dp, vertical = 2.dp)
             .testTag(EditorTags.PROBLEMS),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
