@@ -2,6 +2,7 @@ package org.example.kotlineditor.ui
 
 import androidx.compose.animation.core.withInfiniteAnimationFrameMillis
 import androidx.compose.foundation.background
+import org.example.kotlineditor.model.BlameLine
 import org.example.kotlineditor.state.CodeInsightState
 import kotlin.math.roundToInt
 import androidx.compose.ui.unit.dp
@@ -103,6 +104,8 @@ fun CodeEditor(
     path: String? = null,
     // Hover, navigation, problems, usages: null when the file has no language server.
     insight: CodeInsightState? = null,
+    // A click on a blame annotation: the commit that last changed the line.
+    onBlameClick: (BlameLine) -> Unit = {},
 ) {
     var viewportWidth by remember { mutableFloatStateOf(0f) }
     var viewportHeight by remember { mutableFloatStateOf(0f) }
@@ -165,9 +168,17 @@ fun CodeEditor(
                 .hoverInsight(insight, path, document, tab, metrics)
                 .pointerInput(document) {
                     val target =
-                        GestureTarget(document, tab, viewport, metrics, clicks, focusRequester, onCtrlClick, onHint) { delta ->
-                            scope.launch { viewport.scrollBy(delta) }
-                        }
+                        GestureTarget(
+                            document,
+                            tab,
+                            viewport,
+                            metrics,
+                            clicks,
+                            focusRequester,
+                            onCtrlClick,
+                            onHint,
+                            onBlameClick = { line -> tab.blame?.firstOrNull { it.line == line }?.let(onBlameClick) },
+                        ) { delta -> scope.launch { viewport.scrollBy(delta) } }
                     awaitEachGesture { editorGesture(target) }
                 },
         ) {

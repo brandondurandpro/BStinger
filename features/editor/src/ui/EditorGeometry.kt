@@ -56,12 +56,16 @@ internal class EditorMetrics(
     val foldZonePx: Float,
     val blameWidth: Dp,
     val blameStyle: TextStyle,
+    val blameWidthPx: Float = 0f,
 ) {
     /** Horizontal scroll range: widest line plus some slack, minus what fits on screen. */
     fun maxHorizontalOffset(maxLineLength: Int, viewportWidth: Float): Float =
         maxOf(0f, (maxLineLength + SLACK_COLUMNS) * charWidth + paddingPx - (viewportWidth - gutterPx))
 
     fun isOnFoldMarker(x: Float): Boolean = x in gutterPx - foldZonePx..gutterPx
+
+    /** Whether [x] is over the blame annotations of the gutter (when they are shown). */
+    fun isOnBlame(x: Float): Boolean = blameWidthPx > 0f && x >= gutterPx - blameWidthPx && x < gutterPx - foldZonePx
 
     /** Document position under [position] (in the editor's coordinates). */
     fun hit(position: Offset, viewport: VerticalScroll, horizontal: HorizontalScroll, document: Document): TextPos {
@@ -117,6 +121,7 @@ internal fun rememberEditorMetrics(lineCount: Int, fontSize: Float, blameVisible
                 foldZonePx = FOLD_ZONE.toPx(),
                 blameWidth = blameWidth,
                 blameStyle = codeStyle.copy(color = IdeColors.TextSecondary, fontSize = BLAME_FONT_SIZE),
+                blameWidthPx = blameWidth.toPx(),
             )
         }
     }
@@ -147,6 +152,8 @@ internal class GestureTarget(
     val onCtrlClick: (TextPos) -> Unit,
     // A click on the usage hint of a line: true when it was one.
     val onHintClick: (TextPos, Offset) -> Boolean = { _, _ -> false },
+    // A click on the blame annotation of a line.
+    val onBlameClick: (Int) -> Unit = {},
     val autoScroll: (Float) -> Unit,
 )
 
@@ -159,6 +166,10 @@ internal suspend fun AwaitPointerEventScope.editorGesture(target: GestureTarget)
     when {
         target.metrics.isOnFoldMarker(down.position.x) && target.document.folding.isFoldable(pos.line) -> {
             target.document.folding.toggle(pos.line)
+        }
+
+        target.tab.blameVisible && target.metrics.isOnBlame(down.position.x) -> {
+            target.onBlameClick(pos.line)
         }
 
         modifiers.isCtrlPressed || modifiers.isMetaPressed -> {

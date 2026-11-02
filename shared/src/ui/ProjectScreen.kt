@@ -272,6 +272,7 @@ private fun ReadyEditor(
         completion = project.completion.takeIf { Languages.languageOf(tab.entry.path) != null },
         path = tab.entry.path,
         insight = project.insight.takeIf { project.hasInsight(tab) },
+        onBlameClick = { line -> project.openBlameCommit(tab, line) },
     )
 }
 

@@ -67,7 +67,16 @@ fun tabKey(entry: FileEntry, isDiff: Boolean, commit: CommitDiffTarget?): String
 }
 
 /** The commit a diff tab shows, instead of the working tree's changes: [oldPath] is the former path of a rename. */
-data class CommitDiffTarget(val hash: String, val shortHash: String, val oldPath: String? = null)
+data class CommitDiffTarget(
+    val hash: String,
+    val shortHash: String,
+    val oldPath: String? = null,
+    /** What the diff recalls of the commit above its lines; null to show none. */
+    val header: CommitHeader? = null,
+)
+
+/** The commit a diff tab shows, as recalled above its lines: who, when and why. */
+data class CommitHeader(val author: String, val date: String, val message: String)
 
 @Stable
 class EditorTab(

@@ -11,6 +11,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
+import org.example.kotlineditor.model.BlameLine
 import org.example.kotlineditor.model.AppServices
 import org.example.kotlineditor.model.CompletionResult
 import org.example.kotlineditor.model.FileEntry
@@ -147,8 +148,27 @@ class ProjectState(
 
     /** Opens the diff of [file] in [commit] (a click on a changed file in the Branches window). */
     override fun openCommitDiff(commit: GitCommit, file: GitCommitFile) {
-        val target = CommitDiffTarget(commit.hash, commit.shortHash, file.oldPath)
+        val date = java.time.Instant.ofEpochSecond(commit.time).atZone(java.time.ZoneId.systemDefault()).toLocalDate().toString()
+        val header = CommitHeader(commit.author, date, commit.subject)
+        val target = CommitDiffTarget(commit.hash, commit.shortHash, file.oldPath, header)
         editor.openCommitDiff(entryAt(file.path), target)
+    }
+
+    /**
+     * A click on the blame annotation of [line] in [tab]: the diff of the file in the commit that last changed the
+     * line, its whole message above. Lines not committed yet have no commit to show.
+     */
+    fun openBlameCommit(tab: EditorTab, line: BlameLine) {
+        if (line.commit.all { it == '0' }) return
+        scope.launch {
+            val details = runCatching { services.git.commitDetails(root.path, line.commit) }.getOrNull() ?: return@launch
+            if (details.hash.isEmpty()) return@launch
+            val relative = tree.relativePath(tab.entry)
+            val file = details.files.firstOrNull { it.path == relative }
+            val header = CommitHeader(line.author, line.date, details.message)
+            val target = CommitDiffTarget(details.hash, GitCommit(details.hash, emptyList(), line.author, 0, "").shortHash, file?.oldPath, header)
+            editor.openCommitDiff(tab.entry, target)
+        }
     }
 
     /** Opens [entry] at [start]..[end], remembering where we came from. */

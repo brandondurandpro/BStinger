@@ -8,6 +8,10 @@ package org.example.kotlineditor.ui
 object EditorTags {
     const val DIFF = "diff"
     const val DIFF_TOOLBAR = "diff.toolbar"
+    const val DIFF_COMMIT = "diff.commit"
+    const val DIFF_COMMIT_HASH = "diff.commit.hash"
+    const val DIFF_COMMIT_AUTHOR = "diff.commit.author"
+    const val DIFF_COMMIT_MESSAGE = "diff.commit.message"
     const val DIFF_OPEN_FILE = "diff.openFile"
     const val DIFF_LAYOUT_TOGGLE = "diff.layoutToggle"
     const val DIFF_SPLIT = "diff.split"

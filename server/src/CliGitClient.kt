@@ -220,10 +220,12 @@ class CliGitClient :
     override suspend fun commitDetails(root: String, hash: String): GitCommitDetails =
         withContext(Dispatchers.IO) {
             require(hash.matches(HASH)) { "Not a commit hash: $hash" }
+            // A short hash (from the blame) is answered with the full one, the identity of the commit everywhere.
+            val full = gitOutput(root, "rev-parse", VERIFY, QUIET, "$hash^{commit}")?.firstOrNull()?.trim() ?: hash
             val message = runGit(root, "log", "-1", "--format=%B", hash).trimEnd()
             // `-z`: paths as they are (no quoting of spaces or accents); `--root` lists the files of a first commit.
             val raw = runGit(root, "diff-tree", "--no-commit-id", "-r", "-M", "--root", "--name-status", "-z", hash)
-            GitCommitDetails(hash, message, parseNameStatus(raw))
+            GitCommitDetails(full, message, parseNameStatus(raw))
         }
 
     // diff-tree compares two trees: the first parent's and the commit's (a merge shows what it brought to its first

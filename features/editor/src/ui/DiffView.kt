@@ -12,12 +12,15 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.rememberScrollbarAdapter
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -33,6 +36,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.example.kotlineditor.model.DiffKind
 import org.example.kotlineditor.model.DiffLine
+import org.example.kotlineditor.state.CommitDiffTarget
+import org.example.kotlineditor.state.CommitHeader
 import org.example.kotlineditor.state.EditorTab
 
 internal val DIFF_LINE_HEIGHT = 20.dp
@@ -51,6 +56,7 @@ fun DiffView(
     val style = LocalCodeStyle.current
     Column(modifier.fillMaxSize().background(IdeColors.Editor).testTag(EditorTags.DIFF)) {
         DiffToolbar(sideBySide, onToggleSideBySide, onOpenFile)
+        tab.commit?.let { commit -> commit.header?.let { CommitHeaderView(commit, it) } }
         Box(Modifier.weight(1f).fillMaxWidth()) {
             if (sideBySide) {
                 SideBySideDiff(tab.splitListState, lines, style)
@@ -59,6 +65,33 @@ fun DiffView(
             }
         }
     }
+}
+
+// The commit of the diff, like IntelliJ's commit details: hash, author, date, then the whole message.
+@Composable
+private fun CommitHeaderView(commit: CommitDiffTarget, header: CommitHeader) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(max = 160.dp)
+            .background(IdeColors.Panel)
+            .verticalScroll(rememberScrollState())
+            .testTag(EditorTags.DIFF_COMMIT)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Label(commit.shortHash, Modifier.testTag(EditorTags.DIFF_COMMIT_HASH), color = IdeColors.Link, fontSize = 12.sp)
+            Label(header.author, Modifier.padding(start = 10.dp).testTag(EditorTags.DIFF_COMMIT_AUTHOR), fontSize = 12.sp)
+            Label(header.date, Modifier.padding(start = 10.dp), color = IdeColors.TextSecondary, fontSize = 12.sp)
+        }
+        Label(
+            header.message.trimEnd(),
+            Modifier.padding(top = 4.dp).testTag(EditorTags.DIFF_COMMIT_MESSAGE),
+            fontSize = 12.sp,
+            maxLines = Int.MAX_VALUE,
+        )
+    }
+    Box(Modifier.fillMaxWidth().height(1.dp).background(IdeColors.Separator))
 }
 
 @Composable
