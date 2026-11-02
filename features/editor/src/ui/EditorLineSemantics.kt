@@ -80,7 +80,8 @@ internal fun EditorLineSemantics(
                         marks.changed[index],
                         GitChangeKind.Deleted.takeIf { index in marks.deleted || deletedAtEnd },
                     )
-                val lineInsight = LineInsight(insight.problems[index], insight.hints[index], insight.highlights[index])
+                val link = insight.link?.takeIf { it.line == index }?.let { it.start to it.end }
+                val lineInsight = LineInsight(insight.problems[index], insight.hints[index], insight.highlights[index], link)
                 LineNode(row, index, tab, document, metrics, kinds, marks.blame?.containsKey(index) == true, lineInsight)
             }
         }
@@ -153,7 +154,12 @@ private fun LineNode(
 }
 
 /** What the language server marks on one line, for its semantics nodes. */
-internal class LineInsight(val problems: List<LineProblem>?, val hint: String?, val highlights: List<LineHighlight>?)
+internal class LineInsight(
+    val problems: List<LineProblem>?,
+    val hint: String?,
+    val highlights: List<LineHighlight>?,
+    val link: Pair<Int, Int>?,
+)
 
 // The problems, occurrences and usage hint of a line, where the canvas draws them: tests find and click them.
 @Composable
@@ -181,6 +187,10 @@ private fun InsightNodes(index: Int, line: String, tab: EditorTab, metrics: Edit
         Node(start, end - start, EditorTags.symbolHighlight(index, highlight.kind.name))
     }
     insight.hint?.let { hint -> Node(hintColumn(line), hint.length, EditorTags.usageHint(index), hint) }
+    insight.link?.let { (start, end) ->
+        val from = visualColumn(line, start.coerceIn(0, line.length))
+        Node(from, visualColumn(line, end.coerceIn(0, line.length)) - from, EditorTags.LINK, line.substring(start.coerceIn(0, line.length), end.coerceIn(0, line.length)))
+    }
 }
 
 // The colored text of a line, as drawn: tests read its colors here. Derived, so that the colors published for the

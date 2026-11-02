@@ -322,10 +322,9 @@ class CodeInsightState(
         if (sameWord) return
         hoverJob?.cancel()
         hoverWord = word?.let { document to it }
-        if (word == null || pos == null) {
-            scheduleHide()
-            return
-        }
+        // The documentation of the previous word goes, unless the mouse goes onto it.
+        scheduleHide()
+        if (word == null || pos == null) return
         hoverJob =
             scope.launch {
                 delay(HOVER_DELAY_MS)

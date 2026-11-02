@@ -213,13 +213,20 @@ private fun Modifier.hoverInsight(
     metrics: EditorMetrics,
 ): Modifier {
     if (insight == null || path == null) return this
-    return onPointerEvent(PointerEventType.Move) { event ->
-        val change = event.changes.firstOrNull() ?: return@onPointerEvent
-        if (change.pressed) return@onPointerEvent
-        val ctrl = event.keyboardModifiers.isCtrlPressed || event.keyboardModifiers.isMetaPressed
-        val pos = metrics.cellAt(change.position, tab.verticalScroll, tab.horizontalScroll, document)
-        insight.mouseAt(path, document, pos, ctrl)
-    }.onPointerEvent(PointerEventType.Exit) { insight.mouseLeft() }
+    val moved: androidx.compose.ui.input.pointer.AwaitPointerEventScope.(androidx.compose.ui.input.pointer.PointerEvent) -> Unit =
+        { event ->
+            val change = event.changes.firstOrNull()
+            if (change != null && !change.pressed) {
+                val modifiers = event.keyboardModifiers
+                val ctrl = modifiers.isCtrlPressed || modifiers.isMetaPressed
+                val pos = metrics.cellAt(change.position, tab.verticalScroll, tab.horizontalScroll, document)
+                insight.mouseAt(path, document, pos, ctrl)
+            }
+        }
+    // The first event of a mouse coming over the editor is an Enter, already at a position.
+    return onPointerEvent(PointerEventType.Enter, onEvent = moved)
+        .onPointerEvent(PointerEventType.Move, onEvent = moved)
+        .onPointerEvent(PointerEventType.Exit) { insight.mouseLeft() }
 }
 
 // A click on the "3 usages" hint of a line shows the usages of its declaration.
