@@ -19,7 +19,8 @@ class DocumentLinkTranslationsTest {
     @Test
     fun `a file target opens the file, at the line of its fragment`() {
         val top = link(""","target":"$file"""")
-        assertEquals(Paths.get("/p/Greeter.php").toString(), top?.path)
+        // On Windows the URI names the drive (`D:\\p\\Greeter.php`).
+        assertEquals(Paths.get("/p/Greeter.php").toAbsolutePath().toString(), top?.path)
         assertNull(top?.line)
         assertEquals(TextRange(1, 2, 1, 9), top?.range)
         assertEquals(11, link(""","target":"$file#L12"""")?.line)

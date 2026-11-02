@@ -70,4 +70,23 @@ class FileOperationFiltersTest {
         val files = listOf(OperatedFile("/p/A.php", "/p/B.php"), OperatedFile("/p/a.txt", "/p/b.txt"))
         assertEquals(listOf(files[0]), filesMatching(phpFiles, WILL_RENAME, files))
     }
+
+    @Test
+    fun `globs match like LSP's, whatever the system`() {
+        val cases =
+            listOf(
+                Triple("**/*.{php,phtml}", "/p/views/a.phtml", true),
+                Triple("**/*.{php,phtml}", "/p/views/a.html", false),
+                Triple("src/*.php", "src/a.php", true),
+                Triple("src/*.php", "src/sub/a.php", false),
+                Triple("src/**", "src/sub/a.php", true),
+                Triple("**/a?.php", "/p/ab.php", true),
+                Triple("**/[a-c].php", "/p/b.php", true),
+                Triple("**/[!a-c].php", "/p/b.php", false),
+                Triple("**/a+b.php", "/p/a+b.php", true),
+            )
+        for ((glob, path, expected) in cases) {
+            assertEquals(expected, Regex(globRegex(glob)).matches(path), "$glob on $path")
+        }
+    }
 }

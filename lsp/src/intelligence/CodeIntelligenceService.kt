@@ -131,6 +131,7 @@ class CodeIntelligenceService internal constructor(
     private val diagnosticsVersion = MutableStateFlow(1L)
     private val offered = ConcurrentHashMap<String, OfferedActions>()
     private val tokens = AtomicLong()
+    private val tokenPrefix = newTokenPrefix()
     private val usageCache = ConcurrentHashMap<String, Pair<Int, UsageCountsResult>>()
 
     // Edits a running command asks for, by server id; a command runs alone on its server.
@@ -520,7 +521,7 @@ class CodeIntelligenceService internal constructor(
                     putJsonObject("context") { put("diagnostics", diagnosticsAt(document, range)) }
                 }
             val actions = codeActionsOf(request("textDocument/codeAction", params))
-            val token = "${session.hashCode()}-${tokens.incrementAndGet()}"
+            val token = "$tokenPrefix${session.hashCode()}-${tokens.incrementAndGet()}"
             offered[session] = OfferedActions(token, server, actions.map { it.second })
             CodeActionsResult(FeatureStatus.Ready, token, actions.map { it.first })
         }

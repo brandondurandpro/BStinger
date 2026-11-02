@@ -63,6 +63,9 @@ class LanguageServersState(
     var status by mutableStateOf(LanguageServersStatus.Empty)
         private set
 
+    /** Whether a language server runs: before that, nothing can adapt the code to a file operation. */
+    val anyRunning: Boolean get() = status.servers.any { it.state == LanguageServerState.Running }
+
     /** The choice offered (the banner above the editors), null when none. */
     var choice: LanguageServerChoice? by mutableStateOf(null)
         private set

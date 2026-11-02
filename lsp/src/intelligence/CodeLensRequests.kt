@@ -40,6 +40,7 @@ internal class CodeLensRequests(
     private val offered = ConcurrentHashMap<String, OfferedLenses>()
     private val latest = ConcurrentHashMap<String, String>()
     private val tokens = AtomicLong()
+    private val tokenPrefix = newTokenPrefix()
 
     /** The lenses of version [version] of [path], in document order. */
     suspend fun codeLenses(session: String, path: String, version: Int): CodeLensesResult {
@@ -84,7 +85,7 @@ internal class CodeLensRequests(
 
     // A new list replaces the previous one of the same document.
     private fun offer(session: String, path: String, server: ManagedServer, commands: List<JsonObject>): String {
-        val token = "${session.hashCode()}-${tokens.incrementAndGet()}"
+        val token = "$tokenPrefix${session.hashCode()}-${tokens.incrementAndGet()}"
         offered[token] = OfferedLenses(session, server, commands)
         latest.put("$session $path", token)?.let { offered.remove(it) }
         return token

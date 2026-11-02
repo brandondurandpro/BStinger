@@ -118,10 +118,8 @@ fun ProjectState.createFile(directory: FileEntry, name: String, isDirectory: Boo
     fileOperation {
         val path = directory.path.trimEnd('/', '\\') + separatorOf(directory.path) + name
         // A file that exists already is not created: nothing to adapt.
-        if (services.fileSystem.fileAt(
-                path,
-            ) == null
-        ) {
+        // Without a running language server nothing is asked: the creation is the only request.
+        if (adaptsCode() && services.fileSystem.fileAt(path) == null) {
             adaptCodeTo(FileOperation.Create, OperatedFile(path, directory = isDirectory))
         }
         val fs = services.fileSystem
@@ -146,7 +144,7 @@ fun ProjectState.rename(entry: FileEntry, newName: String) =
 
 fun ProjectState.delete(entry: FileEntry) =
     fileOperation {
-        adaptCodeTo(FileOperation.Delete, OperatedFile(entry.path, directory = entry.isDirectory))
+        if (adaptsCode()) adaptCodeTo(FileOperation.Delete, OperatedFile(entry.path, directory = entry.isDirectory))
         services.fileSystem.delete(entry)
         editor.discard(entry.path)
         tree.parentOf(entry)?.let {
@@ -161,6 +159,8 @@ private suspend fun ProjectState.adaptCodeToRename(entry: FileEntry, newName: St
     val validName = newName.isNotBlank() && '/' !in newName && '\\' !in newName
     // Only the case changes: the same file on some disks, and no new name for the code.
     val sameName = newName.equals(entry.name, ignoreCase = true)
+    // Without a running language server nothing is asked: the rename is the only request.
+    if (!adaptsCode()) return
     if (!validName || sameName) return
     val newPath = entry.path.dropLast(entry.name.length) + newName
     val fs = services.fileSystem
@@ -178,6 +178,9 @@ private suspend fun ProjectState.adaptCodeTo(operation: FileOperation, file: Ope
     // A file the edit could not change does not stop the operation: retrying it would apply the others twice.
     if (edit.changes.isNotEmpty()) applyEdit(edit)
 }
+
+// Whether a language server runs to adapt the code to a file operation.
+private fun ProjectState.adaptsCode(): Boolean = languageServers?.anyRunning == true
 
 // The separator of the paths of the server machine, as [path] uses it.
 private fun separatorOf(path: String): String = if ('\\' in path && '/' !in path) "\\" else "/"
