@@ -10,8 +10,9 @@ internal fun shiftedHint(hint: InlayHint, change: TextChange): InlayHint? {
     val changeStart = TextPos(change.startLine, change.startColumn)
     val changeEnd = TextPos(change.endLine, change.endColumn)
     val replaced = changeStart < pos && pos < changeEnd
+    if (replaced) return null
     val moved = shifted(pos, change)
-    return hint.takeUnless { replaced }?.copy(line = moved.line, column = moved.column)
+    return hint.copy(line = moved.line, column = moved.column)
 }
 
 /** The hints of each line, to draw in the code. */
@@ -31,6 +32,7 @@ internal fun shiftedToken(token: SemanticToken, change: TextChange): SemanticTok
     val changeEnd = TextPos(change.endLine, change.endColumn)
     // Typed or deleted in the word, or right after it (the word grows): its kind is not known anymore.
     val touched = changeStart <= end && changeEnd >= start
+    if (touched) return null
     val moved = shifted(start, change)
-    return token.takeUnless { touched }?.copy(line = moved.line, column = moved.column)
+    return token.copy(line = moved.line, column = moved.column)
 }

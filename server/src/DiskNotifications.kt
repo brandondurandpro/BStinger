@@ -2,6 +2,8 @@ package org.example.kotlineditor.server
 
 import org.example.kotlineditor.lsp.DiskChange
 import org.example.kotlineditor.model.FileEntry
+import org.example.kotlineditor.model.FileOperation
+import org.example.kotlineditor.model.OperatedFile
 import java.io.IOException
 import java.io.UncheckedIOException
 import java.nio.file.Files
@@ -19,8 +21,11 @@ internal class DiskNotifications(private val services: LocalServices) {
     /** [file] was written. */
     fun written(file: FileEntry) = notify(listOf(file.path to DiskChange.Changed))
 
-    /** [file] was created. */
-    fun created(file: FileEntry) = notify(listOf(file.path to DiskChange.Created))
+    /** [file] (or directory) was created. */
+    fun created(file: FileEntry) {
+        if (!file.isDirectory) notify(listOf(file.path to DiskChange.Created))
+        operated(FileOperation.Create, OperatedFile(file.path, directory = file.isDirectory))
+    }
 
     /** The files under [entry] (or [entry] itself), before it is renamed or deleted. */
     fun filesOf(entry: FileEntry): List<String> =
@@ -51,10 +56,18 @@ internal class DiskNotifications(private val services: LocalServices) {
         val deleted = before.map { it to DiskChange.Deleted }
         val created = before.map { renamed.path + it.removePrefix(old.path) to DiskChange.Created }
         notify(deleted + created)
+        operated(FileOperation.Rename, OperatedFile(old.path, renamed.path, old.isDirectory))
     }
 
-    /** [before] (from [filesOf]) were deleted. */
-    fun deleted(before: List<String>) = notify(before.map { it to DiskChange.Deleted })
+    /** [entry] was deleted, with [before] (from [filesOf]). */
+    fun deleted(before: List<String>, entry: FileEntry) {
+        notify(before.map { it to DiskChange.Deleted })
+        operated(FileOperation.Delete, OperatedFile(entry.path, directory = entry.isDirectory))
+    }
+
+    private fun operated(operation: FileOperation, file: OperatedFile) {
+        if (services.languageServersStarted) services.languageServers.filesOperated(operation, listOf(file))
+    }
 
     private fun notify(changes: List<Pair<String, DiskChange>>) {
         if (services.languageServersStarted && changes.isNotEmpty()) services.languageServers.diskChanged(changes)

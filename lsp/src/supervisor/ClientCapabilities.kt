@@ -45,6 +45,13 @@ internal val WORKSPACE_CAPABILITIES: JsonObject =
         putJsonObject("symbol") { put(DYNAMIC_REGISTRATION, false) }
         putJsonObject("diagnostics") { put("refreshSupport", true) }
         putJsonObject("didChangeWatchedFiles") { put(DYNAMIC_REGISTRATION, false) }
+        putJsonObject("fileOperations") {
+            put(DYNAMIC_REGISTRATION, false)
+            listOf("Create", "Rename", "Delete").forEach { operation ->
+                put("will$operation", true)
+                put("did$operation", true)
+            }
+        }
     }
 
 /** The requests about a document the IDE makes, and the forms of answers it reads. */

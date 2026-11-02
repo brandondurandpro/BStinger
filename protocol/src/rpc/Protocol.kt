@@ -440,6 +440,9 @@ enum class Method(
     /** Runs the command of a code lens. */
     LspRunCodeLens("lsp/runCodeLens"),
 
+    /** Edits adapting the code to files about to be created, renamed or deleted. */
+    LspWillChangeFiles("lsp/willChangeFiles"),
+
     /** Inlay hints of a document. */
     LspInlayHints("lsp/inlayHints"),
 

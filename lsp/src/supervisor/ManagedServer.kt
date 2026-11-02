@@ -37,6 +37,7 @@ import org.example.kotlineditor.lsp.leak.LeakReport
 import org.example.kotlineditor.lsp.leak.Verdict
 import org.example.kotlineditor.lsp.memory.MemoryHistory
 import org.example.kotlineditor.lsp.memory.ProcessMemorySampler
+import org.example.kotlineditor.model.FileOperation
 import org.example.kotlineditor.model.LanguageServerInfo
 import org.example.kotlineditor.model.LanguageServerState
 import org.example.kotlineditor.model.Languages
@@ -227,6 +228,11 @@ internal class ManagedServer(
     /** Tells the process files changed on disk: their URI and FileChangeType (1 created, 2 changed, 3 deleted). */
     fun filesChanged(changes: List<Pair<String, Int>>) {
         if (changes.isNotEmpty()) outbox?.filesChanged(changes)
+    }
+
+    /** Tells the process files were created, renamed or deleted through the IDE. */
+    fun filesOperated(operation: FileOperation, params: JsonObject) {
+        outbox?.filesOperated(operation, params)
     }
 
     /**

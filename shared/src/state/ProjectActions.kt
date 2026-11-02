@@ -9,9 +9,13 @@ import org.example.kotlineditor.model.DiffKind
 import org.example.kotlineditor.model.DiffLine
 import org.example.kotlineditor.model.FileContent
 import org.example.kotlineditor.model.FileEntry
+import org.example.kotlineditor.model.FileOperation
+import org.example.kotlineditor.model.OperatedFile
 import org.example.kotlineditor.model.pathName
 import org.example.kotlineditor.syntax.Structure
 import java.io.IOException
+import java.nio.file.FileAlreadyExistsException
+import java.nio.file.NoSuchFileException
 
 internal const val MAX_BACK_STEPS = 100
 
@@ -112,6 +116,14 @@ private suspend fun ProjectState.declarationOf(
 
 fun ProjectState.createFile(directory: FileEntry, name: String, isDirectory: Boolean) =
     fileOperation {
+        val path = directory.path.trimEnd('/', '\\') + separatorOf(directory.path) + name
+        // A file that exists already is not created: nothing to adapt.
+        if (services.fileSystem.fileAt(
+                path,
+            ) == null
+        ) {
+            adaptCodeTo(FileOperation.Create, OperatedFile(path, directory = isDirectory))
+        }
         val fs = services.fileSystem
         val created = if (isDirectory) fs.createDirectory(directory, name) else fs.createFile(directory, name)
         tree.expand(directory)
@@ -123,6 +135,7 @@ fun ProjectState.createFile(directory: FileEntry, name: String, isDirectory: Boo
 fun ProjectState.rename(entry: FileEntry, newName: String) =
     fileOperation {
         val reopen = editor.allTabs.any { it.entry.path == entry.path && !it.isDiff }
+        adaptCodeToRename(entry, newName)
         editor.flush()
         val renamed = services.fileSystem.rename(entry, newName)
         editor.discard(entry.path)
@@ -133,6 +146,7 @@ fun ProjectState.rename(entry: FileEntry, newName: String) =
 
 fun ProjectState.delete(entry: FileEntry) =
     fileOperation {
+        adaptCodeTo(FileOperation.Delete, OperatedFile(entry.path, directory = entry.isDirectory))
         services.fileSystem.delete(entry)
         editor.discard(entry.path)
         tree.parentOf(entry)?.let {
@@ -140,6 +154,33 @@ fun ProjectState.delete(entry: FileEntry) =
             tree.select(it)
         }
     }
+
+// The code adapted to the rename of [entry] to [newName], once the rename is known to be possible: the code must not
+// change for a rename that then fails (a file of that name exists already, the file is gone).
+private suspend fun ProjectState.adaptCodeToRename(entry: FileEntry, newName: String) {
+    val validName = newName.isNotBlank() && '/' !in newName && '\\' !in newName
+    // Only the case changes: the same file on some disks, and no new name for the code.
+    val sameName = newName.equals(entry.name, ignoreCase = true)
+    if (!validName || sameName) return
+    val newPath = entry.path.dropLast(entry.name.length) + newName
+    val fs = services.fileSystem
+    // Deleted by another program meanwhile: the rename fails, the code stays.
+    if (fs.fileAt(entry.path) == null) throw NoSuchFileException(entry.path)
+    if (fs.fileAt(newPath) != null) throw FileAlreadyExistsException(newPath)
+    adaptCodeTo(FileOperation.Rename, OperatedFile(entry.path, newPath, entry.isDirectory))
+}
+
+// The edits the language servers make before [operation] of [file] (`workspace/willRenameFiles`: the class renamed
+// with its file), applied. The operation runs anyway when no server is ready or answers.
+private suspend fun ProjectState.adaptCodeTo(operation: FileOperation, file: OperatedFile) {
+    val servers = languageServers ?: return
+    val edit = servers.intelligence.willChangeFiles(operation, listOf(file))
+    // A file the edit could not change does not stop the operation: retrying it would apply the others twice.
+    if (edit.changes.isNotEmpty()) applyEdit(edit)
+}
+
+// The separator of the paths of the server machine, as [path] uses it.
+private fun separatorOf(path: String): String = if ('\\' in path && '/' !in path) "\\" else "/"
 
 // Runs a file operation; failures are shown in the open dialog, success closes it.
 private fun ProjectState.fileOperation(block: suspend () -> Unit) {

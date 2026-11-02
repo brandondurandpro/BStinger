@@ -38,6 +38,7 @@ import org.example.kotlineditor.model.EditResult
 import org.example.kotlineditor.model.FeatureStatus
 import org.example.kotlineditor.model.FileChange
 import org.example.kotlineditor.model.FileDiagnostics
+import org.example.kotlineditor.model.FileOperation
 import org.example.kotlineditor.model.FoldingRangesResult
 import org.example.kotlineditor.model.FormatOptions
 import org.example.kotlineditor.model.HierarchyDirection
@@ -48,6 +49,7 @@ import org.example.kotlineditor.model.HoverResult
 import org.example.kotlineditor.model.InlayHintsResult
 import org.example.kotlineditor.model.LocationsResult
 import org.example.kotlineditor.model.NavigationKind
+import org.example.kotlineditor.model.OperatedFile
 import org.example.kotlineditor.model.OutlineResult
 import org.example.kotlineditor.model.RenameTarget
 import org.example.kotlineditor.model.SelectionRangesResult
@@ -117,6 +119,7 @@ class CodeIntelligenceService internal constructor(
     private val hierarchy = HierarchyRequests(requests) { withPreviews(it) }
     private val links = DocumentLinkRequests(requests)
     private val pulls = DiagnosticPulls(scope, serversOf, documents::all, settings.timeoutMs, ::pulled)
+    private val fileOperations = FileOperationRequests(requests, serversOfSession)
     private val typing = TypeFormattingRequests(requests) { refusedEdit(it) }
     private val lenses =
         CodeLensRequests(
@@ -579,6 +582,12 @@ class CodeIntelligenceService internal constructor(
     /** Runs the command of lens [index] of the list [token]: the edits it asked for. */
     suspend fun runCodeLens(session: String, token: String, index: Int): EditResult =
         lenses.runCodeLens(session, token, index)
+
+    /** The edits the servers of [session]'s project make before [operation] of [files]. */
+    suspend fun willChangeFiles(session: String, operation: FileOperation, files: List<OperatedFile>): EditResult {
+        val changes = fileOperations.willChange(session, operation, files) ?: return EditResult.NotReady
+        return EditResult(FeatureStatus.Ready, mergeChanges(changes).map(::withClientPath))
+    }
 
     // The edits [block] gets from a server in time; not ready when it cannot answer, its message when it refuses.
     private suspend fun runSafely(block: suspend () -> EditResult): EditResult =

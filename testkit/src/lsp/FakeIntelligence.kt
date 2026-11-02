@@ -381,6 +381,11 @@ internal class FakeIntelligence(private val code: FakePhpCode) {
     fun rename(params: JsonElement?): JsonElement {
         val (uri, word, _, _) = wordOf(params) ?: return JsonNull
         val newName = params?.jsonObject?.get("newName")?.jsonPrimitive?.contentOrNull ?: return JsonNull
+        return renameEdit(word, uri, newName)
+    }
+
+    /** The WorkspaceEdit renaming the whole-word occurrences of [word] (seen from [uri]) to [newName]. */
+    fun renameEdit(word: String, uri: String, newName: String): JsonObject {
         val byUri = code.occurrences(word, uri).groupBy { it.uri }
         return buildJsonObject {
             putJsonArray("documentChanges") {

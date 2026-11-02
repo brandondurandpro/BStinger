@@ -12,12 +12,14 @@ import org.example.kotlineditor.lsp.supervisor.SupervisorTimings
 import org.example.kotlineditor.model.CodeLensAction
 import org.example.kotlineditor.model.DocumentPosition
 import org.example.kotlineditor.model.FeatureStatus
+import org.example.kotlineditor.model.FileOperation
 import org.example.kotlineditor.model.FormatOptions
 import org.example.kotlineditor.model.HierarchyDirection
 import org.example.kotlineditor.model.HierarchyKind
 import org.example.kotlineditor.model.InlayHintKind
 import org.example.kotlineditor.model.LanguageServerState
 import org.example.kotlineditor.model.NavigationKind
+import org.example.kotlineditor.model.OperatedFile
 import org.example.kotlineditor.model.TextChange
 import org.example.kotlineditor.model.TextRange
 import org.example.kotlineditor.testkit.lsp.FakeLanguageServerCommand
@@ -409,5 +411,103 @@ class CodeStructureIntegrationTest {
         assertEquals(FeatureStatus.Unsupported, triggers.status)
         val edit = runBlocking { intelligence.formatOnType(SESSION, position(7, 5), ";", FormatOptions()) }
         assertEquals(FeatureStatus.Unsupported, edit.status)
+    }
+
+    @Test
+    fun `renaming a PHP file renames its class in every file, before the rename`() {
+        openMain()
+        ready({ it.status }) { intelligence.outline(SESSION, main, 1) }
+        val greeter = project.resolve("Greeter.php").toString()
+        val welcomer = project.resolve("Welcomer.php").toString()
+        val renamed = OperatedFile(greeter, welcomer)
+        val edit = ready({ it.status }) { intelligence.willChangeFiles(SESSION, FileOperation.Rename, listOf(renamed)) }
+        val changed = edit.changes.associate { change -> change.path to change.edits.map { it.text }.toSet() }
+        assertEquals(setOf(greeter, main), changed.keys)
+        assertEquals(setOf("Welcomer"), changed[main])
+        assertEquals(setOf("Welcomer"), changed[greeter])
+        assertEquals(
+            TextChange(1, 6, 1, 13, "Welcomer"),
+            edit.changes
+                .firstOrNull { it.path == greeter }
+                ?.edits
+                ?.single(),
+        )
+    }
+
+    @Test
+    fun `files the filters leave out and operations the server makes no edit for change nothing`() {
+        openMain()
+        ready({ it.status }) { intelligence.outline(SESSION, main, 1) }
+        val text = OperatedFile(project.resolve("notes.txt").toString(), project.resolve("todo.txt").toString())
+        val notClass = OperatedFile(main, project.resolve("index.php").toString())
+        val created = OperatedFile(project.resolve("Other.php").toString())
+        val cases =
+            listOf(
+                FileOperation.Rename to text,
+                FileOperation.Rename to notClass,
+                FileOperation.Create to created,
+                FileOperation.Delete to OperatedFile(main),
+            )
+        for ((operation, file) in cases) {
+            val edit = runBlocking { intelligence.willChangeFiles(SESSION, operation, listOf(file)) }
+            assertEquals(FeatureStatus.Ready, edit.status, "$operation $file")
+            assertTrue(edit.changes.isEmpty(), "$operation $file")
+        }
+    }
+
+    @Test
+    fun `without file operations the servers are not asked and not told`() {
+        options = arrayOf("--without", "fileOperations")
+        openMain()
+        ready({ it.status }) { intelligence.outline(SESSION, main, 1) }
+        val greeter = project.resolve("Greeter.php").toString()
+        val renamed = OperatedFile(greeter, project.resolve("Welcomer.php").toString())
+        val edit = runBlocking { intelligence.willChangeFiles(SESSION, FileOperation.Rename, listOf(renamed)) }
+        assertTrue(edit.changes.isEmpty())
+        service.filesOperated(FileOperation.Rename, listOf(renamed))
+        service.filesOperated(FileOperation.Create, listOf(OperatedFile(main)))
+        assertTrue(fakeLog().none { "Files" in it && "did" in it })
+    }
+
+    @Test
+    fun `created, renamed and deleted PHP files are told to the server, other files and directories are not`() {
+        openMain()
+        ready({ it.status }) { intelligence.outline(SESSION, main, 1) }
+        val created = project.resolve("New.php").toString()
+        val renamed = OperatedFile(created, project.resolve("Newer.php").toString())
+        service.filesOperated(FileOperation.Create, listOf(OperatedFile(created)))
+        service.filesOperated(FileOperation.Create, listOf(OperatedFile(project.resolve("notes.txt").toString())))
+        service.filesOperated(
+            FileOperation.Create,
+            listOf(OperatedFile(project.resolve("lib.php").toString(), directory = true)),
+        )
+        service.filesOperated(FileOperation.Rename, listOf(renamed))
+        service.filesOperated(FileOperation.Delete, listOf(OperatedFile(renamed.newPath!!)))
+        val told = awaitLog { lines -> lines.any { it.startsWith("didDeleteFiles") } }
+        val operations = told.filter { it.startsWith("did") && "Files " in it }
+        assertEquals(
+            listOf("didCreateFiles", "didRenameFiles", "didDeleteFiles"),
+            operations.map { it.substringBefore(' ') },
+        )
+        val uri = { path: String -> Paths.get(path).toUri().toString() }
+        assertTrue(uri(created) in operations[0])
+        assertTrue("oldUri" in operations[1] && uri(renamed.newPath!!) in operations[1])
+        assertTrue(uri(renamed.newPath!!) in operations[2])
+    }
+
+    private fun fakeLog(): List<String> {
+        val id = runBlocking { service.status(-1) }.servers.firstOrNull()?.id ?: return emptyList()
+        return service.log(id)
+    }
+
+    private fun awaitLog(condition: (List<String>) -> Boolean): List<String> {
+        val deadline = System.currentTimeMillis() + WAIT_MS
+        var lines = fakeLog()
+        while (!condition(lines)) {
+            check(System.currentTimeMillis() < deadline) { "Not in the log: $lines" }
+            Thread.sleep(20)
+            lines = fakeLog()
+        }
+        return lines
     }
 }

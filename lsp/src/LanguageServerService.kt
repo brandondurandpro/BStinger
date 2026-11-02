@@ -21,6 +21,8 @@ import org.example.kotlineditor.lsp.documents.MirroredDocument
 import org.example.kotlineditor.lsp.documents.OpenDocuments
 import org.example.kotlineditor.lsp.intelligence.CodeIntelligenceService
 import org.example.kotlineditor.lsp.intelligence.IntelligenceSettings
+import org.example.kotlineditor.lsp.intelligence.fileOperationParams
+import org.example.kotlineditor.lsp.intelligence.filesMatching
 import org.example.kotlineditor.lsp.jsonrpc.LspConnectionClosedException
 import org.example.kotlineditor.lsp.jsonrpc.LspResponseException
 import org.example.kotlineditor.lsp.memory.ProcessMemoryReader
@@ -37,11 +39,13 @@ import org.example.kotlineditor.lsp.supervisor.OrphanReaper
 import org.example.kotlineditor.lsp.supervisor.ServerTarget
 import org.example.kotlineditor.lsp.supervisor.SupervisorTimings
 import org.example.kotlineditor.model.CompletionResult
+import org.example.kotlineditor.model.FileOperation
 import org.example.kotlineditor.model.LanguageServerCandidateInfo
 import org.example.kotlineditor.model.LanguageServerChoice
 import org.example.kotlineditor.model.LanguageServerInfo
 import org.example.kotlineditor.model.LanguageServersStatus
 import org.example.kotlineditor.model.Languages
+import org.example.kotlineditor.model.OperatedFile
 import org.example.kotlineditor.model.ServerMemory
 import org.example.kotlineditor.model.TextChange
 import java.io.Closeable
@@ -253,6 +257,19 @@ class LanguageServerService(private val settings: LanguageServerSettings) : Clos
         byServer.forEach { (server, files) -> server.filesChanged(files) }
         val written = changes.filter { it.second == DiskChange.Changed }.mapNotNull { documents.get(it.first) }
         written.forEach { saved -> documents.locked { serversOf(saved).forEach { it.didSave(saved) } } }
+    }
+
+    /**
+     * [files] were created, renamed or deleted through the IDE ([operation]): the servers whose root holds them and
+     * whose `fileOperations.did<Operation>` filters match are told (`workspace/didRenameFiles`...).
+     */
+    fun filesOperated(operation: FileOperation, files: List<OperatedFile>) {
+        val name = "did${operation.lspName}"
+        val servers = files.flatMap { supervisor.servingPath(it.path) }.distinct()
+        for (server in servers) {
+            val concerned = filesMatching(server.capability("workspace"), name, files)
+            if (concerned.isNotEmpty()) server.filesOperated(operation, fileOperationParams(operation, concerned))
+        }
     }
 
     // The servers of the project [session] has open.

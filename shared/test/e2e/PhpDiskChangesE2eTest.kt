@@ -120,13 +120,16 @@ class PhpDiskChangesE2eTest {
     @Test
     fun `a PHP file renamed in the tree is found at its new path`() =
         runComposeUiTest {
+            project.file("src/ShyToo.php", listOf("<?php", "class ShyToo", "{", "}", "").joinToString("\n"))
             open()
             treeAction("src/Shy.php", TreeTags.MENU_RENAME)
             onNodeWithTag(AppTags.FILE_DIALOG_INPUT).performTextClearance()
             onNodeWithTag(AppTags.FILE_DIALOG_INPUT).performTextInput("Timid.php")
             onNodeWithTag(AppTags.FILE_DIALOG_OK).performClick()
             awaitTag(TreeTags.treeRow("src/Timid.php"))
-            assertNotFound("Shy", "src/Shy.php", witness = "Shy" to "src/Timid.php")
+            // The server renames the class with its file (willRenameFiles), then indexes the new path.
+            assertFound("Timid", "src/Timid.php")
+            assertNotFound("Shy", "src/Shy.php", witness = "ShyToo" to "src/ShyToo.php")
         }
 
     @Test

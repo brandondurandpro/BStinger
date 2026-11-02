@@ -1,5 +1,7 @@
 package org.example.kotlineditor.rpc
 
+import org.example.kotlineditor.model.FileOperation
+import org.example.kotlineditor.model.OperatedFile
 import org.example.kotlineditor.model.CodeLensAction
 import org.example.kotlineditor.model.CodeLensInfo
 import org.example.kotlineditor.model.CodeLensesResult
@@ -73,5 +75,18 @@ class StructureCodecsTest {
         val result = DocumentLinksResult(FeatureStatus.Ready, links)
         assertEquals(result, result.toJson().documentLinksResult())
         assertEquals(DocumentLinksResult.NotReady, DocumentLinksResult.NotReady.toJson().documentLinksResult())
+    }
+
+    @Test
+    fun `the files of an operation travel with their new path and kind`() {
+        val files =
+            listOf(
+                OperatedFile("/p/Greeter.php", "/p/Welcomer.php"),
+                OperatedFile("/p/src", directory = true),
+                OperatedFile("C:\\p\\a.php"),
+            )
+        assertEquals(files, files.toJson().operatedFiles())
+        FileOperation.entries.forEach { assertEquals(it, fileOperationNamed(it.name)) }
+        assertEquals(null, fileOperationNamed("Move"))
     }
 }

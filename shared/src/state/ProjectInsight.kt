@@ -5,13 +5,10 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import org.example.kotlineditor.model.EditResult
 import org.example.kotlineditor.model.FeatureStatus
-import org.example.kotlineditor.model.FileChange
-import org.example.kotlineditor.model.FileContent
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.Languages
 import org.example.kotlineditor.model.pathName
 import org.example.kotlineditor.syntax.Declaration
-import java.io.IOException
 
 /** Code intelligence of a project: its language servers, and what it does on the project's files. */
 internal fun ProjectState.insightBackend(): InsightBackend? {
@@ -78,53 +75,6 @@ internal fun ProjectState.openDocumentOf(path: String): Document? =
         .filterNot { it.isDiff }
         .firstOrNull { normalized(it.entry.path) == normalized(path) }
         ?.document
-
-/**
- * Applies a rename, a formatting or a quick fix: the open documents are edited (one undo step each, saved with the
- * others), the other files are rewritten on disk, created first when the edit says so. Returns why it failed.
- */
-internal suspend fun ProjectState.applyEdit(edit: EditResult): String? {
-    var created: FileEntry? = null
-    for (change in edit.changes) {
-        val document = openDocumentOf(change.path)
-        if (document != null) {
-            document.applyEdits(change.edits)
-            continue
-        }
-        try {
-            val entry = if (change.create) createIfMissing(change.path) else entryOfPath(change.path)
-            if (change.create) created = entry
-            if (change.edits.isNotEmpty()) rewrite(entry, change)
-        } catch (failure: IOException) {
-            return "Could not change ${pathName(normalized(change.path))}: ${failure.message}"
-        }
-    }
-    if (edit.changes.any { openDocumentOf(it.path) == null }) {
-        fileIndex.invalidate()
-        tree.refresh()
-        editor.reloadGitOf(root)
-    }
-    created?.let { editor.open(it) }
-    return null
-}
-
-private suspend fun ProjectState.createIfMissing(path: String): FileEntry {
-    services.fileSystem.fileAt(path)?.let { return it }
-    val file = normalized(path)
-    val directory =
-        FileEntry(
-            file.substringBeforeLast('/'),
-            pathName(file.substringBeforeLast('/')),
-            isDirectory = true,
-        )
-    return services.fileSystem.createFile(directory, pathName(file))
-}
-
-private suspend fun ProjectState.rewrite(entry: FileEntry, change: FileChange) {
-    val content = services.fileSystem.read(entry) as? FileContent.Text ?: throw IOException("not a text file")
-    val lines = applyEdits(content.lines, change.edits)
-    services.fileSystem.write(entry, lines.joinToString(content.lineSeparator))
-}
 
 /** Follows the documents with a language server, their problems, and the restarts of the servers. */
 internal fun ProjectState.followInsight() {

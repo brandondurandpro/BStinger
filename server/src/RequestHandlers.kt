@@ -63,7 +63,9 @@ private fun fileHandlers(services: LocalServices): Map<Method, Handler> {
             }
         },
         Method.CreateFile to { fs.createFile(entry(DIRECTORY), params.string(NAME)).also(disk::created).toJson() },
-        Method.CreateDirectory to { fs.createDirectory(entry(DIRECTORY), params.string(NAME)).toJson() },
+        Method.CreateDirectory to {
+            fs.createDirectory(entry(DIRECTORY), params.string(NAME)).also(disk::created).toJson()
+        },
         Method.Rename to {
             val old = entry("entry")
             val before = disk.filesOf(old)
@@ -74,7 +76,7 @@ private fun fileHandlers(services: LocalServices): Map<Method, Handler> {
             val before = disk.filesOf(deleted)
             nothing {
                 fs.delete(deleted)
-                disk.deleted(before)
+                disk.deleted(before, deleted)
             }
         },
         Method.RecentLoad to { services.recentProjects.load().toJson() },

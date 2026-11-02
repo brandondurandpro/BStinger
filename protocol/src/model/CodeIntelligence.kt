@@ -369,6 +369,12 @@ interface CodeIntelligence {
     /** Runs the command of lens [index] of the list [token] on the server: the edits it asked for. */
     suspend fun runCodeLens(token: String, index: Int): EditResult = EditResult.NotReady
 
+    /**
+     * The edits the servers make before [operation] of [files] (a class renamed with its file, the `require` of a
+     * moved file): to apply before running the operation.
+     */
+    suspend fun willChangeFiles(operation: FileOperation, files: List<OperatedFile>): EditResult = EditResult.NotReady
+
     /** The declarations of [path] at [version] (File Structure). */
     suspend fun outline(path: String, version: Int): OutlineResult = OutlineResult.NotReady
 

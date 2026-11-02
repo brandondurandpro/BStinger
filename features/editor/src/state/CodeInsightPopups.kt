@@ -100,17 +100,24 @@ class DocumentInsight internal constructor(val document: Document) {
 
     internal fun follow(change: TextChange) {
         diagnostics =
-            diagnostics.mapNotNull { diagnostic ->
-                shifted(
-                    diagnostic.range,
-                    change,
-                )?.let { diagnostic.copy(range = it) }
+            diagnostics.following(change, { it.range }) { diagnostic ->
+                shifted(diagnostic.range, change)?.let { diagnostic.copy(range = it) }
             }
-        usageCounts = usageCounts.mapNotNull { count -> shifted(count.range, change)?.let { count.copy(range = it) } }
-        links = links.mapNotNull { link -> shifted(link.range, change)?.let { link.copy(range = it) } }
-        codeLenses = codeLenses.mapNotNull { lens -> shifted(lens.range, change)?.let { lens.copy(range = it) } }
-        inlayHints = inlayHints.mapNotNull { shiftedHint(it, change) }
-        semanticTokens = semanticTokens.mapNotNull { shiftedToken(it, change) }
+        usageCounts =
+            usageCounts.following(change, { it.range }) { count ->
+                shifted(count.range, change)?.let { count.copy(range = it) }
+            }
+        links =
+            links.following(
+                change,
+                { it.range },
+            ) { link -> shifted(link.range, change)?.let { link.copy(range = it) } }
+        codeLenses =
+            codeLenses.following(change, { it.range }) { lens ->
+                shifted(lens.range, change)?.let { lens.copy(range = it) }
+            }
+        inlayHints = inlayHints.followingLines(change, { it.line }) { shiftedHint(it, change) }
+        semanticTokens = semanticTokens.followingLines(change, { it.line }) { shiftedToken(it, change) }
         highlights = emptyList()
     }
 }
@@ -247,3 +254,32 @@ internal fun clamp(diagnostics: List<Diagnostic>, document: Document): List<Diag
 fun normalized(path: String): String = path.replace('\\', '/').trimEnd('/')
 
 internal fun sameFile(first: String, second: String) = normalized(first) == normalized(second)
+
+/**
+ * Whether [change] can move or touch what spans lines [first] to [last]: not what ends on a line before it, nor what
+ * starts on a line after it when it adds or removes no line. A rename of 2,000 words on 2,000 lines then shifts only
+ * the line of each word, not every token of the file 2,000 times.
+ */
+internal fun reaches(change: TextChange, first: Int, last: Int): Boolean {
+    val before = last < change.startLine
+    val sameLineCount = change.startLine == change.endLine && '\n' !in change.text
+    val afterOnOtherLine = first > change.endLine && sameLineCount
+    return !before && !afterOnOtherLine
+}
+
+// The items after [change]: those it reaches through [shift] (null drops them), the others as they are.
+private inline fun <T> List<T>.following(change: TextChange, range: (T) -> TextRange, shift: (T) -> T?): List<T> {
+    val reached = any { reaches(change, range(it).startLine, range(it).endLine) }
+    if (!reached) return this
+    return mapNotNull { item ->
+        val itemRange = range(item)
+        if (reaches(change, itemRange.startLine, itemRange.endLine)) shift(item) else item
+    }
+}
+
+// Like [following], for items on one line.
+private inline fun <T> List<T>.followingLines(change: TextChange, line: (T) -> Int, shift: (T) -> T?): List<T> {
+    val reached = any { reaches(change, line(it), line(it)) }
+    if (!reached) return this
+    return mapNotNull { item -> if (reaches(change, line(item), line(item))) shift(item) else item }
+}

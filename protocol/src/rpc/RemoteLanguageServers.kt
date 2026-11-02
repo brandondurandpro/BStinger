@@ -9,6 +9,7 @@ import org.example.kotlineditor.model.DiagnosticsSnapshot
 import org.example.kotlineditor.model.DocumentLinksResult
 import org.example.kotlineditor.model.DocumentPosition
 import org.example.kotlineditor.model.EditResult
+import org.example.kotlineditor.model.FileOperation
 import org.example.kotlineditor.model.FoldingRangesResult
 import org.example.kotlineditor.model.FormatOptions
 import org.example.kotlineditor.model.HierarchyDirection
@@ -22,6 +23,7 @@ import org.example.kotlineditor.model.LanguageServers
 import org.example.kotlineditor.model.LanguageServersStatus
 import org.example.kotlineditor.model.LocationsResult
 import org.example.kotlineditor.model.NavigationKind
+import org.example.kotlineditor.model.OperatedFile
 import org.example.kotlineditor.model.OutlineResult
 import org.example.kotlineditor.model.RenameTarget
 import org.example.kotlineditor.model.SelectionRangesResult
@@ -301,6 +303,15 @@ class RemoteLanguageServers(private val client: RpcClient) : LanguageServers {
                 putPosition(at)
                 put("character", character)
                 put("options", options.toJson())
+            }
+        return result.editResult()
+    }
+
+    override suspend fun willChangeFiles(operation: FileOperation, files: List<OperatedFile>): EditResult {
+        val result =
+            client.call(Method.LspWillChangeFiles) {
+                put("operation", operation.name)
+                put("files", files.toJson())
             }
         return result.editResult()
     }

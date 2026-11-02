@@ -7,17 +7,32 @@ import org.example.kotlineditor.model.TextRange
 fun shifted(pos: TextPos, change: TextChange): TextPos {
     val start = TextPos(change.startLine, change.startColumn)
     val end = TextPos(change.endLine, change.endColumn)
-    val insertedLines = change.text.split('\n')
-    val lastInserted = insertedLines.lastOrNull().orEmpty()
-    val newEndLine = change.startLine + insertedLines.lastIndex
-    val newEndColumn = if (insertedLines.size == 1) change.startColumn + lastInserted.length else lastInserted.length
-    val lineDelta = newEndLine - change.endLine
-    val column = if (pos.line == change.endLine) newEndColumn + (pos.column - change.endColumn) else pos.column
     return when {
-        pos < start -> pos
-        pos < end -> TextPos(newEndLine, newEndColumn)
-        else -> TextPos(pos.line + lineDelta, column)
+        pos < start -> {
+            pos
+        }
+
+        pos < end -> {
+            endOfInserted(change)
+        }
+
+        else -> {
+            val newEnd = endOfInserted(change)
+            val lineDelta = newEnd.line - change.endLine
+            val column = if (pos.line == change.endLine) newEnd.column + (pos.column - change.endColumn) else pos.column
+            TextPos(pos.line + lineDelta, column)
+        }
     }
+}
+
+// Where the text [change] inserts ends. Counted rather than split: a large edit (a rename in 2,000 lines) is
+// followed by thousands of positions.
+private fun endOfInserted(change: TextChange): TextPos {
+    val text = change.text
+    val lastBreak = text.lastIndexOf('\n')
+    val line = change.startLine + text.count { it == '\n' }
+    val column = if (lastBreak < 0) change.startColumn + text.length else text.length - lastBreak - 1
+    return TextPos(line, column)
 }
 
 /**

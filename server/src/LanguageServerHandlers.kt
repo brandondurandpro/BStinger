@@ -4,6 +4,7 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import org.example.kotlineditor.model.EditResult
 import org.example.kotlineditor.model.HierarchyDirection
 import org.example.kotlineditor.model.HierarchyKind
 import org.example.kotlineditor.model.NavigationKind
@@ -11,12 +12,14 @@ import org.example.kotlineditor.rpc.InvalidParamsException
 import org.example.kotlineditor.rpc.Method
 import org.example.kotlineditor.rpc.bool
 import org.example.kotlineditor.rpc.documentPosition
+import org.example.kotlineditor.rpc.fileOperationNamed
 import org.example.kotlineditor.rpc.formatOptions
 import org.example.kotlineditor.rpc.hierarchyItem
 import org.example.kotlineditor.rpc.highlightsJson
 import org.example.kotlineditor.rpc.int
 import org.example.kotlineditor.rpc.languageServerChoiceJson
 import org.example.kotlineditor.rpc.long
+import org.example.kotlineditor.rpc.operatedFiles
 import org.example.kotlineditor.rpc.read
 import org.example.kotlineditor.rpc.string
 import org.example.kotlineditor.rpc.strings
@@ -156,6 +159,15 @@ private fun editingHandlers(services: LocalServices): Map<Method, Handler> {
         },
         Method.LspRunCodeLens to {
             intelligence().runCodeLens(session, params.string(TOKEN), params.int(INDEX)).toJson()
+        },
+        Method.LspWillChangeFiles to {
+            val name = params.string("operation")
+            val operation = checkNotNull(fileOperationNamed(name)) { "Unknown file operation $name" }
+            val files = params.read("files") { it.operatedFiles() }
+            // No server runs before the first document with a language server opens: nothing to adapt.
+            val started = services.languageServersStarted
+            val edits = if (started) intelligence().willChangeFiles(session, operation, files) else EditResult.NotReady
+            edits.toJson()
         },
     )
 }

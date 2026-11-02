@@ -288,6 +288,10 @@ object FakeLanguageServer {
                     refreshPulledDiagnostics()
                 }
                 "textDocument/diagnostic" -> reply(id, diagnosticReport(message["params"]))
+                "workspace/willRenameFiles" -> reply(id, FakeFileOperations(phpCode(), intelligence()).willRename(message["params"]))
+                "workspace/willCreateFiles", "workspace/willDeleteFiles" -> reply(id, JsonNull)
+                "workspace/didCreateFiles", "workspace/didRenameFiles", "workspace/didDeleteFiles" ->
+                    log.println("${method.removePrefix("workspace/")} ${message["params"]}").also { log.flush() }
                 "textDocument/definition" -> reply(id, intelligence().definition(message["params"]))
                 "textDocument/declaration" -> reply(id, intelligence().definition(message["params"]))
                 "textDocument/typeDefinition" -> reply(id, intelligence().typeDefinition(message["params"]))
@@ -439,6 +443,9 @@ object FakeLanguageServer {
                         }
                     }
                     if (provided("documentLink")) putJsonObject("documentLinkProvider") { put("resolveProvider", true) }
+                    if (provided("fileOperations")) {
+                        putJsonObject("workspace") { put("fileOperations", fakeFileOperationsCapability()) }
+                    }
                     putJsonObject("executeCommandProvider") {
                         put("commands", buildJsonArray { add(JsonPrimitive("add_docblock")) })
                     }
