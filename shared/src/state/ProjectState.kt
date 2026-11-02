@@ -66,9 +66,10 @@ class ProjectState(
 
     /** Code completion in the editors, from the language servers. */
     val completion =
-        CompletionState(scope) { path, document ->
-            languageServers?.complete(path, document) ?: CompletionResult.NotReady
-        }
+        CompletionState(
+            scope,
+            resolve = { token, index -> languageServers?.resolveCompletion(token, index) },
+        ) { path, document -> languageServers?.complete(path, document) ?: CompletionResult.NotReady }
 
     /** Hover, navigation, usages, problems, rename, reformat and quick fixes, from the language servers. */
     val insight = CodeInsightState(scope, { insightBackend() }, ProjectInsightHost { this })

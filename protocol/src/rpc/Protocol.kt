@@ -392,6 +392,9 @@ enum class Method(
     /** Completion at a position of an open document. */
     LspCompletion("lsp/completion"),
 
+    /** Documentation of an item of a completion answer. */
+    LspResolveCompletion("lsp/resolveCompletion"),
+
     /** Documentation of the symbol at a position. */
     LspHover("lsp/hover"),
 

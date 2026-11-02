@@ -1,5 +1,6 @@
 package org.example.kotlineditor.rpc
 
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import org.example.kotlineditor.model.CodeActionsResult
 import org.example.kotlineditor.model.CompletionResult
@@ -107,6 +108,15 @@ class RemoteLanguageServers(private val client: RpcClient) : LanguageServers {
                 put("column", column)
             }
         return result.completionResult()
+    }
+
+    override suspend fun resolveCompletion(token: String, index: Int): String? {
+        val result =
+            client.call(Method.LspResolveCompletion) {
+                put("token", token)
+                put("index", index)
+            }
+        return result.jsonObject.stringOrNull("documentation")
     }
 
     override suspend fun hover(at: DocumentPosition): HoverResult =

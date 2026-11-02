@@ -16,6 +16,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
 import org.example.kotlineditor.lsp.completion.CompletionAnswers
+import org.example.kotlineditor.lsp.completion.OfferedCompletions
 import org.example.kotlineditor.lsp.documents.MirroredDocument
 import org.example.kotlineditor.lsp.documents.OpenDocuments
 import org.example.kotlineditor.lsp.intelligence.CodeIntelligenceService
@@ -87,6 +88,7 @@ class LanguageServerService(private val settings: LanguageServerSettings) : Clos
     private val lastFiles = HashMap<String, Pair<String, List<String>>>()
     private val specs = ConcurrentHashMap<String, LanguageServerSpec>()
     private val documents = OpenDocuments()
+    private val completions = OfferedCompletions(settings.completionTimeoutMs)
 
     /** Hover, navigation, usages, diagnostics, rename, formatting and code actions of the open documents. */
     val intelligence: CodeIntelligenceService =
@@ -136,6 +138,7 @@ class LanguageServerService(private val settings: LanguageServerSettings) : Clos
     fun release(session: String) {
         synchronized(lastFiles) { lastFiles.remove(session) }
         documents.release(session) { document -> closed(document) }
+        completions.release(session)
         intelligence.released(session)
         supervisor.release(session)
     }
@@ -189,13 +192,17 @@ class LanguageServerService(private val settings: LanguageServerSettings) : Clos
                     matchingVersion != null
                 }
         return if (document != null && hasValidClientVersion) {
-            ask(document, line, column)
+            ask(session, document, line, column)
         } else {
             CompletionResult.NotReady
         }
     }
 
-    private suspend fun ask(document: MirroredDocument, line: Int, column: Int): CompletionResult {
+    /** The documentation of item [index] of [session]'s completion answer [token]; see [OfferedCompletions]. */
+    suspend fun resolveCompletion(session: String, token: String, index: Int): String? =
+        completions.resolve(session, token, index)
+
+    private suspend fun ask(session: String, document: MirroredDocument, line: Int, column: Int): CompletionResult {
         val text = documents.locked { document.line(line) }
         val params =
             buildJsonObject {
@@ -207,11 +214,16 @@ class LanguageServerService(private val settings: LanguageServerSettings) : Clos
             }
         return try {
             // While another server takes over the language, the old one, stopping, is not ready any more.
-            val answer =
+            val answered =
                 withTimeoutOrNull(settings.completionTimeoutMs) {
-                    serversOf(document).firstNotNullOfOrNull { it.request("textDocument/completion", params) }
+                    serversOf(document).firstNotNullOfOrNull { server ->
+                        server.request("textDocument/completion", params)?.let { server to it }
+                    }
                 }
-            answer?.let { CompletionAnswers.translate(it, text, column) } ?: CompletionResult.NotReady
+            answered?.let { (server, answer) ->
+                val (result, items) = CompletionAnswers.translateWithItems(answer, text, column)
+                result.copy(token = completions.offer(session, server, items))
+            } ?: CompletionResult.NotReady
         } catch (_: LspConnectionClosedException) {
             CompletionResult.NotReady
         } catch (_: LspResponseException) {

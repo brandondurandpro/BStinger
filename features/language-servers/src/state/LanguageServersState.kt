@@ -147,6 +147,14 @@ class LanguageServersState(
         }
     }
 
+    /** The documentation of item [index] of the completion answer [token]; null when none, or unreachable. */
+    suspend fun resolveCompletion(token: String, index: Int): String? =
+        try {
+            servers.resolveCompletion(token, index)
+        } catch (_: IOException) {
+            null
+        }
+
     /** Version of [path] the server has once the edits made so far are sent; null when it is not mirrored. */
     fun versionOf(path: String, document: Document): Int? = documents.versionOf(path, document)
 

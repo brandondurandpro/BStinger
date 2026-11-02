@@ -129,4 +129,37 @@ class CompletionPerformanceE2eTest {
             assertEquals(100, popup.selected)
             assertTrue(completionLabels().size <= 12, "${completionLabels().size} rows composed")
         }
+
+    @Test
+    fun `running through 200 documented items with the arrows asks the documentation of the last one only`() =
+        runComposeUiTest {
+            val documented =
+                (1..DOCUMENTED).flatMap {
+                    listOf(
+                        "/** Doc of fn%03d. */".format(it),
+                        "function fn%03d() {}".format(it),
+                    )
+                }
+            project.file("src/documented.php", (listOf("<?php") + documented + "").joinToString("\n"))
+            val app = launchWithProject(project, languageServers = servers().settings)
+            openFromTree("src/documented.php")
+            awaitServer(app) { it.isRunning() }
+            onNodeWithTag(EditorTags.EDITOR).performClick()
+            caretToEnd()
+            typeCode("fn")
+            awaitCompletion("fn001")
+            measure("arrows through $MOVES documented items", budgetMillis = 6_000) {
+                repeat(MOVES) {
+                    editorKeys { pressKey(Key.DirectionDown) }
+                    renderFrame()
+                }
+            }
+            val popup = app.project.completion.popup!!
+            awaitCondition(SERVER_START_MS) { "Doc of fn%03d.".format(MOVES + 1) in popup.documentation.orEmpty() }
+            // A request per item the arrows only passed over would flood the server.
+            assertTrue(popup.resolved.size <= 2, "${popup.resolved.size} items resolved")
+        }
 }
+
+private const val DOCUMENTED = 200
+private const val MOVES = 100

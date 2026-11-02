@@ -1,6 +1,8 @@
 package org.example.kotlineditor.server
 
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.example.kotlineditor.model.NavigationKind
 import org.example.kotlineditor.rpc.InvalidParamsException
 import org.example.kotlineditor.rpc.Method
@@ -74,6 +76,11 @@ internal fun languageServerHandlers(services: LocalServices): Map<Method, Handle
             services.languageServers
                 .complete(session, params.string(PATH), params.int(VERSION), params.int("line"), params.int("column"))
                 .toJson()
+        },
+        Method.LspResolveCompletion to {
+            val documentation =
+                services.languageServers.resolveCompletion(session, params.string("token"), params.int("index"))
+            buildJsonObject { documentation?.let { put("documentation", it) } }
         },
     ) +
         codeIntelligenceHandlers(services)

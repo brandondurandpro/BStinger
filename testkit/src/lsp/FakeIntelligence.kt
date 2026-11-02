@@ -36,6 +36,25 @@ internal class FakeIntelligence(private val code: FakePhpCode) {
         }
     }
 
+    // The item with the documentation of the function it names, like phpactor's resolve.
+    fun resolveCompletion(params: JsonElement?): JsonElement {
+        val item = params as? JsonObject ?: return JsonNull
+        val label = (item["label"] as? JsonPrimitive)?.contentOrNull.orEmpty()
+        val markdown = if (label.startsWith("$")) null else markdownOf(label, "")
+        return JsonObject(
+            item +
+                listOfNotNull(
+                    markdown?.let {
+                        "documentation" to
+                            buildJsonObject {
+                                put("kind", "markdown")
+                                put("value", it)
+                            }
+                    },
+                ),
+        )
+    }
+
     private fun markdownOf(word: String, uri: String): String? {
         val declaration = code.declarationsNamed(word).firstOrNull()
         val builtIn = FakePhpCode.BUILT_INS[word]

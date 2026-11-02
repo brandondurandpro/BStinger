@@ -292,6 +292,7 @@ object FakeLanguageServer {
                 "textDocument/rangeFormatting" -> reply(id, intelligence().format(message["params"], range = true))
                 "textDocument/codeAction" -> reply(id, intelligence().codeActions(message["params"]))
                 "workspace/executeCommand" -> executeCommand(id!!, message["params"])
+                "completionItem/resolve" -> reply(id, intelligence().resolveCompletion(message["params"]))
                 "textDocument/completion" ->
                     if (options.noCompletion) {
                         error(id!!, CONTENT_MODIFIED, "Content modified")
@@ -371,6 +372,7 @@ object FakeLanguageServer {
                     }
                     putJsonObject("completionProvider") {
                         put("triggerCharacters", buildJsonArray { add(JsonPrimitive("$")) })
+                        put("resolveProvider", provided("completionResolve"))
                     }
                 }
                 putJsonObject("serverInfo") {

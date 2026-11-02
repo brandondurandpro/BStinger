@@ -8,8 +8,10 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class SymbolTranslationsTest {
-    private val uri = Paths.get("/tmp/project/src/A.php").toUri().toString()
-    private val path = Paths.get("/tmp/project/src/A.php").toString()
+    // Absolute on every platform (a drive on Windows), named as the IDE server names it.
+    private val file = Paths.get("/tmp/project/src/A.php").toAbsolutePath()
+    private val uri = file.toUri().toString()
+    private val path = file.toString()
 
     private fun json(text: String) = Json.parseToJsonElement(text)
 

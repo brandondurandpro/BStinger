@@ -25,6 +25,7 @@ object EditorTags {
     const val EDITOR_VERTICAL_SCROLLBAR = "editor.vscroll"
     const val EDITOR_MESSAGE = "editor.message"
     const val COMPLETION = "completion"
+    const val COMPLETION_DOCUMENTATION = "completion.documentation"
     const val HOVER = "hover"
     const val HOVER_DOCUMENTATION = "hover.documentation"
     const val HOVER_PROBLEMS = "hover.problems"

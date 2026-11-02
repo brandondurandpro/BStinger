@@ -77,6 +77,8 @@ internal val TEXT_DOCUMENT_CAPABILITIES: JsonObject =
                 // The editor inserts plain text: no tab stops to fill.
                 put("snippetSupport", false)
                 put("insertReplaceSupport", false)
+                putJsonArray("documentationFormat") { TEXT_FORMATS.forEach { add(it) } }
+                putJsonObject("resolveSupport") { putJsonArray("properties") { add("documentation") } }
             }
         }
     }
