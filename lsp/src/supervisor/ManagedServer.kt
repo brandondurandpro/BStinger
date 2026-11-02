@@ -424,7 +424,7 @@ internal class ManagedServer(
             }
 
             failure != null -> {
-                Unit
+                // the link broke: the server exited, and its exit is reported
             }
 
             answered.getOrNull() == null -> {
@@ -554,7 +554,7 @@ internal class ManagedServer(
         val fields = params as? JsonObject
         when {
             fields == null -> {
-                Unit
+                // a notification without parameters: none the IDE follows
             }
 
             method == "\$/progress" -> {
