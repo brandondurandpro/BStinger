@@ -386,7 +386,7 @@ class CodeInsightState(
         }
     }
 
-    private fun navigated(request: NavigationRequest, result: LocationsResult) {
+    private suspend fun navigated(request: NavigationRequest, result: LocationsResult) {
         val document = request.document
         val anchor = request.anchor
         val ready = result.status == FeatureStatus.Ready
@@ -394,7 +394,8 @@ class CodeInsightState(
         val byName = !ready && request.kind == NavigationKind.Definition
         when {
             byName -> {
-                host.declarationByName(request.pos)
+                val found = host.declarationByName(request.pos)
+                if (!found) notify(document, anchor, emptyMessage(request.kind))
             }
 
             result.status == FeatureStatus.Unsupported -> {

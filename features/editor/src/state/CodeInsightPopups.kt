@@ -38,8 +38,8 @@ interface InsightHost {
     /** Applies the edits of a rename, a formatting or a quick fix to the open documents and the files; an error. */
     suspend fun apply(edit: EditResult): String?
 
-    /** Ctrl+B without a ready language server: the declaration found by name in the project. */
-    fun declarationByName(at: TextPos)
+    /** Ctrl+B without a ready language server: goes to the declaration found by name in the project; false if none. */
+    suspend fun declarationByName(at: TextPos): Boolean
 
     /** Path of [path] relative to the project, for the lists of places. */
     fun relativePath(path: String): String

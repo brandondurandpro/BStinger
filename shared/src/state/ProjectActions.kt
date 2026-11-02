@@ -68,13 +68,17 @@ fun ProjectState.gotoDeclaration(at: TextPos? = null) {
  * (regex-based outline, no compiler).
  */
 fun ProjectState.declarationByName(pos: TextPos) {
-    val tab = editor.activeTab ?: return
-    val document = tab.document ?: return
-    document.identifierAt(pos)?.let { name ->
-        scope.launch {
-            declarationOf(name, tab.entry, document, pos)?.let { (entry, target) -> navigate(entry, target) }
-        }
-    }
+    scope.launch { goToDeclarationByName(pos) }
+}
+
+/** Goes to the declaration named like the word at [pos], found in the file or the project; false if there is none. */
+internal suspend fun ProjectState.goToDeclarationByName(pos: TextPos): Boolean {
+    val tab = editor.activeTab
+    val document = tab?.document
+    val name = document?.identifierAt(pos)
+    val found = name?.let { declarationOf(it, tab.entry, document, pos) }
+    found?.let { (entry, target) -> navigate(entry, target) }
+    return found != null
 }
 
 private suspend fun ProjectState.declarationOf(

@@ -32,7 +32,7 @@ internal class ProjectInsightHost(private val project: () -> ProjectState) : Ins
 
     override suspend fun apply(edit: EditResult): String? = project().applyEdit(edit)
 
-    override fun declarationByName(at: TextPos) = project().declarationByName(at)
+    override suspend fun declarationByName(at: TextPos) = project().goToDeclarationByName(at)
 
     override fun relativePath(path: String): String {
         val root = normalized(project().root.path)

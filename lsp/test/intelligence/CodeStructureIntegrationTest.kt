@@ -15,6 +15,7 @@ import org.example.kotlineditor.model.HierarchyDirection
 import org.example.kotlineditor.model.HierarchyKind
 import org.example.kotlineditor.model.InlayHintKind
 import org.example.kotlineditor.model.LanguageServerState
+import org.example.kotlineditor.model.NavigationKind
 import org.example.kotlineditor.model.TextRange
 import org.example.kotlineditor.testkit.lsp.FakeLanguageServerCommand
 import java.nio.file.Files
@@ -236,6 +237,26 @@ class CodeStructureIntegrationTest {
         assertTrue("3:22:5:parameter:[]" in shown, "$shown")
         assertTrue("5:22:5:parameter:[]" in shown, "$shown")
         assertEquals(tokens.sortedWith(compareBy({ it.line }, { it.column })), tokens)
+    }
+
+    @Test
+    fun `a server without definitions is asked for the declaration instead`() {
+        options = arrayOf("--without", "definition")
+        openMain()
+        val found =
+            ready({ it.status }) { intelligence.navigate(SESSION, position(2, 17), NavigationKind.Definition) }
+        val greet = found.locations.single()
+        assertTrue(greet.path.endsWith("Greeter.php"), greet.path)
+        assertEquals(3, greet.range.startLine)
+    }
+
+    @Test
+    fun `without definitions nor declarations, going to the declaration is unsupported`() {
+        options = arrayOf("--without", "definition,declaration")
+        openMain()
+        ready({ it.status }) { intelligence.outline(SESSION, main, 1) }
+        val found = runBlocking { intelligence.navigate(SESSION, position(2, 17), NavigationKind.Definition) }
+        assertEquals(FeatureStatus.Unsupported, found.status)
     }
 
     @Test

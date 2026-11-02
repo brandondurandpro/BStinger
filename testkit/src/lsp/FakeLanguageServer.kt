@@ -282,6 +282,7 @@ object FakeLanguageServer {
                 "textDocument/didSave" -> log.println("saved ${uriOf(message["params"])}").also { log.flush() }
                 "workspace/didChangeWatchedFiles" -> watchedFilesChanged(message["params"])
                 "textDocument/definition" -> reply(id, intelligence().definition(message["params"]))
+                "textDocument/declaration" -> reply(id, intelligence().definition(message["params"]))
                 "textDocument/typeDefinition" -> reply(id, intelligence().typeDefinition(message["params"]))
                 "textDocument/implementation" -> reply(id, intelligence().implementation(message["params"]))
                 "textDocument/references" -> reply(id, intelligence().references(message["params"]))
@@ -366,6 +367,7 @@ object FakeLanguageServer {
                     }
                     put("hoverProvider", provided("hover"))
                     put("definitionProvider", provided("definition"))
+                    put("declarationProvider", provided("declaration"))
                     put("typeDefinitionProvider", provided("typeDefinition"))
                     put("implementationProvider", provided("implementation"))
                     put("referencesProvider", provided("references"))

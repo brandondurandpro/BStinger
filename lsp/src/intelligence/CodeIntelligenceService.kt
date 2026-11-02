@@ -144,7 +144,24 @@ class CodeIntelligenceService internal constructor(
                 NavigationKind.TypeDefinition -> "textDocument/typeDefinition" to "typeDefinitionProvider"
                 NavigationKind.Implementation -> "textDocument/implementation" to "implementationProvider"
             }
-        return locations(session, at, method, capability, positionParams(at))
+        val found = locations(session, at, method, capability, positionParams(at))
+        // A server without definitions, or finding none, may still know the declaration (textDocument/declaration).
+        val unsupported = found.status == FeatureStatus.Unsupported
+        val nothing = found.status == FeatureStatus.Ready && found.locations.isEmpty()
+        val tryDeclaration = kind == NavigationKind.Definition && (unsupported || nothing)
+        return if (tryDeclaration) declarationOr(found, session, at) else found
+    }
+
+    // The declarations of the symbol at [at], or [definitions] when the server has none either.
+    private suspend fun declarationOr(
+        definitions: LocationsResult,
+        session: String,
+        at: DocumentPosition,
+    ): LocationsResult {
+        val declarations =
+            locations(session, at, "textDocument/declaration", "declarationProvider", positionParams(at))
+        val useful = declarations.status == FeatureStatus.Ready && declarations.locations.isNotEmpty()
+        return if (useful || definitions.status == FeatureStatus.Unsupported) declarations else definitions
     }
 
     /** Usages of the symbol at [at]. */

@@ -75,6 +75,7 @@ internal val TEXT_DOCUMENT_CAPABILITIES: JsonObject =
         putJsonObject("inlayHint") {}
         putJsonObject("callHierarchy") {}
         putJsonObject("typeHierarchy") {}
+        putJsonObject("declaration") { put("linkSupport", true) }
         putJsonObject("semanticTokens") {
             putJsonObject("requests") {
                 put("full", true)
