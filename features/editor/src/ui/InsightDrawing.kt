@@ -156,7 +156,7 @@ internal fun DrawScope.drawProblems(problems: List<LineProblem>?, line: String, 
             }
 
             problem.severity == DiagnosticSeverity.Hint -> {
-                Unit
+                // a hint is not drawn, like in IntelliJ
             }
 
             problem.severity == DiagnosticSeverity.Information -> {

@@ -110,9 +110,11 @@ class CompletionChaosE2eTest {
     fun `after the IDE server restarts the document is sent again`() =
         runComposeUiTest {
             val app = openPhp()
+            val before = awaitServer(app) { it.isRunning() }
             app.process.restart()
             awaitReconnected()
-            awaitServer(app) { it.isRunning() }
+            // The status of the server before the restart is still shown for a moment: wait for the new process.
+            awaitServer(app) { it.isRunning() && it.pid != before.pid }
             typeCode("function afterRestart() {}\nafterR")
             awaitCompletion("afterRestart")
         }

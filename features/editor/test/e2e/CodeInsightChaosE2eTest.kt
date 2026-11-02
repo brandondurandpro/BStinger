@@ -144,9 +144,11 @@ class CodeInsightChaosE2eTest {
         runComposeUiTest {
             val app = open("src/Greeter.php")
             awaitTag(EditorTags.usageHint(13), timeout = SERVER_START_MS, unmerged = true)
+            val before = awaitServer(app) { it.isRunning() }
             app.process.restart()
             awaitReconnected()
-            awaitServer(app) { it.isRunning() }
+            // The status of the server before the restart is still shown for a moment: wait for the new process.
+            awaitServer(app) { it.isRunning() && it.pid != before.pid }
             onNodeWithTag(EditorTags.EDITOR).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.MoveEnd) } }
             typeCode("missing();")
             awaitCondition(SERVER_START_MS) { textOf(EditorTags.PROBLEMS_ERRORS) == "1" }

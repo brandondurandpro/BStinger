@@ -85,21 +85,25 @@ private class FoundFiles {
         private set
     val cursor = ListCursor()
     private var foundFor: Pair<String, List<*>?>? = null
-    private var openWhenFound = false
+
+    // The query Enter was pressed for before its results: only they are opened, never those of an older query
+    // whose search ends meanwhile.
+    private var openWhenFound: String? = null
 
     fun update(query: String, indexed: List<*>?, matches: List<FileMatch>, selection: Int, open: (FileMatch) -> Unit) {
         results = matches
         cursor.selected = selection
         foundFor = query to indexed
         // Results found before the index was ready are not the ones Enter asked for.
-        if (openWhenFound && indexed != null) {
-            openWhenFound = false
+        val asked = openWhenFound == query
+        if (asked && indexed != null) {
+            openWhenFound = null
             selected()?.let(open)
         }
     }
 
     fun enter(query: String, indexed: List<*>?, open: (FileMatch) -> Unit) {
-        if (indexed != null && foundFor == query to indexed) selected()?.let(open) else openWhenFound = true
+        if (indexed != null && foundFor == query to indexed) selected()?.let(open) else openWhenFound = query
     }
 
     private fun selected(): FileMatch? = results.getOrNull(cursor.selected)

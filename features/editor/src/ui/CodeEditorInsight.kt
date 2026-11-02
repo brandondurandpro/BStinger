@@ -135,7 +135,7 @@ internal fun hintClicked(
     val onHint = hint != null && offset.x in left..right
     val usable = onHint && insight != null && path != null
     if (usable && declaration != null) {
-        insight?.showUsages(path!!, document, TextPos(declaration.range.startLine, declaration.range.startColumn))
+        insight.showUsages(path, document, TextPos(declaration.range.startLine, declaration.range.startColumn))
     }
     return usable && declaration != null
 }

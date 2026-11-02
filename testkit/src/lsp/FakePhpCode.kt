@@ -112,7 +112,8 @@ internal class FakePhpCode(private val open: Map<String, List<String>>, private 
         val found = ArrayList<FakeDeclaration>()
         var currentClass: FakeDeclaration? = null
         lines.forEachIndexed { index, text ->
-            if (currentClass != null && index > currentClass!!.endLine) currentClass = null
+            val endOfClass = currentClass?.endLine ?: Int.MAX_VALUE
+            if (index > endOfClass) currentClass = null
             TYPE.find(text)?.let { match ->
                 val kind =
                     when (match.groupValues[1]) {

@@ -177,7 +177,7 @@ internal suspend fun AwaitPointerEventScope.editorGesture(target: GestureTarget)
         }
 
         target.onHintClick(pos, down.position) -> {
-            Unit
+            // the click listed the usages of the declaration
         }
 
         else -> {

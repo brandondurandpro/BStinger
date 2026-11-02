@@ -195,7 +195,7 @@ class CodeInsightState(
         hoverWord = word?.let { document to it }
         // The documentation of the previous word goes, unless the mouse goes onto it.
         scheduleHide()
-        if (word != null && pos != null) {
+        if (word != null) {
             hoverJob =
                 scope.launch {
                     delay(HOVER_DELAY_MS)
@@ -247,7 +247,7 @@ class CodeInsightState(
         val nothing = markdown == null && problems.isEmpty()
         when {
             document.version != version -> {
-                Unit
+                // the text changed meanwhile: the answer is about an older one
             }
 
             nothing && explicit -> {
@@ -255,7 +255,7 @@ class CodeInsightState(
             }
 
             nothing -> {
-                Unit
+                // a word without documentation shows nothing on hover
             }
 
             else -> {
