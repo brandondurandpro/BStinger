@@ -130,7 +130,7 @@ data class LanguageServerChoice(
 
 /** Language servers running on the server machine for the open projects. */
 @Suppress("TooManyFunctions", "ComplexInterface")
-interface LanguageServers {
+interface LanguageServers : CodeIntelligence {
     /**
      * The status once its version is greater than [since], or the current one after a while (a long poll): a
      * newer snapshot replaces an older one, so a late or repeated answer never shows an older state.

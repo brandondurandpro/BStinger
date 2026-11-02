@@ -25,7 +25,7 @@ import org.example.kotlineditor.rpc.terminalInput
 import org.example.kotlineditor.rpc.toJson
 import org.example.kotlineditor.rpc.toJsonOrNull
 
-private typealias Handler = suspend Request.() -> JsonElement
+internal typealias Handler = suspend Request.() -> JsonElement
 
 private const val PATH = "path"
 private const val DIRECTORY = "directory"

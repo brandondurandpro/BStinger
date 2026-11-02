@@ -46,7 +46,7 @@ import java.io.OutputStream
  */
 object Protocol {
     /** Version announced in the handshake; client and server must speak the same one. */
-    const val VERSION = 7
+    const val VERSION = 8
 
     /** Version of the application, shown in the welcome screen and used to identify remote server bundles. */
     const val APP_VERSION = "2026.1"
@@ -391,6 +391,42 @@ enum class Method(
 
     /** Completion at a position of an open document. */
     LspCompletion("lsp/completion"),
+
+    /** Documentation of the symbol at a position. */
+    LspHover("lsp/hover"),
+
+    /** Declaration, type or implementations of the symbol at a position. */
+    LspNavigate("lsp/navigate"),
+
+    /** Usages of the symbol at a position. */
+    LspReferences("lsp/references"),
+
+    /** Occurrences of the symbol at a position in its document. */
+    LspHighlights("lsp/highlights"),
+
+    /** Signatures of the call around a position. */
+    LspSignatureHelp("lsp/signatureHelp"),
+
+    /** Usage counts of the declarations of a document. */
+    LspUsageCounts("lsp/usageCounts"),
+
+    /** Diagnostics of the session's documents, answered once newer than the client's version (long poll). */
+    LspDiagnostics("lsp/diagnostics"),
+
+    /** What can be renamed at a position. */
+    LspPrepareRename("lsp/prepareRename"),
+
+    /** Edits that rename a symbol. */
+    LspRename("lsp/rename"),
+
+    /** Edits that format a document or a range of it. */
+    LspFormat("lsp/format"),
+
+    /** Quick fixes and refactorings offered for a range. */
+    LspCodeActions("lsp/codeActions"),
+
+    /** Edits of one of the code actions offered; runs its command on the language server, once. */
+    LspApplyCodeAction("lsp/applyCodeAction", mutating = true),
 }
 
 /** A JSON-RPC error object `{"code": ..., "message": ...}`. */

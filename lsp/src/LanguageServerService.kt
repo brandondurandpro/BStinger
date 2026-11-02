@@ -16,6 +16,8 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
 import org.example.kotlineditor.lsp.completion.CompletionAnswers
+import org.example.kotlineditor.lsp.intelligence.CodeIntelligenceService
+import org.example.kotlineditor.lsp.intelligence.IntelligenceSettings
 import org.example.kotlineditor.lsp.documents.MirroredDocument
 import org.example.kotlineditor.lsp.documents.OpenDocuments
 import org.example.kotlineditor.lsp.jsonrpc.LspConnectionClosedException
@@ -26,8 +28,10 @@ import org.example.kotlineditor.lsp.provision.CandidateRegistry
 import org.example.kotlineditor.lsp.provision.CandidateStatus
 import org.example.kotlineditor.lsp.provision.LanguageServerChoiceStore
 import org.example.kotlineditor.lsp.provision.ToolDownloader
+import org.example.kotlineditor.lsp.supervisor.LanguageServerHooks
 import org.example.kotlineditor.lsp.supervisor.LanguageServerSpec
 import org.example.kotlineditor.lsp.supervisor.LanguageServerSupervisor
+import org.example.kotlineditor.lsp.supervisor.ManagedServer
 import org.example.kotlineditor.lsp.supervisor.OrphanReaper
 import org.example.kotlineditor.lsp.supervisor.ServerTarget
 import org.example.kotlineditor.lsp.supervisor.SupervisorTimings
@@ -62,6 +66,8 @@ class LanguageServerSettings(
     val sampleIntervalMs: Long = 2_000,
     /** How long a completion waits for the edits it follows, then for the language server's answer. */
     val completionTimeoutMs: Long = 10_000,
+    /** Delays and limits of hover, navigation, usages, diagnostics... */
+    val intelligence: IntelligenceSettings = IntelligenceSettings(),
 )
 
 /**
@@ -81,6 +87,9 @@ class LanguageServerService(private val settings: LanguageServerSettings) : Clos
     private val lastFiles = HashMap<String, Pair<String, List<String>>>()
     private val specs = ConcurrentHashMap<String, LanguageServerSpec>()
     private val documents = OpenDocuments()
+
+    /** Hover, navigation, usages, diagnostics, rename, formatting and code actions of the open documents. */
+    val intelligence: CodeIntelligenceService = CodeIntelligenceService(documents, ::serversOf, settings.intelligence)
     private val supervisor =
         LanguageServerSupervisor(
             scope,
@@ -89,6 +98,12 @@ class LanguageServerService(private val settings: LanguageServerSettings) : Clos
             settings.timings,
             onChange = { changes.trySend(Unit) },
             documents = documents,
+            hooks =
+                LanguageServerHooks(
+                    onDiagnostics = intelligence::published,
+                    onApplyEdit = intelligence::applyEdit,
+                    onRestarted = intelligence::restarted,
+                ),
         )
 
     // When the last status was published, in milliseconds since the epoch.
@@ -119,7 +134,8 @@ class LanguageServerService(private val settings: LanguageServerSettings) : Clos
     /** [session] ended. */
     fun release(session: String) {
         synchronized(lastFiles) { lastFiles.remove(session) }
-        documents.release(session) { document -> serversOf(document).forEach { it.didClose(document) } }
+        documents.release(session) { document -> closed(document) }
+        intelligence.released(session)
         supervisor.release(session)
     }
 
@@ -147,7 +163,12 @@ class LanguageServerService(private val settings: LanguageServerSettings) : Clos
 
     /** [session] closed [path]. */
     fun closeDocument(session: String, path: String) {
-        documents.close(session, path) { document -> serversOf(document).forEach { it.didClose(document) } }
+        documents.close(session, path, ::closed)
+    }
+
+    private fun closed(document: MirroredDocument) {
+        serversOf(document).forEach { it.didClose(document) }
+        intelligence.closed(document)
     }
 
     /**
@@ -198,7 +219,7 @@ class LanguageServerService(private val settings: LanguageServerSettings) : Clos
         }
     }
 
-    private fun serversOf(document: MirroredDocument) = supervisor.serving(document.language, document.root)
+    private fun serversOf(document: MirroredDocument): List<ManagedServer> = supervisor.serving(document.language, document.root)
 
     /** See [LanguageServerSupervisor.restart]. */
     fun restart(id: String, generation: Long) = supervisor.restart(id, generation)

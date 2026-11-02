@@ -18,6 +18,8 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.add
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
@@ -103,6 +105,8 @@ internal class ManagedServer(
     private val onChange: () -> Unit,
     // The documents open in the IDE: those under its root are opened in each process it starts.
     private val documents: OpenDocuments? = null,
+    // What the server says besides answers: diagnostics, edits it asks for.
+    private val hooks: LanguageServerHooks = LanguageServerHooks(),
 ) {
     val id = target.id
     val language get() = target.spec.language
@@ -133,6 +137,9 @@ internal class ManagedServer(
     @Volatile private var outbox: DocumentOutbox? = null
 
     @Volatile private var leak: LeakReport? = null
+
+    // The capabilities the current process answered to initialize; null while none is ready.
+    @Volatile private var capabilities: JsonObject? = null
 
     @Volatile var history: MemoryHistory? = null
         private set
@@ -218,6 +225,20 @@ internal class ManagedServer(
         box.flush()
         return link.request(method, params)
     }
+
+    /**
+     * Whether the ready process offers [capability] (`hoverProvider`): present and not false. Null when no process
+     * is ready.
+     */
+    fun supports(capability: String): Boolean? {
+        val current = capabilities ?: return null
+        val value = current[capability] ?: return false
+        val disabled = value is JsonPrimitive && value.booleanOrNull == false
+        return value != JsonNull && !disabled
+    }
+
+    /** The value of capability [name] of the ready process, null when it has none or no process is ready. */
+    fun capability(name: String): JsonElement? = capabilities?.get(name)
 
     /** Kills what is left without asking (after [Command.Close], or when it did not answer in time). */
     fun kill() {
@@ -415,6 +436,9 @@ internal class ManagedServer(
     }
 
     private fun ready(launched: Process, link: LspConnection, initialized: JsonElement?) {
+        val answer = initialized as? JsonObject
+        capabilities = (answer?.get("capabilities") as? JsonObject) ?: JsonObject(emptyMap())
+        hooks.onRestarted(id)
         runCatching { link.notify("initialized", JsonObject(emptyMap())) }
         openDocuments(DocumentOutbox(link, scope, syncKindOf(initialized)))
         // A key per process: the old one may still be untracked after a new one started.
@@ -432,6 +456,7 @@ internal class ManagedServer(
     }
 
     private fun closeOutbox() {
+        capabilities = null
         val close = {
             outbox?.close()
             outbox = null
@@ -504,6 +529,12 @@ internal class ManagedServer(
                 buildJsonArray { add(folder()) }
             }
 
+            "workspace/applyEdit" -> {
+                val edit = params as? JsonObject
+                val applied = edit != null && hooks.onApplyEdit(id, edit)
+                buildJsonObject { put("applied", applied) }
+            }
+
             "window/workDoneProgress/create", "client/registerCapability", "client/unregisterCapability",
             "window/showMessageRequest", "workspace/semanticTokens/refresh", "workspace/inlayHint/refresh",
             "workspace/diagnostic/refresh", "workspace/codeLens/refresh",
@@ -525,6 +556,10 @@ internal class ManagedServer(
 
             method == "\$/progress" -> {
                 onProgress(fields)
+            }
+
+            method == "textDocument/publishDiagnostics" -> {
+                hooks.onDiagnostics(id, fields)
             }
 
             method == "window/logMessage" || method == "window/showMessage" -> {
@@ -586,10 +621,49 @@ internal class ManagedServer(
                 putJsonObject("workspace") {
                     put("configuration", true)
                     put("workspaceFolders", true)
+                    put("applyEdit", true)
+                    putJsonObject("workspaceEdit") {
+                        put("documentChanges", true)
+                        putJsonArray("resourceOperations") { add("create") }
+                    }
+                    putJsonObject("executeCommand") { put("dynamicRegistration", false) }
                 }
                 putJsonObject("textDocument") {
                     putJsonObject("synchronization") { put("dynamicRegistration", false) }
-                    putJsonObject("publishDiagnostics") {}
+                    putJsonObject("publishDiagnostics") {
+                        put("relatedInformation", false)
+                        putJsonObject("tagSupport") { putJsonArray("valueSet") { add(1); add(2) } }
+                        put("versionSupport", true)
+                    }
+                    putJsonObject("hover") { putJsonArray("contentFormat") { add("markdown"); add("plaintext") } }
+                    putJsonObject("definition") { put("linkSupport", true) }
+                    putJsonObject("typeDefinition") { put("linkSupport", true) }
+                    putJsonObject("implementation") { put("linkSupport", true) }
+                    putJsonObject("references") {}
+                    putJsonObject("documentHighlight") {}
+                    putJsonObject("documentSymbol") { put("hierarchicalDocumentSymbolSupport", true) }
+                    putJsonObject("signatureHelp") {
+                        putJsonObject("signatureInformation") {
+                            putJsonArray("documentationFormat") { add("markdown"); add("plaintext") }
+                            putJsonObject("parameterInformation") { put("labelOffsetSupport", true) }
+                            put("activeParameterSupport", true)
+                        }
+                    }
+                    putJsonObject("rename") { put("prepareSupport", true) }
+                    putJsonObject("formatting") {}
+                    putJsonObject("rangeFormatting") {}
+                    putJsonObject("codeAction") {
+                        put("isPreferredSupport", true)
+                        putJsonObject("disabledSupport") {}
+                        putJsonObject("codeActionLiteralSupport") {
+                            putJsonObject("codeActionKind") {
+                                putJsonArray("valueSet") {
+                                    listOf("", "quickfix", "refactor", "refactor.extract", "refactor.inline",
+                                        "refactor.rewrite", "source", "source.organizeImports").forEach { add(it) }
+                                }
+                            }
+                        }
+                    }
                     putJsonObject("completion") {
                         put("contextSupport", false)
                         putJsonObject("completionItem") {

@@ -53,6 +53,8 @@ class LanguageServerSupervisor(
     private val onChange: () -> Unit = {},
     // The documents open in the IDE, sent to the servers whose root has them.
     private val documents: OpenDocuments? = null,
+    // Diagnostics and edits the servers send.
+    private val hooks: LanguageServerHooks = LanguageServerHooks(),
 ) : Closeable {
     private val lock = Any()
     private val managed = LinkedHashMap<String, ManagedServer>()
@@ -141,7 +143,7 @@ class LanguageServerSupervisor(
     }
 
     private fun newServer(target: ServerTarget) =
-        ManagedServer(target, scope, sampler, reaper, timings, clock, ::forget, onChange, documents)
+        ManagedServer(target, scope, sampler, reaper, timings, clock, ::forget, onChange, documents, hooks)
 
     private fun forget(server: ManagedServer): Boolean {
         val removed =
