@@ -34,6 +34,7 @@ import org.example.kotlineditor.state.Document
 import org.example.kotlineditor.state.EditorTab
 import org.example.kotlineditor.state.VerticalScroll
 import org.example.kotlineditor.state.placeholder
+import org.example.kotlineditor.state.visualColumn
 import kotlin.math.ceil
 import kotlin.math.roundToInt
 
@@ -45,7 +46,13 @@ import kotlin.math.roundToInt
  * once the scroll ends. Composing them on every frame of a scroll would cost far more than drawing the lines.
  */
 @Composable
-internal fun EditorLineSemantics(tab: EditorTab, document: Document, metrics: EditorMetrics, marks: GutterMarks) {
+internal fun EditorLineSemantics(
+    tab: EditorTab,
+    document: Document,
+    metrics: EditorMetrics,
+    marks: GutterMarks,
+    insight: InsightMarks = InsightMarks.None,
+) {
     val scroll = tab.verticalScroll
     val folding = document.folding
     val scope = rememberCoroutineScope()
@@ -73,7 +80,8 @@ internal fun EditorLineSemantics(tab: EditorTab, document: Document, metrics: Ed
                         marks.changed[index],
                         GitChangeKind.Deleted.takeIf { index in marks.deleted || deletedAtEnd },
                     )
-                LineNode(row, index, tab, document, metrics, kinds, marks.blame?.containsKey(index) == true)
+                val lineInsight = LineInsight(insight.problems[index], insight.hints[index], insight.highlights[index])
+                LineNode(row, index, tab, document, metrics, kinds, marks.blame?.containsKey(index) == true, lineInsight)
             }
         }
     }
@@ -88,6 +96,7 @@ private fun LineNode(
     metrics: EditorMetrics,
     changes: List<GitChangeKind>,
     annotated: Boolean,
+    insight: LineInsight,
 ) {
     val scroll = tab.verticalScroll
     val folding = document.folding
@@ -139,7 +148,39 @@ private fun LineNode(
                 .semantics { this.text = text }
                 .testTag(EditorTags.lineText(index)),
         )
+        InsightNodes(index, line, tab, metrics, insight)
     }
+}
+
+/** What the language server marks on one line, for its semantics nodes. */
+internal class LineInsight(val problems: List<LineProblem>?, val hint: String?, val highlights: List<LineHighlight>?)
+
+// The problems, occurrences and usage hint of a line, where the canvas draws them: tests find and click them.
+@Composable
+private fun InsightNodes(index: Int, line: String, tab: EditorTab, metrics: EditorMetrics, insight: LineInsight) {
+    val density = LocalDensity.current
+    val cell = with(density) { metrics.charWidth.toDp() }
+    @Composable
+    fun Node(startColumn: Int, columns: Int, tag: String, label: String? = null) {
+        Box(
+            Modifier
+                .offset { IntOffset(textLeft(metrics, tab.horizontalScroll.offset) + (startColumn * metrics.charWidth).roundToInt(), 0) }
+                .size(cell * columns.coerceAtLeast(1), metrics.lineHeight)
+                .semantics { if (label != null) this.text = androidx.compose.ui.text.AnnotatedString(label) }
+                .testTag(tag),
+        )
+    }
+    insight.problems?.forEach { problem ->
+        val start = visualColumn(line, problem.start.coerceIn(0, line.length))
+        val end = visualColumn(line, problem.end.coerceIn(0, line.length))
+        Node(start, end - start, EditorTags.diagnostic(index, problem.severity.name))
+    }
+    insight.highlights?.forEach { highlight ->
+        val start = visualColumn(line, highlight.start.coerceIn(0, line.length))
+        val end = visualColumn(line, highlight.end.coerceIn(0, line.length))
+        Node(start, end - start, EditorTags.symbolHighlight(index, highlight.kind.name))
+    }
+    insight.hint?.let { hint -> Node(hintColumn(line), hint.length, EditorTags.usageHint(index), hint) }
 }
 
 // The colored text of a line, as drawn: tests read its colors here. Derived, so that the colors published for the

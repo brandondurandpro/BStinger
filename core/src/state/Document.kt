@@ -54,6 +54,9 @@ class Document(initialLines: List<String>, val language: Language, val lineSepar
      */
     var editListener: ((TextChange) -> Unit)? = null
 
+    /** Told of every change too, after [editListener]: the diagnostics and usage hints shown follow the text. */
+    var markerListener: ((TextChange) -> Unit)? = null
+
     /** Selections before each Ctrl+W, for Ctrl+Shift+W. */
     val selectionHistory = ArrayDeque<Pair<TextPos?, TextPos>>()
 
@@ -176,7 +179,9 @@ class Document(initialLines: List<String>, val language: Language, val lineSepar
     }
 
     private fun applyRaw(start: TextPos, end: TextPos, text: String): TextPos {
-        editListener?.invoke(TextChange(start.line, start.column, end.line, end.column, text))
+        val change = TextChange(start.line, start.column, end.line, end.column, text)
+        editListener?.invoke(change)
+        markerListener?.invoke(change)
         val prefix = lines[start.line].substring(0, start.column)
         val suffix = lines[end.line].substring(end.column)
         val parts = text.split('\n')

@@ -48,6 +48,15 @@ internal class LineRenderCache(
     fun number(number: Int): TextLayoutResult =
         numbers.getOrPut(number) { measurer.measure(number.toString(), style, softWrap = false, maxLines = 1) }
 
+    // The usage hints share a few texts ("1 usage", "3 usages").
+    private val hints = LruMap<String, TextLayoutResult>(BLAME_CAPACITY)
+
+    /** Usage hint ("3 usages") drawn after the text of a declaration, in the code font. */
+    fun hint(text: String): TextLayoutResult =
+        hints.getOrPut(text) {
+            measurer.measure(text, style.copy(color = IdeColors.InlayHint), softWrap = false, maxLines = 1)
+        }
+
     /** Blame annotation ("author date") of a line. */
     fun blame(text: String): TextLayoutResult =
         blames.getOrPut(text) { measurer.measure(text, blameStyle, softWrap = false, maxLines = 1) }

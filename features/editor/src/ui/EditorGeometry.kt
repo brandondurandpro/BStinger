@@ -74,6 +74,23 @@ internal class EditorMetrics(
                 .coerceAtLeast(0)
         return TextPos(line, columnForVisual(document.lines[line], visual))
     }
+
+    /**
+     * The character under [position] (not the boundary nearest to it, as [hit]): null over the gutter, past the end
+     * of the line, or below the last line.
+     */
+    fun cellAt(position: Offset, viewport: VerticalScroll, horizontal: HorizontalScroll, document: Document): TextPos? {
+        val folding = document.folding
+        val rowOffset = floor((position.y + viewport.rowOffsetPx) / lineHeightPx).toInt()
+        val row = viewport.firstRow + rowOffset
+        val x = position.x - gutterPx - paddingPx + horizontal.offset
+        if (row !in 0 until folding.rowCount() || x < 0) return null
+        val line = folding.lineAt(row)
+        val text = document.lines[line]
+        val visual = floor(x / charWidth).toInt()
+        val column = columnForVisual(text, visual)
+        return if (column < text.length) TextPos(line, column) else null
+    }
 }
 
 @Composable
@@ -128,6 +145,8 @@ internal class GestureTarget(
     val clicks: ClickCounter,
     val focus: FocusRequester,
     val onCtrlClick: (TextPos) -> Unit,
+    // A click on the usage hint of a line: true when it was one.
+    val onHintClick: (TextPos, Offset) -> Boolean = { _, _ -> false },
     val autoScroll: (Float) -> Unit,
 )
 
@@ -144,6 +163,10 @@ internal suspend fun AwaitPointerEventScope.editorGesture(target: GestureTarget)
 
         modifiers.isCtrlPressed || modifiers.isMetaPressed -> {
             target.onCtrlClick(pos)
+        }
+
+        target.onHintClick(pos, down.position) -> {
+            Unit
         }
 
         else -> {

@@ -47,6 +47,7 @@ import org.example.kotlineditor.state.TabStatus
 import org.example.kotlineditor.state.TextPos
 import org.example.kotlineditor.state.findAll
 import org.example.kotlineditor.state.gotoDeclaration
+import org.example.kotlineditor.state.hasInsight
 import org.example.kotlineditor.state.openFileOfDiff
 import org.example.kotlineditor.state.saveAll
 import org.example.kotlineditor.state.synchronize
@@ -270,6 +271,7 @@ private fun ReadyEditor(
         onCtrlClick = project::gotoDeclaration,
         completion = project.completion.takeIf { Languages.languageOf(tab.entry.path) != null },
         path = tab.entry.path,
+        insight = project.insight.takeIf { project.hasInsight(tab) },
     )
 }
 

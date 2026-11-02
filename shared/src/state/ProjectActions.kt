@@ -53,13 +53,23 @@ fun ProjectState.navigateBack() {
 }
 
 /**
- * Ctrl+B: jumps to the declaration of the identifier at the caret, looking in the current file first,
- * then in the whole project (regex-based outline, no compiler).
+ * Ctrl+B and Ctrl+click: jumps to the declaration of the identifier at [at] (the caret by default). The language
+ * server of the file finds it when there is one (its usages when already on it); otherwise it is searched by name.
  */
 fun ProjectState.gotoDeclaration(at: TextPos? = null) {
     val tab = editor.activeTab ?: return
     val document = tab.document ?: return
     val pos = at ?: document.caret
+    if (hasInsight(tab)) insight.gotoDeclaration(tab.entry.path, document, pos) else declarationByName(pos)
+}
+
+/**
+ * The declaration of the identifier at [pos] by name, looking in the current file first, then in the whole project
+ * (regex-based outline, no compiler).
+ */
+fun ProjectState.declarationByName(pos: TextPos) {
+    val tab = editor.activeTab ?: return
+    val document = tab.document ?: return
     document.identifierAt(pos)?.let { name ->
         scope.launch {
             declarationOf(name, tab.entry, document, pos)?.let { (entry, target) -> navigate(entry, target) }

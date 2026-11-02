@@ -58,6 +58,7 @@ internal fun EditorCanvas(
     highlights: SearchHighlights?,
     hints: CaretHints,
     caretOn: State<Boolean>,
+    insight: InsightMarks = InsightMarks.None,
 ) {
     val measurer = rememberTextMeasurer(cacheSize = 0)
     val cache =
@@ -68,7 +69,7 @@ internal fun EditorCanvas(
             Modifier
                 .fillMaxSize()
                 .graphicsLayer()
-                .drawBehind { drawRows(tab, document, metrics, highlights, hints, cache, marks) },
+                .drawBehind { drawRows(tab, document, metrics, highlights, hints, cache, marks, insight) },
         )
         Spacer(
             Modifier
@@ -76,7 +77,7 @@ internal fun EditorCanvas(
                 .graphicsLayer()
                 .drawBehind { if (caretOn.value) drawCaret(tab, document, metrics) },
         )
-        EditorLineSemantics(tab, document, metrics, marks)
+        EditorLineSemantics(tab, document, metrics, marks, insight)
     }
 }
 
@@ -88,6 +89,7 @@ private fun DrawScope.drawRows(
     hints: CaretHints,
     cache: LineRenderCache,
     marks: GutterMarks,
+    insight: InsightMarks,
 ) {
     val scroll = tab.verticalScroll
     val folding = document.folding
@@ -98,7 +100,7 @@ private fun DrawScope.drawRows(
     for (row in first until last) {
         val index = folding.lineAt(row)
         translate(top = (row - first) * lineHeight - scroll.rowOffsetPx) {
-            drawRow(index, document, metrics, highlights, hints, cache, marks, tab.horizontalScroll.offset)
+            drawRow(index, document, metrics, highlights, hints, cache, marks, insight, tab.horizontalScroll.offset)
         }
     }
 }
@@ -112,6 +114,7 @@ private fun DrawScope.drawRow(
     hints: CaretHints,
     cache: LineRenderCache,
     marks: GutterMarks,
+    insight: InsightMarks,
     horizontalOffset: Float,
 ) {
     val folding = document.folding
@@ -120,7 +123,7 @@ private fun DrawScope.drawRow(
     val deletedAtEnd = index == document.lines.lastIndex && document.lineCount in marks.deleted
     val deleted = index in marks.deleted || deletedAtEnd
     val decorations =
-        decorations(document, index, line, highlights, hints, marks.changed[index], deleted, marks.blame?.get(index))
+        decorations(document, index, line, highlights, hints, marks.changed[index], deleted, marks.blame?.get(index), insight.hasHighlights)
     val lineHeight = metrics.lineHeightPx
     if (decorations.isCaretLine && !decorations.hasSelection) {
         drawRect(IdeColors.CurrentLine, Offset.Zero, Size(size.width, lineHeight))
@@ -141,9 +144,21 @@ private fun DrawScope.drawRow(
     val textLeft = metrics.gutterPx.roundToInt().toFloat()
     clipRect(left = textLeft, top = 0f, right = size.width, bottom = lineHeight) {
         val origin = textLeft + TEXT_PADDING.toPx() - horizontalOffset
-        translate(left = origin) { drawDecorations(decorations, 0f, metrics.charWidth, lineHeight) }
+        translate(left = origin) {
+            drawSymbolHighlights(insight.highlights[index], line, metrics.charWidth, lineHeight)
+            drawDecorations(decorations, 0f, metrics.charWidth, lineHeight)
+        }
         val textX = textLeft + TEXT_PADDING.roundToPx() - horizontalOffset.roundToInt()
         drawText(cache.line(source), topLeft = Offset(textX, 0f))
+        translate(left = origin) {
+            drawProblems(insight.problems[index], line, metrics.charWidth, lineHeight)
+            drawLink(insight.link, index, line, metrics.charWidth, lineHeight)
+        }
+        insight.hints[index]?.let { hint ->
+            val layout = cache.hint(hint)
+            val hintX = textX + hintColumn(if (folded) line + " " + source.placeholder.orEmpty() else line) * metrics.charWidth
+            drawText(layout, topLeft = Offset(hintX, (lineHeight - layout.size.height) / 2))
+        }
     }
 }
 

@@ -54,6 +54,12 @@ object IdeColors {
     val TextSelection = Color(0xFF214283)
     val BracketMatch = Color(0xFF3B514D)
     val IdentifierUsage = Color(0xFF373B39)
+    val IdentifierWrite = Color(0xFF472C47)
+    val ProblemError = Color(0xFFF75464)
+    val ProblemWarning = Color(0xFFE5B53D)
+    val ProblemInformation = Color(0xFF7E838B)
+    val InlayHint = Color(0xFF868A91)
+    val DocumentationCode = Color(0xFF1E1F22)
     val FoldPlaceholder = Color(0xFF393B40)
 
     val Keyword = Color(0xFFCF8E6D)

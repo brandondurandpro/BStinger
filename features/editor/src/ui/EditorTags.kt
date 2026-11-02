@@ -21,6 +21,21 @@ object EditorTags {
     const val EDITOR_VERTICAL_SCROLLBAR = "editor.vscroll"
     const val EDITOR_MESSAGE = "editor.message"
     const val COMPLETION = "completion"
+    const val HOVER = "hover"
+    const val HOVER_DOCUMENTATION = "hover.documentation"
+    const val HOVER_PROBLEMS = "hover.problems"
+    const val LOCATIONS = "locations"
+    const val LOCATIONS_TITLE = "locations.title"
+    const val SIGNATURE = "signature"
+    const val SIGNATURE_ACTIVE_PARAMETER = "signature.activeParameter"
+    const val RENAME = "rename"
+    const val RENAME_INPUT = "rename.input"
+    const val CODE_ACTIONS = "codeActions"
+    const val NOTICE = "notice"
+    const val PROBLEMS = "problems"
+    const val PROBLEMS_ERRORS = "problems.errors"
+    const val PROBLEMS_WARNINGS = "problems.warnings"
+    const val LINK = "editor.link"
     const val FIND_BAR = "findBar"
     const val FIND_BAR_INPUT = "findBar.input"
     const val FIND_BAR_COUNT = "findBar.count"
@@ -66,4 +81,19 @@ object EditorTags {
     fun lineText(index: Int) = "line.text:$index"
 
     fun foldMarker(line: Int) = "fold:$line"
+
+    /** A row of the list of places (usages, declarations), by its index. */
+    fun location(index: Int) = "locations.item:$index"
+
+    /** A row of the quick fixes popup, by its title. */
+    fun codeAction(title: String) = "codeActions.item:$title"
+
+    /** A problem underlined on [line], by severity (`Error`, `Warning`...). */
+    fun diagnostic(line: Int, severity: String) = "editor.diagnostic:$line:$severity"
+
+    /** The "3 usages" hint at the end of [line]. */
+    fun usageHint(line: Int) = "editor.usages:$line"
+
+    /** An occurrence of the symbol at the caret highlighted by the language server, on [line]. */
+    fun symbolHighlight(line: Int, kind: String) = "editor.highlight:$line:$kind"
 }

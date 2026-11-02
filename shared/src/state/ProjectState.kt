@@ -67,6 +67,9 @@ class ProjectState(
         CompletionState(scope) { path, document ->
             languageServers?.complete(path, document) ?: CompletionResult.NotReady
         }
+
+    /** Hover, navigation, usages, problems, rename, reformat and quick fixes, from the language servers. */
+    val insight = CodeInsightState(scope, { insightBackend() }, ProjectInsightHost { this })
     val terminal = TerminalState(root.path, services.terminal, scope)
 
     /** Git: branch, status, commit, branches of the toolbar, and the Branches tool window's history. */
@@ -99,6 +102,7 @@ class ProjectState(
     init {
         git.refresh()
         followActiveFile()
+        followInsight()
     }
 
     /** Shows or hides a tool window (Alt+1, Alt+9, Alt+F12, Ctrl+Alt+Shift+D or its button in the left strip). */
