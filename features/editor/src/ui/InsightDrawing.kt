@@ -57,6 +57,8 @@ internal class InsightMarks(insight: DocumentInsight?, val link: LinkTarget?, do
             .filter { it.range.startLine == it.range.endLine }
             .groupBy({ it.range.startLine }) { LineHighlight(it.range.startColumn, it.range.endColumn, it.kind) }
 
+    val semantic: Map<Int, LineSemantic> = semanticByLine(insight?.semanticTokens.orEmpty())
+
     /** Whether the language server's occurrences replace the word-based ones. */
     val hasHighlights: Boolean get() = highlights.isNotEmpty()
 

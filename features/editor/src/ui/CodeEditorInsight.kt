@@ -44,7 +44,7 @@ import org.example.kotlineditor.state.toggleProblems
 @Composable
 internal fun rememberInsightMarks(insight: CodeInsightState?, document: Document, link: LinkTarget?): InsightMarks {
     val shown = insight?.insightOf(document)
-    return remember(shown?.diagnostics, shown?.usageCounts, shown?.highlights, link) {
+    return remember(shown?.diagnostics, shown?.usageCounts, shown?.highlights, shown?.semanticTokens, link) {
         if (shown == null) InsightMarks.None else InsightMarks(shown, link, document)
     }
 }

@@ -1,6 +1,7 @@
 package org.example.kotlineditor.state
 
 import org.example.kotlineditor.model.InlayHint
+import org.example.kotlineditor.model.SemanticToken
 import org.example.kotlineditor.model.TextChange
 
 /** [hint] after [change]: it follows its character; null when the change replaced the text around it. */
@@ -21,3 +22,15 @@ fun inlaysOf(hints: List<InlayHint>): Map<Int, LineInlays> =
             val sorted = onLine.sortedBy { it.column }
             LineInlays(IntArray(sorted.size) { sorted[it].column }, sorted.map { it.label })
         }
+
+/** [token] after [change]: it follows its word; null when the change touched the word (until the server answers). */
+internal fun shiftedToken(token: SemanticToken, change: TextChange): SemanticToken? {
+    val start = TextPos(token.line, token.column)
+    val end = TextPos(token.line, token.column + token.length)
+    val changeStart = TextPos(change.startLine, change.startColumn)
+    val changeEnd = TextPos(change.endLine, change.endColumn)
+    // Typed or deleted in the word, or right after it (the word grows): its kind is not known anymore.
+    val touched = changeStart <= end && changeEnd >= start
+    val moved = shifted(start, change)
+    return token.takeUnless { touched }?.copy(line = moved.line, column = moved.column)
+}

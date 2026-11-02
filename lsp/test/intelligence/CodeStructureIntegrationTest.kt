@@ -223,13 +223,34 @@ class CodeStructureIntegrationTest {
     }
 
     @Test
+    fun `semantic tokens are named with the server's legend, in the order of the text`() {
+        openMain()
+        val tokens = ready({ it.status }) { intelligence.semanticTokens(SESSION, main, 1) }.tokens
+        val shown = tokens.map { "${it.line}:${it.column}:${it.length}:${it.type}:${it.modifiers.sorted()}" }
+        // `$greeter = new Greeter();`, then `echo $greeter->greet("world", 1);`.
+        assertTrue("1:0:8:variable:[]" in shown, "$shown")
+        assertTrue("1:15:7:class:[]" in shown, "$shown")
+        assertTrue("2:15:5:method:[]" in shown, "$shown")
+        // `function shout(string $text)`, then its use in the body.
+        assertTrue("3:9:5:function:[declaration]" in shown, "$shown")
+        assertTrue("3:22:5:parameter:[]" in shown, "$shown")
+        assertTrue("5:22:5:parameter:[]" in shown, "$shown")
+        assertEquals(tokens.sortedWith(compareBy({ it.line }, { it.column })), tokens)
+    }
+
+    @Test
     fun `features the server does not offer are unsupported, not waited for`() {
-        options = arrayOf("--without", "inlayHint,callHierarchy,typeHierarchy,foldingRange,selectionRange")
+        options =
+            arrayOf(
+                "--without",
+                "inlayHint,callHierarchy,typeHierarchy,foldingRange,selectionRange,semanticTokens",
+            )
         openMain()
         // The outline answers once the server has the document: the others are then known to be missing.
         ready({ it.status }) { intelligence.outline(SESSION, main, 1) }
         runBlocking {
             assertEquals(FeatureStatus.Unsupported, intelligence.inlayHints(SESSION, main, 1).status)
+            assertEquals(FeatureStatus.Unsupported, intelligence.semanticTokens(SESSION, main, 1).status)
             assertEquals(FeatureStatus.Unsupported, intelligence.foldingRanges(SESSION, main, 1).status)
             assertEquals(FeatureStatus.Unsupported, intelligence.selectionRanges(SESSION, position(5, 13)).status)
             val calls = intelligence.prepareHierarchy(SESSION, position(3, 10), HierarchyKind.Calls)

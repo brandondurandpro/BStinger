@@ -1,11 +1,15 @@
 package org.example.kotlineditor.lsp.supervisor
 
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
+import org.example.kotlineditor.lsp.intelligence.SEMANTIC_TOKEN_MODIFIERS
+import org.example.kotlineditor.lsp.intelligence.SEMANTIC_TOKEN_TYPES
 
 // What the IDE tells a language server it can do, in `initialize`.
 
@@ -71,6 +75,17 @@ internal val TEXT_DOCUMENT_CAPABILITIES: JsonObject =
         putJsonObject("inlayHint") {}
         putJsonObject("callHierarchy") {}
         putJsonObject("typeHierarchy") {}
+        putJsonObject("semanticTokens") {
+            putJsonObject("requests") {
+                put("full", true)
+                put("range", true)
+            }
+            put("tokenTypes", JsonArray(SEMANTIC_TOKEN_TYPES.map { JsonPrimitive(it) }))
+            put("tokenModifiers", JsonArray(SEMANTIC_TOKEN_MODIFIERS.map { JsonPrimitive(it) }))
+            put("formats", JsonArray(listOf(JsonPrimitive("relative"))))
+            put("overlappingTokenSupport", false)
+            put("multilineTokenSupport", false)
+        }
         put("signatureHelp", SIGNATURE_HELP)
         putJsonObject("rename") { put("prepareSupport", true) }
         putJsonObject("formatting") {}

@@ -88,6 +88,7 @@ internal fun EditorLineSemantics(
                         insight.hints[index],
                         insight.highlights[index],
                         link,
+                        insight.semantic[index],
                     )
                 LineNode(
                     row,
@@ -120,7 +121,7 @@ private fun LineNode(
     val line = document.lines[index]
     val folded = folding.isFolded(index)
     val placeholder = if (folded) folding.placeholder(index, document.lines) else null
-    val text by rememberLineText(document, index, line, placeholder)
+    val text by rememberLineText(document, index, line, placeholder, insight.semantic)
     val density = LocalDensity.current
     val gutter = with(density) { metrics.gutterPx.toDp() }
     val textWidth = with(density) { (text.length * metrics.charWidth).toDp() }
@@ -175,6 +176,7 @@ internal class LineInsight(
     val hint: String?,
     val highlights: List<LineHighlight>?,
     val link: Pair<Int, Int>?,
+    val semantic: LineSemantic? = null,
 )
 
 // The problems, occurrences and usage hint of a line, where the canvas draws them: tests find and click them.
@@ -237,23 +239,29 @@ private fun InsightNodes(index: Int, line: ScreenLine, tab: EditorTab, metrics: 
 // The colored text of a line, as drawn: tests read its colors here. Derived, so that the colors published for the
 // other lines (after each edit) do not compose this line again.
 @Composable
-private fun rememberLineText(document: Document, index: Int, line: String, placeholder: String?) =
-    remember(document, index, line, placeholder) {
-        derivedStateOf(structuralEqualityPolicy()) {
-            highlighted(
-                LineSource(
-                    index,
-                    line,
-                    document.language,
-                    document.commentStates?.getOrNull(index) == true,
-                    foldable = false,
-                    folded = placeholder != null,
-                    placeholder,
-                    document.syntax?.highlights?.spansFor(index, line),
-                ),
-            )
-        }
+private fun rememberLineText(
+    document: Document,
+    index: Int,
+    line: String,
+    placeholder: String?,
+    semantic: LineSemantic?,
+) = remember(document, index, line, placeholder, semantic) {
+    derivedStateOf(structuralEqualityPolicy()) {
+        highlighted(
+            LineSource(
+                index,
+                line,
+                document.language,
+                document.commentStates?.getOrNull(index) == true,
+                foldable = false,
+                folded = placeholder != null,
+                placeholder,
+                document.syntax?.highlights?.spansFor(index, line),
+                semantic = semantic,
+            ),
+        )
     }
+}
 
 // The first row on screen, left as it was while a scroll is in progress.
 @Composable

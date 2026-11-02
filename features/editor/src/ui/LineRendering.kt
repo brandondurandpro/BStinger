@@ -56,6 +56,8 @@ class LineSource(
     val spans: LineSpans? = null,
     /** The inlay hints drawn between its characters, none when null. */
     val inlays: LineInlays? = null,
+    /** The styles of the language server's semantic tokens, over the others; none when null. */
+    val semantic: LineSemantic? = null,
 )
 
 internal val DELETION_MARKER_SIZE = 7.dp
@@ -87,7 +89,8 @@ internal fun highlighted(source: LineSource): AnnotatedString {
             styled(text, SyntaxHighlighter.highlight(text, source.language, source.startsInComment), columns = null)
         } else {
             colored(source.text, spans)
-        }.let { withInlays(it, source.text, source.inlays) }
+        }.let { withSemantic(it, source.text, source.semantic) }
+            .let { withInlays(it, source.text, source.inlays) }
     val placeholder = source.placeholder ?: return highlighted
     return buildAnnotatedString {
         append(highlighted)

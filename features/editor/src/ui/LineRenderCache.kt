@@ -27,6 +27,7 @@ internal class LineRenderCache(
         val placeholder: String?,
         val spans: LineSpans?,
         val inlays: LineInlays?,
+        val semantic: LineSemantic?,
     )
 
     private val lines = LruMap<LineKey, TextLayoutResult>(lineCapacity)
@@ -47,7 +48,7 @@ internal class LineRenderCache(
             measurer.measure(highlighted(source), style, softWrap = false, maxLines = 1)
         }
 
-    private fun LineSource.key() = LineKey(text, language, startsInComment, placeholder, spans, inlays)
+    private fun LineSource.key() = LineKey(text, language, startsInComment, placeholder, spans, inlays, semantic)
 
     /** Line number [number] (one-based), without color: the caret line draws it brighter. */
     fun number(number: Int): TextLayoutResult =

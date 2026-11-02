@@ -362,6 +362,9 @@ interface CodeIntelligence {
     suspend fun hierarchyChildren(path: String, item: HierarchyItem, direction: HierarchyDirection): HierarchyResult =
         HierarchyResult.NotReady
 
+    /** The semantic tokens of version [version] of [path], to color the code as the server understands it. */
+    suspend fun semanticTokens(path: String, version: Int): SemanticTokensResult = SemanticTokensResult.NotReady
+
     /** The inlay hints of version [version] of [path]: parameter names, types. */
     suspend fun inlayHints(path: String, version: Int): InlayHintsResult = InlayHintsResult.NotReady
 

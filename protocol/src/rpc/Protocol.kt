@@ -422,6 +422,9 @@ enum class Method(
     /** The callers, callees, supertypes or subtypes of a hierarchy item. */
     LspHierarchyChildren("lsp/hierarchyChildren"),
 
+    /** Semantic tokens of a document. */
+    LspSemanticTokens("lsp/semanticTokens"),
+
     /** Inlay hints of a document. */
     LspInlayHints("lsp/inlayHints"),
 

@@ -148,6 +148,9 @@ private fun structureHandlers(services: LocalServices): Map<Method, Handler> {
             val direction = params.enumValue("direction", HierarchyDirection.entries)
             intelligence().hierarchyChildren(params.string(PATH), item, direction).toJson()
         },
+        Method.LspSemanticTokens to {
+            intelligence().semanticTokens(session, params.string(PATH), params.int(VERSION)).toJson()
+        },
         Method.LspInlayHints to {
             intelligence().inlayHints(session, params.string(PATH), params.int(VERSION)).toJson()
         },

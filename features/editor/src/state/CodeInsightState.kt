@@ -187,6 +187,7 @@ class CodeInsightState(
                 countUsages(insight)
                 foldingFromServer(insight)
                 inlayHintsFromServer(insight)
+                semanticTokensFromServer(insight)
             }
     }
 
@@ -219,6 +220,15 @@ class CodeInsightState(
             insight.inlayHints = it.hints
             applyInlays(insight)
         }
+    }
+
+    // The semantic tokens of the text the usages were counted on.
+    private suspend fun semanticTokensFromServer(insight: DocumentInsight) {
+        val document = insight.document
+        val version = document.version
+        val result = askVersion(insight.path, document) { servers, at -> servers.semanticTokens(insight.path, at) }
+        val ready = result?.takeIf { it.status == FeatureStatus.Ready && document.version == version }
+        ready?.let { insight.semanticTokens = it.tokens }
     }
 
     // Inline, the hints are drawn in the code; otherwise the code has none.

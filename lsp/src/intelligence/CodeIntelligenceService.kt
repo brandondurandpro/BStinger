@@ -46,6 +46,7 @@ import org.example.kotlineditor.model.NavigationKind
 import org.example.kotlineditor.model.OutlineResult
 import org.example.kotlineditor.model.RenameTarget
 import org.example.kotlineditor.model.SelectionRangesResult
+import org.example.kotlineditor.model.SemanticTokensResult
 import org.example.kotlineditor.model.SignatureHelpResult
 import org.example.kotlineditor.model.SourceLocation
 import org.example.kotlineditor.model.SymbolHighlight
@@ -209,6 +210,10 @@ class CodeIntelligenceService internal constructor(
     /** The callers, callees, supertypes or subtypes of [item], from the server of the open document [path]. */
     suspend fun hierarchyChildren(path: String, item: HierarchyItem, direction: HierarchyDirection): HierarchyResult =
         hierarchy.children(path, item, direction)
+
+    /** The semantic tokens of version [version] of [path], over the whole document. */
+    suspend fun semanticTokens(session: String, path: String, version: Int): SemanticTokensResult =
+        structure.semanticTokens(session, path, version)
 
     /** The inlay hints of version [version] of [path], over the whole document. */
     suspend fun inlayHints(session: String, path: String, version: Int): InlayHintsResult =

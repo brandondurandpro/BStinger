@@ -23,6 +23,7 @@ import org.example.kotlineditor.model.NavigationKind
 import org.example.kotlineditor.model.OutlineResult
 import org.example.kotlineditor.model.RenameTarget
 import org.example.kotlineditor.model.SelectionRangesResult
+import org.example.kotlineditor.model.SemanticTokensResult
 import org.example.kotlineditor.model.SignatureHelpResult
 import org.example.kotlineditor.model.SymbolHighlight
 import org.example.kotlineditor.model.TextChange
@@ -183,6 +184,15 @@ class RemoteLanguageServers(private val client: RpcClient) : LanguageServers {
                 put("direction", direction.name)
             }
         return result.hierarchyResult()
+    }
+
+    override suspend fun semanticTokens(path: String, version: Int): SemanticTokensResult {
+        val result =
+            client.call(Method.LspSemanticTokens) {
+                put(PATH, path)
+                put(VERSION, version)
+            }
+        return result.semanticTokensResult()
     }
 
     override suspend fun inlayHints(path: String, version: Int): InlayHintsResult {
