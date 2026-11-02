@@ -29,8 +29,13 @@ internal data class FakeOccurrence(val uri: String, val line: Int, val column: I
  * declarations of classes, interfaces, functions and methods with their docblocks, whole-word occurrences, calls of
  * unknown functions. The files are the open documents and, for the others, those of the root directory on disk.
  */
-internal class FakePhpCode(private val open: Map<String, List<String>>, private val rootUri: String?) {
-    private val diskFiles: Map<String, List<String>> by lazy { readDisk() }
+internal class FakePhpCode(
+    private val open: Map<String, List<String>>,
+    private val rootUri: String?,
+    // The files on disk as an indexing server knows them; null: read now.
+    private val disk: Map<String, List<String>>? = null,
+) {
+    private val diskFiles: Map<String, List<String>> by lazy { disk ?: readDisk(rootUri) }
 
     /** Every file: the open ones as the client sent them, the others as on disk. */
     val files: Map<String, List<String>> by lazy { diskFiles + open }
@@ -176,24 +181,28 @@ internal class FakePhpCode(private val open: Map<String, List<String>>, private 
         return text.joinToString("\n").trim().takeIf { it.isNotEmpty() }
     }
 
-    private fun readDisk(): Map<String, List<String>> {
-        val root = rootUri?.let { runCatching { File(URI(it)) }.getOrNull() } ?: return emptyMap()
-        val files =
-            root
-                .walkTopDown()
-                .onEnter { it.name != ".git" }
-                .filter { it.isFile && it.extension == "php" }
-                .take(MAX_DISK_FILES)
-        // Named like the client names them: Path.toUri, as the IDE server does.
-        // A file deleted while the directory is read is left out, as a real server would.
-        val read = files.mapNotNull { file -> runCatching { file.toPath().toUri().toString() to readShared(file) }.getOrNull() }
-        return read.toMap()
-    }
-
-    // NIO opens files sharing their deletion on Windows (java.io does not): the IDE can still delete them meanwhile.
-    private fun readShared(file: File): List<String> = java.nio.file.Files.readAllLines(file.toPath())
-
     companion object {
+        /** The PHP files under [rootUri], by URI, as an indexing server reads them. */
+        fun readDisk(rootUri: String?): Map<String, List<String>> {
+            val root = rootUri?.let { runCatching { File(URI(it)) }.getOrNull() } ?: return emptyMap()
+            val files =
+                root
+                    .walkTopDown()
+                    .onEnter { it.name != ".git" }
+                    .filter { it.isFile && it.extension == "php" }
+                    .take(MAX_DISK_FILES)
+            // Named like the client names them: Path.toUri, as the IDE server does.
+            // A file deleted while the directory is read is left out, as a real server would.
+            val read = files.mapNotNull { file -> runCatching { file.toPath().toUri().toString() to readShared(file) }.getOrNull() }
+            return read.toMap()
+        }
+
+        /** The lines of the file at [uri], null when it cannot be read (deleted meanwhile). */
+        fun readFile(uri: String): List<String>? = runCatching { readShared(File(URI(uri))) }.getOrNull()
+
+        // NIO opens files sharing their deletion on Windows (java.io does not): the IDE can still delete them meanwhile.
+        private fun readShared(file: File): List<String> = java.nio.file.Files.readAllLines(file.toPath())
+
         const val CLASS = 5
         const val METHOD = 6
         const val ENUM = 10

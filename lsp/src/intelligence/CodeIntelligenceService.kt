@@ -38,6 +38,7 @@ import org.example.kotlineditor.model.FormatOptions
 import org.example.kotlineditor.model.HoverResult
 import org.example.kotlineditor.model.LocationsResult
 import org.example.kotlineditor.model.NavigationKind
+import org.example.kotlineditor.model.OutlineResult
 import org.example.kotlineditor.model.RenameTarget
 import org.example.kotlineditor.model.SignatureHelpResult
 import org.example.kotlineditor.model.SourceLocation
@@ -45,6 +46,8 @@ import org.example.kotlineditor.model.SymbolHighlight
 import org.example.kotlineditor.model.TextRange
 import org.example.kotlineditor.model.UsageCount
 import org.example.kotlineditor.model.UsageCountsResult
+import org.example.kotlineditor.model.WorkspaceSymbol
+import org.example.kotlineditor.model.WorkspaceSymbolsResult
 import java.io.IOException
 import java.nio.charset.MalformedInputException
 import java.nio.file.Files
@@ -60,6 +63,8 @@ private const val RENAME_PROVIDER = "renameProvider"
 private const val POSITION = "position"
 private const val EDIT = "edit"
 private const val CODE_ACTION_PROVIDER = "codeActionProvider"
+private const val DOCUMENT_SYMBOL_PROVIDER = "documentSymbolProvider"
+private const val WORKSPACE_SYMBOL_PROVIDER = "workspaceSymbolProvider"
 
 /** Delays and limits of the code intelligence requests. */
 class IntelligenceSettings(
@@ -94,6 +99,7 @@ class CodeIntelligenceService internal constructor(
     private val documents: OpenDocuments,
     private val serversOf: (MirroredDocument) -> List<ManagedServer>,
     private val settings: IntelligenceSettings = IntelligenceSettings(),
+    private val serversOfSession: (String) -> List<ManagedServer> = { emptyList() },
 ) {
     private val diagnostics = ConcurrentHashMap<String, Published>()
     private val diagnosticsVersion = MutableStateFlow(1L)
@@ -179,6 +185,51 @@ class CodeIntelligenceService internal constructor(
             signatureHelpOf(request("textDocument/signatureHelp", positionParams(document, at)))
         }
 
+    /** The declarations of [path] at [version], nested, for File Structure. */
+    suspend fun outline(session: String, path: String, version: Int): OutlineResult {
+        val unsupported = OutlineResult(FeatureStatus.Unsupported, emptyList())
+        return ask(session, path, version, DOCUMENT_SYMBOL_PROVIDER, OutlineResult.NotReady, unsupported) {
+                document,
+                request,
+            ->
+            val params = buildJsonObject { putJsonObject(TEXT_DOCUMENT) { put(URI, document.uri) } }
+            OutlineResult(FeatureStatus.Ready, outlineOf(request("textDocument/documentSymbol", params)))
+        }
+    }
+
+    /** The declarations of [session]'s project named like [query], from every server of the project that searches. */
+    suspend fun workspaceSymbols(session: String, query: String): WorkspaceSymbolsResult {
+        val servers = serversOfSession(session).filter { it.supports(WORKSPACE_SYMBOL_PROVIDER) != null }
+        val searching = servers.filter { it.supports(WORKSPACE_SYMBOL_PROVIDER) == true }
+        val unsupported = servers.isNotEmpty() && searching.isEmpty()
+        val found = if (searching.isEmpty()) emptyList() else searchSymbols(searching, query)
+        val status =
+            when {
+                unsupported -> FeatureStatus.Unsupported
+                found.isEmpty() -> FeatureStatus.NotReady
+                else -> FeatureStatus.Ready
+            }
+        return WorkspaceSymbolsResult(status, found.flatten().take(settings.maxLocations))
+    }
+
+    // The answers of the [servers] that answered.
+    private suspend fun searchSymbols(servers: List<ManagedServer>, query: String): List<List<WorkspaceSymbol>> {
+        val params = buildJsonObject { put("query", query) }
+        val answers =
+            coroutineScope {
+                val asked =
+                    servers.map { server ->
+                        async {
+                            answeredBy<List<WorkspaceSymbol>?>(server, null) { request ->
+                                workspaceSymbolsOf(request("workspace/symbol", params))
+                            }
+                        }
+                    }
+                asked.awaitAll()
+            }
+        return answers.filterNotNull()
+    }
+
     /**
      * How many times each declaration of [path] is used: its symbols, then the references of each, a few at a time.
      * Kept for the version of the document it was counted on.
@@ -186,7 +237,7 @@ class CodeIntelligenceService internal constructor(
     suspend fun usageCounts(session: String, path: String, version: Int): UsageCountsResult {
         val notReady = UsageCountsResult(FeatureStatus.NotReady, emptyList())
         val unsupported = UsageCountsResult(FeatureStatus.Unsupported, emptyList())
-        return ask(session, path, version, "documentSymbolProvider", notReady, unsupported) { document, request ->
+        return ask(session, path, version, DOCUMENT_SYMBOL_PROVIDER, notReady, unsupported) { document, request ->
             val lspVersion = documents.locked { document.lspVersion }
             val cached = usageCache[document.uri]?.takeIf { it.first == lspVersion }
             cached?.second ?: countUsages(document, request).also { usageCache[document.uri] = lspVersion to it }
@@ -549,13 +600,21 @@ class CodeIntelligenceService internal constructor(
         notReady: T,
         refused: (LspResponseException) -> T,
         block: suspend (MirroredDocument, suspend (String, JsonObject) -> JsonElement?) -> T,
+    ): T = answeredBy(server, notReady, refused) { request -> block(document, request) }
+
+    // What [block] finds asking [server]; [notReady] when it cannot answer in time, [refused] when it refuses.
+    private suspend fun <T> answeredBy(
+        server: ManagedServer,
+        notReady: T,
+        refused: (LspResponseException) -> T = { notReady },
+        block: suspend (suspend (String, JsonObject) -> JsonElement?) -> T,
     ): T {
         val request: suspend (String, JsonObject) -> JsonElement? = { method, params ->
             val answer = server.request(method, params) ?: throw NotReadyException()
             answer.takeIf { it != JsonNull }
         }
         return try {
-            withTimeoutOrNull(settings.timeoutMs) { block(document, request) } ?: notReady
+            withTimeoutOrNull(settings.timeoutMs) { block(request) } ?: notReady
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: NotReadyException) {

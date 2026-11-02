@@ -192,6 +192,10 @@ class ProjectState(
         editor.openAt(entry, start, end)
     }
 
+    override suspend fun serverOutline(document: Document) = outlineFromServer(document)
+
+    override suspend fun serverSymbols(query: String) = symbolsFromServers(query)
+
     // Selects the active file in the tree whenever it changes (and when the option is turned back on).
     private fun followActiveFile() {
         scope.launch {

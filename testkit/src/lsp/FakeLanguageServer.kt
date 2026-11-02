@@ -9,6 +9,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
@@ -55,6 +56,7 @@ object FakeLanguageServer {
     private const val PERCENT = 100
     private const val TICK_MS = 100L
     private const val MILLIS_PER_SECOND = 1000L
+    private const val WATCHED_DELETED = 3
 
     /** Starts the server (or, with `--hold-mb n`, a child that only holds n MB until its stdin closes). */
     @JvmStatic
@@ -104,6 +106,8 @@ object FakeLanguageServer {
         val noCompletion: Boolean = false,
         val without: Set<String> = emptySet(),
         val noDiagnostics: Boolean = false,
+        // Reads the files on disk once, like a server that indexes them, then only what didChangeWatchedFiles names.
+        val index: Boolean = false,
     ) {
         val allocates get() = leakMbPerSecond > 0 || sawtooth != null || spikeThenPlateau != null
 
@@ -140,6 +144,7 @@ object FakeLanguageServer {
                     noCompletion = "no-completion" in values,
                     without = values["without"]?.split(',')?.toSet().orEmpty(),
                     noDiagnostics = "no-diagnostics" in values,
+                    index = "index" in values,
                 )
             }
 
@@ -193,11 +198,33 @@ object FakeLanguageServer {
         private val documents = HashMap<String, MutableList<String>>()
         private var rootUri: String? = null
 
+        // The files on disk as indexed with `--index`, by URI.
+        private var indexed: MutableMap<String, List<String>>? = null
+
         // executeCommand requests waiting for the answer to the applyEdit they sent, by the applyEdit's id.
         private val pendingCommands = HashMap<String, JsonElement>()
         private var nextEditId = 0
 
-        private fun intelligence() = FakeIntelligence(FakePhpCode(documents.mapValues { it.value.toList() }, rootUri))
+        private fun intelligence() =
+            FakeIntelligence(FakePhpCode(documents.mapValues { it.value.toList() }, rootUri, disk()))
+
+        private fun disk(): Map<String, List<String>>? =
+            if (options.index) indexed ?: FakePhpCode.readDisk(rootUri).toMutableMap().also { indexed = it } else null
+
+        // Updates the index with the files the client says changed: 1 created, 2 changed, 3 deleted.
+        private fun watchedFilesChanged(params: JsonElement?) {
+            val changes = (params as? JsonObject)?.get("changes") as? JsonArray ?: return
+            for (change in changes) {
+                val fields = change as? JsonObject ?: continue
+                val uri = (fields["uri"] as? JsonPrimitive)?.contentOrNull ?: continue
+                val type = (fields["type"] as? JsonPrimitive)?.intOrNull
+                log.println("watched $type $uri")
+                val index = indexed ?: continue
+                val lines = if (type == WATCHED_DELETED) null else FakePhpCode.readFile(uri)
+                if (lines == null) index.remove(uri) else index[uri] = lines
+            }
+            log.flush()
+        }
 
         fun run() {
             if (options.stderrFlood) thread(isDaemon = true, name = "stderr-flood") { flood() }
@@ -249,12 +276,15 @@ object FakeLanguageServer {
                     if (!options.diagnostics) publishProblems()
                 }
                 "textDocument/didClose" -> documents.remove(uriOf(message["params"]))
+                "textDocument/didSave" -> log.println("saved ${uriOf(message["params"])}").also { log.flush() }
+                "workspace/didChangeWatchedFiles" -> watchedFilesChanged(message["params"])
                 "textDocument/definition" -> reply(id, intelligence().definition(message["params"]))
                 "textDocument/typeDefinition" -> reply(id, intelligence().typeDefinition(message["params"]))
                 "textDocument/implementation" -> reply(id, intelligence().implementation(message["params"]))
                 "textDocument/references" -> reply(id, intelligence().references(message["params"]))
                 "textDocument/documentHighlight" -> reply(id, intelligence().highlights(message["params"]))
                 "textDocument/documentSymbol" -> reply(id, intelligence().documentSymbols(message["params"]))
+                "workspace/symbol" -> reply(id, intelligence().workspaceSymbols(message["params"]))
                 "textDocument/signatureHelp" -> reply(id, intelligence().signatureHelp(message["params"]))
                 "textDocument/prepareRename" -> reply(id, intelligence().prepareRename(message["params"]))
                 "textDocument/rename" -> reply(id, intelligence().rename(message["params"]))
@@ -314,7 +344,11 @@ object FakeLanguageServer {
         private fun capabilities() =
             buildJsonObject {
                 putJsonObject("capabilities") {
-                    put("textDocumentSync", if (options.fullSync) 1 else 2)
+                    putJsonObject("textDocumentSync") {
+                        put("openClose", true)
+                        put("change", if (options.fullSync) 1 else 2)
+                        putJsonObject("save") { put("includeText", false) }
+                    }
                     put("hoverProvider", provided("hover"))
                     put("definitionProvider", provided("definition"))
                     put("typeDefinitionProvider", provided("typeDefinition"))
@@ -322,6 +356,7 @@ object FakeLanguageServer {
                     put("referencesProvider", provided("references"))
                     put("documentHighlightProvider", provided("documentHighlight"))
                     put("documentSymbolProvider", provided("documentSymbol"))
+                    put("workspaceSymbolProvider", provided("workspaceSymbol"))
                     put("documentFormattingProvider", provided("formatting"))
                     put("documentRangeFormattingProvider", provided("rangeFormatting"))
                     if (provided("rename")) putJsonObject("renameProvider") { put("prepareProvider", true) }

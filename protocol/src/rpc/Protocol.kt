@@ -46,7 +46,7 @@ import java.io.OutputStream
  */
 object Protocol {
     /** Version announced in the handshake; client and server must speak the same one. */
-    const val VERSION = 8
+    const val VERSION = 9
 
     /** Version of the application, shown in the welcome screen and used to identify remote server bundles. */
     const val APP_VERSION = "2026.1"
@@ -409,6 +409,12 @@ enum class Method(
 
     /** Usage counts of the declarations of a document. */
     LspUsageCounts("lsp/usageCounts"),
+
+    /** Declarations of a document, nested. */
+    LspOutline("lsp/outline"),
+
+    /** Declarations of the project matching a name. */
+    LspWorkspaceSymbols("lsp/workspaceSymbols"),
 
     /** Diagnostics of the session's documents, answered once newer than the client's version (long poll). */
     LspDiagnostics("lsp/diagnostics"),

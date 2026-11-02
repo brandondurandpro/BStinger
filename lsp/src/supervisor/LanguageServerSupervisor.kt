@@ -117,6 +117,20 @@ class LanguageServerSupervisor(
     internal fun serving(language: String, root: String): List<ManagedServer> =
         synchronized(lock) { managed.values.filter { it.language == language && it.root == root } }
 
+    /** The servers whose root is [project] or inside it. */
+    internal fun servingInside(project: String): List<ManagedServer> =
+        synchronized(lock) { managed.values.filter { isWithin(it.root, project) } }
+
+    /** The servers whose root holds the file or directory at [path]. */
+    internal fun servingPath(path: String): List<ManagedServer> =
+        synchronized(lock) { managed.values.filter { isWithin(path, it.root) } }
+
+    // Whether [path] is [directory] or inside it.
+    private fun isWithin(path: String, directory: String): Boolean {
+        val prefix = directory.trimEnd('/', '\\')
+        return path == prefix || path.startsWith("$prefix/") || path.startsWith("$prefix\\")
+    }
+
     /** The pid of [id]'s process while it runs (tests). */
     fun pidOf(id: String): Long? = synchronized(lock) { managed[id] }?.pid
 

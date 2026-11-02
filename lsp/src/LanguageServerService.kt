@@ -89,7 +89,8 @@ class LanguageServerService(private val settings: LanguageServerSettings) : Clos
     private val documents = OpenDocuments()
 
     /** Hover, navigation, usages, diagnostics, rename, formatting and code actions of the open documents. */
-    val intelligence: CodeIntelligenceService = CodeIntelligenceService(documents, ::serversOf, settings.intelligence)
+    val intelligence: CodeIntelligenceService =
+        CodeIntelligenceService(documents, ::serversOf, settings.intelligence, ::serversOfSession)
     private val supervisor =
         LanguageServerSupervisor(
             scope,
@@ -221,6 +222,28 @@ class LanguageServerService(private val settings: LanguageServerSettings) : Clos
 
     private fun serversOf(document: MirroredDocument): List<ManagedServer> =
         supervisor.serving(document.language, document.root)
+
+    /**
+     * Files changed on disk through the IDE ([DiskChange] by absolute path): the servers whose root holds them are
+     * told (`workspace/didChangeWatchedFiles`), and an open document that was written is saved (`didSave`).
+     */
+    fun diskChanged(changes: List<Pair<String, DiskChange>>) {
+        // One notification per server, with all its files.
+        val byServer = LinkedHashMap<ManagedServer, MutableList<Pair<String, Int>>>()
+        for ((path, change) in changes) {
+            val uri = Paths.get(path).toUri().toString()
+            supervisor.servingPath(path).forEach { byServer.getOrPut(it) { ArrayList() } += uri to change.type }
+        }
+        byServer.forEach { (server, files) -> server.filesChanged(files) }
+        val written = changes.filter { it.second == DiskChange.Changed }.mapNotNull { documents.get(it.first) }
+        written.forEach { saved -> documents.locked { serversOf(saved).forEach { it.didSave(saved) } } }
+    }
+
+    // The servers of the project [session] has open.
+    private fun serversOfSession(session: String): List<ManagedServer> {
+        val project = synchronized(lastFiles) { lastFiles[session]?.first } ?: return emptyList()
+        return supervisor.servingInside(project)
+    }
 
     /** See [LanguageServerSupervisor.restart]. */
     fun restart(id: String, generation: Long) = supervisor.restart(id, generation)
@@ -387,3 +410,20 @@ class LanguageServerService(private val settings: LanguageServerSettings) : Clos
         const val MIN_MOVE_RATIO = 0.02
     }
 }
+
+/** What happened to a file on disk, as the language servers are told (LSP FileChangeType). */
+enum class DiskChange(
+    /** The FileChangeType value. */
+    val type: Int,
+) {
+    /** It was created. */
+    Created(1),
+
+    /** Its content changed (written, saved). */
+    Changed(2),
+
+    /** It was deleted. */
+    Deleted(DELETED_TYPE),
+}
+
+private const val DELETED_TYPE = 3

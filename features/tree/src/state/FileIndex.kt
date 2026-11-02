@@ -93,6 +93,13 @@ class FileIndex(private val root: FileEntry, private val search: ProjectSearch, 
         }
     }
 
+    /** [declaration] of [entry] as Go to Symbol lists it for [query], null when its name does not match. */
+    fun symbolMatch(entry: FileEntry, declaration: Declaration, query: String): SymbolMatch? {
+        val matched = fuzzyMatch(query.trim(), declaration.name) ?: return null
+        val (score, indices) = matched
+        return SymbolMatch(entry, relativePath(entry), declaration, score, indices)
+    }
+
     fun relativePath(entry: FileEntry): String =
         entry.path
             .removePrefix(root.path)
@@ -136,5 +143,9 @@ class FileIndex(private val root: FileEntry, private val search: ProjectSearch, 
     companion object {
         /** See [FuzzyMatch]. */
         fun fuzzyMatch(query: String, name: String): Pair<Int, List<Int>>? = FuzzyMatch.match(query, name)
+
+        /** [matches] best first, at most [limit]. */
+        fun rankSymbols(matches: List<SymbolMatch>, limit: Int = DEFAULT_RESULTS): List<SymbolMatch> =
+            matches.sortedWith(BEST_SYMBOL_FIRST).take(limit)
     }
 }

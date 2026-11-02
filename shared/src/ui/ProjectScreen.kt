@@ -144,13 +144,33 @@ private fun ProjectBody(app: AppState, project: ProjectState, findFocus: FocusRe
 internal fun ProjectPopups(project: ProjectState, onClose: () -> Unit) {
     val document = project.editor.activeTab?.document
     when (project.popup) {
-        PopupKind.GotoFile -> GotoFilePopup(project, onClose = onClose)
-        PopupKind.RecentFiles -> GotoFilePopup(project, onClose = onClose, recentOnly = true)
-        PopupKind.FindInFiles -> FindInFilesPopup(project, onClose = onClose)
-        PopupKind.GotoLine -> document?.let { GotoLinePopup(it, onClose = onClose) }
-        PopupKind.GotoSymbol -> GotoSymbolPopup(project, onClose = onClose)
-        PopupKind.FileStructure -> document?.let { FileStructurePopup(it, onClose = onClose) }
-        null -> Unit
+        PopupKind.GotoFile -> {
+            GotoFilePopup(project, onClose = onClose)
+        }
+
+        PopupKind.RecentFiles -> {
+            GotoFilePopup(project, onClose = onClose, recentOnly = true)
+        }
+
+        PopupKind.FindInFiles -> {
+            FindInFilesPopup(project, onClose = onClose)
+        }
+
+        PopupKind.GotoLine -> {
+            document?.let { GotoLinePopup(it, onClose = onClose) }
+        }
+
+        PopupKind.GotoSymbol -> {
+            GotoSymbolPopup(project, onClose = onClose)
+        }
+
+        PopupKind.FileStructure -> {
+            document?.let { FileStructurePopup(it, onClose = onClose) { project.serverOutline(it) } }
+        }
+
+        null -> {
+            Unit
+        }
     }
 }
 

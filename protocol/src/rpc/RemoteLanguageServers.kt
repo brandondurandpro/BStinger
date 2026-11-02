@@ -13,12 +13,14 @@ import org.example.kotlineditor.model.LanguageServers
 import org.example.kotlineditor.model.LanguageServersStatus
 import org.example.kotlineditor.model.LocationsResult
 import org.example.kotlineditor.model.NavigationKind
+import org.example.kotlineditor.model.OutlineResult
 import org.example.kotlineditor.model.RenameTarget
 import org.example.kotlineditor.model.SignatureHelpResult
 import org.example.kotlineditor.model.SymbolHighlight
 import org.example.kotlineditor.model.TextChange
 import org.example.kotlineditor.model.TextRange
 import org.example.kotlineditor.model.UsageCountsResult
+import org.example.kotlineditor.model.WorkspaceSymbolsResult
 
 private const val ID = "id"
 private const val LANGUAGE = "language"
@@ -133,6 +135,18 @@ class RemoteLanguageServers(private val client: RpcClient) : LanguageServers {
 
     override suspend fun signatureHelp(at: DocumentPosition): SignatureHelpResult =
         client.call(Method.LspSignatureHelp) { putPosition(at) }.signatureHelpResult()
+
+    override suspend fun outline(path: String, version: Int): OutlineResult {
+        val result =
+            client.call(Method.LspOutline) {
+                put(PATH, path)
+                put(VERSION, version)
+            }
+        return result.outlineResult()
+    }
+
+    override suspend fun workspaceSymbols(query: String): WorkspaceSymbolsResult =
+        client.call(Method.LspWorkspaceSymbols) { put("query", query) }.workspaceSymbolsResult()
 
     override suspend fun usageCounts(path: String, version: Int): UsageCountsResult {
         val result =

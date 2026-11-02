@@ -351,4 +351,10 @@ interface CodeIntelligence {
 
     /** The edits of action [index] of the list [token] (running its command on the server when it has one). */
     suspend fun applyCodeAction(token: String, index: Int): EditResult = EditResult.NotReady
+
+    /** The declarations of [path] at [version] (File Structure). */
+    suspend fun outline(path: String, version: Int): OutlineResult = OutlineResult.NotReady
+
+    /** The declarations of the session's project named like [query] (Go to Symbol). */
+    suspend fun workspaceSymbols(query: String): WorkspaceSymbolsResult = WorkspaceSymbolsResult.NotReady
 }

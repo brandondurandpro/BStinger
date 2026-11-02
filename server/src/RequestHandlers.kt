@@ -45,6 +45,7 @@ internal fun requestHandlers(services: LocalServices): Map<Method, Handler> =
 
 private fun fileHandlers(services: LocalServices): Map<Method, Handler> {
     val fs = services.fileSystem
+    val disk = DiskNotifications(services)
     return mapOf(
         Method.ResolveDirectory to { fs.resolveDirectory(params.string(PATH)).toJsonOrNull() },
         Method.UserHome to { JsonPrimitive(services.places.home()) },
@@ -54,11 +55,28 @@ private fun fileHandlers(services: LocalServices): Map<Method, Handler> {
             fs.read(entry("file")).toJson()
         },
         Method.FileAt to { fs.fileAt(params.string(PATH)).toJsonOrNull() },
-        Method.Write to { nothing { fs.write(entry("file"), params.string("text")) } },
-        Method.CreateFile to { fs.createFile(entry(DIRECTORY), params.string(NAME)).toJson() },
+        Method.Write to {
+            val file = entry("file")
+            nothing {
+                fs.write(file, params.string("text"))
+                disk.written(file)
+            }
+        },
+        Method.CreateFile to { fs.createFile(entry(DIRECTORY), params.string(NAME)).also(disk::created).toJson() },
         Method.CreateDirectory to { fs.createDirectory(entry(DIRECTORY), params.string(NAME)).toJson() },
-        Method.Rename to { fs.rename(entry("entry"), params.string("newName")).toJson() },
-        Method.Delete to { nothing { fs.delete(entry("entry")) } },
+        Method.Rename to {
+            val old = entry("entry")
+            val before = disk.filesOf(old)
+            fs.rename(old, params.string("newName")).also { disk.renamed(before, old, it) }.toJson()
+        },
+        Method.Delete to {
+            val deleted = entry("entry")
+            val before = disk.filesOf(deleted)
+            nothing {
+                fs.delete(deleted)
+                disk.deleted(before)
+            }
+        },
         Method.RecentLoad to { services.recentProjects.load().toJson() },
         Method.RecentSave to { nothing { services.recentProjects.save(params.read("paths") { it.strings() }) } },
         Method.SessionLoad to { services.sessions.load(params.string("project")).toJson() },

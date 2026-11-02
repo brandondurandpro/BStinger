@@ -4,11 +4,13 @@ import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import org.example.kotlineditor.model.EditResult
+import org.example.kotlineditor.model.FeatureStatus
 import org.example.kotlineditor.model.FileChange
 import org.example.kotlineditor.model.FileContent
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.Languages
 import org.example.kotlineditor.model.pathName
+import org.example.kotlineditor.syntax.Declaration
 import java.io.IOException
 
 /** Code intelligence of a project: its language servers, and what it does on the project's files. */
@@ -36,6 +38,29 @@ internal class ProjectInsightHost(private val project: () -> ProjectState) : Ins
         val root = normalized(project().root.path)
         val file = normalized(path)
         return if (file.startsWith("$root/")) file.removePrefix("$root/") else file
+    }
+}
+
+/** The declarations of [document] from its language server, null when none answers. */
+internal suspend fun ProjectState.outlineFromServer(document: Document): List<Declaration>? {
+    val servers = languageServers ?: return null
+    val tab = editor.allTabs.filterNot { it.isDiff }.firstOrNull { it.document === document }
+    val path = tab?.entry?.path
+    val version = path?.let { servers.versionOf(it, document) }
+    val result = version?.let { servers.intelligence.outline(path, it) }
+    return result?.declarations?.takeIf { result.status == FeatureStatus.Ready }
+}
+
+/** The declarations of the project named like [query], from its language servers. */
+internal suspend fun ProjectState.symbolsFromServers(query: String): List<SymbolMatch> {
+    val servers = languageServers ?: return emptyList()
+    val result = servers.intelligence.workspaceSymbols(query)
+    return result.symbols.mapNotNull { symbol ->
+        fileIndex.symbolMatch(
+            entryOfPath(symbol.path),
+            symbol.declaration,
+            query,
+        )
     }
 }
 

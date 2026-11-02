@@ -10,6 +10,7 @@ import kotlinx.serialization.json.putJsonObject
 // What the IDE tells a language server it can do, in `initialize`.
 
 private const val LINK_SUPPORT = "linkSupport"
+private const val DYNAMIC_REGISTRATION = "dynamicRegistration"
 private const val VALUE_SET = "valueSet"
 private const val TAG_UNNECESSARY = 1
 private const val TAG_DEPRECATED = 2
@@ -36,13 +37,18 @@ internal val WORKSPACE_CAPABILITIES: JsonObject =
             put("documentChanges", true)
             putJsonArray("resourceOperations") { add("create") }
         }
-        putJsonObject("executeCommand") { put("dynamicRegistration", false) }
+        putJsonObject("executeCommand") { put(DYNAMIC_REGISTRATION, false) }
+        putJsonObject("symbol") { put(DYNAMIC_REGISTRATION, false) }
+        putJsonObject("didChangeWatchedFiles") { put(DYNAMIC_REGISTRATION, false) }
     }
 
 /** The requests about a document the IDE makes, and the forms of answers it reads. */
 internal val TEXT_DOCUMENT_CAPABILITIES: JsonObject =
     buildJsonObject {
-        putJsonObject("synchronization") { put("dynamicRegistration", false) }
+        putJsonObject("synchronization") {
+            put(DYNAMIC_REGISTRATION, false)
+            put("didSave", true)
+        }
         putJsonObject("publishDiagnostics") {
             put("relatedInformation", false)
             putJsonObject("tagSupport") {

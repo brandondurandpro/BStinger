@@ -148,6 +148,24 @@ internal class FakeIntelligence(private val code: FakePhpCode) {
         }
     }
 
+    // The declarations of every file whose name contains the query, ignoring case, as SymbolInformations.
+    fun workspaceSymbols(params: JsonElement?): JsonElement {
+        val query = (params as? JsonObject)?.get("query")?.jsonPrimitive?.contentOrNull.orEmpty().lowercase()
+        return buildJsonArray {
+            code.declarations.filter { query in it.name.lowercase() }.forEach { declaration ->
+                addJsonObject {
+                    put("name", declaration.name)
+                    put("kind", declaration.kind)
+                    declaration.parent?.let { put("containerName", it) }
+                    putJsonObject("location") {
+                        put("uri", declaration.uri)
+                        put("range", range(declaration.line, declaration.column, declaration.line, declaration.column + declaration.name.length))
+                    }
+                }
+            }
+        }
+    }
+
     private fun symbolOf(declaration: FakeDeclaration, lines: List<String>) =
         buildJsonObject {
             put("name", declaration.name)

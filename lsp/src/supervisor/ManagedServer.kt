@@ -216,6 +216,19 @@ internal class ManagedServer(
         outbox?.didClose(document)
     }
 
+    /** Tells the process [document] was saved, if it asked to know (`textDocumentSync.save`). */
+    fun didSave(document: MirroredDocument) {
+        val sync = capability("textDocumentSync") as? JsonObject
+        val save = sync?.get("save")?.takeIf { it != JsonNull }
+        val refused = (save as? JsonPrimitive)?.booleanOrNull == false
+        if (save != null && !refused) outbox?.didSave(document)
+    }
+
+    /** Tells the process files changed on disk: their URI and FileChangeType (1 created, 2 changed, 3 deleted). */
+    fun filesChanged(changes: List<Pair<String, Int>>) {
+        if (changes.isNotEmpty()) outbox?.filesChanged(changes)
+    }
+
     /**
      * Sends [method] once the document notifications queued before were written, and returns its answer; null
      * when no process is ready. Fails like [LspConnection.request] when the process stops meanwhile.

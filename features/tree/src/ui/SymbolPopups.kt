@@ -40,16 +40,24 @@ private const val SYMBOL_DEBOUNCE_MS = 100L
 
 /** File Structure (Ctrl+F12): the declarations of the current file, filterable, Enter jumps to one. */
 @Composable
-fun FileStructurePopup(document: Document, onClose: () -> Unit) {
+fun FileStructurePopup(
+    document: Document,
+    onClose: () -> Unit,
+    serverOutline: suspend () -> List<Declaration>? = { null },
+) {
     var query by remember { mutableStateOf("") }
     var all by remember { mutableStateOf<List<Declaration>>(emptyList()) }
+    var loading by remember { mutableStateOf(true) }
     val cursor = remember { ListCursor() }
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) {
         focus.requestFocus()
         val lines = document.lines.toList()
         val states = document.commentStates
-        all = withContext(Dispatchers.Default) { Structure.outline(lines, document.language, states) }
+        val local = withContext(Dispatchers.Default) { Structure.outline(lines, document.language, states) }
+        // A language without a local outline (PHP) asks its language server.
+        all = local.ifEmpty { askOutline(serverOutline) }
+        loading = false
         // Start on the declaration enclosing the caret, like IntelliJ.
         cursor.selected = all.indexOfLast { it.line <= document.caret.line }.coerceAtLeast(0)
     }
@@ -80,6 +88,10 @@ fun FileStructurePopup(document: Document, onClose: () -> Unit) {
                 placeholder = "Filter declarations",
                 leading = { SearchIcon() },
             )
+            if (loading) {
+                val modifier = Modifier.padding(8.dp).testTag(TreeTags.STRUCTURE_LOADING)
+                Label("Loading…", color = IdeColors.TextSecondary, modifier = modifier)
+            }
             ResultList(results, cursor.selected) { index, declaration ->
                 DeclarationRow(
                     declaration,
@@ -151,7 +163,8 @@ fun GotoSymbolPopup(project: TreeHost, onClose: () -> Unit) {
                 leading = { SearchIcon() },
             )
             if (results == null) {
-                Label("Indexing symbols…", color = IdeColors.TextSecondary, modifier = Modifier.padding(8.dp))
+                val modifier = Modifier.padding(8.dp).testTag(TreeTags.GOTO_SYMBOL_SEARCHING)
+                Label("Indexing symbols…", color = IdeColors.TextSecondary, modifier = modifier)
             }
             ResultList(
                 list,
@@ -161,11 +174,27 @@ fun GotoSymbolPopup(project: TreeHost, onClose: () -> Unit) {
     }
 }
 
-private suspend fun symbols(project: TreeHost, query: String): List<SymbolMatch> =
+// The declarations found locally (Kotlin, Java) and by the language servers (PHP), best first.
+private suspend fun symbols(project: TreeHost, query: String): List<SymbolMatch> {
+    val local = unlessUnreachable { project.fileIndex.searchSymbols(query) }
+    val fromServers = if (query.isBlank()) emptyList() else unlessUnreachable { project.serverSymbols(query.trim()) }
+    val unique = (local + fromServers).distinctBy { Triple(it.relativePath, it.declaration.line, it.declaration.name) }
+    return FileIndex.rankSymbols(unique)
+}
+
+// What [search] finds; nothing while the server is unreachable, until it is back.
+private suspend fun unlessUnreachable(search: suspend () -> List<SymbolMatch>): List<SymbolMatch> =
     try {
-        project.fileIndex.searchSymbols(query)
+        search()
     } catch (expected: IOException) {
-        emptyList() // server unreachable: no results until it is back
+        emptyList()
+    }
+
+private suspend fun askOutline(serverOutline: suspend () -> List<Declaration>?): List<Declaration> =
+    try {
+        serverOutline().orEmpty()
+    } catch (expected: IOException) {
+        emptyList() // server unreachable: nothing to list
     }
 
 @Composable
