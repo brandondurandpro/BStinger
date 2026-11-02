@@ -41,14 +41,31 @@ fun shifted(range: TextRange, change: TextChange): TextRange? {
  */
 fun Document.applyEdits(edits: List<TextChange>) {
     if (edits.isEmpty()) return
-    val sorted = edits.sortedWith(compareBy({ it.startLine }, { it.startColumn }, { it.endLine }, { it.endColumn }))
-    val regionStart = TextPos(sorted.first().startLine, sorted.first().startColumn)
+    val inside = edits.map { clamped(it, lines) }
+    val sorted = inside.sortedWith(compareBy({ it.startLine }, { it.startColumn }, { it.endLine }, { it.endColumn }))
+    val first = sorted[0]
+    val regionStart = TextPos(first.startLine, first.startColumn)
     val lastEnd = sorted.maxOf { TextPos(it.endLine, it.endColumn) }
     val region = textBetween(regionStart, lastEnd)
     val rewritten = rewrite(region, regionStart, sorted)
     val caretAfter = sorted.asReversed().fold(caret) { pos, edit -> shifted(pos, edit) }
     replace(regionStart, lastEnd, rewritten)
     moveTo(caretAfter)
+}
+
+// Servers name positions past the end of the text (the line after the last one): they are its end.
+private fun clamped(edit: TextChange, lines: List<String>): TextChange {
+    val start = clamped(TextPos(edit.startLine, edit.startColumn), lines)
+    val end = clamped(TextPos(edit.endLine, edit.endColumn), lines)
+    return TextChange(start.line, start.column, end.line, end.column, edit.text)
+}
+
+private fun clamped(pos: TextPos, lines: List<String>): TextPos {
+    val last = lines.lastIndex.coerceAtLeast(0)
+    if (pos.line > last) return TextPos(last, lines.getOrNull(last)?.length ?: 0)
+    val line = pos.line.coerceAtLeast(0)
+    val length = lines.getOrNull(line)?.length ?: 0
+    return TextPos(line, pos.column.coerceIn(0, length))
 }
 
 /** [lines] with [edits] applied (in the coordinates of [lines]): the files that are not open. */
