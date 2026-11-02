@@ -1,0 +1,180 @@
+package org.example.kotlineditor.e2e
+
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.test.withKeyDown
+import org.example.kotlineditor.ui.AppTags
+import org.example.kotlineditor.ui.EditorTags
+import org.example.kotlineditor.ui.RemoteTags
+import org.example.kotlineditor.ui.TreeTags
+import java.nio.file.Files
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
+
+/** What the user sees when the SSH link to a remote server breaks. */
+@OptIn(ExperimentalTestApi::class)
+class RemoteDevelopmentChaosE2eTest {
+    private val project = SampleProject.standard()
+
+    @BeforeTest
+    fun prepare() {
+        RemoteTestEnvironment.prepare()
+    }
+
+    @AfterTest
+    fun cleanup() {
+        project.delete()
+    }
+
+    @Test
+    fun `the editor keeps working after the SSH server restarts`() =
+        remoteUiTest {
+            launchApp()
+            connectRemoteTo(RemoteTestEnvironment, project.path)
+            awaitTag(TreeTags.treeRow("src"), timeout = 60_000)
+            openFromTree("README.md")
+
+            // The link goes down: the tunnel and the client must both recover, without losing the daemon.
+            RemoteTestEnvironment.ssh.stop()
+            awaitReconnecting()
+            RemoteTestEnvironment.ssh.start()
+            awaitReconnected()
+
+            openFromTree("docs/guide.md")
+            onNodeWithTag(EditorTags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performKeyInput {
+                withKeyDown(Key.CtrlLeft) { pressKey(Key.MoveHome) }
+                pressKey(Key.Q)
+                withKeyDown(Key.CtrlLeft) { pressKey(Key.S) }
+            }
+            awaitCondition { project.read("docs/guide.md").startsWith("qGuide") }
+        }
+
+    @Test
+    fun `the editor keeps working after the remote daemon dies and comes back on another port`() =
+        remoteUiTest {
+            launchApp()
+            connectRemoteTo(RemoteTestEnvironment, project.path)
+            awaitTag(TreeTags.treeRow("src"), timeout = 60_000)
+            val firstPid = RemoteTestEnvironment.daemonPid()
+            val firstPort = RemoteTestEnvironment.daemonPort()
+
+            // A crash: the SSH link is fine, but nothing listens on the forwarded port any more.
+            RemoteTestEnvironment.killDaemon()
+            awaitReconnecting()
+            awaitNoTag(AppTags.STATUS_CONNECTION, timeout = 60_000)
+            val secondPid = RemoteTestEnvironment.daemonPid()
+            assertNotEquals(firstPid, secondPid, "the session should have started a new daemon")
+            val secondPort = RemoteTestEnvironment.daemonPort()
+            println("daemon restarted: pid $firstPid -> $secondPid, port $firstPort -> $secondPort")
+
+            openFromTree("docs/guide.md")
+            onNodeWithTag(EditorTags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performKeyInput {
+                withKeyDown(Key.CtrlLeft) { pressKey(Key.MoveHome) }
+                pressKey(Key.Q)
+                withKeyDown(Key.CtrlLeft) { pressKey(Key.S) }
+            }
+            awaitCondition { project.read("docs/guide.md").startsWith("qGuide") }
+            assertFalse(project.read("docs/guide.md").startsWith("qq"), "the edit must be written once")
+        }
+
+    @Test
+    fun `the editor keeps working when the daemon comes back with a new token`() =
+        remoteUiTest {
+            launchApp()
+            connectRemoteTo(RemoteTestEnvironment, project.path)
+            awaitTag(TreeTags.treeRow("src"), timeout = 60_000)
+            val firstToken = RemoteTestEnvironment.daemonToken()
+
+            // The host was reset: the daemon is gone and so is its secret.
+            RemoteTestEnvironment.killDaemon()
+            RemoteTestEnvironment.forgetToken()
+            awaitReconnecting()
+            awaitNoTag(AppTags.STATUS_CONNECTION, timeout = 60_000)
+            assertNotEquals(firstToken, RemoteTestEnvironment.daemonToken(), "the daemon should have a new token")
+
+            openFromTree("docs/guide.md")
+            onNodeWithTag(EditorTags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performKeyInput {
+                withKeyDown(Key.CtrlLeft) { pressKey(Key.MoveHome) }
+                pressKey(Key.Q)
+                withKeyDown(Key.CtrlLeft) { pressKey(Key.S) }
+            }
+            awaitCondition { project.read("docs/guide.md").startsWith("qGuide") }
+            assertFalse(project.read("docs/guide.md").startsWith("qq"), "the edit must be written once")
+        }
+
+    @Test
+    fun `a changed host key is shown instead of reconnecting forever`() =
+        remoteUiTest {
+            launchApp()
+            connectRemoteTo(RemoteTestEnvironment, project.path)
+            awaitTag(TreeTags.treeRow("src"), timeout = 60_000)
+
+            RemoteTestEnvironment.ssh.restartWithNewHostKey()
+            awaitStatusContains("Host key", timeout = 30_000)
+            awaitTag(AppTags.STATUS_CONNECTION)
+        }
+
+    @Test
+    fun `the Open Project dialog finishes a listing when the SSH link comes back`() {
+        if (!RemoteTestEnvironment.available) return
+        val folder = Files.createTempDirectory(RemoteTestEnvironment.home, "after-chaos-")
+        try {
+            remoteUiTest {
+                launchApp()
+                connectRemoteTo(RemoteTestEnvironment, null)
+                awaitTag(RemoteTags.OPEN_PROJECT, timeout = 60_000)
+                awaitTag(RemoteTags.pickerDirectory(folder.toString()))
+
+                // The double click's listing request is sent while the link is down; it must finish after.
+                RemoteTestEnvironment.ssh.stop()
+                onNodeWithTag(RemoteTags.pickerDirectory(folder.toString())).performDoubleClick()
+                RemoteTestEnvironment.ssh.start()
+
+                awaitTag(RemoteTags.OPEN_PROJECT_EMPTY, timeout = 30_000)
+                awaitCondition { shownDirectoryInProjectPicker() == folder.toString() }
+                awaitNoTag(RemoteTags.OPEN_PROJECT_ERROR)
+            }
+        } finally {
+            folder.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `a typed path is checked when the SSH link comes back`() {
+        if (!RemoteTestEnvironment.available) return
+        val folder = Files.createTempDirectory(RemoteTestEnvironment.home, "typed-after-chaos-")
+        try {
+            remoteUiTest {
+                launchApp()
+                connectRemoteTo(RemoteTestEnvironment, null)
+                awaitTag(RemoteTags.OPEN_PROJECT, timeout = 60_000)
+                awaitTag(RemoteTags.OPEN_PROJECT_COUNT)
+
+                RemoteTestEnvironment.ssh.stop()
+                val path = folder.toString()
+                typeFolderPathInChunks(path.dropLast(4), path.takeLast(4))
+                RemoteTestEnvironment.ssh.start()
+
+                awaitTag(RemoteTags.OPEN_PROJECT_EMPTY, timeout = 30_000)
+                assertEquals(path, shownDirectoryInProjectPicker())
+                awaitCondition {
+                    runCatching { onNodeWithTag(RemoteTags.OPEN_PROJECT_OPEN).assertIsEnabled() }.isSuccess
+                }
+            }
+        } finally {
+            folder.toFile().deleteRecursively()
+        }
+    }
+}

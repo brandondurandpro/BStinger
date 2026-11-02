@@ -1,0 +1,19 @@
+# Git: status and commit, branches and their history, the branch picker and the toolbar's pinned branches.
+# State in src/state, UI in src/ui, end-to-end tests in test/.
+product:
+  type: jvm/lib
+
+dependencies:
+  - //features/editor: exported
+
+settings:
+  compose: enabled
+
+test-dependencies:
+  - //e2e
+
+test-settings:
+  jvm:
+    test:
+      freeJvmArgs:
+        - --enable-native-access=ALL-UNNAMED

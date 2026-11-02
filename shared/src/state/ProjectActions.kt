@@ -9,13 +9,11 @@ import org.example.kotlineditor.model.DiffKind
 import org.example.kotlineditor.model.DiffLine
 import org.example.kotlineditor.model.FileContent
 import org.example.kotlineditor.model.FileEntry
-import org.example.kotlineditor.model.GitCommit
-import org.example.kotlineditor.model.GitCommitFile
 import org.example.kotlineditor.model.pathName
 import org.example.kotlineditor.syntax.Structure
 import java.io.IOException
 
-private const val MAX_BACK_STEPS = 100
+internal const val MAX_BACK_STEPS = 100
 
 /** Entry of the file at [relativePath] (Git paths are relative to the project root, with `/` separators). */
 fun ProjectState.entryAt(relativePath: String): FileEntry =
@@ -24,9 +22,6 @@ fun ProjectState.entryAt(relativePath: String): FileEntry =
         name = pathName(relativePath),
         isDirectory = false,
     )
-
-/** Opens the diff tab of the file at [relativePath] (a click on a Git panel change). */
-fun ProjectState.openDiff(relativePath: String) = editor.openDiff(entryAt(relativePath))
 
 /**
  * Opens the file of the diff [tab] (its Open File button, F4), at the first line the diff changed. The line numbers
@@ -39,7 +34,7 @@ fun ProjectState.openFileOfDiff(tab: EditorTab) {
 }
 
 // Zero-based line of the first change in the new version: an added line, or where removed lines used to be.
-internal fun firstChangedLine(lines: List<DiffLine>): Int {
+fun firstChangedLine(lines: List<DiffLine>): Int {
     val first = lines.indexOfFirst { it.kind == DiffKind.Added || it.kind == DiffKind.Removed }
     if (first < 0) return 0
     val after = lines.drop(first).firstOrNull { it.newLine > 0 }
@@ -51,17 +46,6 @@ internal fun firstChangedLine(lines: List<DiffLine>): Int {
             else -> 1
         }
     return (newLine - 1).coerceAtLeast(0)
-}
-
-/** Opens the diff of [file] in [commit] (a click on a changed file in the Branches window). */
-fun ProjectState.openCommitDiff(commit: GitCommit, file: GitCommitFile) =
-    editor.openCommitDiff(entryAt(file.path), CommitDiffTarget(commit.hash, commit.shortHash, file.oldPath))
-
-/** Opens [entry] at [start]..[end], remembering where we came from. */
-fun ProjectState.navigate(entry: FileEntry, start: TextPos, end: TextPos = start) {
-    editor.activeTab?.let { tab -> tab.document?.let { backStack.addLast(tab.entry to it.caret) } }
-    if (backStack.size > MAX_BACK_STEPS) backStack.removeFirst()
-    editor.openAt(entry, start, end)
 }
 
 fun ProjectState.navigateBack() {
@@ -156,7 +140,7 @@ private fun ProjectState.fileOperation(block: suspend () -> Unit) {
 fun ProjectState.synchronize() {
     tree.refresh()
     fileIndex.invalidate()
-    refreshGit()
+    git.refresh()
     for (tab in editor.allTabs.filterNot { it.isDiff }.distinctBy { it.entry.path }) {
         val document = tab.document
         if (document != null && !document.isModified) scope.launch { reloadIfChanged(tab.entry, document) }

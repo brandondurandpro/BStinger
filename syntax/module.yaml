@@ -1,0 +1,22 @@
+# Syntax highlighting without the UI: the line lexer, outlines, and tree-sitter (grammars, parsing, captures).
+# It returns color categories (SyntaxColor); the UI's theme turns them into text styles.
+product:
+  type: jvm/lib
+
+dependencies:
+  - //protocol: exported
+  # Snapshot state only (mutableStateOf, snapshotFlow, @Stable): no composable, no Compose compiler plugin.
+  - $libs.compose.runtime
+  - $libs.kotlinx.coroutines.core
+  - $libs.jtreesitter: exported
+
+test-dependencies:
+  - //testkit
+  - $libs.tree.sitter.kotlin
+  - $libs.tree.sitter.json
+
+test-settings:
+  jvm:
+    test:
+      freeJvmArgs:
+        - --enable-native-access=ALL-UNNAMED

@@ -78,7 +78,7 @@ class Conversation(val id: Int, title: String, val branch: String) {
     var showsChat by mutableStateOf(true)
 
     /** Branch checked out where the agent works: it follows a checkout made from the Git panel or the terminal. */
-    val currentBranch: String? get() = workspace?.gitBranch ?: branch.takeIf { mode == WorkMode.Worktree }
+    val currentBranch: String? get() = workspace?.git?.currentBranch ?: branch.takeIf { mode == WorkMode.Worktree }
 
     /** Scroll position of the messages, kept when switching tabs. */
     val listState = LazyListState()

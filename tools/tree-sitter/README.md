@@ -2,7 +2,7 @@
 
 The editor colors files with [tree-sitter](https://tree-sitter.github.io/), through its official Java binding
 ([jtreesitter](https://github.com/tree-sitter/java-tree-sitter), FFM). Only the tree-sitter runtime ships with the IDE,
-in `shared/resources/tree-sitter/runtime` for every platform. The grammars are downloaded by the IDE, on the machine it
+in `syntax/resources/tree-sitter/runtime` for every platform. The grammars are downloaded by the IDE, on the machine it
 runs on, the first time a file of their language opens.
 
 ## The runtime
@@ -18,14 +18,14 @@ prebuilt runtime of bonede/tree-sitter-ng cannot be used: its Windows DLL only e
 
 ## How it works
 
-- `shared/src/syntax/treesitter/GrammarCatalog.kt` (generated) lists every grammar: the prebuilt jar
+- `syntax/src/treesitter/GrammarCatalog.kt` (generated) lists every grammar: the prebuilt jar
   `io.github.bonede:tree-sitter-<id>:<version>` from Maven Central
   ([bonede/tree-sitter-ng](https://github.com/bonede/tree-sitter-ng)), its SHA-256, its platforms, its entry point,
   and the extensions and file names it colors.
 - `GrammarStore` downloads the jar, checks its SHA-256, keeps the library of the current platform in
   `~/.kotlin-editor/tree-sitter`, and retries a failed download with a growing delay. Until the grammar is there (or
   if it never can be: offline, unsupported platform, file over 16 MB), the line lexer colors the file.
-- `shared/resources/tree-sitter/<id>/highlights.scm` (generated) are the highlight queries, from the grammar's own
+- `syntax/resources/tree-sitter/<id>/highlights.scm` (generated) are the highlight queries, from the grammar's own
   repository at the built version when it has one, else from [Helix](https://github.com/helix-editor/helix). The
   patterns the grammar rejects, and those using a predicate the editor does not evaluate, are left out. As in
   tree-sitter's highlighter, the last pattern capturing a node wins: Helix's queries, where the first one wins, are

@@ -37,7 +37,8 @@ class AppState(
     private val localServices: AppServices? = initialServices,
     /** Creates SSH sessions; null in previews and tests that do not exercise remote development. */
     private val remoteFactory: RemoteFactory? = null,
-) {
+) : RemoteHost,
+    ProjectPickerHost {
     // Last preferences known: those of the open project are read live, these cover the welcome screen.
     private var preferences: Map<String, String> = preferenceStore.load()
 
@@ -58,20 +59,20 @@ class AppState(
         private set
 
     /** Hosts of the client's `~/.ssh/config`, shown in the remote dialog. */
-    var sshHosts: List<SshConfigHost> by mutableStateOf(emptyList())
+    override var sshHosts: List<SshConfigHost> by mutableStateOf(emptyList())
         private set
 
     /** Whether `~/.ssh/config` is being read (it resolves each alias with `ssh -G`). */
-    var sshHostsLoading: Boolean by mutableStateOf(false)
+    override var sshHostsLoading: Boolean by mutableStateOf(false)
         private set
 
     /** Remote folders already opened, newest first, searchable from the remote dialog. */
-    val remoteWorkspaces = mutableStateListOf<RemoteWorkspace>()
+    override val remoteWorkspaces = mutableStateListOf<RemoteWorkspace>()
 
     private val hostTags = mutableStateMapOf<String, List<String>>()
 
     /** What the remote connection is doing, while it is being established. */
-    var remoteStatus: String? by mutableStateOf(null)
+    override var remoteStatus: String? by mutableStateOf(null)
         private set
 
     // State: the welcome screen, the top bar and the status bar show whether the IDE is remote.
@@ -84,7 +85,7 @@ class AppState(
     val isRemote: Boolean get() = remoteSession != null
 
     /** `user@host` of the remote session, or null when the server is local. */
-    val remoteLabel: String? get() = remoteSession?.label
+    override val remoteLabel: String? get() = remoteSession?.label
 
     /** Home directory of the SSH user, or null when the server is local. */
     val remoteHome: String? get() = remoteSession?.home
@@ -195,7 +196,7 @@ class AppState(
     }
 
     /** A host of `~/.ssh/config` was picked: use the alias, and let ssh resolve user, port and key. */
-    fun selectSshHost(host: SshConfigHost) {
+    override fun selectSshHost(host: SshConfigHost) {
         val dialog = remoteDialog ?: return
         remoteDialog =
             dialog.copy(
@@ -213,7 +214,7 @@ class AppState(
     }
 
     /** A saved remote folder was picked: fill the connection and its path, ready to connect. */
-    fun selectRemoteWorkspace(workspace: RemoteWorkspace) {
+    override fun selectRemoteWorkspace(workspace: RemoteWorkspace) {
         val dialog = remoteDialog ?: return
         remoteDialog =
             dialog.copy(
@@ -231,10 +232,10 @@ class AppState(
     }
 
     /** Tags of a host, by alias or by host:port:user. */
-    fun tagsFor(key: String): List<String> = hostTags[key].orEmpty()
+    override fun tagsFor(key: String): List<String> = hostTags[key].orEmpty()
 
     /** The tags field changed: kept in the dialog, and saved right away for a `~/.ssh/config` alias. */
-    fun editRemoteTags(text: String) {
+    override fun editRemoteTags(text: String) {
         val dialog = remoteDialog ?: return
         remoteDialog = dialog.copy(tags = text)
         val alias = dialog.alias.trim()
@@ -242,7 +243,7 @@ class AppState(
     }
 
     /** Shows the manual form to add a host that is not in `~/.ssh/config`. */
-    fun addRemoteHost() {
+    override fun addRemoteHost() {
         val dialog = remoteDialog ?: return
         remoteDialog =
             dialog.copy(
@@ -260,7 +261,7 @@ class AppState(
     }
 
     /** Back to the lists; whatever was typed stays selected so it can still be connected. */
-    fun chooseRemoteHost() {
+    override fun chooseRemoteHost() {
         val dialog = remoteDialog ?: return
         remoteDialog = dialog.copy(manual = false, error = null)
     }
@@ -271,12 +272,12 @@ class AppState(
     }
 
     /** Updates the dialog while the user types. */
-    fun updateRemoteDialog(dialog: RemoteDialogState) {
+    override fun updateRemoteDialog(dialog: RemoteDialogState) {
         remoteDialog = dialog
     }
 
     /** Closes the dialog and cancels a connection in progress. */
-    fun dismissRemoteDialog() {
+    override fun dismissRemoteDialog() {
         remoteJob?.cancel()
         remoteJob = null
         remoteDialog = null
@@ -288,7 +289,7 @@ class AppState(
      * opens once the connection is ready; otherwise the remote welcome screen shows its recent projects.
      */
     @Suppress("TooGenericExceptionCaught") // every failure of the SSH flow belongs in the dialog
-    fun connectRemote(dialog: RemoteDialogState) {
+    override fun connectRemote(dialog: RemoteDialogState) {
         val factory =
             remoteFactory ?: run {
                 remoteDialog = dialog.copy(error = "Remote development is not available in this build")
@@ -366,7 +367,8 @@ class AppState(
         screen = Screen.Welcome
         // Load before opening the project, so its own addition to the list is not overwritten by the load.
         loadRecentsNow()
-        if (target.projectPath != null) openProject(target.projectPath) else browseForProject()
+        val projectPath = target.projectPath
+        if (projectPath != null) openProject(projectPath) else browseForProject()
     }
 
     private fun reloadRecents() {
@@ -422,25 +424,25 @@ class AppState(
     }
 
     /** Closes the Open Project dialog without opening anything (its Cancel, Escape or the backdrop). */
-    fun closeProjectPicker() {
+    override fun closeProjectPicker() {
         projectPickerOpen = false
     }
 
     /** Opens [path] as the project of a confirmed Open Project dialog. */
-    fun openFromProjectPicker(path: String) {
+    override fun openFromProjectPicker(path: String) {
         projectPickerOpen = false
         openProject(path)
     }
 
     /** Resolves [path] on the server's disk to a directory, or `null` when there is no such directory. */
-    suspend fun resolvePickerDirectory(path: String): FileEntry? = services.fileSystem.resolveDirectory(path)
+    override suspend fun resolvePickerDirectory(path: String): FileEntry? = services.fileSystem.resolveDirectory(path)
 
     /** The directories inside [directory], sorted as the server lists them (directories first, by name). */
-    suspend fun pickerSubdirectories(directory: FileEntry): List<FileEntry> =
+    override suspend fun pickerSubdirectories(directory: FileEntry): List<FileEntry> =
         services.fileSystem.list(directory).filter { it.isDirectory }
 
     /** Remembers [path] as the last directory the Open Project dialog browsed (a preference of the local server). */
-    fun rememberProjectPickerDirectory(path: String) {
+    override fun rememberProjectPickerDirectory(path: String) {
         // A remote path means nothing on the local disk, and the remote dialog starts from the project or home.
         if (isRemote || path == lastPickerDirectory) return
         lastPickerDirectory = path
@@ -450,14 +452,14 @@ class AppState(
      * Where the Open Project dialog starts: on a remote server the open project, else the SSH user's home; on the
      * local one the last directory it browsed, else the home; the root when nothing is known.
      */
-    fun projectPickerStart(): String {
+    override fun projectPickerStart(): String {
         if (!isRemote) return lastPickerDirectory ?: serverHome ?: "/"
         val project = (screen as? Screen.Project)?.project
         return project?.root?.path ?: projectPickerHome() ?: "/"
     }
 
     /** The home directory of the server shown (the SSH user's on a remote one): the dialog's Home and `~`. */
-    fun projectPickerHome(): String? = if (isRemote) remoteHome ?: serverHome else serverHome
+    override fun projectPickerHome(): String? = if (isRemote) remoteHome ?: serverHome else serverHome
 
     fun removeRecent(path: String) {
         recentProjects.remove(path)
@@ -600,7 +602,6 @@ class AppState(
 
     companion object {
         private const val MAX_RECENT = 20
-        const val DEFAULT_EDITOR_FONT_SIZE = 13f
         const val MIN_EDITOR_FONT_SIZE = 8f
         const val MAX_EDITOR_FONT_SIZE = 40f
     }

@@ -41,7 +41,7 @@ import org.example.kotlineditor.state.AppState
 
 @Composable
 fun WelcomeScreen(state: AppState) {
-    Row(Modifier.fillMaxSize().background(IdeColors.Panel).testTag(Tags.WELCOME)) {
+    Row(Modifier.fillMaxSize().background(IdeColors.Panel).testTag(AppTags.WELCOME)) {
         Column(Modifier.width(220.dp).fillMaxHeight().padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 ProjectBadge("Kotlin Editor", size = 36.dp)
@@ -65,7 +65,7 @@ fun WelcomeScreen(state: AppState) {
                 Modifier
                     .fillMaxWidth()
                     .clickable { state.openRemoteDialog() }
-                    .testTag(Tags.WELCOME_REMOTE)
+                    .testTag(AppTags.WELCOME_REMOTE)
                     .padding(horizontal = 10.dp, vertical = 6.dp),
             ) {
                 Label("Remote Development")
@@ -76,7 +76,7 @@ fun WelcomeScreen(state: AppState) {
                 IdeButton(
                     "Disconnect",
                     state::disconnectRemote,
-                    Modifier.padding(top = 6.dp).testTag(Tags.REMOTE_DISCONNECT),
+                    Modifier.padding(top = 6.dp).testTag(AppTags.REMOTE_DISCONNECT),
                 )
             }
         }
@@ -106,7 +106,7 @@ private fun EmptyWelcome(state: AppState) {
             "Open",
             onClick = state::browseForProject,
             primary = true,
-            modifier = Modifier.testTag(Tags.WELCOME_OPEN),
+            modifier = Modifier.testTag(AppTags.WELCOME_OPEN),
         )
         ErrorMessage(state)
     }
@@ -125,7 +125,7 @@ private fun RecentProjects(state: AppState) {
             IdeTextField(
                 query,
                 { query = it },
-                Modifier.weight(1f).testTag(Tags.WELCOME_SEARCH),
+                Modifier.weight(1f).testTag(AppTags.WELCOME_SEARCH),
                 placeholder = "Search projects",
                 leading = { SearchIcon() },
                 onSubmit = { filtered.firstOrNull()?.let(state::openProject) },
@@ -134,7 +134,7 @@ private fun RecentProjects(state: AppState) {
                 "Open",
                 onClick = state::browseForProject,
                 primary = true,
-                modifier = Modifier.testTag(Tags.WELCOME_OPEN),
+                modifier = Modifier.testTag(AppTags.WELCOME_OPEN),
             )
         }
         ErrorMessage(state)
@@ -166,7 +166,7 @@ private fun RecentProjectRow(path: String, onOpen: () -> Unit, onRemove: () -> U
             .background(if (hovered) IdeColors.Hover else Color.Transparent, RoundedCornerShape(6.dp))
             .hoverable(interaction)
             .clickable(interaction, indication = null, onClick = onOpen)
-            .testTag(ItemTags.recentProject(path))
+            .testTag(AppTags.recentProject(path))
             .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -176,7 +176,7 @@ private fun RecentProjectRow(path: String, onOpen: () -> Unit, onRemove: () -> U
             Label(path, color = IdeColors.TextSecondary, fontSize = 12.sp)
         }
         if (hovered) {
-            IconButton(onClick = onRemove, modifier = Modifier.testTag(ItemTags.recentRemove(path))) { CloseIcon() }
+            IconButton(onClick = onRemove, modifier = Modifier.testTag(AppTags.recentRemove(path))) { CloseIcon() }
         }
     }
 }
@@ -184,5 +184,5 @@ private fun RecentProjectRow(path: String, onOpen: () -> Unit, onRemove: () -> U
 @Composable
 private fun ErrorMessage(state: AppState) {
     val error = state.error ?: return
-    Label(error, color = IdeColors.Error, modifier = Modifier.padding(top = 8.dp).testTag(Tags.WELCOME_ERROR))
+    Label(error, color = IdeColors.Error, modifier = Modifier.padding(top = 8.dp).testTag(AppTags.WELCOME_ERROR))
 }

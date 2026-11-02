@@ -6,13 +6,13 @@ naming:
   FunctionNaming:
     # Compose API guidelines: @Composable functions that emit UI are PascalCase nouns. Test names are sentences.
     ignoreAnnotated: ['Composable']
-    # Amper keeps tests in `test/` and `test@jvm/`: detekt's default test exclusions only know `test/`.
-    excludes: &tests ['**/test/**', '**/test@jvm/**']
+    # Amper keeps tests in `test/` (and `test@<platform>/` in multiplatform modules).
+    excludes: &tests ['**/test/**', '**/e2e/src/**']
   FunctionNameMaxLength:
     # Test names are full sentences (`a 200k line file opens fast ...`).
     excludes: *tests
   InvalidPackageDeclaration:
-    # Amper's source layout (`src/`, `src@jvm/` per module) does not mirror package names; `rootPackage` cannot
+    # Amper's source layout (`src/` per module) does not mirror package names; `rootPackage` cannot
     # express one root per module, so the rule cannot be satisfied without breaking the build layout.
     active: false
 
@@ -47,13 +47,13 @@ complexity:
 
 comments:
   # Documentation is required for the API modules other modules build on (`protocol`, `server`); the application
-  # modules (`shared`, `desktopApp`) are not a library API.
+  # modules (`shared` and the client modules split from it, `desktopApp`) are not a library API.
   UndocumentedPublicClass:
-    excludes: ['**/shared/**', '**/desktopApp/**', '**/test/**', '**/test@jvm/**']
+    excludes: ['**/shared/**', '**/ui/**', '**/core/**', '**/features/**', '**/e2e/**', '**/syntax/**', '**/desktopApp/**', '**/test/**', '**/test@jvm/**']
   UndocumentedPublicFunction:
-    excludes: ['**/shared/**', '**/desktopApp/**', '**/test/**', '**/test@jvm/**']
+    excludes: ['**/shared/**', '**/ui/**', '**/core/**', '**/features/**', '**/e2e/**', '**/syntax/**', '**/desktopApp/**', '**/test/**', '**/test@jvm/**']
   UndocumentedPublicProperty:
-    excludes: ['**/shared/**', '**/desktopApp/**', '**/test/**', '**/test@jvm/**']
+    excludes: ['**/shared/**', '**/ui/**', '**/core/**', '**/features/**', '**/e2e/**', '**/syntax/**', '**/desktopApp/**', '**/test/**', '**/test@jvm/**']
 
 # The project's own rules (module detekt-rules), see AGENTS.md, "Kotlin Coding Guidelines".
 kotlin-editor:

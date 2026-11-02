@@ -1,15 +1,25 @@
 modules:
   - benchmark
   - compression
+  - core
   - desktopApp
   - detekt-rules
+  - e2e
+  - features/editor
+  - features/git
+  - features/language-servers
+  - features/remote
+  - features/terminal
+  - features/tree
   - lsp
   - packaging
   - protocol
   - server
   - serverApp
   - shared
+  - syntax
   - testkit
+  - ui/kit
 
 plugins:
   - ./packaging

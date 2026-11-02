@@ -1,0 +1,19 @@
+# The code editor: documents in tabs and split panes, completion, find, diffs, blame and the gutter.
+# State in src/state, UI in src/ui, end-to-end tests in test/.
+product:
+  type: jvm/lib
+
+dependencies:
+  - //ui/kit: exported
+
+settings:
+  compose: enabled
+
+test-dependencies:
+  - //e2e
+
+test-settings:
+  jvm:
+    test:
+      freeJvmArgs:
+        - --enable-native-access=ALL-UNNAMED

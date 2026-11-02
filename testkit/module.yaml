@@ -1,8 +1,9 @@
 # Test helpers shared by the tests of several modules (server tests, e2e tests); never shipped.
 product:
-  type: kmp/lib
-  platforms: [jvm]
+  type: jvm/lib
 
 dependencies:
   # The fake language server reads and writes JSON-RPC messages.
   - $libs.kotlinx.serialization.json
+  # The loopback Maven repository of grammars (TestGrammars) for the syntax and e2e tests.
+  - //syntax

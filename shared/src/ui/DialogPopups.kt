@@ -43,7 +43,7 @@ fun GotoLinePopup(document: Document, onClose: () -> Unit) {
         }
         Unit
     }
-    PopupFrame(Tags.GOTO_LINE, onClose, width = 360) {
+    PopupFrame(AppTags.GOTO_LINE, onClose, width = 360) {
         Column {
             Label("Go to Line:Column", fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 8.dp))
             IdeTextField(
@@ -51,7 +51,7 @@ fun GotoLinePopup(document: Document, onClose: () -> Unit) {
                 { value = it },
                 Modifier
                     .fillMaxWidth()
-                    .testTag(Tags.GOTO_LINE_INPUT)
+                    .testTag(AppTags.GOTO_LINE_INPUT)
                     .focusRequester(focus)
                     .popupKeys(go, onClose),
                 placeholder = "line[:column]",
@@ -73,7 +73,7 @@ fun FileDialogPopup(project: ProjectState, dialog: FileDialog, onClose: () -> Un
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
     val submit = { submit(project, dialog, name) }
-    PopupFrame(Tags.FILE_DIALOG, onClose, width = 420) {
+    PopupFrame(AppTags.FILE_DIALOG, onClose, width = 420) {
         Column {
             Label(title(dialog), fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 8.dp))
             if (dialog is FileDialog.Delete) {
@@ -88,7 +88,7 @@ fun FileDialogPopup(project: ProjectState, dialog: FileDialog, onClose: () -> Un
                     { name = it },
                     Modifier
                         .fillMaxWidth()
-                        .testTag(Tags.FILE_DIALOG_INPUT)
+                        .testTag(AppTags.FILE_DIALOG_INPUT)
                         .focusRequester(focus)
                         .popupKeys(submit, onClose),
                     placeholder =
@@ -105,7 +105,7 @@ fun FileDialogPopup(project: ProjectState, dialog: FileDialog, onClose: () -> Un
                 Label(
                     it,
                     color = IdeColors.Error,
-                    modifier = Modifier.padding(top = 6.dp).testTag(Tags.FILE_DIALOG_ERROR),
+                    modifier = Modifier.padding(top = 6.dp).testTag(AppTags.FILE_DIALOG_ERROR),
                 )
             }
             Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.End) {
@@ -113,7 +113,7 @@ fun FileDialogPopup(project: ProjectState, dialog: FileDialog, onClose: () -> Un
                 IdeButton(
                     action(dialog),
                     submit,
-                    Modifier.padding(start = 8.dp).testTag(Tags.FILE_DIALOG_OK),
+                    Modifier.padding(start = 8.dp).testTag(AppTags.FILE_DIALOG_OK),
                     primary = true,
                 )
             }

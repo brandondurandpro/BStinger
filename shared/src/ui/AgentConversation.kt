@@ -59,7 +59,7 @@ internal fun ConversationView(agent: AgentState, conversation: Conversation) {
     LaunchedEffect(conversation.messages.size) {
         if (conversation.messages.isNotEmpty()) listState.animateScrollToItem(conversation.messages.lastIndex)
     }
-    Column(Modifier.fillMaxSize().testTag(Tags.agentView(conversation.id))) {
+    Column(Modifier.fillMaxSize().testTag(AppTags.agentView(conversation.id))) {
         Box(Modifier.weight(1f).fillMaxWidth()) {
             if (conversation.messages.isEmpty()) {
                 Label(
@@ -81,7 +81,7 @@ internal fun ConversationView(agent: AgentState, conversation: Conversation) {
                                 .widthIn(max = CONTENT_WIDTH)
                                 .fillMaxWidth()
                                 .padding(horizontal = 20.dp, vertical = 6.dp)
-                                .testTag(Tags.agentMessage(index)),
+                                .testTag(AppTags.agentMessage(index)),
                         ) {
                             MessageView(message)
                         }
@@ -198,7 +198,7 @@ private fun Prompt(agent: AgentState, conversation: Conversation) {
                     Modifier
                         .fillMaxWidth()
                         .focusRequester(focus)
-                        .testTag(Tags.AGENT_PROMPT)
+                        .testTag(AppTags.AGENT_PROMPT)
                         .onPreviewKeyEvent { event -> sendsOnEnter(event) { agent.send(conversation) } },
                     textStyle = bodyStyle,
                     cursorBrush = SolidColor(IdeColors.Caret),
@@ -221,12 +221,12 @@ private fun PromptActions(agent: AgentState, conversation: Conversation) {
         Label("Simulated agent: no model connected", color = IdeColors.TextSecondary, fontSize = 12.sp)
         Spacer(Modifier.weight(1f))
         if (conversation.busy) {
-            IdeButton("Stop", { agent.stop(conversation) }, Modifier.testTag(Tags.AGENT_STOP))
+            IdeButton("Stop", { agent.stop(conversation) }, Modifier.testTag(AppTags.AGENT_STOP))
         } else {
             IdeButton(
                 "Send",
                 { agent.send(conversation) },
-                Modifier.testTag(Tags.AGENT_SEND),
+                Modifier.testTag(AppTags.AGENT_SEND),
                 primary = true,
                 enabled = conversation.draft.isNotBlank(),
             )

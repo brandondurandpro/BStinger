@@ -1,0 +1,13 @@
+# What every feature of the IDE client shares, without the UI: documents and editing, positions, folding,
+# scrolling, preferences, the tool window layout and the remote workspaces. Compiled without the Compose plugin.
+product:
+  type: jvm/lib
+
+dependencies:
+  - //protocol: exported
+  - //syntax: exported
+  # Snapshot state and a few UI state types (LazyListState, FocusRequester), as plain libraries.
+  - $libs.compose.runtime: exported
+  - $libs.compose.foundation: exported
+  - $libs.compose.ui: exported
+  - $libs.kotlinx.coroutines.core

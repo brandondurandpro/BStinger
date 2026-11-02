@@ -1,0 +1,63 @@
+package org.example.kotlineditor.e2e
+
+import androidx.compose.ui.test.ComposeUiTest
+import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextClearance
+import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.v2.runComposeUiTest
+import org.example.kotlineditor.ui.AppTags
+import org.example.kotlineditor.ui.RemoteTags
+
+/** Runs [block] in a Compose test, or does nothing on a platform that cannot host the POSIX test remote. */
+@OptIn(ExperimentalTestApi::class)
+fun remoteUiTest(block: ComposeUiTest.() -> Unit) {
+    if (!RemoteTestEnvironment.available) return
+    runComposeUiTest { block() }
+}
+
+/** Replaces the path of the Open Project dialog in one edit, without Enter (one debounced check). */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.replaceFolderPath(text: String) {
+    onNodeWithTag(RemoteTags.OPEN_PROJECT_PATH).performTextReplacement(text)
+}
+
+/** Replaces the path of the Open Project dialog with several quick edits, as a user typing would, without Enter. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.typeFolderPathInChunks(vararg chunks: String) {
+    onNodeWithTag(RemoteTags.OPEN_PROJECT_PATH).performTextClearance()
+    chunks.forEach { onNodeWithTag(RemoteTags.OPEN_PROJECT_PATH).performTextInput(it) }
+}
+
+/** Fills the Remote Development dialog for the fake SSH server of [RemoteTestEnvironment]. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.connectRemoteTo(
+    environment: RemoteTestEnvironment,
+    projectPath: String?,
+    host: String = "127.0.0.1",
+    user: String = "tester",
+    identity: String = environment.ssh.identity.toString(),
+) {
+    onNodeWithTag(AppTags.WELCOME_REMOTE).performClick()
+    awaitTag(RemoteTags.REMOTE_DIALOG)
+    // The pick view hides the manual form; adding a host happens through its button.
+    onNodeWithTag(RemoteTags.REMOTE_NEW_HOST).performClick()
+    awaitTag(RemoteTags.REMOTE_HOST)
+    if (host.isNotEmpty()) {
+        onNodeWithTag(RemoteTags.REMOTE_HOST).performTextInput(host)
+    }
+    if (user.isNotEmpty()) {
+        onNodeWithTag(RemoteTags.REMOTE_USER).performTextInput(user)
+    }
+    onNodeWithTag(RemoteTags.REMOTE_PORT).performTextClearance()
+    onNodeWithTag(RemoteTags.REMOTE_PORT).performTextInput(environment.ssh.port.toString())
+    if (identity.isNotEmpty()) {
+        onNodeWithTag(RemoteTags.REMOTE_IDENTITY).performTextInput(identity)
+    }
+    if (projectPath != null) {
+        onNodeWithTag(RemoteTags.REMOTE_PROJECT).performTextInput(projectPath)
+    }
+    onNodeWithTag(RemoteTags.REMOTE_CONNECT).performClick()
+}

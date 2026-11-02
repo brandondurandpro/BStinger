@@ -62,7 +62,7 @@ fun ProjectScreen(app: AppState, project: ProjectState) {
     // Shortcuts only reach a focused component: with no file open nothing else holds the focus, so the screen takes it.
     val windowFocused = LocalWindowInfo.current.isWindowFocused
     // With the Open Project dialog open, its own field keeps the keyboard.
-    val screenFocusFree = project.popup == null && !project.branchPickerOpen && !app.projectPickerOpen
+    val screenFocusFree = project.popup == null && !project.git.branchPickerOpen && !app.projectPickerOpen
     LaunchedEffect(hasFocus, screenFocusFree, windowFocused) {
         if (!hasFocus && screenFocusFree) runCatching { rootFocus.requestFocus() }
     }
@@ -70,7 +70,7 @@ fun ProjectScreen(app: AppState, project: ProjectState) {
         Modifier
             .fillMaxSize()
             .background(IdeColors.Panel)
-            .testTag(Tags.PROJECT)
+            .testTag(AppTags.PROJECT)
             .onPreviewKeyEvent(shortcuts::handle)
             .focusRequester(rootFocus)
             .onFocusChanged { hasFocus = it.hasFocus }
@@ -84,7 +84,7 @@ fun ProjectScreen(app: AppState, project: ProjectState) {
             } else {
                 ProjectBody(app, project, findFocus)
                 ProjectPopups(project) { closePopup(project) }
-                if (project.branchPickerOpen) BranchPicker(project)
+                if (project.git.branchPickerOpen) BranchPicker(project)
             }
             project.fileDialog?.let { dialog ->
                 FileDialogPopup(project, dialog, onClose = { project.fileDialog = null })
@@ -117,7 +117,7 @@ private fun ProjectBody(app: AppState, project: ProjectState, findFocus: FocusRe
     Box(
         Modifier
             .fillMaxSize()
-            .testTag(Tags.WORKSPACE)
+            .testTag(AppTags.WORKSPACE)
             .onGloballyPositioned { drag.workspace = it.boundsInRoot() },
     ) {
         Row(Modifier.fillMaxSize()) {
@@ -185,7 +185,7 @@ private fun EditorPaneView(
     Column(
         modifier
             .fillMaxHeight()
-            .testTag(Tags.pane(index))
+            .testTag(AppTags.pane(index))
             .pointerInput(pane) {
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
@@ -213,7 +213,7 @@ private fun TabContent(
 ) {
     when (val status = tab.status) {
         TabStatus.Loading -> {
-            Box(Modifier.fillMaxSize().testTag(Tags.EDITOR_LOADING))
+            Box(Modifier.fillMaxSize().testTag(AppTags.EDITOR_LOADING))
         }
 
         is TabStatus.Unsupported -> {

@@ -1,41 +1,21 @@
 product:
-  type: kmp/lib
-  platforms: [jvm]
+  type: jvm/lib
 
 dependencies:
-  - //protocol: exported
-  - $compose.runtime
-  - $compose.foundation
-  - $compose.material3
-  - $compose.ui
-  - $compose.components.resources
-  - $compose.preview
+  - //features/editor: exported
+  - //features/git: exported
+  - //features/language-servers: exported
+  - //features/remote: exported
+  - //features/terminal: exported
+  - //features/tree: exported
   - $libs.androidx.lifecycle.viewmodel.compose
   - $libs.androidx.lifecycle.runtime.compose
-  - $libs.jtreesitter
-
-dependencies@android:
-  - $compose.uiTooling
 
 settings:
-  compose:
-    enabled: true
-    resources:
-      packageName: org.example.kotlineditor.resources
-      # Generate public accessors so other modules (and previews) can use Res.*
-      exposedAccessors: true
+  compose: enabled
 
-test-dependencies@jvm:
-  - //server
-  - //lsp
-  - //testkit
-  - $compose.uiTest
-  - $compose.desktop.currentOs
-  - $libs.tree.sitter.kotlin
-  - $libs.tree.sitter.json
-  # A real SSH server for the remote development end-to-end tests; the client is the system OpenSSH.
-  - $libs.sshd.core
-  - $libs.sshd.sftp
+test-dependencies:
+  - //e2e
 
 test-settings:
   jvm:

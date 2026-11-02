@@ -65,7 +65,7 @@ internal fun Toolbar(app: AppState, project: ProjectState) {
         }
         // In agent mode, the branch of the project the agent of the active conversation works on.
         val branchProject = if (project.agentMode) project.agent.current?.workspace else project
-        if (branchProject?.gitBranch == null) {
+        if (branchProject == null || branchProject.git.currentBranch == null) {
             Spacer(Modifier.weight(1f))
         } else {
             BranchWidget(branchProject, Modifier.weight(1f).padding(start = 12.dp))
@@ -94,7 +94,7 @@ private fun RemoteBadge(app: AppState) {
             Modifier
                 .border(1.dp, border, RoundedCornerShape(50))
                 .clickable { menuOpen = true }
-                .testTag(Tags.TOP_REMOTE)
+                .testTag(AppTags.TOP_REMOTE)
                 .padding(horizontal = 10.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -113,7 +113,7 @@ private fun RemoteBadge(app: AppState) {
                     menuOpen = false
                     app.disconnectRemote()
                 },
-                modifier = Modifier.testTag(Tags.REMOTE_DISCONNECT),
+                modifier = Modifier.testTag(AppTags.REMOTE_DISCONNECT),
             )
         }
     }
@@ -126,7 +126,7 @@ private fun ProjectWidget(app: AppState, project: ProjectState) {
         Row(
             Modifier
                 .clickable { menuOpen = true }
-                .testTag(Tags.PROJECT_WIDGET)
+                .testTag(AppTags.PROJECT_WIDGET)
                 .padding(horizontal = 6.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -139,7 +139,7 @@ private fun ProjectWidget(app: AppState, project: ProjectState) {
             onDismissRequest = { menuOpen = false },
             Modifier
                 .widthIn(min = MENU_MIN_WIDTH, max = MENU_MAX_WIDTH)
-                .testTag(Tags.PROJECT_MENU)
+                .testTag(AppTags.PROJECT_MENU)
                 .onPreviewKeyEvent { event ->
                     val escape = event.key == Key.Escape && event.type == KeyEventType.KeyDown
                     if (escape) menuOpen = false
@@ -159,7 +159,7 @@ private fun ProjectMenuItems(app: AppState, close: () -> Unit) {
             close()
             app.browseForProject()
         },
-        modifier = Modifier.testTag(Tags.PROJECT_OPEN_OTHER),
+        modifier = Modifier.testTag(AppTags.PROJECT_OPEN_OTHER),
     )
     DropdownMenuItem(
         text = { Text("Go Homepage", fontSize = 13.sp) },
@@ -167,7 +167,7 @@ private fun ProjectMenuItems(app: AppState, close: () -> Unit) {
             close()
             app.closeProject()
         },
-        modifier = Modifier.testTag(Tags.PROJECT_CLOSE),
+        modifier = Modifier.testTag(AppTags.PROJECT_CLOSE),
     )
     // Feature flag of the experimental agent mode, saved with the preferences.
     DropdownMenuItem(
@@ -179,7 +179,7 @@ private fun ProjectMenuItems(app: AppState, close: () -> Unit) {
             close()
             app.enableAgentMode(!app.agentModeEnabled)
         },
-        modifier = Modifier.testTag(Tags.PROJECT_AGENT_MODE),
+        modifier = Modifier.testTag(AppTags.PROJECT_AGENT_MODE),
     )
     val others = app.otherProjects
     if (others.isNotEmpty()) {
@@ -211,7 +211,7 @@ private fun RecentProjectItem(path: String, onClick: () -> Unit) {
             .background(if (hovered) IdeColors.Hover else Color.Transparent)
             .hoverable(interaction)
             .clickable(interaction, indication = null, onClick = onClick)
-            .testTag(ItemTags.switchProject(path))
+            .testTag(AppTags.switchProject(path))
             .padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -228,7 +228,7 @@ internal fun EmptyEditor() {
     // Center the block as a whole: centering each row individually staggers them, because every
     // row is as wide as its own shortcut text.
     Box(
-        Modifier.fillMaxSize().testTag(Tags.EDITOR_EMPTY),
+        Modifier.fillMaxSize().testTag(AppTags.EDITOR_EMPTY),
         contentAlignment = Alignment.Center,
     ) {
         Column {
@@ -249,11 +249,11 @@ internal fun EmptyEditor() {
 private fun Hint(action: String, shortcut: String) {
     Row(
         Modifier
-            .testTag(ItemTags.editorHint(action))
+            .testTag(AppTags.editorHint(action))
             .padding(vertical = 5.dp),
     ) {
         Label(action, color = IdeColors.TextSecondary, modifier = Modifier.width(140.dp))
-        Label(shortcut, color = IdeColors.Accent, modifier = Modifier.testTag(ItemTags.editorHintShortcut(action)))
+        Label(shortcut, color = IdeColors.Accent, modifier = Modifier.testTag(AppTags.editorHintShortcut(action)))
     }
 }
 
@@ -266,7 +266,7 @@ internal fun StatusBar(app: AppState, project: ProjectState) {
             .height(26.dp)
             .background(IdeColors.Panel)
             .padding(horizontal = 12.dp)
-            .testTag(Tags.STATUS_BAR),
+            .testTag(AppTags.STATUS_BAR),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
@@ -281,14 +281,14 @@ internal fun StatusBar(app: AppState, project: ProjectState) {
             }
         Label(
             path.joinToString("  ›  "),
-            Modifier.weight(1f).testTag(Tags.STATUS_PATH),
+            Modifier.weight(1f).testTag(AppTags.STATUS_PATH),
             color = IdeColors.TextSecondary,
             fontSize = 12.sp,
         )
         app.remoteLabel?.let {
             Label(
                 "Remote: $it",
-                Modifier.testTag(Tags.STATUS_REMOTE),
+                Modifier.testTag(AppTags.STATUS_REMOTE),
                 color = IdeColors.TextSecondary,
                 fontSize = 12.sp,
             )
@@ -296,13 +296,13 @@ internal fun StatusBar(app: AppState, project: ProjectState) {
         app.opening?.let {
             Label(
                 "Opening ${pathName(it)}…",
-                Modifier.testTag(Tags.STATUS_OPENING),
+                Modifier.testTag(AppTags.STATUS_OPENING),
                 color = IdeColors.TextSecondary,
                 fontSize = 12.sp,
             )
         }
         app.error?.let {
-            Label(it, Modifier.testTag(Tags.STATUS_ERROR), color = IdeColors.Error, fontSize = 12.sp)
+            Label(it, Modifier.testTag(AppTags.STATUS_ERROR), color = IdeColors.Error, fontSize = 12.sp)
         }
         LanguageServerStatusItems(project)
         LinkStatus(app)
@@ -323,7 +323,7 @@ private fun LinkStatus(app: AppState) {
             else -> null
         }
     message?.let {
-        Label(it, Modifier.testTag(Tags.STATUS_CONNECTION), color = IdeColors.Error, fontSize = 12.sp)
+        Label(it, Modifier.testTag(AppTags.STATUS_CONNECTION), color = IdeColors.Error, fontSize = 12.sp)
     }
 }
 
@@ -340,7 +340,7 @@ private fun DocumentStatus(document: Document) {
         }
     Label(
         "${caret.line + 1}:${caret.column + 1}$selection",
-        Modifier.testTag(Tags.STATUS_CARET),
+        Modifier.testTag(AppTags.STATUS_CARET),
         color = IdeColors.TextSecondary,
         fontSize = 12.sp,
     )
@@ -348,7 +348,7 @@ private fun DocumentStatus(document: Document) {
     Label("UTF-8", color = IdeColors.TextSecondary, fontSize = 12.sp)
     Label(
         document.syntax?.spec?.name ?: document.language.name,
-        Modifier.testTag(Tags.STATUS_LANGUAGE),
+        Modifier.testTag(AppTags.STATUS_LANGUAGE),
         color = IdeColors.TextSecondary,
         fontSize = 12.sp,
     )

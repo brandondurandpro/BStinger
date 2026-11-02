@@ -1,0 +1,9 @@
+# Modules whose tests drive the UI (end-to-end and performance tests). `run-tests` and `run-tests.bat` run them one at
+# a time, after the other modules.
+editor
+git
+language-servers
+remote
+terminal
+tree
+shared

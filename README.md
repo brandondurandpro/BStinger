@@ -4,10 +4,11 @@ This project is targeting Desktop (JVM), built with
 the [Kotlin Toolchain](https://kotlin-toolchain.org/latest/).
 
 - [/desktopApp](./desktopApp) contains the desktop (JVM) application.
-- [/shared](./shared) holds the code shared across your applications — Compose UI,
-  business logic, and platform-specific implementations. [src](./shared/src) is for common code; the
-  sibling `src@<platform>` folders (for example `src@android`) hold code compiled only for the platform named in the
-  folder.
+- [/shared](./shared) assembles the IDE's Compose UI from the client modules (see "Architecture" below).
+
+The library modules are `jvm/lib`, not `kmp/lib`: a multiplatform module (with `src@jvm`, or Compose resources) is
+compiled with several source fragments, and the Kotlin compiler then rebuilds the whole module on every change
+(KT-62686).
 
 The `kotlin` (macOS/Linux) and `kotlin.bat` (Windows) scripts in the project root are self-bootstrapping wrappers for
 the Kotlin Toolchain: they download the pinned toolchain version on first use, so no separate installation is required.
@@ -90,16 +91,27 @@ All the logic on files runs in a **server**; the IDE is a client that only displ
 - `serverApp` – standalone server for remote use:
   `./kotlin run -m serverApp -- --host 0.0.0.0 --port 7777 --token <secret>`. It is also the daemon that remote
   development installs and starts (`--token-file`/`--state-file`, `--version`).
-- `shared` – Compose UI and UI state; `desktopApp` – the IDE. By default it embeds a server on loopback; use
-  `--server host:port --token <secret>` (or `KOTLIN_EDITOR_SERVER` / `KOTLIN_EDITOR_TOKEN`) for a remote one.
-- **Remote development** – `shared/src@jvm/remote` (SSH client, installer, tunnel supervisor) and
-  `shared/src/ui/RemoteDialog.kt`. Server bundles are built with `tools/remote-bundle.sh` and looked up in `remote/`
+- The client, from the bottom up:
+  - `syntax` – syntax highlighting without the UI: line lexer, outlines, tree-sitter grammars and captures;
+  - `core` – what every feature builds on: documents and their editing, folding, preferences, tool window layout,
+    compiled without the Compose plugin and unit tested without the UI;
+  - `ui/kit` – theme, fonts, components, popups, icons, tool window chrome, and the tags shared by several modules;
+  - `features/editor`, `features/git`, `features/terminal`, `features/language-servers`, `features/remote`,
+    `features/tree` – one module per feature, holding its state (`src/state`), its UI (`src/ui`, with its own test
+    tags such as `GitTags`) and its tests (`test`, end-to-end tests in `test/e2e`). A feature's UI sees the project
+    through a host interface (`GitHost`, `TreeHost`…) rather than through `ProjectState`;
+  - `e2e` – the end-to-end test support (`launchApp`, `SampleProject`, fixtures) used by the tests of every module;
+  - `shared` – the project and application state (`ProjectState`, `AppState`, agent mode), the screens and tool
+    windows assembled from the features, and the end-to-end tests that span several features;
+  - `desktopApp` – the IDE. By default it embeds a server on loopback; use `--server host:port --token <secret>`
+    (or `KOTLIN_EDITOR_SERVER` / `KOTLIN_EDITOR_TOKEN`) for a remote one.
+- **Remote development** – `features/remote/src/ssh` and `features/remote/src/ui/RemoteDialog.kt`. Server bundles are built with `tools/remote-bundle.sh` and looked up in `remote/`
   next to the application (see [docs/REMOTE.md](docs/REMOTE.md)).
 
 **Protocol.** JSON-RPC 2.0 over TCP (`TCP_NODELAY`), framed like LSP (`Content-Length` header, then the JSON body):
 named params, methods such as `fs/read`, `git/status` or `terminal/start`, standard error codes, answers in any order,
 server-pushed notifications for terminal screens (lines sent as style runs), bodies compressed with zstd-3 when it pays
-(`Content-Encoding: zstd`, a code dictionary on file contents). See `protocol/src@jvm/rpc/Protocol.kt` for the mapping.
+(`Content-Encoding: zstd`, a code dictionary on file contents). See `protocol/src/rpc/Protocol.kt` for the mapping.
 About 70 µs per round trip on loopback, a 200,000-line file in about 100 ms. TCP retransmits lost packets; the session
 layer survives broken links:
 

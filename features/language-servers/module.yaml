@@ -1,0 +1,19 @@
+# Language servers: their state and memory, the tool window, and the choice of a server for a language.
+# State in src/state, UI in src/ui, end-to-end tests in test/.
+product:
+  type: jvm/lib
+
+dependencies:
+  - //ui/kit: exported
+
+settings:
+  compose: enabled
+
+test-dependencies:
+  - //e2e
+
+test-settings:
+  jvm:
+    test:
+      freeJvmArgs:
+        - --enable-native-access=ALL-UNNAMED
