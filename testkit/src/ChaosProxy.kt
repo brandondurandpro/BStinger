@@ -92,8 +92,8 @@ class ChaosProxy(private val targetPort: Int) : Closeable {
             } catch (ignored: IOException) {
                 // a socket of the link was closed: the link is over
             } finally {
+                // The chunks read before the end are still delivered, then the link closes.
                 delayed.close()
-                close(link)
             }
         }
     }
@@ -124,8 +124,9 @@ class ChaosProxy(private val targetPort: Int) : Closeable {
     }
 }
 
-// Writes each chunk once its latency has passed, in the order it was read, while the next chunks are read.
-private class DelayedOutput(private val output: OutputStream, private val onBroken: () -> Unit) {
+// Writes each chunk once its latency has passed, in the order it was read, while the next chunks are read; [onEnd]
+// once the last one is written or the socket broke.
+private class DelayedOutput(private val output: OutputStream, private val onEnd: () -> Unit) {
     private class Chunk(val bytes: ByteArray, val dueNanos: Long)
 
     private val queue = LinkedBlockingQueue<Chunk>()
@@ -156,7 +157,9 @@ private class DelayedOutput(private val output: OutputStream, private val onBrok
                 chunk = queue.take()
             }
         } catch (ignored: IOException) {
-            onBroken()
+            // the socket written to was closed
+        } finally {
+            onEnd()
         }
     }
 
