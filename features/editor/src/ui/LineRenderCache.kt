@@ -35,6 +35,9 @@ internal class LineRenderCache(
     // Consecutive lines of a commit share their annotation.
     private val blames = LruMap<String, TextLayoutResult>(BLAME_CAPACITY)
 
+    // The usage hints share a few texts ("1 usage", "3 usages").
+    private val hints = LruMap<String, TextLayoutResult>(BLAME_CAPACITY)
+
     val size: Int get() = lines.size
 
     fun line(source: LineSource): TextLayoutResult =
@@ -47,9 +50,6 @@ internal class LineRenderCache(
     /** Line number [number] (one-based), without color: the caret line draws it brighter. */
     fun number(number: Int): TextLayoutResult =
         numbers.getOrPut(number) { measurer.measure(number.toString(), style, softWrap = false, maxLines = 1) }
-
-    // The usage hints share a few texts ("1 usage", "3 usages").
-    private val hints = LruMap<String, TextLayoutResult>(BLAME_CAPACITY)
 
     /** Usage hint ("3 usages") drawn after the text of a declaration, in the code font. */
     fun hint(text: String): TextLayoutResult =

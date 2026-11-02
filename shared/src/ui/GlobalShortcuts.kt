@@ -13,10 +13,13 @@ import org.example.kotlineditor.state.ToolWindow
 import org.example.kotlineditor.state.gotoDeclaration
 import org.example.kotlineditor.state.navigateBack
 import org.example.kotlineditor.state.openFileOfDiff
+import org.example.kotlineditor.state.reformat
 import org.example.kotlineditor.state.saveAll
 import org.example.kotlineditor.state.selectNext
 import org.example.kotlineditor.state.selectPrevious
 import org.example.kotlineditor.state.selectedText
+import org.example.kotlineditor.state.showCodeActions
+import org.example.kotlineditor.state.startRename
 import org.example.kotlineditor.state.withInsight
 
 private const val DOUBLE_SHIFT_MILLIS = 400L

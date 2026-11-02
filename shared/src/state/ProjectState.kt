@@ -16,6 +16,7 @@ import org.example.kotlineditor.model.BlameLine
 import org.example.kotlineditor.model.CompletionResult
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.GitCommit
+import org.example.kotlineditor.model.GitCommitDetails
 import org.example.kotlineditor.model.GitCommitFile
 import org.example.kotlineditor.model.GitFileStatus
 import org.example.kotlineditor.syntax.treesitter.GrammarStore
@@ -148,13 +149,7 @@ class ProjectState(
 
     /** Opens the diff of [file] in [commit] (a click on a changed file in the Branches window). */
     override fun openCommitDiff(commit: GitCommit, file: GitCommitFile) {
-        val date =
-            java.time.Instant
-                .ofEpochSecond(
-                    commit.time,
-                ).atZone(java.time.ZoneId.systemDefault())
-                .toLocalDate()
-                .toString()
+        val date = localDate(commit.time)
         val header = CommitHeader(commit.author, date, commit.subject)
         val target = CommitDiffTarget(commit.hash, commit.shortHash, file.oldPath, header)
         editor.openCommitDiff(entryAt(file.path), target)
@@ -167,14 +162,13 @@ class ProjectState(
     fun openBlameCommit(tab: EditorTab, line: BlameLine) {
         if (line.commit.all { it == '0' }) return
         scope.launch {
-            val details =
-                runCatching {
-                    services.git.commitDetails(
-                        root.path,
-                        line.commit,
-                    )
-                }.getOrNull() ?: return@launch
-            if (details.hash.isEmpty()) return@launch
+            val details = runCatching { services.git.commitDetails(root.path, line.commit) }.getOrNull()
+            if (details != null && details.hash.isNotEmpty()) openCommitOf(tab, line, details)
+        }
+    }
+
+    private fun openCommitOf(tab: EditorTab, line: BlameLine, details: GitCommitDetails) {
+        run {
             val relative = tree.relativePath(tab.entry)
             val file = details.files.firstOrNull { it.path == relative }
             val header = CommitHeader(line.author, line.date, details.message)
@@ -216,4 +210,10 @@ class ProjectState(
         terminal.stop()
         scope.cancel()
     }
+}
+
+// `yyyy-MM-dd` of a commit time (seconds since the epoch), in the local time zone.
+private fun localDate(seconds: Long): String {
+    val instant = java.time.Instant.ofEpochSecond(seconds)
+    return instant.atZone(java.time.ZoneId.systemDefault()).toLocalDate().toString()
 }

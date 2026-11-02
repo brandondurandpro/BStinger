@@ -80,25 +80,29 @@ private fun problemsByLine(diagnostics: List<Diagnostic>, document: Document): M
         val range = diagnostic.range
         val lastLine = range.endLine.coerceAtMost(document.lines.lastIndex)
         for (line in range.startLine..lastLine) {
-            val length = document.lines.getOrNull(line)?.length ?: continue
-            val start = if (line == range.startLine) range.startColumn else 0
-            val end = if (line == range.endLine) range.endColumn else length
-            // An empty range is marked on the character after it, or before it at the end of the line.
-            val widened = if (end > start) end else start + 1
-            val shift = if (start >= length && start > 0) 1 else 0
-            val problem =
-                LineProblem(
-                    start - shift,
-                    widened - shift,
-                    diagnostic.severity,
-                    diagnostic.unnecessary,
-                    diagnostic.deprecated,
-                )
-            byLine.getOrPut(line) { ArrayList() } += problem
+            val length = document.lines[line].length
+            byLine.getOrPut(line) { ArrayList() } += lineProblem(diagnostic, line, length)
         }
     }
     // The most serious drawn last, on top.
     return byLine.mapValues { (_, problems) -> problems.sortedByDescending { it.severity.ordinal } }
+}
+
+// The part of [diagnostic] on [line], of [length] characters.
+private fun lineProblem(diagnostic: Diagnostic, line: Int, length: Int): LineProblem {
+    val range = diagnostic.range
+    val start = if (line == range.startLine) range.startColumn else 0
+    val end = if (line == range.endLine) range.endColumn else length
+    // An empty range is marked on the character after it, or before it at the end of the line.
+    val widened = if (end > start) end else start + 1
+    val shift = if (start >= length && start > 0) 1 else 0
+    return LineProblem(
+        start - shift,
+        widened - shift,
+        diagnostic.severity,
+        diagnostic.unnecessary,
+        diagnostic.deprecated,
+    )
 }
 
 internal fun problemColor(severity: DiagnosticSeverity): Color =

@@ -36,6 +36,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -60,12 +61,13 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.example.kotlineditor.model.Diagnostic
-import org.example.kotlineditor.model.DiagnosticSeverity
 import org.example.kotlineditor.state.CodeInsightState
 import org.example.kotlineditor.state.Document
-import org.example.kotlineditor.state.DocumentInsight
 import org.example.kotlineditor.state.EditorTab
 import org.example.kotlineditor.state.TextPos
+import org.example.kotlineditor.state.applyCodeAction
+import org.example.kotlineditor.state.cancelRename
+import org.example.kotlineditor.state.confirmRename
 import org.example.kotlineditor.state.visualColumn
 import kotlin.math.roundToInt
 
@@ -81,10 +83,8 @@ private val SECONDARY_STYLE = TextStyle(color = IdeColors.TextSecondary, fontSiz
 /** Where an overlay is placed relative to its anchor's line. */
 private enum class Placement { Below, Above }
 
-/**
- * A box placed at [anchor] of [document], under its line (or above with [placement] Above, or when it does not fit
- * below): read in the layout phase, so that scrolling moves it without recomposing.
- */
+// A box placed at the anchor, under its line (above with Placement.Above, or when it does not fit below): read in the
+// layout phase, so that scrolling moves it without recomposing.
 @Composable
 private fun Anchored(
     document: Document,
@@ -99,24 +99,23 @@ private fun Anchored(
     var size by remember { mutableStateOf(IntSize.Zero) }
     Box(
         modifier
+            .onSizeChanged { size = it }
             .offset {
                 val line = document.lines.getOrElse(anchor.line) { "" }
                 val column = visualColumn(line, anchor.column.coerceAtMost(line.length))
                 val textLeft = metrics.gutterPx + metrics.paddingPx - tab.horizontalScroll.offset
                 val area = viewport()
-                val x =
-                    (textLeft + column * metrics.charWidth)
-                        .coerceAtMost(
-                            (area.width - size.width).toFloat(),
-                        ).coerceAtLeast(0f)
+                val rightmost = (area.width - size.width).toFloat()
+                val x = (textLeft + column * metrics.charWidth).coerceAtMost(rightmost).coerceAtLeast(0f)
                 val rowTop = document.folding.rowOf(anchor.line) * metrics.lineHeightPx - tab.verticalScroll.offsetPx
                 val below = rowTop + metrics.lineHeightPx
                 val above = rowTop - size.height
                 val fitsBelow = below + size.height <= area.height
                 val fitsAbove = above >= 0
-                val goesAbove = (placement == Placement.Above && fitsAbove) || (!fitsBelow && fitsAbove)
+                val wantsAbove = placement == Placement.Above || !fitsBelow
+                val goesAbove = wantsAbove && fitsAbove
                 IntOffset(x.roundToInt(), (if (goesAbove) above else below).roundToInt())
-            }.onSizeChanged { size = it },
+            },
     ) { content() }
 }
 
@@ -205,9 +204,8 @@ private fun ProblemLine(problem: Diagnostic) {
     Row(verticalAlignment = Alignment.Top) {
         Box(
             Modifier
-                .padding(
-                    top = 4.dp,
-                ).size(8.dp)
+                .padding(top = 4.dp)
+                .size(8.dp)
                 .background(problemColor(problem.severity), RoundedCornerShape(4.dp)),
         )
         val source = listOfNotNull(problem.source, problem.code).joinToString(" ")
@@ -303,14 +301,11 @@ private fun CodeActionsView(popup: org.example.kotlineditor.state.CodeActionsPop
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 val isFix = action.kind?.startsWith("quickfix") == true
+                val color = if (isFix) IdeColors.ProblemWarning else IdeColors.Accent
                 Box(
                     Modifier
-                        .size(
-                            8.dp,
-                        ).background(
-                            if (isFix) IdeColors.ProblemWarning else IdeColors.Accent,
-                            RoundedCornerShape(4.dp),
-                        ),
+                        .size(8.dp)
+                        .background(color, RoundedCornerShape(4.dp)),
                 )
                 BasicText(action.title, Modifier.padding(start = 8.dp), style = LABEL_STYLE, maxLines = 1)
             }
@@ -335,9 +330,8 @@ private fun SignatureView(help: org.example.kotlineditor.model.SignatureHelpResu
         }
     Column(
         Modifier
-            .widthIn(
-                max = HOVER_MAX_WIDTH,
-            ).popupFrame()
+            .widthIn(max = HOVER_MAX_WIDTH)
+            .popupFrame()
             .swallowClicks()
             .testTag(EditorTags.SIGNATURE)
             .padding(horizontal = 10.dp, vertical = 5.dp),
@@ -347,9 +341,8 @@ private fun SignatureView(help: org.example.kotlineditor.model.SignatureHelpResu
             val text = signature.label.substring(parameter.start, parameter.end)
             Box(
                 Modifier
-                    .size(
-                        0.dp,
-                    ).semantics { this.text = AnnotatedString(text) }
+                    .size(0.dp)
+                    .semantics { this.text = AnnotatedString(text) }
                     .testTag(EditorTags.SIGNATURE_ACTIVE_PARAMETER),
             )
         }
@@ -397,24 +390,8 @@ private fun RenameView(
                 .border(1.dp, IdeColors.Accent, RoundedCornerShape(3.dp))
                 .padding(horizontal = 6.dp, vertical = 4.dp)
                 .focusRequester(focus)
-                .onPreviewKeyEvent { event ->
-                    val down = event.type == KeyEventType.KeyDown
-                    when {
-                        down && (event.key == Key.Enter || event.key == Key.NumPadEnter) -> {
-                            close(insight::confirmRename)
-                            true
-                        }
-
-                        down && event.key == Key.Escape -> {
-                            close(insight::cancelRename)
-                            true
-                        }
-
-                        else -> {
-                            false
-                        }
-                    }
-                }.testTag(EditorTags.RENAME_INPUT),
+                .onPreviewKeyEvent { event -> renameKey(event, insight, close) }
+                .testTag(EditorTags.RENAME_INPUT),
             enabled = !popup.applying,
             singleLine = true,
             textStyle = LocalCodeStyle.current.copy(color = IdeColors.Text),
@@ -428,37 +405,17 @@ private fun RenameView(
     }
 }
 
-/** The problems of the document at the top right, like IntelliJ's: a click goes to the next one (F2). */
-@Composable
-internal fun ProblemsWidget(insight: DocumentInsight, onNext: () -> Unit, modifier: Modifier = Modifier) {
-    val errors = insight.errorCount
-    val warnings = insight.warningCount
-    Row(
-        modifier
-            .padding(6.dp)
-            .background(IdeColors.Editor.copy(alpha = 0.85f), POPUP_SHAPE)
-            .pointerInput(Unit) { detectTapGestures { onNext() } }
-            .padding(horizontal = 6.dp, vertical = 2.dp)
-            .testTag(EditorTags.PROBLEMS),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (errors == 0 && warnings == 0) {
-            BasicText("✓", style = LABEL_STYLE.copy(color = IdeColors.GitAdded))
+// Enter renames, Escape cancels; the other keys type the name.
+private fun renameKey(event: KeyEvent, insight: CodeInsightState, close: (() -> Unit) -> Unit): Boolean {
+    val down = event.type == KeyEventType.KeyDown
+    val enter = event.key == Key.Enter || event.key == Key.NumPadEnter
+    val action: (() -> Unit)? =
+        when {
+            !down -> null
+            enter -> insight::confirmRename
+            event.key == Key.Escape -> insight::cancelRename
+            else -> null
         }
-        if (errors > 0) Counter("●", errors, DiagnosticSeverity.Error, EditorTags.PROBLEMS_ERRORS)
-        if (warnings > 0) Counter("▲", warnings, DiagnosticSeverity.Warning, EditorTags.PROBLEMS_WARNINGS)
-    }
-}
-
-@Composable
-private fun Counter(symbol: String, count: Int, severity: DiagnosticSeverity, tag: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        BasicText(symbol, style = LABEL_STYLE.copy(color = problemColor(severity), fontSize = 11.sp))
-        BasicText(
-            count.toString(),
-            Modifier.padding(start = 3.dp).testTag(tag),
-            style = LABEL_STYLE.copy(fontSize = 12.sp),
-        )
-    }
+    action?.let(close)
+    return action != null
 }

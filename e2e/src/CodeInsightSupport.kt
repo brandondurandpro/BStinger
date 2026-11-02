@@ -46,10 +46,13 @@ fun codeInsightProject(): SampleProject =
             echo ${'$'}greeter->greet("again", 2);
             """.trimIndent() + "\n",
         )
-        file("src/Polite.php", "<?php\n\ninterface Polite\n{\n}\n")
-        file("src/Shy.php", "<?php\n\nclass Shy implements Polite\n{\n}\n")
+        file("src/Polite.php", phpFile("interface Polite"))
+        file("src/Shy.php", phpFile("class Shy implements Polite"))
         file("README.md", "# Greetings\n")
     }
+
+// A PHP file declaring an empty type.
+private fun phpFile(declaration: String): String = listOf("<?php", "", declaration, "{", "}", "").joinToString("\n")
 
 // Where the character at [column] of the editor line [line] is, in the line text node's coordinates.
 @OptIn(ExperimentalTestApi::class)

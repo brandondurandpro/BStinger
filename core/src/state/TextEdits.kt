@@ -7,15 +7,17 @@ import org.example.kotlineditor.model.TextRange
 fun shifted(pos: TextPos, change: TextChange): TextPos {
     val start = TextPos(change.startLine, change.startColumn)
     val end = TextPos(change.endLine, change.endColumn)
-    if (pos < start) return pos
     val insertedLines = change.text.split('\n')
-    val lastInserted = insertedLines.last()
+    val lastInserted = insertedLines.lastOrNull().orEmpty()
     val newEndLine = change.startLine + insertedLines.lastIndex
     val newEndColumn = if (insertedLines.size == 1) change.startColumn + lastInserted.length else lastInserted.length
-    if (pos < end) return TextPos(newEndLine, newEndColumn)
     val lineDelta = newEndLine - change.endLine
     val column = if (pos.line == change.endLine) newEndColumn + (pos.column - change.endColumn) else pos.column
-    return TextPos(pos.line + lineDelta, column)
+    return when {
+        pos < start -> pos
+        pos < end -> TextPos(newEndLine, newEndColumn)
+        else -> TextPos(pos.line + lineDelta, column)
+    }
 }
 
 /**

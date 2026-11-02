@@ -184,21 +184,22 @@ private fun InsightNodes(index: Int, line: String, tab: EditorTab, metrics: Edit
 
     @Composable
     fun Node(startColumn: Int, columns: Int, tag: String, label: String? = null) {
+        val labelled =
+            label?.let {
+                Modifier.semantics {
+                    text =
+                        androidx.compose.ui.text.AnnotatedString(
+                            it,
+                        )
+                }
+            } ?: Modifier
+        val left = (startColumn * metrics.charWidth).roundToInt()
         Box(
             Modifier
-                .offset {
-                    IntOffset(
-                        textLeft(metrics, tab.horizontalScroll.offset) + (startColumn * metrics.charWidth).roundToInt(),
-                        0,
-                    )
-                }.size(cell * columns.coerceAtLeast(1), metrics.lineHeight)
-                .semantics {
-                    if (label != null) {
-                        this.text =
-                            androidx.compose.ui.text
-                                .AnnotatedString(label)
-                    }
-                }.testTag(tag),
+                .offset { IntOffset(textLeft(metrics, tab.horizontalScroll.offset) + left, 0) }
+                .size(cell * columns.coerceAtLeast(1), metrics.lineHeight)
+                .then(labelled)
+                .testTag(tag),
         )
     }
     insight.problems?.forEach { problem ->
