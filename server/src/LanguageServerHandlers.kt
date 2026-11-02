@@ -109,6 +109,9 @@ private fun codeIntelligenceHandlers(services: LocalServices): Map<Method, Handl
         Method.LspOutline to {
             intelligence().outline(session, params.string(PATH), params.int(VERSION)).toJson()
         },
+        Method.LspInlayHints to {
+            intelligence().inlayHints(session, params.string(PATH), params.int(VERSION)).toJson()
+        },
         Method.LspFoldingRanges to {
             intelligence().foldingRanges(session, params.string(PATH), params.int(VERSION)).toJson()
         },

@@ -39,6 +39,7 @@ import org.example.kotlineditor.state.applyCodeAction
 import org.example.kotlineditor.state.closeProblems
 import org.example.kotlineditor.state.goToProblem
 import org.example.kotlineditor.state.moveProblemSelection
+import org.example.kotlineditor.state.screenLine
 import org.example.kotlineditor.state.toggleProblems
 
 // What code intelligence adds to the code editor: the popups over the code, the mouse, the keys of its lists.
@@ -134,7 +135,7 @@ internal fun hintAt(
     val hint = target.marks.hints[pos.line]
     val document = target.document
     val declaration = insight.insightOf(document)?.usageCounts?.firstOrNull { it.range.startLine == pos.line }
-    val line = document.lines[pos.line]
+    val line = document.screenLine(pos.line)
     val left = metrics.gutterPx + metrics.paddingPx - tab.horizontalScroll.offset + hintColumn(line) * metrics.charWidth
     val right = left + (hint?.length ?: 0) * metrics.charWidth
     val onHint = hint != null && target.path != null && offset.x in left..right

@@ -1,6 +1,5 @@
 package org.example.kotlineditor.lsp.intelligence
 
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -37,6 +36,7 @@ import org.example.kotlineditor.model.FileDiagnostics
 import org.example.kotlineditor.model.FoldingRangesResult
 import org.example.kotlineditor.model.FormatOptions
 import org.example.kotlineditor.model.HoverResult
+import org.example.kotlineditor.model.InlayHintsResult
 import org.example.kotlineditor.model.LocationsResult
 import org.example.kotlineditor.model.NavigationKind
 import org.example.kotlineditor.model.OutlineResult
@@ -85,9 +85,6 @@ class IntelligenceSettings(
 /** A code action offered to a session, kept until it asks for another list. */
 private class OfferedActions(val token: String, val server: ManagedServer, val actions: List<JsonObject>)
 
-/** The server cannot answer now (no process ready, or it went away). */
-private class NotReadyException : Exception()
-
 /** Diagnostics of a document as one language server published them. */
 private data class Published(val server: String, val uri: String, val diagnostics: List<Diagnostic>)
 
@@ -103,6 +100,8 @@ class CodeIntelligenceService internal constructor(
     private val settings: IntelligenceSettings = IntelligenceSettings(),
     private val serversOfSession: (String) -> List<ManagedServer> = { emptyList() },
 ) {
+    private val requests = ServerRequests(documents, serversOf, settings)
+    private val structure = DocumentStructureRequests(documents, requests)
     private val diagnostics = ConcurrentHashMap<String, Published>()
     private val diagnosticsVersion = MutableStateFlow(1L)
     private val offered = ConcurrentHashMap<String, OfferedActions>()
@@ -115,7 +114,7 @@ class CodeIntelligenceService internal constructor(
 
     /** Documentation at [at]. */
     suspend fun hover(session: String, at: DocumentPosition): HoverResult =
-        ask(
+        requests.ask(
             session,
             at.path,
             at.version,
@@ -155,7 +154,7 @@ class CodeIntelligenceService internal constructor(
         capability: String,
         params: (MirroredDocument) -> JsonObject,
     ): LocationsResult =
-        ask(
+        requests.ask(
             session,
             at.path,
             at.version,
@@ -170,13 +169,20 @@ class CodeIntelligenceService internal constructor(
 
     /** Occurrences of the symbol at [at] in its document. */
     suspend fun highlights(session: String, at: DocumentPosition): List<SymbolHighlight> =
-        ask(session, at.path, at.version, "documentHighlightProvider", emptyList(), emptyList()) { document, request ->
+        requests.ask(
+            session,
+            at.path,
+            at.version,
+            "documentHighlightProvider",
+            emptyList(),
+            emptyList(),
+        ) { document, request ->
             highlightsOf(request("textDocument/documentHighlight", positionParams(document, at)))
         }
 
     /** Signatures of the call around [at]. */
     suspend fun signatureHelp(session: String, at: DocumentPosition): SignatureHelpResult =
-        ask(
+        requests.ask(
             session,
             at.path,
             at.version,
@@ -188,54 +194,20 @@ class CodeIntelligenceService internal constructor(
         }
 
     /** The declarations of [path] at [version], nested, for File Structure. */
-    suspend fun outline(session: String, path: String, version: Int): OutlineResult {
-        val unsupported = OutlineResult(FeatureStatus.Unsupported, emptyList())
-        return ask(session, path, version, DOCUMENT_SYMBOL_PROVIDER, OutlineResult.NotReady, unsupported) {
-                document,
-                request,
-            ->
-            val params = buildJsonObject { putJsonObject(TEXT_DOCUMENT) { put(URI, document.uri) } }
-            OutlineResult(FeatureStatus.Ready, outlineOf(request("textDocument/documentSymbol", params)))
-        }
-    }
+    suspend fun outline(session: String, path: String, version: Int): OutlineResult =
+        structure.outline(session, path, version)
+
+    /** The inlay hints of version [version] of [path], over the whole document. */
+    suspend fun inlayHints(session: String, path: String, version: Int): InlayHintsResult =
+        structure.inlayHints(session, path, version)
 
     /** The regions of version [version] of [path] that can be folded. */
-    suspend fun foldingRanges(session: String, path: String, version: Int): FoldingRangesResult {
-        val unsupported = FoldingRangesResult(FeatureStatus.Unsupported, emptyMap())
-        return ask(session, path, version, "foldingRangeProvider", FoldingRangesResult.NotReady, unsupported) {
-                document,
-                request,
-            ->
-            val params = buildJsonObject { putJsonObject(TEXT_DOCUMENT) { put(URI, document.uri) } }
-            FoldingRangesResult(FeatureStatus.Ready, foldingRegionsOf(request("textDocument/foldingRange", params)))
-        }
-    }
+    suspend fun foldingRanges(session: String, path: String, version: Int): FoldingRangesResult =
+        structure.foldingRanges(session, path, version)
 
     /** The ranges Ctrl+W selects around [at], innermost first. */
-    suspend fun selectionRanges(session: String, at: DocumentPosition): SelectionRangesResult {
-        val unsupported = SelectionRangesResult(FeatureStatus.Unsupported, emptyList())
-        return ask(
-            session,
-            at.path,
-            at.version,
-            "selectionRangeProvider",
-            SelectionRangesResult.NotReady,
-            unsupported,
-        ) {
-                document,
-                request,
-            ->
-            val params =
-                buildJsonObject {
-                    putJsonObject(TEXT_DOCUMENT) { put(URI, document.uri) }
-                    put("positions", JsonArray(listOf(position(at.line, at.column))))
-                }
-            SelectionRangesResult(
-                FeatureStatus.Ready,
-                selectionRangesOf(request("textDocument/selectionRange", params)),
-            )
-        }
-    }
+    suspend fun selectionRanges(session: String, at: DocumentPosition): SelectionRangesResult =
+        structure.selectionRanges(session, at)
 
     /** The declarations of [session]'s project named like [query], from every server of the project that searches. */
     suspend fun workspaceSymbols(session: String, query: String): WorkspaceSymbolsResult {
@@ -260,7 +232,7 @@ class CodeIntelligenceService internal constructor(
                 val asked =
                     servers.map { server ->
                         async {
-                            answeredBy<List<WorkspaceSymbol>?>(server, null) { request ->
+                            requests.answeredBy<List<WorkspaceSymbol>?>(server, null) { request ->
                                 workspaceSymbolsOf(request("workspace/symbol", params))
                             }
                         }
@@ -277,7 +249,14 @@ class CodeIntelligenceService internal constructor(
     suspend fun usageCounts(session: String, path: String, version: Int): UsageCountsResult {
         val notReady = UsageCountsResult(FeatureStatus.NotReady, emptyList())
         val unsupported = UsageCountsResult(FeatureStatus.Unsupported, emptyList())
-        return ask(session, path, version, DOCUMENT_SYMBOL_PROVIDER, notReady, unsupported) { document, request ->
+        return requests.ask(
+            session,
+            path,
+            version,
+            DOCUMENT_SYMBOL_PROVIDER,
+            notReady,
+            unsupported,
+        ) { document, request ->
             val lspVersion = documents.locked { document.lspVersion }
             val cached = usageCache[document.uri]?.takeIf { it.first == lspVersion }
             cached?.second ?: countUsages(document, request).also { usageCache[document.uri] = lspVersion to it }
@@ -349,7 +328,7 @@ class CodeIntelligenceService internal constructor(
     suspend fun prepareRename(session: String, at: DocumentPosition): RenameTarget {
         val notReady = RenameTarget(FeatureStatus.NotReady, null, null)
         val unsupported = RenameTarget(FeatureStatus.Unsupported, null, null)
-        return ask(
+        return requests.ask(
             session,
             at.path,
             at.version,
@@ -396,7 +375,7 @@ class CodeIntelligenceService internal constructor(
 
     /** The edits renaming the symbol at [at] to [newName]. */
     suspend fun rename(session: String, at: DocumentPosition, newName: String): EditResult =
-        ask(
+        requests.ask(
             session,
             at.path,
             at.version,
@@ -438,7 +417,7 @@ class CodeIntelligenceService internal constructor(
     ): EditResult {
         val capability = if (range == null) "documentFormattingProvider" else "documentRangeFormattingProvider"
         val method = if (range == null) "textDocument/formatting" else "textDocument/rangeFormatting"
-        return ask(
+        return requests.ask(
             session,
             path,
             version,
@@ -468,7 +447,7 @@ class CodeIntelligenceService internal constructor(
     /** The code actions offered for [range] of [path], with the diagnostics found there. */
     suspend fun codeActions(session: String, path: String, version: Int, range: TextRange): CodeActionsResult {
         val unsupported = CodeActionsResult(FeatureStatus.Unsupported, "", emptyList())
-        return ask(
+        return requests.ask(
             session,
             path,
             version,
@@ -608,71 +587,6 @@ class CodeIntelligenceService internal constructor(
     internal fun released(session: String) {
         offered.remove(session)
         diagnosticsVersion.value++
-    }
-
-    // Runs the block with the document once the session's version arrived, and a request to its language server
-    // offering the capability: notReady when no server is ready (or it went away), unsupported when the ready one
-    // does not offer it, refused when it answers with an error.
-    @Suppress("LongParameterList")
-    private suspend fun <T> ask(
-        session: String,
-        path: String,
-        version: Int,
-        capability: String,
-        notReady: T,
-        unsupported: T,
-        refused: (LspResponseException) -> T = { notReady },
-        block: suspend (MirroredDocument, suspend (String, JsonObject) -> JsonElement?) -> T,
-    ): T {
-        val document = awaitDocument(session, path, version)
-        val readyServers = document?.let { serversOf(it) }.orEmpty().filter { it.supports(capability) != null }
-        val server = readyServers.firstOrNull { it.supports(capability) == true }
-        return when {
-            document == null || readyServers.isEmpty() -> notReady
-            server == null -> unsupported
-            else -> answered(server, document, notReady, refused, block)
-        }
-    }
-
-    private suspend fun <T> answered(
-        server: ManagedServer,
-        document: MirroredDocument,
-        notReady: T,
-        refused: (LspResponseException) -> T,
-        block: suspend (MirroredDocument, suspend (String, JsonObject) -> JsonElement?) -> T,
-    ): T = answeredBy(server, notReady, refused) { request -> block(document, request) }
-
-    // What [block] finds asking [server]; [notReady] when it cannot answer in time, [refused] when it refuses.
-    private suspend fun <T> answeredBy(
-        server: ManagedServer,
-        notReady: T,
-        refused: (LspResponseException) -> T = { notReady },
-        block: suspend (suspend (String, JsonObject) -> JsonElement?) -> T,
-    ): T {
-        val request: suspend (String, JsonObject) -> JsonElement? = { method, params ->
-            val answer = server.request(method, params) ?: throw NotReadyException()
-            answer.takeIf { it != JsonNull }
-        }
-        return try {
-            withTimeoutOrNull(settings.timeoutMs) { block(request) } ?: notReady
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: NotReadyException) {
-            notReady
-        } catch (_: LspConnectionClosedException) {
-            notReady
-        } catch (failure: LspResponseException) {
-            refused(failure)
-        }
-    }
-
-    private suspend fun awaitDocument(session: String, path: String, version: Int): MirroredDocument? {
-        val document = documents.get(path) ?: return null
-        val arrived =
-            withTimeoutOrNull(settings.timeoutMs) {
-                document.clientVersion.firstOrNull { it.session == session && it.version >= version }
-            }
-        return document.takeIf { arrived != null }
     }
 
     // The locations with the text of their first line, read from the open documents, else from the disk.

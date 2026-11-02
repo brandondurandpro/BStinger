@@ -3,6 +3,7 @@ package org.example.kotlineditor.ui
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
+import org.example.kotlineditor.state.LineInlays
 import org.example.kotlineditor.syntax.Language
 import org.example.kotlineditor.syntax.treesitter.LineSpans
 
@@ -25,6 +26,7 @@ internal class LineRenderCache(
         val startsInComment: Boolean,
         val placeholder: String?,
         val spans: LineSpans?,
+        val inlays: LineInlays?,
     )
 
     private val lines = LruMap<LineKey, TextLayoutResult>(lineCapacity)
@@ -45,7 +47,7 @@ internal class LineRenderCache(
             measurer.measure(highlighted(source), style, softWrap = false, maxLines = 1)
         }
 
-    private fun LineSource.key() = LineKey(text, language, startsInComment, placeholder, spans)
+    private fun LineSource.key() = LineKey(text, language, startsInComment, placeholder, spans, inlays)
 
     /** Line number [number] (one-based), without color: the caret line draws it brighter. */
     fun number(number: Int): TextLayoutResult =

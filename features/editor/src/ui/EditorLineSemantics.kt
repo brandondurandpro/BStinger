@@ -32,9 +32,10 @@ import kotlinx.coroutines.launch
 import org.example.kotlineditor.model.GitChangeKind
 import org.example.kotlineditor.state.Document
 import org.example.kotlineditor.state.EditorTab
+import org.example.kotlineditor.state.ScreenLine
 import org.example.kotlineditor.state.VerticalScroll
 import org.example.kotlineditor.state.placeholder
-import org.example.kotlineditor.state.visualColumn
+import org.example.kotlineditor.state.screenLine
 import kotlin.math.ceil
 import kotlin.math.roundToInt
 
@@ -164,7 +165,7 @@ private fun LineNode(
                 .semantics { this.text = text }
                 .testTag(EditorTags.lineText(index)),
         )
-        InsightNodes(index, line, tab, metrics, insight)
+        InsightNodes(index, document.screenLine(index), tab, metrics, insight)
     }
 }
 
@@ -178,7 +179,7 @@ internal class LineInsight(
 
 // The problems, occurrences and usage hint of a line, where the canvas draws them: tests find and click them.
 @Composable
-private fun InsightNodes(index: Int, line: String, tab: EditorTab, metrics: EditorMetrics, insight: LineInsight) {
+private fun InsightNodes(index: Int, line: ScreenLine, tab: EditorTab, metrics: EditorMetrics, insight: LineInsight) {
     val density = LocalDensity.current
     val cell = with(density) { metrics.charWidth.toDp() }
 
@@ -203,23 +204,32 @@ private fun InsightNodes(index: Int, line: String, tab: EditorTab, metrics: Edit
         )
     }
     insight.problems?.forEach { problem ->
-        val start = visualColumn(line, problem.start.coerceIn(0, line.length))
-        val end = visualColumn(line, problem.end.coerceIn(0, line.length))
+        val start = line.startOf(problem.start)
+        val end = line.endOf(problem.end)
         Node(start, end - start, EditorTags.diagnostic(index, problem.severity.name))
     }
     insight.highlights?.forEach { highlight ->
-        val start = visualColumn(line, highlight.start.coerceIn(0, line.length))
-        val end = visualColumn(line, highlight.end.coerceIn(0, line.length))
+        val start = line.startOf(highlight.start)
+        val end = line.endOf(highlight.end)
         Node(start, end - start, EditorTags.symbolHighlight(index, highlight.kind.name))
     }
     insight.hint?.let { hint -> Node(hintColumn(line), hint.length, EditorTags.usageHint(index), hint) }
+    line.inlays?.let { inlays ->
+        for (at in 0 until inlays.size) {
+            val column = inlays.columns[at]
+            val label = inlays.labels[at]
+            // Its cells end where the character it precedes starts.
+            Node(line.startOf(column) - label.length, label.length, EditorTags.inlayHint(index, column), label)
+        }
+    }
     insight.link?.let { (start, end) ->
-        val from = visualColumn(line, start.coerceIn(0, line.length))
+        val text = line.text
+        val from = line.startOf(start)
         Node(
             from,
-            visualColumn(line, end.coerceIn(0, line.length)) - from,
+            line.endOf(end) - from,
             EditorTags.LINK,
-            line.substring(start.coerceIn(0, line.length), end.coerceIn(0, line.length)),
+            text.substring(start.coerceIn(0, text.length), end.coerceIn(0, text.length)),
         )
     }
 }

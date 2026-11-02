@@ -10,6 +10,7 @@ import org.example.kotlineditor.model.EditResult
 import org.example.kotlineditor.model.FoldingRangesResult
 import org.example.kotlineditor.model.FormatOptions
 import org.example.kotlineditor.model.HoverResult
+import org.example.kotlineditor.model.InlayHintsResult
 import org.example.kotlineditor.model.LanguageServerChoice
 import org.example.kotlineditor.model.LanguageServers
 import org.example.kotlineditor.model.LanguageServersStatus
@@ -155,6 +156,15 @@ class RemoteLanguageServers(private val client: RpcClient) : LanguageServers {
                 put(VERSION, version)
             }
         return result.outlineResult()
+    }
+
+    override suspend fun inlayHints(path: String, version: Int): InlayHintsResult {
+        val result =
+            client.call(Method.LspInlayHints) {
+                put(PATH, path)
+                put(VERSION, version)
+            }
+        return result.inlayHintsResult()
     }
 
     override suspend fun foldingRanges(path: String, version: Int): FoldingRangesResult {

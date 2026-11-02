@@ -1,6 +1,8 @@
 package org.example.kotlineditor.lsp.intelligence
 
 import kotlinx.serialization.json.Json
+import org.example.kotlineditor.model.InlayHint
+import org.example.kotlineditor.model.InlayHintKind
 import org.example.kotlineditor.model.TextRange
 import org.example.kotlineditor.syntax.Declaration
 import org.example.kotlineditor.syntax.DeclarationKind
@@ -113,5 +115,27 @@ class SymbolTranslationsTest {
                 """{"startLine":8,"endLine":9},{"startLine":3,"endLine":3},{"endLine":5},{"startLine":12,"endLine":10}]"""
         assertEquals(mapOf(4 to 6, 8 to 11), foldingRegionsOf(json(answer)))
         assertEquals(emptyMap(), foldingRegionsOf(json("null")))
+    }
+
+    @Test
+    fun `inlay hints join their label parts, turn padding into spaces and come sorted`() {
+        val answer =
+            """
+            [
+              {"position": {"line": 2, "character": 30}, "label": "times:", "kind": 2, "paddingRight": true},
+              {"position": {"line": 2, "character": 21}, "label": [{"value": "na"}, {"value": "me:"}], "kind": 2},
+              {"position": {"line": 1, "character": 8}, "label": "string", "kind": 1, "paddingLeft": true},
+              {"position": {"line": 0, "character": 0}, "label": "?"}
+            ]
+            """.trimIndent()
+        val expected =
+            listOf(
+                InlayHint(0, 0, "?", InlayHintKind.Other),
+                InlayHint(1, 8, " string", InlayHintKind.Type),
+                InlayHint(2, 21, "name:", InlayHintKind.Parameter),
+                InlayHint(2, 30, "times: ", InlayHintKind.Parameter),
+            )
+        assertEquals(expected, inlayHintsOf(json(answer)))
+        assertEquals(emptyList(), inlayHintsOf(json("null")))
     }
 }

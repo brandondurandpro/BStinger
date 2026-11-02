@@ -86,7 +86,7 @@ internal fun CompletionList(
     val place: Density.() -> IntOffset = {
         // Horizontally: the badge left of the word's first letter.
         val lineText = document.lines.getOrElse(popup.line) { "" }
-        val column = visualColumn(lineText, popup.replaceFrom)
+        val column = visualColumn(lineText, popup.replaceFrom, document.inlays[popup.line])
         val textLeft = metrics.gutterPx + metrics.paddingPx - tab.horizontalScroll.offset
         val wordLeft = textLeft + column * metrics.charWidth
         val badgeSpace = COMPLETION_BADGE.toPx() + 8.dp.toPx()

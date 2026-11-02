@@ -67,3 +67,41 @@ data class FoldingRangesResult(
         val NotReady = FoldingRangesResult(FeatureStatus.NotReady, emptyMap())
     }
 }
+
+/** What an inlay hint names: a parameter of the call, the type of what is before it, or something else. */
+enum class InlayHintKind {
+    /** `name:` before an argument. */
+    Parameter,
+
+    /** `: string` after a variable. */
+    Type,
+
+    /** Any other hint. */
+    Other,
+}
+
+/** A hint the language server shows in the code without it being text of the file: `name:` before an argument. */
+data class InlayHint(
+    /** Line it is on. */
+    val line: Int,
+    /** Column of the character it is drawn before. */
+    val column: Int,
+    /** What it shows, its spaces included (`name: `). */
+    val label: String,
+    /** What it names. */
+    val kind: InlayHintKind,
+)
+
+/** The inlay hints of a document, in the order of the text. */
+data class InlayHintsResult(
+    /** Whether a server answered. */
+    val status: FeatureStatus,
+    /** Sorted by line, then column. */
+    val hints: List<InlayHint>,
+) {
+    /** Answers shared by every client. */
+    companion object {
+        /** No server could answer. */
+        val NotReady = InlayHintsResult(FeatureStatus.NotReady, emptyList())
+    }
+}

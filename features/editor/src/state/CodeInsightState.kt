@@ -83,6 +83,19 @@ class CodeInsightState(
     var problems: ProblemsList? by mutableStateOf(null)
         internal set
 
+    /**
+     * How the inlay hints are shown; changing it shows those already known the new way. Chosen in the Language
+     * Servers window, saved with the preferences.
+     */
+    var inlayHintsMode: InlayHintsMode
+        get() = inlayMode
+        set(value) {
+            inlayMode = value
+            insights.values.forEach(::applyInlays)
+        }
+
+    private var inlayMode by mutableStateOf(InlayHintsMode.Popup)
+
     /** The document whose "3 usages" hint is under the mouse (the pointer is a hand over it), null when none. */
     var hintUnderMouse: Document? by mutableStateOf(null)
 
@@ -133,6 +146,7 @@ class CodeInsightState(
     }
 
     private fun forget(document: Document) {
+        document.inlays = emptyMap()
         insights.remove(document)?.usagesJob?.cancel()
         document.markerListener = null
     }
@@ -152,6 +166,7 @@ class CodeInsightState(
 
     private fun onEdit(insight: DocumentInsight, change: TextChange) {
         insight.follow(change)
+        applyInlays(insight)
         refreshUsages(insight, delayed = true)
         dismissHover()
         notice = null
@@ -167,6 +182,7 @@ class CodeInsightState(
                 if (delayed) delay(USAGES_DELAY_MS)
                 countUsages(insight)
                 foldingFromServer(insight)
+                inlayHintsFromServer(insight)
             }
     }
 
@@ -187,6 +203,24 @@ class CodeInsightState(
             settled = status == FeatureStatus.Ready || status == FeatureStatus.Unsupported
             if (!settled) delay(NOT_READY_RETRY_MS)
         }
+    }
+
+    // The inlay hints of the text the usages were counted on.
+    private suspend fun inlayHintsFromServer(insight: DocumentInsight) {
+        val document = insight.document
+        val version = document.version
+        val result = askVersion(insight.path, document) { servers, at -> servers.inlayHints(insight.path, at) }
+        val ready = result?.takeIf { it.status == FeatureStatus.Ready && document.version == version }
+        ready?.let {
+            insight.inlayHints = it.hints
+            applyInlays(insight)
+        }
+    }
+
+    // Inline, the hints are drawn in the code; otherwise the code has none.
+    private fun applyInlays(insight: DocumentInsight) {
+        val inline = inlayMode == InlayHintsMode.Inline
+        insight.document.inlays = if (inline) inlaysOf(insight.inlayHints) else emptyMap()
     }
 
     // The regions only the server knows how to fold, once it counted the usages of the same text.

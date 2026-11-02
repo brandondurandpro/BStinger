@@ -15,7 +15,9 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import org.example.kotlineditor.model.GitChangeKind
+import org.example.kotlineditor.state.LineInlays
 import org.example.kotlineditor.state.TAB_SIZE
+import org.example.kotlineditor.state.visualColumn
 import org.example.kotlineditor.syntax.Language
 import org.example.kotlineditor.syntax.SyntaxHighlighter
 import org.example.kotlineditor.syntax.treesitter.LineSpans
@@ -52,6 +54,8 @@ class LineSource(
     val placeholder: String?,
     /** Tree-sitter colors of the line; `null` when the line lexer colors it. */
     val spans: LineSpans? = null,
+    /** The inlay hints drawn between its characters, none when null. */
+    val inlays: LineInlays? = null,
 )
 
 internal val DELETION_MARKER_SIZE = 7.dp
@@ -83,7 +87,7 @@ internal fun highlighted(source: LineSource): AnnotatedString {
             styled(text, SyntaxHighlighter.highlight(text, source.language, source.startsInComment), columns = null)
         } else {
             colored(source.text, spans)
-        }
+        }.let { withInlays(it, source.text, source.inlays) }
     val placeholder = source.placeholder ?: return highlighted
     return buildAnnotatedString {
         append(highlighted)
@@ -93,6 +97,23 @@ internal fun highlighted(source: LineSource): AnnotatedString {
         ) { append(placeholder) }
     }
 }
+
+// [text], the displayed [line], with its inlay hints inserted before their characters, greyed on their background.
+private fun withInlays(text: AnnotatedString, line: String, inlays: LineInlays?): AnnotatedString {
+    if (inlays == null || inlays.size == 0) return text
+    return buildAnnotatedString {
+        var from = 0
+        for (index in 0 until inlays.size) {
+            val at = visualColumn(line, inlays.columns[index]).coerceIn(from, text.length)
+            append(text.subSequence(from, at))
+            withStyle(INLAY_STYLE) { append(inlays.labels[index]) }
+            from = at
+        }
+        append(text.subSequence(from, text.length))
+    }
+}
+
+private val INLAY_STYLE = SpanStyle(color = IdeColors.InlayHint, background = IdeColors.InlayHintBackground)
 
 // The line as displayed (tabs expanded) with the colors of [spans], which count the characters of [line].
 private fun colored(line: String, spans: LineSpans): AnnotatedString {

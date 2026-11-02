@@ -62,6 +62,9 @@ object IdeColors {
     val DocumentationCode = Color(0xFF1E1F22)
     val FoldPlaceholder = Color(0xFF393B40)
 
+    /** Background of an inlay hint. */
+    val InlayHintBackground = Color(0xFF3B3D42)
+
     val Keyword = Color(0xFFCF8E6D)
     val StringLiteral = Color(0xFF6AAB73)
     val Number = Color(0xFF2AACB8)

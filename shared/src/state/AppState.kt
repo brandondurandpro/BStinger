@@ -499,7 +499,8 @@ class AppState(
         val app = preferences + picker + fontSizePreference() + agentMode + remotePreferences()
         val project = (screen as? Screen.Project)?.project ?: return app
         val autoSelect = PreferenceKeys.AUTO_SELECT_OPENED_FILE to project.autoSelectOpenedFile.toString()
-        return app + project.toolWindows.toPreferences() + autoSelect
+        val inlayHints = PreferenceKeys.INLAY_HINTS to project.inlayHintsMode.name
+        return app + project.toolWindows.toPreferences() + autoSelect + inlayHints
     }
 
     private fun remotePreferences(): Map<String, String> =

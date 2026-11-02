@@ -96,6 +96,17 @@ class ProjectState(
     override var autoSelectOpenedFile by
         mutableStateOf(preferences[PreferenceKeys.AUTO_SELECT_OPENED_FILE]?.toBooleanStrictOrNull() ?: true)
 
+    override var inlayHintsMode: InlayHintsMode
+        get() = insight.inlayHintsMode
+        set(value) {
+            insight.inlayHintsMode = value
+        }
+
+    init {
+        val saved = preferences[PreferenceKeys.INLAY_HINTS]
+        insight.inlayHintsMode = InlayHintsMode.entries.firstOrNull { it.name == saved } ?: InlayHintsMode.Popup
+    }
+
     /** Diff viewer layout: old and new files side by side (two panes) instead of the unified view. */
     var diffSideBySide by mutableStateOf(false)
 

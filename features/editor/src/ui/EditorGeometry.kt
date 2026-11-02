@@ -23,7 +23,7 @@ import org.example.kotlineditor.state.EditorTab
 import org.example.kotlineditor.state.HorizontalScroll
 import org.example.kotlineditor.state.TextPos
 import org.example.kotlineditor.state.VerticalScroll
-import org.example.kotlineditor.state.columnForVisual
+import org.example.kotlineditor.state.columnOfVisual
 import org.example.kotlineditor.state.selectWordAt
 import org.example.kotlineditor.state.toggle
 import kotlin.math.floor
@@ -79,7 +79,7 @@ internal class EditorMetrics(
             ((position.x - gutterPx - paddingPx + horizontal.offset) / charWidth)
                 .roundToInt()
                 .coerceAtLeast(0)
-        return TextPos(line, columnForVisual(document.lines[line], visual))
+        return TextPos(line, document.columnOfVisual(line, visual))
     }
 
     /**
@@ -95,7 +95,7 @@ internal class EditorMetrics(
         val line = folding.lineAt(row)
         val text = document.lines[line]
         val visual = floor(x / charWidth).toInt()
-        val column = columnForVisual(text, visual)
+        val column = document.columnOfVisual(line, visual)
         return if (column < text.length) TextPos(line, column) else null
     }
 }

@@ -81,12 +81,12 @@ private val LABEL_STYLE = TextStyle(color = IdeColors.Text, fontSize = 13.sp)
 private val SECONDARY_STYLE = TextStyle(color = IdeColors.TextSecondary, fontSize = 12.sp)
 
 /** Where an overlay is placed relative to its anchor's line. */
-private enum class Placement { Below, Above }
+internal enum class Placement { Below, Above }
 
 // A box placed at the anchor, under its line (above with Placement.Above, or when it does not fit below): read in the
 // layout phase, so that scrolling moves it without recomposing.
 @Composable
-private fun Anchored(
+internal fun Anchored(
     document: Document,
     anchor: TextPos,
     tab: EditorTab,
@@ -102,7 +102,8 @@ private fun Anchored(
             .onSizeChanged { size = it }
             .offset {
                 val line = document.lines.getOrElse(anchor.line) { "" }
-                val column = visualColumn(line, anchor.column.coerceAtMost(line.length))
+                val inlays = document.inlays[anchor.line]
+                val column = visualColumn(line, anchor.column.coerceAtMost(line.length), inlays)
                 val textLeft = metrics.gutterPx + metrics.paddingPx - tab.horizontalScroll.offset
                 val area = viewport()
                 val rightmost = (area.width - size.width).toFloat()
@@ -136,9 +137,12 @@ internal fun CodeInsightOverlays(
     editorFocus: FocusRequester,
     viewport: () -> IntSize,
 ) {
-    insight.signature?.takeIf { it.document === document }?.let { popup ->
+    val signature = insight.signature?.takeIf { it.document === document }
+    signature?.let { popup ->
         Anchored(document, popup.anchor, tab, metrics, viewport, Placement.Above) { SignatureView(popup.help) }
     }
+    // Popup mode: the line of the caret with its hints, above it (the parameter info takes its place).
+    if (signature == null) CaretLineHints(insight, document, tab, metrics, viewport)
     insight.hover?.takeIf { it.document === document }?.let { popup ->
         Anchored(document, popup.anchor, tab, metrics, viewport) {
             HoverView(popup.markdown, popup.problems, insight)

@@ -59,6 +59,7 @@ import org.example.kotlineditor.state.identifierAt
 import org.example.kotlineditor.state.matchingBracket
 import org.example.kotlineditor.state.reveal
 import org.example.kotlineditor.state.visualColumn
+import org.example.kotlineditor.state.visualColumnOf
 import org.example.kotlineditor.state.wordOccurrences
 import kotlin.math.roundToInt
 
@@ -218,14 +219,26 @@ internal fun decorations(
     serverHighlights: Boolean = false,
 ): LineDecorations {
     val caret = document.caret
+    val inlays = document.inlays[index]
     val selection = document.selectionRange()?.takeIf { index in it.first.line..it.second.line }
-    val selectionStart = selection?.let { if (index == it.first.line) visualColumn(line, it.first.column) else 0 } ?: -1
+    val selectionStart =
+        selection?.let {
+            if (index == it.first.line) {
+                visualColumn(
+                    line,
+                    it.first.column,
+                    inlays,
+                )
+            } else {
+                0
+            }
+        } ?: -1
     val selectionEnd =
         selection?.let {
             if (index == it.second.line) {
-                visualColumn(line, it.second.column)
+                visualColumn(line, it.second.column, inlays)
             } else {
-                visualColumn(line, line.length) + 1
+                visualColumn(line, line.length, inlays) + 1
             }
         } ?: -1
     val word = hints.identifier.takeUnless { serverHighlights }
@@ -233,16 +246,23 @@ internal fun decorations(
         hints.brackets
             ?.toList()
             ?.filter { it.line == index }
-            ?.map { visualColumn(line, it.column) }
+            ?.map { visualColumn(line, it.column, inlays) }
     return LineDecorations(
-        caretColumn = if (caret.line == index) visualColumn(line, caret.column) else -1,
+        caretColumn = if (caret.line == index) visualColumn(line, caret.column, inlays) else -1,
         selectionStart = selectionStart,
         selectionEnd = selectionEnd,
         matches = highlights?.byLine?.get(index),
         matchLength = highlights?.length ?: 0,
-        currentMatch = highlights?.current?.takeIf { it.line == index }?.let { visualColumn(line, it.column) } ?: -1,
+        currentMatch =
+        highlights?.current?.takeIf { it.line == index }?.let {
+            visualColumn(
+                line,
+                it.column,
+                inlays,
+            )
+        } ?: -1,
         brackets = bracketColumns?.takeIf { it.isNotEmpty() }?.toIntArray(),
-        usages = word?.let { wordOccurrences(line, it) }?.map { visualColumn(line, it) }?.toIntArray(),
+        usages = word?.let { wordOccurrences(line, it) }?.map { visualColumn(line, it, inlays) }?.toIntArray(),
         usageLength = word?.length ?: 0,
         change = change,
         deleted = deleted,
@@ -301,7 +321,7 @@ private fun FollowCaret(
             // A search or "go to line" may land inside a folded region: unfold it, like IntelliJ.
             if (document.folding.isHidden(caret.line)) document.folding.reveal(caret.line)
             scrollToRow(viewport, metrics, document.folding.rowOf(caret.line))
-            val x = visualColumn(document.lines[caret.line], caret.column) * metrics.charWidth + metrics.paddingPx
+            val x = document.visualColumnOf(caret.line, caret.column) * metrics.charWidth + metrics.paddingPx
             scrollToX(tab.horizontalScroll, metrics, x, viewportWidth() - metrics.gutterPx)
         }
         // A file opened by a jump shows where it landed, once the editor knows how tall it is.

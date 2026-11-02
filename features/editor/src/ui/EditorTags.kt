@@ -43,6 +43,7 @@ object EditorTags {
     const val PROBLEMS_LIST = "problems.list"
     const val PROBLEMS_LIST_EMPTY = "problems.list.empty"
     const val PROBLEMS_LIST_TITLE = "problems.list.title"
+    const val INLAY_HINTS_POPUP = "inlayHints.popup"
     const val PROBLEMS_SCRIM = "problems.scrim"
 
     const val LINK = "editor.link"
@@ -106,6 +107,9 @@ object EditorTags {
 
     /** An occurrence of the symbol at the caret highlighted by the language server, on [line]. */
     fun symbolHighlight(line: Int, kind: String) = "editor.highlight:$line:$kind"
+
+    /** The inlay hint drawn before the character at [column] of [line]. */
+    fun inlayHint(line: Int, column: Int) = "inlayHint:$line:$column"
 
     /** Row [index] of the problems list. */
     fun problem(index: Int) = "problems.list:$index"

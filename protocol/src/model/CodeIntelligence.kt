@@ -355,6 +355,9 @@ interface CodeIntelligence {
     /** The declarations of [path] at [version] (File Structure). */
     suspend fun outline(path: String, version: Int): OutlineResult = OutlineResult.NotReady
 
+    /** The inlay hints of version [version] of [path]: parameter names, types. */
+    suspend fun inlayHints(path: String, version: Int): InlayHintsResult = InlayHintsResult.NotReady
+
     /** The regions of version [version] of [path] that can be folded. */
     suspend fun foldingRanges(path: String, version: Int): FoldingRangesResult = FoldingRangesResult.NotReady
 

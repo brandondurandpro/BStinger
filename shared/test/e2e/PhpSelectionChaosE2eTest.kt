@@ -10,6 +10,7 @@ import org.example.kotlineditor.ui.EditorTags
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.minutes
 
 private const val RETURN_LINE = 15
 private const val NAME_COLUMN = 38
@@ -113,7 +114,8 @@ class PhpSelectionChaosE2eTest {
 
     @Test
     fun `after the server restarts Ctrl+W grows through the language server's ranges again`() =
-        runComposeUiTest {
+        // A restart and the retries until the new server answers: more than a minute on a slow runner.
+        runComposeUiTest(testTimeout = RESTART_TEST_TIMEOUT) {
             val app = open()
             firstServerStep(app)
             app.process.restart()
@@ -128,3 +130,5 @@ class PhpSelectionChaosE2eTest {
             }
         }
 }
+
+private val RESTART_TEST_TIMEOUT = 3.minutes

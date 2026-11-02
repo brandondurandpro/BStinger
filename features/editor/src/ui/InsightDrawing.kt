@@ -14,7 +14,7 @@ import org.example.kotlineditor.model.HighlightKind
 import org.example.kotlineditor.state.Document
 import org.example.kotlineditor.state.DocumentInsight
 import org.example.kotlineditor.state.LinkTarget
-import org.example.kotlineditor.state.visualColumn
+import org.example.kotlineditor.state.ScreenLine
 
 private val WAVE_HEIGHT = 2.dp
 private val WAVE_LENGTH = 4.dp
@@ -116,25 +116,25 @@ internal fun problemColor(severity: DiagnosticSeverity): Color =
 /** The language server's occurrences of the symbol at the caret, behind the text of [line]. */
 internal fun DrawScope.drawSymbolHighlights(
     highlights: List<LineHighlight>?,
-    line: String,
+    line: ScreenLine,
     charWidth: Float,
     height: Float,
 ) {
     highlights?.forEach { highlight ->
-        val start = visualColumn(line, highlight.start.coerceIn(0, line.length))
-        val end = visualColumn(line, highlight.end.coerceIn(0, line.length))
+        val start = line.startOf(highlight.start)
+        val end = line.endOf(highlight.end)
         val color = if (highlight.kind == HighlightKind.Write) IdeColors.IdentifierWrite else IdeColors.IdentifierUsage
         drawRect(color, Offset(start * charWidth, 0f), Size((end - start) * charWidth, height))
     }
 }
 
 /** Problems of [line] over its text: wavy underlines, struck-through deprecated code, dimmed unused code. */
-internal fun DrawScope.drawProblems(problems: List<LineProblem>?, line: String, charWidth: Float, height: Float) {
+internal fun DrawScope.drawProblems(problems: List<LineProblem>?, line: ScreenLine, charWidth: Float, height: Float) {
     problems?.forEach { problem ->
-        val start = visualColumn(line, problem.start.coerceIn(0, line.length))
-        val endColumn = visualColumn(line, problem.end.coerceIn(0, line.length))
+        val start = line.startOf(problem.start)
+        val endColumn = line.endOf(problem.end)
         // Past the end of the line (a missing semicolon): one cell after the text.
-        val end = if (problem.end > line.length) endColumn + 1 else endColumn.coerceAtLeast(start + 1)
+        val end = if (problem.end > line.text.length) endColumn + 1 else endColumn.coerceAtLeast(start + 1)
         val left = start * charWidth
         val right = end * charWidth
         when {
@@ -192,12 +192,12 @@ private fun DrawScope.drawWave(left: Float, right: Float, height: Float, color: 
 }
 
 /** The link under the mouse (Ctrl held): an underline in the link color. */
-internal fun DrawScope.drawLink(link: LinkTarget?, index: Int, line: String, charWidth: Float, height: Float) {
+internal fun DrawScope.drawLink(link: LinkTarget?, index: Int, line: ScreenLine, charWidth: Float, height: Float) {
     if (link == null || link.line != index) return
-    val start = visualColumn(line, link.start.coerceIn(0, line.length)) * charWidth
-    val end = visualColumn(line, link.end.coerceIn(0, line.length)) * charWidth
+    val start = line.startOf(link.start) * charWidth
+    val end = line.endOf(link.end) * charWidth
     drawLine(IdeColors.Link, Offset(start, height - 2.dp.toPx()), Offset(end, height - 2.dp.toPx()), UNDERLINE.toPx())
 }
 
 /** Where the usage hint of a line starts, in visual columns: two cells after its text. */
-internal fun hintColumn(line: String): Int = visualColumn(line, line.length) + HINT_GAP_COLUMNS
+internal fun hintColumn(line: ScreenLine): Int = line.end + HINT_GAP_COLUMNS

@@ -24,8 +24,10 @@ import org.example.kotlineditor.model.GitChangeKind
 import org.example.kotlineditor.model.GitLineChange
 import org.example.kotlineditor.state.Document
 import org.example.kotlineditor.state.EditorTab
+import org.example.kotlineditor.state.ScreenLine
 import org.example.kotlineditor.state.placeholder
-import org.example.kotlineditor.state.visualColumn
+import org.example.kotlineditor.state.screenLine
+import org.example.kotlineditor.state.visualColumnOf
 import kotlin.math.ceil
 import kotlin.math.roundToInt
 
@@ -119,6 +121,7 @@ private fun DrawScope.drawRow(
 ) {
     val folding = document.folding
     val line = document.lines[index]
+    val screenLine = document.screenLine(index)
     val folded = folding.isFolded(index)
     val deletedAtEnd = index == document.lines.lastIndex && document.lineCount in marks.deleted
     val deleted = index in marks.deleted || deletedAtEnd
@@ -145,30 +148,34 @@ private fun DrawScope.drawRow(
             folded,
             if (folded) folding.placeholder(index, document.lines) else null,
             document.syntax?.highlights?.spansFor(index, line),
+            screenLine.inlays,
         )
     // Layout places the text area on a whole pixel: so does this, or glyphs would be antialiased differently.
     val textLeft = metrics.gutterPx.roundToInt().toFloat()
     clipRect(left = textLeft, top = 0f, right = size.width, bottom = lineHeight) {
         val origin = textLeft + TEXT_PADDING.toPx() - horizontalOffset
         translate(left = origin) {
-            drawSymbolHighlights(insight.highlights[index], line, metrics.charWidth, lineHeight)
+            drawSymbolHighlights(insight.highlights[index], screenLine, metrics.charWidth, lineHeight)
             drawDecorations(decorations, 0f, metrics.charWidth, lineHeight)
         }
         val textX = textLeft + TEXT_PADDING.roundToPx() - horizontalOffset.roundToInt()
         drawText(cache.line(source), topLeft = Offset(textX, 0f))
         translate(left = origin) {
-            drawProblems(insight.problems[index], line, metrics.charWidth, lineHeight)
-            drawLink(insight.link, index, line, metrics.charWidth, lineHeight)
+            drawProblems(insight.problems[index], screenLine, metrics.charWidth, lineHeight)
+            drawLink(insight.link, index, screenLine, metrics.charWidth, lineHeight)
         }
         insight.hints[index]?.let { hint ->
-            val layout = cache.hint(hint)
-            val hintX =
-                textX +
-                    hintColumn(
-                        if (folded) line + " " + source.placeholder.orEmpty() else line,
-                    ) *
-                    metrics.charWidth
-            drawText(layout, topLeft = Offset(hintX, (lineHeight - layout.size.height) / 2))
+            // Folded, the usage hint goes after the placeholder.
+            val shown =
+                if (folded) {
+                    ScreenLine(
+                        line + " " + source.placeholder.orEmpty(),
+                        screenLine.inlays,
+                    )
+                } else {
+                    screenLine
+                }
+            drawUsageHint(cache.hint(hint), textX + hintColumn(shown) * metrics.charWidth, lineHeight)
         }
     }
 }
@@ -215,10 +222,14 @@ private fun DrawScope.drawCaret(tab: EditorTab, document: Document, metrics: Edi
     val scroll = tab.verticalScroll
     val y = (folding.rowOf(caret.line) - scroll.firstRow) * metrics.lineHeightPx - scroll.rowOffsetPx
     if (y + metrics.lineHeightPx < 0 || y > size.height) return
-    val column = visualColumn(document.lines[caret.line], caret.column)
+    val column = document.visualColumnOf(caret.line, caret.column)
     val textLeft = metrics.gutterPx.roundToInt().toFloat()
     val x = textLeft + TEXT_PADDING.toPx() - tab.horizontalScroll.offset + column * metrics.charWidth
     clipRect(left = textLeft) {
         drawRect(IdeColors.Caret, Offset(x, y), Size(CARET_WIDTH.toPx(), metrics.lineHeightPx))
     }
+}
+
+private fun DrawScope.drawUsageHint(layout: TextLayoutResult, x: Float, lineHeight: Float) {
+    drawText(layout, topLeft = Offset(x, (lineHeight - layout.size.height) / 2))
 }

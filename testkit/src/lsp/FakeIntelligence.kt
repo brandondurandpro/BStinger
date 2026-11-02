@@ -16,7 +16,11 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
+
 import kotlinx.serialization.json.putJsonObject
+
+// A call: a name, then its opening parenthesis.
+private val CALL = Regex("""([A-Za-z_][A-Za-z0-9_]*)\s*\(""")
 
 /**
  * The answers of the [FakeLanguageServer] to the code intelligence requests, computed from [FakePhpCode] like
@@ -165,6 +169,67 @@ internal class FakeIntelligence(private val code: FakePhpCode) {
                 add(symbol(top, declarations.filter { it.parent == top.name }))
             }
         }
+    }
+
+    // Like phpactor: `name:` before each argument of a call of a known function or method (kind 2, padded right).
+    fun inlayHints(params: JsonElement?): JsonElement {
+        val uri = (params as? JsonObject)?.get("textDocument")?.jsonObject?.get("uri")?.jsonPrimitive?.contentOrNull
+        val lines = uri?.let { code.files[it] } ?: return JsonNull
+        return buildJsonArray {
+            lines.forEachIndexed { index, line ->
+                CALL.findAll(line).forEach { call ->
+                    val name = call.groupValues[1]
+                    val declared = line.substring(0, call.range.first).trimEnd().endsWith("function")
+                    val parameters = code.declarationsNamed(name).firstOrNull()?.let(::parametersOf).orEmpty()
+                    val open = call.range.last
+                    if (!declared) {
+                        argumentStarts(line, open).zip(parameters).forEach { (column, parameter) ->
+                            add(
+                                buildJsonObject {
+                                    putJsonObject("position") {
+                                        put("line", index)
+                                        put("character", column)
+                                    }
+                                    put("label", "$parameter:")
+                                    put("kind", 2)
+                                    put("paddingRight", true)
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // The names of the parameters of a declaration, without their `$`.
+    private fun parametersOf(declaration: FakeDeclaration): List<String> {
+        val inside = declaration.signature.substringAfter('(', "").substringBefore(')')
+        return inside.split(',').mapNotNull { parameter -> parameter.trim().split(' ').lastOrNull { it.startsWith('$') } }
+            .map { it.removePrefix("$") }
+    }
+
+    // Where each argument of the call whose `(` is at [open] starts, up to its `)` on the same line.
+    private fun argumentStarts(line: String, open: Int): List<Int> {
+        val starts = ArrayList<Int>()
+        var depth = 0
+        var expecting = true
+        var index = open + 1
+        while (index < line.length && depth >= 0) {
+            val c = line[index]
+            when {
+                c == '(' || c == '[' -> depth++
+                c == ')' || c == ']' -> depth--
+                c == ',' && depth == 0 -> expecting = true
+            }
+            val startsArgument = expecting && depth >= 0 && !c.isWhitespace() && c != ',' && c != ')'
+            if (startsArgument) {
+                starts += index
+                expecting = false
+            }
+            index++
+        }
+        return starts
     }
 
     // Like phpactor: each declaration with a body, each docblock, and each run of `use` lines (kind imports).

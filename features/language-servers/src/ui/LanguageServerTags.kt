@@ -22,6 +22,9 @@ object LanguageServerTags {
     const val LSP_CHOICE_DETAILS = "lsp.choice.details"
     const val LSP_CHOICE_CANCEL = "lsp.choice.cancel"
 
+    /** The button choosing how inlay hints show: Off, Popup or Inline. */
+    fun inlayHintsMode(mode: String) = "languageServers.inlayHints:$mode"
+
     fun statusLanguageServer(id: String) = "status.languageServer:$id"
 
     fun statusLanguageServerTooltip(id: String) = "status.languageServer.tooltip:$id"

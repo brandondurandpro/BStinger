@@ -12,6 +12,9 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.example.kotlineditor.model.FeatureStatus
 import org.example.kotlineditor.model.FoldingRangesResult
+import org.example.kotlineditor.model.InlayHint
+import org.example.kotlineditor.model.InlayHintKind
+import org.example.kotlineditor.model.InlayHintsResult
 import org.example.kotlineditor.model.OutlineResult
 import org.example.kotlineditor.model.SelectionRangesResult
 import org.example.kotlineditor.model.WorkspaceSymbol
@@ -98,4 +101,28 @@ fun JsonElement.foldingRangesResult(): FoldingRangesResult {
             bounds[0].jsonPrimitive.int to bounds[1].jsonPrimitive.int
         }
     return FoldingRangesResult(fields.featureStatus(), regions)
+}
+
+/** An inlay hints answer: each hint as [line, column, label, kind]. */
+fun InlayHintsResult.toJson(): JsonObject =
+    buildJsonObject {
+        put(STATUS, status.name)
+        val encoded =
+            hints.map { hint ->
+                val fields = listOf(JsonPrimitive(hint.line), JsonPrimitive(hint.column))
+                JsonArray(fields + JsonPrimitive(hint.label) + JsonPrimitive(hint.kind.name))
+            }
+        put("hints", JsonArray(encoded))
+    }
+
+/** Reads an inlay hints answer. */
+fun JsonElement.inlayHintsResult(): InlayHintsResult {
+    val fields = jsonObject
+    val hints =
+        fields.getValue("hints").jsonArray.map { encoded ->
+            val parts = encoded.jsonArray
+            val kind = InlayHintKind.valueOf(parts[3].jsonPrimitive.content)
+            InlayHint(parts[0].jsonPrimitive.int, parts[1].jsonPrimitive.int, parts[2].jsonPrimitive.content, kind)
+        }
+    return InlayHintsResult(fields.featureStatus(), hints)
 }

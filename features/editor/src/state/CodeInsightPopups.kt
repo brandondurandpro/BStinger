@@ -12,6 +12,7 @@ import org.example.kotlineditor.model.CodeIntelligence
 import org.example.kotlineditor.model.Diagnostic
 import org.example.kotlineditor.model.DiagnosticSeverity
 import org.example.kotlineditor.model.EditResult
+import org.example.kotlineditor.model.InlayHint
 import org.example.kotlineditor.model.SignatureHelpResult
 import org.example.kotlineditor.model.SourceLocation
 import org.example.kotlineditor.model.SymbolHighlight
@@ -54,6 +55,10 @@ class DocumentInsight internal constructor(val document: Document) {
     var usageCounts: List<UsageCount> by mutableStateOf(emptyList())
         internal set
 
+    /** The inlay hints (`name:` before an argument), in the order of the text. */
+    var inlayHints: List<InlayHint> by mutableStateOf(emptyList())
+        internal set
+
     /** The occurrences of the symbol at the caret, empty while the caret moves or after an edit. */
     var highlights: List<SymbolHighlight> by mutableStateOf(emptyList())
         internal set
@@ -76,6 +81,7 @@ class DocumentInsight internal constructor(val document: Document) {
                 )?.let { diagnostic.copy(range = it) }
             }
         usageCounts = usageCounts.mapNotNull { count -> shifted(count.range, change)?.let { count.copy(range = it) } }
+        inlayHints = inlayHints.mapNotNull { shiftedHint(it, change) }
         highlights = emptyList()
     }
 }

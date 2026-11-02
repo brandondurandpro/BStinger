@@ -330,7 +330,12 @@ private fun highlightsOf(document: Document, matches: List<TextPos>, find: FindS
     val byLine = HashMap<Int, IntArray>()
     for ((line, list) in matches.groupBy { it.line }) {
         val text = document.lines.getOrNull(line)
-        if (text != null) byLine[line] = IntArray(list.size) { visualColumn(text, list[it].column) }
+        if (text != null) {
+            byLine[line] =
+                IntArray(
+                    list.size,
+                ) { visualColumn(text, list[it].column, document.inlays[line]) }
+        }
     }
     return SearchHighlights(byLine, find.query.length, matches.getOrNull(find.current))
 }

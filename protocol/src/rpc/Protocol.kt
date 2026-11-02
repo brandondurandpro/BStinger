@@ -416,6 +416,9 @@ enum class Method(
     /** Declarations of a document, nested. */
     LspOutline("lsp/outline"),
 
+    /** Inlay hints of a document. */
+    LspInlayHints("lsp/inlayHints"),
+
     /** Regions of a document that can be folded. */
     LspFoldingRanges("lsp/foldingRanges"),
 
