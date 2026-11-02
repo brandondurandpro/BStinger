@@ -124,6 +124,9 @@ class EditorTab(
 
     /** Selection to apply once the content is loaded (opening a search result). */
     var pendingSelection: Pair<TextPos, TextPos>? = null
+
+    /** Set by a jump (a declaration, a search result): the editor shows the caret once it is laid out. */
+    var revealCaret = false
     internal var lastActivated = 0L
     internal var job: Job? = null
     internal var changesJob: Job? = null

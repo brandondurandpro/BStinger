@@ -121,6 +121,7 @@ class EditorState(
     fun openAt(entry: FileEntry, start: TextPos, end: TextPos = start): EditorTab {
         val tab = open(entry)
         val document = tab.document
+        tab.revealCaret = true
         if (document != null) document.select(start, end) else tab.pendingSelection = start to end
         return tab
     }

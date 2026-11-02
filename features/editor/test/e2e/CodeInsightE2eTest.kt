@@ -105,6 +105,21 @@ class CodeInsightE2eTest {
         }
 
     @Test
+    fun `Ctrl+click on a function declared far down another file scrolls to its declaration`() =
+        runComposeUiTest {
+            val filler = List(FAR_LINE - 1) { "// filler $it" }
+            project.file("src/Far.php", (listOf("<?php") + filler + "function farAway() {}" + "").joinToString("\n"))
+            project.file("src/call.php", listOf("<?php", "farAway();", "").joinToString("\n"))
+            val app = open("src/call.php")
+            ctrlClickAt(1, 2)
+            awaitCondition(SERVER_START_MS) { app.activePath() == "src/Far.php" }
+            awaitCondition { app.caret() == TextPos(FAR_LINE, "function ".length) }
+            // The file opens on the declaration, not at its top.
+            awaitTag(EditorTags.lineText(FAR_LINE), unmerged = true)
+            awaitNoTag(EditorTags.lineText(0))
+        }
+
+    @Test
     fun `holding Ctrl over a symbol underlines it like a link`() =
         runComposeUiTest {
             open()
@@ -207,3 +222,6 @@ class CodeInsightE2eTest {
             assertEquals("Cannot find declaration to go to", textOf(EditorTags.NOTICE))
         }
 }
+
+// Far below the first screen of a file.
+private const val FAR_LINE = 300

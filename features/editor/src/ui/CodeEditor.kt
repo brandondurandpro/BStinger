@@ -42,6 +42,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.IntSize
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.example.kotlineditor.model.BlameLine
 import org.example.kotlineditor.model.GitChangeKind
@@ -290,14 +291,21 @@ private fun FollowCaret(
     viewportWidth: () -> Float,
 ) {
     LaunchedEffect(document) {
-        // drop(1): coming back to a tab must restore its scroll position, not jump to the caret.
-        snapshotFlow { document.caret }.drop(1).collect { caret ->
+        val reveal: suspend (TextPos) -> Unit = { caret ->
+            tab.revealCaret = false
             // A search or "go to line" may land inside a folded region: unfold it, like IntelliJ.
             if (document.folding.isHidden(caret.line)) document.folding.reveal(caret.line)
             scrollToRow(viewport, metrics, document.folding.rowOf(caret.line))
             val x = visualColumn(document.lines[caret.line], caret.column) * metrics.charWidth + metrics.paddingPx
             scrollToX(tab.horizontalScroll, metrics, x, viewportWidth() - metrics.gutterPx)
         }
+        // A file opened by a jump shows where it landed, once the editor knows how tall it is.
+        if (tab.revealCaret) {
+            snapshotFlow { viewport.viewportHeightPx }.first { it > 0f }
+            reveal(document.caret)
+        }
+        // drop(1): coming back to a tab must restore its scroll position, not jump to the caret.
+        snapshotFlow { document.caret }.drop(1).collect(reveal)
     }
 }
 
