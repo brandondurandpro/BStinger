@@ -91,6 +91,9 @@ class LanguageServerService(private val settings: LanguageServerSettings) : Clos
             documents = documents,
         )
 
+    // When the last status was published, in milliseconds since the epoch.
+    private var publishedAt = 0L
+
     init {
         scope.launch { publish() }
     }
@@ -304,9 +307,30 @@ class LanguageServerService(private val settings: LanguageServerSettings) : Clos
             val residentMoved = moved(last.server.residentBytes, server.residentBytes)
             val heapMoved = moved(last.server.heapUsedBytes, server.heapUsedBytes)
             val ownMemoryMoved = residentMoved || heapMoved
-            val changed = serversChanged || serverMemoryMoved || ownMemoryMoved
-            if (changed) published.value = LanguageServersStatus(last.version + 1, server, servers)
+            val memoryMoved = serverMemoryMoved || ownMemoryMoved
+            val now = System.currentTimeMillis()
+            if (shouldPublish(last, servers, serversChanged, memoryMoved, now)) {
+                published.value = LanguageServersStatus(last.version + 1, server, servers)
+                publishedAt = now
+            }
         }
+    }
+
+    // A server that starts, stops or first reports its memory is shown at once. A memory that only moved waits for
+    // MEMORY_PUBLISH_MS after the last status: the IDE server's heap moves all the time when it shares the JVM of the
+    // UI, which would otherwise send a status every second to an idle IDE.
+    private fun shouldPublish(
+        last: LanguageServersStatus,
+        servers: List<LanguageServerInfo>,
+        serversChanged: Boolean,
+        memoryMoved: Boolean,
+        now: Long,
+    ): Boolean {
+        val memoryAppeared = servers.any { info -> privateOf(last, info.id) == null && info.memory != null }
+        val shownAtOnce = serversChanged || memoryAppeared
+        val memoryDue = now - publishedAt >= MEMORY_PUBLISH_MS
+        val memoryShown = memoryMoved && memoryDue
+        return shownAtOnce || memoryShown
     }
 
     private fun privateOf(status: LanguageServersStatus, id: String): Long? {
@@ -336,6 +360,7 @@ class LanguageServerService(private val settings: LanguageServerSettings) : Clos
 
     private companion object {
         const val PUBLISH_TICK_MS = 1_000L
+        const val MEMORY_PUBLISH_MS = 5_000L
         const val MIN_MOVE_BYTES = 5L * 1024 * 1024
         const val MIN_MOVE_RATIO = 0.02
     }

@@ -1,5 +1,6 @@
 package org.example.kotlineditor.e2e
 
+import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
@@ -39,10 +40,10 @@ class LanguageServerPerformanceE2eTest {
             openFromTree("src/package0/index.php")
             awaitServer(app) { it.state == LanguageServerState.Running && it.memory != null }
             // Its memory settles once the JVM warmed up.
-            Thread.sleep(3_000)
+            idleFor(3_000)
             val windowMs = 10_000L
             val start = System.currentTimeMillis()
-            Thread.sleep(windowMs)
+            idleFor(windowMs)
             val end = System.currentTimeMillis()
             app.client.network.recording = false
             val answers =
@@ -74,3 +75,12 @@ class LanguageServerPerformanceE2eTest {
             awaitTag(LanguageServerTags.languageServerRow(app.languageServers.last().id))
         }
 }
+
+// Lets the app run for [millis]: the status long poll runs on the UI thread, which a sleep would block.
+@OptIn(ExperimentalTestApi::class)
+private fun ComposeUiTest.idleFor(millis: Long) {
+    val deadline = System.currentTimeMillis() + millis
+    awaitCondition(millis + IDLE_MARGIN_MS) { System.currentTimeMillis() >= deadline }
+}
+
+private const val IDLE_MARGIN_MS = 5_000L
