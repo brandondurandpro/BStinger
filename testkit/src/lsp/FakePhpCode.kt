@@ -184,7 +184,9 @@ internal class FakePhpCode(private val open: Map<String, List<String>>, private 
                 .filter { it.isFile && it.extension == "php" }
                 .take(MAX_DISK_FILES)
         // Named like the client names them: Path.toUri, as the IDE server does.
-        return files.associate { file -> file.toPath().toUri().toString() to file.readLines() }
+        // A file deleted while the directory is read is left out, as a real server would.
+        val read = files.mapNotNull { file -> runCatching { file.toPath().toUri().toString() to file.readLines() }.getOrNull() }
+        return read.toMap()
     }
 
     companion object {
