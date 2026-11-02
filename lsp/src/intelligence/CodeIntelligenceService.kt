@@ -53,6 +53,7 @@ import org.example.kotlineditor.model.SignatureHelpResult
 import org.example.kotlineditor.model.SourceLocation
 import org.example.kotlineditor.model.SymbolHighlight
 import org.example.kotlineditor.model.TextRange
+import org.example.kotlineditor.model.TypeFormattingTriggers
 import org.example.kotlineditor.model.UsageCount
 import org.example.kotlineditor.model.UsageCountsResult
 import org.example.kotlineditor.model.WorkspaceSymbol
@@ -111,6 +112,7 @@ class CodeIntelligenceService internal constructor(
     private val structure = DocumentStructureRequests(documents, requests)
     private val hierarchy = HierarchyRequests(requests) { withPreviews(it) }
     private val links = DocumentLinkRequests(requests)
+    private val typing = TypeFormattingRequests(requests) { refusedEdit(it) }
     private val lenses =
         CodeLensRequests(
             requests,
@@ -548,6 +550,18 @@ class CodeIntelligenceService internal constructor(
             ) ?: return EditResult(FeatureStatus.Ready, emptyList(), "This action is no longer available")
         return runSafely { run(list.server, resolved(list.server, action)) }
     }
+
+    /** The characters whose typing in [path] makes its server format around them. */
+    suspend fun typeFormattingTriggers(session: String, path: String, version: Int): TypeFormattingTriggers =
+        typing.triggers(session, path, version)
+
+    /** The edits the server makes after [character] was typed just before [at]. */
+    suspend fun formatOnType(
+        session: String,
+        at: DocumentPosition,
+        character: String,
+        options: FormatOptions,
+    ): EditResult = typing.format(session, at, character, options)
 
     /** The links of version [version] of [path]. */
     suspend fun documentLinks(session: String, path: String, version: Int): DocumentLinksResult =

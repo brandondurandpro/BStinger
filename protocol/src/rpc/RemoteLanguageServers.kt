@@ -30,6 +30,7 @@ import org.example.kotlineditor.model.SignatureHelpResult
 import org.example.kotlineditor.model.SymbolHighlight
 import org.example.kotlineditor.model.TextChange
 import org.example.kotlineditor.model.TextRange
+import org.example.kotlineditor.model.TypeFormattingTriggers
 import org.example.kotlineditor.model.UsageCountsResult
 import org.example.kotlineditor.model.WorkspaceSymbolsResult
 
@@ -280,6 +281,25 @@ class RemoteLanguageServers(private val client: RpcClient) : LanguageServers {
                 put(PATH, path)
                 put(VERSION, version)
                 range?.let { put("range", it.toJson()) }
+                put("options", options.toJson())
+            }
+        return result.editResult()
+    }
+
+    override suspend fun typeFormattingTriggers(path: String, version: Int): TypeFormattingTriggers {
+        val result =
+            client.call(Method.LspTypeFormattingTriggers) {
+                put(PATH, path)
+                put(VERSION, version)
+            }
+        return result.typeFormattingTriggers()
+    }
+
+    override suspend fun formatOnType(at: DocumentPosition, character: String, options: FormatOptions): EditResult {
+        val result =
+            client.call(Method.LspFormatOnType) {
+                putPosition(at)
+                put("character", character)
                 put("options", options.toJson())
             }
         return result.editResult()

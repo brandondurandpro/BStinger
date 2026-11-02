@@ -3,6 +3,7 @@ package org.example.kotlineditor.rpc
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
@@ -12,7 +13,9 @@ import kotlinx.serialization.json.put
 import org.example.kotlineditor.model.DocumentLinkInfo
 import org.example.kotlineditor.model.DocumentLinksResult
 import org.example.kotlineditor.model.FeatureStatus
+import org.example.kotlineditor.model.TypeFormattingTriggers
 
+private const val STATUS = "status"
 private const val PATH = "path"
 private const val LINE = "line"
 private const val URL = "url"
@@ -21,7 +24,7 @@ private const val TOOLTIP = "tooltip"
 /** A document links answer. */
 fun DocumentLinksResult.toJson(): JsonObject =
     buildJsonObject {
-        put("status", status.name)
+        put(STATUS, status.name)
         put("links", JsonArray(links.map { it.toJson() }))
     }
 
@@ -37,7 +40,7 @@ private fun DocumentLinkInfo.toJson(): JsonObject =
 /** Reads a document links answer. */
 fun JsonElement.documentLinksResult(): DocumentLinksResult {
     val fields = jsonObject
-    val name = fields.string("status")
+    val name = fields.string(STATUS)
     val status = FeatureStatus.entries.firstOrNull { it.name == name } ?: FeatureStatus.NotReady
     val links = fields.getValue("links").jsonArray.map { it.jsonObject.documentLink() }
     return DocumentLinksResult(status, links)
@@ -51,3 +54,19 @@ private fun JsonObject.documentLink(): DocumentLinkInfo =
         stringOrNull(URL),
         stringOrNull(TOOLTIP),
     )
+
+/** The trigger characters of formatting while typing. */
+fun TypeFormattingTriggers.toJson(): JsonObject =
+    buildJsonObject {
+        put(STATUS, status.name)
+        put("characters", JsonArray(characters.map(::JsonPrimitive)))
+    }
+
+/** Reads the trigger characters of formatting while typing. */
+fun JsonElement.typeFormattingTriggers(): TypeFormattingTriggers {
+    val fields = jsonObject
+    val name = fields.string(STATUS)
+    val status = FeatureStatus.entries.firstOrNull { it.name == name } ?: FeatureStatus.NotReady
+    val characters = fields.getValue("characters").jsonArray.map { it.jsonPrimitive.content }
+    return TypeFormattingTriggers(status, characters)
+}

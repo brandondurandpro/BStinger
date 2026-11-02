@@ -345,6 +345,14 @@ interface CodeIntelligence {
     suspend fun format(path: String, version: Int, range: TextRange?, options: FormatOptions): EditResult =
         EditResult.NotReady
 
+    /** The characters whose typing in [path] makes its server format around them (`;`, `}`). */
+    suspend fun typeFormattingTriggers(path: String, version: Int): TypeFormattingTriggers =
+        TypeFormattingTriggers.NotReady
+
+    /** The edits the server makes after [character] was typed just before [at]. */
+    suspend fun formatOnType(at: DocumentPosition, character: String, options: FormatOptions): EditResult =
+        EditResult.NotReady
+
     /** The quick fixes and refactorings offered for [range] of [path] at [version] (Alt+Enter). */
     suspend fun codeActions(path: String, version: Int, range: TextRange): CodeActionsResult =
         CodeActionsResult.NotReady

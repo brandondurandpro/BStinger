@@ -12,11 +12,13 @@ import org.example.kotlineditor.lsp.supervisor.SupervisorTimings
 import org.example.kotlineditor.model.CodeLensAction
 import org.example.kotlineditor.model.DocumentPosition
 import org.example.kotlineditor.model.FeatureStatus
+import org.example.kotlineditor.model.FormatOptions
 import org.example.kotlineditor.model.HierarchyDirection
 import org.example.kotlineditor.model.HierarchyKind
 import org.example.kotlineditor.model.InlayHintKind
 import org.example.kotlineditor.model.LanguageServerState
 import org.example.kotlineditor.model.NavigationKind
+import org.example.kotlineditor.model.TextChange
 import org.example.kotlineditor.model.TextRange
 import org.example.kotlineditor.testkit.lsp.FakeLanguageServerCommand
 import java.nio.file.Files
@@ -376,5 +378,36 @@ class CodeStructureIntegrationTest {
         ready({ it.status }) { intelligence.outline(SESSION, main, 1) }
         val result = runBlocking { intelligence.documentLinks(SESSION, main, 1) }
         assertEquals(FeatureStatus.Unsupported, result.status)
+    }
+
+    @Test
+    fun `typing a trigger character gives the server's edits, another character none`() {
+        openMain()
+        val triggers = ready({ it.status }) { intelligence.typeFormattingTriggers(SESSION, main, 1) }
+        assertEquals(listOf(";", "}"), triggers.characters)
+        val text = MAIN.replace("echo shout(\"hi\");", "echo shout(\"hi\")  ;")
+        service.changeDocument(SESSION, main, 2, listOf(TextChange(0, 0, MAIN.lines().lastIndex, 0, text)))
+        val after = DocumentPosition(main, 2, 7, "echo shout(\"hi\")  ;".length)
+        val edit = runBlocking { intelligence.formatOnType(SESSION, after, ";", FormatOptions()) }
+        val change =
+            edit.changes
+                .singleOrNull()
+                ?.edits
+                ?.singleOrNull()
+        assertEquals(TextChange(7, 16, 7, 18, ""), change)
+        val other = runBlocking { intelligence.formatOnType(SESSION, after, "x", FormatOptions()) }
+        assertEquals(FeatureStatus.Ready, other.status)
+        assertTrue(other.changes.isEmpty())
+    }
+
+    @Test
+    fun `without formatting while typing the server says so`() {
+        options = arrayOf("--without", "onTypeFormatting")
+        openMain()
+        ready({ it.status }) { intelligence.outline(SESSION, main, 1) }
+        val triggers = runBlocking { intelligence.typeFormattingTriggers(SESSION, main, 1) }
+        assertEquals(FeatureStatus.Unsupported, triggers.status)
+        val edit = runBlocking { intelligence.formatOnType(SESSION, position(7, 5), ";", FormatOptions()) }
+        assertEquals(FeatureStatus.Unsupported, edit.status)
     }
 }

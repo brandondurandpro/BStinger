@@ -90,6 +90,7 @@ internal fun languageServerHandlers(services: LocalServices): Map<Method, Handle
         },
     ) +
         codeIntelligenceHandlers(services) +
+        editingHandlers(services) +
         structureHandlers(services)
 
 // The code intelligence methods: hover, navigation, usages, diagnostics, edits.
@@ -119,10 +120,26 @@ private fun codeIntelligenceHandlers(services: LocalServices): Map<Method, Handl
         Method.LspRename to {
             intelligence().rename(session, params.documentPosition(), params.string("newName")).toJson()
         },
+    )
+}
+
+// The code intelligence methods that edit or act: formatting, quick fixes, links, code lenses.
+private fun editingHandlers(services: LocalServices): Map<Method, Handler> {
+    val intelligence = { services.languageServers.intelligence }
+    return mapOf<Method, Handler>(
         Method.LspFormat to {
             val range = params[RANGE]?.takeIf { it != JsonNull }?.let { params.read(RANGE) { it.textRange() } }
             val options = params.read("options") { it.formatOptions() }
             intelligence().format(session, params.string(PATH), params.int(VERSION), range, options).toJson()
+        },
+        Method.LspTypeFormattingTriggers to {
+            intelligence().typeFormattingTriggers(session, params.string(PATH), params.int(VERSION)).toJson()
+        },
+        Method.LspFormatOnType to {
+            val options = params.read("options") { it.formatOptions() }
+            val character = params.string("character")
+            val edits = intelligence().formatOnType(session, params.documentPosition(), character, options)
+            edits.toJson()
         },
         Method.LspCodeActions to {
             val range = params.read(RANGE) { it.textRange() }

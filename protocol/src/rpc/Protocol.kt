@@ -425,6 +425,12 @@ enum class Method(
     /** Semantic tokens of a document. */
     LspSemanticTokens("lsp/semanticTokens"),
 
+    /** Characters that format while typed in a document. */
+    LspTypeFormattingTriggers("lsp/typeFormattingTriggers"),
+
+    /** Edits after a trigger character was typed. */
+    LspFormatOnType("lsp/formatOnType"),
+
     /** Links of a document. */
     LspDocumentLinks("lsp/documentLinks"),
 

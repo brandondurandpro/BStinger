@@ -166,10 +166,15 @@ class CodeInsightState(
     }
 
     /** The language server restarted, or another one serves the files: the usage counts are asked again. */
-    fun refreshAll() = insights.values.forEach { refreshUsages(it, delayed = false) }
+    fun refreshAll() =
+        insights.values.forEach { insight ->
+            insight.typeFormattingTriggers = null
+            refreshUsages(insight, delayed = false)
+        }
 
     private fun onEdit(insight: DocumentInsight, change: TextChange) {
         insight.follow(change)
+        formatAfterTyping(insight, change)
         applyInlays(insight)
         refreshUsages(insight, delayed = true)
         dismissHover()
@@ -187,6 +192,7 @@ class CodeInsightState(
                 countUsages(insight)
                 codeLensesFromServer(insight)
                 documentLinksFromServer(insight)
+                formatTriggersFromServer(insight)
                 foldingFromServer(insight)
                 inlayHintsFromServer(insight)
                 semanticTokensFromServer(insight)

@@ -83,6 +83,10 @@ class DocumentInsight internal constructor(val document: Document) {
 
     internal var path: String = ""
 
+    /** The characters whose typing formats around them (`;`, `}`); null until the server said. */
+    var typeFormattingTriggers: Set<String>? = null
+        internal set
+
     /** Identifies [codeLenses] on the server, to run one; a newer list has another. */
     var codeLensToken: String = ""
         internal set

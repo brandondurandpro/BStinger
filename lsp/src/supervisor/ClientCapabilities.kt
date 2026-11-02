@@ -54,6 +54,7 @@ internal val TEXT_DOCUMENT_CAPABILITIES: JsonObject =
             put("didSave", true)
         }
         putJsonObject("codeLens") { put(DYNAMIC_REGISTRATION, false) }
+        putJsonObject("onTypeFormatting") { put(DYNAMIC_REGISTRATION, false) }
         putJsonObject("documentLink") {
             put(DYNAMIC_REGISTRATION, false)
             put("tooltipSupport", true)
