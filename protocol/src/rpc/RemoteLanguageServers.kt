@@ -8,17 +8,17 @@ import org.example.kotlineditor.model.DocumentPosition
 import org.example.kotlineditor.model.EditResult
 import org.example.kotlineditor.model.FormatOptions
 import org.example.kotlineditor.model.HoverResult
+import org.example.kotlineditor.model.LanguageServerChoice
+import org.example.kotlineditor.model.LanguageServers
+import org.example.kotlineditor.model.LanguageServersStatus
 import org.example.kotlineditor.model.LocationsResult
 import org.example.kotlineditor.model.NavigationKind
 import org.example.kotlineditor.model.RenameTarget
 import org.example.kotlineditor.model.SignatureHelpResult
 import org.example.kotlineditor.model.SymbolHighlight
+import org.example.kotlineditor.model.TextChange
 import org.example.kotlineditor.model.TextRange
 import org.example.kotlineditor.model.UsageCountsResult
-import org.example.kotlineditor.model.LanguageServerChoice
-import org.example.kotlineditor.model.LanguageServers
-import org.example.kotlineditor.model.LanguageServersStatus
-import org.example.kotlineditor.model.TextChange
 
 private const val ID = "id"
 private const val LANGUAGE = "language"

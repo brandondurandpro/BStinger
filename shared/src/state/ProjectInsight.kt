@@ -84,7 +84,12 @@ internal suspend fun ProjectState.applyEdit(edit: EditResult): String? {
 private suspend fun ProjectState.createIfMissing(path: String): FileEntry {
     services.fileSystem.fileAt(path)?.let { return it }
     val file = normalized(path)
-    val directory = FileEntry(file.substringBeforeLast('/'), pathName(file.substringBeforeLast('/')), isDirectory = true)
+    val directory =
+        FileEntry(
+            file.substringBeforeLast('/'),
+            pathName(file.substringBeforeLast('/')),
+            isDirectory = true,
+        )
     return services.fileSystem.createFile(directory, pathName(file))
 }
 
@@ -116,7 +121,8 @@ internal fun ProjectState.followInsight() {
 }
 
 /** Whether the file of [tab] has a language server in this project. */
-fun ProjectState.hasInsight(tab: EditorTab): Boolean = languageServers != null && Languages.languageOf(tab.entry.path) != null
+fun ProjectState.hasInsight(tab: EditorTab): Boolean =
+    languageServers != null && Languages.languageOf(tab.entry.path) != null
 
 /** Runs [action] on the active editor when its file has a language server. */
 fun ProjectState.withInsight(action: CodeInsightState.(path: String, document: Document) -> Unit) {

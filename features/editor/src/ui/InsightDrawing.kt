@@ -24,7 +24,13 @@ private const val DIMMED_ALPHA = 0.45f
 
 /** One problem's part on one line, in characters of the line (`end` past the text: to the end of the line). */
 @Immutable
-internal class LineProblem(val start: Int, val end: Int, val severity: DiagnosticSeverity, val unnecessary: Boolean, val deprecated: Boolean)
+internal class LineProblem(
+    val start: Int,
+    val end: Int,
+    val severity: DiagnosticSeverity,
+    val unnecessary: Boolean,
+    val deprecated: Boolean,
+)
 
 /** One occurrence of the symbol at the caret on a line, in characters. */
 @Immutable
@@ -80,7 +86,14 @@ private fun problemsByLine(diagnostics: List<Diagnostic>, document: Document): M
             // An empty range is marked on the character after it, or before it at the end of the line.
             val widened = if (end > start) end else start + 1
             val shift = if (start >= length && start > 0) 1 else 0
-            val problem = LineProblem(start - shift, widened - shift, diagnostic.severity, diagnostic.unnecessary, diagnostic.deprecated)
+            val problem =
+                LineProblem(
+                    start - shift,
+                    widened - shift,
+                    diagnostic.severity,
+                    diagnostic.unnecessary,
+                    diagnostic.deprecated,
+                )
             byLine.getOrPut(line) { ArrayList() } += problem
         }
     }
@@ -97,7 +110,12 @@ internal fun problemColor(severity: DiagnosticSeverity): Color =
     }
 
 /** The language server's occurrences of the symbol at the caret, behind the text of [line]. */
-internal fun DrawScope.drawSymbolHighlights(highlights: List<LineHighlight>?, line: String, charWidth: Float, height: Float) {
+internal fun DrawScope.drawSymbolHighlights(
+    highlights: List<LineHighlight>?,
+    line: String,
+    charWidth: Float,
+    height: Float,
+) {
     highlights?.forEach { highlight ->
         val start = visualColumn(line, highlight.start.coerceIn(0, line.length))
         val end = visualColumn(line, highlight.end.coerceIn(0, line.length))
@@ -116,14 +134,39 @@ internal fun DrawScope.drawProblems(problems: List<LineProblem>?, line: String, 
         val left = start * charWidth
         val right = end * charWidth
         when {
-            problem.unnecessary -> drawRect(IdeColors.Editor.copy(alpha = DIMMED_ALPHA), Offset(left, 0f), Size(right - left, height))
-            problem.deprecated -> drawLine(IdeColors.Code, Offset(left, height / 2), Offset(right, height / 2), UNDERLINE.toPx())
-            problem.severity == DiagnosticSeverity.Hint -> Unit
-            problem.severity == DiagnosticSeverity.Information -> {
-                drawLine(problemColor(problem.severity), Offset(left, height - 1.dp.toPx()), Offset(right, height - 1.dp.toPx()), UNDERLINE.toPx())
+            problem.unnecessary -> {
+                drawRect(
+                    IdeColors.Editor.copy(alpha = DIMMED_ALPHA),
+                    Offset(left, 0f),
+                    Size(right - left, height),
+                )
             }
 
-            else -> drawWave(left, right, height, problemColor(problem.severity))
+            problem.deprecated -> {
+                drawLine(
+                    IdeColors.Code,
+                    Offset(left, height / 2),
+                    Offset(right, height / 2),
+                    UNDERLINE.toPx(),
+                )
+            }
+
+            problem.severity == DiagnosticSeverity.Hint -> {
+                Unit
+            }
+
+            problem.severity == DiagnosticSeverity.Information -> {
+                drawLine(
+                    problemColor(problem.severity),
+                    Offset(left, height - 1.dp.toPx()),
+                    Offset(right, height - 1.dp.toPx()),
+                    UNDERLINE.toPx(),
+                )
+            }
+
+            else -> {
+                drawWave(left, right, height, problemColor(problem.severity))
+            }
         }
     }
 }

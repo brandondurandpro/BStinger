@@ -336,8 +336,7 @@ interface CodeIntelligence {
     suspend fun diagnostics(since: Long): DiagnosticsSnapshot = kotlinx.coroutines.awaitCancellation()
 
     /** What can be renamed at [at] (Shift+F6). */
-    suspend fun prepareRename(at: DocumentPosition): RenameTarget =
-        RenameTarget(FeatureStatus.NotReady, null, null)
+    suspend fun prepareRename(at: DocumentPosition): RenameTarget = RenameTarget(FeatureStatus.NotReady, null, null)
 
     /** The edits that rename the symbol at [at] to [newName], in every file. */
     suspend fun rename(at: DocumentPosition, newName: String): EditResult = EditResult.NotReady

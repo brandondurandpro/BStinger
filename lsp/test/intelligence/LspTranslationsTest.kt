@@ -16,7 +16,8 @@ class LspTranslationsTest {
 
     private fun json(text: String) = Json.parseToJsonElement(text)
 
-    private fun range(a: Int, b: Int, c: Int, d: Int) = """{"start":{"line":$a,"character":$b},"end":{"line":$c,"character":$d}}"""
+    private fun range(a: Int, b: Int, c: Int, d: Int) =
+        """{"start":{"line":$a,"character":$b},"end":{"line":$c,"character":$d}}"""
 
     @Test
     fun `locations come as one Location, an array, or LocationLinks, and phar URIs are left out`() {
@@ -25,7 +26,12 @@ class LspTranslationsTest {
         val links =
             locationsOf(
                 json(
-                    """[{"targetUri":"$uri","targetRange":${range(0, 0, 9, 1)},"targetSelectionRange":${range(2, 6, 2, 13)}},
+                    """[{"targetUri":"$uri","targetRange":${range(
+                        0,
+                        0,
+                        9,
+                        1,
+                    )},"targetSelectionRange":${range(2, 6, 2, 13)}},
                        {"uri":"phar:///x.phar/stubs.php","range":${range(1, 0, 1, 1)}}]""",
                 ),
             )
@@ -54,11 +60,23 @@ class LspTranslationsTest {
                 json(
                     """{"documentChanges":[
                         {"kind":"create","uri":"$uri"},
-                        {"textDocument":{"uri":"$uri","version":null},"edits":[{"range":${range(0, 0, 0, 0)},"newText":"<?php"}]}]}""",
+                        {"textDocument":{"uri":"$uri","version":null},"edits":[{"range":${range(
+                        0,
+                        0,
+                        0,
+                        0,
+                    )},"newText":"<?php"}]}]}""",
                 ),
             )!!
         assertTrue(documentChanges.single().create)
-        assertEquals("<?php", documentChanges.single().edits.single().text)
+        assertEquals(
+            "<?php",
+            documentChanges
+                .single()
+                .edits
+                .single()
+                .text,
+        )
         assertNull(workspaceEditOf(json("""{"documentChanges":[{"kind":"rename","oldUri":"$uri","newUri":"$uri"}]}""")))
     }
 
@@ -82,8 +100,18 @@ class LspTranslationsTest {
             countedSymbolsOf(
                 json(
                     """[{"name":"Greeter","kind":5,"range":${range(0, 0, 9, 1)},"selectionRange":${range(0, 6, 0, 13)},
-                        "children":[{"name":"greet","kind":6,"range":${range(2, 4, 4, 5)},"selectionRange":${range(2, 20, 2, 25)}},
-                                    {"name":"${'$'}local","kind":13,"range":${range(3, 0, 3, 1)},"selectionRange":${range(3, 0, 3, 1)}}]}]""",
+                        "children":[{"name":"greet","kind":6,"range":${range(
+                        2,
+                        4,
+                        4,
+                        5,
+                    )},"selectionRange":${range(2, 20, 2, 25)}},
+                                    {"name":"${'$'}local","kind":13,"range":${range(
+                        3,
+                        0,
+                        3,
+                        1,
+                    )},"selectionRange":${range(3, 0, 3, 1)}}]}]""",
                 ),
             )
         assertEquals(listOf("Greeter", "greet"), symbols.map { it.name })

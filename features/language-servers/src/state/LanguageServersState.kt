@@ -18,8 +18,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
 import org.example.kotlineditor.model.CodeIntelligence
 import org.example.kotlineditor.model.CompletionResult
-import org.example.kotlineditor.model.DiagnosticsSnapshot
 import org.example.kotlineditor.model.ConnectionStatus
+import org.example.kotlineditor.model.DiagnosticsSnapshot
 import org.example.kotlineditor.model.LanguageServerCandidateInfo
 import org.example.kotlineditor.model.LanguageServerChoice
 import org.example.kotlineditor.model.LanguageServerInfo

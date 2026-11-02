@@ -83,7 +83,12 @@ class CodeIntelligenceTest {
                 tool = null,
                 command = { _, _ -> FakeLanguageServerCommand.command(*options) },
             )
-        val nothing = RuntimeDetector(pathEnvironment = "", extraDirectories = { emptyList() }, probe = { _, _ -> null })
+        val nothing =
+            RuntimeDetector(
+                pathEnvironment = "",
+                extraDirectories = { emptyList() },
+                probe = { _, _ -> null },
+            )
         Files.writeString(data.resolve("language-servers.properties"), "php=fake\n")
         LanguageServerService(
             LanguageServerSettings(
@@ -134,7 +139,8 @@ class CodeIntelligenceTest {
             }
         }
 
-    private fun at(line: Int, column: Int, path: String = main, version: Int = 1) = DocumentPosition(path, version, line, column)
+    private fun at(line: Int, column: Int, path: String = main, version: Int = 1) =
+        DocumentPosition(path, version, line, column)
 
     @Test
     fun `hover shows the docblock and the signature of a method declared in a file that is not open`() {
@@ -194,11 +200,21 @@ class CodeIntelligenceTest {
             runBlocking {
                 withTimeout(WAIT_MS) {
                     var snapshot = intelligence.diagnostics(SESSION, 0)
-                    while (snapshot.files.flatMap { it.diagnostics }.isEmpty()) snapshot = intelligence.diagnostics(SESSION, snapshot.version)
+                    while (snapshot.files.flatMap { it.diagnostics }.isEmpty()) {
+                        snapshot =
+                            intelligence.diagnostics(
+                                SESSION,
+                                snapshot.version,
+                            )
+                    }
                     snapshot
                 }
             }
-        val problem = first.files.single { it.path == main }.diagnostics.single()
+        val problem =
+            first.files
+                .single { it.path == main }
+                .diagnostics
+                .single()
         assertEquals("Function \"missing_function\" not found", problem.message)
         assertEquals(DiagnosticSeverity.Error, problem.severity)
         assertEquals(TextRange(4, 0, 4, 16), problem.range)
@@ -208,7 +224,13 @@ class CodeIntelligenceTest {
             runBlocking {
                 withTimeout(WAIT_MS) {
                     var snapshot = intelligence.diagnostics(SESSION, first.version)
-                    while (snapshot.files.flatMap { it.diagnostics }.isNotEmpty()) snapshot = intelligence.diagnostics(SESSION, snapshot.version)
+                    while (snapshot.files.flatMap { it.diagnostics }.isNotEmpty()) {
+                        snapshot =
+                            intelligence.diagnostics(
+                                SESSION,
+                                snapshot.version,
+                            )
+                    }
                     snapshot
                 }
             }
@@ -225,7 +247,12 @@ class CodeIntelligenceTest {
         assertEquals("greet", target.placeholder)
         val edit = runBlocking { intelligence.rename(SESSION, at(2, 18), "welcome") }
         assertEquals(setOf(main, greeter), edit.changes.map { it.path }.toSet())
-        assertEquals(2, edit.changes.single { it.path == main }.edits.size)
+        assertEquals(
+            2,
+            edit.changes
+                .single { it.path == main }
+                .edits.size,
+        )
         assertTrue(edit.changes.flatMap { it.edits }.all { it.text == "welcome" })
         val nothing = runBlocking { intelligence.prepareRename(SESSION, at(1, 12)) }
         assertNull(nothing.range)
@@ -255,19 +282,38 @@ class CodeIntelligenceTest {
         runBlocking {
             withTimeout(WAIT_MS) {
                 var snapshot = intelligence.diagnostics(SESSION, 0)
-                while (snapshot.files.flatMap { it.diagnostics }.isEmpty()) snapshot = intelligence.diagnostics(SESSION, snapshot.version)
+                while (snapshot.files.flatMap { it.diagnostics }.isEmpty()) {
+                    snapshot =
+                        intelligence.diagnostics(
+                            SESSION,
+                            snapshot.version,
+                        )
+                }
             }
         }
         val fixes = ready({ it.status }) { intelligence.codeActions(SESSION, main, 1, TextRange(1, 3, 1, 3)) }
         assertEquals(listOf("Create function missing_function"), fixes.actions.map { it.title })
         assertTrue(fixes.actions.single().preferred)
         val created = runBlocking { intelligence.applyCodeAction(SESSION, fixes.token, 0) }
-        assertEquals("\nfunction missing_function()\n{\n}\n", created.changes.single().edits.single().text)
+        assertEquals(
+            "\nfunction missing_function()\n{\n}\n",
+            created.changes
+                .single()
+                .edits
+                .single()
+                .text,
+        )
 
         val refactorings = runBlocking { intelligence.codeActions(SESSION, main, 1, TextRange(2, 0, 2, 0)) }
         assertEquals(listOf("Add docblock"), refactorings.actions.map { it.title })
         val docblock = runBlocking { intelligence.applyCodeAction(SESSION, refactorings.token, 0) }
-        assertEquals(TextChange(2, 0, 2, 0, "/**\n * TODO\n */\n"), docblock.changes.single().edits.single())
+        assertEquals(
+            TextChange(2, 0, 2, 0, "/**\n * TODO\n */\n"),
+            docblock.changes
+                .single()
+                .edits
+                .single(),
+        )
         assertEquals(main, docblock.changes.single().path)
         // A list replaced by a newer one cannot be applied any more.
         val stale = runBlocking { intelligence.applyCodeAction(SESSION, fixes.token, 0) }
@@ -282,7 +328,10 @@ class CodeIntelligenceTest {
         val signature = help.signatures.single()
         assertEquals("greet(string \$name, int \$times): string", signature.label)
         assertEquals(1, help.activeParameter)
-        assertEquals("int \$times", signature.label.substring(signature.parameters[1].start, signature.parameters[1].end))
+        assertEquals(
+            "int \$times",
+            signature.label.substring(signature.parameters[1].start, signature.parameters[1].end),
+        )
         val highlights = runBlocking { intelligence.highlights(SESSION, at(2, 7)) }
         assertEquals(listOf(HighlightKind.Write, HighlightKind.Read, HighlightKind.Read), highlights.map { it.kind })
     }
@@ -292,7 +341,10 @@ class CodeIntelligenceTest {
         runBlocking {
             assertEquals(FeatureStatus.NotReady, intelligence.hover(SESSION, at(0, 0)).status)
             service.openDocument(SESSION, project.toString(), main, 1, "<?php\n")
-            assertEquals(FeatureStatus.NotReady, intelligence.navigate(SESSION, at(0, 0), NavigationKind.Definition).status)
+            assertEquals(
+                FeatureStatus.NotReady,
+                intelligence.navigate(SESSION, at(0, 0), NavigationKind.Definition).status,
+            )
             assertEquals(FeatureStatus.NotReady, intelligence.references(SESSION, at(0, 0, version = 2), true).status)
         }
     }

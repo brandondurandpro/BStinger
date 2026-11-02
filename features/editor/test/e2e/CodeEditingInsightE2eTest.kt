@@ -54,7 +54,15 @@ class CodeEditingInsightE2eTest {
     }
 
     private fun ComposeUiTest.problemCount(tag: String): String? =
-        textOf(tag).takeIf { onAllNodes(androidx.compose.ui.test.hasTestTag(tag), true).fetchSemanticsNodes().isNotEmpty() }
+        textOf(
+            tag,
+        ).takeIf {
+            onAllNodes(
+                androidx.compose.ui.test
+                    .hasTestTag(tag),
+                true,
+            ).fetchSemanticsNodes().isNotEmpty()
+        }
 
     @Test
     fun `an unknown function is underlined, counted, explained on hover, and F2 goes to it`() =
@@ -164,7 +172,12 @@ class CodeEditingInsightE2eTest {
             clickAt(1, 12)
             editorKeys { withKeyDown(Key.ShiftLeft) { pressKey(Key.F6) } }
             awaitTag(EditorTags.NOTICE, timeout = SERVER_START_MS)
-            assertFalse(onAllNodes(androidx.compose.ui.test.hasTestTag(EditorTags.RENAME)).fetchSemanticsNodes().isNotEmpty())
+            assertFalse(
+                onAllNodes(
+                    androidx.compose.ui.test
+                        .hasTestTag(EditorTags.RENAME),
+                ).fetchSemanticsNodes().isNotEmpty(),
+            )
         }
 
     @Test

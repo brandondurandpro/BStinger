@@ -81,8 +81,23 @@ internal fun EditorLineSemantics(
                         GitChangeKind.Deleted.takeIf { index in marks.deleted || deletedAtEnd },
                     )
                 val link = insight.link?.takeIf { it.line == index }?.let { it.start to it.end }
-                val lineInsight = LineInsight(insight.problems[index], insight.hints[index], insight.highlights[index], link)
-                LineNode(row, index, tab, document, metrics, kinds, marks.blame?.containsKey(index) == true, lineInsight)
+                val lineInsight =
+                    LineInsight(
+                        insight.problems[index],
+                        insight.hints[index],
+                        insight.highlights[index],
+                        link,
+                    )
+                LineNode(
+                    row,
+                    index,
+                    tab,
+                    document,
+                    metrics,
+                    kinds,
+                    marks.blame?.containsKey(index) == true,
+                    lineInsight,
+                )
             }
         }
     }
@@ -166,14 +181,24 @@ internal class LineInsight(
 private fun InsightNodes(index: Int, line: String, tab: EditorTab, metrics: EditorMetrics, insight: LineInsight) {
     val density = LocalDensity.current
     val cell = with(density) { metrics.charWidth.toDp() }
+
     @Composable
     fun Node(startColumn: Int, columns: Int, tag: String, label: String? = null) {
         Box(
             Modifier
-                .offset { IntOffset(textLeft(metrics, tab.horizontalScroll.offset) + (startColumn * metrics.charWidth).roundToInt(), 0) }
-                .size(cell * columns.coerceAtLeast(1), metrics.lineHeight)
-                .semantics { if (label != null) this.text = androidx.compose.ui.text.AnnotatedString(label) }
-                .testTag(tag),
+                .offset {
+                    IntOffset(
+                        textLeft(metrics, tab.horizontalScroll.offset) + (startColumn * metrics.charWidth).roundToInt(),
+                        0,
+                    )
+                }.size(cell * columns.coerceAtLeast(1), metrics.lineHeight)
+                .semantics {
+                    if (label != null) {
+                        this.text =
+                            androidx.compose.ui.text
+                                .AnnotatedString(label)
+                    }
+                }.testTag(tag),
         )
     }
     insight.problems?.forEach { problem ->
@@ -189,7 +214,12 @@ private fun InsightNodes(index: Int, line: String, tab: EditorTab, metrics: Edit
     insight.hint?.let { hint -> Node(hintColumn(line), hint.length, EditorTags.usageHint(index), hint) }
     insight.link?.let { (start, end) ->
         val from = visualColumn(line, start.coerceIn(0, line.length))
-        Node(from, visualColumn(line, end.coerceIn(0, line.length)) - from, EditorTags.LINK, line.substring(start.coerceIn(0, line.length), end.coerceIn(0, line.length)))
+        Node(
+            from,
+            visualColumn(line, end.coerceIn(0, line.length)) - from,
+            EditorTags.LINK,
+            line.substring(start.coerceIn(0, line.length), end.coerceIn(0, line.length)),
+        )
     }
 }
 

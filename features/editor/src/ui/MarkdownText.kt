@@ -51,6 +51,7 @@ internal sealed interface MarkdownBlock {
 internal fun parseMarkdown(markdown: String): List<MarkdownBlock> {
     val blocks = ArrayList<MarkdownBlock>()
     val paragraph = ArrayList<String>()
+
     fun flush() {
         if (paragraph.isNotEmpty()) blocks += MarkdownBlock.Paragraph(joinLines(paragraph))
         paragraph.clear()
@@ -68,11 +69,20 @@ internal fun parseMarkdown(markdown: String): List<MarkdownBlock> {
                 flush()
                 val code = ArrayList<String>()
                 index++
-                while (index < lines.size && !lines[index].trim().startsWith(fence.groupValues[1])) code += lines[index++]
+                while (index < lines.size &&
+                    !lines[index].trim().startsWith(
+                        fence.groupValues[1],
+                    )
+                ) {
+                    code += lines[index++]
+                }
                 blocks += MarkdownBlock.Code(fence.groupValues[2].trim(), code.joinToString("\n").trimEnd())
             }
 
-            trimmed.isEmpty() -> flush()
+            trimmed.isEmpty() -> {
+                flush()
+            }
+
             RULE.matches(trimmed) -> {
                 flush()
                 blocks += MarkdownBlock.Rule
@@ -88,7 +98,9 @@ internal fun parseMarkdown(markdown: String): List<MarkdownBlock> {
                 blocks += MarkdownBlock.Item(item.groupValues[2], item.groupValues[3].trim())
             }
 
-            else -> paragraph += line
+            else -> {
+                paragraph += line
+            }
         }
         index++
     }
@@ -150,7 +162,9 @@ internal fun inlineMarkdown(text: String, code: SpanStyle): AnnotatedString =
                         append(c)
                         index++
                     } else {
-                        withStyle(SpanStyle(color = IdeColors.Link, textDecoration = TextDecoration.Underline)) { append(link.groupValues[1]) }
+                        withStyle(
+                            SpanStyle(color = IdeColors.Link, textDecoration = TextDecoration.Underline),
+                        ) { append(link.groupValues[1]) }
                         index += link.value.length
                     }
                 }
@@ -173,7 +187,16 @@ private fun isEmphasis(text: String, index: Int, open: Boolean): Boolean {
     val before = text.getOrNull(index - 1)
     val after = text.getOrNull(index + 1)
     if (text[index] == '_' && before?.isLetterOrDigit() == true && after?.isLetterOrDigit() == true) return false
-    return if (open) before != null && !before.isWhitespace() else after != null && !after.isWhitespace() && text.indexOf(text[index], index + 1) > 0
+    return if (open) {
+        before != null && !before.isWhitespace()
+    } else {
+        after != null &&
+            !after.isWhitespace() &&
+            text.indexOf(
+                text[index],
+                index + 1,
+            ) > 0
+    }
 }
 
 private val FENCE = Regex("""^(```+|~~~+)\s*([\w+-]*).*$""")
@@ -197,10 +220,16 @@ internal fun MarkdownText(markdown: String, modifier: Modifier = Modifier) {
             when (block) {
                 is MarkdownBlock.Heading -> {
                     val size = if (block.level <= 2) 15.sp else 13.sp
-                    BasicText(inlineMarkdown(block.text, inlineCode), style = text.copy(fontSize = size, fontWeight = FontWeight.Bold))
+                    BasicText(
+                        inlineMarkdown(block.text, inlineCode),
+                        style = text.copy(fontSize = size, fontWeight = FontWeight.Bold),
+                    )
                 }
 
-                is MarkdownBlock.Paragraph -> BasicText(inlineMarkdown(block.text, inlineCode), style = text)
+                is MarkdownBlock.Paragraph -> {
+                    BasicText(inlineMarkdown(block.text, inlineCode), style = text)
+                }
+
                 is MarkdownBlock.Item -> {
                     Row {
                         val bullet = if (block.marker.first().isDigit()) block.marker else "•"
@@ -209,8 +238,13 @@ internal fun MarkdownText(markdown: String, modifier: Modifier = Modifier) {
                     }
                 }
 
-                is MarkdownBlock.Code -> CodeBlock(block)
-                MarkdownBlock.Rule -> Box(Modifier.fillMaxWidth().height(1.dp).background(IdeColors.Separator))
+                is MarkdownBlock.Code -> {
+                    CodeBlock(block)
+                }
+
+                MarkdownBlock.Rule -> {
+                    Box(Modifier.fillMaxWidth().height(1.dp).background(IdeColors.Separator))
+                }
             }
         }
     }
@@ -242,7 +276,13 @@ private fun highlightedCode(code: String, language: Language): AnnotatedString =
             val spans = SyntaxHighlighter.highlight(line, language, inComment)
             val start = length
             append(line)
-            for (i in 0 until spans.size) addStyle(syntaxStyle(spans.styles[i]), start + spans.starts[i], start + spans.ends[i])
+            for (i in 0 until spans.size) {
+                addStyle(
+                    syntaxStyle(spans.styles[i]),
+                    start + spans.starts[i],
+                    start + spans.ends[i],
+                )
+            }
             inComment = line.contains("/*") && !line.contains("*/")
         }
     }

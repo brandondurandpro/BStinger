@@ -104,7 +104,11 @@ private fun Anchored(
                 val column = visualColumn(line, anchor.column.coerceAtMost(line.length))
                 val textLeft = metrics.gutterPx + metrics.paddingPx - tab.horizontalScroll.offset
                 val area = viewport()
-                val x = (textLeft + column * metrics.charWidth).coerceAtMost((area.width - size.width).toFloat()).coerceAtLeast(0f)
+                val x =
+                    (textLeft + column * metrics.charWidth)
+                        .coerceAtMost(
+                            (area.width - size.width).toFloat(),
+                        ).coerceAtLeast(0f)
                 val rowTop = document.folding.rowOf(anchor.line) * metrics.lineHeightPx - tab.verticalScroll.offsetPx
                 val below = rowTop + metrics.lineHeightPx
                 val above = rowTop - size.height
@@ -188,7 +192,10 @@ private fun HoverView(markdown: String?, problems: List<Diagnostic>, insight: Co
             if (markdown != null) Box(Modifier.fillMaxWidth().height(1.dp).background(IdeColors.Separator))
         }
         if (markdown != null) {
-            MarkdownText(markdown, Modifier.padding(horizontal = 12.dp, vertical = 8.dp).testTag(EditorTags.HOVER_DOCUMENTATION))
+            MarkdownText(
+                markdown,
+                Modifier.padding(horizontal = 12.dp, vertical = 8.dp).testTag(EditorTags.HOVER_DOCUMENTATION),
+            )
         }
     }
 }
@@ -196,7 +203,13 @@ private fun HoverView(markdown: String?, problems: List<Diagnostic>, insight: Co
 @Composable
 private fun ProblemLine(problem: Diagnostic) {
     Row(verticalAlignment = Alignment.Top) {
-        Box(Modifier.padding(top = 4.dp).size(8.dp).background(problemColor(problem.severity), RoundedCornerShape(4.dp)))
+        Box(
+            Modifier
+                .padding(
+                    top = 4.dp,
+                ).size(8.dp)
+                .background(problemColor(problem.severity), RoundedCornerShape(4.dp)),
+        )
         val source = listOfNotNull(problem.source, problem.code).joinToString(" ")
         val text =
             buildAnnotatedString {
@@ -214,7 +227,13 @@ private fun LocationsView(popup: org.example.kotlineditor.state.LocationsPopup, 
         val first = listState.firstVisibleItemIndex
         if (popup.selected < first || popup.selected >= first + LIST_ROWS) listState.scrollToItem(popup.selected)
     }
-    Column(Modifier.width(LIST_WIDTH).popupFrame().swallowClicks().testTag(EditorTags.LOCATIONS)) {
+    Column(
+        Modifier
+            .width(LIST_WIDTH)
+            .popupFrame()
+            .swallowClicks()
+            .testTag(EditorTags.LOCATIONS),
+    ) {
         BasicText(
             popup.title,
             Modifier.padding(horizontal = 10.dp, vertical = 5.dp).testTag(EditorTags.LOCATIONS_TITLE),
@@ -250,7 +269,12 @@ private fun LocationsView(popup: org.example.kotlineditor.state.LocationsPopup, 
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    BasicText(name.substringBeforeLast('/', ""), Modifier.padding(start = 8.dp), style = SECONDARY_STYLE, maxLines = 1)
+                    BasicText(
+                        name.substringBeforeLast('/', ""),
+                        Modifier.padding(start = 8.dp),
+                        style = SECONDARY_STYLE,
+                        maxLines = 1,
+                    )
                 }
             }
         }
@@ -259,7 +283,13 @@ private fun LocationsView(popup: org.example.kotlineditor.state.LocationsPopup, 
 
 @Composable
 private fun CodeActionsView(popup: org.example.kotlineditor.state.CodeActionsPopup, insight: CodeInsightState) {
-    Column(Modifier.widthIn(min = 260.dp, max = LIST_WIDTH).popupFrame().swallowClicks().testTag(EditorTags.CODE_ACTIONS)) {
+    Column(
+        Modifier
+            .widthIn(min = 260.dp, max = LIST_WIDTH)
+            .popupFrame()
+            .swallowClicks()
+            .testTag(EditorTags.CODE_ACTIONS),
+    ) {
         popup.actions.forEachIndexed { index, action ->
             val selected = index == popup.selected
             Row(
@@ -273,7 +303,15 @@ private fun CodeActionsView(popup: org.example.kotlineditor.state.CodeActionsPop
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 val isFix = action.kind?.startsWith("quickfix") == true
-                Box(Modifier.size(8.dp).background(if (isFix) IdeColors.ProblemWarning else IdeColors.Accent, RoundedCornerShape(4.dp)))
+                Box(
+                    Modifier
+                        .size(
+                            8.dp,
+                        ).background(
+                            if (isFix) IdeColors.ProblemWarning else IdeColors.Accent,
+                            RoundedCornerShape(4.dp),
+                        ),
+                )
                 BasicText(action.title, Modifier.padding(start = 8.dp), style = LABEL_STYLE, maxLines = 1)
             }
         }
@@ -288,22 +326,51 @@ private fun SignatureView(help: org.example.kotlineditor.model.SignatureHelpResu
         buildAnnotatedString {
             append(signature.label)
             if (parameter != null) {
-                addStyle(SpanStyle(fontWeight = FontWeight.Bold, color = IdeColors.Text), parameter.start, parameter.end)
+                addStyle(
+                    SpanStyle(fontWeight = FontWeight.Bold, color = IdeColors.Text),
+                    parameter.start,
+                    parameter.end,
+                )
             }
         }
-    Column(Modifier.widthIn(max = HOVER_MAX_WIDTH).popupFrame().swallowClicks().testTag(EditorTags.SIGNATURE).padding(horizontal = 10.dp, vertical = 5.dp)) {
+    Column(
+        Modifier
+            .widthIn(
+                max = HOVER_MAX_WIDTH,
+            ).popupFrame()
+            .swallowClicks()
+            .testTag(EditorTags.SIGNATURE)
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+    ) {
         BasicText(label, style = LocalCodeStyle.current.copy(color = IdeColors.TextSecondary, fontSize = 12.5.sp))
         if (parameter != null) {
             val text = signature.label.substring(parameter.start, parameter.end)
-            Box(Modifier.size(0.dp).semantics { this.text = AnnotatedString(text) }.testTag(EditorTags.SIGNATURE_ACTIVE_PARAMETER))
+            Box(
+                Modifier
+                    .size(
+                        0.dp,
+                    ).semantics { this.text = AnnotatedString(text) }
+                    .testTag(EditorTags.SIGNATURE_ACTIVE_PARAMETER),
+            )
         }
-        val documentation = parameter?.documentation?.takeIf { it != signature.label.substring(parameter.start, parameter.end) } ?: signature.documentation
+        val documentation =
+            parameter?.documentation?.takeIf {
+                it !=
+                    signature.label.substring(
+                        parameter.start,
+                        parameter.end,
+                    )
+            } ?: signature.documentation
         documentation?.let { MarkdownText(it, Modifier.padding(top = 4.dp)) }
     }
 }
 
 @Composable
-private fun RenameView(popup: org.example.kotlineditor.state.RenamePopup, insight: CodeInsightState, editorFocus: FocusRequester) {
+private fun RenameView(
+    popup: org.example.kotlineditor.state.RenamePopup,
+    insight: CodeInsightState,
+    editorFocus: FocusRequester,
+) {
     val focus = remember { FocusRequester() }
     LaunchedEffect(popup) { runCatching { focus.requestFocus() } }
     val close = { action: () -> Unit ->
@@ -311,7 +378,14 @@ private fun RenameView(popup: org.example.kotlineditor.state.RenamePopup, insigh
         runCatching { editorFocus.requestFocus() }
         Unit
     }
-    Column(Modifier.width(320.dp).popupFrame().swallowClicks().testTag(EditorTags.RENAME).padding(8.dp)) {
+    Column(
+        Modifier
+            .width(320.dp)
+            .popupFrame()
+            .swallowClicks()
+            .testTag(EditorTags.RENAME)
+            .padding(8.dp),
+    ) {
         BasicText("Rename '${popup.oldName}' and its usages to:", style = SECONDARY_STYLE)
         BasicTextField(
             popup.name,
@@ -336,7 +410,9 @@ private fun RenameView(popup: org.example.kotlineditor.state.RenamePopup, insigh
                             true
                         }
 
-                        else -> false
+                        else -> {
+                            false
+                        }
                     }
                 }.testTag(EditorTags.RENAME_INPUT),
             enabled = !popup.applying,
@@ -344,7 +420,11 @@ private fun RenameView(popup: org.example.kotlineditor.state.RenamePopup, insigh
             textStyle = LocalCodeStyle.current.copy(color = IdeColors.Text),
             cursorBrush = SolidColor(IdeColors.Caret),
         )
-        BasicText("Enter to rename, Escape to cancel", Modifier.padding(top = 4.dp), style = SECONDARY_STYLE.copy(fontSize = 11.sp))
+        BasicText(
+            "Enter to rename, Escape to cancel",
+            Modifier.padding(top = 4.dp),
+            style = SECONDARY_STYLE.copy(fontSize = 11.sp),
+        )
     }
 }
 
@@ -375,6 +455,10 @@ internal fun ProblemsWidget(insight: DocumentInsight, onNext: () -> Unit, modifi
 private fun Counter(symbol: String, count: Int, severity: DiagnosticSeverity, tag: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         BasicText(symbol, style = LABEL_STYLE.copy(color = problemColor(severity), fontSize = 11.sp))
-        BasicText(count.toString(), Modifier.padding(start = 3.dp).testTag(tag), style = LABEL_STYLE.copy(fontSize = 12.sp))
+        BasicText(
+            count.toString(),
+            Modifier.padding(start = 3.dp).testTag(tag),
+            style = LABEL_STYLE.copy(fontSize = 12.sp),
+        )
     }
 }

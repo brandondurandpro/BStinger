@@ -79,7 +79,10 @@ class CodeInsightChaosE2eTest {
             awaitReconnected()
             // Once back, Ctrl+B goes to the declaration.
             editorKeys { withKeyDown(Key.CtrlLeft) { pressKey(Key.B) } }
-            awaitCondition(SERVER_START_MS) { app.project.editor.activeTab?.relativePath == "src/Greeter.php" }
+            awaitCondition(SERVER_START_MS) {
+                app.project.editor.activeTab
+                    ?.relativePath == "src/Greeter.php"
+            }
         }
 
     @Test
@@ -113,9 +116,15 @@ class CodeInsightChaosE2eTest {
             app.network.cutAll()
             app.network.dropFromServer = false
             awaitReconnected()
-            awaitCondition(SERVER_START_MS) { "public function welcome(" in Files.readString(project.root.resolve("src/Greeter.php")) }
+            awaitCondition(
+                SERVER_START_MS,
+            ) { "public function welcome(" in Files.readString(project.root.resolve("src/Greeter.php")) }
             assertEquals("echo \$greeter->welcome(\"world\", 1);", app.document().lines[2])
-            val declaration = Files.readAllLines(project.root.resolve("src/Greeter.php")).count { "function welcome(" in it }
+            val declaration =
+                Files
+                    .readAllLines(
+                        project.root.resolve("src/Greeter.php"),
+                    ).count { "function welcome(" in it }
             assertEquals(1, declaration)
         }
 

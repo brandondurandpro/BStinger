@@ -36,7 +36,10 @@ class CodeInsightE2eTest {
     private fun E2eApp.document(): Document = project.editor.activeTab!!.document!!
 
     // Null while the file opened by a navigation loads.
-    private fun E2eApp.caret(): TextPos? = project.editor.activeTab?.document?.caret
+    private fun E2eApp.caret(): TextPos? =
+        project.editor.activeTab
+            ?.document
+            ?.caret
 
     private fun E2eApp.activePath(): String = project.editor.activeTab!!.relativePath
 

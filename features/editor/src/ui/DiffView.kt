@@ -20,9 +20,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.rememberScrollbarAdapter
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -80,8 +80,17 @@ private fun CommitHeaderView(commit: CommitDiffTarget, header: CommitHeader) {
             .padding(horizontal = 12.dp, vertical = 6.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Label(commit.shortHash, Modifier.testTag(EditorTags.DIFF_COMMIT_HASH), color = IdeColors.Link, fontSize = 12.sp)
-            Label(header.author, Modifier.padding(start = 10.dp).testTag(EditorTags.DIFF_COMMIT_AUTHOR), fontSize = 12.sp)
+            Label(
+                commit.shortHash,
+                Modifier.testTag(EditorTags.DIFF_COMMIT_HASH),
+                color = IdeColors.Link,
+                fontSize = 12.sp,
+            )
+            Label(
+                header.author,
+                Modifier.padding(start = 10.dp).testTag(EditorTags.DIFF_COMMIT_AUTHOR),
+                fontSize = 12.sp,
+            )
             Label(header.date, Modifier.padding(start = 10.dp), color = IdeColors.TextSecondary, fontSize = 12.sp)
         }
         Label(

@@ -16,10 +16,10 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
 import org.example.kotlineditor.lsp.completion.CompletionAnswers
-import org.example.kotlineditor.lsp.intelligence.CodeIntelligenceService
-import org.example.kotlineditor.lsp.intelligence.IntelligenceSettings
 import org.example.kotlineditor.lsp.documents.MirroredDocument
 import org.example.kotlineditor.lsp.documents.OpenDocuments
+import org.example.kotlineditor.lsp.intelligence.CodeIntelligenceService
+import org.example.kotlineditor.lsp.intelligence.IntelligenceSettings
 import org.example.kotlineditor.lsp.jsonrpc.LspConnectionClosedException
 import org.example.kotlineditor.lsp.jsonrpc.LspResponseException
 import org.example.kotlineditor.lsp.memory.ProcessMemoryReader
@@ -99,11 +99,11 @@ class LanguageServerService(private val settings: LanguageServerSettings) : Clos
             onChange = { changes.trySend(Unit) },
             documents = documents,
             hooks =
-                LanguageServerHooks(
-                    onDiagnostics = intelligence::published,
-                    onApplyEdit = intelligence::applyEdit,
-                    onRestarted = intelligence::restarted,
-                ),
+            LanguageServerHooks(
+                onDiagnostics = intelligence::published,
+                onApplyEdit = intelligence::applyEdit,
+                onRestarted = intelligence::restarted,
+            ),
         )
 
     // When the last status was published, in milliseconds since the epoch.
@@ -219,7 +219,8 @@ class LanguageServerService(private val settings: LanguageServerSettings) : Clos
         }
     }
 
-    private fun serversOf(document: MirroredDocument): List<ManagedServer> = supervisor.serving(document.language, document.root)
+    private fun serversOf(document: MirroredDocument): List<ManagedServer> =
+        supervisor.serving(document.language, document.root)
 
     /** See [LanguageServerSupervisor.restart]. */
     fun restart(id: String, generation: Long) = supervisor.restart(id, generation)

@@ -123,7 +123,13 @@ private fun DrawScope.drawRow(
     val deletedAtEnd = index == document.lines.lastIndex && document.lineCount in marks.deleted
     val deleted = index in marks.deleted || deletedAtEnd
     val decorations =
-        decorations(document, index, line, highlights, hints, marks.changed[index], deleted, marks.blame?.get(index), insight.hasHighlights)
+        decorations(
+            document, index, line, highlights, hints, marks.changed[index], deleted,
+            marks.blame?.get(
+                index,
+            ),
+            insight.hasHighlights,
+        )
     val lineHeight = metrics.lineHeightPx
     if (decorations.isCaretLine && !decorations.hasSelection) {
         drawRect(IdeColors.CurrentLine, Offset.Zero, Size(size.width, lineHeight))
@@ -156,7 +162,12 @@ private fun DrawScope.drawRow(
         }
         insight.hints[index]?.let { hint ->
             val layout = cache.hint(hint)
-            val hintX = textX + hintColumn(if (folded) line + " " + source.placeholder.orEmpty() else line) * metrics.charWidth
+            val hintX =
+                textX +
+                    hintColumn(
+                        if (folded) line + " " + source.placeholder.orEmpty() else line,
+                    ) *
+                    metrics.charWidth
             drawText(layout, topLeft = Offset(hintX, (lineHeight - layout.size.height) / 2))
         }
     }

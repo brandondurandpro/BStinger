@@ -88,7 +88,13 @@ class DocumentInsight internal constructor(val document: Document) {
     val warningCount: Int get() = diagnostics.count { it.severity == DiagnosticSeverity.Warning }
 
     internal fun follow(change: TextChange) {
-        diagnostics = diagnostics.mapNotNull { diagnostic -> shifted(diagnostic.range, change)?.let { diagnostic.copy(range = it) } }
+        diagnostics =
+            diagnostics.mapNotNull { diagnostic ->
+                shifted(
+                    diagnostic.range,
+                    change,
+                )?.let { diagnostic.copy(range = it) }
+            }
         usageCounts = usageCounts.mapNotNull { count -> shifted(count.range, change)?.let { count.copy(range = it) } }
         highlights = emptyList()
     }
@@ -126,7 +132,7 @@ class LocationsPopup(
         internal set
 }
 
-/** The signature of the call around the caret (Ctrl+P, or typed `(` and `,`). */
+/** The signature of the call around the caret (Ctrl+P, or typed `(` and `, `). */
 @Immutable
 class SignaturePopup(
     /** The document. */
@@ -294,15 +300,26 @@ class CodeInsightState(
                 if (delayed) delay(USAGES_DELAY_MS)
                 repeat(NOT_READY_RETRIES) {
                     val version = insight.document.version
-                    val result = ask { backend -> backend.intelligence.usageCounts(insight.path, backend.versionOf(insight.path, insight.document) ?: return@ask null) }
+                    val result =
+                        ask { backend ->
+                            backend.intelligence.usageCounts(
+                                insight.path,
+                                backend.versionOf(insight.path, insight.document) ?: return@ask null,
+                            )
+                        }
                     when {
-                        result == null || insight.document.version != version -> Unit
+                        result == null || insight.document.version != version -> {
+                            Unit
+                        }
+
                         result.status == FeatureStatus.Ready -> {
                             insight.usageCounts = result.counts
                             return@launch
                         }
 
-                        result.status == FeatureStatus.Unsupported -> return@launch
+                        result.status == FeatureStatus.Unsupported -> {
+                            return@launch
+                        }
                     }
                     delay(NOT_READY_RETRY_MS)
                 }
@@ -317,7 +334,17 @@ class CodeInsightState(
      */
     fun mouseAt(path: String, document: Document, pos: TextPos?, ctrl: Boolean) {
         val word = pos?.let { wordRange(document, it) }
-        link = if (ctrl && word != null) LinkTarget(document, word.startLine, word.startColumn, word.endColumn) else null
+        link =
+            if (ctrl && word != null) {
+                LinkTarget(
+                    document,
+                    word.startLine,
+                    word.startColumn,
+                    word.endColumn,
+                )
+            } else {
+                null
+            }
         val sameWord = word != null && hoverWord?.first === document && hoverWord?.second == word
         if (sameWord) return
         hoverJob?.cancel()
@@ -354,16 +381,31 @@ class CodeInsightState(
     /** Ctrl+Q: the documentation of the symbol at the caret. */
     fun quickDocumentation(path: String, document: Document) {
         val caret = document.caret
-        val word = wordRange(document, caret) ?: wordRange(document, TextPos(caret.line, (caret.column - 1).coerceAtLeast(0)))
+        val word =
+            wordRange(
+                document,
+                caret,
+            ) ?: wordRange(document, TextPos(caret.line, (caret.column - 1).coerceAtLeast(0)))
         val anchor = word?.let { TextPos(it.startLine, it.startColumn) } ?: caret
         hoverJob?.cancel()
         hoverJob = scope.launch { showHover(path, document, caret, anchor, explicit = true) }
     }
 
-    private suspend fun showHover(path: String, document: Document, pos: TextPos, anchor: TextPos, explicit: Boolean = false) {
+    private suspend fun showHover(
+        path: String,
+        document: Document,
+        pos: TextPos,
+        anchor: TextPos,
+        explicit: Boolean = false,
+    ) {
         val version = document.version
         val problems = insights[document]?.diagnostics.orEmpty().filter { inside(pos, it.range) }
-        val result = ask { backend -> backend.intelligence.hover(position(backend, path, document, pos) ?: return@ask null) }
+        val result =
+            ask { backend ->
+                backend.intelligence.hover(
+                    position(backend, path, document, pos) ?: return@ask null,
+                )
+            }
         if (document.version != version) return
         val markdown = result?.markdown
         if (markdown == null && problems.isEmpty()) {
@@ -418,16 +460,39 @@ class CodeInsightState(
         scope.launch {
             val version = document.version
             val result =
-                ask { backend -> backend.intelligence.navigate(position(backend, path, document, pos) ?: return@ask null, kind) }
+                ask { backend ->
+                    backend.intelligence.navigate(
+                        position(backend, path, document, pos) ?: return@ask null,
+                        kind,
+                    )
+                }
                     ?: LocationsResult.NotReady
             if (document.version != version) return@launch
             val name = word?.let { document.lines[it.startLine].substring(it.startColumn, it.endColumn) }
             when {
-                result.status != FeatureStatus.Ready && fallback -> host.declarationByName(pos)
-                result.status == FeatureStatus.Unsupported -> notify(document, anchor, "The language server cannot find ${what(kind)}")
-                result.status == FeatureStatus.NotReady -> notify(document, anchor, "The language server is not ready")
-                result.locations.isEmpty() -> notify(document, anchor, emptyMessage(kind))
-                else -> arrived(path, document, pos, anchor, kind, name, result.locations)
+                result.status != FeatureStatus.Ready && fallback -> {
+                    host.declarationByName(pos)
+                }
+
+                result.status == FeatureStatus.Unsupported -> {
+                    notify(
+                        document,
+                        anchor,
+                        "The language server cannot find ${what(kind)}",
+                    )
+                }
+
+                result.status == FeatureStatus.NotReady -> {
+                    notify(document, anchor, "The language server is not ready")
+                }
+
+                result.locations.isEmpty() -> {
+                    notify(document, anchor, emptyMessage(kind))
+                }
+
+                else -> {
+                    arrived(path, document, pos, anchor, kind, name, result.locations)
+                }
             }
         }
     }
@@ -456,7 +521,15 @@ class CodeInsightState(
     private fun landingOf(location: SourceLocation, name: String?): TextPos {
         val range = location.range
         val preview = location.preview
-        val column = if (name != null && preview != null) preview.indexOf(name, range.startColumn.coerceAtMost(preview.length)) else -1
+        val column =
+            if (name != null && preview != null) {
+                preview.indexOf(
+                    name,
+                    range.startColumn.coerceAtMost(preview.length),
+                )
+            } else {
+                -1
+            }
         return if (column >= 0) TextPos(range.startLine, column) else TextPos(range.startLine, range.startColumn)
     }
 
@@ -474,14 +547,34 @@ class CodeInsightState(
         scope.launch {
             val version = document.version
             val result =
-                ask { backend -> backend.intelligence.references(position(backend, path, document, pos) ?: return@ask null, false) }
+                ask { backend ->
+                    backend.intelligence.references(
+                        position(backend, path, document, pos) ?: return@ask null,
+                        false,
+                    )
+                }
                     ?: LocationsResult.NotReady
             if (document.version != version) return@launch
             when {
-                result.status == FeatureStatus.NotReady -> notify(document, anchor, "The language server is not ready")
-                result.status == FeatureStatus.Unsupported -> notify(document, anchor, "The language server cannot find usages")
-                result.locations.isEmpty() -> notify(document, anchor, "No usages found")
-                else -> showLocations(usagesTitle(name, result), result.locations, document, anchor)
+                result.status == FeatureStatus.NotReady -> {
+                    notify(document, anchor, "The language server is not ready")
+                }
+
+                result.status == FeatureStatus.Unsupported -> {
+                    notify(
+                        document,
+                        anchor,
+                        "The language server cannot find usages",
+                    )
+                }
+
+                result.locations.isEmpty() -> {
+                    notify(document, anchor, "No usages found")
+                }
+
+                else -> {
+                    showLocations(usagesTitle(name, result), result.locations, document, anchor)
+                }
             }
         }
     }
@@ -531,7 +624,12 @@ class CodeInsightState(
             scope.launch {
                 delay(HIGHLIGHT_DELAY_MS)
                 if (wordRange(document, caret) == null) return@launch
-                val found = ask { backend -> backend.intelligence.highlights(position(backend, path, document, caret) ?: return@ask null) }
+                val found =
+                    ask { backend ->
+                        backend.intelligence.highlights(
+                            position(backend, path, document, caret) ?: return@ask null,
+                        )
+                    }
                 val unchanged = document.version == version && document.caret == caret
                 // A lone occurrence is not worth highlighting, like IntelliJ.
                 if (found != null && unchanged && found.size > 1) insight.highlights = found
@@ -540,7 +638,7 @@ class CodeInsightState(
         if (shown != null && shown.document === document) requestSignature(path, document, explicit = false)
     }
 
-    /** Text was typed: `(` and `,` open the parameter info, which follows the caret while it is shown. */
+    /** Text was typed: `(` and `, ` open the parameter info, which follows the caret while it is shown. */
     fun edited(path: String, document: Document) {
         val caret = document.caret
         val before = document.lines.getOrNull(caret.line)?.getOrNull(caret.column - 1)
@@ -558,7 +656,12 @@ class CodeInsightState(
         signatureJob =
             scope.launch {
                 if (!explicit) delay(SIGNATURE_DELAY_MS)
-                val help = ask { backend -> backend.intelligence.signatureHelp(position(backend, path, document, caret) ?: return@ask null) }
+                val help =
+                    ask { backend ->
+                        backend.intelligence.signatureHelp(
+                            position(backend, path, document, caret) ?: return@ask null,
+                        )
+                    }
                 if (document.version != version || document.caret != caret) return@launch
                 val shown = help != null && help.signatures.isNotEmpty()
                 signature = if (shown) SignaturePopup(document, caret, help!!) else null
@@ -580,15 +683,39 @@ class CodeInsightState(
         val caret = document.caret
         scope.launch {
             val version = document.version
-            val target = ask { backend -> backend.intelligence.prepareRename(position(backend, path, document, caret) ?: return@ask null) }
+            val target =
+                ask { backend ->
+                    backend.intelligence.prepareRename(
+                        position(backend, path, document, caret) ?: return@ask null,
+                    )
+                }
             if (document.version != version) return@launch
             val range = target?.range
             val name = target?.placeholder ?: range?.let { textOf(document, it) }
             when {
-                target == null || target.status == FeatureStatus.NotReady -> notify(document, caret, "The language server is not ready")
-                target.status == FeatureStatus.Unsupported -> notify(document, caret, "The language server cannot rename")
-                range == null || name == null -> notify(document, caret, target.message ?: "Cannot rename this element")
-                else -> rename = RenamePopup(document, path, range, name)
+                target == null || target.status == FeatureStatus.NotReady -> {
+                    notify(
+                        document,
+                        caret,
+                        "The language server is not ready",
+                    )
+                }
+
+                target.status == FeatureStatus.Unsupported -> {
+                    notify(
+                        document,
+                        caret,
+                        "The language server cannot rename",
+                    )
+                }
+
+                range == null || name == null -> {
+                    notify(document, caret, target.message ?: "Cannot rename this element")
+                }
+
+                else -> {
+                    rename = RenamePopup(document, path, range, name)
+                }
             }
         }
     }
@@ -641,7 +768,15 @@ class CodeInsightState(
         dismissHover()
         val caret = document.caret
         val selection = document.selectionRange()
-        val range = selection?.let { (start, end) -> TextRange(start.line, start.column, end.line, end.column) } ?: TextRange(caret.line, caret.column, caret.line, caret.column)
+        val range =
+            selection?.let { (start, end) ->
+                TextRange(
+                    start.line,
+                    start.column,
+                    end.line,
+                    end.column,
+                )
+            } ?: TextRange(caret.line, caret.column, caret.line, caret.column)
         scope.launch {
             val version = document.version
             val result =
@@ -651,9 +786,25 @@ class CodeInsightState(
                 }
             if (document.version != version) return@launch
             when {
-                result == null || result.status == FeatureStatus.NotReady -> notify(document, caret, "The language server is not ready")
-                result.status == FeatureStatus.Unsupported || result.actions.isEmpty() -> notify(document, caret, "No actions available here")
-                else -> codeActions = CodeActionsPopup(document, caret, result.token, result.actions)
+                result == null || result.status == FeatureStatus.NotReady -> {
+                    notify(
+                        document,
+                        caret,
+                        "The language server is not ready",
+                    )
+                }
+
+                result.status == FeatureStatus.Unsupported || result.actions.isEmpty() -> {
+                    notify(
+                        document,
+                        caret,
+                        "No actions available here",
+                    )
+                }
+
+                else -> {
+                    codeActions = CodeActionsPopup(document, caret, result.token, result.actions)
+                }
             }
         }
     }
@@ -665,7 +816,13 @@ class CodeInsightState(
         if (popup.actions.getOrNull(chosen) == null) return
         codeActions = null
         scope.launch {
-            val result = ask { backend -> backend.intelligence.applyCodeAction(popup.token, chosen) } ?: EditResult.NotReady
+            val result =
+                ask { backend ->
+                    backend.intelligence.applyCodeAction(
+                        popup.token,
+                        chosen,
+                    )
+                } ?: EditResult.NotReady
             applyResult(popup.document, popup.anchor, result, "apply the action")
         }
     }
@@ -711,7 +868,13 @@ class CodeInsightState(
 
     /** Escape: closes what is shown over the code; false when nothing was. */
     fun escape(): Boolean {
-        val shown = hover != null || locations != null || signature != null || codeActions != null || notice != null || rename != null
+        val shown =
+            hover != null ||
+                locations != null ||
+                signature != null ||
+                codeActions != null ||
+                notice != null ||
+                rename != null
         dismissHover()
         locations = null
         dismissSignature()

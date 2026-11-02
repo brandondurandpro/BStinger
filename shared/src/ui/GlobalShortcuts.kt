@@ -11,13 +11,13 @@ import org.example.kotlineditor.state.PopupKind
 import org.example.kotlineditor.state.ProjectState
 import org.example.kotlineditor.state.ToolWindow
 import org.example.kotlineditor.state.gotoDeclaration
-import org.example.kotlineditor.state.withInsight
 import org.example.kotlineditor.state.navigateBack
 import org.example.kotlineditor.state.openFileOfDiff
 import org.example.kotlineditor.state.saveAll
 import org.example.kotlineditor.state.selectNext
 import org.example.kotlineditor.state.selectPrevious
 import org.example.kotlineditor.state.selectedText
+import org.example.kotlineditor.state.withInsight
 
 private const val DOUBLE_SHIFT_MILLIS = 400L
 
@@ -78,15 +78,41 @@ private val IDE_SHORTCUTS =
         bind(setOf(Key.N), ctrl = true, shift = true) { project.showPopup(PopupKind.GotoFile) },
         bind(setOf(Key.P), ctrl = true, shift = false) { project.showPopup(PopupKind.GotoFile) },
         bind(setOf(Key.DirectionLeft), ctrl = true, alt = true) { project.navigateBack() },
-        bind(setOf(Key.B), ctrl = true, shift = true) { project.withInsight { path, document -> gotoTypeDeclaration(path, document) } },
-        bind(setOf(Key.B), ctrl = true, alt = true) { project.withInsight { path, document -> gotoImplementation(path, document) } },
+        bind(
+            setOf(Key.B),
+            ctrl = true,
+            shift = true,
+        ) { project.withInsight { path, document -> gotoTypeDeclaration(path, document) } },
+        bind(
+            setOf(Key.B),
+            ctrl = true,
+            alt = true,
+        ) { project.withInsight { path, document -> gotoImplementation(path, document) } },
         bind(setOf(Key.B), ctrl = true, shift = false) { project.gotoDeclaration() },
-        bind(setOf(Key.Q), ctrl = true) { project.withInsight { path, document -> quickDocumentation(path, document) } },
-        bind(setOf(Key.P), ctrl = true, shift = true) { project.withInsight { path, document -> parameterInfo(path, document) } },
-        bind(setOf(Key.F7), ctrl = null, alt = true) { project.withInsight { path, document -> showUsages(path, document, document.caret) } },
+        bind(
+            setOf(Key.Q),
+            ctrl = true,
+        ) { project.withInsight { path, document -> quickDocumentation(path, document) } },
+        bind(
+            setOf(Key.P),
+            ctrl = true,
+            shift = true,
+        ) { project.withInsight { path, document -> parameterInfo(path, document) } },
+        bind(
+            setOf(Key.F7),
+            ctrl = null,
+            alt = true,
+        ) { project.withInsight { path, document -> showUsages(path, document, document.caret) } },
         bind(setOf(Key.F6), shift = true) { project.withInsight { path, document -> startRename(path, document) } },
-        bind(setOf(Key.L), ctrl = true, alt = true) { project.withInsight { path, document -> reformat(path, document) } },
-        bind(setOf(Key.Enter, Key.NumPadEnter), alt = true) { project.withInsight { path, document -> showCodeActions(path, document) } },
+        bind(
+            setOf(Key.L),
+            ctrl = true,
+            alt = true,
+        ) { project.withInsight { path, document -> reformat(path, document) } },
+        bind(
+            setOf(Key.Enter, Key.NumPadEnter),
+            alt = true,
+        ) { project.withInsight { path, document -> showCodeActions(path, document) } },
         bind(setOf(Key.F2)) { project.withInsight { _, document -> nextProblem(document, backward = it.shift) } },
         bind(setOf(Key.R), ctrl = true) { openFindBar(replace = true) },
         bind(setOf(Key.F), ctrl = true, shift = true) { project.showPopup(PopupKind.FindInFiles) },

@@ -88,6 +88,7 @@ fun applyEdits(lines: List<String>, edits: List<TextChange>): List<String> {
 // The text of [region] (starting at [origin]) with [edits] applied, the edits sorted by position.
 private fun rewrite(region: String, origin: TextPos, edits: List<TextChange>): String {
     val offsets = lineOffsets(region)
+
     fun offsetOf(line: Int, column: Int): Int {
         val relativeLine = line - origin.line
         val lineStart = offsets.getOrElse(relativeLine) { region.length }

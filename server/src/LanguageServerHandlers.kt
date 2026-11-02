@@ -1,6 +1,5 @@
 package org.example.kotlineditor.server
 
-import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import org.example.kotlineditor.model.NavigationKind
 import org.example.kotlineditor.rpc.InvalidParamsException
@@ -9,7 +8,6 @@ import org.example.kotlineditor.rpc.bool
 import org.example.kotlineditor.rpc.documentPosition
 import org.example.kotlineditor.rpc.formatOptions
 import org.example.kotlineditor.rpc.highlightsJson
-import org.example.kotlineditor.rpc.textRange
 import org.example.kotlineditor.rpc.int
 import org.example.kotlineditor.rpc.languageServerChoiceJson
 import org.example.kotlineditor.rpc.long
@@ -17,6 +15,7 @@ import org.example.kotlineditor.rpc.read
 import org.example.kotlineditor.rpc.string
 import org.example.kotlineditor.rpc.strings
 import org.example.kotlineditor.rpc.textChanges
+import org.example.kotlineditor.rpc.textRange
 import org.example.kotlineditor.rpc.toJson
 
 private const val ID = "id"
@@ -74,7 +73,8 @@ internal fun languageServerHandlers(services: LocalServices): Map<Method, Handle
                 .complete(session, params.string(PATH), params.int(VERSION), params.int("line"), params.int("column"))
                 .toJson()
         },
-    ) + codeIntelligenceHandlers(services)
+    ) +
+        codeIntelligenceHandlers(services)
 
 /** The code intelligence methods: hover, navigation, usages, diagnostics, edits. */
 private fun codeIntelligenceHandlers(services: LocalServices): Map<Method, Handler> {
@@ -83,7 +83,10 @@ private fun codeIntelligenceHandlers(services: LocalServices): Map<Method, Handl
         Method.LspHover to { intelligence().hover(session, params.documentPosition()).toJson() },
         Method.LspNavigate to {
             val kindName = params.string("kind")
-            val kind = NavigationKind.entries.firstOrNull { it.name == kindName } ?: throw InvalidParamsException("Unknown kind $kindName")
+            val kind =
+                NavigationKind.entries.firstOrNull { it.name == kindName } ?: throw InvalidParamsException(
+                    "Unknown kind $kindName",
+                )
             intelligence().navigate(session, params.documentPosition(), kind).toJson()
         },
         Method.LspReferences to {

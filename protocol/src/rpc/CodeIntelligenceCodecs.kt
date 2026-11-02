@@ -49,14 +49,18 @@ private const val MESSAGE = "message"
 private const val RANGE_FIELDS = 4
 
 /** A range as `[startLine, startColumn, endLine, endColumn]`. */
-fun TextRange.toJson(): JsonArray =
-    JsonArray(listOf(startLine, startColumn, endLine, endColumn).map(::JsonPrimitive))
+fun TextRange.toJson(): JsonArray = JsonArray(listOf(startLine, startColumn, endLine, endColumn).map(::JsonPrimitive))
 
 /** Reads a range. */
 fun JsonElement.textRange(): TextRange {
     val fields = jsonArray
     require(fields.size == RANGE_FIELDS) { "A range has $RANGE_FIELDS fields" }
-    return TextRange(fields[0].jsonPrimitive.int, fields[1].jsonPrimitive.int, fields[2].jsonPrimitive.int, fields[3].jsonPrimitive.int)
+    return TextRange(
+        fields[0].jsonPrimitive.int,
+        fields[1].jsonPrimitive.int,
+        fields[2].jsonPrimitive.int,
+        fields[3].jsonPrimitive.int,
+    )
 }
 
 private fun JsonObject.rangeOrNull(key: String = RANGE): TextRange? = get(key)?.takeIf { it != JsonNull }?.textRange()
@@ -114,7 +118,8 @@ private fun SourceLocation.toJson(): JsonObject =
         preview?.let { put("preview", it) }
     }
 
-private fun JsonObject.sourceLocation() = SourceLocation(string(PATH), getValue(RANGE).textRange(), stringOrNull("preview"))
+private fun JsonObject.sourceLocation() =
+    SourceLocation(string(PATH), getValue(RANGE).textRange(), stringOrNull("preview"))
 
 /** A navigation or usages answer. */
 fun LocationsResult.toJson(): JsonObject =
@@ -251,7 +256,10 @@ fun JsonElement.diagnosticsSnapshot(): DiagnosticsSnapshot {
     val files =
         fields.getValue("files").jsonArray.map { element ->
             val file = element.jsonObject
-            FileDiagnostics(file.string(PATH), file.getValue("diagnostics").jsonArray.map { it.jsonObject.diagnostic() })
+            FileDiagnostics(
+                file.string(PATH),
+                file.getValue("diagnostics").jsonArray.map { it.jsonObject.diagnostic() },
+            )
         }
     return DiagnosticsSnapshot(fields.long(VERSION), files)
 }
@@ -314,7 +322,12 @@ fun RenameTarget.toJson(): JsonObject =
 /** Reads a prepare rename answer. */
 fun JsonElement.renameTarget(): RenameTarget {
     val fields = jsonObject
-    return RenameTarget(fields.status(), fields.rangeOrNull(), fields.stringOrNull("placeholder"), fields.stringOrNull(MESSAGE))
+    return RenameTarget(
+        fields.status(),
+        fields.rangeOrNull(),
+        fields.stringOrNull("placeholder"),
+        fields.stringOrNull(MESSAGE),
+    )
 }
 
 /** A code actions answer. */

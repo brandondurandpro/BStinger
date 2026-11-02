@@ -15,6 +15,7 @@ import kotlinx.serialization.json.putJsonObject
 import org.example.kotlineditor.model.CodeActionInfo
 import org.example.kotlineditor.model.Diagnostic
 import org.example.kotlineditor.model.DiagnosticSeverity
+import org.example.kotlineditor.model.FeatureStatus
 import org.example.kotlineditor.model.FileChange
 import org.example.kotlineditor.model.HighlightKind
 import org.example.kotlineditor.model.SignatureHelpResult
@@ -24,7 +25,6 @@ import org.example.kotlineditor.model.SourceLocation
 import org.example.kotlineditor.model.SymbolHighlight
 import org.example.kotlineditor.model.TextChange
 import org.example.kotlineditor.model.TextRange
-import org.example.kotlineditor.model.FeatureStatus
 import java.net.URI
 import java.nio.file.Paths
 
@@ -42,7 +42,8 @@ private const val HIGHLIGHT_WRITE = 3
 /** The declarations whose usages are counted: classes, methods, properties, functions, constants... */
 private val COUNTED_SYMBOL_KINDS = setOf(5, 6, 7, 8, 10, 11, 12, 14, 22, 23)
 
-internal fun JsonObject.string(key: String): String? = (get(key) as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull
+internal fun JsonObject.string(key: String): String? =
+    (get(key) as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull
 
 internal fun JsonObject.int(key: String): Int? = (get(key) as? JsonPrimitive)?.intOrNull
 
@@ -100,7 +101,9 @@ private fun locationOf(element: JsonObject?): SourceLocation? {
     if (element == null) return null
     // A LocationLink goes to its target, preferably to the name (selection range).
     val uri = element.string("uri") ?: element.string("targetUri") ?: return null
-    val range = element["range"].textRange() ?: element["targetSelectionRange"].textRange() ?: element["targetRange"].textRange()
+    val range =
+        element["range"].textRange() ?: element["targetSelectionRange"].textRange()
+            ?: element["targetRange"].textRange()
     val path = pathOfUri(uri)
     return if (path != null && range != null) SourceLocation(path, range) else null
 }
@@ -118,10 +121,27 @@ fun hoverMarkdown(answer: JsonElement?): String? {
 /** Markdown of documentation: a string, MarkupContent or MarkedString(s). */
 fun contentsMarkdown(contents: JsonElement?): String? =
     when (contents) {
-        is JsonPrimitive -> contents.contentOrNull
-        is JsonArray -> contents.mapNotNull { contentsMarkdown(it) }.filter { it.isNotBlank() }.joinToString("\n\n---\n\n")
-        is JsonObject -> objectMarkdown(contents)
-        else -> null
+        is JsonPrimitive -> {
+            contents.contentOrNull
+        }
+
+        is JsonArray -> {
+            contents
+                .mapNotNull {
+                    contentsMarkdown(
+                        it,
+                    )
+                }.filter { it.isNotBlank() }
+                .joinToString("\n\n---\n\n")
+        }
+
+        is JsonObject -> {
+            objectMarkdown(contents)
+        }
+
+        else -> {
+            null
+        }
     }
 
 private fun objectMarkdown(contents: JsonObject): String? {
@@ -178,7 +198,11 @@ private fun signatureOf(signature: JsonObject?): SignatureInfo? {
             val bounds = parameterBounds(parameter?.get("label"), label, searchFrom)
             bounds?.let {
                 searchFrom = it.second
-                SignatureParameter(it.first, it.second, contentsMarkdown(parameter?.get("documentation"))?.takeIf(String::isNotBlank))
+                SignatureParameter(
+                    it.first,
+                    it.second,
+                    contentsMarkdown(parameter?.get("documentation"))?.takeIf(String::isNotBlank),
+                )
             }
         }
     val documentation = contentsMarkdown(signature["documentation"])?.takeIf { it.isNotBlank() }
@@ -197,7 +221,14 @@ private fun parameterBounds(label: JsonElement?, signature: String, from: Int): 
         is JsonArray -> {
             val start = (label.getOrNull(0) as? JsonPrimitive)?.intOrNull
             val end = (label.getOrNull(1) as? JsonPrimitive)?.intOrNull
-            if (start != null && end != null) start.coerceIn(0, signature.length) to end.coerceIn(start, signature.length) else null
+            if (start != null && end != null) {
+                start.coerceIn(
+                    0,
+                    signature.length,
+                ) to end.coerceIn(start, signature.length)
+            } else {
+                null
+            }
         }
 
         else -> {
@@ -214,6 +245,7 @@ data class CountedSymbol(val name: String, val range: TextRange)
  */
 fun countedSymbolsOf(answer: JsonElement?): List<CountedSymbol> {
     val found = ArrayList<CountedSymbol>()
+
     fun visit(element: JsonElement) {
         val symbol = element as? JsonObject ?: return
         val name = symbol.string("name")
@@ -229,23 +261,26 @@ fun countedSymbolsOf(answer: JsonElement?): List<CountedSymbol> {
 
 /** The diagnostics of a publishDiagnostics notification. */
 fun diagnosticsOf(params: JsonObject): List<Diagnostic> =
-    params.array("diagnostics").orEmpty().mapNotNull { element ->
-        val diagnostic = element as? JsonObject
-        val range = diagnostic?.get("range").textRange()
-        val message = diagnostic?.string("message")?.trim()
-        if (range == null || message.isNullOrEmpty()) return@mapNotNull null
-        val tags = diagnostic.array("tags").orEmpty().mapNotNull { (it as? JsonPrimitive)?.intOrNull }
-        val code = diagnostic["code"] as? JsonPrimitive
-        Diagnostic(
-            range = range,
-            severity = severityOf(diagnostic.int("severity")),
-            message = message,
-            source = diagnostic.string("source"),
-            code = code?.contentOrNull,
-            unnecessary = TAG_UNNECESSARY in tags,
-            deprecated = TAG_DEPRECATED in tags,
-        )
-    }.sortedWith(compareBy({ it.range.startLine }, { it.range.startColumn }))
+    params
+        .array("diagnostics")
+        .orEmpty()
+        .mapNotNull { element ->
+            val diagnostic = element as? JsonObject
+            val range = diagnostic?.get("range").textRange()
+            val message = diagnostic?.string("message")?.trim()
+            if (range == null || message.isNullOrEmpty()) return@mapNotNull null
+            val tags = diagnostic.array("tags").orEmpty().mapNotNull { (it as? JsonPrimitive)?.intOrNull }
+            val code = diagnostic["code"] as? JsonPrimitive
+            Diagnostic(
+                range = range,
+                severity = severityOf(diagnostic.int("severity")),
+                message = message,
+                source = diagnostic.string("source"),
+                code = code?.contentOrNull,
+                unnecessary = TAG_UNNECESSARY in tags,
+                deprecated = TAG_DEPRECATED in tags,
+            )
+        }.sortedWith(compareBy({ it.range.startLine }, { it.range.startColumn }))
 
 private fun severityOf(severity: Int?): DiagnosticSeverity =
     when (severity) {
@@ -275,6 +310,7 @@ fun textChangesOf(answer: JsonElement?): List<TextChange> = (answer as? JsonArra
 fun workspaceEditOf(edit: JsonElement?): List<FileChange>? {
     val workspaceEdit = edit as? JsonObject ?: return emptyList()
     val byPath = LinkedHashMap<String, FileChange>()
+
     fun add(uri: String?, edits: List<TextChange>, create: Boolean = false): Boolean {
         val path = uri?.let(::pathOfUri) ?: return false
         val previous = byPath[path]

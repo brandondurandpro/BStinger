@@ -2,23 +2,13 @@ package org.example.kotlineditor.ui
 
 import androidx.compose.animation.core.withInfiniteAnimationFrameMillis
 import androidx.compose.foundation.background
-import org.example.kotlineditor.model.BlameLine
-import org.example.kotlineditor.state.CodeInsightState
-import kotlin.math.roundToInt
-import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.layout.padding
-import androidx.compose.ui.input.key.type
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.isCtrlPressed
-import androidx.compose.ui.input.key.isAltPressed
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -41,9 +31,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerIcon
@@ -56,9 +52,12 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
+import org.example.kotlineditor.model.BlameLine
 import org.example.kotlineditor.model.GitChangeKind
+import org.example.kotlineditor.state.CodeInsightState
 import org.example.kotlineditor.state.CompletionState
 import org.example.kotlineditor.state.DEFAULT_EDITOR_FONT_SIZE
 import org.example.kotlineditor.state.Document
@@ -71,6 +70,7 @@ import org.example.kotlineditor.state.matchingBracket
 import org.example.kotlineditor.state.reveal
 import org.example.kotlineditor.state.visualColumn
 import org.example.kotlineditor.state.wordOccurrences
+import kotlin.math.roundToInt
 
 private const val CARET_BLINK_MILLIS = 530L
 private const val CARET_MARGIN_COLUMNS = 4
@@ -191,7 +191,11 @@ fun CodeEditor(
             val viewportSize = { IntSize(viewportWidth.roundToInt(), viewportHeight.roundToInt()) }
             CodeInsightOverlays(insight, tab, document, metrics, focusRequester, viewportSize)
             documentInsight?.let { shown ->
-                ProblemsWidget(shown, { insight.nextProblem(document) }, Modifier.align(Alignment.TopEnd).padding(end = 12.dp))
+                ProblemsWidget(
+                    shown,
+                    { insight.nextProblem(document) },
+                    Modifier.align(Alignment.TopEnd).padding(end = 12.dp),
+                )
             }
         }
     }
@@ -224,7 +228,9 @@ private fun Modifier.hoverInsight(
     metrics: EditorMetrics,
 ): Modifier {
     if (insight == null || path == null) return this
-    val moved: androidx.compose.ui.input.pointer.AwaitPointerEventScope.(androidx.compose.ui.input.pointer.PointerEvent) -> Unit =
+    val moved: androidx.compose.ui.input.pointer.AwaitPointerEventScope.(
+        androidx.compose.ui.input.pointer.PointerEvent,
+    ) -> Unit =
         { event ->
             val change = event.changes.firstOrNull()
             if (change != null && !change.pressed) {
@@ -259,7 +265,12 @@ private fun hintClicked(
     val left = textLeft + hintColumn(line) * metrics.charWidth
     val right = left + hint.length * metrics.charWidth
     if (offset.x !in left..right) return false
-    val declaration = insight.insightOf(document)?.usageCounts?.firstOrNull { it.range.startLine == pos.line } ?: return false
+    val declaration =
+        insight
+            .insightOf(
+                document,
+            )?.usageCounts
+            ?.firstOrNull { it.range.startLine == pos.line } ?: return false
     insight.showUsages(path, document, TextPos(declaration.range.startLine, declaration.range.startColumn))
     return true
 }
@@ -293,15 +304,26 @@ private fun insightKey(event: KeyEvent, insight: CodeInsightState, document: Doc
     val list = insight.locations?.document === document || insight.codeActions?.document === document
     val plain = !event.isCtrlPressed && !event.isAltPressed
     return when {
-        list && plain && event.key == Key.DirectionDown -> true.also { insight.moveSelection(1) }
-        list && plain && event.key == Key.DirectionUp -> true.also { insight.moveSelection(-1) }
+        list && plain && event.key == Key.DirectionDown -> {
+            true.also { insight.moveSelection(1) }
+        }
+
+        list && plain && event.key == Key.DirectionUp -> {
+            true.also { insight.moveSelection(-1) }
+        }
+
         list && plain && (event.key == Key.Enter || event.key == Key.NumPadEnter) -> {
             if (insight.locations != null) insight.openLocation() else insight.applyCodeAction()
             true
         }
 
-        event.key == Key.Escape -> insight.escape()
-        else -> false
+        event.key == Key.Escape -> {
+            insight.escape()
+        }
+
+        else -> {
+            false
+        }
     }
 }
 

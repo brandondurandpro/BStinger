@@ -98,9 +98,16 @@ class CodeIntelligenceService internal constructor(
 
     /** Documentation at [at]. */
     suspend fun hover(session: String, at: DocumentPosition): HoverResult =
-        ask(session, at.path, at.version, "hoverProvider", HoverResult.NotReady, HoverResult(FeatureStatus.Unsupported, null)) {
-            document,
-            request,
+        ask(
+            session,
+            at.path,
+            at.version,
+            "hoverProvider",
+            HoverResult.NotReady,
+            HoverResult(FeatureStatus.Unsupported, null),
+        ) {
+                document,
+                request,
             ->
             val answer = request("textDocument/hover", positionParams(document, at))
             val range = (answer as? JsonObject)?.get("range").textRange()
@@ -131,7 +138,14 @@ class CodeIntelligenceService internal constructor(
         capability: String,
         params: (MirroredDocument) -> JsonObject,
     ): LocationsResult =
-        ask(session, at.path, at.version, capability, LocationsResult.NotReady, LocationsResult.Unsupported) { document, request ->
+        ask(
+            session,
+            at.path,
+            at.version,
+            capability,
+            LocationsResult.NotReady,
+            LocationsResult.Unsupported,
+        ) { document, request ->
             val found = locationsOf(request(method, params(document)))
             val kept = found.take(settings.maxLocations)
             LocationsResult(FeatureStatus.Ready, withPreviews(kept), truncated = found.size > kept.size)
@@ -170,26 +184,33 @@ class CodeIntelligenceService internal constructor(
         }
     }
 
-    private suspend fun countUsages(document: MirroredDocument, request: suspend (String, JsonObject) -> JsonElement?): UsageCountsResult {
+    private suspend fun countUsages(
+        document: MirroredDocument,
+        request: suspend (String, JsonObject) -> JsonElement?,
+    ): UsageCountsResult {
         val symbolParams = buildJsonObject { putJsonObject("textDocument") { put("uri", document.uri) } }
-        val symbols = countedSymbolsOf(request("textDocument/documentSymbol", symbolParams)).take(settings.maxCountedSymbols)
+        val symbols =
+            countedSymbolsOf(
+                request("textDocument/documentSymbol", symbolParams),
+            ).take(settings.maxCountedSymbols)
         val supportsReferences = serversOf(document).any { it.supports("referencesProvider") == true }
         if (!supportsReferences) return UsageCountsResult(FeatureStatus.Unsupported, emptyList())
         val permits = Semaphore(settings.countParallelism)
         val counts =
             coroutineScope {
-                symbols.map { symbol ->
-                    async {
-                        permits.withPermit {
-                            val start = symbol.range
-                            val params = referencesParams(start.startLine, start.startColumn, false)(document)
-                            val usages = locationsOf(request("textDocument/references", params))
-                            // Some servers count the declaration even when asked not to.
-                            val others = usages.filterNot { it.path == document.path && contains(it.range, start) }
-                            UsageCount(symbol.range, symbol.name, others.size)
+                symbols
+                    .map { symbol ->
+                        async {
+                            permits.withPermit {
+                                val start = symbol.range
+                                val params = referencesParams(start.startLine, start.startColumn, false)(document)
+                                val usages = locationsOf(request("textDocument/references", params))
+                                // Some servers count the declaration even when asked not to.
+                                val others = usages.filterNot { it.path == document.path && contains(it.range, start) }
+                                UsageCount(symbol.range, symbol.name, others.size)
+                            }
                         }
-                    }
-                }.awaitAll()
+                    }.awaitAll()
             }
         return UsageCountsResult(FeatureStatus.Ready, counts)
     }
@@ -203,7 +224,10 @@ class CodeIntelligenceService internal constructor(
         val files =
             opened.map { document ->
                 val found = diagnostics.values.filter { it.uri == document.uri }.flatMap { it.diagnostics }
-                FileDiagnostics(document.path, found.sortedWith(compareBy({ it.range.startLine }, { it.range.startColumn })))
+                FileDiagnostics(
+                    document.path,
+                    found.sortedWith(compareBy({ it.range.startLine }, { it.range.startColumn })),
+                )
             }
         return DiagnosticsSnapshot(version, files)
     }
@@ -212,7 +236,15 @@ class CodeIntelligenceService internal constructor(
     suspend fun prepareRename(session: String, at: DocumentPosition): RenameTarget {
         val notReady = RenameTarget(FeatureStatus.NotReady, null, null)
         val unsupported = RenameTarget(FeatureStatus.Unsupported, null, null)
-        return ask(session, at.path, at.version, "renameProvider", notReady, unsupported, ::refusedRename) { document, request ->
+        return ask(
+            session,
+            at.path,
+            at.version,
+            "renameProvider",
+            notReady,
+            unsupported,
+            ::refusedRename,
+        ) { document, request ->
             val server = serversOf(document).firstOrNull { it.supports("renameProvider") == true }
             val provider = server?.capability("renameProvider") as? JsonObject
             val prepares = (provider?.get("prepareProvider") as? JsonPrimitive)?.booleanOrNull == true
@@ -226,8 +258,18 @@ class CodeIntelligenceService internal constructor(
     private fun refusedRename(failure: LspResponseException) =
         RenameTarget(FeatureStatus.Ready, null, null, failure.message?.substringBefore(" at ")?.take(MAX_MESSAGE))
 
-    private fun renameTargetOf(answer: JsonElement?, document: MirroredDocument, word: Pair<TextRange, String>?): RenameTarget {
-        val fields = answer as? JsonObject ?: return RenameTarget(FeatureStatus.Ready, null, null, "Cannot rename this element")
+    private fun renameTargetOf(
+        answer: JsonElement?,
+        document: MirroredDocument,
+        word: Pair<TextRange, String>?,
+    ): RenameTarget {
+        val fields =
+            answer as? JsonObject ?: return RenameTarget(
+                FeatureStatus.Ready,
+                null,
+                null,
+                "Cannot rename this element",
+            )
         val defaultBehavior = (fields["defaultBehavior"] as? JsonPrimitive)?.booleanOrNull == true
         val range = fields.textRangeOrNull() ?: fields["range"].textRange() ?: word?.first.takeIf { defaultBehavior }
         val name = fields.string("placeholder") ?: range?.let { textOf(document, it) }
@@ -238,7 +280,15 @@ class CodeIntelligenceService internal constructor(
 
     /** The edits renaming the symbol at [at] to [newName]. */
     suspend fun rename(session: String, at: DocumentPosition, newName: String): EditResult =
-        ask(session, at.path, at.version, "renameProvider", EditResult.NotReady, EditResult.Unsupported, ::refusedEdit) { document, request ->
+        ask(
+            session,
+            at.path,
+            at.version,
+            "renameProvider",
+            EditResult.NotReady,
+            EditResult.Unsupported,
+            ::refusedEdit,
+        ) { document, request ->
             val params =
                 buildJsonObject {
                     putJsonObject("textDocument") { put("uri", document.uri) }
@@ -253,16 +303,34 @@ class CodeIntelligenceService internal constructor(
 
     private fun editResultOf(changes: List<FileChange>?): EditResult =
         if (changes == null) {
-            EditResult(FeatureStatus.Ready, emptyList(), "The language server asked for file operations the IDE does not support")
+            EditResult(
+                FeatureStatus.Ready,
+                emptyList(),
+                "The language server asked for file operations the IDE does not support",
+            )
         } else {
             EditResult(FeatureStatus.Ready, changes.map(::withClientPath))
         }
 
     /** The edits formatting [path], or [range] of it. */
-    suspend fun format(session: String, path: String, version: Int, range: TextRange?, options: FormatOptions): EditResult {
+    suspend fun format(
+        session: String,
+        path: String,
+        version: Int,
+        range: TextRange?,
+        options: FormatOptions,
+    ): EditResult {
         val capability = if (range == null) "documentFormattingProvider" else "documentRangeFormattingProvider"
         val method = if (range == null) "textDocument/formatting" else "textDocument/rangeFormatting"
-        return ask(session, path, version, capability, EditResult.NotReady, EditResult.Unsupported, ::refusedEdit) { document, request ->
+        return ask(
+            session,
+            path,
+            version,
+            capability,
+            EditResult.NotReady,
+            EditResult.Unsupported,
+            ::refusedEdit,
+        ) { document, request ->
             val params =
                 buildJsonObject {
                     putJsonObject("textDocument") { put("uri", document.uri) }
@@ -274,15 +342,28 @@ class CodeIntelligenceService internal constructor(
                     }
                 }
             val edits = textChangesOf(request(method, params))
-            EditResult(FeatureStatus.Ready, if (edits.isEmpty()) emptyList() else listOf(FileChange(document.path, edits)))
+            EditResult(
+                FeatureStatus.Ready,
+                if (edits.isEmpty()) emptyList() else listOf(FileChange(document.path, edits)),
+            )
         }
     }
 
     /** The code actions offered for [range] of [path], with the diagnostics found there. */
     suspend fun codeActions(session: String, path: String, version: Int, range: TextRange): CodeActionsResult {
         val unsupported = CodeActionsResult(FeatureStatus.Unsupported, "", emptyList())
-        return ask(session, path, version, "codeActionProvider", CodeActionsResult.NotReady, unsupported) { document, request ->
-            val server = serversOf(document).firstOrNull { it.supports("codeActionProvider") == true } ?: throw NotReadyException()
+        return ask(
+            session,
+            path,
+            version,
+            "codeActionProvider",
+            CodeActionsResult.NotReady,
+            unsupported,
+        ) { document, request ->
+            val server =
+                serversOf(
+                    document,
+                ).firstOrNull { it.supports("codeActionProvider") == true } ?: throw NotReadyException()
             val params =
                 buildJsonObject {
                     putJsonObject("textDocument") { put("uri", document.uri) }
@@ -322,9 +403,14 @@ class CodeIntelligenceService internal constructor(
      */
     suspend fun applyCodeAction(session: String, token: String, index: Int): EditResult {
         val list = offered[session]?.takeIf { it.token == token }
-        val action = list?.actions?.getOrNull(index) ?: return EditResult(FeatureStatus.Ready, emptyList(), "This action is no longer available")
+        val action =
+            list?.actions?.getOrNull(
+                index,
+            ) ?: return EditResult(FeatureStatus.Ready, emptyList(), "This action is no longer available")
         return try {
-            withTimeoutOrNull(settings.timeoutMs) { run(list.server, resolved(list.server, action)) } ?: EditResult.NotReady
+            withTimeoutOrNull(
+                settings.timeoutMs,
+            ) { run(list.server, resolved(list.server, action)) } ?: EditResult.NotReady
         } catch (_: NotReadyException) {
             EditResult.NotReady
         } catch (_: LspConnectionClosedException) {
@@ -486,7 +572,13 @@ class CodeIntelligenceService internal constructor(
     }
 
     private fun mergeChanges(changes: List<FileChange>): List<FileChange> =
-        changes.groupBy { it.path }.map { (path, same) -> FileChange(path, same.flatMap { it.edits }, same.any { it.create }) }
+        changes.groupBy { it.path }.map { (path, same) ->
+            FileChange(
+                path,
+                same.flatMap { it.edits },
+                same.any { it.create },
+            )
+        }
 
     private fun textOf(document: MirroredDocument, range: TextRange): String? {
         if (range.startLine != range.endLine) return null
@@ -504,7 +596,11 @@ class CodeIntelligenceService internal constructor(
             put("position", position(at.line, at.column))
         }
 
-    private fun referencesParams(line: Int, column: Int, includeDeclaration: Boolean): (MirroredDocument) -> JsonObject =
+    private fun referencesParams(
+        line: Int,
+        column: Int,
+        includeDeclaration: Boolean,
+    ): (MirroredDocument) -> JsonObject =
         { document ->
             buildJsonObject {
                 putJsonObject("textDocument") { put("uri", document.uri) }
@@ -527,15 +623,20 @@ class CodeIntelligenceService internal constructor(
 
 /** Whether [inner] is inside [outer]. */
 internal fun contains(outer: TextRange, inner: TextRange): Boolean {
-    val startsAfter = inner.startLine > outer.startLine || (inner.startLine == outer.startLine && inner.startColumn >= outer.startColumn)
-    val endsBefore = inner.endLine < outer.endLine || (inner.endLine == outer.endLine && inner.endColumn <= outer.endColumn)
+    val startsAfter =
+        inner.startLine > outer.startLine ||
+            (inner.startLine == outer.startLine && inner.startColumn >= outer.startColumn)
+    val endsBefore =
+        inner.endLine < outer.endLine || (inner.endLine == outer.endLine && inner.endColumn <= outer.endColumn)
     return startsAfter && endsBefore
 }
 
 /** Whether [first] and [second] share a position (an empty range touching another counts). */
 internal fun overlaps(first: TextRange, second: TextRange): Boolean {
-    val firstEndsBefore = first.endLine < second.startLine || (first.endLine == second.startLine && first.endColumn < second.startColumn)
-    val secondEndsBefore = second.endLine < first.startLine || (second.endLine == first.startLine && second.endColumn < first.startColumn)
+    val firstEndsBefore =
+        first.endLine < second.startLine || (first.endLine == second.startLine && first.endColumn < second.startColumn)
+    val secondEndsBefore =
+        second.endLine < first.startLine || (second.endLine == first.startLine && second.endColumn < first.startColumn)
     return !firstEndsBefore && !secondEndsBefore
 }
 

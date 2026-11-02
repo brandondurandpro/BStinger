@@ -17,9 +17,9 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
@@ -632,10 +632,20 @@ internal class ManagedServer(
                     putJsonObject("synchronization") { put("dynamicRegistration", false) }
                     putJsonObject("publishDiagnostics") {
                         put("relatedInformation", false)
-                        putJsonObject("tagSupport") { putJsonArray("valueSet") { add(1); add(2) } }
+                        putJsonObject("tagSupport") {
+                            putJsonArray("valueSet") {
+                                add(1)
+                                add(2)
+                            }
+                        }
                         put("versionSupport", true)
                     }
-                    putJsonObject("hover") { putJsonArray("contentFormat") { add("markdown"); add("plaintext") } }
+                    putJsonObject("hover") {
+                        putJsonArray("contentFormat") {
+                            add("markdown")
+                            add("plaintext")
+                        }
+                    }
                     putJsonObject("definition") { put("linkSupport", true) }
                     putJsonObject("typeDefinition") { put("linkSupport", true) }
                     putJsonObject("implementation") { put("linkSupport", true) }
@@ -644,7 +654,10 @@ internal class ManagedServer(
                     putJsonObject("documentSymbol") { put("hierarchicalDocumentSymbolSupport", true) }
                     putJsonObject("signatureHelp") {
                         putJsonObject("signatureInformation") {
-                            putJsonArray("documentationFormat") { add("markdown"); add("plaintext") }
+                            putJsonArray("documentationFormat") {
+                                add("markdown")
+                                add("plaintext")
+                            }
                             putJsonObject("parameterInformation") { put("labelOffsetSupport", true) }
                             put("activeParameterSupport", true)
                         }
@@ -658,8 +671,16 @@ internal class ManagedServer(
                         putJsonObject("codeActionLiteralSupport") {
                             putJsonObject("codeActionKind") {
                                 putJsonArray("valueSet") {
-                                    listOf("", "quickfix", "refactor", "refactor.extract", "refactor.inline",
-                                        "refactor.rewrite", "source", "source.organizeImports").forEach { add(it) }
+                                    listOf(
+                                        "",
+                                        "quickfix",
+                                        "refactor",
+                                        "refactor.extract",
+                                        "refactor.inline",
+                                        "refactor.rewrite",
+                                        "source",
+                                        "source.organizeImports",
+                                    ).forEach { add(it) }
                                 }
                             }
                         }
