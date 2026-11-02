@@ -79,6 +79,9 @@ class CodeInsightState(
     var codeActions: CodeActionsPopup? by mutableStateOf(null)
         internal set
 
+    /** The ranges Ctrl+W walks through, from the last answer of the server (see `SmartSelection.kt`). */
+    internal var selectionSteps: SelectionSteps? = null
+
     /** The message shown, null when none. */
     var notice: InsightNotice? by mutableStateOf(null)
         private set
@@ -156,6 +159,7 @@ class CodeInsightState(
             scope.launch {
                 if (delayed) delay(USAGES_DELAY_MS)
                 countUsages(insight)
+                foldingFromServer(insight)
             }
     }
 
@@ -176,6 +180,15 @@ class CodeInsightState(
             settled = status == FeatureStatus.Ready || status == FeatureStatus.Unsupported
             if (!settled) delay(NOT_READY_RETRY_MS)
         }
+    }
+
+    // The regions only the server knows how to fold, once it counted the usages of the same text.
+    private suspend fun foldingFromServer(insight: DocumentInsight) {
+        val document = insight.document
+        val version = document.version
+        val result = askVersion(insight.path, document) { servers, at -> servers.foldingRanges(insight.path, at) }
+        val ready = result?.takeIf { it.status == FeatureStatus.Ready && document.version == version }
+        ready?.let { document.folding.serverRegions(it.regions, document.lineCount) }
     }
 
     // --- Hover

@@ -355,6 +355,12 @@ interface CodeIntelligence {
     /** The declarations of [path] at [version] (File Structure). */
     suspend fun outline(path: String, version: Int): OutlineResult = OutlineResult.NotReady
 
+    /** The regions of version [version] of [path] that can be folded. */
+    suspend fun foldingRanges(path: String, version: Int): FoldingRangesResult = FoldingRangesResult.NotReady
+
+    /** The ranges Ctrl+W selects around [at], innermost first. */
+    suspend fun selectionRanges(at: DocumentPosition): SelectionRangesResult = SelectionRangesResult.NotReady
+
     /** The declarations of the session's project named like [query] (Go to Symbol). */
     suspend fun workspaceSymbols(query: String): WorkspaceSymbolsResult = WorkspaceSymbolsResult.NotReady
 }

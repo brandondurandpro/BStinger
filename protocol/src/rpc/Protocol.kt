@@ -416,6 +416,12 @@ enum class Method(
     /** Declarations of a document, nested. */
     LspOutline("lsp/outline"),
 
+    /** Regions of a document that can be folded. */
+    LspFoldingRanges("lsp/foldingRanges"),
+
+    /** Ranges to extend the selection to around a position. */
+    LspSelectionRanges("lsp/selectionRanges"),
+
     /** Declarations of the project matching a name. */
     LspWorkspaceSymbols("lsp/workspaceSymbols"),
 

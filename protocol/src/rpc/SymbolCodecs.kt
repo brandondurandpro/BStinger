@@ -3,12 +3,17 @@ package org.example.kotlineditor.rpc
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.example.kotlineditor.model.FeatureStatus
+import org.example.kotlineditor.model.FoldingRangesResult
 import org.example.kotlineditor.model.OutlineResult
+import org.example.kotlineditor.model.SelectionRangesResult
 import org.example.kotlineditor.model.WorkspaceSymbol
 import org.example.kotlineditor.model.WorkspaceSymbolsResult
 
@@ -58,4 +63,39 @@ fun JsonElement.workspaceSymbolsResult(): WorkspaceSymbolsResult {
 private fun JsonObject.featureStatus(): FeatureStatus {
     val name = string(STATUS)
     return FeatureStatus.entries.firstOrNull { it.name == name } ?: FeatureStatus.NotReady
+}
+
+/** A selection ranges answer. */
+fun SelectionRangesResult.toJson(): JsonObject =
+    buildJsonObject {
+        put(STATUS, status.name)
+        put("ranges", JsonArray(ranges.map { it.toJson() }))
+    }
+
+/** Reads a selection ranges answer. */
+fun JsonElement.selectionRangesResult(): SelectionRangesResult {
+    val fields = jsonObject
+    val ranges = fields.getValue("ranges").jsonArray.map { it.textRange() }
+    return SelectionRangesResult(fields.featureStatus(), ranges)
+}
+
+/** A folding ranges answer: each region as [start, end]. */
+fun FoldingRangesResult.toJson(): JsonObject =
+    buildJsonObject {
+        put(STATUS, status.name)
+        put(
+            "regions",
+            JsonArray(regions.map { (start, end) -> JsonArray(listOf(JsonPrimitive(start), JsonPrimitive(end))) }),
+        )
+    }
+
+/** Reads a folding ranges answer. */
+fun JsonElement.foldingRangesResult(): FoldingRangesResult {
+    val fields = jsonObject
+    val regions =
+        fields.getValue("regions").jsonArray.associate { region ->
+            val bounds = region.jsonArray
+            bounds[0].jsonPrimitive.int to bounds[1].jsonPrimitive.int
+        }
+    return FoldingRangesResult(fields.featureStatus(), regions)
 }

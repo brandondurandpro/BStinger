@@ -13,9 +13,22 @@ import org.example.kotlineditor.syntax.Language
  * lines: without any fold both are the same and no mapping is allocated.
  */
 @Stable
+@Suppress("TooManyFunctions")
 class FoldingModel(private val document: Document) {
-    /** Start line -> end line of every foldable region, recomputed in the background after edits. */
-    var regions: Map<Int, Int> by mutableStateOf(emptyMap())
+    /**
+     * Start line -> end line of every foldable region: the editor's own, set as it recomputes them in the background
+     * after edits, and those only the language server knows (see [serverRegions]).
+     */
+    var regions: Map<Int, Int>
+        get() = merged
+        set(value) {
+            local = value
+        }
+
+    private var local by mutableStateOf(emptyMap<Int, Int>())
+    private var fromServer by mutableStateOf(emptyMap<Int, Int>())
+    private var serverLineCount = -1
+    private val merged by derivedStateOf { withServerRegions(local, fromServer) }
 
     var folded: Set<Int> by mutableStateOf(emptySet())
         internal set
@@ -73,6 +86,16 @@ class FoldingModel(private val document: Document) {
      */
     fun onEdit() {
         if (folded.isNotEmpty() && document.lineCount != foldedForLineCount) folded = emptySet()
+        if (fromServer.isNotEmpty() && document.lineCount != serverLineCount) fromServer = emptyMap()
+    }
+
+    /**
+     * The regions the language server found when the document had [lineCount] lines (`use` statements, a heredoc…);
+     * dropped once lines are inserted or removed, until it sends them again.
+     */
+    fun serverRegions(regions: Map<Int, Int>, lineCount: Int) {
+        serverLineCount = lineCount
+        fromServer = if (lineCount == document.lineCount) regions else emptyMap()
     }
 
     companion object {
@@ -124,4 +147,13 @@ private fun visibleLines(folded: Set<Int>, regions: Map<Int, Int>, count: Int): 
         line = if (end != null && end > line) end + 1 else line + 1
     }
     return out.copyOf(n)
+}
+
+// The editor's regions, and those of the server that neither start nor end on the line of one of them: the server's
+// `function` line to `}` is the editor's `{` to `}`, shown once.
+private fun withServerRegions(local: Map<Int, Int>, server: Map<Int, Int>): Map<Int, Int> {
+    if (server.isEmpty()) return local
+    val localEnds = local.values.toHashSet()
+    val added = server.filter { (start, end) -> start !in local && end !in localEnds }
+    return if (added.isEmpty()) local else local + added
 }

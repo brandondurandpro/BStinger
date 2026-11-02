@@ -39,3 +39,31 @@ data class WorkspaceSymbolsResult(
         val NotReady = WorkspaceSymbolsResult(FeatureStatus.NotReady, emptyList())
     }
 }
+
+/** The ranges Ctrl+W selects one after the other around a position, innermost first. */
+data class SelectionRangesResult(
+    /** Whether a server answered. */
+    val status: FeatureStatus,
+    /** Each one contains the previous one. */
+    val ranges: List<TextRange>,
+) {
+    /** Answers shared by every client. */
+    companion object {
+        /** No server could answer. */
+        val NotReady = SelectionRangesResult(FeatureStatus.NotReady, emptyList())
+    }
+}
+
+/** The regions of a document the language server says can be folded: start line -> end line. */
+data class FoldingRangesResult(
+    /** Whether a server answered. */
+    val status: FeatureStatus,
+    /** Each one starts on its key line and ends on its value line, after it. */
+    val regions: Map<Int, Int>,
+) {
+    /** Answers shared by every client. */
+    companion object {
+        /** No server could answer. */
+        val NotReady = FoldingRangesResult(FeatureStatus.NotReady, emptyMap())
+    }
+}

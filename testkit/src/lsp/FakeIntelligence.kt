@@ -167,6 +167,67 @@ internal class FakeIntelligence(private val code: FakePhpCode) {
         }
     }
 
+    // Like phpactor: each declaration with a body, each docblock, and each run of `use` lines (kind imports).
+    fun foldingRanges(params: JsonElement?): JsonElement {
+        val uri = (params as? JsonObject)?.get("textDocument")?.jsonObject?.get("uri")?.jsonPrimitive?.contentOrNull
+        val lines = uri?.let { code.files[it] } ?: return JsonNull
+        val ranges = ArrayList<Pair<Int, Int>>()
+        code.declarations.filter { it.uri == uri && it.endLine > it.line }.forEach { ranges += it.line to it.endLine }
+        var docStart = -1
+        var useStart = -1
+        lines.forEachIndexed { index, line ->
+            val text = line.trim()
+            if (text.startsWith("/**")) docStart = index
+            if (text.endsWith("*/") && docStart in 0 until index) ranges += docStart to index
+            if (text.endsWith("*/")) docStart = -1
+            val isUse = text.startsWith("use ")
+            if (isUse && useStart < 0) useStart = index
+            if (!isUse && useStart in 0 until index - 1) ranges += useStart to index - 1
+            if (!isUse) useStart = -1
+        }
+        return buildJsonArray {
+            ranges.forEach { (start, end) ->
+                add(
+                    buildJsonObject {
+                        put("startLine", start)
+                        put("endLine", end)
+                    },
+                )
+            }
+        }
+    }
+
+    // Around the first position: the word, the line without its indentation, the declarations around it (their
+    // whole text, innermost first), then the file, each one the parent of the previous one.
+    fun selectionRanges(params: JsonElement?): JsonElement {
+        val fields = params as? JsonObject ?: return JsonNull
+        val uri = fields["textDocument"]?.jsonObject?.get("uri")?.jsonPrimitive?.contentOrNull ?: return JsonNull
+        val position = (fields["positions"] as? JsonArray)?.firstOrNull()?.jsonObject ?: return JsonNull
+        val line = position["line"]?.jsonPrimitive?.int ?: return JsonNull
+        val column = position["character"]?.jsonPrimitive?.int ?: return JsonNull
+        val lines = code.files[uri].orEmpty()
+        val text = lines.getOrNull(line) ?: return JsonNull
+        val ranges = ArrayList<List<Int>>()
+        code.wordAt(uri, line, column)?.let { (word, start) -> ranges += listOf(line, start, line, start + word.length) }
+        val indent = text.length - text.trimStart().length
+        ranges += listOf(line, indent, line, text.trimEnd().length)
+        code.declarations
+            .filter { it.uri == uri && line in it.line..it.endLine }
+            .sortedBy { it.endLine - it.line }
+            .forEach { ranges += listOf(it.line, it.start, it.endLine, lines.getOrNull(it.endLine)?.length ?: 0) }
+        ranges += listOf(0, 0, lines.lastIndex.coerceAtLeast(0), lines.lastOrNull()?.length ?: 0)
+        var chain: JsonObject? = null
+        for (range in ranges.distinct().reversed()) {
+            val parent = chain
+            chain =
+                buildJsonObject {
+                    put("range", range(range[0], range[1], range[2], range[3]))
+                    parent?.let { put("parent", it) }
+                }
+        }
+        return buildJsonArray { chain?.let { add(it) } }
+    }
+
     // The declarations of every file whose name contains the query, ignoring case, as SymbolInformations.
     fun workspaceSymbols(params: JsonElement?): JsonElement {
         val query = (params as? JsonObject)?.get("query")?.jsonPrimitive?.contentOrNull.orEmpty().lowercase()

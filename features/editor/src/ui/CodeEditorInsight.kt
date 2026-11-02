@@ -17,6 +17,7 @@ import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isAltPressed
 import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.AwaitPointerEventScope
@@ -170,4 +171,10 @@ private fun listKey(key: Key, insight: CodeInsightState): Boolean {
         else -> return false
     }
     return true
+}
+
+/** Ctrl+W, which the language server's selection ranges answer in a file it serves. */
+internal fun isExtendSelection(event: KeyEvent): Boolean {
+    val plainCtrl = event.isCtrlPressed && !event.isShiftPressed && !event.isAltPressed
+    return event.type == KeyEventType.KeyDown && plainCtrl && event.key == Key.W
 }

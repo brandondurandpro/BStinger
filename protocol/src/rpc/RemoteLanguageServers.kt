@@ -7,6 +7,7 @@ import org.example.kotlineditor.model.CompletionResult
 import org.example.kotlineditor.model.DiagnosticsSnapshot
 import org.example.kotlineditor.model.DocumentPosition
 import org.example.kotlineditor.model.EditResult
+import org.example.kotlineditor.model.FoldingRangesResult
 import org.example.kotlineditor.model.FormatOptions
 import org.example.kotlineditor.model.HoverResult
 import org.example.kotlineditor.model.LanguageServerChoice
@@ -16,6 +17,7 @@ import org.example.kotlineditor.model.LocationsResult
 import org.example.kotlineditor.model.NavigationKind
 import org.example.kotlineditor.model.OutlineResult
 import org.example.kotlineditor.model.RenameTarget
+import org.example.kotlineditor.model.SelectionRangesResult
 import org.example.kotlineditor.model.SignatureHelpResult
 import org.example.kotlineditor.model.SymbolHighlight
 import org.example.kotlineditor.model.TextChange
@@ -154,6 +156,18 @@ class RemoteLanguageServers(private val client: RpcClient) : LanguageServers {
             }
         return result.outlineResult()
     }
+
+    override suspend fun foldingRanges(path: String, version: Int): FoldingRangesResult {
+        val result =
+            client.call(Method.LspFoldingRanges) {
+                put(PATH, path)
+                put(VERSION, version)
+            }
+        return result.foldingRangesResult()
+    }
+
+    override suspend fun selectionRanges(at: DocumentPosition): SelectionRangesResult =
+        client.call(Method.LspSelectionRanges) { putPosition(at) }.selectionRangesResult()
 
     override suspend fun workspaceSymbols(query: String): WorkspaceSymbolsResult =
         client.call(Method.LspWorkspaceSymbols) { put("query", query) }.workspaceSymbolsResult()

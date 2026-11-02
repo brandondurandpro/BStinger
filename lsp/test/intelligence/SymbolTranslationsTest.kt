@@ -1,6 +1,7 @@
 package org.example.kotlineditor.lsp.intelligence
 
 import kotlinx.serialization.json.Json
+import org.example.kotlineditor.model.TextRange
 import org.example.kotlineditor.syntax.Declaration
 import org.example.kotlineditor.syntax.DeclarationKind
 import java.nio.file.Paths
@@ -74,5 +75,43 @@ class SymbolTranslationsTest {
         assertEquals("Greeter", symbols.firstOrNull()?.container)
         assertEquals(DeclarationKind.Interface, symbols.getOrNull(1)?.declaration?.kind)
         assertEquals(0, symbols.getOrNull(1)?.declaration?.line)
+    }
+
+    private fun span(startLine: Int, startColumn: Int, endLine: Int, endColumn: Int) =
+        """{"start":{"line":$startLine,"character":$startColumn},"end":{"line":$endLine,"character":$endColumn}}"""
+
+    @Test
+    fun `selection ranges are the first range and its parents, innermost first`() {
+        val file = """{"range":${span(0, 0, 9, 0)}}"""
+        val method = """{"range":${span(2, 4, 5, 5)},"parent":$file}"""
+        val word = """{"range":${range(3, 15, 17)},"parent":$method}"""
+        val other = """{"range":${range(7, 0, 1)}}"""
+        val expected =
+            listOf(
+                TextRange(3, 15, 3, 17),
+                TextRange(2, 4, 5, 5),
+                TextRange(0, 0, 9, 0),
+            )
+        assertEquals(expected, selectionRangesOf(json("[$word,$other]")))
+    }
+
+    @Test
+    fun `a parent equal to its child or not holding it is skipped, and no answer gives no range`() {
+        val outer = """{"range":${span(0, 0, 9, 0)}}"""
+        val elsewhere = """{"range":${range(8, 0, 3)},"parent":$outer}"""
+        val same = """{"range":${range(3, 15, 17)},"parent":$elsewhere}"""
+        val word = """{"range":${range(3, 15, 17)},"parent":$same}"""
+        assertEquals(listOf(TextRange(3, 15, 3, 17), TextRange(0, 0, 9, 0)), selectionRangesOf(json("[$word]")))
+        assertEquals(emptyList(), selectionRangesOf(json("null")))
+        assertEquals(emptyList(), selectionRangesOf(json("[]")))
+    }
+
+    @Test
+    fun `folding ranges keep the multi-line ones, the longest of those starting on the same line`() {
+        val answer =
+            """[{"startLine":4,"endLine":6,"kind":"imports"},{"startLine":8,"endLine":11},""" +
+                """{"startLine":8,"endLine":9},{"startLine":3,"endLine":3},{"endLine":5},{"startLine":12,"endLine":10}]"""
+        assertEquals(mapOf(4 to 6, 8 to 11), foldingRegionsOf(json(answer)))
+        assertEquals(emptyMap(), foldingRegionsOf(json("null")))
     }
 }

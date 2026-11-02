@@ -34,12 +34,14 @@ import org.example.kotlineditor.model.EditResult
 import org.example.kotlineditor.model.FeatureStatus
 import org.example.kotlineditor.model.FileChange
 import org.example.kotlineditor.model.FileDiagnostics
+import org.example.kotlineditor.model.FoldingRangesResult
 import org.example.kotlineditor.model.FormatOptions
 import org.example.kotlineditor.model.HoverResult
 import org.example.kotlineditor.model.LocationsResult
 import org.example.kotlineditor.model.NavigationKind
 import org.example.kotlineditor.model.OutlineResult
 import org.example.kotlineditor.model.RenameTarget
+import org.example.kotlineditor.model.SelectionRangesResult
 import org.example.kotlineditor.model.SignatureHelpResult
 import org.example.kotlineditor.model.SourceLocation
 import org.example.kotlineditor.model.SymbolHighlight
@@ -194,6 +196,44 @@ class CodeIntelligenceService internal constructor(
             ->
             val params = buildJsonObject { putJsonObject(TEXT_DOCUMENT) { put(URI, document.uri) } }
             OutlineResult(FeatureStatus.Ready, outlineOf(request("textDocument/documentSymbol", params)))
+        }
+    }
+
+    /** The regions of version [version] of [path] that can be folded. */
+    suspend fun foldingRanges(session: String, path: String, version: Int): FoldingRangesResult {
+        val unsupported = FoldingRangesResult(FeatureStatus.Unsupported, emptyMap())
+        return ask(session, path, version, "foldingRangeProvider", FoldingRangesResult.NotReady, unsupported) {
+                document,
+                request,
+            ->
+            val params = buildJsonObject { putJsonObject(TEXT_DOCUMENT) { put(URI, document.uri) } }
+            FoldingRangesResult(FeatureStatus.Ready, foldingRegionsOf(request("textDocument/foldingRange", params)))
+        }
+    }
+
+    /** The ranges Ctrl+W selects around [at], innermost first. */
+    suspend fun selectionRanges(session: String, at: DocumentPosition): SelectionRangesResult {
+        val unsupported = SelectionRangesResult(FeatureStatus.Unsupported, emptyList())
+        return ask(
+            session,
+            at.path,
+            at.version,
+            "selectionRangeProvider",
+            SelectionRangesResult.NotReady,
+            unsupported,
+        ) {
+                document,
+                request,
+            ->
+            val params =
+                buildJsonObject {
+                    putJsonObject(TEXT_DOCUMENT) { put(URI, document.uri) }
+                    put("positions", JsonArray(listOf(position(at.line, at.column))))
+                }
+            SelectionRangesResult(
+                FeatureStatus.Ready,
+                selectionRangesOf(request("textDocument/selectionRange", params)),
+            )
         }
     }
 

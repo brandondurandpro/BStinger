@@ -8,6 +8,8 @@ import org.example.kotlineditor.model.WorkspaceSymbol
 import org.example.kotlineditor.syntax.Declaration
 import org.example.kotlineditor.syntax.DeclarationKind
 
+private const val RANGE = "range"
+
 // LSP SymbolKind values, as File Structure and Go to Symbol show them.
 private val CLASS_KINDS = setOf(5, 10, 23)
 private const val INTERFACE_KIND = 11
@@ -45,7 +47,7 @@ fun workspaceSymbolsOf(answer: JsonElement?): List<WorkspaceSymbol> =
     (answer as? JsonArray).objects().mapNotNull { symbol ->
         val location = symbol.obj(LOCATION)
         val path = location?.string("uri")?.let(::pathOfUri)
-        val range = location?.get("range").textRange() ?: TextRange(0, 0, 0, 0)
+        val range = location?.get(RANGE).textRange() ?: TextRange(0, 0, 0, 0)
         val declaration = declarationOf(symbol, range, 0)
         val container = symbol.string("containerName")?.takeIf { it.isNotBlank() }
         if (path == null || declaration == null) null else WorkspaceSymbol(path, declaration, container)
@@ -56,7 +58,7 @@ private fun JsonArray?.objects(): List<JsonObject> = orEmpty().mapNotNull { it a
 // Where the name is: the selection range of a DocumentSymbol, else the range of a SymbolInformation's location.
 private fun nameRange(symbol: JsonObject): TextRange? {
     val selection = symbol["selectionRange"].textRange()
-    return selection ?: symbol.obj(LOCATION)?.get("range").textRange()
+    return selection ?: symbol.obj(LOCATION)?.get(RANGE).textRange()
 }
 
 // A SymbolInformation of a flat list is one level under its container.
@@ -82,3 +84,39 @@ private fun kindOf(kind: Int?): DeclarationKind? =
         in PROPERTY_KINDS -> DeclarationKind.Property
         else -> null
     }
+
+/**
+ * The ranges of the first SelectionRange of a selectionRange answer, innermost first (its parents in order); a range
+ * equal to the previous one or not containing it is left out.
+ */
+fun selectionRangesOf(answer: JsonElement?): List<TextRange> {
+    val found = ArrayList<TextRange>()
+    var current = (answer as? JsonArray)?.firstOrNull() as? JsonObject
+    while (current != null) {
+        val range = current[RANGE].textRange()
+        val previous = found.lastOrNull()
+        range?.takeIf { grows(it, previous) }?.let { found += it }
+        current = current.obj("parent")
+    }
+    return found
+}
+
+// A parent range is one more step when it holds the previous one and is larger.
+private fun grows(range: TextRange, previous: TextRange?): Boolean {
+    if (previous == null) return true
+    return range != previous && contains(range, previous)
+}
+
+/**
+ * The regions of a foldingRange answer, start line -> end line; a range on one line is left out, and of two
+ * starting on the same line the longer one is kept.
+ */
+fun foldingRegionsOf(answer: JsonElement?): Map<Int, Int> {
+    val regions = HashMap<Int, Int>()
+    for (range in (answer as? JsonArray).objects()) {
+        val start = range.int("startLine") ?: -1
+        val end = range.int("endLine") ?: -1
+        if (start >= 0 && end > start) regions[start] = maxOf(regions[start] ?: 0, end)
+    }
+    return regions
+}

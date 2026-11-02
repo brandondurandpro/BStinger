@@ -168,9 +168,7 @@ internal fun ProjectPopups(project: ProjectState, onClose: () -> Unit) {
             document?.let { FileStructurePopup(it, onClose = onClose) { project.serverOutline(it) } }
         }
 
-        null -> {
-            Unit
-        }
+        null -> {}
     }
 }
 

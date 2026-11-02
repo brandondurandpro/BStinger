@@ -285,6 +285,8 @@ object FakeLanguageServer {
                 "textDocument/documentHighlight" -> reply(id, intelligence().highlights(message["params"]))
                 "textDocument/documentSymbol" -> reply(id, intelligence().documentSymbols(message["params"]))
                 "workspace/symbol" -> reply(id, intelligence().workspaceSymbols(message["params"]))
+                "textDocument/selectionRange" -> reply(id, intelligence().selectionRanges(message["params"]))
+                "textDocument/foldingRange" -> reply(id, intelligence().foldingRanges(message["params"]))
                 "textDocument/signatureHelp" -> reply(id, intelligence().signatureHelp(message["params"]))
                 "textDocument/prepareRename" -> reply(id, intelligence().prepareRename(message["params"]))
                 "textDocument/rename" -> reply(id, intelligence().rename(message["params"]))
@@ -358,6 +360,8 @@ object FakeLanguageServer {
                     put("documentHighlightProvider", provided("documentHighlight"))
                     put("documentSymbolProvider", provided("documentSymbol"))
                     put("workspaceSymbolProvider", provided("workspaceSymbol"))
+                    put("selectionRangeProvider", provided("selectionRange"))
+                    put("foldingRangeProvider", provided("foldingRange"))
                     put("documentFormattingProvider", provided("formatting"))
                     put("documentRangeFormattingProvider", provided("rangeFormatting"))
                     if (provided("rename")) putJsonObject("renameProvider") { put("prepareProvider", true) }

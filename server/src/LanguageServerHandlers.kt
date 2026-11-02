@@ -109,6 +109,12 @@ private fun codeIntelligenceHandlers(services: LocalServices): Map<Method, Handl
         Method.LspOutline to {
             intelligence().outline(session, params.string(PATH), params.int(VERSION)).toJson()
         },
+        Method.LspFoldingRanges to {
+            intelligence().foldingRanges(session, params.string(PATH), params.int(VERSION)).toJson()
+        },
+        Method.LspSelectionRanges to {
+            intelligence().selectionRanges(session, params.documentPosition()).toJson()
+        },
         Method.LspWorkspaceSymbols to { intelligence().workspaceSymbols(session, params.string("query")).toJson() },
         Method.LspDiagnostics to { intelligence().diagnostics(session, params.long("since")).toJson() },
         Method.LspPrepareRename to { intelligence().prepareRename(session, params.documentPosition()).toJson() },

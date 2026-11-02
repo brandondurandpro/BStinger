@@ -66,6 +66,8 @@ internal val TEXT_DOCUMENT_CAPABILITIES: JsonObject =
         putJsonObject("references") {}
         putJsonObject("documentHighlight") {}
         putJsonObject("documentSymbol") { put("hierarchicalDocumentSymbolSupport", true) }
+        putJsonObject("selectionRange") {}
+        putJsonObject("foldingRange") { put("lineFoldingOnly", true) }
         put("signatureHelp", SIGNATURE_HELP)
         putJsonObject("rename") { put("prepareSupport", true) }
         putJsonObject("formatting") {}

@@ -310,8 +310,8 @@ fun ComposeUiTest.awaitTag(tag: String, timeout: Long = TIMEOUT, unmerged: Boole
 }
 
 @OptIn(ExperimentalTestApi::class)
-fun ComposeUiTest.awaitNoTag(tag: String, timeout: Long = TIMEOUT) {
-    waitUntil(timeoutMillis = timeout) { onAllNodes(hasTestTag(tag)).fetchSemanticsNodes().isEmpty() }
+fun ComposeUiTest.awaitNoTag(tag: String, timeout: Long = TIMEOUT, unmerged: Boolean = false) {
+    waitUntil(timeoutMillis = timeout) { onAllNodes(hasTestTag(tag), unmerged).fetchSemanticsNodes().isEmpty() }
 }
 
 @OptIn(ExperimentalTestApi::class)
