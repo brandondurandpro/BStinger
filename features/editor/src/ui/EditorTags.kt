@@ -109,6 +109,9 @@ object EditorTags {
     /** A problem underlined on [line], by severity (`Error`, `Warning`...). */
     fun diagnostic(line: Int, severity: String) = "editor.diagnostic:$line:$severity"
 
+    /** Code lens [at] (from the left) at the end of [line]. */
+    fun codeLens(line: Int, at: Int) = "editor.codeLens:$line:$at"
+
     /** The "3 usages" hint at the end of [line]. */
     fun usageHint(line: Int) = "editor.usages:$line"
 

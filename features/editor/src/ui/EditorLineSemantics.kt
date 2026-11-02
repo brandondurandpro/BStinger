@@ -89,6 +89,7 @@ internal fun EditorLineSemantics(
                         insight.highlights[index],
                         link,
                         insight.semantic[index],
+                        insight.lenses[index],
                     )
                 LineNode(
                     row,
@@ -177,6 +178,7 @@ internal class LineInsight(
     val highlights: List<LineHighlight>?,
     val link: Pair<Int, Int>?,
     val semantic: LineSemantic? = null,
+    val lenses: List<LineLens>? = null,
 )
 
 // The problems, occurrences and usage hint of a line, where the canvas draws them: tests find and click them.
@@ -216,6 +218,12 @@ private fun InsightNodes(index: Int, line: ScreenLine, tab: EditorTab, metrics: 
         Node(start, end - start, EditorTags.symbolHighlight(index, highlight.kind.name))
     }
     insight.hint?.let { hint -> Node(hintColumn(line), hint.length, EditorTags.usageHint(index), hint) }
+    insight.lenses?.let { lenses ->
+        val columns = lensColumns(line, insight.hint, lenses)
+        lenses.forEachIndexed { at, lens ->
+            Node(columns[at], lens.title.length, EditorTags.codeLens(index, at), lens.title)
+        }
+    }
     line.inlays?.let { inlays ->
         for (at in 0 until inlays.size) {
             val column = inlays.columns[at]

@@ -352,6 +352,12 @@ interface CodeIntelligence {
     /** The edits of action [index] of the list [token] (running its command on the server when it has one). */
     suspend fun applyCodeAction(token: String, index: Int): EditResult = EditResult.NotReady
 
+    /** The code lenses of [path] at [version] (`2 implementations`, `Run test`). */
+    suspend fun codeLenses(path: String, version: Int): CodeLensesResult = CodeLensesResult.NotReady
+
+    /** Runs the command of lens [index] of the list [token] on the server: the edits it asked for. */
+    suspend fun runCodeLens(token: String, index: Int): EditResult = EditResult.NotReady
+
     /** The declarations of [path] at [version] (File Structure). */
     suspend fun outline(path: String, version: Int): OutlineResult = OutlineResult.NotReady
 

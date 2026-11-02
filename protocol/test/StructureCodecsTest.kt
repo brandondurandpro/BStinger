@@ -1,5 +1,8 @@
 package org.example.kotlineditor.rpc
 
+import org.example.kotlineditor.model.CodeLensAction
+import org.example.kotlineditor.model.CodeLensInfo
+import org.example.kotlineditor.model.CodeLensesResult
 import org.example.kotlineditor.model.FeatureStatus
 import org.example.kotlineditor.model.HierarchyItem
 import org.example.kotlineditor.model.HierarchyResult
@@ -13,7 +16,7 @@ import org.example.kotlineditor.model.TextRange
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-/** The answers of semantic tokens, inlay hints and hierarchies go over the protocol and come back the same. */
+/** The answers of semantic tokens, inlay hints, hierarchies and code lenses go over the protocol and come back the same. */
 class StructureCodecsTest {
     @Test
     fun `semantic tokens travel with their type and modifier names`() {
@@ -42,5 +45,19 @@ class StructureCodecsTest {
             )
         val result = HierarchyResult(FeatureStatus.Ready, listOf(item, item.copy(detail = "Greeter")))
         assertEquals(result, result.toJson().hierarchyResult())
+    }
+
+    @Test
+    fun `code lenses travel with their action and the places they list`() {
+        val place = SourceLocation("/p/Greeter.php", TextRange(1, 6, 1, 13), "class Greeter implements Polite")
+        val lenses =
+            listOf(
+                CodeLensInfo(TextRange(1, 10, 1, 16), "1 implementation", CodeLensAction.ShowLocations, listOf(place)),
+                CodeLensInfo(TextRange(3, 9, 3, 14), "Add docblock", CodeLensAction.Run),
+                CodeLensInfo(TextRange(5, 0, 5, 3), "Informs", CodeLensAction.None),
+            )
+        val result = CodeLensesResult(FeatureStatus.Ready, "t-1", lenses)
+        assertEquals(result, result.toJson().codeLensesResult())
+        assertEquals(CodeLensesResult.NotReady, CodeLensesResult.NotReady.toJson().codeLensesResult())
     }
 }

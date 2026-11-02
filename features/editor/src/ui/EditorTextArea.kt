@@ -66,7 +66,8 @@ internal fun EditorTextArea(
         // Like a click: the line under the mouse, wherever on it (the hint is after the end of its text).
         val pos = position?.let { metrics.hit(it, tab.verticalScroll, tab.horizontalScroll, document) }
         val onHint = pos != null && hintAt(hintTarget, metrics, tab, pos, position) != null
-        insight?.hintUnderMouse = document.takeIf { onHint }
+        val onLens = pos != null && lensAt(hintTarget, metrics, tab, pos, position) != null
+        insight?.hintUnderMouse = document.takeIf { onHint || onLens }
     }
     Box(
         Modifier

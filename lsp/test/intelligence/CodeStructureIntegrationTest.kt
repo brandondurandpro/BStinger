@@ -9,6 +9,7 @@ import org.example.kotlineditor.lsp.provision.CandidateRegistry
 import org.example.kotlineditor.lsp.provision.LanguageServerCandidate
 import org.example.kotlineditor.lsp.provision.RuntimeDetector
 import org.example.kotlineditor.lsp.supervisor.SupervisorTimings
+import org.example.kotlineditor.model.CodeLensAction
 import org.example.kotlineditor.model.DocumentPosition
 import org.example.kotlineditor.model.FeatureStatus
 import org.example.kotlineditor.model.HierarchyDirection
@@ -299,5 +300,51 @@ class CodeStructureIntegrationTest {
         assertNotNull(shout, "${result.items.map { it.label }}")
         val documentation = runBlocking { service.resolveCompletion(SESSION, result.token, shout.resolveIndex) }
         assertTrue(documentation.orEmpty().contains("function shout(string \$text)"), documentation)
+    }
+
+    @Test
+    fun `code lenses are resolved, and running one gives the edits its command asked for`() {
+        openMain()
+        val result = ready({ it.status }) { intelligence.codeLenses(SESSION, main, 1) }
+        // `shout` has no docblock: its lens came without a command, and was resolved.
+        val lens = result.lenses.singleOrNull()
+        assertEquals("Add docblock", lens?.title)
+        assertEquals(CodeLensAction.Run, lens?.action)
+        assertEquals(3, lens?.range?.startLine)
+        val edit = runBlocking { intelligence.runCodeLens(SESSION, result.token, 0) }
+        assertEquals(FeatureStatus.Ready, edit.status)
+        val change = edit.changes.singleOrNull()
+        assertEquals(main, change?.path)
+        assertEquals(listOf("/**", " * TODO", " */", "").joinToString("\n"), change?.edits?.singleOrNull()?.text)
+        // A list replaced by a newer one is gone.
+        val newer = runBlocking { intelligence.codeLenses(SESSION, main, 1) }
+        val stale = runBlocking { intelligence.runCodeLens(SESSION, result.token, 0) }
+        assertEquals("This lens is no longer available", stale.message)
+        assertTrue(newer.token != result.token)
+    }
+
+    @Test
+    fun `the implementations lens of an interface lists the classes implementing it`() {
+        openMain()
+        val polite = project.resolve("Polite.php").toString()
+        service.openDocument(SESSION, project.toString(), polite, 1, POLITE)
+        val result = ready({ it.status }) { intelligence.codeLenses(SESSION, polite, 1) }
+        val lens = result.lenses.singleOrNull()
+        assertEquals("1 implementation", lens?.title)
+        assertEquals(CodeLensAction.ShowLocations, lens?.action)
+        val location = lens?.locations?.singleOrNull()
+        assertEquals(project.resolve("Greeter.php").toString(), location?.path)
+        assertEquals("class Greeter implements Polite", location?.preview)
+    }
+
+    @Test
+    fun `without code lenses the server says so`() {
+        options = arrayOf("--without", "codeLens")
+        openMain()
+        ready({ it.status }) { intelligence.outline(SESSION, main, 1) }
+        val result = runBlocking { intelligence.codeLenses(SESSION, main, 1) }
+        assertEquals(FeatureStatus.Unsupported, result.status)
+        val run = runBlocking { intelligence.runCodeLens(SESSION, "unknown", 0) }
+        assertEquals("This lens is no longer available", run.message)
     }
 }

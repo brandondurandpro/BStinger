@@ -31,6 +31,8 @@ private const val LANGUAGE = "language"
 private const val PROJECT = "project"
 private const val PATH = "path"
 private const val VERSION = "version"
+private const val TOKEN = "token"
+private const val INDEX = "index"
 
 /** The `lsp/` methods: the language servers of [LocalServices.languageServers]. */
 internal fun languageServerHandlers(services: LocalServices): Map<Method, Handler> =
@@ -83,7 +85,7 @@ internal fun languageServerHandlers(services: LocalServices): Map<Method, Handle
         },
         Method.LspResolveCompletion to {
             val documentation =
-                services.languageServers.resolveCompletion(session, params.string("token"), params.int("index"))
+                services.languageServers.resolveCompletion(session, params.string(TOKEN), params.int(INDEX))
             buildJsonObject { documentation?.let { put("documentation", it) } }
         },
     ) +
@@ -127,7 +129,13 @@ private fun codeIntelligenceHandlers(services: LocalServices): Map<Method, Handl
             intelligence().codeActions(session, params.string(PATH), params.int(VERSION), range).toJson()
         },
         Method.LspApplyCodeAction to {
-            intelligence().applyCodeAction(session, params.string("token"), params.int("index")).toJson()
+            intelligence().applyCodeAction(session, params.string(TOKEN), params.int(INDEX)).toJson()
+        },
+        Method.LspCodeLenses to {
+            intelligence().codeLenses(session, params.string(PATH), params.int(VERSION)).toJson()
+        },
+        Method.LspRunCodeLens to {
+            intelligence().runCodeLens(session, params.string(TOKEN), params.int(INDEX)).toJson()
         },
     )
 }

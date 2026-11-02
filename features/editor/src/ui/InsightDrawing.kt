@@ -59,6 +59,8 @@ internal class InsightMarks(insight: DocumentInsight?, val link: LinkTarget?, do
 
     val semantic: Map<Int, LineSemantic> = semanticByLine(insight?.semanticTokens.orEmpty())
 
+    val lenses: Map<Int, List<LineLens>> = lensesByLine(insight?.codeLenses.orEmpty())
+
     /** Whether the language server's occurrences replace the word-based ones. */
     val hasHighlights: Boolean get() = highlights.isNotEmpty()
 

@@ -26,6 +26,7 @@ import org.example.kotlineditor.lsp.jsonrpc.LspConnectionClosedException
 import org.example.kotlineditor.lsp.jsonrpc.LspResponseException
 import org.example.kotlineditor.lsp.supervisor.ManagedServer
 import org.example.kotlineditor.model.CodeActionsResult
+import org.example.kotlineditor.model.CodeLensesResult
 import org.example.kotlineditor.model.Diagnostic
 import org.example.kotlineditor.model.DiagnosticsSnapshot
 import org.example.kotlineditor.model.DocumentPosition
@@ -108,6 +109,12 @@ class CodeIntelligenceService internal constructor(
     private val requests = ServerRequests(documents, serversOf, settings)
     private val structure = DocumentStructureRequests(documents, requests)
     private val hierarchy = HierarchyRequests(requests) { withPreviews(it) }
+    private val lenses =
+        CodeLensRequests(
+            requests,
+            run = { server, command -> runSafely { run(server, command) } },
+            withPreviews = { withPreviews(it) },
+        )
     private val diagnostics = ConcurrentHashMap<String, Published>()
     private val diagnosticsVersion = MutableStateFlow(1L)
     private val offered = ConcurrentHashMap<String, OfferedActions>()
@@ -537,10 +544,21 @@ class CodeIntelligenceService internal constructor(
             list?.actions?.getOrNull(
                 index,
             ) ?: return EditResult(FeatureStatus.Ready, emptyList(), "This action is no longer available")
-        return try {
-            withTimeoutOrNull(
-                settings.timeoutMs,
-            ) { run(list.server, resolved(list.server, action)) } ?: EditResult.NotReady
+        return runSafely { run(list.server, resolved(list.server, action)) }
+    }
+
+    /** The code lenses of version [version] of [path]. */
+    suspend fun codeLenses(session: String, path: String, version: Int): CodeLensesResult =
+        lenses.codeLenses(session, path, version)
+
+    /** Runs the command of lens [index] of the list [token]: the edits it asked for. */
+    suspend fun runCodeLens(session: String, token: String, index: Int): EditResult =
+        lenses.runCodeLens(session, token, index)
+
+    // The edits [block] gets from a server in time; not ready when it cannot answer, its message when it refuses.
+    private suspend fun runSafely(block: suspend () -> EditResult): EditResult =
+        try {
+            withTimeoutOrNull(settings.timeoutMs) { block() } ?: EditResult.NotReady
         } catch (_: NotReadyException) {
             EditResult.NotReady
         } catch (_: LspConnectionClosedException) {
@@ -548,7 +566,6 @@ class CodeIntelligenceService internal constructor(
         } catch (failure: LspResponseException) {
             refusedEdit(failure)
         }
-    }
 
     // A code action with neither edit nor command is resolved first, when the server can.
     private suspend fun resolved(server: ManagedServer, action: JsonObject): JsonObject {
@@ -621,6 +638,7 @@ class CodeIntelligenceService internal constructor(
     /** [session] ended. */
     internal fun released(session: String) {
         offered.remove(session)
+        lenses.released(session)
         diagnosticsVersion.value++
     }
 

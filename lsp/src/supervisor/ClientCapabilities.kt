@@ -53,6 +53,7 @@ internal val TEXT_DOCUMENT_CAPABILITIES: JsonObject =
             put(DYNAMIC_REGISTRATION, false)
             put("didSave", true)
         }
+        putJsonObject("codeLens") { put(DYNAMIC_REGISTRATION, false) }
         putJsonObject("publishDiagnostics") {
             put("relatedInformation", false)
             putJsonObject("tagSupport") {

@@ -9,6 +9,7 @@ import androidx.compose.runtime.setValue
 import kotlinx.coroutines.Job
 import org.example.kotlineditor.model.CodeActionInfo
 import org.example.kotlineditor.model.CodeIntelligence
+import org.example.kotlineditor.model.CodeLensInfo
 import org.example.kotlineditor.model.Diagnostic
 import org.example.kotlineditor.model.DiagnosticSeverity
 import org.example.kotlineditor.model.EditResult
@@ -56,6 +57,10 @@ class DocumentInsight internal constructor(val document: Document) {
     var usageCounts: List<UsageCount> by mutableStateOf(emptyList())
         internal set
 
+    /** The code lenses (`2 implementations`, `Run test`), in document order. */
+    var codeLenses: List<CodeLensInfo> by mutableStateOf(emptyList())
+        internal set
+
     /** The semantic tokens (what each word is), in the order of the text. */
     var semanticTokens: List<SemanticToken> by mutableStateOf(emptyList())
         internal set
@@ -69,6 +74,10 @@ class DocumentInsight internal constructor(val document: Document) {
         internal set
 
     internal var path: String = ""
+
+    /** Identifies [codeLenses] on the server, to run one; a newer list has another. */
+    var codeLensToken: String = ""
+        internal set
     internal var usagesJob: Job? = null
 
     /** Errors among [diagnostics]. */
@@ -86,6 +95,7 @@ class DocumentInsight internal constructor(val document: Document) {
                 )?.let { diagnostic.copy(range = it) }
             }
         usageCounts = usageCounts.mapNotNull { count -> shifted(count.range, change)?.let { count.copy(range = it) } }
+        codeLenses = codeLenses.mapNotNull { lens -> shifted(lens.range, change)?.let { lens.copy(range = it) } }
         inlayHints = inlayHints.mapNotNull { shiftedHint(it, change) }
         semanticTokens = semanticTokens.mapNotNull { shiftedToken(it, change) }
         highlights = emptyList()

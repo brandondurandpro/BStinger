@@ -3,6 +3,7 @@ package org.example.kotlineditor.rpc
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import org.example.kotlineditor.model.CodeActionsResult
+import org.example.kotlineditor.model.CodeLensesResult
 import org.example.kotlineditor.model.CompletionResult
 import org.example.kotlineditor.model.DiagnosticsSnapshot
 import org.example.kotlineditor.model.DocumentPosition
@@ -36,6 +37,8 @@ private const val LANGUAGE = "language"
 private const val PROJECT = "project"
 private const val PATH = "path"
 private const val VERSION = "version"
+private const val TOKEN = "token"
+private const val INDEX = "index"
 
 /** [LanguageServers] of the server. */
 @Suppress("TooManyFunctions")
@@ -121,8 +124,8 @@ class RemoteLanguageServers(private val client: RpcClient) : LanguageServers {
     override suspend fun resolveCompletion(token: String, index: Int): String? {
         val result =
             client.call(Method.LspResolveCompletion) {
-                put("token", token)
-                put("index", index)
+                put(TOKEN, token)
+                put(INDEX, index)
             }
         return result.jsonObject.stringOrNull("documentation")
     }
@@ -193,6 +196,24 @@ class RemoteLanguageServers(private val client: RpcClient) : LanguageServers {
                 put(VERSION, version)
             }
         return result.semanticTokensResult()
+    }
+
+    override suspend fun codeLenses(path: String, version: Int): CodeLensesResult {
+        val result =
+            client.call(Method.LspCodeLenses) {
+                put(PATH, path)
+                put(VERSION, version)
+            }
+        return result.codeLensesResult()
+    }
+
+    override suspend fun runCodeLens(token: String, index: Int): EditResult {
+        val result =
+            client.call(Method.LspRunCodeLens) {
+                put(TOKEN, token)
+                put(INDEX, index)
+            }
+        return result.editResult()
     }
 
     override suspend fun inlayHints(path: String, version: Int): InlayHintsResult {
@@ -267,8 +288,8 @@ class RemoteLanguageServers(private val client: RpcClient) : LanguageServers {
     override suspend fun applyCodeAction(token: String, index: Int): EditResult {
         val result =
             client.call(Method.LspApplyCodeAction) {
-                put("token", token)
-                put("index", index)
+                put(TOKEN, token)
+                put(INDEX, index)
             }
         return result.editResult()
     }

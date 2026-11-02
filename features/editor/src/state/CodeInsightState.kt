@@ -185,6 +185,7 @@ class CodeInsightState(
             scope.launch {
                 if (delayed) delay(USAGES_DELAY_MS)
                 countUsages(insight)
+                codeLensesFromServer(insight)
                 foldingFromServer(insight)
                 inlayHintsFromServer(insight)
                 semanticTokensFromServer(insight)
@@ -495,7 +496,7 @@ class CodeInsightState(
         return if (name != null) "Usages of $name  $usages" else usages
     }
 
-    private fun showLocations(title: String, locations: List<SourceLocation>, document: Document, anchor: TextPos) {
+    internal fun showLocations(title: String, locations: List<SourceLocation>, document: Document, anchor: TextPos) {
         val names = locations.map { host.relativePath(it.path) }
         this.locations = LocationsPopup(title, locations, document, anchor, names)
     }

@@ -425,6 +425,12 @@ enum class Method(
     /** Semantic tokens of a document. */
     LspSemanticTokens("lsp/semanticTokens"),
 
+    /** Code lenses of a document. */
+    LspCodeLenses("lsp/codeLenses"),
+
+    /** Runs the command of a code lens. */
+    LspRunCodeLens("lsp/runCodeLens"),
+
     /** Inlay hints of a document. */
     LspInlayHints("lsp/inlayHints"),
 

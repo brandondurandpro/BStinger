@@ -124,7 +124,7 @@ fun CodeInsightState.dismissCodeActions() {
     codeActions = null
 }
 
-private suspend fun CodeInsightState.applyResult(
+internal suspend fun CodeInsightState.applyResult(
     document: Document,
     anchor: TextPos,
     result: EditResult,

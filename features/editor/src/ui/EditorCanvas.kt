@@ -165,18 +165,15 @@ private fun DrawScope.drawRow(
             drawProblems(insight.problems[index], screenLine, metrics.charWidth, lineHeight)
             drawLink(insight.link, index, screenLine, metrics.charWidth, lineHeight)
         }
-        insight.hints[index]?.let { hint ->
-            // Folded, the usage hint goes after the placeholder.
-            val shown =
-                if (folded) {
-                    ScreenLine(
-                        line + " " + source.placeholder.orEmpty(),
-                        screenLine.inlays,
-                    )
-                } else {
-                    screenLine
-                }
-            drawUsageHint(cache.hint(hint), textX + hintColumn(shown) * metrics.charWidth, lineHeight)
+        // Folded, the usage hint and the lenses go after the placeholder.
+        val shown = if (folded) ScreenLine(line + " " + source.placeholder.orEmpty(), screenLine.inlays) else screenLine
+        val hint = insight.hints[index]
+        hint?.let { drawUsageHint(cache.hint(it), textX + hintColumn(shown) * metrics.charWidth, lineHeight) }
+        insight.lenses[index]?.let { lenses ->
+            val columns = lensColumns(shown, hint, lenses)
+            lenses.forEachIndexed { at, lens ->
+                drawUsageHint(cache.hint(lens.title), textX + columns[at] * metrics.charWidth, lineHeight)
+            }
         }
     }
 }

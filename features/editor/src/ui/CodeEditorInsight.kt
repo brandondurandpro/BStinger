@@ -35,6 +35,7 @@ import org.example.kotlineditor.state.Document
 import org.example.kotlineditor.state.EditorTab
 import org.example.kotlineditor.state.LinkTarget
 import org.example.kotlineditor.state.TextPos
+import org.example.kotlineditor.state.clickCodeLens
 import org.example.kotlineditor.state.screenLine
 import org.example.kotlineditor.state.toggleProblems
 
@@ -44,7 +45,8 @@ import org.example.kotlineditor.state.toggleProblems
 @Composable
 internal fun rememberInsightMarks(insight: CodeInsightState?, document: Document, link: LinkTarget?): InsightMarks {
     val shown = insight?.insightOf(document)
-    return remember(shown?.diagnostics, shown?.usageCounts, shown?.highlights, shown?.semanticTokens, link) {
+    val lenses = shown?.codeLenses
+    return remember(shown?.diagnostics, shown?.usageCounts, shown?.highlights, shown?.semanticTokens, lenses, link) {
         if (shown == null) InsightMarks.None else InsightMarks(shown, link, document)
     }
 }
@@ -139,7 +141,24 @@ internal fun hintAt(
     return declaration?.takeIf { onHint }
 }
 
-/** A click on the "3 usages" hint of a line shows the usages of its declaration; true when it was on one. */
+/** The code lens a click at [offset] (on the row of [pos]) runs, by its index in the document; null when none. */
+internal fun lensAt(target: HintTarget, metrics: EditorMetrics, tab: EditorTab, pos: TextPos, offset: Offset): Int? {
+    val lenses = target.marks.lenses[pos.line].orEmpty()
+    val columns = lensColumns(target.document.screenLine(pos.line), target.marks.hints[pos.line], lenses)
+    val origin = metrics.gutterPx + metrics.paddingPx - tab.horizontalScroll.offset
+    val hit =
+        lenses.indices.firstOrNull { at ->
+            val left = origin + columns[at] * metrics.charWidth
+            offset.x in left..left + lenses[at].title.length * metrics.charWidth
+        }
+    val lens = hit?.let { lenses[it] }?.takeIf { it.clickable }
+    return lens?.index?.takeIf { target.path != null }
+}
+
+/**
+ * A click on the "3 usages" hint of a line shows the usages of its declaration, one on a code lens runs it; true
+ * when it was on one.
+ */
 internal fun hintClicked(
     target: HintTarget,
     metrics: EditorMetrics,
@@ -147,6 +166,11 @@ internal fun hintClicked(
     pos: TextPos,
     offset: Offset,
 ): Boolean {
+    val lens = lensAt(target, metrics, tab, pos, offset)
+    if (lens != null) {
+        target.insight?.clickCodeLens(target.document, lens)
+        return true
+    }
     val declaration = hintAt(target, metrics, tab, pos, offset)
     val start = declaration?.let { TextPos(it.range.startLine, it.range.startColumn) }
     val path = target.path
