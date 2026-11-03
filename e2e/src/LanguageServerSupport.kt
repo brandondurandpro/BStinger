@@ -23,9 +23,10 @@ const val SERVER_START_MS = 60_000L
 
 /**
  * The PHP language servers of an e2e test: `fake`, a [org.example.kotlineditor.testkit.lsp.FakeLanguageServer]
- * started with [options], and `needs-node`, which needs Node.js and finds none.
+ * started with [options], and `needs-node`, which needs Node.js and finds none; with [alternative], also `other`,
+ * the same fake server under another name, to switch to.
  */
-class FakePhpServers(vararg options: String, idleStopMs: Long = 1_000) {
+class FakePhpServers(vararg options: String, idleStopMs: Long = 1_000, alternative: Boolean = false) {
     /** Choices and pids of the servers. */
     val data: Path = Files.createTempDirectory("kotlin-editor-lsp")
     private val fake =
@@ -50,6 +51,8 @@ class FakePhpServers(vararg options: String, idleStopMs: Long = 1_000) {
             requirements = listOf(Requirement(RuntimeKind.Node, "18")),
         )
 
+    private val other = fake.copy(id = OTHER, displayName = "otherphp")
+
     // No PHP nor Node.js: the fake server needs neither, and the other candidate is unavailable.
     private val nothingInstalled =
         RuntimeDetector(pathEnvironment = "", extraDirectories = { emptyList() }, probe = { _, _ -> null })
@@ -67,7 +70,11 @@ class FakePhpServers(vararg options: String, idleStopMs: Long = 1_000) {
         LanguageServerSettings(
             dataDirectory = data,
             toolsDirectory = data.resolve("tools"),
-            candidates = CandidateRegistry(nothingInstalled, listOf(fake, needsNode)),
+            candidates =
+            CandidateRegistry(
+                nothingInstalled,
+                listOfNotNull(fake, needsNode, other.takeIf { alternative }),
+            ),
             timings = timings,
             statusHoldMs = 5_000,
             sampleIntervalMs = 250,
@@ -87,6 +94,7 @@ class FakePhpServers(vararg options: String, idleStopMs: Long = 1_000) {
     companion object {
         const val FAKE = "fake"
         const val NEEDS_NODE = "needs-node"
+        const val OTHER = "other"
 
         /** Why the fake server gives no inlay hints, when started `--without inlayHint`. */
         const val WITHOUT_INLAY_HINTS = "fakephp gives inlay hints only with a licence."

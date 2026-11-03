@@ -179,6 +179,27 @@ class LanguageServersState(
         }
     }
 
+    /**
+     * The servers offered for [language], for the Settings dialog: on the welcome screen as in a project, whose
+     * own choice would apply.
+     */
+    suspend fun choiceFor(language: String): LanguageServerChoice =
+        servers.choice(language, declared?.project.orEmpty())
+
+    /**
+     * Uses [candidate] for [language] from the Settings dialog, as the choice dialog does: the running servers
+     * switch to it, and the banner asking for a server of [language] goes away. Throws when the server is out of
+     * reach.
+     */
+    suspend fun use(language: String, candidate: String) {
+        servers.choose(language, declared?.project.orEmpty(), candidate)
+        if (choice?.language == language) {
+            choice = null
+            choiceDialogOpen = false
+        }
+        declared?.let { send(it) }
+    }
+
     /** Opens the choice dialog for [language] again, to change the server. */
     fun offerChoice(language: String, project: String) =
         control {

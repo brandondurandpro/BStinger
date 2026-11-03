@@ -49,8 +49,9 @@ class AppState(
     telemetryOf: ((instanceId: String) -> Telemetry)? = null,
 ) : RemoteHost,
     ProjectPickerHost {
-    // Last preferences known: those of the open project are read live, these cover the welcome screen.
-    private var preferences: Map<String, String> = preferenceStore.load()
+    // Last preferences known: those of the open project are read live, these cover the welcome screen (where the
+    // Settings dialog changes the project settings here).
+    private var preferences: Map<String, String> by mutableStateOf(preferenceStore.load())
 
     /**
      * Services of the server currently shown: the embedded one, or a remote one. A state, so that what reads it
@@ -141,6 +142,42 @@ class AppState(
 
     /** Whether the user shares anonymous performance measures: asked on the welcome screen, changed in the menu. */
     val telemetry = TelemetryConsent(preferences, telemetryOf)
+
+    /** Whether a dialog of the whole window is open (Open Project, Settings): it keeps the keyboard. */
+    val dialogOpen: Boolean get() = projectPickerOpen || settings != null
+
+    /** The Settings dialog, null while it is closed. */
+    var settings: SettingsState? by mutableStateOf(null)
+        private set
+
+    /**
+     * How the inlay hints show: those of the open project, else the saved ones, which the next project opened
+     * takes (the Settings dialog changes them on the welcome screen).
+     */
+    var inlayHintsMode: InlayHintsMode
+        get() = openProject?.inlayHintsMode ?: InlayHintsMode.fromSaved(preferences[PreferenceKeys.INLAY_HINTS])
+        set(value) {
+            val project = openProject
+            if (project != null) {
+                project.inlayHintsMode = value
+            } else {
+                preferences = preferences + (PreferenceKeys.INLAY_HINTS to value.name)
+            }
+        }
+
+    /** "Always Select Opened File": the open project's, else the saved one (as [inlayHintsMode]). */
+    var autoSelectOpenedFile: Boolean
+        get() = openProject?.autoSelectOpenedFile ?: autoSelectOf(preferences)
+        set(value) {
+            val project = openProject
+            if (project != null) {
+                project.autoSelectOpenedFile = value
+            } else {
+                preferences = preferences + (PreferenceKeys.AUTO_SELECT_OPENED_FILE to value.toString())
+            }
+        }
+
+    private val openProject: ProjectState? get() = (screen as? Screen.Project)?.project
 
     /** Editor font size in points, shared by every editor (Alt+Shift+. / Alt+Shift+, / Ctrl+wheel). */
     var editorFontSize by mutableFloatStateOf(savedFontSize())
@@ -410,6 +447,21 @@ class AppState(
 
     fun resetEditorZoom() {
         editorFontSize = DEFAULT_EDITOR_FONT_SIZE
+    }
+
+    /** Opens the Settings dialog on [category], or on its first one. */
+    fun openSettings(category: SettingsCategory = SettingsCategory.Editor) {
+        settings?.close()
+        settings =
+            SettingsState({ languageServers }, scope).apply {
+                select(category)
+                loadServers()
+            }
+    }
+
+    fun closeSettings() {
+        settings?.close()
+        settings = null
     }
 
     fun openProject(path: String) {

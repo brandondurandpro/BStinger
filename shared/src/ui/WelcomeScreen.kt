@@ -70,6 +70,15 @@ fun WelcomeScreen(state: AppState) {
             ) {
                 Label("Remote Development")
             }
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable { state.openSettings() }
+                    .testTag(AppTags.WELCOME_SETTINGS)
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+            ) {
+                Label("Settings")
+            }
             state.remoteLabel?.let { destination ->
                 Spacer(Modifier.height(12.dp))
                 Label("Connected to $destination", color = IdeColors.TextSecondary, fontSize = 11.sp)

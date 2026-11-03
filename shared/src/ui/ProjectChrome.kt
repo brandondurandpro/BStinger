@@ -152,6 +152,19 @@ private fun ProjectWidget(app: AppState, project: ProjectState) {
 }
 
 @Composable
+private fun SettingsMenuItem(app: AppState, close: () -> Unit) {
+    DropdownMenuItem(
+        text = { Text("Settings…", fontSize = 13.sp) },
+        trailingIcon = { Text("Ctrl+Alt+S", fontSize = 12.sp, color = IdeColors.TextSecondary) },
+        onClick = {
+            close()
+            app.openSettings()
+        },
+        modifier = Modifier.testTag(AppTags.PROJECT_SETTINGS),
+    )
+}
+
+@Composable
 private fun ProjectMenuItems(app: AppState, close: () -> Unit) {
     DropdownMenuItem(
         text = { Text("Open Project…", fontSize = 13.sp) },
@@ -169,6 +182,7 @@ private fun ProjectMenuItems(app: AppState, close: () -> Unit) {
         },
         modifier = Modifier.testTag(AppTags.PROJECT_CLOSE),
     )
+    SettingsMenuItem(app, close)
     // Feature flag of the experimental agent mode, saved with the preferences.
     DropdownMenuItem(
         text = {

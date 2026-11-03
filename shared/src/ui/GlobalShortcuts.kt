@@ -138,6 +138,7 @@ private val IDE_SHORTCUTS =
         bind(setOf(Key.Comma), shift = true, alt = true) { app.zoomEditor(-1f) },
         bind(setOf(Key.Zero, Key.NumPad0), shift = true, alt = true) { app.resetEditorZoom() },
         bind(setOf(Key.F1), alt = true) { revealActiveFile() },
+        bind(setOf(Key.S), ctrl = true, alt = true) { app.openSettings() },
         bind(setOf(Key.S), ctrl = true) { editor.saveAll() },
         bind(setOf(Key.F4), ctrl = true) { editor.activeTab?.let(editor::close) },
         // Jump to Source: from a diff tab, the file itself.
