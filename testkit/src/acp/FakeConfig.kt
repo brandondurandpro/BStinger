@@ -10,12 +10,13 @@ import kotlinx.serialization.json.putJsonArray
 
 private val STANDARD = listOf("fake-fast" to "Fast", "fake-smart" to "Smart")
 private val PREMIUM = listOf("fake-max" to "Max")
-private val MODES = listOf("ask" to "Ask", "code" to "Code")
+private val MODES = listOf("manual" to "Manual", "accept-edits" to "Accept edits", "plan" to "Plan")
 
 /**
  * The settings of the sessions of the [FakeAgent] (ACP session config options): its model, `fake-fast` (the default)
- * and `fake-smart` in the group Standard, `fake-max` in the group Premium, as Claude groups its models; and its mode,
- * `ask` or `code`. [extraModels] more models (`fake-extra-1`…) in the group More, for a long menu.
+ * and `fake-smart` in the group Standard, `fake-max` in the group Premium, as Claude groups its models; and its mode
+ * of permissions, as Claude's: `manual` (it asks before it writes), `accept-edits` (it writes without asking),
+ * `plan`. [extraModels] more models (`fake-extra-1`…) in the group More, for a long menu.
  */
 class FakeConfig(extraModels: Int = 0) {
     private val more = (1..extraModels).map { "fake-extra-$it" to "Extra $it" }
@@ -49,6 +50,12 @@ class FakeConfig(extraModels: Int = 0) {
 
         /** The model of a new session. */
         const val DEFAULT_MODEL = "fake-fast"
+
+        /** The mode of a new session: it asks before it writes. */
+        const val DEFAULT_MODE = "manual"
+
+        /** The mode in which it writes without asking. */
+        const val ACCEPT_EDITS = "accept-edits"
     }
 }
 

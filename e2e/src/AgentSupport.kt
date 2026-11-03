@@ -133,25 +133,42 @@ fun agentSettings(registry: String, data: java.io.File): AgentSettings =
 /** The agents of a test server that chose no registry: one on a closed port, so that nothing reaches the internet. */
 fun offlineAgents(data: java.io.File): AgentSettings = agentSettings("http://127.0.0.1:9/registry.json", data)
 
-/** The model shown under the prompt, as the button reads (`Smart ▾`). */
+/** The value a setting button under the prompt shows ([AgentTags.AGENT_MODEL]…), as it reads (`Smart ▾`). */
 @OptIn(ExperimentalTestApi::class)
-fun ComposeUiTest.shownModel(): String = textOf(AgentTags.AGENT_MODEL)
+fun ComposeUiTest.shownOption(tag: String): String = textOf(tag)
 
-/** Waits until the model button shows [name]. */
+/** Waits until the setting button [tag] shows [name]. */
 @OptIn(ExperimentalTestApi::class)
-fun ComposeUiTest.awaitModel(name: String, timeout: Long = AGENT_TIMEOUT) {
-    awaitTag(AgentTags.AGENT_MODEL, timeout = timeout)
+fun ComposeUiTest.awaitOption(tag: String, name: String, timeout: Long = AGENT_TIMEOUT) {
+    awaitTag(tag, timeout = timeout)
     try {
-        awaitCondition(timeout) { shownModel() == "$name ▾" }
+        awaitCondition(timeout) { shownOption(tag) == "$name ▾" }
     } catch (e: androidx.compose.ui.test.ComposeTimeoutException) {
-        throw AssertionError("Model '$name' not shown; the button shows '${shownModel()}'", e)
+        throw AssertionError("'$name' not shown; the button $tag shows '${shownOption(tag)}'", e)
     }
 }
 
+/** Chooses, in the menu of the setting button [tag], the value whose item is tagged [item]. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.chooseOption(tag: String, item: String) {
+    awaitTag(tag, timeout = AGENT_TIMEOUT).performClick()
+    awaitTag(item).performClick()
+    awaitNoTag(item)
+}
+
+/** Waits until the model button shows [name]. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.awaitModel(name: String) = awaitOption(AgentTags.AGENT_MODEL, name)
+
 /** Chooses the model [value] in the menu of the model button. */
 @OptIn(ExperimentalTestApi::class)
-fun ComposeUiTest.chooseModel(value: String) {
-    awaitTag(AgentTags.AGENT_MODEL, timeout = AGENT_TIMEOUT).performClick()
-    awaitTag(AgentTags.agentModel(value)).performClick()
-    awaitNoTag(AgentTags.agentModel(value))
-}
+fun ComposeUiTest.chooseModel(value: String) = chooseOption(AgentTags.AGENT_MODEL, AgentTags.agentModel(value))
+
+/** Waits until the button of the mode of permissions shows [name]. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.awaitPermissions(name: String) = awaitOption(AgentTags.AGENT_PERMISSIONS, name)
+
+/** Chooses the mode of permissions [value] (`accept-edits`). */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.choosePermissions(value: String) =
+    chooseOption(AgentTags.AGENT_PERMISSIONS, AgentTags.agentPermissionMode(value))

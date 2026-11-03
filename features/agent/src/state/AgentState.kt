@@ -105,6 +105,9 @@ class Conversation(val id: Int, title: String, val branch: String) {
 
     /** The model of its session, when the agent lets the user choose it. */
     val model: AgentOption? get() = options.firstOrNull { it.category == AgentOption.MODEL }
+
+    /** The mode of permissions of its session (ask before editing, accept edits, plan…), when the agent has one. */
+    val permissions: AgentOption? get() = options.firstOrNull { it.category == AgentOption.MODE }
     internal var offering: Job? = null
 
     // The choices of the user, sent again before the first prompt; how many are on their way; their order.

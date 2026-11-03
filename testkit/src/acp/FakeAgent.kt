@@ -41,7 +41,8 @@ private const val CLIENT_TIMEOUT_S = 60L
  * - `slow`: chunks every 50 ms until it is cancelled (`stubborn`: the same, but it never stops);
  * - `stream <n>`: `n` chunks at once; `tools <n>`: `n` completed tool calls; `crash`: exits with code 3;
  * - `count`: the number of prompts of its session;
- * - `model`: `Model: <model>.`, the model of its session; `fallback`: it moves to `fake-fast` itself and says so;
+ * - `model`: `Model: <model>.`, the model of its session (`mode`: `Mode: <mode>.`, `write` asks nothing in
+ *   `accept-edits`); `fallback`: it moves to `fake-fast` itself and says so;
  * - `markdown`: an answer in Markdown, streamed in pieces that cut its marks: a heading, bold, a list, code, a table;
  * - `run <n> <code>`: runs [FakeProgram] in a terminal of the client, which prints `n` lines and exits with `code`;
  *   `run forever`: one that never stops, killed when the prompt is cancelled; `run big <n>`: `n` lines, of which
@@ -260,6 +261,7 @@ class FakeAgent(private val options: FakeAgentOptions, private val out: PrintStr
             "run" -> run(session, words.drop(1))
             "markdown" -> chunks(session, MARKDOWN.chunked(MARKDOWN_PIECE))
             "model" -> chunks(session, listOf("Model: ${store[session]?.model}."))
+            "mode" -> chunks(session, listOf("Mode: ${store[session]?.mode}."))
             "fallback" -> fellBack(session)
             else -> chunks(session, listOf("You said: $prompt"))
         }
@@ -290,6 +292,8 @@ class FakeAgent(private val options: FakeAgentOptions, private val out: PrintStr
 
     private fun write(session: String, path: String, text: String): String {
         tool(session, "write-1", "Write $path", "edit", "pending", path)
+        val asks = store[session]?.mode != FakeConfig.ACCEPT_EDITS
+        if (!asks) return written(session, path, text)
         val outcome =
             request(
                 "session/request_permission",
@@ -308,6 +312,10 @@ class FakeAgent(private val options: FakeAgentOptions, private val out: PrintStr
             message(session, "Not written.")
             return END_TURN
         }
+        return written(session, path, text)
+    }
+
+    private fun written(session: String, path: String, text: String): String {
         request("fs/write_text_file", buildJsonObject {
             put("sessionId", session)
             put("path", path)

@@ -4,13 +4,14 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.model.AgentItem
 import java.nio.file.Files
+import kotlin.io.path.readText
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * The model of a conversation when the network or the server fails: a choice is set once the server is back, a
+ * The model and the mode of permissions of a conversation when the network or the server fails: a choice is set once the server is back, a
  * restart forgets none, and on a slow link the last choice wins.
  */
 @OptIn(ExperimentalTestApi::class)
@@ -97,5 +98,25 @@ class AgentModelChaosE2eTest {
             app.network.latencyMs = 0
             awaitModel("Max")
             assertEquals(1, conversation.itemsOf<AgentItem.AgentText>().count { it.text.startsWith("Model:") })
+        }
+
+    @Test
+    fun `Accept edits chosen while the network is down applies once it is back`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, preferences(), chaos = true)
+            val conversation = startConversation(app)
+            awaitPermissions("Manual")
+            app.network.goDown()
+            awaitReconnecting()
+            choosePermissions("accept-edits")
+            awaitPermissions("Accept edits")
+            app.network.comeBack()
+            awaitReconnected()
+            val file = project.root.resolve("OFFLINE.md")
+            sendPrompt("write $file offline")
+            awaitShown(conversation, "Wrote")
+            awaitIdle(conversation)
+            assertEquals("offline", file.readText())
+            assertTrue(conversation.itemsOf<AgentItem.Permission>().isEmpty(), "Asked: ${conversation.items}")
         }
 }

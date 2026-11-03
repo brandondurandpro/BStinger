@@ -29,7 +29,7 @@ class FakeSession(val id: String, val cwd: String) {
     var model: String = FakeConfig.DEFAULT_MODEL
 
     @Volatile
-    var mode: String = "ask"
+    var mode: String = FakeConfig.DEFAULT_MODE
     val turns: MutableList<FakeTurn> = java.util.Collections.synchronizedList(mutableListOf())
 }
 
@@ -82,6 +82,7 @@ class FakeSessions(private val store: File?) {
                 put("title", session.title?.let(::JsonPrimitive) ?: kotlinx.serialization.json.JsonNull)
                 put("updatedAt", session.updatedAt)
                 put("model", session.model)
+                put("mode", session.mode)
                 putJsonArray("turns") {
                     session.turns.toList().forEach { turn ->
                         add(
@@ -102,6 +103,7 @@ class FakeSessions(private val store: File?) {
         session.title = json.text("title")
         session.updatedAt = json.text("updatedAt") ?: session.updatedAt
         session.model = json.text("model") ?: session.model
+        session.mode = json.text("mode") ?: session.mode
         (json["turns"] as? JsonArray).orEmpty().forEach { element ->
             val turn = element.jsonObject
             session.turns.add(FakeTurn(turn.text("prompt").orEmpty(), StringBuilder(turn.text("reply").orEmpty())))

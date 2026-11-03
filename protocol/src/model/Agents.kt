@@ -250,6 +250,9 @@ data class AgentOption(
     companion object {
         /** The category of the model of the session. */
         const val MODEL = "model"
+
+        /** The category of the mode of the session: for Claude, its permissions (ask, accept edits, plan…). */
+        const val MODE = "mode"
     }
 }
 
