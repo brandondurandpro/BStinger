@@ -256,4 +256,21 @@ class AgentE2eTest {
             awaitIdle(conversation)
             assertContains(textOf(AppTags.AGENT_TERMINAL), "Exit code")
         }
+
+    @Test
+    fun `an answer in Markdown shows formatted, its marks hidden`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, agentPreferences())
+            val conversation = startConversation(app)
+            sendPrompt("markdown")
+            awaitShown(conversation, "fun answer() = 42")
+            awaitIdle(conversation)
+            val shown = shownConversation(conversation)
+            assertContains(shown, "Summary")
+            assertContains(shown, "The fix is done and parse() is faster.")
+            assertContains(shown, "second point")
+            // A table keeps its rows, aligned as written.
+            assertContains(shown, "| size | 3     |")
+            assertFalse("**" in shown || "```" in shown || "# Summary" in shown, shown)
+        }
 }

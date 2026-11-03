@@ -41,6 +41,7 @@ private const val CLIENT_TIMEOUT_S = 60L
  * - `slow`: chunks every 50 ms until it is cancelled (`stubborn`: the same, but it never stops);
  * - `stream <n>`: `n` chunks at once; `tools <n>`: `n` completed tool calls; `crash`: exits with code 3;
  * - `count`: the number of prompts of its session;
+ * - `markdown`: an answer in Markdown, streamed in pieces that cut its marks: a heading, bold, a list, code, a table;
  * - `run <n> <code>`: runs [FakeProgram] in a terminal of the client, which prints `n` lines and exits with `code`;
  *   `run forever`: one that never stops, killed when the prompt is cancelled; `run big <n>`: `n` lines, of which
  *   the client keeps 10,000 bytes;
@@ -225,6 +226,7 @@ class FakeAgent(private val options: FakeAgentOptions, private val out: PrintStr
             "crash" -> crash()
             "count" -> chunks(session, listOf("Prompt $count of $session."))
             "run" -> run(session, words.drop(1))
+            "markdown" -> chunks(session, MARKDOWN.chunked(MARKDOWN_PIECE))
             else -> chunks(session, listOf("You said: $prompt"))
         }
     }
@@ -418,6 +420,24 @@ class FakeAgent(private val options: FakeAgentOptions, private val out: PrintStr
         const val AUTH_REQUIRED = -32_000
         const val RESOURCE_NOT_FOUND = -32_002
         const val TITLE_LENGTH = 30
+        const val MARKDOWN_PIECE = 7
+        val MARKDOWN =
+            listOf(
+                "# Summary",
+                "",
+                "The fix is **done** and `parse()` is *faster*.",
+                "",
+                "- first point",
+                "- second point",
+                "",
+                "```kotlin",
+                "fun answer() = 42",
+                "```",
+                "",
+                "| Name | Value |",
+                "|------|-------|",
+                "| size | 3     |",
+            ).joinToString("\n")
 
         fun textBlock(text: String) =
             buildJsonObject {

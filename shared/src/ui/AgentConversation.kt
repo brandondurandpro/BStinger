@@ -21,7 +21,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.Composable
@@ -153,7 +152,7 @@ internal val bodyStyle = TextStyle(color = IdeColors.Text, fontSize = 13.sp, lin
 private fun ItemView(agent: AgentState, conversation: Conversation, item: AgentItem) {
     when (item) {
         is AgentItem.UserText -> UserBubble(item.text)
-        is AgentItem.AgentText -> BasicText(item.text.trimEnd(), Modifier.fillMaxWidth(), style = bodyStyle)
+        is AgentItem.AgentText -> MarkdownText(item.text.trimEnd(), Modifier.fillMaxWidth())
         is AgentItem.Thought -> ThoughtView(item.text)
         is AgentItem.ToolCall -> ToolCallCard(item)
         is AgentItem.Plan -> PlanView(item)
