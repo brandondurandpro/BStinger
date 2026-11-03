@@ -10,6 +10,8 @@ class LanguageServerSpec(
     val language: String,
     /** `initializationOptions` of the `initialize` request. */
     val initializationOptions: JsonElement? = null,
+    /** Why it may give no inlay hints, shown when it gives none; null: a generic sentence. */
+    val withoutInlayHints: String? = null,
     /**
      * The command line. Blocking, it may download the server first; an exception (runtime missing, failed
      * download) makes the server unavailable with the exception's message.

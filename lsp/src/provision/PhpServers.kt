@@ -1,5 +1,8 @@
 package org.example.kotlineditor.lsp.provision
 
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+
 /**
  * The PHP language servers offered to the user. Updating a pin:
  * - phpactor: latest release of github.com/phpactor/phpactor; the SHA-256 is the `digest` GitHub shows for the
@@ -50,6 +53,17 @@ object PhpServers {
             "Needs Node.js on the server machine",
         )
 
+    /**
+     * What phpactor leaves off unless its client asks (its configuration, given as `initializationOptions`): the
+     * inlay hints, with the type of each assigned variable (`$user: User`) as well as the parameter names.
+     */
+    val PHPACTOR_OPTIONS =
+        buildJsonObject {
+            put("language_server_worse_reflection.inlay_hints.enable", true)
+            put("language_server_worse_reflection.inlay_hints.types", true)
+            put("language_server_worse_reflection.inlay_hints.params", true)
+        }
+
     /** phpactor: free, MIT, runs on PHP. */
     val phpactor =
         LanguageServerCandidate(
@@ -71,6 +85,7 @@ object PhpServers {
             command = { runtimes, phar ->
                 listOf(runtimes.getValue(RuntimeKind.Php).toString(), checkNotNull(phar).toString(), "language-server")
             },
+            initializationOptions = PHPACTOR_OPTIONS,
         )
 
     /** intelephense: proprietary with a free core, runs on Node.js. */
@@ -99,6 +114,9 @@ object PhpServers {
                     "--stdio",
                 )
             },
+            withoutInlayHints =
+            "intelephense gives inlay hints only with a Premium licence, and never the type of a variable: " +
+                "phpactor gives both for free.",
         )
 
     /** Both, in the order the choice panel shows them. */

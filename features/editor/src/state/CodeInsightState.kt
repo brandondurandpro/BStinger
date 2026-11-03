@@ -236,7 +236,7 @@ class CodeInsightState(
         val result = askVersion(insight.path, document) { servers, at -> servers.inlayHints(insight.path, at) }
         val ready = result?.takeIf { it.status == FeatureStatus.Ready && document.version == version }
         ready?.let {
-            insight.inlayHints = it.hints
+            insight.inlayHints = shownHints(it.hints, document.lines)
             applyInlays(insight)
         }
     }

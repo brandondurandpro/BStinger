@@ -8,6 +8,7 @@ import androidx.compose.ui.test.hasTestTag
 import org.example.kotlineditor.lsp.LanguageServerSettings
 import org.example.kotlineditor.lsp.provision.CandidateRegistry
 import org.example.kotlineditor.lsp.provision.LanguageServerCandidate
+import org.example.kotlineditor.lsp.provision.PhpServers
 import org.example.kotlineditor.lsp.provision.Requirement
 import org.example.kotlineditor.lsp.provision.RuntimeDetector
 import org.example.kotlineditor.lsp.provision.RuntimeKind
@@ -38,6 +39,9 @@ class FakePhpServers(vararg options: String, idleStopMs: Long = 1_000) {
             requirements = emptyList(),
             tool = null,
             command = { _, _ -> FakeLanguageServerCommand.command(*options) },
+            // Configured as phpactor is: its inlay hints on, types included.
+            initializationOptions = PhpServers.PHPACTOR_OPTIONS,
+            withoutInlayHints = WITHOUT_INLAY_HINTS,
         )
     private val needsNode =
         fake.copy(
@@ -83,6 +87,9 @@ class FakePhpServers(vararg options: String, idleStopMs: Long = 1_000) {
     companion object {
         const val FAKE = "fake"
         const val NEEDS_NODE = "needs-node"
+
+        /** Why the fake server gives no inlay hints, when started `--without inlayHint`. */
+        const val WITHOUT_INLAY_HINTS = "fakephp gives inlay hints only with a licence."
 
         /** A PHP project: a `composer.json` at its root and two PHP files. */
         fun project(): SampleProject =

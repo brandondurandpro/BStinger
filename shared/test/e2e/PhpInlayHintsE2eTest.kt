@@ -29,11 +29,23 @@ private const val CALL_LINE = 2
 private const val FIRST_ARGUMENT = 21
 private const val SECOND_ARGUMENT = 30
 
+// In src/index.php: `$greeter = new Greeter();`, the type drawn after the variable, before column 8.
+private const val CREATED_LINE = 1
+private const val CREATED_VARIABLE_END = 8
+
+// A class, then a variable created from it: the server names the class after its closing brace (`} class Shop`).
+private val SHOP_PHP = listOf("<?php", "class Shop", "{", "}", "\$shop = new Shop();", "").joinToString("\n")
+private const val SHOP_CLASS_END_LINE = 3
+private const val SHOP_CREATED_LINE = 4
+
 // A function declared, then called: its usage count on line 1, the hint of its argument on line 2.
 private val TWICE_PHP = listOf("<?php", "function twice(int \$n) { return \$n; }", "twice(2);", "").joinToString("\n")
 private const val TWICE_ARGUMENT = 6
 
-/** Inlay hints in PHP (`name:` before an argument, textDocument/inlayHint): off, in a popup, or in the code. */
+/**
+ * Inlay hints in PHP (`name:` before an argument, `: Type` after a variable, textDocument/inlayHint): off, in a
+ * popup, or in the code.
+ */
 @OptIn(ExperimentalTestApi::class)
 class PhpInlayHintsE2eTest {
     private val project = codeInsightProject()
@@ -84,6 +96,46 @@ class PhpInlayHintsE2eTest {
             onNodeWithTag(hint(SECOND_ARGUMENT), useUnmergedTree = true).assertTextEquals("times: ")
             // A declaration is not a call: no hint on its line.
             awaitNoTag(EditorTags.inlayHint(1, 22), unmerged = true)
+            // A server that gives them needs no explanation.
+            awaitNoTag(LanguageServerTags.INLAY_HINTS_NOTE)
+        }
+
+    @Test
+    fun `inline, the type of a variable is drawn after its name`() =
+        runComposeUiTest {
+            open()
+            choose(InlayHintsMode.Inline)
+            val type = EditorTags.inlayHint(CREATED_LINE, CREATED_VARIABLE_END)
+            awaitTag(type, unmerged = true, timeout = SERVER_START_MS)
+            onNodeWithTag(type, useUnmergedTree = true).assertTextEquals(": Greeter")
+            onNodeWithTag(EditorTags.lineText(CREATED_LINE), useUnmergedTree = true)
+                .assertTextEquals("\$greeter = new Greeter();")
+        }
+
+    @Test
+    fun `in a popup, the line of an assignment is shown with the type of its variable`() =
+        runComposeUiTest {
+            open()
+            choose(InlayHintsMode.Popup)
+            clickAt(CREATED_LINE, 2)
+            awaitTag(EditorTags.INLAY_HINTS_POPUP, timeout = SERVER_START_MS)
+                .assertTextEquals("\$greeter: Greeter = new Greeter();")
+        }
+
+    @Test
+    fun `the name of the block a brace closes is not drawn after it, as in IntelliJ`() =
+        runComposeUiTest {
+            project.file("src/shop.php", SHOP_PHP)
+            open()
+            choose(InlayHintsMode.Inline)
+            openFromTree("src/shop.php")
+            // Both hints come in the same answer: once the variable's type shows, the class's would have too.
+            awaitTag(
+                EditorTags.inlayHint(SHOP_CREATED_LINE, "\$shop".length),
+                unmerged = true,
+                timeout = SERVER_START_MS,
+            )
+            awaitNoTag(EditorTags.inlayHint(SHOP_CLASS_END_LINE, 1), unmerged = true)
         }
 
     @Test
@@ -147,11 +199,12 @@ class PhpInlayHintsE2eTest {
         }
 
     @Test
-    fun `a server without inlay hints shows none, in any mode`() =
+    fun `a server without inlay hints shows none, in any mode, and the Language Servers window says why`() =
         runComposeUiTest {
             project.file("src/twice.php", TWICE_PHP)
             open("--without", "inlayHint")
             choose(InlayHintsMode.Inline)
+            awaitTag(LanguageServerTags.INLAY_HINTS_NOTE).assertTextEquals(FakePhpServers.WITHOUT_INLAY_HINTS)
             openFromTree("src/twice.php")
             // The hints are asked with the usage counts: once those are shown, nothing more is coming.
             awaitTag(EditorTags.usageHint(1), unmerged = true, timeout = SERVER_START_MS)
