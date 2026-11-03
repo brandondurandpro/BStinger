@@ -93,7 +93,7 @@ class RemoteServicesTest {
             val results = reads.awaitAll()
             assertEquals(2000, results.size)
             assertTrue(results.all { it.lines.single().startsWith("content ") })
-            assertEquals(1L, client.connections.get())
+            assertEquals(1L, client.connections.value)
         }
 
     @Test

@@ -107,8 +107,11 @@ class RpcClient(
     /** State of the link with the server. */
     val status: StateFlow<ConnectionStatus> = mutableStatus.asStateFlow()
 
-    /** Number of connections opened so far (tests use it to check reconnections). */
-    val connections: AtomicLong get() = connector.connections
+    /**
+     * Number of connections opened so far, one more at each reconnection: unlike [status], which may be back to
+     * Connected before a collector saw it leave, every reconnection changes it.
+     */
+    val connections: StateFlow<Long> = connector.connections.asStateFlow()
 
     init {
         scope.launch { connector.run(this) }
