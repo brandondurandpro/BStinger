@@ -59,6 +59,7 @@ fun RpcClient.appServices(): AppServices =
         network = network,
         languageServers = RemoteLanguageServers(this),
         telemetry = RemoteTelemetrySettings(this),
+        agents = RemoteAgents(this),
     )
 
 /** [TelemetrySettings] of the server. */

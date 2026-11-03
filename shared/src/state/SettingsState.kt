@@ -63,6 +63,12 @@ enum class Setting(val category: SettingsCategory, val title: String, val descri
         "The IDE | Agent switch of the toolbar, where agents work in their own worktrees.",
         "ai agents conversations",
     ),
+    AgentCommand(
+        SettingsCategory.Experimental,
+        "Agent command",
+        "The ACP agent the server starts for agent mode; empty for Claude Code ($DEFAULT_AGENT_COMMAND).",
+        "acp claude codex gemini opencode npx",
+    ),
     ;
 
     private val searched = "$title $description $keywords ${category.title}".lowercase()

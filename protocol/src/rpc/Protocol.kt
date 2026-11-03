@@ -46,7 +46,7 @@ import java.io.OutputStream
  */
 object Protocol {
     /** Version announced in the handshake; client and server must speak the same one. */
-    const val VERSION = 9
+    const val VERSION = 10
 
     /** Version of the application, shown in the welcome screen and used to identify remote server bundles. */
     const val APP_VERSION = "2026.1"
@@ -483,6 +483,21 @@ enum class Method(
 
     /** Edits of one of the code actions offered; runs its command on the language server, once. */
     LspApplyCodeAction("lsp/applyCodeAction", mutating = true),
+
+    /** Sends a prompt to the agent of a conversation, starting the agent and its session when needed. */
+    AgentPrompt("agent/prompt", mutating = true),
+
+    /** Stops the prompt running in a conversation. */
+    AgentCancel("agent/cancel", mutating = true),
+
+    /** Answers a permission request of the agent. */
+    AgentAnswer("agent/answer", mutating = true),
+
+    /** The items of a conversation newer than a version (a long poll). */
+    AgentTranscript("agent/transcript"),
+
+    /** Forgets a conversation and ends its session. */
+    AgentClose("agent/close", mutating = true),
 }
 
 /** A JSON-RPC error object `{"code": ..., "message": ...}`. */

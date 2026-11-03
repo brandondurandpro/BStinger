@@ -40,6 +40,7 @@ object AppTags {
     const val SETTINGS_SERVERS_LOADING = "settings.servers.loading"
     const val SETTINGS_SERVERS_ERROR = "settings.servers.error"
     const val SETTINGS_TELEMETRY_FORBIDDEN = "settings.telemetry.forbidden"
+    const val SETTINGS_AGENT_COMMAND = "settings.agentCommand"
     const val TOOL_PROJECT = "tool.project"
     const val TOOL_GIT = "tool.git"
     const val TOOL_BRANCHES = "tool.branches"
@@ -69,6 +70,8 @@ object AppTags {
     const val AGENT_PROMPT = "agent.prompt"
     const val AGENT_SEND = "agent.send"
     const val AGENT_STOP = "agent.stop"
+    const val AGENT_THINKING = "agent.thinking"
+    const val AGENT_NAME = "agent.name"
     const val AGENT_STRIP_CONVERSATIONS = "agent.strip.conversations"
     const val AGENT_DETAILS = "agent.details"
     const val AGENT_DETAIL_CONVERSATION = "agent.detail.conversation"
@@ -108,6 +111,9 @@ object AppTags {
     fun agentView(id: Int) = "agent.view.$id"
 
     fun agentMessage(index: Int) = "agent.message.$index"
+
+    /** A button of the pending permission request, by the id of its option (`allow`). */
+    fun agentPermission(option: String) = "agent.permission:$option"
 
     fun recentProject(path: String) = "recent:$path"
 

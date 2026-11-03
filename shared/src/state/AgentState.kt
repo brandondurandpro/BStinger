@@ -7,28 +7,26 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
+import org.example.kotlineditor.model.AgentCommand
+import org.example.kotlineditor.model.AgentItem
+import org.example.kotlineditor.model.AgentToolKind
+import org.example.kotlineditor.model.AgentToolStatus
+import org.example.kotlineditor.model.AgentTranscript
+import org.example.kotlineditor.model.AgentTurnState
 import org.example.kotlineditor.model.FileContent
+import java.io.IOException
+import java.util.UUID
 
 private const val TITLE_LENGTH = 40
+private const val RETRY_MS = 1_000L
 
-/** One entry of a conversation with the agent. */
-sealed interface AgentMessage {
-    class User(val text: String) : AgentMessage
-
-    class Agent(val text: String) : AgentMessage
-
-    /** An action of the agent on the project (read a file, run a command…), shown as a card. */
-    @Stable
-    class ToolCall(val tool: String, val target: String) : AgentMessage {
-        var running by mutableStateOf(true)
-            internal set
-        var output by mutableStateOf("")
-            internal set
-    }
-}
+// Tool calls whose end changes files: the tree, Git and the open editors look at the disk again.
+private val WRITING_TOOLS = setOf(AgentToolKind.Edit, AgentToolKind.Delete, AgentToolKind.Move, AgentToolKind.Execute)
 
 /** Where the agent of a conversation works. */
 enum class WorkMode {
@@ -41,23 +39,47 @@ enum class WorkMode {
 
 /**
  * A conversation with the agent. Its files, Git panel and terminal are those of [workspace]: the project itself in
- * [WorkMode.Direct], the worktree of [branch] in [WorkMode.Worktree].
+ * [WorkMode.Direct], the worktree of [branch] in [WorkMode.Worktree]. Its [items] are the transcript the server keeps,
+ * followed as it changes; [key] names it on the server.
  */
 @Stable
 class Conversation(val id: Int, title: String, val branch: String) {
+    /** Name of the conversation on the server, unique across projects and IDEs. */
+    val key: String = UUID.randomUUID().toString()
+
     var title by mutableStateOf(title)
         internal set
-    val messages = mutableStateListOf<AgentMessage>()
+
+    /** The transcript, oldest first. */
+    val items = mutableStateListOf<AgentItem>()
+    private val positions = HashMap<String, Int>()
 
     /** Text being typed in the prompt, kept per conversation like an unsent draft. */
     var draft by mutableStateOf("")
 
-    /** True while the agent is answering; the prompt then offers to stop it. */
-    var busy by mutableStateOf(false)
+    /** What the agent is doing, as the server last said. */
+    var state by mutableStateOf(AgentTurnState.Idle)
         internal set
-    internal var job: Job? = null
 
-    /** Direct by default; the agent moves to a worktree of [branch] on request. */
+    /** True from the moment a prompt is sent until the server took it. */
+    var sending by mutableStateOf(false)
+        internal set
+
+    /** True while the agent is answering; the prompt then offers to stop it. */
+    val busy: Boolean get() = sending || state != AgentTurnState.Idle
+
+    /** Name and version of the agent, once it introduced itself. */
+    var agentName: String? by mutableStateOf(null)
+        internal set
+
+    internal var job: Job? = null
+    internal var polling: Job? = null
+
+    // Position in the transcript of the server: its instance, and the version of the latest change seen.
+    internal var epoch = ""
+    internal var since = 0L
+
+    /** Direct by default; the agent moves to a worktree of [branch] on request, before the first prompt. */
     var mode by mutableStateOf(WorkMode.Direct)
         internal set
 
@@ -80,28 +102,56 @@ class Conversation(val id: Int, title: String, val branch: String) {
     /** Branch checked out where the agent works: it follows a checkout made from the Git panel or the terminal. */
     val currentBranch: String? get() = workspace?.git?.currentBranch ?: branch.takeIf { mode == WorkMode.Worktree }
 
+    /** Whether the agent already works somewhere: its place can no longer change. */
+    val started: Boolean get() = items.isNotEmpty()
+
     /** Scroll position of the messages, kept when switching tabs. */
     val listState = LazyListState()
 
     /** Last line shown under the title in the conversation list. */
     val preview: String
         get() =
-            when (val last = messages.lastOrNull()) {
-                is AgentMessage.User -> last.text
-                is AgentMessage.Agent -> last.text
-                is AgentMessage.ToolCall -> "${last.tool} ${last.target}"
+            when (val last = items.lastOrNull()) {
+                is AgentItem.UserText -> last.text
+                is AgentItem.AgentText -> last.text
+                is AgentItem.Thought -> last.text
+                is AgentItem.ToolCall -> last.title
+                is AgentItem.Plan -> "Plan"
+                is AgentItem.Permission -> "Asks: ${last.title}"
+                is AgentItem.Notice -> last.text
                 null -> "No messages yet"
-            }.lineSequence().first()
+            }.lineSequence().firstOrNull().orEmpty()
+
+    /** Adds [item], or replaces the item with its id: a newer version of it, or the prompt the server echoed. */
+    internal fun upsert(item: AgentItem) {
+        val position = positions[item.id]
+        if (position == null) {
+            positions[item.id] = items.size
+            items.add(item)
+        } else {
+            items[position] = item
+        }
+    }
+
+    /** A notice of the IDE itself, not of the server. */
+    internal fun note(text: String, error: Boolean = true) {
+        upsert(AgentItem.Notice("local-${UUID.randomUUID()}", 0, text, error))
+    }
 }
 
 /**
- * Agent mode (proof of concept): the conversations of [project], listed on the left and opened in tabs, each one in
- * a worktree of its branch. No model is plugged in: [send] answers with a simulated agent working on the real files.
+ * Agent mode: the conversations of [project], listed on the left and opened in tabs, each one on the current branch
+ * or in a worktree of its own branch. The agent runs on the server ([org.example.kotlineditor.model.Agents]), started
+ * with the command [agentCommand] returns; each conversation follows its transcript with a long poll.
  */
 @Stable
-class AgentState(private val project: ProjectState) {
+class AgentState(
+    private val project: ProjectState,
+    private val agentCommand: () -> AgentCommand = { agentCommandOf("") },
+) {
     private val git get() = project.services.git
-    val conversations = mutableStateListOf<Conversation>().apply { addAll(sampleConversations()) }
+    private val agents get() = project.services.agents
+    val conversations = mutableStateListOf<Conversation>()
 
     /** Conversations opened in the tabs of agent mode. */
     val tabs = AgentTabs()
@@ -109,9 +159,12 @@ class AgentState(private val project: ProjectState) {
     /** Conversation of the active tab: the tool windows and the toolbar show its worktree and its branch. */
     val current: Conversation? get() = tabs.active
 
+    /** The agent, as shown under the prompt before it introduced itself: its program. */
+    val agentLabel: String get() = agentCommand().command.joinToString(" ").let { "Agent: $it" }
+
     /** Whether the conversation list is shown on the left. */
     var conversationsVisible by mutableStateOf(true)
-    private var nextId = conversations.size + 1
+    private var nextId = 1
 
     init {
         followEditors()
@@ -145,11 +198,14 @@ class AgentState(private val project: ProjectState) {
         return conversation
     }
 
-    /** Deletes [conversation] and its worktree, if it has one (Git keeps it when it has uncommitted changes). */
+    /** Deletes [conversation], its session and its worktree, if it has one (Git keeps it when it has changes). */
     fun delete(conversation: Conversation) {
-        stop(conversation)
+        conversation.job?.cancel()
+        conversation.polling?.cancel()
         tabs.close(conversation)
         conversations.remove(conversation)
+        val started = conversation.started
+        project.scope.launch { if (started) runCatching { agents.close(conversation.key) } }
         closeWorktree(conversation)?.let { worktree ->
             project.scope.launch { runCatching { git.removeWorktree(project.root.path, worktree.root.path) } }
         }
@@ -157,11 +213,11 @@ class AgentState(private val project: ProjectState) {
 
     /**
      * Moves the agent of [conversation] to [mode]: into a worktree of its branch (created on first use), or back to
-     * the branch of the project. A worktree left stays on disk with its changes, and is reused when coming back.
+     * the branch of the project. Only before the first prompt: the session of the agent works in one directory.
      */
     fun setMode(conversation: Conversation, mode: WorkMode) {
         val working = conversation.busy || conversation.preparingWorktree
-        if (conversation.mode == mode || working) return
+        if (conversation.mode == mode || working || conversation.started) return
         val previous = conversation.mode
         conversation.mode = mode
         conversation.showsChat = true
@@ -184,38 +240,134 @@ class AgentState(private val project: ProjectState) {
             }
     }
 
-    /** Sends the draft of [conversation] and starts the simulated agent. */
+    /**
+     * Sends the draft of [conversation]: the modified files are saved first, so the agent reads what the user sees,
+     * then the server runs the agent and the transcript shows its answer as it streams.
+     */
     fun send(conversation: Conversation) {
         val text = conversation.draft.trim()
         if (text.isEmpty() || conversation.busy) return
         conversation.draft = ""
-        if (conversation.messages.isEmpty()) conversation.title = titleOf(text)
-        conversation.messages.add(AgentMessage.User(text))
+        if (!conversation.started) conversation.title = titleOf(text)
+        val itemId = "prompt-${UUID.randomUUID()}"
+        // Shown at once; the server's copy of the prompt replaces it, under the same id.
+        conversation.upsert(AgentItem.UserText(itemId, 0, text))
         conversations.remove(conversation)
         conversations.add(0, conversation)
-        conversation.busy = true
-        conversation.job =
-            project.scope.launch {
-                try {
-                    prepare(conversation)
-                    conversation.preparing?.join()
-                    SimulatedAgent(conversation).answer(text)
-                } finally {
-                    conversation.messages.filterIsInstance<AgentMessage.ToolCall>().forEach { it.running = false }
-                    conversation.busy = false
-                }
-            }
+        conversation.sending = true
+        conversation.job = project.scope.launch { deliver(conversation, itemId, text) }
     }
 
+    private suspend fun deliver(conversation: Conversation, itemId: String, text: String) {
+        try {
+            prepare(conversation)
+            conversation.preparing?.join()
+            val workspace = conversation.workspace
+            if (workspace == null) {
+                val reason = conversation.workspaceError ?: "its worktree is not ready"
+                conversation.note("The agent cannot work on ${conversation.branch}: $reason.")
+                return
+            }
+            workspace.editor.flush()
+            follow(conversation)
+            agents.prompt(conversation.key, agentCommand(), workspace.root.path, itemId, text)
+        } catch (failure: IOException) {
+            conversation.note("The prompt could not be sent: ${failure.message}")
+        } finally {
+            conversation.sending = false
+        }
+    }
+
+    /** Stops the agent of [conversation]; its permission requests are cancelled. */
     fun stop(conversation: Conversation) {
         if (!conversation.busy) return
-        conversation.job?.cancel()
-        conversation.messages.add(AgentMessage.Agent("Stopped."))
+        project.scope.launch {
+            try {
+                agents.cancel(conversation.key)
+            } catch (failure: IOException) {
+                conversation.note("The agent could not be stopped: ${failure.message}")
+            }
+        }
+    }
+
+    /** Answers the permission request [request] of [conversation] with [option]. */
+    fun answer(conversation: Conversation, request: AgentItem.Permission, option: String) {
+        if (!request.pending) return
+        project.scope.launch {
+            try {
+                agents.answer(conversation.key, request.id, option)
+            } catch (failure: IOException) {
+                conversation.note("The answer could not be sent: ${failure.message}")
+            }
+        }
     }
 
     /** Closes the worktrees when the project closes; they stay on disk for the next session. */
     fun dispose() {
-        conversations.forEach { closeWorktree(it) }
+        conversations.forEach {
+            it.polling?.cancel()
+            closeWorktree(it)
+        }
+    }
+
+    // Follows the transcript of [conversation] on the server, once: every answer is newer than what it shows.
+    private fun follow(conversation: Conversation) {
+        if (conversation.polling?.isActive == true) return
+        conversation.polling = project.scope.launch { poll(conversation) }
+    }
+
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun poll(conversation: Conversation) {
+        while (true) {
+            try {
+                val transcript = agents.transcript(conversation.key, conversation.epoch, conversation.since)
+                apply(conversation, transcript)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                delay(RETRY_MS)
+            }
+        }
+    }
+
+    private fun apply(conversation: Conversation, transcript: AgentTranscript) {
+        val restarted = conversation.epoch.isNotEmpty() && conversation.epoch != transcript.epoch
+        conversation.epoch = transcript.epoch
+        conversation.since = transcript.version
+        if (!transcript.known) {
+            forgotten(conversation, restarted)
+            return
+        }
+        val wasBusy = conversation.state != AgentTurnState.Idle
+        var wrote = false
+        for (item in transcript.items) {
+            wrote = wrote || finishedWriting(conversation, item)
+            conversation.upsert(item)
+        }
+        conversation.state = transcript.state
+        transcript.agentName?.let { conversation.agentName = it }
+        val turnEnded = wasBusy && transcript.state == AgentTurnState.Idle
+        // The tree, the Git panel and the open editors pick the changes of the agent up.
+        if (wrote || turnEnded) conversation.workspace?.synchronize()
+    }
+
+    // The server does not know the conversation: it restarted and lost the session of the agent with it.
+    private fun forgotten(conversation: Conversation, restarted: Boolean) {
+        val wasBusy = conversation.state != AgentTurnState.Idle
+        conversation.state = AgentTurnState.Idle
+        val shownByServer = conversation.items.any { it.version > 0 }
+        if (restarted && shownByServer) {
+            conversation.note("The server restarted: the agent no longer remembers this conversation.", error = false)
+        } else if (wasBusy) {
+            conversation.note("The agent stopped.")
+        }
+    }
+
+    private fun finishedWriting(conversation: Conversation, item: AgentItem): Boolean {
+        if (item !is AgentItem.ToolCall || item.kind !in WRITING_TOOLS) return false
+        val done = item.status == AgentToolStatus.Completed || item.status == AgentToolStatus.Failed
+        val before = conversation.items.firstOrNull { it.id == item.id } as? AgentItem.ToolCall
+        return done && before?.status != item.status
     }
 
     // Closes the worktree project of the conversation (never the project itself) and returns it.
@@ -266,6 +418,6 @@ class AgentState(private val project: ProjectState) {
 internal fun FileContent.textOrNull(): String? = (this as? FileContent.Text)?.lines?.joinToString(lineSeparator)
 
 internal fun titleOf(text: String): String {
-    val line = text.lineSequence().first()
+    val line = text.lineSequence().firstOrNull().orEmpty()
     return if (line.length <= TITLE_LENGTH) line else line.take(TITLE_LENGTH).trimEnd() + "…"
 }

@@ -38,6 +38,8 @@ class ProjectState(
     internal val grammars: GrammarStore? = null,
     /** Language servers of the IDE, shared by every project; none for the worktrees of agent mode. */
     override val languageServers: LanguageServersState? = null,
+    /** The command line of the agent of agent mode, as set in the settings. */
+    private val agentCommand: () -> String = { "" },
 ) : GitHost,
     TreeHost,
     LanguageServersHost {
@@ -83,9 +85,9 @@ class ProjectState(
     val network = NetworkView(services.network)
 
     // Created on first use: the worktrees of the conversations are projects too, without agent mode of their own.
-    private val agentState = lazy { AgentState(this) }
+    private val agentState = lazy { AgentState(this) { agentCommandOf(agentCommand()) } }
 
-    /** Conversations of agent mode (proof of concept, in memory), each in a worktree of its branch. */
+    /** Conversations of agent mode, in memory, each on the current branch or in a worktree of its own. */
     val agent by agentState
 
     override val gitStatus: Map<String, GitFileStatus> get() = git.status

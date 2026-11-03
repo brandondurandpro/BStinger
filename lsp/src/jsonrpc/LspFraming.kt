@@ -4,7 +4,19 @@ import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 
-/** A message that breaks the LSP base protocol: bad header, bad length, cut in the middle, too large. */
+/** How the messages of a JSON-RPC stream are delimited: [LspFraming] for LSP, [LineFraming] for ACP. */
+interface MessageFraming {
+    /** Writes and flushes one message; callers serialize writes to the same stream. */
+    fun write(output: OutputStream, body: ByteArray)
+
+    /**
+     * Reads one message body, blocking. Null when the stream ends cleanly between two messages (the peer exited);
+     * [LspFramingException] when it ends inside one or when the message breaks the framing.
+     */
+    fun read(input: InputStream, maxSize: Int = LspFraming.DEFAULT_MAX_MESSAGE_SIZE): ByteArray?
+}
+
+/** A message that breaks the framing of its stream: bad header, bad length, cut in the middle, too large. */
 class LspFramingException(message: String, cause: Throwable? = null) : IOException(message, cause)
 
 /**
@@ -12,7 +24,7 @@ class LspFramingException(message: String, cause: Throwable? = null) : IOExcepti
  * an empty line, then N bytes of UTF-8 JSON. Headers are read byte by byte from a buffered stream, without regex;
  * a declared length above the cap is refused before anything is allocated for it.
  */
-object LspFraming {
+object LspFraming : MessageFraming {
     /** Largest message accepted by default: a language server answering more is broken or hostile. */
     const val DEFAULT_MAX_MESSAGE_SIZE = 64 * 1024 * 1024
 
@@ -23,18 +35,13 @@ object LspFraming {
     private const val CR = '\r'.code
     private const val LF = '\n'.code
 
-    /** Writes and flushes one message; callers serialize writes to the same stream. */
-    fun write(output: OutputStream, body: ByteArray) {
+    override fun write(output: OutputStream, body: ByteArray) {
         output.write("Content-Length: ${body.size}\r\n\r\n".toByteArray(Charsets.US_ASCII))
         output.write(body)
         output.flush()
     }
 
-    /**
-     * Reads one message body, blocking. Null when the stream ends cleanly between two messages (the server
-     * exited); [LspFramingException] when it ends inside one or when the message breaks the protocol.
-     */
-    fun read(input: InputStream, maxSize: Int = DEFAULT_MAX_MESSAGE_SIZE): ByteArray? {
+    override fun read(input: InputStream, maxSize: Int): ByteArray? {
         var length = -1
         var first = true
         while (true) {

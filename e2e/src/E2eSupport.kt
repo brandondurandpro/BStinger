@@ -254,6 +254,7 @@ fun ComposeUiTest.launchApp(
             remote.network,
             remote.languageServers,
             remote.telemetry,
+            remote.agents,
         )
     var created: AppState? = null
     val measured = telemetry?.factory

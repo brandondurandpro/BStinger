@@ -41,7 +41,8 @@ internal fun requestHandlers(services: LocalServices): Map<Method, Handler> =
         searchHandlers(services) +
         gitHandlers(services.git) +
         terminalHandlers() +
-        languageServerHandlers(services)
+        languageServerHandlers(services) +
+        agentHandlers(services)
 
 private fun fileHandlers(services: LocalServices): Map<Method, Handler> {
     val fs = services.fileSystem
