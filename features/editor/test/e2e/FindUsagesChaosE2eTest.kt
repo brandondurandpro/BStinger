@@ -84,11 +84,16 @@ class FindUsagesChaosE2eTest {
             val app = open()
             findUsagesOfGreet()
             awaitCondition(SERVER_START_MS) { notice() == INDEXING }
+            val before = app.languageServers.map { it.pid }.toSet()
             app.process.restart()
             awaitReconnected()
+            // The request sent before the restart is replayed on the new server, which answers it once its language
+            // server indexed: wait for that answer, so that its list cannot open under the next click.
+            awaitServer(app) { it.isRunning() && it.pid !in before }
             awaitCondition(SERVER_START_MS) { listed() || notice() != INDEXING }
+            waitForIdle()
             if (listed()) editorKeys { pressKey(Key.Escape) }
-            awaitServer(app) { it.isRunning() || it.state == LanguageServerState.Indexing }
+            awaitNoTag(EditorTags.LOCATIONS)
             findUsagesOfGreet()
             awaitUsagesOfGreet()
             // The counts are those of the new server, once it indexed.

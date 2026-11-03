@@ -8,6 +8,7 @@ import androidx.compose.ui.test.v2.runComposeUiTest
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.time.Duration.Companion.minutes
 
 /** Formatting while typing when the network or the server fails: late answers never override newer typing. */
 @OptIn(ExperimentalTestApi::class)
@@ -71,7 +72,8 @@ class PhpTypeFormattingChaosE2eTest {
 
     @Test
     fun `after the server restarts, its triggers are asked again and typing formats`() =
-        runComposeUiTest {
+        // A restart and a new language server: more than the default minute on a slow runner.
+        runComposeUiTest(testTimeout = 3.minutes) {
             val app = open()
             app.process.restart()
             awaitReconnected()
