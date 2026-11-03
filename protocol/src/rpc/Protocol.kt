@@ -510,6 +510,12 @@ enum class Method(
 
     /** The agents of the ACP registry the server can install. */
     AgentRegistry("agent/registry"),
+
+    /** The settings (model…) a new session of an agent offers. */
+    AgentOptions("agent/options"),
+
+    /** Changes a setting (the model…) of the session of a conversation. */
+    AgentSetOption("agent/setOption", mutating = true),
 }
 
 /** A JSON-RPC error object `{"code": ..., "message": ...}`. */

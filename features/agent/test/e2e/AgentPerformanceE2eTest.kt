@@ -4,6 +4,7 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.v2.runComposeUiTest
 import kotlinx.coroutines.runBlocking
@@ -28,6 +29,7 @@ private const val TYPED = "a prompt typed key by key"
 
 // Measured here: 250 ms to stream, 185 ms for the tool calls, 730 ms to scroll, 450 ms to jump, 210 ms to type,
 // 130 ms to replay the history.
+// 340 ms to open a menu of 503 models.
 // The budgets leave room for a slow runner, not for a cost per item or per chunk.
 private const val STREAM_BUDGET_MS = 5_000L
 private const val TOOLS_BUDGET_MS = 5_000L
@@ -38,6 +40,8 @@ private const val HISTORY_BUDGET_MS = 3_000L
 private const val COMMAND_BUDGET_MS = 10_000L
 private const val REGISTRY_AGENTS = 2_000
 private const val REGISTRY_BUDGET_MS = 3_000L
+private const val MODELS = 500
+private const val MODEL_MENU_BUDGET_MS = 3_000L
 private const val BUDGET_MB = 800L
 private const val MAX_COMPOSED_ROWS = 80
 private const val MAX_SHOWN_OUTPUT = 16_000
@@ -177,4 +181,26 @@ class AgentPerformanceE2eTest {
             .lastOrNull()
             ?.text
             .orEmpty()
+
+    @Test
+    fun `a menu of hundreds of models opens and chooses fast`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, agentPreferences("--models", "$MODELS"))
+            val conversation = startConversation(app)
+            awaitModel("Fast")
+            val last = "fake-extra-$MODELS"
+            measure("Menu of ${MODELS + 3} models opened", MODEL_MENU_BUDGET_MS, BUDGET_MB) {
+                awaitTag(AgentTags.AGENT_MODEL).performClick()
+                awaitTag(AgentTags.agentModel(last))
+                renderFrame()
+            }
+            measure("Model chosen at the end of a menu of ${MODELS + 3}", MODEL_MENU_BUDGET_MS, BUDGET_MB) {
+                awaitTag(AgentTags.agentModel(last)).performScrollTo().performClick()
+                awaitModel("Extra $MODELS")
+                renderFrame()
+            }
+            sendPrompt("model")
+            awaitShown(conversation, "Model: $last.")
+            awaitIdle(conversation)
+        }
 }

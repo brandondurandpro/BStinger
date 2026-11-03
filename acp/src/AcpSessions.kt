@@ -2,6 +2,7 @@ package org.example.kotlineditor.acp
 
 import kotlinx.serialization.json.JsonObject
 import org.example.kotlineditor.lsp.jsonrpc.LspResponseException
+import org.example.kotlineditor.model.AgentOption
 import org.example.kotlineditor.model.AgentSession
 import java.io.IOException
 
@@ -14,12 +15,20 @@ private const val MAX_PAGES = 50
 // What an agent answers to a request about a session it does not know (any more).
 private const val RESOURCE_NOT_FOUND = -32_002
 
-/** Starts a session working in [directory], whose updates go to [listener]; returns its id. */
-internal suspend fun AgentProcess.newSession(directory: String, listener: SessionListener): String {
+/** A session the agent started, and the settings it offers (null when the agent did not list them). */
+internal class StartedSession(val id: String, val options: List<AgentOption>?)
+
+/**
+ * Starts a session working in [directory], whose updates go to [listener]; the settings it offers are remembered as
+ * those of the next sessions of the agent.
+ */
+internal suspend fun AgentProcess.newSession(directory: String, listener: SessionListener): StartedSession {
     val answer = request("session/new", newSessionParams(directory))
     val id = answer?.text(SESSION_ID) ?: throw IOException("The agent started a session without an id")
     listen(id, listener)
-    return id
+    val options = answer.configOptions()
+    offered = options.orEmpty()
+    return StartedSession(id, options)
 }
 
 /** `session/load`: reopens a session and replays its history. */
@@ -38,17 +47,20 @@ internal fun reopenMethod(can: SessionCapabilities, replay: Boolean): String? =
         else -> null
     }
 
-/** Reopens [session] in [directory] with [method], its updates going to [listener]; fails when the agent cannot. */
+/**
+ * Reopens [session] in [directory] with [method], its updates going to [listener]; returns its settings (null when the
+ * agent did not list them). Fails when the agent cannot.
+ */
 internal suspend fun AgentProcess.reopenSession(
     session: String,
     directory: String,
     listener: SessionListener,
     method: String,
-) {
+): List<AgentOption>? {
     // A replay comes before the answer: the listener must hear it.
     listen(session, listener)
     try {
-        request(method, reopenParams(session, directory))
+        return request(method, reopenParams(session, directory)).configOptions()
     } catch (failure: LspResponseException) {
         release(session)
         throw failure

@@ -132,3 +132,26 @@ fun agentSettings(registry: String, data: java.io.File): AgentSettings =
 
 /** The agents of a test server that chose no registry: one on a closed port, so that nothing reaches the internet. */
 fun offlineAgents(data: java.io.File): AgentSettings = agentSettings("http://127.0.0.1:9/registry.json", data)
+
+/** The model shown under the prompt, as the button reads (`Smart ▾`). */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.shownModel(): String = textOf(AgentTags.AGENT_MODEL)
+
+/** Waits until the model button shows [name]. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.awaitModel(name: String, timeout: Long = AGENT_TIMEOUT) {
+    awaitTag(AgentTags.AGENT_MODEL, timeout = timeout)
+    try {
+        awaitCondition(timeout) { shownModel() == "$name ▾" }
+    } catch (e: androidx.compose.ui.test.ComposeTimeoutException) {
+        throw AssertionError("Model '$name' not shown; the button shows '${shownModel()}'", e)
+    }
+}
+
+/** Chooses the model [value] in the menu of the model button. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.chooseModel(value: String) {
+    awaitTag(AgentTags.AGENT_MODEL, timeout = AGENT_TIMEOUT).performClick()
+    awaitTag(AgentTags.agentModel(value)).performClick()
+    awaitNoTag(AgentTags.agentModel(value))
+}

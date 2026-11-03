@@ -18,6 +18,7 @@ object AgentTags {
     const val AGENT_STOP = "agent.stop"
     const val AGENT_THINKING = "agent.thinking"
     const val AGENT_NAME = "agent.name"
+    const val AGENT_MODEL = "agent.model"
     const val AGENT_TERMINAL = "agent.terminal"
     const val AGENT_STRIP_CONVERSATIONS = "agent.strip.conversations"
     const val AGENT_DETAILS = "agent.details"
@@ -40,6 +41,9 @@ object AgentTags {
     fun agentView(id: Int) = "agent.view.$id"
 
     fun agentMessage(index: Int) = "agent.message.$index"
+
+    /** A model of the menu of the model of the session, by its value (`fake-smart`). */
+    fun agentModel(value: String) = "agent.model:$value"
 
     /** A button of the pending permission request, by the id of its option (`allow`). */
     fun agentPermission(option: String) = "agent.permission:$option"

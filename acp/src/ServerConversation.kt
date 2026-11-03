@@ -25,7 +25,9 @@ internal class ServerConversation(
 ) : SessionListener {
     private val lock = Any()
     private val writer: TranscriptWriter = TranscriptWriter(journal) { id -> keeper.terminalOf(id) }
-    private val keeper: SessionKeeper = SessionKeeper(journal, writer, this)
+
+    /** The session of its agent; its settings (the model…) are set there. */
+    val keeper: SessionKeeper = SessionKeeper(journal, writer, this)
     private val prompted = HashSet<String>()
     private var opened = false
     private var job: Job? = null

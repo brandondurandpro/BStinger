@@ -11,6 +11,7 @@ import org.example.kotlineditor.lsp.jsonrpc.LineFraming
 import org.example.kotlineditor.lsp.jsonrpc.LspConnection
 import org.example.kotlineditor.lsp.supervisor.LogRing
 import org.example.kotlineditor.model.AgentCommand
+import org.example.kotlineditor.model.AgentOption
 import java.io.File
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
@@ -49,6 +50,10 @@ internal class AgentProcess(val command: AgentCommand, scope: CoroutineScope, fi
     private val requests = AgentRequests(sessions, files, terminals)
     private val start = Mutex()
     private var info: AgentInfo? = null
+
+    /** The settings (model…) the latest new session offered; null before one started. */
+    @Volatile
+    var offered: List<AgentOption>? = null
 
     private val process: Process =
         try {

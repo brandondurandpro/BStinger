@@ -22,6 +22,10 @@ private const val SESSION = "session"
 
 /** Agent mode: conversations with the agents, run by [LocalServices.agents]. */
 internal fun agentHandlers(services: LocalServices): Map<Method, Handler> =
+    conversationHandlers(services) + optionHandlers(services)
+
+// The conversations: prompts, answers, transcripts, history.
+private fun conversationHandlers(services: LocalServices): Map<Method, Handler> =
     mapOf(
         Method.AgentPrompt to {
             services.agents.prompt(
@@ -69,6 +73,22 @@ internal fun agentHandlers(services: LocalServices): Map<Method, Handler> =
         },
         Method.AgentClose to {
             services.agents.close(params.string(CONVERSATION))
+            JsonNull
+        },
+    )
+
+// The settings of the sessions (the model…).
+private fun optionHandlers(services: LocalServices): Map<Method, Handler> =
+    mapOf(
+        Method.AgentOptions to {
+            val agent = params.read(AGENT) { it.agentCommand() }
+            val options = services.agents.processes.options(agent, params.string(DIRECTORY))
+            options.toJson()
+        },
+        Method.AgentSetOption to {
+            val agent = params.read(AGENT) { it.agentCommand() }
+            val conversation = params.string(CONVERSATION)
+            services.agents.setOption(conversation, agent, params.string("option"), params.string("value"))
             JsonNull
         },
     )

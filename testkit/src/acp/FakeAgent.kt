@@ -41,6 +41,7 @@ private const val CLIENT_TIMEOUT_S = 60L
  * - `slow`: chunks every 50 ms until it is cancelled (`stubborn`: the same, but it never stops);
  * - `stream <n>`: `n` chunks at once; `tools <n>`: `n` completed tool calls; `crash`: exits with code 3;
  * - `count`: the number of prompts of its session;
+ * - `model`: `Model: <model>.`, the model of its session; `fallback`: it moves to `fake-fast` itself and says so;
  * - `markdown`: an answer in Markdown, streamed in pieces that cut its marks: a heading, bold, a list, code, a table;
  * - `run <n> <code>`: runs [FakeProgram] in a terminal of the client, which prints `n` lines and exits with `code`;
  *   `run forever`: one that never stops, killed when the prompt is cancelled; `run big <n>`: `n` lines, of which
@@ -52,12 +53,14 @@ private const val CLIENT_TIMEOUT_S = 60L
  *
  * Options: `--login` refuses `session/new` until the user logs in; `--store <dir>` keeps the sessions in a directory,
  * so that they outlive the process; `--no-load` does not replay sessions (it still resumes them); `--no-history`
- * neither lists nor reopens them.
+ * neither lists nor reopens them; `--no-config` offers no settings (no model to choose, [FakeConfig]); `--models <n>`
+ * offers `n` more models.
  */
 class FakeAgent(private val options: FakeAgentOptions, private val out: PrintStream = System.out) {
     private val loginRequired = options.loginRequired
     private val store = FakeSessions(options.store)
     private val turns = ConcurrentHashMap<String, FakeTurn>()
+    private val config = FakeConfig(options.extraModels)
 
     private val writeLock = Any()
     private val ids = AtomicLong()
@@ -93,6 +96,7 @@ class FakeAgent(private val options: FakeAgentOptions, private val out: PrintStr
                 "session/list" -> success(id, listed(params))
                 "session/close" -> success(id, JsonObject(emptyMap()))
                 "session/delete" -> deleted(id, params)
+                "session/set_config_option" -> configured(id, params)
                 else -> failure(id, METHOD_NOT_FOUND, "Unknown method $method")
             }
         send(reply)
@@ -133,7 +137,7 @@ class FakeAgent(private val options: FakeAgentOptions, private val out: PrintStr
     private fun newSession(id: JsonElement, params: JsonObject): JsonObject {
         if (loginRequired) return failure(id, AUTH_REQUIRED, "Authentication required")
         val session = store.create(params.text("cwd").orEmpty())
-        return success(id, buildJsonObject { put("sessionId", session.id) })
+        return success(id, sessionAnswer(session, buildJsonObject { put("sessionId", session.id) }))
     }
 
     // `session/load` replays the history before it answers; `session/resume` does not.
@@ -145,7 +149,7 @@ class FakeAgent(private val options: FakeAgentOptions, private val out: PrintStr
             session == null -> failure(id, RESOURCE_NOT_FOUND, "Unknown session ${params.text("sessionId")}")
             else -> {
                 if (replay) replayed(session)
-                success(id, JsonObject(emptyMap()))
+                success(id, sessionAnswer(session, JsonObject(emptyMap())))
             }
         }
     }
@@ -179,6 +183,34 @@ class FakeAgent(private val options: FakeAgentOptions, private val out: PrintStr
                 }
             }
         }
+
+    // [answer] with the settings of [session], unless it offers none.
+    private fun sessionAnswer(session: FakeSession, answer: JsonObject): JsonObject {
+        if (!options.config) return answer
+        return JsonObject(answer + ("configOptions" to config.options(session)))
+    }
+
+    private fun configured(id: JsonElement, params: JsonObject): JsonObject {
+        val session = params.text("sessionId")?.let(store::get)
+        val option = params.text("configId").orEmpty()
+        val value = params.text("value").orEmpty()
+        if (session == null || !config.accepts(option, value)) {
+            return failure(id, INVALID_PARAMS, "No $option $value")
+        }
+        if (option == FakeConfig.MODEL) session.model = value else session.mode = value
+        store.save(session)
+        return success(id, buildJsonObject { put("configOptions", config.options(session)) })
+    }
+
+    private fun fellBack(session: String): String {
+        val kept = store[session]
+        if (kept != null) {
+            kept.model = FakeConfig.DEFAULT_MODEL
+            update(session, "config_option_update") { put("configOptions", config.options(kept)) }
+        }
+        message(session, "Fell back to ${FakeConfig.DEFAULT_MODEL}.")
+        return END_TURN
+    }
 
     private fun deleted(id: JsonElement, params: JsonObject): JsonObject {
         val session = params.text("sessionId").orEmpty()
@@ -227,6 +259,8 @@ class FakeAgent(private val options: FakeAgentOptions, private val out: PrintStr
             "count" -> chunks(session, listOf("Prompt $count of $session."))
             "run" -> run(session, words.drop(1))
             "markdown" -> chunks(session, MARKDOWN.chunked(MARKDOWN_PIECE))
+            "model" -> chunks(session, listOf("Model: ${store[session]?.model}."))
+            "fallback" -> fellBack(session)
             else -> chunks(session, listOf("You said: $prompt"))
         }
     }
@@ -417,6 +451,7 @@ class FakeAgent(private val options: FakeAgentOptions, private val out: PrintStr
         const val END_TURN = "end_turn"
         const val CANCELLED = "cancelled"
         const val METHOD_NOT_FOUND = -32_601
+        const val INVALID_PARAMS = -32_602
         const val AUTH_REQUIRED = -32_000
         const val RESOURCE_NOT_FOUND = -32_002
         const val TITLE_LENGTH = 30
@@ -485,18 +520,26 @@ data class FakeAgentOptions(
     val store: java.io.File? = null,
     val history: Boolean = true,
     val load: Boolean = true,
+    val config: Boolean = true,
+    val extraModels: Int = 0,
 ) {
     companion object {
-        /** Reads `--login`, `--store <dir>`, `--no-load` and `--no-history`. */
+        /** Reads `--login`, `--store <dir>`, `--no-load`, `--no-history`, `--no-config` and `--models <n>`. */
         fun parse(args: List<String>): FakeAgentOptions {
-            val store = args.indexOf("--store").takeIf { it >= 0 }?.let { args.getOrNull(it + 1) }
+            val store = valueOf(args, "--store")
+            val models = valueOf(args, "--models")?.toIntOrNull() ?: 0
             return FakeAgentOptions(
                 loginRequired = "--login" in args,
                 store = store?.let { java.io.File(it) },
                 history = "--no-history" !in args,
                 load = "--no-load" !in args,
+                config = "--no-config" !in args,
+                extraModels = models,
             )
         }
+
+        private fun valueOf(args: List<String>, option: String): String? =
+            args.indexOf(option).takeIf { it >= 0 }?.let { args.getOrNull(it + 1) }
     }
 }
 

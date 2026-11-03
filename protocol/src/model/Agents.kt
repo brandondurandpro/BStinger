@@ -218,6 +218,41 @@ sealed interface AgentItem {
     ) : AgentItem
 }
 
+private const val NO_SERVER = "No server runs the agents"
+
+/** A value an [AgentOption] can take: a model of the agent, or a mode. */
+data class AgentOptionValue(
+    /** What the agent is told when it is chosen. */
+    val value: String,
+    /** What the user reads. */
+    val name: String,
+    /** What it is good at, when the agent says. */
+    val description: String? = null,
+)
+
+/**
+ * A setting of a session the agent offers, among values it lists: its model, its mode, how hard it thinks (the
+ * `select` session config options of ACP).
+ */
+data class AgentOption(
+    /** What the agent names it, to change it. */
+    val id: String,
+    /** What the user reads (`Model`). */
+    val name: String,
+    /** What it is about, as ACP names it (`model`, `mode`, `thought_level`…); null when the agent does not say. */
+    val category: String?,
+    /** The value chosen. */
+    val current: String,
+    /** The values, in the order the agent prefers. */
+    val values: List<AgentOptionValue>,
+) {
+    /** The ACP categories the IDE knows. */
+    companion object {
+        /** The category of the model of the session. */
+        const val MODEL = "model"
+    }
+}
+
 /**
  * The items of a conversation newer than what the client had, and its state. [known] is false when the server does
  * not know the conversation (it restarted since): the client keeps what it shows, and the next prompt starts a new
@@ -242,6 +277,8 @@ data class AgentTranscript(
     val title: String? = null,
     /** Whether the items start with the history of the session the agent replayed: they replace those shown. */
     val replayed: Boolean = false,
+    /** The settings of the session (its model…), as chosen; empty before the agent said which it offers. */
+    val options: List<AgentOption> = emptyList(),
 )
 
 /** A session an agent keeps, as the agent lists it: the history of a conversation. */
@@ -266,8 +303,26 @@ data class AgentSessions(
     val sessions: List<AgentSession>,
 )
 
+/** What the user chooses of the agents: which agent (from the ACP registry), and the settings of its sessions. */
+interface AgentChoices {
+    /** The agents of the ACP registry, and whether the server can run each one. */
+    suspend fun registry(): List<AgentRegistryEntry>
+
+    /**
+     * The settings a session of [agent] working in [directory] offers (its model…), before a conversation started one;
+     * empty when the agent offers none. The agent may start for it.
+     */
+    suspend fun options(agent: AgentCommand, directory: String): List<AgentOption>
+
+    /**
+     * Sets the setting [option] of the session of [conversation] to [value]: at once when the session runs, as soon
+     * as it starts otherwise. The transcript shows the settings as the agent then says they are.
+     */
+    suspend fun setOption(conversation: String, agent: AgentCommand, option: String, value: String)
+}
+
 /** Conversations with agents, run by the server. Every call returns at once except [transcript], a long poll. */
-interface Agents {
+interface Agents : AgentChoices {
     /**
      * Sends [text] to the agent of [conversation], started with [agent] in [directory] if it does not run yet. The
      * prompt shows as item [itemId]. A conversation the server does not know continues the agent's [session], when
@@ -294,9 +349,6 @@ interface Agents {
     /** Deletes the agent's [session] and its history, when the agent can; returns whether it did. */
     suspend fun delete(agent: AgentCommand, session: String): Boolean
 
-    /** The agents of the ACP registry, and whether the server can run each one. */
-    suspend fun registry(): List<AgentRegistryEntry>
-
     /** Stops the prompt running in [conversation]; its pending permission requests are cancelled. */
     suspend fun cancel(conversation: String)
 
@@ -321,16 +373,21 @@ interface Agents {
             itemId: String,
             text: String,
             session: String?,
-        ): Unit = throw java.io.IOException("No server runs the agents")
+        ): Unit = throw java.io.IOException(NO_SERVER)
 
         override suspend fun open(conversation: String, agent: AgentCommand, directory: String, session: String): Unit =
-            throw java.io.IOException("No server runs the agents")
+            throw java.io.IOException(NO_SERVER)
 
         override suspend fun sessions(agent: AgentCommand, root: String) = AgentSessions(false, emptyList())
 
         override suspend fun delete(agent: AgentCommand, session: String) = false
 
         override suspend fun registry(): List<AgentRegistryEntry> = emptyList()
+
+        override suspend fun options(agent: AgentCommand, directory: String): List<AgentOption> = emptyList()
+
+        override suspend fun setOption(conversation: String, agent: AgentCommand, option: String, value: String): Unit =
+            throw java.io.IOException(NO_SERVER)
 
         override suspend fun cancel(conversation: String) = Unit
 

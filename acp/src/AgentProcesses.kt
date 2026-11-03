@@ -1,7 +1,10 @@
 package org.example.kotlineditor.acp
 
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.example.kotlineditor.model.AgentCommand
+import org.example.kotlineditor.model.AgentOption
 import org.example.kotlineditor.model.AgentRegistryEntry
 import org.example.kotlineditor.model.AgentSessions
 import java.io.Closeable
@@ -27,6 +30,16 @@ class AgentProcesses internal constructor(
 
     /** Deletes the agent's [session] and its history; false when the agent cannot. */
     suspend fun delete(agent: AgentCommand, session: String): Boolean = processFor(agent).deleteSession(session)
+
+    /** The settings (model…) a session of [agent] in [directory] offers; the agent starts for it when needed. */
+    suspend fun options(agent: AgentCommand, directory: String): List<AgentOption> {
+        val process = withContext(Dispatchers.IO) { processFor(agent) }
+        return process.offeredOptions(directory)
+    }
+
+    /** The settings the latest new session of [agent] offered, without starting it; empty when none started. */
+    internal fun knownOptions(agent: AgentCommand): List<AgentOption> =
+        synchronized(processes) { processes[agent]?.offered }.orEmpty()
 
     /** The agents of the ACP registry, and whether this server can run each one. Blocking. */
     fun registry(): List<AgentRegistryEntry> = registry.entries()

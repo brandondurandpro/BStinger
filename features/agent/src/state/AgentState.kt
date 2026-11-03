@@ -10,8 +10,10 @@ import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.model.AgentItem
+import org.example.kotlineditor.model.AgentOption
 import org.example.kotlineditor.model.AgentTurnState
 import org.example.kotlineditor.model.FileContent
 import java.io.IOException
@@ -93,6 +95,22 @@ class Conversation(val id: Int, title: String, val branch: String) {
     var workspaceError: String? by mutableStateOf(null)
         internal set
     internal var preparing: Job? = null
+
+    /**
+     * The settings of its session (the model…), as the agent says, or as the user just chose; before the session
+     * starts, those a new session offers.
+     */
+    var options: List<AgentOption> by mutableStateOf(emptyList())
+        internal set
+
+    /** The model of its session, when the agent lets the user choose it. */
+    val model: AgentOption? get() = options.firstOrNull { it.category == AgentOption.MODEL }
+    internal var offering: Job? = null
+
+    // The choices of the user, sent again before the first prompt; how many are on their way; their order.
+    internal val choices = LinkedHashMap<String, String>()
+    internal var settingOptions = 0
+    internal val optionsLock = Mutex()
 
     /** True while the agent moves to a worktree: the tool windows still show where it worked before. */
     var preparingWorktree by mutableStateOf(false)
@@ -190,6 +208,9 @@ class AgentState(
             return "Agent: ${agent.registry ?: agent.command.joinToString(" ")}"
         }
 
+    /** The settings of the sessions (the model…), chosen in the conversations. */
+    val options = ConversationOptions(project, agentCommand)
+
     /** Whether the conversation list is shown on the left. */
     var conversationsVisible by mutableStateOf(true)
     internal var nextId = 1
@@ -204,6 +225,7 @@ class AgentState(
         tabs.open(conversation)
         conversation.prepareIn(project)
         project.restore(conversation, agentCommand())
+        options.offer(conversation)
     }
 
     /** Ctrl+F4: closes the file or diff shown, or the conversation when it is the one shown. */
@@ -306,6 +328,7 @@ class AgentState(
                 return
             }
             workspace.editor.flush()
+            options.beforePrompt(conversation)
             project.followTranscript(conversation)
             agents.prompt(conversation.key, agentCommand(), workspace.root.path, itemId, text, conversation.session)
         } catch (failure: IOException) {

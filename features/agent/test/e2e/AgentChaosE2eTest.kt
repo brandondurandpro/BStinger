@@ -110,13 +110,14 @@ class AgentChaosE2eTest {
             val app = launchWithProject(project, agentPreferences("--store", "$store"), chaos = true)
             val conversation = startConversation(app)
             sendPrompt("count")
-            awaitShown(conversation, "Prompt 1 of session-1.")
+            awaitShown(conversation, "Prompt 1 of session-")
             awaitIdle(conversation)
+            val session = checkNotNull(conversation.session) { "No session" }
             app.process.restart()
             awaitReconnected()
             sendPrompt("count")
             // The agent reopened its session: it remembers the first prompt, and nothing says it forgot.
-            awaitShown(conversation, "Prompt 2 of session-1.")
+            awaitShown(conversation, "Prompt 2 of $session.")
             awaitIdle(conversation)
             assertEquals(2, conversation.itemsOf<AgentItem.UserText>().size)
             assertTrue(conversation.itemsOf<AgentItem.Notice>().isEmpty(), shownConversation(conversation))

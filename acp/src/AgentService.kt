@@ -103,6 +103,14 @@ class AgentService(
         conversation(conversation).open(session, directory) { processes.processFor(agent) }
     }
 
+    /**
+     * Sets the setting [option] (the model…) of the session of [conversation] to [value], now or as soon as it starts:
+     * meanwhile its transcript shows the settings the sessions of [agent] offer, with the choice made.
+     */
+    suspend fun setOption(conversation: String, agent: AgentCommand, option: String, value: String) {
+        conversation(conversation).keeper.setOption(option, value, processes.knownOptions(agent))
+    }
+
     /** Stops the prompt running in [conversation]. */
     fun cancel(conversation: String) {
         conversations[conversation]?.cancel()
@@ -134,6 +142,7 @@ class AgentService(
             session = header.session,
             title = header.title,
             replayed = header.replayed,
+            options = header.options,
         )
     }
 

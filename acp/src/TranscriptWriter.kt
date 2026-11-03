@@ -52,8 +52,12 @@ internal class TranscriptWriter(
 
     /** Writes [update], a `session/update`; the kinds this IDE does not show are ignored. */
     fun write(update: JsonObject) {
+        val kind = update.text("sessionUpdate")
+        // The settings are the session's as it is now, even while a replay of the history is muted.
+        val options = update.configOptions().takeIf { kind == "config_option_update" }
+        if (options != null) journal.describe { it.copy(options = options) }
         if (mode == Mode.Muted) return
-        when (update.text("sessionUpdate")) {
+        when (kind) {
             "user_message_chunk" -> if (mode == Mode.Replay) append(update, Text.User)
             "agent_message_chunk" -> append(update, Text.Agent)
             "agent_thought_chunk" -> append(update, Text.Thought)

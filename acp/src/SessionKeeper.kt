@@ -1,6 +1,9 @@
 package org.example.kotlineditor.acp
 
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.example.kotlineditor.lsp.jsonrpc.LspResponseException
+import org.example.kotlineditor.model.AgentOption
 import java.io.IOException
 
 private const val NEW_SESSION = "A new session of the agent started: it no longer remembers the previous messages."
@@ -41,6 +44,10 @@ internal class SessionKeeper(
     private var replay = false
     private var hadSession = false
 
+    // The settings chosen before the session started, set as soon as it does; the lock keeps them in order.
+    private val pending = LinkedHashMap<String, String>()
+    private val settings = Mutex()
+
     /**
      * Reopens [session] before the next prompt, unless a session runs already; its history replays into the journal
      * when [replay] (a session opened from the history), not when the IDE shows it already (after a restart).
@@ -74,19 +81,52 @@ internal class SessionKeeper(
         val reopened = previous?.let { reopen(agent, it, directory) }
         val forgot = hadSession || previous != null
         if (reopened == null && forgot) writer.notice(NEW_SESSION)
-        return started(reopened ?: fresh(agent, info, directory))
+        val session = started(reopened ?: fresh(agent, info, directory))
+        settings.withLock { applyPending(session) }
+        return session
+    }
+
+    /**
+     * Sets [option] to [value]: in the running session, or in the next one, the settings shown meanwhile being
+     * [known] (those the agent offers) with the choice made.
+     */
+    suspend fun setOption(option: String, value: String, known: List<AgentOption>) {
+        settings.withLock {
+            val running = current?.takeIf { it.process.isAlive }
+            if (running == null) {
+                pending[option] = value
+                journal.describe { it.copy(options = chosen(it.options.ifEmpty { known }, option, value)) }
+            } else {
+                val options = running.process.setOption(running.id, option, value)
+                journal.describe { it.copy(options = options ?: chosen(it.options, option, value)) }
+            }
+        }
+    }
+
+    // Sets the settings chosen before [session] started; one the agent refuses becomes a notice.
+    private suspend fun applyPending(session: AgentSession) {
+        for ((option, value) in pending.entries.toList()) {
+            try {
+                val options = session.process.setOption(session.id, option, value)
+                journal.describe { it.copy(options = options ?: chosen(it.options, option, value)) }
+            } catch (refused: LspResponseException) {
+                writer.notice("The agent refused $value for $option: ${refused.message}", error = true)
+            }
+        }
+        pending.clear()
     }
 
     // A new session of [agent]: its exceptions say why it could not start.
     private suspend fun fresh(agent: AgentProcess, info: AgentInfo, directory: String): AgentSession {
-        val id =
+        val started =
             try {
                 agent.newSession(directory, listener)
             } catch (refused: LspResponseException) {
                 throw if (refused.code == AUTH_REQUIRED) loginRequired(refused, info) else refused
             }
         writer.newSession()
-        return AgentSession(agent, id, directory)
+        started.options?.let { options -> journal.describe { it.copy(options = options) } }
+        return AgentSession(agent, started.id, directory)
     }
 
     /** Ends the session in the agent; the agent keeps its history. */
@@ -120,7 +160,8 @@ internal class SessionKeeper(
         if (replays && wanted) journal.describe { it.copy(replayed = true) }
         val reopened =
             try {
-                agent.reopenSession(id, directory, listener, method)
+                val options = agent.reopenSession(id, directory, listener, method)
+                options?.let { listed -> journal.describe { it.copy(options = listed) } }
                 true
             } catch (_: LspResponseException) {
                 // It forgot the session: a new one starts, with a notice.

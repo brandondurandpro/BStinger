@@ -213,9 +213,17 @@ private fun sendsOnEnter(event: KeyEvent, send: () -> Unit): Boolean {
 @Composable
 private fun PromptActions(agent: AgentState, conversation: Conversation) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        // The model first: the name of the agent (its command line, before it introduced itself) may be long.
+        ModelPicker(agent, conversation)
+        Spacer(Modifier.width(8.dp))
         val name = conversation.agentName ?: agent.agentLabel
-        Label(name, Modifier.testTag(AgentTags.AGENT_NAME), color = IdeColors.TextSecondary, fontSize = 12.sp)
-        Spacer(Modifier.weight(1f))
+        Label(
+            name,
+            Modifier.weight(1f).testTag(AgentTags.AGENT_NAME),
+            color = IdeColors.TextSecondary,
+            fontSize = 12.sp,
+        )
+        Spacer(Modifier.width(8.dp))
         if (conversation.busy) {
             IdeButton("Stop", { agent.stop(conversation) }, Modifier.testTag(AgentTags.AGENT_STOP))
         } else {

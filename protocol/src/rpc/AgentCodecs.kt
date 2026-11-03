@@ -32,6 +32,7 @@ private const val AGENT_NAME = "agentName"
 private const val SESSION = "session"
 private const val TITLE = "title"
 private const val REPLAYED = "replayed"
+private const val OPTIONS = "options"
 
 /** An agent command line. */
 fun AgentCommand.toJson(): JsonObject =
@@ -60,6 +61,7 @@ fun AgentTranscript.toJson(): JsonObject =
         put(SESSION, session.orNull())
         put(TITLE, title.orNull())
         put(REPLAYED, replayed)
+        put(OPTIONS, options.toJson())
     }
 
 /** A string, or JSON null. */
@@ -78,6 +80,7 @@ fun JsonElement.agentTranscript(): AgentTranscript {
         session = json.stringOrNull(SESSION),
         title = json.stringOrNull(TITLE),
         replayed = json[REPLAYED]?.let { json.bool(REPLAYED) } ?: false,
+        options = json[OPTIONS]?.agentOptions().orEmpty(),
     )
 }
 
