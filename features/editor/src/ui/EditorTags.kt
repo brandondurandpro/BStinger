@@ -103,6 +103,9 @@ object EditorTags {
     /** A row of the list of places (usages, declarations), by its index. */
     fun location(index: Int) = "locations.item:$index"
 
+    /** The code of row [index] of the list of places. */
+    fun locationPreview(index: Int) = "locations.preview:$index"
+
     /** A row of the quick fixes popup, by its title. */
     fun codeAction(title: String) = "codeActions.item:$title"
 

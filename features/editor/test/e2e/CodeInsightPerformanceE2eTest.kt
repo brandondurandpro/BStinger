@@ -5,6 +5,7 @@ import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.test.withKeyDown
@@ -16,6 +17,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.example.kotlineditor.state.EditorTab
 import org.example.kotlineditor.ui.EditorTags
+import org.example.kotlineditor.ui.IdeColors
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -149,6 +151,37 @@ class CodeInsightPerformanceE2eTest {
                     renderFrame()
                 }
             }
+        }
+
+    @Test
+    fun `the code of 1,500 usages is colored by the grammar, and the mouse moves over the rows`() =
+        runComposeUiTest {
+            val app = openBig()
+            awaitAllProblems()
+            clickAt(1, 11)
+            editorKeys { withKeyDown(Key.AltLeft) { pressKey(Key.F7) } }
+            awaitTag(EditorTags.LOCATIONS, timeout = SERVER_START_MS)
+            measure("color the code of 1,500 usages", budgetMillis = 3_000, budgetMegabytes = 300) {
+                awaitCondition {
+                    app.project.insight.locations
+                        ?.previewColors != null
+                }
+                renderFrame()
+            }
+            assertEquals(IdeColors.FunctionDeclaration, previewColorOf(0, "common"))
+            measure("hover 12 rows 10 times", budgetMillis = 3_000, budgetMegabytes = 300) {
+                repeat(10) {
+                    for (row in 0 until 12) {
+                        onNodeWithTag(EditorTags.location(row)).performMouseInput { moveTo(center) }
+                        renderFrame()
+                    }
+                }
+            }
+            assertEquals(
+                11,
+                app.project.insight.locations
+                    ?.hovered,
+            )
         }
 
     @Test

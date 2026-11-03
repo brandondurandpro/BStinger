@@ -14,6 +14,7 @@ test-dependencies:
   - //testkit
   - $libs.tree.sitter.kotlin
   - $libs.tree.sitter.json
+  - $libs.tree.sitter.php
 
 test-settings:
   jvm:

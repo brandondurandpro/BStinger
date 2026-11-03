@@ -9,6 +9,9 @@ import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.Languages
 import org.example.kotlineditor.model.pathName
 import org.example.kotlineditor.syntax.Declaration
+import org.example.kotlineditor.syntax.treesitter.LineSpans
+import org.example.kotlineditor.syntax.treesitter.Snippet
+import org.example.kotlineditor.syntax.treesitter.highlightSnippets
 
 /** Code intelligence of a project: its language servers, and what it does on the project's files. */
 internal fun ProjectState.insightBackend(): InsightBackend? {
@@ -37,6 +40,11 @@ internal class ProjectInsightHost(private val project: () -> ProjectState) : Ins
         val root = normalized(project().root.path)
         val file = normalized(path)
         return if (file.startsWith("$root/")) file.removePrefix("$root/") else file
+    }
+
+    override suspend fun colorsOf(snippets: List<Snippet>): List<LineSpans?> {
+        val grammars = project().grammars ?: return snippets.map { null }
+        return grammars.highlightSnippets(snippets)
     }
 }
 

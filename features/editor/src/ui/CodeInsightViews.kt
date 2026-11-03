@@ -15,9 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
@@ -54,7 +51,6 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -74,11 +70,11 @@ import kotlin.math.roundToInt
 private val POPUP_SHAPE = RoundedCornerShape(4.dp)
 private val HOVER_MAX_WIDTH = 620.dp
 private val HOVER_MAX_HEIGHT = 420.dp
-private val LIST_WIDTH = 640.dp
-private val ROW_HEIGHT = 22.dp
-private const val LIST_ROWS = 12
-private val LABEL_STYLE = TextStyle(color = IdeColors.Text, fontSize = 13.sp)
-private val SECONDARY_STYLE = TextStyle(color = IdeColors.TextSecondary, fontSize = 12.sp)
+internal val LIST_WIDTH = 640.dp
+internal val LIST_ROW_HEIGHT = 22.dp
+internal const val LIST_ROWS = 12
+internal val POPUP_LABEL_STYLE = TextStyle(color = IdeColors.Text, fontSize = 13.sp)
+internal val POPUP_SECONDARY_STYLE = TextStyle(color = IdeColors.TextSecondary, fontSize = 12.sp)
 
 /** Where an overlay is placed relative to its anchor's line. */
 internal enum class Placement { Below, Above }
@@ -166,7 +162,7 @@ internal fun CodeInsightOverlays(
                     .border(1.dp, IdeColors.ProblemWarning.copy(alpha = 0.6f), POPUP_SHAPE)
                     .padding(horizontal = 10.dp, vertical = 5.dp)
                     .testTag(EditorTags.NOTICE),
-            ) { BasicText(notice.text, style = LABEL_STYLE) }
+            ) { BasicText(notice.text, style = POPUP_LABEL_STYLE) }
         }
     }
 }
@@ -218,68 +214,7 @@ private fun ProblemLine(problem: Diagnostic) {
                 append(problem.message)
                 if (source.isNotEmpty()) withStyle(SpanStyle(color = IdeColors.TextSecondary)) { append("  $source") }
             }
-        BasicText(text, Modifier.padding(start = 8.dp), style = LABEL_STYLE)
-    }
-}
-
-@Composable
-private fun LocationsView(popup: org.example.kotlineditor.state.LocationsPopup, insight: CodeInsightState) {
-    val listState = rememberLazyListState()
-    LaunchedEffect(popup.selected) {
-        val first = listState.firstVisibleItemIndex
-        if (popup.selected < first || popup.selected >= first + LIST_ROWS) listState.scrollToItem(popup.selected)
-    }
-    Column(
-        Modifier
-            .width(LIST_WIDTH)
-            .popupFrame()
-            .swallowClicks()
-            .testTag(EditorTags.LOCATIONS),
-    ) {
-        BasicText(
-            popup.title,
-            Modifier.padding(horizontal = 10.dp, vertical = 5.dp).testTag(EditorTags.LOCATIONS_TITLE),
-            style = LABEL_STYLE.copy(fontWeight = FontWeight.Bold),
-        )
-        Box(Modifier.fillMaxWidth().height(1.dp).background(IdeColors.Separator))
-        LazyColumn(Modifier.fillMaxWidth().heightIn(max = ROW_HEIGHT * LIST_ROWS), state = listState) {
-            itemsIndexed(popup.locations) { index, location ->
-                val selected = index == popup.selected
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(ROW_HEIGHT)
-                        .background(if (selected) IdeColors.Selection else IdeColors.Popup)
-                        .pointerInput(index) { detectTapGestures { insight.openLocation(index) } }
-                        .semantics { this.selected = selected }
-                        .testTag(EditorTags.location(index))
-                        .padding(horizontal = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    val name = popup.names.getOrElse(index) { location.path }
-                    BasicText(
-                        "${name.substringAfterLast('/')}:${location.range.startLine + 1}",
-                        Modifier.width(200.dp),
-                        style = LABEL_STYLE,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    BasicText(
-                        location.preview?.trim().orEmpty(),
-                        Modifier.weight(1f),
-                        style = LocalCodeStyle.current.copy(color = IdeColors.Code, fontSize = 12.sp),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    BasicText(
-                        name.substringBeforeLast('/', ""),
-                        Modifier.padding(start = 8.dp),
-                        style = SECONDARY_STYLE,
-                        maxLines = 1,
-                    )
-                }
-            }
-        }
+        BasicText(text, Modifier.padding(start = 8.dp), style = POPUP_LABEL_STYLE)
     }
 }
 
@@ -296,7 +231,7 @@ private fun CodeActionsView(popup: org.example.kotlineditor.state.CodeActionsPop
             val selected = index == popup.selected
             Row(
                 Modifier
-                    .height(ROW_HEIGHT)
+                    .height(LIST_ROW_HEIGHT)
                     .background(if (selected) IdeColors.Selection else IdeColors.Popup)
                     .pointerInput(index) { detectTapGestures { insight.applyCodeAction(index) } }
                     .semantics { this.selected = selected }
@@ -311,7 +246,7 @@ private fun CodeActionsView(popup: org.example.kotlineditor.state.CodeActionsPop
                         .size(8.dp)
                         .background(color, RoundedCornerShape(4.dp)),
                 )
-                BasicText(action.title, Modifier.padding(start = 8.dp), style = LABEL_STYLE, maxLines = 1)
+                BasicText(action.title, Modifier.padding(start = 8.dp), style = POPUP_LABEL_STYLE, maxLines = 1)
             }
         }
     }
@@ -383,7 +318,7 @@ private fun RenameView(
             .testTag(EditorTags.RENAME)
             .padding(8.dp),
     ) {
-        BasicText("Rename '${popup.oldName}' and its usages to:", style = SECONDARY_STYLE)
+        BasicText("Rename '${popup.oldName}' and its usages to:", style = POPUP_SECONDARY_STYLE)
         BasicTextField(
             popup.name,
             { popup.name = it },
@@ -404,7 +339,7 @@ private fun RenameView(
         BasicText(
             "Enter to rename, Escape to cancel",
             Modifier.padding(top = 4.dp),
-            style = SECONDARY_STYLE.copy(fontSize = 11.sp),
+            style = POPUP_SECONDARY_STYLE.copy(fontSize = 11.sp),
         )
     }
 }

@@ -14,6 +14,7 @@ dependencies:
   # Grammar jars served by the loopback Maven repository of TestGrammars.
   - $libs.tree.sitter.kotlin: exported
   - $libs.tree.sitter.json: exported
+  - $libs.tree.sitter.php: exported
   # A real SSH server for the remote development end-to-end tests; the client is the system OpenSSH.
   - $libs.sshd.core: exported
   - $libs.sshd.sftp: exported

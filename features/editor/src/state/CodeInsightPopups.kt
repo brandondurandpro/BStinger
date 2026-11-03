@@ -22,6 +22,8 @@ import org.example.kotlineditor.model.SymbolHighlight
 import org.example.kotlineditor.model.TextChange
 import org.example.kotlineditor.model.TextRange
 import org.example.kotlineditor.model.UsageCount
+import org.example.kotlineditor.syntax.treesitter.LineSpans
+import org.example.kotlineditor.syntax.treesitter.Snippet
 
 /** What the code intelligence of the editor asks the language servers through. */
 interface InsightBackend {
@@ -48,6 +50,9 @@ interface InsightHost {
 
     /** Path of [path] relative to the project, for the lists of places. */
     fun relativePath(path: String): String
+
+    /** The tree-sitter colors of lines of code shown out of their file (the rows of a list of places). */
+    suspend fun colorsOf(snippets: List<Snippet>): List<LineSpans?> = snippets.map { null }
 }
 
 /** The problems, usage counts and occurrences the language server gave for one document; they follow its edits. */
@@ -152,6 +157,30 @@ class LocationsPopup(
     /** The selected row. */
     var selected by mutableIntStateOf(0)
         internal set
+
+    /** The row under the mouse, -1 when none. */
+    var hovered by mutableIntStateOf(-1)
+        internal set
+
+    /**
+     * The tree-sitter colors of each row's code, `null` until they are computed; a row without them (or until then)
+     * is colored by the line lexer.
+     */
+    var previewColors: List<LineSpans?>? by mutableStateOf(null)
+        internal set
+
+    /** The code of each row, as shown: the line of the place without its indentation. */
+    val previews: List<String> = locations.map { it.preview?.trim().orEmpty() }
+
+    /** The mouse entered row [index]. */
+    fun hover(index: Int) {
+        hovered = index
+    }
+
+    /** The mouse left row [index]; another row it entered meanwhile stays hovered. */
+    fun unhover(index: Int) {
+        if (hovered == index) hovered = -1
+    }
 }
 
 /** The signature of the call around the caret (Ctrl+P, or typed `(` and `, `). */

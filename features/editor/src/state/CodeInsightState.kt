@@ -18,6 +18,7 @@ import org.example.kotlineditor.model.NavigationKind
 import org.example.kotlineditor.model.SourceLocation
 import org.example.kotlineditor.model.TextChange
 import org.example.kotlineditor.model.TextRange
+import org.example.kotlineditor.syntax.treesitter.Snippet
 import java.io.IOException
 
 private const val HOVER_DELAY_MS = 500L
@@ -125,6 +126,7 @@ class CodeInsightState(
     private var highlightJob: Job? = null
     private var signatureJob: Job? = null
     private var noticeJob: Job? = null
+    private var previewColoring: Job? = null
     private var lastDiagnostics: DiagnosticsSnapshot = DiagnosticsSnapshot.Empty
 
     /** What the language server said about [document], null when it has none. */
@@ -507,7 +509,11 @@ class CodeInsightState(
 
     internal fun showLocations(title: String, locations: List<SourceLocation>, document: Document, anchor: TextPos) {
         val names = locations.map { host.relativePath(it.path) }
-        this.locations = LocationsPopup(title, locations, document, anchor, names)
+        val popup = LocationsPopup(title, locations, document, anchor, names)
+        this.locations = popup
+        previewColoring?.cancel()
+        val snippets = popup.previews.mapIndexed { index, preview -> Snippet(names[index], preview) }
+        previewColoring = scope.launch { popup.previewColors = host.colorsOf(snippets) }
     }
 
     /** Moves the selection of the list of places or of quick fixes by [delta], wrapping around. */
