@@ -55,6 +55,7 @@ fun RpcClient.appServices(): AppServices =
         sessions = RemoteSessions(this),
         git = RemoteGit(this),
         connection = status,
+        connections = connections,
         network = network,
         languageServers = RemoteLanguageServers(this),
         telemetry = RemoteTelemetrySettings(this),

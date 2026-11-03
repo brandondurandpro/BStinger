@@ -500,6 +500,11 @@ class AppServices(
     val git: GitClient = GitClient.None,
     /** State of the link with the server. */
     val connection: StateFlow<ConnectionStatus> = MutableStateFlow(ConnectionStatus.Connected),
+    /**
+     * Number of connections opened to the server, one more at each reconnection (a restarted server forgot what it
+     * was told): follow it rather than [connection], which a quick reconnection leaves at Connected.
+     */
+    val connections: StateFlow<Long> = MutableStateFlow(1L),
     /** Capture of the frames exchanged with the server (devtools), when there is a server. */
     val network: NetworkInspector? = null,
     /** Language servers run by the server. */

@@ -223,6 +223,7 @@ fun ComposeUiTest.launchApp(
             sessions ?: remote.sessions,
             remote.git,
             remote.connection,
+            remote.connections,
             remote.network,
             remote.languageServers,
             remote.telemetry,

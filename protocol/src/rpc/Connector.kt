@@ -4,6 +4,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runInterruptible
@@ -14,7 +15,6 @@ import org.example.kotlineditor.model.ConnectionStatus
 import java.io.IOException
 import java.net.InetSocketAddress
 import java.net.Socket
-import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Keeps one live connection to the server: connects, authenticates, resends what is pending, resumes streams,
@@ -30,7 +30,8 @@ internal class Connector(
     private val tap: NetworkTap,
     private val resume: (streamId: Long, lastSeq: Long) -> Unit,
 ) {
-    val connections = AtomicLong(0)
+    /** Number of connections opened so far: one more at each reconnection. */
+    val connections = MutableStateFlow(0L)
 
     @Volatile var link: Link? = null
         private set
@@ -95,9 +96,9 @@ internal class Connector(
         }
 
     private suspend fun serve(opened: Link) {
-        connections.incrementAndGet()
         link = opened
         status.value = ConnectionStatus.Connected
+        connections.update { it + 1 }
         try {
             // Unanswered requests, in their original order: the server deduplicates retries.
             pending.inOrder().forEach(opened::send)

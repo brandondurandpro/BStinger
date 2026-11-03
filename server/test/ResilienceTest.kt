@@ -54,7 +54,7 @@ class ResilienceTest {
                 }
             repeat(300) { assertEquals(listOf("stable"), (fs.read(file) as FileContent.Text).lines) }
             chaos.join()
-            assertTrue(client.connections.get() > 1, "the client reconnected ${client.connections.get() - 1} times")
+            assertTrue(client.connections.value > 1, "the client reconnected ${client.connections.value - 1} times")
         }
 
     @Test
@@ -66,7 +66,7 @@ class ResilienceTest {
             proxy.cutOnNextServerData = true
             val created = fs.createFile(root, "once.txt") // retried after reconnecting: no "already exists" error
             assertEquals("once.txt", created.name)
-            assertTrue(client.connections.get() >= 2)
+            assertTrue(client.connections.value >= 2)
             assertEquals(1, Files.list(project).use { it.count() }.toInt())
         }
 
