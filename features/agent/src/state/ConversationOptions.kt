@@ -1,12 +1,20 @@
 package org.example.kotlineditor.state
 
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withLock
 import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.model.AgentOption
+import org.example.kotlineditor.model.AgentSlashCommand
 import java.io.IOException
+
+private const val COMMAND_TRIES = 5
+private const val COMMAND_RETRY_MS = 400L
 
 /**
  * The settings of the sessions of the conversations (the model…): the agent offers them, the user chooses one in the
@@ -20,6 +28,22 @@ class ConversationOptions internal constructor(
 ) {
     private val agents get() = project.services.agents
 
+    /** The commands the agent offered in its latest session: those of a conversation that has no session yet. */
+    var commands: List<AgentSlashCommand> by mutableStateOf(emptyList())
+        private set
+
+    /**
+     * Asks the server again for the commands of the agent while it knows none: an agent lists them a while after its
+     * session started (Claude asks its SDK first), so a `/` typed early may come before them.
+     */
+    internal suspend fun refreshCommands() {
+        repeat(COMMAND_TRIES) { attempt ->
+            if (commands.isNotEmpty()) return
+            if (attempt > 0) delay(COMMAND_RETRY_MS)
+            commands = knownCommands()
+        }
+    }
+
     /** Asks the server what a new session offers, for [conversation] while it shows no settings. */
     internal fun offer(conversation: Conversation) {
         val asking = conversation.offering?.isActive == true
@@ -28,6 +52,8 @@ class ConversationOptions internal constructor(
             project.scope.launch {
                 val offered = offeredTo(project.root.path)
                 if (conversation.options.isEmpty()) conversation.options = offered
+                // Known once a session of the agent started: the one that read its settings, at the latest.
+                commands = knownCommands().ifEmpty { commands }
             }
     }
 
@@ -78,6 +104,16 @@ class ConversationOptions internal constructor(
         val settled = settingOptions == 0
         if (settled && serverOptions.isNotEmpty()) options = serverOptions
     }
+
+    // The commands the agent offered in its latest session; none when the server cannot say.
+    private suspend fun knownCommands(): List<AgentSlashCommand> =
+        try {
+            agents.commands(agentCommand())
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: IOException) {
+            emptyList()
+        }
 
     // The settings a session of the agent in [directory] offers; none when the server cannot say.
     private suspend fun offeredTo(directory: String): List<AgentOption> =

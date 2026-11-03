@@ -8,6 +8,7 @@ import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.model.AgentSessions
 import org.example.kotlineditor.rpc.Method
 import org.example.kotlineditor.rpc.agentCommand
+import org.example.kotlineditor.rpc.commandsToJson
 import org.example.kotlineditor.rpc.long
 import org.example.kotlineditor.rpc.read
 import org.example.kotlineditor.rpc.string
@@ -90,6 +91,11 @@ private fun optionHandlers(services: LocalServices): Map<Method, Handler> =
             val conversation = params.string(CONVERSATION)
             services.agents.setOption(conversation, agent, params.string("option"), params.string("value"))
             JsonNull
+        },
+        Method.AgentCommands to {
+            val agent = params.read(AGENT) { it.agentCommand() }
+            val commands = services.agents.processes.knownCommands(agent)
+            commands.commandsToJson()
         },
     )
 

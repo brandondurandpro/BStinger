@@ -21,6 +21,7 @@ object AgentTags {
     const val AGENT_MODEL = "agent.model"
     const val AGENT_PERMISSIONS = "agent.permissions"
     const val AGENT_EFFORT = "agent.effort"
+    const val AGENT_COMPLETION = "agent.completion"
     const val AGENT_TERMINAL = "agent.terminal"
     const val AGENT_STRIP_CONVERSATIONS = "agent.strip.conversations"
     const val AGENT_DETAILS = "agent.details"
@@ -52,6 +53,9 @@ object AgentTags {
 
     /** An effort of the menu of the effort of the session, by its value (`high`). */
     fun agentEffort(value: String) = "agent.effort:$value"
+
+    /** A suggestion of the completion of the prompt, by its label (`/echo`, `src/Main.kt`). */
+    fun agentCompletion(label: String) = "agent.completion:$label"
 
     /** A button of the pending permission request, by the id of its option (`allow`). */
     fun agentPermission(option: String) = "agent.permission:$option"

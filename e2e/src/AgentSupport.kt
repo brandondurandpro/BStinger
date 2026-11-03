@@ -1,6 +1,7 @@
 package org.example.kotlineditor.e2e
 
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onNodeWithTag
@@ -180,3 +181,24 @@ fun ComposeUiTest.awaitPermissions(name: String) = awaitOption(AgentTags.AGENT_P
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.choosePermissions(value: String) =
     chooseOption(AgentTags.AGENT_PERMISSIONS, AgentTags.agentPermissionMode(value))
+
+/** Types [text] in the prompt, without sending it. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.typePrompt(text: String) {
+    awaitTag(AgentTags.AGENT_PROMPT).performTextInput(text)
+}
+
+/** Presses [key] in the prompt. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.pressInPrompt(key: Key) {
+    awaitTag(AgentTags.AGENT_PROMPT).performKeyInput { pressKey(key) }
+}
+
+/** The labels of the suggestions of the completion of the prompt, in order. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.suggestions(): List<String> {
+    val prefix = AgentTags.agentCompletion("")
+    val nodes = onAllNodes(hasTestTagPrefix(prefix)).fetchSemanticsNodes()
+    val tags = nodes.mapNotNull { it.config.getOrElseNullable(SemanticsProperties.TestTag) { null } }
+    return tags.map { it.removePrefix(prefix) }
+}

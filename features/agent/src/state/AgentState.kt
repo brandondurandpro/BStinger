@@ -7,6 +7,8 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
@@ -14,6 +16,7 @@ import kotlinx.coroutines.sync.Mutex
 import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.model.AgentItem
 import org.example.kotlineditor.model.AgentOption
+import org.example.kotlineditor.model.AgentSlashCommand
 import org.example.kotlineditor.model.AgentTurnState
 import org.example.kotlineditor.model.FileContent
 import java.io.IOException
@@ -47,8 +50,19 @@ class Conversation(val id: Int, title: String, val branch: String) {
     val items = mutableStateListOf<AgentItem>()
     private val positions = HashMap<String, Int>()
 
-    /** Text being typed in the prompt, kept per conversation like an unsent draft. */
-    var draft by mutableStateOf("")
+    /** Text being typed in the prompt and its caret, kept per conversation like an unsent draft. */
+    var draftValue by mutableStateOf(TextFieldValue(""))
+
+    /** Text being typed in the prompt; setting it puts the caret at its end. */
+    var draft: String
+        get() = draftValue.text
+        set(value) {
+            draftValue = TextFieldValue(value, TextRange(value.length))
+        }
+
+    /** The commands the agent offers in its session (`/compact`…); empty before it said. */
+    var commands: List<AgentSlashCommand> by mutableStateOf(emptyList())
+        internal set
 
     /** What the agent is doing, as the server last said. */
     var state by mutableStateOf(AgentTurnState.Idle)

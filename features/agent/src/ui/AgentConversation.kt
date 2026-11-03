@@ -46,6 +46,7 @@ import org.example.kotlineditor.model.AgentItem
 import org.example.kotlineditor.model.AgentToolStatus
 import org.example.kotlineditor.model.AgentTurnState
 import org.example.kotlineditor.state.AgentState
+import org.example.kotlineditor.state.Completing
 import org.example.kotlineditor.state.Conversation
 
 private val CONTENT_WIDTH = 760.dp
@@ -176,6 +177,12 @@ private fun Prompt(agent: AgentState, conversation: Conversation) {
     ) {
         // Where the agent works (the current branch or a worktree), just above what is sent to it.
         val width = Modifier.widthIn(max = CONTENT_WIDTH).fillMaxWidth()
+        val commands = { conversation.commands.ifEmpty { agent.options.commands } }
+        val completion = remember(conversation) { PromptCompletion(conversation, commands) }
+        // A `/` typed before the agent listed its commands asks for them again.
+        val wantsCommands = completion.completing is Completing.Command && commands().isEmpty()
+        LaunchedEffect(wantsCommands) { if (wantsCommands) agent.options.refreshCommands() }
+        CompletionList(completion, width.padding(bottom = 6.dp))
         WorkspaceStatus(agent, conversation, width.padding(horizontal = 4.dp, vertical = 6.dp))
         Column(
             width
@@ -188,13 +195,16 @@ private fun Prompt(agent: AgentState, conversation: Conversation) {
                     Label("Ask the agent… (Enter to send, Shift+Enter for a new line)", color = IdeColors.TextSecondary)
                 }
                 BasicTextField(
-                    conversation.draft,
-                    { conversation.draft = it },
+                    conversation.draftValue,
+                    { conversation.draftValue = it },
                     Modifier
                         .fillMaxWidth()
                         .focusRequester(focus)
                         .testTag(AgentTags.AGENT_PROMPT)
-                        .onPreviewKeyEvent { event -> sendsOnEnter(event) { agent.send(conversation) } },
+                        .onPreviewKeyEvent { event ->
+                            // The list of suggestions first: Enter chooses one there, and sends otherwise.
+                            completion.handle(event) || sendsOnEnter(event) { agent.send(conversation) }
+                        },
                     textStyle = bodyStyle,
                     cursorBrush = SolidColor(IdeColors.Caret),
                 )

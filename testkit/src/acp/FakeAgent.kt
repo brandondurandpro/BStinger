@@ -55,7 +55,8 @@ private const val CLIENT_TIMEOUT_S = 60L
  * Options: `--login` refuses `session/new` until the user logs in; `--store <dir>` keeps the sessions in a directory,
  * so that they outlive the process; `--no-load` does not replay sessions (it still resumes them); `--no-history`
  * neither lists nor reopens them; `--no-config` offers no settings (no model to choose, [FakeConfig]); `--models <n>`
- * offers `n` more models.
+ * offers `n` more models; it lists its commands ([COMMANDS], typed `/echo hi`), but none with `--no-commands`, and
+ * `n` more with `--commands <n>`.
  */
 class FakeAgent(private val options: FakeAgentOptions, private val out: PrintStream = System.out) {
     private val loginRequired = options.loginRequired
@@ -101,6 +102,20 @@ class FakeAgent(private val options: FakeAgentOptions, private val out: PrintStr
                 else -> failure(id, METHOD_NOT_FOUND, "Unknown method $method")
             }
         send(reply)
+        // Like Claude, it lists its commands once the client knows the session.
+        val opened = method in OPENING && reply["result"] != null
+        val session = (reply["result"] as? JsonObject)?.text("sessionId") ?: params.text("sessionId")
+        if (opened && session != null) announceCommands(session)
+    }
+
+    private fun announceCommands(session: String) {
+        if (!options.commands) return
+        update(session, "available_commands_update") {
+            putJsonArray("availableCommands") {
+                COMMANDS.forEach { (name, description, hint) -> add(command(name, description, hint)) }
+                repeat(options.extraCommands) { add(command("extra-${it + 1}", "Extra command ${it + 1}", null)) }
+            }
+        }
     }
 
     private fun initialized() =
@@ -244,8 +259,10 @@ class FakeAgent(private val options: FakeAgentOptions, private val out: PrintStr
     }
 
     private fun answer(session: String, prompt: String, count: Int): String {
-        val words = prompt.trim().split(Regex("\\s+"))
-        val rest = prompt.trim().substringAfter(' ', "")
+        // A slash command (`/echo hi`) is the same prompt as its name.
+        val typed = prompt.trim().removePrefix("/")
+        val words = typed.split(Regex("\\s+"))
+        val rest = typed.substringAfter(' ', "")
         return when (words.firstOrNull()) {
             "echo" -> chunks(session, rest.split(' ').map { "$it " })
             "think" -> think(session, rest)
@@ -465,6 +482,16 @@ class FakeAgent(private val options: FakeAgentOptions, private val out: PrintStr
         const val RESOURCE_NOT_FOUND = -32_002
         const val TITLE_LENGTH = 30
         const val MARKDOWN_PIECE = 7
+        val OPENING = setOf("session/new", "session/load", "session/resume")
+
+        // Its commands: name, description, hint of what to type after it.
+        val COMMANDS =
+            listOf(
+                Triple("echo", "Answers the text that follows", "text to echo"),
+                Triple("count", "Counts the prompts of the session", null),
+                Triple("model", "Says the model of the session", null),
+                Triple("plan", "Makes a plan of two steps", null),
+            )
         val MARKDOWN =
             listOf(
                 "# Summary",
@@ -487,6 +514,13 @@ class FakeAgent(private val options: FakeAgentOptions, private val out: PrintStr
             buildJsonObject {
                 put("type", "text")
                 put("text", text)
+            }
+
+        fun command(name: String, description: String, hint: String?) =
+            buildJsonObject {
+                put("name", name)
+                put("description", description)
+                if (hint != null) putJsonObject("input") { put("hint", hint) }
             }
 
         fun option(id: String, name: String, kind: String) =
@@ -531,12 +565,18 @@ data class FakeAgentOptions(
     val load: Boolean = true,
     val config: Boolean = true,
     val extraModels: Int = 0,
+    val commands: Boolean = true,
+    val extraCommands: Int = 0,
 ) {
     companion object {
-        /** Reads `--login`, `--store <dir>`, `--no-load`, `--no-history`, `--no-config` and `--models <n>`. */
+        /**
+         * Reads `--login`, `--store <dir>`, `--no-load`, `--no-history`, `--no-config`, `--models <n>`,
+         * `--no-commands` and `--commands <n>`.
+         */
         fun parse(args: List<String>): FakeAgentOptions {
             val store = valueOf(args, "--store")
             val models = valueOf(args, "--models")?.toIntOrNull() ?: 0
+            val commands = valueOf(args, "--commands")?.toIntOrNull() ?: 0
             return FakeAgentOptions(
                 loginRequired = "--login" in args,
                 store = store?.let { java.io.File(it) },
@@ -544,6 +584,8 @@ data class FakeAgentOptions(
                 load = "--no-load" !in args,
                 config = "--no-config" !in args,
                 extraModels = models,
+                commands = "--no-commands" !in args,
+                extraCommands = commands,
             )
         }
 

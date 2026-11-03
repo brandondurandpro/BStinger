@@ -40,6 +40,9 @@ private const val HISTORY_BUDGET_MS = 3_000L
 private const val COMMAND_BUDGET_MS = 10_000L
 private const val REGISTRY_AGENTS = 2_000
 private const val REGISTRY_BUDGET_MS = 3_000L
+private const val COMMANDS = 2_000
+private const val COMMANDS_BUDGET_MS = 3_000L
+private const val MAX_COMPOSED_SUGGESTIONS = 40
 private const val MODELS = 500
 private const val MODEL_MENU_BUDGET_MS = 3_000L
 private const val BUDGET_MB = 800L
@@ -202,5 +205,27 @@ class AgentPerformanceE2eTest {
             sendPrompt("model")
             awaitShown(conversation, "Model: $last.")
             awaitIdle(conversation)
+        }
+
+    @Test
+    fun `thousands of commands list and filter fast, a few rows composed`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, agentPreferences("--commands", "$COMMANDS"))
+            val conversation = startConversation(app)
+            // The agent starts, and lists its commands, outside the measure.
+            sendPrompt("echo ready")
+            awaitIdle(conversation)
+            measure("Slash typed over ${COMMANDS + 4} commands", COMMANDS_BUDGET_MS, BUDGET_MB) {
+                typePrompt("/")
+                awaitTag(AgentTags.agentCompletion("/echo"))
+                renderFrame()
+            }
+            val composed = onAllNodes(hasTestTagPrefix(AgentTags.agentCompletion(""))).fetchSemanticsNodes().size
+            assertTrue(composed <= MAX_COMPOSED_SUGGESTIONS, "$composed suggestions composed")
+            measure("Commands filtered key by key", COMMANDS_BUDGET_MS, BUDGET_MB) {
+                for (key in "extra-1999") typePrompt("$key")
+                awaitCondition { suggestions() == listOf("/extra-1999") }
+                renderFrame()
+            }
         }
 }

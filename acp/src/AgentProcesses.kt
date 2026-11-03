@@ -7,6 +7,7 @@ import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.model.AgentOption
 import org.example.kotlineditor.model.AgentRegistryEntry
 import org.example.kotlineditor.model.AgentSessions
+import org.example.kotlineditor.model.AgentSlashCommand
 import java.io.Closeable
 
 /**
@@ -46,6 +47,10 @@ class AgentProcesses internal constructor(
         val directory = process?.lastDirectory ?: return null
         return process.offeredOptions(directory, choices)
     }
+
+    /** The commands [agent] offered in its latest session, without starting it; empty before it said. */
+    fun knownCommands(agent: AgentCommand): List<AgentSlashCommand> =
+        synchronized(processes) { processes[agent]?.commands }.orEmpty()
 
     /** The settings the latest new session of [agent] offered, without starting it; empty when none started. */
     internal fun knownOptions(agent: AgentCommand): List<AgentOption> =

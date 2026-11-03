@@ -220,6 +220,16 @@ sealed interface AgentItem {
 
 private const val NO_SERVER = "No server runs the agents"
 
+/** A command the agent offers, typed in the prompt as `/name`, such as `/compact` or `/review`. */
+data class AgentSlashCommand(
+    /** Its name, without the slash. */
+    val name: String,
+    /** What it does. */
+    val description: String,
+    /** What to type after it, when it takes something (`text to echo`); null when it takes nothing. */
+    val hint: String? = null,
+)
+
 /** A value an [AgentOption] can take: a model of the agent, or a mode. */
 data class AgentOptionValue(
     /** What the agent is told when it is chosen. */
@@ -285,6 +295,8 @@ data class AgentTranscript(
     val replayed: Boolean = false,
     /** The settings of the session (its model…), as chosen; empty before the agent said which it offers. */
     val options: List<AgentOption> = emptyList(),
+    /** The commands the agent offers in this session; empty before it said. */
+    val commands: List<AgentSlashCommand> = emptyList(),
 )
 
 /** A session an agent keeps, as the agent lists it: the history of a conversation. */
@@ -325,6 +337,9 @@ interface AgentChoices {
      * as it starts otherwise. The transcript shows the settings as the agent then says they are.
      */
     suspend fun setOption(conversation: String, agent: AgentCommand, option: String, value: String)
+
+    /** The commands [agent] offered in its latest session, without starting it; empty before it said. */
+    suspend fun commands(agent: AgentCommand): List<AgentSlashCommand>
 }
 
 /** Conversations with agents, run by the server. Every call returns at once except [transcript], a long poll. */
@@ -371,7 +386,7 @@ interface Agents : AgentChoices {
     suspend fun close(conversation: String)
 
     /** No agents (an IDE without a server). */
-    object None : Agents {
+    object None : Agents, AgentChoices by NoChoices {
         override suspend fun prompt(
             conversation: String,
             agent: AgentCommand,
@@ -388,13 +403,6 @@ interface Agents : AgentChoices {
 
         override suspend fun delete(agent: AgentCommand, session: String) = false
 
-        override suspend fun registry(): List<AgentRegistryEntry> = emptyList()
-
-        override suspend fun options(agent: AgentCommand, directory: String): List<AgentOption> = emptyList()
-
-        override suspend fun setOption(conversation: String, agent: AgentCommand, option: String, value: String): Unit =
-            throw java.io.IOException(NO_SERVER)
-
         override suspend fun cancel(conversation: String) = Unit
 
         override suspend fun answer(conversation: String, itemId: String, option: String) = Unit
@@ -404,4 +412,16 @@ interface Agents : AgentChoices {
 
         override suspend fun close(conversation: String) = Unit
     }
+}
+
+// The choices of an IDE without a server: none.
+private object NoChoices : AgentChoices {
+    override suspend fun registry(): List<AgentRegistryEntry> = emptyList()
+
+    override suspend fun options(agent: AgentCommand, directory: String): List<AgentOption> = emptyList()
+
+    override suspend fun setOption(conversation: String, agent: AgentCommand, option: String, value: String): Unit =
+        throw java.io.IOException(NO_SERVER)
+
+    override suspend fun commands(agent: AgentCommand): List<AgentSlashCommand> = emptyList()
 }

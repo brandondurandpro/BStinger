@@ -144,6 +144,7 @@ class AgentService(
             title = header.title,
             replayed = header.replayed,
             options = header.options,
+            commands = header.commands,
         )
     }
 

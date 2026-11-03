@@ -8,8 +8,9 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import org.example.kotlineditor.model.AgentOption
 import org.example.kotlineditor.model.AgentOptionValue
+import org.example.kotlineditor.model.AgentSlashCommand
 
-// JSON of the settings of a session of an agent (its model…).
+// JSON of the settings of a session of an agent (its model…), and of the commands it offers.
 
 private const val VALUE = "value"
 private const val NAME = "name"
@@ -53,3 +54,22 @@ private fun JsonElement.agentOptionValue(): AgentOptionValue {
     val json = jsonObject
     return AgentOptionValue(json.string(VALUE), json.string(NAME), json.stringOrNull(DESCRIPTION))
 }
+
+/** The slash commands of an agent. */
+fun List<AgentSlashCommand>.commandsToJson(): JsonArray =
+    JsonArray(
+        map { command ->
+            buildJsonObject {
+                put(NAME, command.name)
+                put(DESCRIPTION, command.description)
+                put("hint", command.hint.orNull())
+            }
+        },
+    )
+
+/** Reads the slash commands of an agent. */
+fun JsonElement.agentSlashCommands(): List<AgentSlashCommand> =
+    jsonArray.map { element ->
+        val json = element.jsonObject
+        AgentSlashCommand(json.string(NAME), json.string(DESCRIPTION), json.stringOrNull("hint"))
+    }

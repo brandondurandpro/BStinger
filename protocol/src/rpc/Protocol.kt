@@ -516,6 +516,9 @@ enum class Method(
 
     /** Changes a setting (the model…) of the session of a conversation. */
     AgentSetOption("agent/setOption", mutating = true),
+
+    /** The slash commands an agent offered in its latest session. */
+    AgentCommands("agent/commands"),
 }
 
 /** A JSON-RPC error object `{"code": ..., "message": ...}`. */

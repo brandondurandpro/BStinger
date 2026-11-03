@@ -48,6 +48,7 @@ private fun apply(conversation: Conversation, transcript: AgentTranscript) {
     val wasBusy = conversation.state != AgentTurnState.Idle
     transcript.session?.let { conversation.session = it }
     transcript.title?.let { conversation.title = titleOf(it) }
+    if (transcript.commands.isNotEmpty()) conversation.commands = transcript.commands
     // A choice on its way shows until the server has it.
     if (transcript.options.isNotEmpty()) conversation.serverOptions = transcript.options
     val settled = conversation.settingOptions == 0

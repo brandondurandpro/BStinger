@@ -12,6 +12,7 @@ import org.example.kotlineditor.lsp.jsonrpc.LspConnection
 import org.example.kotlineditor.lsp.supervisor.LogRing
 import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.model.AgentOption
+import org.example.kotlineditor.model.AgentSlashCommand
 import java.io.File
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
@@ -54,6 +55,10 @@ internal class AgentProcess(val command: AgentCommand, scope: CoroutineScope, fi
     /** The settings (model…) the latest new session offered; null before one started. */
     @Volatile
     var offered: List<AgentOption>? = null
+
+    /** The commands the agent offered in its latest session; empty before it said. */
+    @Volatile
+    var commands: List<AgentSlashCommand> = emptyList()
 
     /** Directory the latest new session works in; null before one started. */
     @Volatile
@@ -141,6 +146,8 @@ internal class AgentProcess(val command: AgentCommand, scope: CoroutineScope, fi
         val update = params.obj()?.takeIf { method == "session/update" }
         val session = update?.text(SESSION_ID)?.let(sessions::get)
         val content = update?.get("update").obj()
+        // Kept for the conversations that have no session yet, even when the session is not listened to (yet).
+        content?.slashCommands()?.let { commands = it }
         if (session != null && content != null) session.onUpdate(content)
     }
 }

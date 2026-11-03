@@ -88,6 +88,9 @@ internal class SessionKeeper(
         val forgot = hadSession || previous != null
         if (reopened == null && forgot) writer.notice(NEW_SESSION)
         val session = started(reopened ?: fresh(agent, info, directory))
+        // The agent may list its commands before the session is listened to: those it last listed meanwhile.
+        val known = agent.commands
+        if (known.isNotEmpty()) journal.describe { it.copy(commands = it.commands.ifEmpty { known }) }
         settings.withLock { applyChoices(session) }
         return session
     }

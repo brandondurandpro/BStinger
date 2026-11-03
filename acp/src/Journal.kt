@@ -4,6 +4,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import org.example.kotlineditor.model.AgentItem
 import org.example.kotlineditor.model.AgentOption
+import org.example.kotlineditor.model.AgentSlashCommand
 import org.example.kotlineditor.model.AgentTurnState
 
 /**
@@ -97,6 +98,8 @@ internal class Journal(private val epoch: String) {
         val replayed: Boolean = false,
         /** The settings of the session (its model…), as the agent last said, or as the user chose since. */
         val options: List<AgentOption> = emptyList(),
+        /** The commands the agent offers in the session. */
+        val commands: List<AgentSlashCommand> = emptyList(),
     )
 }
 
