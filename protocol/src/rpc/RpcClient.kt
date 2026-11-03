@@ -92,6 +92,7 @@ class RpcClient(
             pending,
             streams,
             mutableStatus,
+            ::measureReconnections,
             NetworkTap(network),
         ) { id, lastSeq ->
             scope.launch {
@@ -113,31 +114,30 @@ class RpcClient(
      */
     val connections: StateFlow<Long> = connector.connections.asStateFlow()
 
+    // Only touched by the connector's loop, which reports every status change in order.
+    private var connectedOnce = false
+    private var lost: Span? = null
+
     init {
         scope.launch { connector.run(this) }
-        scope.launch { measureReconnections() }
     }
 
     // connection.reconnect: from the link lost to the link back (the first connection is not a reconnection).
-    private suspend fun measureReconnections() {
-        var connectedOnce = false
-        var lost: Span? = null
-        status.collect { now ->
-            when (now) {
-                ConnectionStatus.Connected -> {
-                    telemetry.end(lost)
-                    lost = null
-                    connectedOnce = true
-                }
+    private fun measureReconnections(now: ConnectionStatus) {
+        when (now) {
+            ConnectionStatus.Connected -> {
+                telemetry.end(lost)
+                lost = null
+                connectedOnce = true
+            }
 
-                ConnectionStatus.Reconnecting -> {
-                    if (connectedOnce && lost == null) lost = telemetry.start(Operation.Reconnect)
-                }
+            ConnectionStatus.Reconnecting -> {
+                if (connectedOnce && lost == null) lost = telemetry.start(Operation.Reconnect)
+            }
 
-                ConnectionStatus.Disconnected -> {
-                    telemetry.end(lost, Outcome.Cancelled)
-                    lost = null
-                }
+            ConnectionStatus.Disconnected -> {
+                telemetry.end(lost, Outcome.Cancelled)
+                lost = null
             }
         }
     }

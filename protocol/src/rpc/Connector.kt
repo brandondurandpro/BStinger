@@ -27,6 +27,7 @@ internal class Connector(
     private val pending: PendingRequests,
     private val streams: StreamRegistry,
     private val status: MutableStateFlow<ConnectionStatus>,
+    private val onStatus: (ConnectionStatus) -> Unit,
     private val tap: NetworkTap,
     private val resume: (streamId: Long, lastSeq: Long) -> Unit,
 ) {
@@ -46,6 +47,12 @@ internal class Connector(
 
     @Volatile private var closed = false
 
+    // Every change, as it happens: [status] conflates, a collector may miss a reconnection that came back quickly.
+    private fun report(now: ConnectionStatus) {
+        status.value = now
+        onStatus(now)
+    }
+
     // Neither closed nor rejected by the server, and still wanted.
     private fun canRetry(scope: CoroutineScope): Boolean {
         val open = !closed && rejection == null
@@ -57,7 +64,7 @@ internal class Connector(
         while (canRetry(scope)) {
             val opened = tryOpen()
             if (opened == null) {
-                if (rejection == null) status.value = ConnectionStatus.Reconnecting
+                if (rejection == null) report(ConnectionStatus.Reconnecting)
                 delay(backoff)
                 backoff = minOf(backoff * 2, options.maxBackoffMs)
             } else {
@@ -89,7 +96,7 @@ internal class Connector(
         } catch (rejected: RejectedException) {
             rejection = rejected
             pending.failAll(rejected)
-            status.value = ConnectionStatus.Disconnected
+            report(ConnectionStatus.Disconnected)
             null
         } catch (expected: IOException) {
             null // server unreachable for now: retried after a backoff
@@ -97,7 +104,7 @@ internal class Connector(
 
     private suspend fun serve(opened: Link) {
         link = opened
-        status.value = ConnectionStatus.Connected
+        report(ConnectionStatus.Connected)
         connections.update { it + 1 }
         try {
             // Unanswered requests, in their original order: the server deduplicates retries.
@@ -109,7 +116,7 @@ internal class Connector(
         } finally {
             link = null
             opened.close()
-            if (!closed) status.value = ConnectionStatus.Reconnecting
+            if (!closed) report(ConnectionStatus.Reconnecting)
         }
     }
 
