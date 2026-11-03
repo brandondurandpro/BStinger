@@ -18,7 +18,11 @@ private const val OUTCOME = "outcome"
  * What an agent asks its client: the user's permission, the session it belongs to answers; a file to read or
  * write, [files] does. A request of a session the client does not know, or with a relative path, is refused.
  */
-internal class AgentRequests(private val sessions: Map<String, SessionListener>, private val files: FileAccess) {
+internal class AgentRequests(
+    private val sessions: Map<String, SessionListener>,
+    private val files: FileAccess,
+    private val terminals: AgentTerminals,
+) {
     /** Answers [method] with [params], or refuses it. */
     suspend fun answer(method: String, params: JsonElement?): JsonElement {
         val request = params.obj() ?: throw LspResponseException(INVALID_PARAMS, "Params must be an object")
@@ -26,8 +30,17 @@ internal class AgentRequests(private val sessions: Map<String, SessionListener>,
             "session/request_permission" -> permission(request)
             "fs/read_text_file" -> read(request)
             "fs/write_text_file" -> write(request)
-            else -> throw LspResponseException(LspConnection.METHOD_NOT_FOUND, "Unhandled method $method")
+            else -> other(method, request)
         }
+    }
+
+    // The commands of `terminal/*`, run by [terminals].
+    private suspend fun other(method: String, request: JsonObject): JsonElement {
+        if (!method.startsWith("terminal/")) {
+            throw LspResponseException(LspConnection.METHOD_NOT_FOUND, "Unhandled method $method")
+        }
+        val session = request.text(SESSION_ID).orEmpty()
+        return terminals.answer(method, request, session, sessionOf(request))
     }
 
     private suspend fun permission(request: JsonObject): JsonElement {

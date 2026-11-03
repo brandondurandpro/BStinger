@@ -68,6 +68,16 @@ enum class AgentToolStatus {
     Failed,
 }
 
+/** What a tool call shows of a command the agent runs: the end of its output, and its exit code once it exited. */
+data class AgentTerminalOutput(
+    /** The end of its output, stdout and stderr mixed as they came. */
+    val text: String,
+    /** Its exit code; null while it runs. */
+    val exitCode: Int? = null,
+    /** Whether the beginning of the output is not shown. */
+    val truncated: Boolean = false,
+)
+
 /** A change of a file proposed or made by a tool call: the whole old text (null for a new file) and new text. */
 data class AgentDiff(
     /** Absolute path of the file. */
@@ -148,6 +158,8 @@ sealed interface AgentItem {
         val diffs: List<AgentDiff> = emptyList(),
         /** Files it works on, absolute. */
         val locations: List<String> = emptyList(),
+        /** The command it runs on the server, when it runs one. */
+        val terminal: AgentTerminalOutput? = null,
     ) : AgentItem
 
     /** The plan of the agent for the current prompt, replaced as it goes. */

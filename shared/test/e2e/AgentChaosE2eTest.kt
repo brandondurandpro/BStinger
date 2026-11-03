@@ -27,6 +27,15 @@ class AgentChaosE2eTest {
         project.delete()
     }
 
+    // The programs the fake agent runs in its terminals, still running.
+    private fun fakePrograms(): Long =
+        ProcessHandle
+            .allProcesses()
+            .filter { process -> commandOf(process).contains("FakeProgram") }
+            .count()
+
+    private fun commandOf(process: ProcessHandle): String = process.info().commandLine().orElse("")
+
     // The numbers of the ticks of a slow answer, in the order shown.
     private fun ticks(text: String): List<Int> =
         Regex("tick (\\d+)").findAll(text).map { it.groupValues[1].toInt() }.toList()
@@ -163,6 +172,38 @@ class AgentChaosE2eTest {
             awaitReconnected()
             awaitIdle(conversation)
             assertContains(shownConversation(conversation), "The agent stopped.")
+            sendPrompt("echo still here")
+            awaitShown(conversation, "still here")
+        }
+
+    @Test
+    fun `a command keeps running while the network is down, and shows all its output when it is back`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, agentPreferences(), chaos = true)
+            val conversation = startConversation(app)
+            sendPrompt("run forever")
+            awaitShown(conversation, "tick 2")
+            app.network.goDown()
+            awaitReconnecting()
+            app.network.comeBack()
+            awaitReconnected()
+            awaitShown(conversation, "tick 40")
+            onNodeWithTag(AppTags.AGENT_STOP).performClick()
+            awaitShown(conversation, "Killed.")
+            awaitIdle(conversation)
+        }
+
+    @Test
+    fun `a server that restarts while a command runs kills it and leaves nothing stuck`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, agentPreferences(), chaos = true)
+            val conversation = startConversation(app)
+            sendPrompt("run forever")
+            awaitShown(conversation, "tick 2")
+            app.process.restart()
+            awaitReconnected()
+            awaitIdle(conversation)
+            awaitCondition(AGENT_TIMEOUT) { fakePrograms() == 0L }
             sendPrompt("echo still here")
             awaitShown(conversation, "still here")
         }

@@ -227,4 +227,33 @@ class AgentE2eTest {
             sendPrompt("echo hi")
             awaitShown(conversation, "Cannot start the agent no-such-agent-43")
         }
+
+    @Test
+    fun `a command the agent runs shows its output and exit code`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, agentPreferences())
+            val conversation = startConversation(app)
+            sendPrompt("run 3 2")
+            awaitShown(conversation, "Exit code 2,")
+            awaitIdle(conversation)
+            val card = textOf(AppTags.AGENT_TERMINAL)
+            assertContains(card, "line 3")
+            assertContains(card, "failed with 2")
+            assertContains(card, "Exit code 2")
+            assertEquals(AgentToolStatus.Failed, conversation.itemsOf<AgentItem.ToolCall>().lastOrNull()?.status)
+        }
+
+    @Test
+    fun `stopping the agent kills the command it runs`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, agentPreferences())
+            val conversation = startConversation(app)
+            sendPrompt("run forever")
+            // Its output shows while it runs.
+            awaitShown(conversation, "tick 3")
+            onNodeWithTag(AppTags.AGENT_STOP).performClick()
+            awaitShown(conversation, "Killed.")
+            awaitIdle(conversation)
+            assertContains(textOf(AppTags.AGENT_TERMINAL), "Exit code")
+        }
 }

@@ -41,6 +41,9 @@ private const val CLIENT_TIMEOUT_S = 60L
  * - `slow`: chunks every 50 ms until it is cancelled (`stubborn`: the same, but it never stops);
  * - `stream <n>`: `n` chunks at once; `tools <n>`: `n` completed tool calls; `crash`: exits with code 3;
  * - `count`: the number of prompts of its session;
+ * - `run <n> <code>`: runs [FakeProgram] in a terminal of the client, which prints `n` lines and exits with `code`;
+ *   `run forever`: one that never stops, killed when the prompt is cancelled; `run big <n>`: `n` lines, of which
+ *   the client keeps 10,000 bytes;
  * - anything else: `You said: <prompt>`.
  *
  * Its sessions keep their history (the prompts and the answers): it lists them (`session/list`), replays them
@@ -221,6 +224,7 @@ class FakeAgent(private val options: FakeAgentOptions, private val out: PrintStr
             "tools" -> tools(session, words.getOrNull(1)?.toIntOrNull() ?: 1)
             "crash" -> crash()
             "count" -> chunks(session, listOf("Prompt $count of $session."))
+            "run" -> run(session, words.drop(1))
             else -> chunks(session, listOf("You said: $prompt"))
         }
     }
@@ -330,6 +334,13 @@ class FakeAgent(private val options: FakeAgentOptions, private val out: PrintStr
         return END_TURN
     }
 
+    private fun run(session: String, words: List<String>): String {
+        val terminals = FakeTerminalRun(session, ::request, ::update) { session in cancelled }
+        val (stopReason, summary) = terminals.run(words)
+        message(session, summary)
+        return stopReason
+    }
+
     private fun crash(): String {
         System.err.println("fake agent crashed")
         System.err.flush()
@@ -364,7 +375,7 @@ class FakeAgent(private val options: FakeAgentOptions, private val out: PrintStr
             }
         }
 
-    private fun update(session: String, kind: String, fields: JsonObjectBuilder.() -> Unit) =
+    private fun update(session: String, kind: String, fields: JsonObjectBuilder.() -> Unit): Unit =
         send(
             buildJsonObject {
                 put("jsonrpc", "2.0")

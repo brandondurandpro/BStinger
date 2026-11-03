@@ -72,6 +72,7 @@ object AppTags {
     const val AGENT_STOP = "agent.stop"
     const val AGENT_THINKING = "agent.thinking"
     const val AGENT_NAME = "agent.name"
+    const val AGENT_TERMINAL = "agent.terminal"
     const val AGENT_STRIP_CONVERSATIONS = "agent.strip.conversations"
     const val AGENT_DETAILS = "agent.details"
     const val AGENT_DETAIL_CONVERSATION = "agent.detail.conversation"

@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.example.kotlineditor.model.AgentDiff
 import org.example.kotlineditor.model.AgentItem
+import org.example.kotlineditor.model.AgentTerminalOutput
 import org.example.kotlineditor.model.AgentToolStatus
 
 // The items of a conversation: the prompts, thoughts, tool calls with their diffs, plans, permission requests and
@@ -33,6 +34,9 @@ private const val DIFF_LINES = 12
 
 // The output of a tool call, or a thought, shows at most these lines.
 private const val OUTPUT_LINES = 6
+
+// Lines shown of the output of a command: its end, where the result and the errors are.
+private const val TERMINAL_LINES = 12
 
 @Composable
 internal fun UserBubble(text: String) {
@@ -101,7 +105,31 @@ internal fun ToolCallCard(call: AgentItem.ToolCall) {
         if (call.output.isNotBlank()) {
             BasicText(call.output.trimEnd(), style = LocalCodeStyleSmall(), maxLines = OUTPUT_LINES)
         }
+        call.terminal?.let { TerminalOutput(it) }
         for (diff in call.diffs) DiffPreview(diff)
+    }
+}
+
+// The end of the output of a command the agent runs, as a terminal shows it, and how it exited.
+@Composable
+private fun TerminalOutput(terminal: AgentTerminalOutput) {
+    val lines = terminal.text.trimEnd().lines()
+    val end = lines.takeLast(TERMINAL_LINES)
+    val hidden = terminal.truncated || lines.size > end.size
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(IdeColors.Editor, RoundedCornerShape(4.dp))
+            .padding(horizontal = 8.dp, vertical = 4.dp)
+            .testTag(AppTags.AGENT_TERMINAL),
+    ) {
+        if (hidden) Label("…", color = IdeColors.TextSecondary, fontSize = 12.sp)
+        BasicText(end.joinToString("\n"), style = LocalCodeStyleSmall())
+        val code = terminal.exitCode
+        if (code != null) {
+            val color = if (code == 0) IdeColors.TextSecondary else IdeColors.Error
+            Label("Exit code $code", color = color, fontSize = 12.sp)
+        }
     }
 }
 

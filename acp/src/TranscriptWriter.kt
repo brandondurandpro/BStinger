@@ -13,9 +13,15 @@ private const val STATUS = "status"
  * Turns the updates of an agent's session into items of [journal]: chunks of text grow the item they continue, a
  * tool call and its updates are one item, the plan of a prompt is one item, replaced as it goes.
  */
-internal class TranscriptWriter(private val journal: Journal) {
+internal class TranscriptWriter(
+    private val journal: Journal,
+    private val terminals: (String) -> AgentTerminal? = { null },
+) {
     // Journal item of each tool call of the current session, by the id the agent gave it.
     private val toolItems = ConcurrentHashMap<String, String>()
+
+    // Journal item of the tool call that shows each terminal, by terminal id.
+    private val terminalItems = ConcurrentHashMap<String, String>()
 
     // Message the latest chunk belonged to, when the agent numbers its messages: a new one starts a new item.
     @Volatile
@@ -31,7 +37,17 @@ internal class TranscriptWriter(private val journal: Journal) {
     /** A new session started: its tool call ids are its own. */
     fun newSession() {
         toolItems.clear()
+        terminalItems.clear()
         messageId = null
+    }
+
+    /** The output of [terminal] changed: the tool call that shows it shows the new one. */
+    fun terminalChanged(terminal: AgentTerminal) {
+        val itemId = terminalItems[terminal.id] ?: return
+        val shown = terminal.shown()
+        journal.update(itemId) { item, version ->
+            (item as AgentItem.ToolCall).copy(version = version, terminal = shown)
+        }
     }
 
     /** Writes [update], a `session/update`; the kinds this IDE does not show are ignored. */
@@ -98,12 +114,19 @@ internal class TranscriptWriter(private val journal: Journal) {
     private fun tool(update: JsonObject) {
         val callId = update.text("toolCallId") ?: return
         val existing = toolItems[callId]
+        val id = existing ?: journal.newId()
+        val content = update.toolContent()
+        val terminal = content?.terminals?.lastOrNull()
+        if (terminal != null) terminalItems[terminal] = id
+        val shown = terminal?.let(terminals)?.shown()
         if (existing == null) {
-            val id = journal.newId()
             toolItems[callId] = id
-            journal.add { version -> newTool(id, version, callId, update) }
+            journal.add { version -> newTool(id, version, callId, update).copy(terminal = shown) }
         } else {
-            journal.update(existing) { item, version -> changedTool(item as AgentItem.ToolCall, version, update) }
+            journal.update(existing) { item, version ->
+                val changed = changedTool(item as AgentItem.ToolCall, version, update)
+                if (shown == null) changed else changed.copy(terminal = shown)
+            }
         }
     }
 

@@ -28,6 +28,7 @@ private const val PATH = "path"
 private const val STATUS = "status"
 private const val NAME = "name"
 private const val TITLE = "title"
+private const val TERMINAL = "terminal"
 
 internal fun JsonObjectBuilder.tool(item: AgentItem.ToolCall) {
     put(TYPE, "tool")
@@ -37,6 +38,7 @@ internal fun JsonObjectBuilder.tool(item: AgentItem.ToolCall) {
     put("output", item.output)
     put("diffs", JsonArray(item.diffs.map { it.toJson() }))
     put("locations", item.locations.toJson())
+    put(TERMINAL, item.terminal?.toJson() ?: JsonNull)
 }
 
 internal fun JsonObjectBuilder.permission(item: AgentItem.Permission) {
@@ -57,6 +59,7 @@ internal fun JsonObject.toolCall(id: String, version: Long) =
         output = string("output"),
         diffs = field("diffs").jsonArray.map { it.diff() },
         locations = field("locations").strings(),
+        terminal = get(TERMINAL)?.terminalOutput(),
     )
 
 internal fun JsonObject.permission(id: String, version: Long) =

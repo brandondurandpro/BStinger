@@ -19,6 +19,7 @@ import kotlin.test.assertTrue
 private const val CHUNKS = 5_000
 private const val TOOL_CALLS = 2_000
 private const val HISTORY_TURNS = 2_000
+private const val COMMAND_LINES = 200_000
 private const val STEPS = 40
 private const val TYPED = "a prompt typed key by key"
 
@@ -31,8 +32,10 @@ private const val SCROLL_BUDGET_MS = 4_000L
 private const val JUMPS_BUDGET_MS = 3_000L
 private const val TYPING_BUDGET_MS = 2_000L
 private const val HISTORY_BUDGET_MS = 3_000L
+private const val COMMAND_BUDGET_MS = 10_000L
 private const val BUDGET_MB = 800L
 private const val MAX_COMPOSED_ROWS = 80
+private const val MAX_SHOWN_OUTPUT = 16_000
 
 /**
  * Agent mode on large inputs: an answer of 5,000 chunks, a transcript of 2,000 tool calls scrolled and jumped
@@ -62,6 +65,25 @@ class AgentPerformanceE2eTest {
                 renderFrame()
             }
             assertEquals(2, conversation.itemsOf<AgentItem.AgentText>().size)
+        }
+
+    @Test
+    fun `a command of thousands of lines shows its end fast`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, agentPreferences())
+            val conversation = startConversation(app)
+            sendPrompt("echo ready")
+            awaitIdle(conversation)
+            measure("Command of $COMMAND_LINES lines run and shown", COMMAND_BUDGET_MS, BUDGET_MB) {
+                sendPrompt("run $COMMAND_LINES 0")
+                awaitCondition(COMMAND_BUDGET_MS) { "line $COMMAND_LINES" in textOf(AppTags.AGENT_TERMINAL) }
+                awaitIdle(conversation)
+                renderFrame()
+            }
+            // The transcript carries the end of the output, never all of it.
+            val shown = conversation.itemsOf<AgentItem.ToolCall>().lastOrNull()?.terminal
+            assertTrue(shown?.truncated == true)
+            assertTrue(shown.text.length <= MAX_SHOWN_OUTPUT, "${shown.text.length} characters shown")
         }
 
     @Test

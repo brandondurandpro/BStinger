@@ -53,7 +53,7 @@ internal fun initializeParams(): JsonObject =
                 put("readTextFile", true)
                 put("writeTextFile", true)
             }
-            put("terminal", false)
+            put("terminal", true)
         }
         putJsonObject("clientInfo") {
             put("name", "kotlin-editor")

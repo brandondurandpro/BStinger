@@ -57,21 +57,25 @@ internal fun toolStatus(status: String?): AgentToolStatus? =
         else -> null
     }
 
-/** The output and the diffs of the `content` of a tool call, null when the update does not change them. */
-internal class ToolContent(val output: String, val diffs: List<AgentDiff>)
+/**
+ * The output, the diffs and the terminals (their ids) of the `content` of a tool call, null when the update does not
+ * change them.
+ */
+internal class ToolContent(val output: String, val diffs: List<AgentDiff>, val terminals: List<String>)
 
 internal fun JsonObject.toolContent(): ToolContent? {
     val content = get(CONTENT) as? JsonArray ?: return null
     val texts = mutableListOf<String>()
     val diffs = mutableListOf<AgentDiff>()
+    val terminals = mutableListOf<String>()
     for (entry in content.mapNotNull { it.obj() }) {
         when (entry.text("type")) {
             CONTENT -> entry[CONTENT].obj()?.contentText()?.let(texts::add)
             "diff" -> entry.diff()?.let(diffs::add)
-            "terminal" -> texts.add("[terminal ${entry.text("terminalId").orEmpty()}]")
+            "terminal" -> entry.text("terminalId")?.let(terminals::add)
         }
     }
-    return ToolContent(texts.filter { it.isNotEmpty() }.joinToString("\n"), diffs)
+    return ToolContent(texts.filter { it.isNotEmpty() }.joinToString("\n"), diffs, terminals)
 }
 
 private fun JsonObject.diff(): AgentDiff? {

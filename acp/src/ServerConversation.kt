@@ -24,15 +24,15 @@ internal class ServerConversation(
     private val settings: AgentSettings,
 ) : SessionListener {
     private val lock = Any()
-    private val writer = TranscriptWriter(journal)
-    private val keeper = SessionKeeper(journal, writer, this)
+    private val writer: TranscriptWriter = TranscriptWriter(journal) { id -> keeper.terminalOf(id) }
+    private val keeper: SessionKeeper = SessionKeeper(journal, writer, this)
     private val prompted = HashSet<String>()
     private var opened = false
     private var job: Job? = null
 
     @Volatile
     private var stopping = false
-    private val permissions = ConcurrentHashMap<String, CompletableDeferred<String?>>()
+    private val permissions = Permissions(journal, writer)
 
     /**
      * Starts answering [text], shown as item [itemId], in the agent's [session] when the conversation has none yet. A
@@ -72,7 +72,7 @@ internal class ServerConversation(
         val running = synchronized(lock) { job?.takeIf { it.isActive } } ?: return
         stopping = true
         keeper.current?.let { it.process.cancel(it.id) }
-        cancelPermissions()
+        permissions.cancelAll()
         scope.launch {
             delay(settings.cancelGraceMs)
             running.cancel()
@@ -81,32 +81,23 @@ internal class ServerConversation(
 
     /** Answers the permission request [itemId] with [option]; a request already answered keeps its answer. */
     fun answer(itemId: String, option: String) {
-        permissions.remove(itemId)?.complete(option)
+        permissions.answer(itemId, option)
     }
 
     /** Stops the prompt and ends the session; the agent keeps its history. */
     suspend fun close() {
         job?.cancel()
-        cancelPermissions()
+        permissions.cancelAll()
         keeper.close()
     }
 
     override fun onUpdate(update: JsonObject) = writer.write(update)
 
-    override suspend fun requestPermission(params: JsonObject): String? {
-        val title = writer.permissionTitle(params["toolCall"].obj())
-        val options = params.permissionOptions()
-        val answer = CompletableDeferred<String?>()
-        val itemId = journal.newId()
-        permissions[itemId] = answer
-        journal.add { AgentItem.Permission(itemId, it, title, options) }
-        if (stopping) cancelPermissions()
-        val chosen = answer.await()
-        journal.update(itemId) { item, version ->
-            (item as AgentItem.Permission).copy(version = version, chosen = chosen, cancelled = chosen == null)
-        }
-        return chosen
-    }
+    override fun directory(): String? = keeper.current?.directory
+
+    override fun onTerminal(terminal: AgentTerminal) = writer.terminalChanged(terminal)
+
+    override suspend fun requestPermission(params: JsonObject): String? = permissions.ask(params, cancelled = stopping)
 
     private suspend fun run(itemId: String, text: String, directory: String, process: () -> AgentProcess) {
         var stopReason: String? = null
@@ -128,7 +119,7 @@ internal class ServerConversation(
     private fun finish(stopReason: String?) {
         val ended = stopReason == "end_turn" && !stopping
         writer.closeRunningTools(if (ended) AgentToolStatus.Completed else AgentToolStatus.Failed)
-        cancelPermissions()
+        permissions.cancelAll()
         when {
             stopping -> writer.notice("Stopped.")
             stopReason == "max_tokens" -> writer.notice("The agent stopped: it reached its token limit.", error = true)
@@ -137,10 +128,36 @@ internal class ServerConversation(
         }
         journal.setState(AgentTurnState.Idle)
     }
+}
 
-    private fun cancelPermissions() {
-        val waiting = permissions.keys.toList()
-        waiting.forEach { permissions.remove(it)?.complete(null) }
+/** The permission requests of a conversation waiting for the user, each one an item of its journal. */
+private class Permissions(private val journal: Journal, private val writer: TranscriptWriter) {
+    private val waiting = ConcurrentHashMap<String, CompletableDeferred<String?>>()
+
+    /** Asks the user, and waits for the answer: the option chosen, null when [cancelled] or cancelled meanwhile. */
+    suspend fun ask(params: JsonObject, cancelled: Boolean): String? {
+        val title = writer.permissionTitle(params["toolCall"].obj())
+        val options = params.permissionOptions()
+        val answer = CompletableDeferred<String?>()
+        val itemId = journal.newId()
+        waiting[itemId] = answer
+        journal.add { AgentItem.Permission(itemId, it, title, options) }
+        if (cancelled) cancelAll()
+        val chosen = answer.await()
+        journal.update(itemId) { item, version ->
+            (item as AgentItem.Permission).copy(version = version, chosen = chosen, cancelled = chosen == null)
+        }
+        return chosen
+    }
+
+    /** Answers [itemId] with [option]; a request already answered keeps its answer. */
+    fun answer(itemId: String, option: String) {
+        waiting.remove(itemId)?.complete(option)
+    }
+
+    /** Cancels every request still waiting. */
+    fun cancelAll() {
+        waiting.keys.toList().forEach { waiting.remove(it)?.complete(null) }
     }
 }
 
@@ -178,4 +195,10 @@ private suspend fun failures(
         writer.notice(dead?.exitReason() ?: (failure.message ?: "The agent failed"), error = true)
         if (dead != null) keeper.processDied()
     }
+}
+
+// The terminal [id] of the agent process of [keeper].
+private fun SessionKeeper.terminalOf(id: String): AgentTerminal? {
+    val process = current?.process ?: return null
+    return process.terminals[id]
 }

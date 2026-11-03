@@ -27,6 +27,12 @@ internal interface SessionListener {
 
     /** Asks the user; returns the option chosen, null when the prompt was cancelled first. */
     suspend fun requestPermission(params: JsonObject): String?
+
+    /** Directory the session works in, where its commands run by default; null before it started. */
+    fun directory(): String?
+
+    /** The output of a command of the session changed, or the command exited. */
+    fun onTerminal(terminal: AgentTerminal)
 }
 
 /**
@@ -37,7 +43,10 @@ internal interface SessionListener {
 internal class AgentProcess(val command: AgentCommand, scope: CoroutineScope, files: FileAccess) {
     private val log = LogRing(STDERR_LINES)
     private val sessions = ConcurrentHashMap<String, SessionListener>()
-    private val requests = AgentRequests(sessions, files)
+
+    /** The commands the agent runs on the server. */
+    val terminals = AgentTerminals(scope)
+    private val requests = AgentRequests(sessions, files, terminals)
     private val start = Mutex()
     private var info: AgentInfo? = null
 
@@ -107,11 +116,13 @@ internal class AgentProcess(val command: AgentCommand, scope: CoroutineScope, fi
     /** Forgets [session]: its updates are ignored from now on. */
     fun release(session: String) {
         sessions.remove(session)
+        terminals.releaseSession(session)
     }
 
     /** Stops the process and the programs it started (npx starts node). */
     fun destroy() {
         connection.close()
+        terminals.close()
         process.descendants().forEach { it.destroy() }
         process.destroy()
     }
@@ -125,8 +136,8 @@ internal class AgentProcess(val command: AgentCommand, scope: CoroutineScope, fi
     }
 }
 
-// Windows starts `npx` (a .cmd script) only through cmd.exe; an .exe starts directly.
-private fun commandLine(command: List<String>): List<String> {
+/** [command] as the system starts it: Windows starts `npx` (a .cmd script) only through cmd.exe, an .exe directly. */
+internal fun commandLine(command: List<String>): List<String> {
     val windows = System.getProperty("os.name").startsWith("Windows")
     val program = command.firstOrNull()?.lowercase().orEmpty()
     val direct = program.endsWith(".exe") || program.endsWith(".com")
