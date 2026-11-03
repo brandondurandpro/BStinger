@@ -11,14 +11,12 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
 import org.example.kotlineditor.model.CodeIntelligence
 import org.example.kotlineditor.model.CompletionResult
-import org.example.kotlineditor.model.ConnectionStatus
 import org.example.kotlineditor.model.DiagnosticsSnapshot
 import org.example.kotlineditor.model.LanguageServerCandidateInfo
 import org.example.kotlineditor.model.LanguageServerChoice
@@ -53,7 +51,7 @@ class LanguageServerLog(
 class LanguageServersState(
     private val servers: LanguageServers,
     parentScope: CoroutineScope,
-    connection: StateFlow<ConnectionStatus> = MutableStateFlow(ConnectionStatus.Connected),
+    connections: StateFlow<Long> = MutableStateFlow(1L),
 ) {
     // Its own jobs, cancelled by close() when the IDE switches to another server.
     private val jobs = SupervisorJob(parentScope.coroutineContext[Job])
@@ -110,8 +108,9 @@ class LanguageServersState(
         // One at a time, in order: each declaration replaces the previous one on the server.
         scope.launch { declarations.filterNotNull().collect(::send) }
         // A restarted server lost the sessions and what they declared: declared again at each reconnection.
+        val connected = connections.value
         scope.launch {
-            connection.drop(1).filter { it == ConnectionStatus.Connected }.collect {
+            connections.filter { it > connected }.collect {
                 declarations.value?.let { declarations.value = it.copy(round = it.round + 1) }
                 documents.resend()
             }

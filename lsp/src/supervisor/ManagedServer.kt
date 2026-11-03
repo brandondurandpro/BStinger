@@ -208,7 +208,15 @@ internal class ManagedServer(
             message = message,
             recentCrashes = synchronized(crashes) { crashes.size },
             users = users.size,
+            inlayHintsNote = inlayHintsNote(),
         )
+    }
+
+    // Null while no process is ready, or when it gives inlay hints.
+    private fun inlayHintsNote(): String? {
+        val withoutHints = supports("inlayHintProvider") == false
+        val reason = target.spec.withoutInlayHints ?: "${target.spec.name} gives no inlay hints."
+        return reason.takeIf { withoutHints }
     }
 
     fun setLeak(report: LeakReport): Boolean {

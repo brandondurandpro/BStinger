@@ -20,7 +20,6 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.example.kotlineditor.model.AppServices
-import org.example.kotlineditor.model.ConnectionStatus
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.remote.SshConfigHost
 import org.example.kotlineditor.remote.SshTarget
@@ -634,7 +633,7 @@ class AppState(
     // for the server shown, and each time the user changes their mind.
     private suspend fun shareTelemetryConsent() {
         snapshotFlow { services to telemetry.shared }.collectLatest { (shown, consent) ->
-            shown.connection.filter { it == ConnectionStatus.Connected }.collect { tellServer(shown, consent) }
+            shown.connections.filter { it > 0 }.collect { tellServer(shown, consent) }
         }
     }
 
@@ -647,7 +646,7 @@ class AppState(
     }
 
     private fun languageServersOf(services: AppServices) =
-        LanguageServersState(services.languageServers, scope, services.connection)
+        LanguageServersState(services.languageServers, scope, services.connections)
 
     // The old server's state stops polling: its connection is closed or belongs to another server.
     private fun rebindLanguageServers() {

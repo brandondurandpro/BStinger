@@ -79,9 +79,9 @@ class NetworkInspectorTest {
         runBlocking {
             client.awaitConnected()
             client.network.recording = true
-            val before = client.connections.get()
+            val before = client.connections.value
             server.dropConnections()
-            while (client.connections.get() == before) delay(10)
+            while (client.connections.value == before) delay(10)
             client.awaitConnected()
             val hello = client.network.snapshot().first { it.kind == "Hello" }
             assertTrue(hello.redacted)
