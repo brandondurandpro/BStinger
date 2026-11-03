@@ -108,7 +108,8 @@ class AgentService(
      * meanwhile its transcript shows the settings the sessions of [agent] offer, with the choice made.
      */
     suspend fun setOption(conversation: String, agent: AgentCommand, option: String, value: String) {
-        conversation(conversation).keeper.setOption(option, value, processes.knownOptions(agent))
+        val preview = Preview { choices -> processes.preview(agent, choices) }
+        conversation(conversation).keeper.setOption(option, value, processes.knownOptions(agent), preview)
     }
 
     /** Stops the prompt running in [conversation]. */

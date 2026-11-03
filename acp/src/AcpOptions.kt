@@ -57,15 +57,28 @@ internal suspend fun AgentProcess.setOption(session: String, option: String, val
 }
 
 /**
- * The settings a session of this agent working in [directory] offers: those of its latest new session, or those of
- * a session started to read them, then deleted (or closed) so that the history does not keep it.
+ * The settings a session of this agent working in [directory] has once [choices] are made: those of its latest new
+ * session when there is no choice, else those of a session started to read them, with the choices made (one the
+ * agent refuses is left out), then deleted (or closed) so that the history does not keep it.
  */
-internal suspend fun AgentProcess.offeredOptions(directory: String): List<AgentOption> {
-    offered?.let { return it }
+internal suspend fun AgentProcess.offeredOptions(
+    directory: String,
+    choices: Map<String, String> = emptyMap(),
+): List<AgentOption> {
+    val known = offered.takeIf { choices.isEmpty() }
+    if (known != null) return known
     val probe = newSession(directory, Unheard)
-    val deleted = runCatching { deleteSession(probe.id) }.getOrDefault(false)
-    if (!deleted) closeSession(probe.id)
-    return probe.options.orEmpty()
+    try {
+        var options = probe.options.orEmpty()
+        for ((option, value) in choices) {
+            val changed = runCatching { setOption(probe.id, option, value) }.getOrNull()
+            options = changed ?: options
+        }
+        return options
+    } finally {
+        val deleted = runCatching { deleteSession(probe.id) }.getOrDefault(false)
+        if (!deleted) closeSession(probe.id)
+    }
 }
 
 // The listener of a session nobody prompts.

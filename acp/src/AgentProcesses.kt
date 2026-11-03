@@ -37,6 +37,16 @@ class AgentProcesses internal constructor(
         return process.offeredOptions(directory)
     }
 
+    /**
+     * The settings a new session of [agent] has once [choices] are made (a model changes the efforts it offers), read
+     * in a session started for it, then deleted; null when the agent does not run, or never started a session.
+     */
+    internal suspend fun preview(agent: AgentCommand, choices: Map<String, String>): List<AgentOption>? {
+        val process = synchronized(processes) { processes[agent]?.takeIf { it.isAlive } }
+        val directory = process?.lastDirectory ?: return null
+        return process.offeredOptions(directory, choices)
+    }
+
     /** The settings the latest new session of [agent] offered, without starting it; empty when none started. */
     internal fun knownOptions(agent: AgentCommand): List<AgentOption> =
         synchronized(processes) { processes[agent]?.offered }.orEmpty()

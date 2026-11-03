@@ -53,6 +53,7 @@ class ConversationOptions internal constructor(
                     conversation.note("The ${known.name.lowercase()} could not be changed: ${failure.message}")
                 } finally {
                     conversation.settingOptions -= 1
+                    conversation.showServerOptions()
                 }
             }
         }
@@ -70,6 +71,12 @@ class ConversationOptions internal constructor(
                 agents.setOption(conversation.key, agentCommand(), option, value)
             }
         }
+    }
+
+    // Once no choice is on its way, the settings as the server said them while one was: those a model brings.
+    private fun Conversation.showServerOptions() {
+        val settled = settingOptions == 0
+        if (settled && serverOptions.isNotEmpty()) options = serverOptions
     }
 
     // The settings a session of the agent in [directory] offers; none when the server cannot say.

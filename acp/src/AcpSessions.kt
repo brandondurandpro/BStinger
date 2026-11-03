@@ -28,6 +28,7 @@ internal suspend fun AgentProcess.newSession(directory: String, listener: Sessio
     listen(id, listener)
     val options = answer.configOptions()
     offered = options.orEmpty()
+    lastDirectory = directory
     return StartedSession(id, options)
 }
 

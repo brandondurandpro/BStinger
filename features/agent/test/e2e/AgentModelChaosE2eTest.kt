@@ -119,4 +119,21 @@ class AgentModelChaosE2eTest {
             assertEquals("offline", file.readText())
             assertTrue(conversation.itemsOf<AgentItem.Permission>().isEmpty(), "Asked: ${conversation.items}")
         }
+
+    @Test
+    fun `an effort chosen on a slow link before the first prompt answers it`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, preferences(), chaos = true)
+            val conversation = startConversation(app)
+            awaitModel("Fast")
+            app.network.latencyMs = 400
+            chooseModel("fake-max")
+            awaitEffort("Default")
+            chooseEffort("high")
+            sendPrompt("effort")
+            awaitShown(conversation, "Effort: high.")
+            awaitIdle(conversation)
+            app.network.latencyMs = 0
+            awaitEffort("High")
+        }
 }

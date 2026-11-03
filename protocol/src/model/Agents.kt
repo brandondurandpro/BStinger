@@ -253,6 +253,9 @@ data class AgentOption(
 
         /** The category of the mode of the session: for Claude, its permissions (ask, accept edits, plan…). */
         const val MODE = "mode"
+
+        /** The category of how hard the agent thinks: for Claude, its effort, which depends on the model. */
+        const val THOUGHT_LEVEL = "thought_level"
     }
 }
 

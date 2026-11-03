@@ -51,6 +51,13 @@ fun PermissionsPicker(agent: AgentState, conversation: Conversation) {
     OptionPicker(agent, conversation, permissions, AgentTags.AGENT_PERMISSIONS, AgentTags::agentPermissionMode)
 }
 
+/** The effort of the session of [conversation]: how hard the agent thinks, when its model lets the user choose. */
+@Composable
+fun EffortPicker(agent: AgentState, conversation: Conversation) {
+    val effort = conversation.effort ?: return
+    OptionPicker(agent, conversation, effort, AgentTags.AGENT_EFFORT, AgentTags::agentEffort)
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun OptionPicker(

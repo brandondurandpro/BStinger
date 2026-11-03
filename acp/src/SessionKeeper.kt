@@ -15,6 +15,11 @@ private const val AUTH_REQUIRED = -32_000
 /** The agent needs the user to log in before it starts a session. */
 internal class LoginRequiredException(message: String) : IOException(message)
 
+/** The settings a new session of the agent would have with some choices made; null when it cannot say. */
+internal fun interface Preview {
+    suspend fun optionsWith(choices: Map<String, String>): List<AgentOption>?
+}
+
 /** A session of an agent process, and the process it belongs to. */
 internal class AgentSession(val process: AgentProcess, val id: String, val directory: String) {
     /** Whether it can take a prompt to work in [place]. */
@@ -44,8 +49,9 @@ internal class SessionKeeper(
     private var replay = false
     private var hadSession = false
 
-    // The settings chosen before the session started, set as soon as it does; the lock keeps them in order.
-    private val pending = LinkedHashMap<String, String>()
+    // The settings the user chose, in order, set in every session it starts (the first one, or one that replaces a
+    // session lost); the lock keeps them in order.
+    private val choices = LinkedHashMap<String, String>()
     private val settings = Mutex()
 
     /**
@@ -82,20 +88,23 @@ internal class SessionKeeper(
         val forgot = hadSession || previous != null
         if (reopened == null && forgot) writer.notice(NEW_SESSION)
         val session = started(reopened ?: fresh(agent, info, directory))
-        settings.withLock { applyPending(session) }
+        settings.withLock { applyChoices(session) }
         return session
     }
 
     /**
-     * Sets [option] to [value]: in the running session, or in the next one, the settings shown meanwhile being
-     * [known] (those the agent offers) with the choice made.
+     * Sets [option] to [value]: in the running session, or in the next one. Meanwhile the settings shown are those
+     * [preview] says a session with the choices made has (a model changes the efforts it offers), else [known] (those
+     * the agent offers) with the choice made.
      */
-    suspend fun setOption(option: String, value: String, known: List<AgentOption>) {
+    suspend fun setOption(option: String, value: String, known: List<AgentOption>, preview: Preview) {
         settings.withLock {
+            choices.remove(option)
+            choices[option] = value
             val running = current?.takeIf { it.process.isAlive }
             if (running == null) {
-                pending[option] = value
-                journal.describe { it.copy(options = chosen(it.options.ifEmpty { known }, option, value)) }
+                val previewed = preview.optionsWith(choices.toMap())
+                journal.describe { it.copy(options = previewed ?: chosen(it.options.ifEmpty { known }, option, value)) }
             } else {
                 val options = running.process.setOption(running.id, option, value)
                 journal.describe { it.copy(options = options ?: chosen(it.options, option, value)) }
@@ -103,17 +112,17 @@ internal class SessionKeeper(
         }
     }
 
-    // Sets the settings chosen before [session] started; one the agent refuses becomes a notice.
-    private suspend fun applyPending(session: AgentSession) {
-        for ((option, value) in pending.entries.toList()) {
+    // Sets the choices of the user in [session]; one the agent refuses becomes a notice, and is forgotten.
+    private suspend fun applyChoices(session: AgentSession) {
+        for ((option, value) in choices.entries.toList()) {
             try {
                 val options = session.process.setOption(session.id, option, value)
                 journal.describe { it.copy(options = options ?: chosen(it.options, option, value)) }
             } catch (refused: LspResponseException) {
+                choices.remove(option)
                 writer.notice("The agent refused $value for $option: ${refused.message}", error = true)
             }
         }
-        pending.clear()
     }
 
     // A new session of [agent]: its exceptions say why it could not start.

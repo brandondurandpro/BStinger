@@ -42,7 +42,7 @@ private const val CLIENT_TIMEOUT_S = 60L
  * - `stream <n>`: `n` chunks at once; `tools <n>`: `n` completed tool calls; `crash`: exits with code 3;
  * - `count`: the number of prompts of its session;
  * - `model`: `Model: <model>.`, the model of its session (`mode`: `Mode: <mode>.`, `write` asks nothing in
- *   `accept-edits`); `fallback`: it moves to `fake-fast` itself and says so;
+ *   `accept-edits`; `effort`: `Effort: <effort>.`); `fallback`: it moves to `fake-fast` itself and says so;
  * - `markdown`: an answer in Markdown, streamed in pieces that cut its marks: a heading, bold, a list, code, a table;
  * - `run <n> <code>`: runs [FakeProgram] in a terminal of the client, which prints `n` lines and exits with `code`;
  *   `run forever`: one that never stops, killed when the prompt is cancelled; `run big <n>`: `n` lines, of which
@@ -195,10 +195,10 @@ class FakeAgent(private val options: FakeAgentOptions, private val out: PrintStr
         val session = params.text("sessionId")?.let(store::get)
         val option = params.text("configId").orEmpty()
         val value = params.text("value").orEmpty()
-        if (session == null || !config.accepts(option, value)) {
+        if (session == null || !config.accepts(session, option, value)) {
             return failure(id, INVALID_PARAMS, "No $option $value")
         }
-        if (option == FakeConfig.MODEL) session.model = value else session.mode = value
+        config.set(session, option, value)
         store.save(session)
         return success(id, buildJsonObject { put("configOptions", config.options(session)) })
     }
@@ -206,7 +206,7 @@ class FakeAgent(private val options: FakeAgentOptions, private val out: PrintStr
     private fun fellBack(session: String): String {
         val kept = store[session]
         if (kept != null) {
-            kept.model = FakeConfig.DEFAULT_MODEL
+            config.set(kept, FakeConfig.MODEL, FakeConfig.DEFAULT_MODEL)
             update(session, "config_option_update") { put("configOptions", config.options(kept)) }
         }
         message(session, "Fell back to ${FakeConfig.DEFAULT_MODEL}.")
@@ -262,6 +262,7 @@ class FakeAgent(private val options: FakeAgentOptions, private val out: PrintStr
             "markdown" -> chunks(session, MARKDOWN.chunked(MARKDOWN_PIECE))
             "model" -> chunks(session, listOf("Model: ${store[session]?.model}."))
             "mode" -> chunks(session, listOf("Mode: ${store[session]?.mode}."))
+            "effort" -> chunks(session, listOf("Effort: ${store[session]?.effort}."))
             "fallback" -> fellBack(session)
             else -> chunks(session, listOf("You said: $prompt"))
         }

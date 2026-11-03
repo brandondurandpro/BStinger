@@ -55,6 +55,10 @@ internal class AgentProcess(val command: AgentCommand, scope: CoroutineScope, fi
     @Volatile
     var offered: List<AgentOption>? = null
 
+    /** Directory the latest new session works in; null before one started. */
+    @Volatile
+    var lastDirectory: String? = null
+
     private val process: Process =
         try {
             ProcessBuilder(commandLine(command.command))

@@ -141,6 +141,63 @@ class AgentOptionsTest {
         assertEquals("fake-max", followed.last.options.model())
     }
 
+    private fun List<AgentOption>.effort(): AgentOption? = firstOrNull { it.category == AgentOption.THOUGHT_LEVEL }
+
+    // The effort of [conversation] once the agent is idle.
+    private fun AgentService.effortOf(conversation: String): AgentOption? {
+        val followed = idle(conversation)
+        return followed.last.options.effort()
+    }
+
+    @Test
+    fun `a model chosen before the first prompt brings its efforts, and the preview leaves no session`() {
+        val server = server()
+        val agent = agent()
+        val offered = runBlocking { server.processes.options(agent, directory) }
+        assertNull(offered.effort(), "fake-fast thinks as it does")
+        runBlocking { server.setOption("c1", agent, "model", "fake-max") }
+        val previewed = server.effortOf("c1")
+        assertEquals(listOf("default", "low", "medium", "high", "max"), previewed?.values?.map { it.value })
+        runBlocking { server.setOption("c1", agent, "effort", "high") }
+        server.send("effort", agent)
+        val followed = server.idle("c1") { it.answers().isNotEmpty() }
+        assertEquals(listOf("Effort: high."), followed.items.answers())
+        val history = runBlocking { server.processes.sessions(agent, listOf(directory)) }
+        assertEquals(1, history.sessions.size, "Only the session of the conversation: ${history.sessions}")
+    }
+
+    @Test
+    fun `the efforts follow the model of a running session`() {
+        val server = server()
+        val agent = agent()
+        server.send("echo hi", agent)
+        server.idle("c1") { it.answers().isNotEmpty() }
+        runBlocking { server.setOption("c1", agent, "model", "fake-max") }
+        runBlocking { server.setOption("c1", agent, "effort", "max") }
+        runBlocking { server.setOption("c1", agent, "model", "fake-smart") }
+        val effort = server.effortOf("c1")
+        // fake-smart has no max: the agent went back to its default, and says so.
+        assertEquals("default", effort?.current)
+        assertEquals(listOf("default", "low", "medium", "high"), effort?.values?.map { it.value })
+        runBlocking { server.setOption("c1", agent, "model", "fake-fast") }
+        assertNull(server.effortOf("c1"))
+    }
+
+    @Test
+    fun `the choices are set again in the session that replaces one lost`() {
+        val server = server()
+        val agent = agent("--no-history")
+        server.send("echo hi", agent)
+        server.idle("c1") { it.answers().isNotEmpty() }
+        runBlocking { server.setOption("c1", agent, "model", "fake-smart") }
+        server.send("crash", agent)
+        server.idle("c1") { list -> list.any { it is AgentItem.Notice } }
+        server.send("model", agent)
+        val followed = server.idle("c1") { it.answers().size == 2 }
+        // The agent cannot reopen its session: a new one starts, with the model chosen.
+        assertEquals("Model: fake-smart.", followed.items.answers().lastOrNull())
+    }
+
     @Test
     fun `config options are read flat or grouped, and the other types are left out`() {
         val message =

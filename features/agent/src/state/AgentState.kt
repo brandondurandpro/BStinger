@@ -108,11 +108,17 @@ class Conversation(val id: Int, title: String, val branch: String) {
 
     /** The mode of permissions of its session (ask before editing, accept edits, plan…), when the agent has one. */
     val permissions: AgentOption? get() = options.firstOrNull { it.category == AgentOption.MODE }
+
+    /** How hard the agent thinks (its effort), when its model lets the user choose. */
+    val effort: AgentOption? get() = options.firstOrNull { it.category == AgentOption.THOUGHT_LEVEL }
     internal var offering: Job? = null
 
     // The choices of the user, sent again before the first prompt; how many are on their way; their order.
     internal val choices = LinkedHashMap<String, String>()
     internal var settingOptions = 0
+
+    // The settings as the server last said, shown once no choice is on its way any more.
+    internal var serverOptions: List<AgentOption> = emptyList()
     internal val optionsLock = Mutex()
 
     /** True while the agent moves to a worktree: the tool windows still show where it worked before. */

@@ -164,6 +164,14 @@ fun ComposeUiTest.awaitModel(name: String) = awaitOption(AgentTags.AGENT_MODEL, 
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.chooseModel(value: String) = chooseOption(AgentTags.AGENT_MODEL, AgentTags.agentModel(value))
 
+/** Waits until the effort button shows [name]. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.awaitEffort(name: String) = awaitOption(AgentTags.AGENT_EFFORT, name)
+
+/** Chooses the effort [value] (`high`). */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.chooseEffort(value: String) = chooseOption(AgentTags.AGENT_EFFORT, AgentTags.agentEffort(value))
+
 /** Waits until the button of the mode of permissions shows [name]. */
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.awaitPermissions(name: String) = awaitOption(AgentTags.AGENT_PERMISSIONS, name)

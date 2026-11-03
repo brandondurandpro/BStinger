@@ -215,6 +215,7 @@ private fun PromptActions(agent: AgentState, conversation: Conversation) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         // The model first: the name of the agent (its command line, before it introduced itself) may be long.
         ModelPicker(agent, conversation)
+        EffortPicker(agent, conversation)
         PermissionsPicker(agent, conversation)
         Spacer(Modifier.width(8.dp))
         val name = conversation.agentName ?: agent.agentLabel
