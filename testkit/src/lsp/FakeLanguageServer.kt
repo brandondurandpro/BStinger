@@ -41,7 +41,8 @@ import kotlin.system.exitProcess
  *   `--ignore-shutdown`, `--crash-like-symfony` (crashes at start like phpactor: an error block, then the usage of
  *   its command);
  * - output: `--garbage-stdout`, `--huge-message <mb>` (the hover answer), `--stderr-flood`;
- * - timing and questions: `--latency-ms <n>`, `--ask-configuration` (asks `workspace/configuration` after
+ * - timing and questions: `--latency-ms <n>`, `--progress-on-references <ms>` (each search of references takes
+ *   that long, within a "Finding references" progress, like phpactor), `--ask-configuration` (asks `workspace/configuration` after
  *   `initialized` and writes the answer to stderr), `--diagnostics`, `--progress <seconds>` (reports an
  *   "Indexing" progress from 0 to 100 % over that many seconds after `initialized`), `--blind-until-indexed` (with
  *   `--progress`: like intelephense, finds no definition nor usage until its indexing ended, which begins a moment
@@ -122,6 +123,7 @@ object FakeLanguageServer {
         val hugeMessageMb: Int? = null,
         val stderrFlood: Boolean = false,
         val latencyMs: Long = 0,
+        val progressOnReferencesMs: Long? = null,
         val askConfiguration: Boolean = false,
         val diagnostics: Boolean = false,
         val progressSeconds: Int? = null,
@@ -165,6 +167,7 @@ object FakeLanguageServer {
                     hugeMessageMb = int("huge-message"),
                     stderrFlood = "stderr-flood" in values,
                     latencyMs = values["latency-ms"]?.toLong() ?: 0,
+                    progressOnReferencesMs = values["progress-on-references"]?.toLong(),
                     askConfiguration = "ask-configuration" in values,
                     diagnostics = "diagnostics" in values,
                     progressSeconds = int("progress"),
@@ -189,6 +192,7 @@ object FakeLanguageServer {
                     "crash-after",
                     "huge-message",
                     "latency-ms",
+                    "progress-on-references",
                     "progress",
                     "completion-items",
                     "without",
@@ -239,6 +243,8 @@ object FakeLanguageServer {
 
         // False until the indexing of `--progress` ended, with `--blind-until-indexed`: no definition nor usage.
         @Volatile private var sees = !(options.blindUntilIndexed && options.progressSeconds != null)
+
+        private var searches = 0
 
         // executeCommand requests waiting for the answer to the applyEdit they sent, by the applyEdit's id.
         private val pendingCommands = HashMap<String, JsonElement>()
@@ -632,9 +638,35 @@ object FakeLanguageServer {
         }
 
         private fun answerNavigation(id: JsonElement?, method: String, params: JsonElement?) {
-            val answer = if (method == "textDocument/references") intelligence().references(params) else intelligence().definition(params)
+            val references = method == "textDocument/references"
+            val searchMs = options.progressOnReferencesMs
+            if (references && searchMs != null) {
+                answerReferencesWithProgress(id, params, searchMs)
+                return
+            }
+            val answer = if (references) intelligence().references(params) else intelligence().definition(params)
             reply(id, answer)
         }
+
+        // Like phpactor: each search of references is a work-done progress the server creates, begun and ended.
+        private fun answerReferencesWithProgress(id: JsonElement?, params: JsonElement?, searchMs: Long) {
+            searches++
+            val token = "references-$searches"
+            send(request("progress-$token", "window/workDoneProgress/create", buildJsonObject { put("token", token) }))
+            progressOf(token, buildJsonObject {
+                put("kind", "begin")
+                put("title", "Finding references")
+            })
+            Thread.sleep(searchMs)
+            reply(id, intelligence().references(params))
+            progressOf(token, buildJsonObject { put("kind", "end") })
+        }
+
+        private fun progressOf(token: String, value: JsonObject) =
+            notify("\$/progress", buildJsonObject {
+                put("token", token)
+                put("value", value)
+            })
 
         private fun reportProgress(seconds: Int) {
             // A blind server begins to index a moment after initialized, as intelephense once its configuration came.

@@ -120,6 +120,33 @@ class PhpactorIntegrationTest {
         stillUpAfter(root)
     }
 
+    @Test
+    fun `phpactor indexes the project of KOTLIN_EDITOR_PHPACTOR_FILE, then gives the inlay hints of the file`() {
+        val given = System.getenv("KOTLIN_EDITOR_PHPACTOR_FILE").orEmpty()
+        val root = System.getenv("KOTLIN_EDITOR_PHPACTOR_PROJECT").orEmpty()
+        val asked = given.isNotBlank() && root.isNotBlank()
+        if (!asked || !phpAvailable()) return
+        val file = Paths.get(given)
+        val started = System.currentTimeMillis()
+        startOn(Paths.get(root), file)
+        // Like the editor: the usages of its declarations first, each one a search of references.
+        val counted = runBlocking { service.intelligence.usageCounts(SESSION, file.toString(), 1) }
+        assertTrue(counted.status == FeatureStatus.Ready, "usages: $counted")
+        val hints =
+            runBlocking {
+                withTimeout(START_MS) {
+                    var answer = service.intelligence.inlayHints(SESSION, file.toString(), 1)
+                    while (answer.status == FeatureStatus.NotReady) {
+                        delay(100)
+                        answer = service.intelligence.inlayHints(SESSION, file.toString(), 1)
+                    }
+                    answer
+                }
+            }
+        println("PHPACTOR ${hints.hints.size} inlay hints after ${System.currentTimeMillis() - started} ms")
+        assertTrue(hints.hints.isNotEmpty(), "no inlay hint: $hints\n${logOf(server())}")
+    }
+
     private fun startOn(root: Path, file: Path) {
         service.use(SESSION, root.toString(), listOf(file.toString()))
         service.openDocument(SESSION, root.toString(), file.toString(), 1, Files.readString(file))
