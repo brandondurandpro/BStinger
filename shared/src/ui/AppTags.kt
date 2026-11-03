@@ -1,7 +1,7 @@
 package org.example.kotlineditor.ui
 
 /**
- * Semantics test tags of the application shell (screens, tool windows, shortcuts, agents), shared with the
+ * Semantics test tags of the application shell (screens, tool windows, shortcuts), shared with the
  * end-to-end tests. Paths are relative to the project root.
  */
 @Suppress("TooManyFunctions")
@@ -41,7 +41,6 @@ object AppTags {
     const val SETTINGS_SERVERS_ERROR = "settings.servers.error"
     const val SETTINGS_TELEMETRY_FORBIDDEN = "settings.telemetry.forbidden"
     const val SETTINGS_AGENT_COMMAND = "settings.agentCommand"
-    const val SETTINGS_AGENTS = "settings.agents"
     const val TOOL_PROJECT = "tool.project"
     const val TOOL_GIT = "tool.git"
     const val TOOL_BRANCHES = "tool.branches"
@@ -58,29 +57,6 @@ object AppTags {
     const val NETWORK_UNAVAILABLE = "network.unavailable"
     const val NETWORK_DETAIL = "network.detail"
     const val WORKSPACE = "workspace"
-    const val MODE_SWITCH = "mode.switch"
-    const val MODE_IDE = "mode.ide"
-    const val MODE_AGENT = "mode.agent"
-    const val AGENT = "agent"
-    const val AGENT_LIST = "agent.list"
-    const val AGENT_NEW = "agent.new"
-    const val AGENT_FILTER = "agent.filter"
-    const val AGENT_DELETE = "agent.delete"
-    const val AGENT_TABS = "agent.tabs"
-    const val AGENT_EMPTY = "agent.empty"
-    const val AGENT_PROMPT = "agent.prompt"
-    const val AGENT_SEND = "agent.send"
-    const val AGENT_STOP = "agent.stop"
-    const val AGENT_THINKING = "agent.thinking"
-    const val AGENT_NAME = "agent.name"
-    const val AGENT_TERMINAL = "agent.terminal"
-    const val AGENT_STRIP_CONVERSATIONS = "agent.strip.conversations"
-    const val AGENT_DETAILS = "agent.details"
-    const val AGENT_DETAIL_CONVERSATION = "agent.detail.conversation"
-    const val AGENT_DETAIL_EDITOR = "agent.detail.editor"
-    const val AGENT_WORKSPACE_STATUS = "agent.workspaceStatus"
-    const val AGENT_MODE_DIRECT = "agent.mode.direct"
-    const val AGENT_MODE_WORKTREE = "agent.mode.worktree"
     const val FILE_DIALOG = "fileDialog"
     const val FILE_DIALOG_INPUT = "fileDialog.input"
     const val FILE_DIALOG_OK = "fileDialog.ok"
@@ -101,23 +77,6 @@ object AppTags {
     fun pane(index: Int) = "editor.pane:$index"
 
     fun dockSplitter(dock: String) = "dock.splitter:$dock"
-
-    fun settingsAgent(id: String) = "settings.agent:$id"
-
-    fun agentConversation(id: Int) = "agent.conversation.$id"
-
-    fun agentTab(id: Int) = "agent.tab.$id"
-
-    fun agentTabClose(id: Int) = "agent.tab.$id.close"
-
-    fun agentTabDetails(id: Int) = "agent.tab.$id.details"
-
-    fun agentView(id: Int) = "agent.view.$id"
-
-    fun agentMessage(index: Int) = "agent.message.$index"
-
-    /** A button of the pending permission request, by the id of its option (`allow`). */
-    fun agentPermission(option: String) = "agent.permission:$option"
 
     fun recentProject(path: String) = "recent:$path"
 

@@ -86,7 +86,7 @@ class Conversation(val id: Int, title: String, val branch: String) {
         internal set
 
     /** The project the agent works on: the project itself, or its worktree once Git has created it. */
-    var workspace: ProjectState? by mutableStateOf(null)
+    var workspace: AgentWorkspace? by mutableStateOf(null)
         internal set
 
     /** Why the worktree could not be created (not a Git repository, branch checked out elsewhere…). */
@@ -102,7 +102,7 @@ class Conversation(val id: Int, title: String, val branch: String) {
     var showsChat by mutableStateOf(true)
 
     /** Branch checked out where the agent works: it follows a checkout made from the Git panel or the terminal. */
-    val currentBranch: String? get() = workspace?.git?.currentBranch ?: branch.takeIf { mode == WorkMode.Worktree }
+    val currentBranch: String? get() = workspace?.checkedOutBranch ?: branch.takeIf { mode == WorkMode.Worktree }
 
     /** Whether the agent already works somewhere: its place can no longer change. */
     val started: Boolean get() = items.isNotEmpty() || session != null
@@ -170,7 +170,7 @@ class Conversation(val id: Int, title: String, val branch: String) {
  */
 @Stable
 class AgentState(
-    private val project: ProjectState,
+    private val project: AgentHost,
     private val agentCommand: () -> AgentCommand = { agentCommandOf("") },
 ) {
     private val git get() = project.services.git
@@ -351,7 +351,7 @@ class AgentState(
     // conversation, or its worktree opening, changes nothing.
     private fun followEditors() {
         project.scope.launch {
-            var previous: Pair<Conversation, ProjectState?>? = null
+            var previous: Pair<Conversation, AgentWorkspace?>? = null
             snapshotFlow { current?.let { Triple(it, it.workspace, it.workspace?.editor?.activeTab) } }
                 .filterNotNull()
                 .collect { (conversation, workspace, tab) ->

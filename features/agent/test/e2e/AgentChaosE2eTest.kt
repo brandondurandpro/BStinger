@@ -5,6 +5,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.model.AgentItem
+import org.example.kotlineditor.ui.AgentTags
 import org.example.kotlineditor.ui.AppTags
 import java.nio.file.Files
 import kotlin.io.path.readText
@@ -53,7 +54,7 @@ class AgentChaosE2eTest {
             app.network.comeBack()
             awaitReconnected()
             awaitShown(conversation, "tick 30 ")
-            onNodeWithTag(AppTags.AGENT_STOP).performClick()
+            onNodeWithTag(AgentTags.AGENT_STOP).performClick()
             awaitIdle(conversation)
             val answer = conversation.itemsOf<AgentItem.AgentText>().single().text
             val shown = ticks(answer)
@@ -68,9 +69,9 @@ class AgentChaosE2eTest {
             val conversation = startConversation(app)
             val file = project.root.resolve("NOTES.md")
             sendPrompt("write $file once")
-            awaitTag(AppTags.agentPermission("allow"), timeout = AGENT_TIMEOUT)
+            awaitTag(AgentTags.agentPermission("allow"), timeout = AGENT_TIMEOUT)
             app.network.dropFromServer = true
-            onNodeWithTag(AppTags.agentPermission("allow")).performClick()
+            onNodeWithTag(AgentTags.agentPermission("allow")).performClick()
             app.network.cutAll()
             app.network.dropFromServer = false
             awaitReconnected()
@@ -131,7 +132,7 @@ class AgentChaosE2eTest {
             val conversation = awaitHistory(app, session)
             app.network.goDown()
             awaitReconnecting()
-            awaitTag(AppTags.agentConversation(conversation.id)).performClick()
+            awaitTag(AgentTags.agentConversation(conversation.id)).performClick()
             app.network.comeBack()
             awaitReconnected()
             awaitShown(conversation, "old answer")
@@ -188,7 +189,7 @@ class AgentChaosE2eTest {
             app.network.comeBack()
             awaitReconnected()
             awaitShown(conversation, "tick 40")
-            onNodeWithTag(AppTags.AGENT_STOP).performClick()
+            onNodeWithTag(AgentTags.AGENT_STOP).performClick()
             awaitShown(conversation, "Killed.")
             awaitIdle(conversation)
         }

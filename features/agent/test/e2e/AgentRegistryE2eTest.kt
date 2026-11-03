@@ -6,6 +6,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.acp.registryPlatformForTests
 import org.example.kotlineditor.testkit.acp.FakeRegistry
+import org.example.kotlineditor.ui.AgentTags
 import org.example.kotlineditor.ui.AppTags
 import java.nio.file.Files
 import kotlin.test.AfterTest
@@ -36,7 +37,7 @@ class AgentRegistryE2eTest {
             val app = launchWithProject(project, agentPreferences(), agents = agentSettings(registry.url, data))
             app.state.openSettings()
             awaitTag(AppTags.settingsCategory("Experimental")).performClick()
-            awaitTag(AppTags.settingsAgent("fake-agent")).performClick()
+            awaitTag(AgentTags.settingsAgent("fake-agent")).performClick()
             // A command line would win over the agent chosen: choosing one clears it.
             awaitCondition { app.state.agentRegistry == "fake-agent" && app.state.agentCommand.isEmpty() }
             onNodeWithTag(AppTags.SETTINGS_CLOSE).performClick()
@@ -53,8 +54,8 @@ class AgentRegistryE2eTest {
             val app = launchWithProject(project, agentPreferences(), agents = agentSettings(registry.url, data))
             app.state.openSettings()
             awaitTag(AppTags.settingsCategory("Experimental")).performClick()
-            val row = awaitTag(AppTags.settingsAgent("unsigned-agent"))
-            assertContains(textOf(AppTags.settingsAgent("unsigned-agent")), "no checksum")
+            val row = awaitTag(AgentTags.settingsAgent("unsigned-agent"))
+            assertContains(textOf(AgentTags.settingsAgent("unsigned-agent")), "no checksum")
             row.performClick()
             waitForIdle()
             assertEquals("", app.state.agentRegistry)

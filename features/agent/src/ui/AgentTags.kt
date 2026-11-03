@@ -1,0 +1,46 @@
+package org.example.kotlineditor.ui
+
+/** Semantics test tags of agent mode (its switch, conversations, prompt, settings), shared with the end-to-end tests. */
+object AgentTags {
+    const val SETTINGS_AGENTS = "settings.agents"
+    const val MODE_SWITCH = "mode.switch"
+    const val MODE_IDE = "mode.ide"
+    const val MODE_AGENT = "mode.agent"
+    const val AGENT = "agent"
+    const val AGENT_LIST = "agent.list"
+    const val AGENT_NEW = "agent.new"
+    const val AGENT_FILTER = "agent.filter"
+    const val AGENT_DELETE = "agent.delete"
+    const val AGENT_TABS = "agent.tabs"
+    const val AGENT_EMPTY = "agent.empty"
+    const val AGENT_PROMPT = "agent.prompt"
+    const val AGENT_SEND = "agent.send"
+    const val AGENT_STOP = "agent.stop"
+    const val AGENT_THINKING = "agent.thinking"
+    const val AGENT_NAME = "agent.name"
+    const val AGENT_TERMINAL = "agent.terminal"
+    const val AGENT_STRIP_CONVERSATIONS = "agent.strip.conversations"
+    const val AGENT_DETAILS = "agent.details"
+    const val AGENT_DETAIL_CONVERSATION = "agent.detail.conversation"
+    const val AGENT_DETAIL_EDITOR = "agent.detail.editor"
+    const val AGENT_WORKSPACE_STATUS = "agent.workspaceStatus"
+    const val AGENT_MODE_DIRECT = "agent.mode.direct"
+    const val AGENT_MODE_WORKTREE = "agent.mode.worktree"
+
+    fun settingsAgent(id: String) = "settings.agent:$id"
+
+    fun agentConversation(id: Int) = "agent.conversation.$id"
+
+    fun agentTab(id: Int) = "agent.tab.$id"
+
+    fun agentTabClose(id: Int) = "agent.tab.$id.close"
+
+    fun agentTabDetails(id: Int) = "agent.tab.$id.details"
+
+    fun agentView(id: Int) = "agent.view.$id"
+
+    fun agentMessage(index: Int) = "agent.message.$index"
+
+    /** A button of the pending permission request, by the id of its option (`allow`). */
+    fun agentPermission(option: String) = "agent.permission:$option"
+}

@@ -22,26 +22,23 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.example.kotlineditor.model.AgentRegistryEntry
-import org.example.kotlineditor.state.AppState
-import org.example.kotlineditor.state.DEFAULT_AGENT
+import org.example.kotlineditor.model.Agents
 
 private val LIST_HEIGHT = 260.dp
 
 /**
- * The agents of the ACP registry, as the server reads it: choosing one clears the command line, since a command line
- * wins over it. The agents the server cannot run show why, and cannot be chosen.
+ * The agents of the ACP registry, as the server reads it ([agents]), [chosen] selected; [choose] picks another. The
+ * agents the server cannot run show why, and cannot be chosen.
  */
 @Composable
-internal fun AgentRegistryControl(app: AppState) {
+fun AgentRegistryControl(agents: Agents, chosen: String?, choose: (String) -> Unit) {
     var entries by remember { mutableStateOf<List<AgentRegistryEntry>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    val agents = app.services.agents
     LaunchedEffect(agents) {
         runCatching { agents.registry() }
             .onSuccess { entries = it }
             .onFailure { error = it.message ?: "unknown error" }
     }
-    val chosen = app.agentRegistry.ifBlank { DEFAULT_AGENT }.takeIf { app.agentCommand.isBlank() }
     val listed = entries
     when {
         error != null -> {
@@ -53,17 +50,14 @@ internal fun AgentRegistryControl(app: AppState) {
         }
 
         else -> {
-            AgentList(listed, chosen) { id ->
-                app.agentRegistry = id
-                app.agentCommand = ""
-            }
+            AgentList(listed, chosen, choose)
         }
     }
 }
 
 @Composable
 private fun AgentList(entries: List<AgentRegistryEntry>, chosen: String?, choose: (String) -> Unit) {
-    LazyColumn(Modifier.fillMaxWidth().heightIn(max = LIST_HEIGHT).testTag(AppTags.SETTINGS_AGENTS)) {
+    LazyColumn(Modifier.fillMaxWidth().heightIn(max = LIST_HEIGHT).testTag(AgentTags.SETTINGS_AGENTS)) {
         items(entries, key = { it.id }) { entry -> AgentRow(entry, entry.id == chosen) { choose(entry.id) } }
     }
 }
@@ -78,7 +72,7 @@ private fun AgentRow(entry: AgentRegistryEntry, selected: Boolean, choose: () ->
             .fillMaxWidth()
             .background(background, RoundedCornerShape(4.dp))
             .clickable(enabled = available, onClick = choose)
-            .testTag(AppTags.settingsAgent(entry.id))
+            .testTag(AgentTags.settingsAgent(entry.id))
             .padding(horizontal = 8.dp, vertical = 4.dp),
     ) {
         Label("${entry.name} ${entry.version}", color = text, fontWeight = FontWeight.Medium)

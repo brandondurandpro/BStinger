@@ -10,6 +10,7 @@ import kotlinx.coroutines.runBlocking
 import org.example.kotlineditor.acp.registryPlatformForTests
 import org.example.kotlineditor.model.AgentItem
 import org.example.kotlineditor.testkit.acp.FakeRegistry
+import org.example.kotlineditor.ui.AgentTags
 import org.example.kotlineditor.ui.AppTags
 import java.nio.file.Files
 import kotlin.test.AfterTest
@@ -80,7 +81,7 @@ class AgentPerformanceE2eTest {
             awaitIdle(conversation)
             measure("Command of $COMMAND_LINES lines run and shown", COMMAND_BUDGET_MS, BUDGET_MB) {
                 sendPrompt("run $COMMAND_LINES 0")
-                awaitCondition(COMMAND_BUDGET_MS) { "line $COMMAND_LINES" in textOf(AppTags.AGENT_TERMINAL) }
+                awaitCondition(COMMAND_BUDGET_MS) { "line $COMMAND_LINES" in textOf(AgentTags.AGENT_TERMINAL) }
                 awaitIdle(conversation)
                 renderFrame()
             }
@@ -99,7 +100,7 @@ class AgentPerformanceE2eTest {
             app.state.openSettings()
             measure("Registry of $REGISTRY_AGENTS agents listed", REGISTRY_BUDGET_MS, BUDGET_MB) {
                 awaitTag(AppTags.settingsCategory("Experimental")).performClick()
-                awaitTag(AppTags.settingsAgent("fake-agent"), timeout = REGISTRY_BUDGET_MS)
+                awaitTag(AgentTags.settingsAgent("fake-agent"), timeout = REGISTRY_BUDGET_MS)
                 renderFrame()
             }
             val composed = onAllNodes(hasTestTagPrefix("settings.agent:")).fetchSemanticsNodes().size
@@ -118,7 +119,7 @@ class AgentPerformanceE2eTest {
             // The agent process starts, and lists its sessions, outside the measure.
             val conversation = awaitHistory(app, session)
             measure("History of $HISTORY_TURNS prompts replayed", HISTORY_BUDGET_MS, BUDGET_MB) {
-                awaitTag(AppTags.agentConversation(conversation.id)).performClick()
+                awaitTag(AgentTags.agentConversation(conversation.id)).performClick()
                 awaitCondition(HISTORY_BUDGET_MS) { conversation.items.size == 2 * HISTORY_TURNS }
                 awaitIdle(conversation)
                 renderFrame()
@@ -162,12 +163,12 @@ class AgentPerformanceE2eTest {
             }
             measure("Prompt typed over the transcript", TYPING_BUDGET_MS, BUDGET_MB) {
                 for (letter in TYPED) {
-                    onNodeWithTag(AppTags.AGENT_PROMPT).performTextInput(letter.toString())
+                    onNodeWithTag(AgentTags.AGENT_PROMPT).performTextInput(letter.toString())
                     renderFrame()
                 }
             }
             assertEquals(TYPED, conversation.draft)
-            assertTrue(onAllNodes(hasTestTag(AppTags.AGENT_SEND)).fetchSemanticsNodes().isNotEmpty())
+            assertTrue(onAllNodes(hasTestTag(AgentTags.AGENT_SEND)).fetchSemanticsNodes().isNotEmpty())
         }
 
     private fun lastAnswer(conversation: org.example.kotlineditor.state.Conversation): String =

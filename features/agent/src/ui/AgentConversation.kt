@@ -56,11 +56,11 @@ private const val TO_THE_END = 100_000f
 // One conversation of agent mode: its transcript (messages, tool calls, plans, permission requests) and the prompt.
 
 @Composable
-internal fun ConversationView(agent: AgentState, conversation: Conversation) {
+fun ConversationView(agent: AgentState, conversation: Conversation) {
     val listState = conversation.listState
     val items = conversation.items
     FollowTheEnd(conversation)
-    Column(Modifier.fillMaxSize().testTag(AppTags.agentView(conversation.id))) {
+    Column(Modifier.fillMaxSize().testTag(AgentTags.agentView(conversation.id))) {
         Box(Modifier.weight(1f).fillMaxWidth()) {
             if (items.isEmpty()) {
                 Label(
@@ -110,7 +110,7 @@ private fun Transcript(agent: AgentState, conversation: Conversation) {
                     .widthIn(max = CONTENT_WIDTH)
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp, vertical = 6.dp)
-                    .testTag(AppTags.agentMessage(index)),
+                    .testTag(AgentTags.agentMessage(index)),
             ) {
                 ItemView(agent, conversation, item)
             }
@@ -130,7 +130,7 @@ private fun ThinkingLabel(conversation: Conversation) {
             .widthIn(max = CONTENT_WIDTH)
             .fillMaxWidth()
             .padding(horizontal = 20.dp)
-            .testTag(AppTags.AGENT_THINKING),
+            .testTag(AgentTags.AGENT_THINKING),
         color = IdeColors.TextSecondary,
     )
 }
@@ -193,7 +193,7 @@ private fun Prompt(agent: AgentState, conversation: Conversation) {
                     Modifier
                         .fillMaxWidth()
                         .focusRequester(focus)
-                        .testTag(AppTags.AGENT_PROMPT)
+                        .testTag(AgentTags.AGENT_PROMPT)
                         .onPreviewKeyEvent { event -> sendsOnEnter(event) { agent.send(conversation) } },
                     textStyle = bodyStyle,
                     cursorBrush = SolidColor(IdeColors.Caret),
@@ -214,15 +214,15 @@ private fun sendsOnEnter(event: KeyEvent, send: () -> Unit): Boolean {
 private fun PromptActions(agent: AgentState, conversation: Conversation) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         val name = conversation.agentName ?: agent.agentLabel
-        Label(name, Modifier.testTag(AppTags.AGENT_NAME), color = IdeColors.TextSecondary, fontSize = 12.sp)
+        Label(name, Modifier.testTag(AgentTags.AGENT_NAME), color = IdeColors.TextSecondary, fontSize = 12.sp)
         Spacer(Modifier.weight(1f))
         if (conversation.busy) {
-            IdeButton("Stop", { agent.stop(conversation) }, Modifier.testTag(AppTags.AGENT_STOP))
+            IdeButton("Stop", { agent.stop(conversation) }, Modifier.testTag(AgentTags.AGENT_STOP))
         } else {
             IdeButton(
                 "Send",
                 { agent.send(conversation) },
-                Modifier.testTag(AppTags.AGENT_SEND),
+                Modifier.testTag(AgentTags.AGENT_SEND),
                 primary = true,
                 enabled = conversation.draft.isNotBlank(),
             )

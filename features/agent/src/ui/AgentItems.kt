@@ -121,7 +121,7 @@ private fun TerminalOutput(terminal: AgentTerminalOutput) {
             .fillMaxWidth()
             .background(IdeColors.Editor, RoundedCornerShape(4.dp))
             .padding(horizontal = 8.dp, vertical = 4.dp)
-            .testTag(AppTags.AGENT_TERMINAL),
+            .testTag(AgentTags.AGENT_TERMINAL),
     ) {
         if (hidden) Label("…", color = IdeColors.TextSecondary, fontSize = 12.sp)
         BasicText(end.joinToString("\n"), style = LocalCodeStyleSmall())
@@ -216,7 +216,7 @@ internal fun PermissionCard(request: AgentItem.Permission, onAnswer: (String) ->
                     IdeButton(
                         option.name,
                         { onAnswer(option.id) },
-                        Modifier.testTag(AppTags.agentPermission(option.id)),
+                        Modifier.testTag(AgentTags.agentPermission(option.id)),
                         primary = option.kind.startsWith("allow"),
                     )
                 }

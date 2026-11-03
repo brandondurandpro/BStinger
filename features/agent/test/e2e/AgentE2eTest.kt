@@ -14,6 +14,7 @@ import org.example.kotlineditor.model.AgentToolStatus
 import org.example.kotlineditor.state.InMemoryPreferenceStore
 import org.example.kotlineditor.state.PreferenceKeys
 import org.example.kotlineditor.state.WorkMode
+import org.example.kotlineditor.ui.AgentTags
 import org.example.kotlineditor.ui.AppTags
 import org.example.kotlineditor.ui.EditorTags
 import org.example.kotlineditor.ui.TreeTags
@@ -47,7 +48,7 @@ class AgentE2eTest {
             sendPrompt("echo hello from the agent")
             awaitShown(conversation, "hello from the agent")
             awaitIdle(conversation)
-            assertEquals("Fake Agent 1.0", textOf(AppTags.AGENT_NAME))
+            assertEquals("Fake Agent 1.0", textOf(AgentTags.AGENT_NAME))
             assertEquals(1, conversation.itemsOf<AgentItem.AgentText>().size)
             assertEquals(
                 listOf("echo hello from the agent"),
@@ -83,7 +84,7 @@ class AgentE2eTest {
             assertContains(shownConversation(conversation), "+ Notes of the agent")
             assertContains(shownConversation(conversation), "Answered: Allow")
             // The tree picks the new file up without waiting for the window to regain the focus.
-            awaitTag(AppTags.MODE_IDE).performClick()
+            awaitTag(AgentTags.MODE_IDE).performClick()
             awaitTag(TreeTags.treeRow("NOTES.md"), timeout = AGENT_TIMEOUT)
         }
 
@@ -109,16 +110,16 @@ class AgentE2eTest {
             val conversation = startConversation(app)
             sendPrompt("slow")
             awaitShown(conversation, "tick 2")
-            onNodeWithTag(AppTags.AGENT_STOP).performClick()
+            onNodeWithTag(AgentTags.AGENT_STOP).performClick()
             awaitShown(conversation, "Stopped.")
             awaitIdle(conversation)
             val file = project.root.resolve("NOTES.md")
             sendPrompt("write $file never")
-            awaitTag(AppTags.agentPermission("allow"), timeout = AGENT_TIMEOUT)
-            onNodeWithTag(AppTags.AGENT_STOP).performClick()
+            awaitTag(AgentTags.agentPermission("allow"), timeout = AGENT_TIMEOUT)
+            onNodeWithTag(AgentTags.AGENT_STOP).performClick()
             awaitShown(conversation, "Cancelled")
             awaitIdle(conversation)
-            awaitNoTag(AppTags.agentPermission("allow"))
+            awaitNoTag(AgentTags.agentPermission("allow"))
             assertFalse(file.exists())
         }
 
@@ -207,7 +208,7 @@ class AgentE2eTest {
             val conversation = startConversation(app)
             sendPrompt("echo here")
             awaitIdle(conversation)
-            awaitTag(AppTags.AGENT_MODE_WORKTREE).performClick()
+            awaitTag(AgentTags.AGENT_MODE_WORKTREE).performClick()
             waitForIdle()
             assertEquals(WorkMode.Direct, conversation.mode)
         }
@@ -236,7 +237,7 @@ class AgentE2eTest {
             sendPrompt("run 3 2")
             awaitShown(conversation, "Exit code 2,")
             awaitIdle(conversation)
-            val card = textOf(AppTags.AGENT_TERMINAL)
+            val card = textOf(AgentTags.AGENT_TERMINAL)
             assertContains(card, "line 3")
             assertContains(card, "failed with 2")
             assertContains(card, "Exit code 2")
@@ -251,10 +252,10 @@ class AgentE2eTest {
             sendPrompt("run forever")
             // Its output shows while it runs.
             awaitShown(conversation, "tick 3")
-            onNodeWithTag(AppTags.AGENT_STOP).performClick()
+            onNodeWithTag(AgentTags.AGENT_STOP).performClick()
             awaitShown(conversation, "Killed.")
             awaitIdle(conversation)
-            assertContains(textOf(AppTags.AGENT_TERMINAL), "Exit code")
+            assertContains(textOf(AgentTags.AGENT_TERMINAL), "Exit code")
         }
 
     @Test

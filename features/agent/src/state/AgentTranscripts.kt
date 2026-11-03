@@ -18,13 +18,13 @@ private const val RETRY_MS = 1_000L
 private val WRITING_TOOLS = setOf(AgentToolKind.Edit, AgentToolKind.Delete, AgentToolKind.Move, AgentToolKind.Execute)
 
 // Follows the transcript of [conversation] on the server, once: every answer is newer than what it shows.
-internal fun ProjectState.followTranscript(conversation: Conversation) {
+internal fun AgentHost.followTranscript(conversation: Conversation) {
     if (conversation.polling?.isActive == true) return
     conversation.polling = scope.launch { poll(conversation) }
 }
 
 @Suppress("TooGenericExceptionCaught")
-private suspend fun ProjectState.poll(conversation: Conversation) {
+private suspend fun AgentHost.poll(conversation: Conversation) {
     while (true) {
         try {
             val transcript = services.agents.transcript(conversation.key, conversation.epoch, conversation.since)

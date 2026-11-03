@@ -17,7 +17,7 @@ import org.example.kotlineditor.state.PreferenceStore
 import org.example.kotlineditor.testkit.acp.FakeAgentCommand
 import org.example.kotlineditor.testkit.acp.FakeSessions
 import org.example.kotlineditor.testkit.acp.FakeTurn
-import org.example.kotlineditor.ui.AppTags
+import org.example.kotlineditor.ui.AgentTags
 
 /** How long the fake agent may take to start (a JVM) and answer, on a slow runner. */
 const val AGENT_TIMEOUT = 60_000L
@@ -56,23 +56,23 @@ fun withoutRealAgent(preferences: PreferenceStore): PreferenceStore =
 /** Switches the open project to agent mode and starts a conversation; returns it. */
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.startConversation(app: E2eApp): Conversation {
-    awaitTag(AppTags.MODE_AGENT).performClick()
-    awaitTag(AppTags.AGENT_NEW).performClick()
-    awaitTag(AppTags.AGENT_PROMPT)
+    awaitTag(AgentTags.MODE_AGENT).performClick()
+    awaitTag(AgentTags.AGENT_NEW).performClick()
+    awaitTag(AgentTags.AGENT_PROMPT)
     return checkNotNull(app.project.agent.current) { "No conversation open" }
 }
 
 /** Types [text] in the prompt and sends it with Enter. */
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.sendPrompt(text: String) {
-    val prompt = awaitTag(AppTags.AGENT_PROMPT)
+    val prompt = awaitTag(AgentTags.AGENT_PROMPT)
     prompt.performTextInput(text)
     prompt.performKeyInput { pressKey(Key.Enter) }
 }
 
 /** The text the conversation shows, every item and the prompt bar. */
 @OptIn(ExperimentalTestApi::class)
-fun ComposeUiTest.shownConversation(conversation: Conversation): String = textOf(AppTags.agentView(conversation.id))
+fun ComposeUiTest.shownConversation(conversation: Conversation): String = textOf(AgentTags.agentView(conversation.id))
 
 /** Waits until the conversation shows [text]. */
 @OptIn(ExperimentalTestApi::class)
@@ -88,7 +88,7 @@ fun ComposeUiTest.awaitShown(conversation: Conversation, text: String, timeout: 
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.awaitIdle(conversation: Conversation, timeout: Long = AGENT_TIMEOUT) {
     awaitCondition(timeout) { !conversation.busy }
-    awaitTag(AppTags.AGENT_SEND)
+    awaitTag(AgentTags.AGENT_SEND)
 }
 
 /** The items of [conversation] of type [T]. */
@@ -97,7 +97,7 @@ inline fun <reified T : AgentItem> Conversation.itemsOf(): List<T> = items.filte
 /** Clicks the option [option] of the pending permission request, once it shows. */
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.answerPermission(option: String) {
-    awaitTag(AppTags.agentPermission(option), timeout = AGENT_TIMEOUT).performClick()
+    awaitTag(AgentTags.agentPermission(option), timeout = AGENT_TIMEOUT).performClick()
 }
 
 /** Leaves the node tagged [tag] alone: used to check a button is there without clicking it. */
@@ -120,7 +120,7 @@ fun pastSession(store: java.nio.file.Path, directory: String, turns: List<Pair<S
 /** Switches the open project to agent mode, and waits until the history of the agent lists [session]. */
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.awaitHistory(app: E2eApp, session: String): Conversation {
-    awaitTag(AppTags.MODE_AGENT).performClick()
+    awaitTag(AgentTags.MODE_AGENT).performClick()
     val conversations = app.project.agent.conversations
     awaitCondition(AGENT_TIMEOUT) { conversations.any { it.session == session } }
     return checkNotNull(conversations.firstOrNull { it.session == session })

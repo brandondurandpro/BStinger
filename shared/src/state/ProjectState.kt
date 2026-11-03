@@ -30,7 +30,7 @@ private val DOCUMENT_POPUPS = setOf(PopupKind.GotoLine, PopupKind.FileStructure)
 @Suppress("TooManyFunctions")
 class ProjectState(
     override val root: FileEntry,
-    val services: AppServices,
+    override val services: AppServices,
     parentScope: CoroutineScope,
     preferences: Map<String, String> = emptyMap(),
     /** Open tool windows and their docks; a worktree of agent mode shares the one of its project. */
@@ -43,9 +43,10 @@ class ProjectState(
     private val agentCommand: () -> AgentCommand = { agentCommandOf("") },
 ) : GitHost,
     TreeHost,
-    LanguageServersHost {
+    LanguageServersHost,
+    AgentHost {
     /** Cancelled when the project is closed, so no background work outlives it. */
-    val scope = CoroutineScope(parentScope.coroutineContext + SupervisorJob(parentScope.coroutineContext[Job]))
+    override val scope = CoroutineScope(parentScope.coroutineContext + SupervisorJob(parentScope.coroutineContext[Job]))
     val name: String get() = root.name
     override val tree = FileTreeState(root, services.fileSystem, scope)
     override val editor: EditorState =
@@ -94,7 +95,8 @@ class ProjectState(
     override val gitStatus: Map<String, GitFileStatus> get() = git.status
 
     /** True when the window shows agent mode instead of the editors (toolbar switch, Ctrl+Alt+A). */
-    var agentMode by mutableStateOf(false)
+    override var agentMode by mutableStateOf(false)
+    override val checkedOutBranch: String? get() = git.currentBranch
     var popup: PopupKind? by mutableStateOf(null)
     override var fileDialog: FileDialog? by mutableStateOf(null)
 
@@ -225,7 +227,11 @@ class ProjectState(
         }
     }
 
-    fun dispose() {
+    override suspend fun openWorktree(branch: String): AgentWorkspace = openWorktreeProject(branch)
+
+    override fun synchronize() = synchronizeFiles()
+
+    override fun dispose() {
         if (agentState.isInitialized()) agent.dispose()
         terminal.stop()
         scope.cancel()

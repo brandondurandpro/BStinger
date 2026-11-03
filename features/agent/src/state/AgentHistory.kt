@@ -14,7 +14,7 @@ import java.io.IOException
 private const val DATE = 10
 
 /** Lists the sessions of the agent each time agent mode shows: those of the project and of its worktrees. */
-internal fun AgentState.followHistory(project: ProjectState, agent: () -> AgentCommand) {
+internal fun AgentState.followHistory(project: AgentHost, agent: () -> AgentCommand) {
     project.scope.launch {
         snapshotFlow { project.agentMode }.filter { it }.collect {
             val agents = project.services.agents
@@ -44,7 +44,7 @@ internal fun conversationOf(session: AgentSession, id: Int, root: String): Conve
 }
 
 /** Opens the session of [conversation], a conversation of the history, on first use: the agent replays it. */
-internal fun ProjectState.restore(conversation: Conversation, agent: AgentCommand) {
+internal fun AgentHost.restore(conversation: Conversation, agent: AgentCommand) {
     val session = conversation.session
     val directory = conversation.sessionDirectory
     if (session == null || directory == null) return

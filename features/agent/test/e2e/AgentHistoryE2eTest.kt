@@ -4,6 +4,7 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.model.AgentItem
+import org.example.kotlineditor.ui.AgentTags
 import org.example.kotlineditor.ui.AppTags
 import java.nio.file.Files
 import kotlin.io.path.exists
@@ -46,7 +47,7 @@ class AgentHistoryE2eTest {
             val session = pastSession(store, app.project.root.path, turns)
             val conversation = awaitHistory(app, session)
             assertEquals("echo hello history", conversation.title)
-            awaitTag(AppTags.agentConversation(conversation.id)).performClick()
+            awaitTag(AgentTags.agentConversation(conversation.id)).performClick()
             awaitShown(conversation, "once more")
             val shown = conversation.items.map(::textOf)
             assertEquals(listOf("echo hello history", "hello history ", "echo once more", "once more "), shown)
@@ -64,8 +65,8 @@ class AgentHistoryE2eTest {
             val app = launchWithProject(project, preferences())
             val session = pastSession(store, app.project.root.path, listOf("echo bye" to "bye "))
             val conversation = awaitHistory(app, session)
-            rightClickOn(AppTags.agentConversation(conversation.id))
-            awaitTag(AppTags.AGENT_DELETE).performClick()
+            rightClickOn(AgentTags.agentConversation(conversation.id))
+            awaitTag(AgentTags.AGENT_DELETE).performClick()
             awaitCondition(AGENT_TIMEOUT) { !store.resolve("$session.json").exists() }
             val conversations = app.project.agent.conversations
             assertTrue(conversations.none { it.session == session })
