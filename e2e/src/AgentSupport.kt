@@ -8,6 +8,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.pressKey
+import org.example.kotlineditor.acp.AgentSettings
 import org.example.kotlineditor.model.AgentItem
 import org.example.kotlineditor.state.Conversation
 import org.example.kotlineditor.state.InMemoryPreferenceStore
@@ -44,7 +45,8 @@ fun withoutRealAgent(preferences: PreferenceStore): PreferenceStore =
     object : PreferenceStore {
         override fun load(): Map<String, String> {
             val values = preferences.load()
-            val chosen = values.containsKey(PreferenceKeys.AGENT_COMMAND)
+            val command = values.containsKey(PreferenceKeys.AGENT_COMMAND)
+            val chosen = command || values.containsKey(PreferenceKeys.AGENT_REGISTRY)
             return if (chosen) values else values + (PreferenceKeys.AGENT_COMMAND to NO_AGENT)
         }
 
@@ -123,3 +125,10 @@ fun ComposeUiTest.awaitHistory(app: E2eApp, session: String): Conversation {
     awaitCondition(AGENT_TIMEOUT) { conversations.any { it.session == session } }
     return checkNotNull(conversations.firstOrNull { it.session == session })
 }
+
+/** The agents of a test server: [registry] as the ACP registry, installed into [data]. */
+fun agentSettings(registry: String, data: java.io.File): AgentSettings =
+    AgentSettings(registryUrl = registry, toolsDirectory = data.toPath().resolve("tools"))
+
+/** The agents of a test server that chose no registry: one on a closed port, so that nothing reaches the internet. */
+fun offlineAgents(data: java.io.File): AgentSettings = agentSettings("http://127.0.0.1:9/registry.json", data)

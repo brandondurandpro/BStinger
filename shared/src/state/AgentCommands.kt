@@ -2,8 +2,8 @@ package org.example.kotlineditor.state
 
 import org.example.kotlineditor.model.AgentCommand
 
-/** The agent started when none is configured: Claude Code, through its ACP adapter (needs Node.js). */
-const val DEFAULT_AGENT_COMMAND = "npx -y @agentclientprotocol/claude-agent-acp"
+/** The agent of the ACP registry started when none is chosen: Claude, through its ACP adapter. */
+const val DEFAULT_AGENT = "claude-acp"
 
 /**
  * The words of a command line typed in the settings: split on spaces, with double or single quotes around a word
@@ -45,8 +45,12 @@ fun commandWords(line: String): List<String> {
     return words
 }
 
-/** The command of [line], or of [DEFAULT_AGENT_COMMAND] when it is blank. */
-fun agentCommandOf(line: String): AgentCommand {
+/**
+ * The agent to start: the command [line] when one is typed, otherwise the agent [registry] of the ACP registry
+ * (the server installs it), [DEFAULT_AGENT] when none is chosen.
+ */
+fun agentCommandOf(line: String, registry: String = ""): AgentCommand {
     val words = commandWords(line)
-    return AgentCommand(words.ifEmpty { commandWords(DEFAULT_AGENT_COMMAND) })
+    if (words.isNotEmpty()) return AgentCommand(words)
+    return AgentCommand(emptyList(), registry = registry.ifBlank { DEFAULT_AGENT })
 }

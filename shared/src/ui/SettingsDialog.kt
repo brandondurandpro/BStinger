@@ -44,7 +44,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.example.kotlineditor.state.AppState
-import org.example.kotlineditor.state.DEFAULT_AGENT_COMMAND
 import org.example.kotlineditor.state.Setting
 import org.example.kotlineditor.state.SettingsCategory
 import org.example.kotlineditor.state.SettingsState
@@ -200,6 +199,7 @@ private fun SettingControl(app: AppState, settings: SettingsState, setting: Sett
         Setting.AutoSelect -> SettingCheckBox(setting, app.autoSelectOpenedFile) { app.autoSelectOpenedFile = it }
         Setting.Telemetry -> TelemetryControl(app)
         Setting.AgentMode -> SettingCheckBox(setting, app.agentModeEnabled) { app.enableAgentMode(it) }
+        Setting.Agent -> AgentRegistryControl(app)
         Setting.AgentCommand -> AgentCommandField(app)
     }
 }
@@ -211,7 +211,7 @@ private fun AgentCommandField(app: AppState) {
         app.agentCommand,
         { app.agentCommand = it },
         Modifier.fillMaxWidth().testTag(AppTags.SETTINGS_AGENT_COMMAND),
-        placeholder = DEFAULT_AGENT_COMMAND,
+        placeholder = "npx -y @agentclientprotocol/claude-agent-acp",
         monospace = true,
     )
 }

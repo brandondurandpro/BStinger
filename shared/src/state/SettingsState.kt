@@ -63,11 +63,17 @@ enum class Setting(val category: SettingsCategory, val title: String, val descri
         "The IDE | Agent switch of the toolbar, where agents work in their own worktrees.",
         "ai agents conversations",
     ),
+    Agent(
+        SettingsCategory.Experimental,
+        "Agent",
+        "The agent of agent mode, from the ACP registry: the server installs it. Claude when none is chosen.",
+        "acp registry claude codex gemini opencode goose",
+    ),
     AgentCommand(
         SettingsCategory.Experimental,
         "Agent command",
-        "The ACP agent the server starts for agent mode; empty for Claude Code ($DEFAULT_AGENT_COMMAND).",
-        "acp claude codex gemini opencode npx",
+        "A command line that starts any ACP agent instead (npx, a path…); empty to use the agent above.",
+        "acp npx command line custom",
     ),
     ;
 

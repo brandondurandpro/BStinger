@@ -41,6 +41,7 @@ object AppTags {
     const val SETTINGS_SERVERS_ERROR = "settings.servers.error"
     const val SETTINGS_TELEMETRY_FORBIDDEN = "settings.telemetry.forbidden"
     const val SETTINGS_AGENT_COMMAND = "settings.agentCommand"
+    const val SETTINGS_AGENTS = "settings.agents"
     const val TOOL_PROJECT = "tool.project"
     const val TOOL_GIT = "tool.git"
     const val TOOL_BRANCHES = "tool.branches"
@@ -100,6 +101,8 @@ object AppTags {
     fun pane(index: Int) = "editor.pane:$index"
 
     fun dockSplitter(dock: String) = "dock.splitter:$dock"
+
+    fun settingsAgent(id: String) = "settings.agent:$id"
 
     fun agentConversation(id: Int) = "agent.conversation.$id"
 

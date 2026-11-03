@@ -184,7 +184,11 @@ class AgentState(
     val current: Conversation? get() = tabs.active
 
     /** The agent, as shown under the prompt before it introduced itself: its program. */
-    val agentLabel: String get() = agentCommand().command.joinToString(" ").let { "Agent: $it" }
+    val agentLabel: String
+        get() {
+            val agent = agentCommand()
+            return "Agent: ${agent.registry ?: agent.command.joinToString(" ")}"
+        }
 
     /** Whether the conversation list is shown on the left. */
     var conversationsVisible by mutableStateOf(true)

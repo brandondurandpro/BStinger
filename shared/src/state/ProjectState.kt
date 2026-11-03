@@ -11,6 +11,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
+import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.model.AppServices
 import org.example.kotlineditor.model.BlameLine
 import org.example.kotlineditor.model.CompletionResult
@@ -39,7 +40,7 @@ class ProjectState(
     /** Language servers of the IDE, shared by every project; none for the worktrees of agent mode. */
     override val languageServers: LanguageServersState? = null,
     /** The command line of the agent of agent mode, as set in the settings. */
-    private val agentCommand: () -> String = { "" },
+    private val agentCommand: () -> AgentCommand = { agentCommandOf("") },
 ) : GitHost,
     TreeHost,
     LanguageServersHost {
@@ -85,7 +86,7 @@ class ProjectState(
     val network = NetworkView(services.network)
 
     // Created on first use: the worktrees of the conversations are projects too, without agent mode of their own.
-    private val agentState = lazy { AgentState(this) { agentCommandOf(agentCommand()) } }
+    private val agentState = lazy { AgentState(this, agentCommand) }
 
     /** Conversations of agent mode, in memory, each on the current branch or in a worktree of its own. */
     val agent by agentState

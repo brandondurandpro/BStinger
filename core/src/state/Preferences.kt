@@ -27,6 +27,7 @@ object PreferenceKeys {
     const val AUTO_SELECT_OPENED_FILE = "project.autoSelectOpenedFile"
     const val AGENT_MODE = "experimental.agentMode"
     const val AGENT_COMMAND = "agent.command"
+    const val AGENT_REGISTRY = "agent.registry"
     const val INLAY_HINTS = "editor.inlayHints"
     const val LAYOUT_PREFIX = "layout."
 

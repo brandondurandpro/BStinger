@@ -507,6 +507,9 @@ enum class Method(
 
     /** Deletes a session the agent kept. */
     AgentDelete("agent/delete", mutating = true),
+
+    /** The agents of the ACP registry the server can install. */
+    AgentRegistry("agent/registry"),
 }
 
 /** A JSON-RPC error object `{"code": ..., "message": ...}`. */

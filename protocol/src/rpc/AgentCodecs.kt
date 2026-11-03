@@ -38,13 +38,14 @@ fun AgentCommand.toJson(): JsonObject =
     buildJsonObject {
         put("command", command.toJson())
         put("environment", JsonObject(environment.mapValues { JsonPrimitive(it.value) }))
+        put("registry", registry.orNull())
     }
 
 /** Reads an agent command line. */
 fun JsonElement.agentCommand(): AgentCommand {
     val json = jsonObject
     val environment = json["environment"]?.jsonObject.orEmpty().mapValues { it.value.string() }
-    return AgentCommand(json.field("command").strings(), environment)
+    return AgentCommand(json.field("command").strings(), environment, json.stringOrNull("registry"))
 }
 
 /** A transcript. */

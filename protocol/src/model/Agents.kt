@@ -3,12 +3,31 @@ package org.example.kotlineditor.model
 // Agent mode: conversations with coding agents (Claude Code, Codex, Gemini CLI…) that the server runs through the
 // Agent Client Protocol, next to the sources. The IDE never sees ACP: it follows a transcript the server keeps.
 
-/** How the server starts an agent: its command line and the variables added to its environment. */
+/**
+ * How the server starts an agent: its command line and the variables added to its environment, or the agent of the
+ * ACP registry [registry] names, which the server installs and starts its own way.
+ */
 data class AgentCommand(
-    /** Program and arguments, such as `npx -y @agentclientprotocol/claude-agent-acp`. */
+    /** Program and arguments, such as `npx -y @agentclientprotocol/claude-agent-acp`; empty for [registry]. */
     val command: List<String>,
     /** Variables added to the environment of the agent (an API key). */
     val environment: Map<String, String> = emptyMap(),
+    /** Id of an agent of the ACP registry (`claude-acp`), installed by the server; null for [command]. */
+    val registry: String? = null,
+)
+
+/** An agent of the ACP registry, as the server can run it. */
+data class AgentRegistryEntry(
+    /** Its id (`claude-acp`). */
+    val id: String,
+    /** Its name, for people (`Claude Agent`). */
+    val name: String,
+    /** The version the server installs. */
+    val version: String,
+    /** What it is. */
+    val description: String,
+    /** Why the server cannot run it (no build for its platform, no checksum, no Node.js…); null when it can. */
+    val unavailable: String? = null,
 )
 
 /** What the agent of a conversation is doing. */
@@ -275,6 +294,9 @@ interface Agents {
     /** Deletes the agent's [session] and its history, when the agent can; returns whether it did. */
     suspend fun delete(agent: AgentCommand, session: String): Boolean
 
+    /** The agents of the ACP registry, and whether the server can run each one. */
+    suspend fun registry(): List<AgentRegistryEntry>
+
     /** Stops the prompt running in [conversation]; its pending permission requests are cancelled. */
     suspend fun cancel(conversation: String)
 
@@ -307,6 +329,8 @@ interface Agents {
         override suspend fun sessions(agent: AgentCommand, root: String) = AgentSessions(false, emptyList())
 
         override suspend fun delete(agent: AgentCommand, session: String) = false
+
+        override suspend fun registry(): List<AgentRegistryEntry> = emptyList()
 
         override suspend fun cancel(conversation: String) = Unit
 

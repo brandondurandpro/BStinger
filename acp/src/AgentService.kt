@@ -7,12 +7,14 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
+import org.example.kotlineditor.lsp.provision.ToolDownloader
 import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.model.AgentTranscript
 import org.example.kotlineditor.model.AgentTurnState
 import java.io.Closeable
 import java.io.IOException
 import java.nio.file.Files
+import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -42,13 +44,25 @@ interface FileAccess {
     }
 }
 
-/** Timings of the agents. */
+/** Timings of the agents, and where the agents of the ACP registry come from. */
 data class AgentSettings(
     /** How long a transcript request waits for a change before it answers the state as it is. */
     val holdMs: Long = 20_000,
     /** How long a cancelled prompt waits for the agent to stop before it is abandoned. */
     val cancelGraceMs: Long = 5_000,
-)
+    /** The ACP registry of agents. */
+    val registryUrl: String = REGISTRY_URL,
+    /** How long the registry is used before it is read again. */
+    val registryCacheMs: Long = 3_600_000,
+    /** Where the agents of the registry are installed, shared with the other downloaded tools. */
+    val toolsDirectory: Path = Paths.get(System.getProperty("user.home"), ".kotlin-editor", "tools"),
+) {
+    /** The registry the server reads by default. */
+    companion object {
+        /** The registry of agentclientprotocol.com. */
+        const val REGISTRY_URL = "https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json"
+    }
+}
 
 /**
  * The conversations of agent mode, on the machine of the sources. Each conversation has a session of an agent
@@ -67,7 +81,7 @@ class AgentService(
     private val created = MutableStateFlow(0L)
 
     /** The agent processes, one per command line, and the sessions they keep. */
-    val processes = AgentProcesses(scope, files)
+    val processes = AgentProcesses(scope, files, registry(settings))
 
     /**
      * Sends [text] to the agent of [conversation], started with [agent] in [directory] when needed; a conversation
@@ -158,4 +172,9 @@ class AgentService(
     private companion object {
         const val EPOCH_LENGTH = 8
     }
+}
+
+private fun registry(settings: AgentSettings): AgentRegistry {
+    val installer = AgentInstaller(ToolDownloader(settings.toolsDirectory))
+    return AgentRegistry(settings.registryUrl, installer, settings.registryCacheMs)
 }

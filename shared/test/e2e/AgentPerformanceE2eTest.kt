@@ -7,7 +7,9 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.v2.runComposeUiTest
 import kotlinx.coroutines.runBlocking
+import org.example.kotlineditor.acp.registryPlatformForTests
 import org.example.kotlineditor.model.AgentItem
+import org.example.kotlineditor.testkit.acp.FakeRegistry
 import org.example.kotlineditor.ui.AppTags
 import java.nio.file.Files
 import kotlin.test.AfterTest
@@ -33,6 +35,8 @@ private const val JUMPS_BUDGET_MS = 3_000L
 private const val TYPING_BUDGET_MS = 2_000L
 private const val HISTORY_BUDGET_MS = 3_000L
 private const val COMMAND_BUDGET_MS = 10_000L
+private const val REGISTRY_AGENTS = 2_000
+private const val REGISTRY_BUDGET_MS = 3_000L
 private const val BUDGET_MB = 800L
 private const val MAX_COMPOSED_ROWS = 80
 private const val MAX_SHOWN_OUTPUT = 16_000
@@ -84,6 +88,24 @@ class AgentPerformanceE2eTest {
             val shown = conversation.itemsOf<AgentItem.ToolCall>().lastOrNull()?.terminal
             assertTrue(shown?.truncated == true)
             assertTrue(shown.text.length <= MAX_SHOWN_OUTPUT, "${shown.text.length} characters shown")
+        }
+
+    @Test
+    fun `a registry of thousands of agents lists fast, virtualized`() =
+        runComposeUiTest {
+            val registry = FakeRegistry(registryPlatformForTests(), extraAgents = REGISTRY_AGENTS)
+            val data = Files.createTempDirectory("agent-data").toFile()
+            val app = launchWithProject(project, agentPreferences(), agents = agentSettings(registry.url, data))
+            app.state.openSettings()
+            measure("Registry of $REGISTRY_AGENTS agents listed", REGISTRY_BUDGET_MS, BUDGET_MB) {
+                awaitTag(AppTags.settingsCategory("Experimental")).performClick()
+                awaitTag(AppTags.settingsAgent("fake-agent"), timeout = REGISTRY_BUDGET_MS)
+                renderFrame()
+            }
+            val composed = onAllNodes(hasTestTagPrefix("settings.agent:")).fetchSemanticsNodes().size
+            assertTrue(composed in 1..MAX_COMPOSED_ROWS, "$composed rows composed: the list must be virtualized")
+            registry.close()
+            data.deleteRecursively()
         }
 
     @Test

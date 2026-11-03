@@ -140,8 +140,11 @@ class AppState(
     var agentModeEnabled by mutableStateOf(preferences[PreferenceKeys.AGENT_MODE]?.toBooleanStrictOrNull() ?: false)
         private set
 
-    /** Command line of the agent of agent mode (an ACP agent), blank for [DEFAULT_AGENT_COMMAND]. */
+    /** Command line of the agent of agent mode (any ACP agent); blank for the agent of the registry. */
     var agentCommand by mutableStateOf(preferences[PreferenceKeys.AGENT_COMMAND].orEmpty())
+
+    /** Id of the agent of the ACP registry for agent mode, blank for [DEFAULT_AGENT]; a command line wins over it. */
+    var agentRegistry by mutableStateOf(preferences[PreferenceKeys.AGENT_REGISTRY].orEmpty())
 
     /** Whether the user shares anonymous performance measures: asked on the welcome screen, changed in the menu. */
     val telemetry = TelemetryConsent(preferences, telemetryOf)
@@ -577,7 +580,7 @@ class AppState(
     private fun currentPreferences(): Map<String, String> {
         val picker = lastPickerDirectory?.let { listOf(PreferenceKeys.PICKER_DIRECTORY to it) }.orEmpty()
         val agentMode = PreferenceKeys.AGENT_MODE to agentModeEnabled.toString()
-        val agent = PreferenceKeys.AGENT_COMMAND to agentCommand
+        val agent = mapOf(PreferenceKeys.AGENT_COMMAND to agentCommand, PreferenceKeys.AGENT_REGISTRY to agentRegistry)
         val app =
             preferences +
                 picker +
@@ -680,7 +683,7 @@ class AppState(
                 preferences,
                 grammars = grammars,
                 languageServers = languageServers,
-                agentCommand = { agentCommand },
+                agentCommand = { agentCommandOf(agentCommand, agentRegistry) },
             )
         runCatching { services.sessions.load(root.path) }.getOrNull()?.let(project::restoreSession)
         screen = Screen.Project(project)

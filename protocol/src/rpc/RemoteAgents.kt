@@ -4,6 +4,7 @@ import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.example.kotlineditor.model.AgentCommand
+import org.example.kotlineditor.model.AgentRegistryEntry
 import org.example.kotlineditor.model.AgentSessions
 import org.example.kotlineditor.model.AgentTranscript
 import org.example.kotlineditor.model.Agents
@@ -50,6 +51,8 @@ class RemoteAgents(private val client: RpcClient) : Agents {
             }
         return answer.agentSessions()
     }
+
+    override suspend fun registry(): List<AgentRegistryEntry> = client.call(Method.AgentRegistry).agentRegistry()
 
     override suspend fun delete(agent: AgentCommand, session: String): Boolean {
         val answer =

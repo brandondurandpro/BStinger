@@ -46,6 +46,9 @@ internal fun agentHandlers(services: LocalServices): Map<Method, Handler> =
         Method.AgentSessions to {
             sessions(services, params.read(AGENT) { it.agentCommand() }, params.string("root")).toJson()
         },
+        Method.AgentRegistry to {
+            withContext(Dispatchers.IO) { services.agents.processes.registry() }.toJson()
+        },
         Method.AgentDelete to {
             val agent = params.read(AGENT) { it.agentCommand() }
             val deleted = services.agents.processes.delete(agent, params.string(SESSION))

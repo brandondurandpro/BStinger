@@ -7,10 +7,11 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
+import org.example.kotlineditor.model.AgentRegistryEntry
 import org.example.kotlineditor.model.AgentSession
 import org.example.kotlineditor.model.AgentSessions
 
-// JSON of the sessions an agent keeps: the history of the conversations.
+// JSON of the sessions an agent keeps (the history of the conversations), and of the agents of the registry.
 
 private const val SESSIONS = "sessions"
 
@@ -46,3 +47,30 @@ private fun JsonElement.agentSession(): AgentSession {
         branch = json.stringOrNull("branch"),
     )
 }
+
+/** The agents of the registry. */
+fun List<AgentRegistryEntry>.toJson(): JsonArray =
+    JsonArray(
+        map { entry ->
+            buildJsonObject {
+                put("id", entry.id)
+                put("name", entry.name)
+                put("version", entry.version)
+                put("description", entry.description)
+                put("unavailable", entry.unavailable.orNull())
+            }
+        },
+    )
+
+/** Reads the agents of the registry. */
+fun JsonElement.agentRegistry(): List<AgentRegistryEntry> =
+    jsonArray.map { element ->
+        val json = element.jsonObject
+        AgentRegistryEntry(
+            id = json.string("id"),
+            name = json.string("name"),
+            version = json.string("version"),
+            description = json.string("description"),
+            unavailable = json.stringOrNull("unavailable"),
+        )
+    }
