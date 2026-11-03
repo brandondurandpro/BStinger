@@ -312,6 +312,41 @@ class GitClientTest {
         }
 
     @Test
+    fun `fetch counts the remote commits to pull, prunes deleted remote branches and leaves the files alone`() =
+        runBlocking {
+            val (default, remote) = projectWithRemote()
+            git("branch", "feature")
+            git("push", "-q", "-u", "origin", "feature")
+            val clone = cloneOf(remote)
+            clone.resolve("remote.kt").writeText("remote\n")
+            runGit(clone, "add", "-A")
+            runGit(clone, "commit", "-q", "-m", "remote work")
+            runGit(clone, "push", "-q")
+            runGit(clone, "push", "-q", "origin", "--delete", "feature")
+            val client = CliGitClient()
+            val head = git("rev-parse", "HEAD").trim()
+
+            client.fetch(root.toString())
+
+            val branches = client.branchDetails(root.toString()).associateBy { it.name }
+            assertEquals(1, branches[default]?.behind)
+            assertEquals(true, branches["feature"]?.upstreamGone)
+            assertEquals(head, git("rev-parse", "HEAD").trim())
+            assertFalse(root.resolve("remote.kt").toFile().exists(), "a fetch must not change the working tree")
+        }
+
+    @Test
+    fun `fetch without a remote does nothing, and outside a repository it fails`() =
+        runBlocking {
+            root.resolve("a.kt").writeText("one\n")
+            commitAll()
+            CliGitClient().fetch(root.toString())
+            val outside = temporaryDirectory("not-a-repository")
+            val error = assertFailsWith<IOException> { CliGitClient().fetch(outside.toString()) }
+            assertTrue("fetch" in error.message.orEmpty(), "${error.message}")
+        }
+
+    @Test
     fun `pulling the current branch through pullBranch updates the working tree`() =
         runBlocking {
             val (default, remote) = projectWithRemote()

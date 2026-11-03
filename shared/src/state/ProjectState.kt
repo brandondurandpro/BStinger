@@ -83,7 +83,15 @@ class ProjectState(
     val terminal = TerminalState(root.path, services.terminal, scope)
 
     /** Git: branch, status, commit, branches of the toolbar, and the Branches tool window's history. */
-    override val git = GitState(root, services.git, scope, editor, synchronize = ::synchronize)
+    override val git =
+        GitState(
+            root,
+            services.git,
+            scope,
+            editor,
+            synchronize = ::synchronize,
+            pinned = pinnedBranchesOf(preferences, root.path),
+        )
     val network = NetworkView(services.network)
 
     // Created on first use: the worktrees of the conversations are projects too, without agent mode of their own.

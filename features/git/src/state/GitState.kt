@@ -5,8 +5,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.GitBranchInfo
 import org.example.kotlineditor.model.GitClient
@@ -18,6 +23,9 @@ import org.example.kotlineditor.telemetry.outcome
 import java.io.IOException
 
 private const val MAX_MESSAGE_LENGTH = 300
+
+/** Time between two background fetches of the remotes, while the project is open. */
+const val AUTO_FETCH_MILLIS = 5 * 60 * 1000L
 
 /**
  * Git in a project: the branch, the status of the files, the commit and the branches of the toolbar, and the Git
@@ -32,6 +40,7 @@ class GitState(
     private val scope: CoroutineScope,
     private val editor: EditorState,
     private val synchronize: () -> Unit,
+    pinned: Set<String> = emptySet(),
 ) {
     /** Message of the last Git action (commit, branch switch, pull, push), shown in the Git panel. */
     var message: String? by mutableStateOf(null)
@@ -53,8 +62,11 @@ class GitState(
     var branchInfos: List<GitBranchInfo> by mutableStateOf(emptyList())
         private set
 
-    /** Branches the user pinned in the toolbar (one or several); clicking a branch name still checks it out. */
-    var selectedBranches: Set<String> by mutableStateOf(emptySet())
+    /**
+     * Branches the user pinned in the toolbar (one or several); clicking a branch name still checks it out. Saved with
+     * the preferences of the project ([pinnedBranchesPreference]), so they come back when it is opened again.
+     */
+    var selectedBranches: Set<String> by mutableStateOf(pinned)
         private set
 
     /**
@@ -90,6 +102,9 @@ class GitState(
     val history = BranchHistoryState(root.path, git, scope)
 
     private var statusJob: Job? = null
+
+    // A pull or push waits for a background fetch to end: two Git processes updating the same refs fail on their lock.
+    private val remoteLock = Mutex()
 
     // A refresh asked to reload every editor; kept when a later refresh (a save) cancels it.
     private var editorsReloadPending = false
@@ -141,8 +156,32 @@ class GitState(
         branchInfos = sortedBranches(infos)
         branches = infos.map { it.name }
         val names = infos.mapTo(HashSet()) { it.name }
-        selectedBranches = selectedBranches intersect names
+        // A repository has a branch once it has a commit: an empty list is a failed read, which must not lose the pins.
+        if (names.isNotEmpty()) selectedBranches = selectedBranches intersect names
         pickedBranches = pickedBranches intersect names
+    }
+
+    /** The saved form of [selectedBranches]: one branch name per line (Git forbids line breaks in them). */
+    fun pinnedBranchesPreference(): Pair<String, String> =
+        pinnedBranchesKey(root.path) to selectedBranches.joinToString("\n")
+
+    /**
+     * Fetches the remotes now, then every [AUTO_FETCH_MILLIS] until the project is closed (its scope is cancelled), and
+     * reloads the branches after each, so that the toolbar counts the commits to pull against what the remotes have
+     * now. Silent: a failure (offline, no remote) waits for the next fetch.
+     */
+    fun startAutoFetch(): Job =
+        scope.launch {
+            while (true) {
+                fetchRemotes()
+                // Wall-clock time, also under a test's virtual clock, which would otherwise fetch without a pause.
+                withContext(Dispatchers.Default) { delay(AUTO_FETCH_MILLIS) }
+            }
+        }
+
+    private suspend fun fetchRemotes() {
+        val fetched = remoteLock.withLock { runCatching { git.fetch(root.path) } }
+        if (fetched.isSuccess) refreshBranches()
     }
 
     /** Pins or unpins [name] in the toolbar. */
@@ -300,10 +339,14 @@ class GitState(
             val current = branch == currentBranch
             val done =
                 gitOperation(reloadFiles = current && action == BranchSync.Action.Pull) {
-                    when (action) {
-                        BranchSync.Action.Pull -> git.pullBranch(root.path, branch)
-                        BranchSync.Action.Push -> git.pushBranch(root.path, branch)
-                    }.ifBlank { "${action.done} $branch" }
+                    val output =
+                        remoteLock.withLock {
+                            when (action) {
+                                BranchSync.Action.Pull -> git.pullBranch(root.path, branch)
+                                BranchSync.Action.Push -> git.pushBranch(root.path, branch)
+                            }
+                        }
+                    output.ifBlank { "${action.done} $branch" }
                 }
             branchSync =
                 if (done) {
@@ -319,7 +362,8 @@ class GitState(
     fun pull() =
         scope.launch {
             gitOperation(reloadFiles = true) {
-                git.pull(root.path).ifBlank { "Pulled" }
+                val output = remoteLock.withLock { git.pull(root.path) }
+                output.ifBlank { "Pulled" }
             }
         }
 
@@ -327,7 +371,8 @@ class GitState(
     fun push() =
         scope.launch {
             gitOperation {
-                git.push(root.path).ifBlank { "Pushed" }
+                val output = remoteLock.withLock { git.push(root.path) }
+                output.ifBlank { "Pushed" }
             }
         }
 
@@ -356,6 +401,15 @@ class GitState(
             busy = false
         }
     }
+}
+
+/** The preference holding the branches pinned in the project at [rootPath]. */
+fun pinnedBranchesKey(rootPath: String): String = PreferenceKeys.PINNED_BRANCHES_PREFIX + rootPath
+
+/** The branches pinned in the project at [rootPath], as [GitState.pinnedBranchesPreference] saved them. */
+fun pinnedBranchesOf(preferences: Map<String, String>, rootPath: String): Set<String> {
+    val saved = preferences[pinnedBranchesKey(rootPath)].orEmpty()
+    return saved.lines().filter { it.isNotBlank() }.toSet()
 }
 
 /** A pull or push of one branch from the toolbar: running, then its result. */

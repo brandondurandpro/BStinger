@@ -57,8 +57,27 @@ class LanguageServerChoiceTest {
     }
 
     @Test
+    fun `a PHP without the extensions of phpactor makes it unavailable, with the packages to install`() {
+        val details =
+            registry(RuntimeKind.Php to "8.5.1\nCore,posix,tokenizer")
+                .candidates("php")
+                .firstOrNull { it.candidate.id == "phpactor" }
+                ?.details
+        val detail = details?.singleOrNull().orEmpty()
+        assertTrue(detail.startsWith("PHP 8.5.1 at "), detail)
+        assertTrue(
+            detail.contains("lacks mbstring: install it (apt install php8.5-mbstring, dnf install php-mbstring)"),
+            detail,
+        )
+    }
+
+    @Test
     fun `the command of an available candidate uses the found runtime and the installed artifact`() {
-        val status = registry(RuntimeKind.Php to "8.3.6", RuntimeKind.Node to "20.1.0").candidates("php")
+        val status =
+            registry(
+                RuntimeKind.Php to "8.3.6\nmbstring,posix,tokenizer",
+                RuntimeKind.Node to "20.1.0",
+            ).candidates("php")
         val phpactor = status.first { it.candidate.id == "phpactor" }
         assertTrue(phpactor.available)
         assertEquals(listOf("PHP 8.3.6 found"), phpactor.details)

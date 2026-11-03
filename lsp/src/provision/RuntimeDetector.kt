@@ -12,13 +12,21 @@ enum class RuntimeKind(
     val displayName: String,
     /** Executable name looked up on the `PATH`. */
     val executable: String,
-    /** Arguments that make it print its version, and nothing else, on stdout. */
+    /**
+     * Arguments that make it print its version on stdout, then, on a second line, its loaded extensions separated
+     * by commas when it has extensions.
+     */
     val versionArguments: List<String>,
     /** Names of versioned executables installed side by side (`php8.4`), null when there are none. */
     val versionedNames: Regex? = null,
 ) {
     /** The PHP command line interpreter; Debian and Ubuntu packages install `php8.4` next to `php`. */
-    Php("PHP", "php", listOf("-r", "echo PHP_VERSION;"), Regex("""php\d+(\.\d+)?""")),
+    Php(
+        "PHP",
+        "php",
+        listOf("-r", "echo PHP_VERSION, PHP_EOL, implode(',', get_loaded_extensions());"),
+        Regex("""php\d+(\.\d+)?"""),
+    ),
 
     /** Node.js. */
     Node("Node.js", "node", listOf("--version")),
@@ -58,7 +66,22 @@ sealed interface RuntimeStatus {
         /** The oldest version the language server works with. */
         val minimum: String,
     ) : RuntimeStatus
+
+    /** Recent enough, but without extensions the language server needs; no other candidate has them all. */
+    data class MissingExtensions(
+        /** The runtime. */
+        val kind: RuntimeKind,
+        /** Its executable, the newest recent enough. */
+        val path: Path,
+        /** Its version. */
+        val version: String,
+        /** The extensions it lacks, in lower case. */
+        val missing: List<String>,
+    ) : RuntimeStatus
 }
+
+/** A candidate executable that ran: its version and its loaded extensions, in lower case. */
+private data class Probed(val path: Path, val version: String, val extensions: Set<String>)
 
 /**
  * Finds the runtimes language servers need on the server machine: the configured path when there is one (a
@@ -77,38 +100,50 @@ class RuntimeDetector(
     // Runs an executable with arguments and returns its stdout, or null when it fails; replaceable in tests.
     private val probe: (Path, List<String>) -> String? = ::runForOutput,
 ) {
-    /** The [kind] runtime, checked against the [minimum] version (`"8.2"`), or any version when null. */
-    fun detect(kind: RuntimeKind, minimum: String? = null): RuntimeStatus {
+    /**
+     * The [kind] runtime, checked against the [minimum] version (`"8.2"`), or any version when null, and having
+     * the [extensions] loaded: the newest candidate that has them all, ties decided by the `PATH` order.
+     */
+    fun detect(kind: RuntimeKind, minimum: String? = null, extensions: List<String> = emptyList()): RuntimeStatus {
         val explicit = configured[kind]
         val candidates = if (explicit != null) listOf(Paths.get(explicit)) else candidatesOf(kind)
-        val found =
-            candidates
-                .mapNotNull { path -> probe(path, kind.versionArguments)?.let(::parseVersion)?.let { path to it } }
-                // The newest; the first found among equals, so the PATH order still decides ties.
-                .fold(null as Pair<Path, String>?) { best, next ->
-                    if (best == null || compareVersions(next.second, best.second) > 0) next else best
-                }
+        val probed = candidates.mapNotNull { path -> probe(path, kind.versionArguments)?.let { parse(path, it) } }
+        val recent = probed.filter { minimum == null || compareVersions(it.version, minimum) >= 0 }
+        val complete = recent.filter { it.extensions.containsAll(extensions) }
+        val best = newest(complete)
+        val lacking = newest(recent)
+        val old = newest(probed)
         return when {
-            found == null && explicit != null -> {
-                RuntimeStatus.Missing(
-                    kind,
-                    "${kind.displayName} at $explicit does not run",
-                )
-            }
-
-            found == null -> {
-                RuntimeStatus.Missing(kind, "${kind.displayName} not found")
-            }
-
-            minimum != null && compareVersions(found.second, minimum) < 0 -> {
-                RuntimeStatus.TooOld(kind, found.first, found.second, minimum)
-            }
-
-            else -> {
-                RuntimeStatus.Found(kind, found.first, found.second)
-            }
+            best != null -> RuntimeStatus.Found(kind, best.path, best.version)
+            lacking != null -> missing(kind, lacking, extensions)
+            old != null && minimum != null -> RuntimeStatus.TooOld(kind, old.path, old.version, minimum)
+            explicit != null -> RuntimeStatus.Missing(kind, "${kind.displayName} at $explicit does not run")
+            else -> RuntimeStatus.Missing(kind, "${kind.displayName} not found")
         }
     }
+
+    private fun missing(kind: RuntimeKind, probed: Probed, extensions: List<String>): RuntimeStatus {
+        val absent = extensions.filter { it !in probed.extensions }
+        return RuntimeStatus.MissingExtensions(kind, probed.path, probed.version, absent)
+    }
+
+    private fun parse(path: Path, output: String): Probed? {
+        val version = parseVersion(output) ?: return null
+        val extensionLine =
+            output
+                .lines()
+                .drop(1)
+                .firstOrNull { it.isNotBlank() }
+                .orEmpty()
+        val extensions = extensionLine.split(',').map { it.trim().lowercase() }.filter { it.isNotEmpty() }
+        return Probed(path, version, extensions.toSet())
+    }
+
+    // The newest; the first found among equals, so the PATH order still decides ties.
+    private fun newest(probed: List<Probed>): Probed? =
+        probed.fold(null as Probed?) { best, next ->
+            if (best == null || compareVersions(next.version, best.version) > 0) next else best
+        }
 
     private fun candidatesOf(kind: RuntimeKind): List<Path> {
         val extensions = if (isWindows) pathExtensions.split(';').filter { it.isNotBlank() } else listOf("")

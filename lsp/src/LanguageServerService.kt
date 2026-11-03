@@ -136,12 +136,15 @@ class LanguageServerService(
 
     /**
      * Sets the files [session] has open in [project]: the servers they need run, and the languages that need a
-     * server not chosen yet are returned.
+     * server not chosen yet are returned. The servers of the project it had open before, if another, stop now when
+     * no other session uses them; those of files closed in the same project stop after the idle delay.
      */
     fun use(session: String, project: String, files: List<String>): List<String> {
-        synchronized(lastFiles) { lastFiles[session] = project to files }
+        val left = synchronized(lastFiles) { lastFiles.put(session, project to files) }?.first
         val (targets, unchosen) = targetsOf(project, files)
         supervisor.use(session, targets)
+        // A project left (another one opened, or none: an empty [project]) has no file to come back to soon.
+        if (left != null && left != project) supervisor.discardInside(left)
         return unchosen
     }
 

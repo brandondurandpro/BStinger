@@ -42,6 +42,13 @@ private const val SHOP_CREATED_LINE = 4
 private val TWICE_PHP = listOf("<?php", "function twice(int \$n) { return \$n; }", "twice(2);", "").joinToString("\n")
 private const val TWICE_ARGUMENT = 6
 
+// Like a legacy report: several functions, each one a search of its usages, then a call with an argument.
+private val REPORT_PHP =
+    (listOf("<?php") + (1..6).map { "function cell$it(int \$n) { return \$n; }" } + listOf("cell1(2);", ""))
+        .joinToString("\n")
+private const val REPORT_CALL_LINE = 7
+private const val REPORT_ARGUMENT = 6
+
 /**
  * Inlay hints in PHP (`name:` before an argument, `: Type` after a variable, textDocument/inlayHint): off, in a
  * popup, or in the code.
@@ -98,6 +105,21 @@ class PhpInlayHintsE2eTest {
             awaitNoTag(EditorTags.inlayHint(1, 22), unmerged = true)
             // A server that gives them needs no explanation.
             awaitNoTag(LanguageServerTags.INLAY_HINTS_NOTE)
+        }
+
+    @Test
+    fun `hints come from a server that reports each search of references as a progress, like phpactor`() =
+        runComposeUiTest {
+            // Each usage count is a search, each search a progress: the server goes indexing, then running, again
+            // and again. Restarting the counts at each change never finished them, and the hints, asked after the
+            // counts, never came.
+            project.file("src/report.php", REPORT_PHP)
+            open("--progress-on-references", "400")
+            choose(InlayHintsMode.Inline)
+            openFromTree("src/report.php")
+            val argument = EditorTags.inlayHint(REPORT_CALL_LINE, REPORT_ARGUMENT)
+            awaitTag(argument, unmerged = true, timeout = SERVER_START_MS)
+            onNodeWithTag(argument, useUnmergedTree = true).assertTextEquals("n: ")
         }
 
     @Test

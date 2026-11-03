@@ -27,6 +27,9 @@ import org.example.kotlineditor.model.LanguageServersStatus
 import java.io.IOException
 
 private const val RETRY_MS = 1_000L
+
+// Declared when no project is open: the server then knows the project left.
+private const val NO_PROJECT = ""
 private const val BYTES_PER_MB = 1024.0 * 1024.0
 private const val MB_PER_GB = 1024.0
 private val STOPPED = setOf(LanguageServerState.Stopped, LanguageServerState.Crashed, LanguageServerState.Unavailable)
@@ -124,10 +127,11 @@ class LanguageServersState(
     /** The open [project] has [files] open (null project: none is open). */
     fun declare(project: String?, files: List<String>) {
         val previous = declarations.value
+        // No project: the one left stops its servers now, like a switch to another project.
         declarations.value =
             when {
                 project != null -> Declaration(project, files.distinct().sorted())
-                previous != null -> Declaration(previous.project, emptyList())
+                previous != null -> Declaration(NO_PROJECT, emptyList())
                 else -> return
             }
     }

@@ -201,6 +201,10 @@ class RemoteGit(private val client: RpcClient) :
 
     override suspend fun push(root: String): String = client.call(Method.GitPush) { put(ROOT, root) }.string()
 
+    override suspend fun fetch(root: String) {
+        client.call(Method.GitFetch) { put(ROOT, root) }
+    }
+
     override suspend fun pushBranch(root: String, branch: String): String {
         val output =
             client.call(Method.GitPushBranch) {
