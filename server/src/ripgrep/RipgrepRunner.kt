@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runInterruptible
+import org.example.kotlineditor.lsp.supervisor.OrphanReaper
 import org.example.kotlineditor.model.IGNORED_DIRECTORIES
 import java.io.IOException
 import java.io.InputStream
@@ -128,11 +129,8 @@ internal class RipgrepRunner(
         private const val EXIT_ERROR = 2
         private const val MAX_ERROR_OUTPUT = 4096
 
-        /** Kills [process] and every process it started. */
-        fun destroyTree(process: Process) {
-            process.descendants().forEach { it.destroyForcibly() }
-            process.destroyForcibly()
-        }
+        /** Kills [process] and every process it started, not the strangers that once had a parent of its pid. */
+        fun destroyTree(process: Process) = OrphanReaper.killTree(process.toHandle())
 
         // Paths are confined to the searched root: anything else (it should not happen) is dropped.
         private fun isUnder(root: Path, path: String): Boolean =

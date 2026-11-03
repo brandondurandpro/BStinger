@@ -67,11 +67,30 @@ class OrphanReaper(private val directory: Path) {
                 .map(Instant::toEpochMilli)
                 .orElse(0L)
 
-        /** Kills [process] and every process it started; the children are listed first, while they are its own. */
-        fun killTree(process: ProcessHandle) {
-            val children = runCatching { process.descendants().use { it.toList() } }.getOrDefault(emptyList())
+        /**
+         * Kills [process] and every process it started; the children are listed first, while they are its own.
+         * [start] is its start time, read while it ran: needed to find its children once it exited.
+         */
+        fun killTree(process: ProcessHandle, start: Long = startOf(process)) {
+            val children = ownDescendants(process, start)
             process.destroyForcibly()
             children.forEach { it.destroyForcibly() }
+        }
+
+        /**
+         * The processes [process] started, [start] being its start time (0: unknown, none is returned).
+         *
+         * [ProcessHandle.descendants] goes by parent pid. Once a process exited, the JDK no longer finds its start
+         * time and stops comparing start times, and Windows still names a parent pid that has since been reused:
+         * the descendants of an exited process are then every process whose long dead parent had the same pid, a
+         * CI runner for instance. Only the processes started after it are its own, and none once its pid belongs to
+         * another process.
+         */
+        fun ownDescendants(process: ProcessHandle, start: Long): List<ProcessHandle> {
+            if (start == 0L) return emptyList()
+            val listed = runCatching { process.descendants().use { it.toList() } }.getOrDefault(emptyList())
+            val reused = ProcessHandle.of(process.pid()).map { startOf(it) != start }.orElse(false)
+            return if (reused) emptyList() else listed.filter { startOf(it) >= start }
         }
     }
 }
