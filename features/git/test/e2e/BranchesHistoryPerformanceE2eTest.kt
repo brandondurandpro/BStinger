@@ -61,14 +61,7 @@ class BranchesHistoryPerformanceE2eTest {
                 script.append("from refs/heads/$default\n\n")
             }
         }
-        val process =
-            ProcessBuilder("git", "fast-import", "--quiet", "--force")
-                .directory(project.root.toFile())
-                .redirectErrorStream(true)
-                .start()
-        process.outputStream.use { it.write(script.toString().toByteArray()) }
-        val output = process.inputStream.bufferedReader().readText()
-        check(process.waitFor() == 0) { "git fast-import failed: $output" }
+        gitFastImport(project.root, script.toString())
         project.git("reset", "-q", "--hard", default)
         return default
     }

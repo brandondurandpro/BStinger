@@ -19,6 +19,21 @@ fun gitIn(directory: Path, vararg args: String): String {
     return output
 }
 
+/**
+ * Feeds [script] to `git fast-import` in [directory]: thousands of commits in one process, where one `git commit`
+ * each takes minutes.
+ */
+fun gitFastImport(directory: Path, script: String) {
+    val process =
+        ProcessBuilder("git", "fast-import", "--quiet", "--force")
+            .directory(directory.toFile())
+            .redirectErrorStream(true)
+            .start()
+    process.outputStream.use { it.write(script.toByteArray()) }
+    val output = process.inputStream.bufferedReader().readText()
+    check(process.waitFor() == 0) { "git fast-import failed: $output" }
+}
+
 /** Makes the project a repository whose first commit holds every file. */
 fun SampleProject.commitAll() {
     git("init", "-q")
