@@ -12,7 +12,7 @@ internal object CrashReason {
     private const val INDENT = ' '
 
     /** What explains the crash in [stderr] (the lines of the process, oldest first), null when it wrote nothing. */
-    fun of(stderr: List<String>): String? = symfonyBlock(stderr) ?: lastError(stderr) ?: lastLine(stderr)
+    fun explain(stderr: List<String>): String? = symfonyBlock(stderr) ?: lastError(stderr) ?: lastLine(stderr)
 
     // The indented lines after the last header, padding removed; the block wraps long messages over several lines.
     private fun symfonyBlock(stderr: List<String>): String? {

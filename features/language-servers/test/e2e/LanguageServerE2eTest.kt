@@ -200,7 +200,7 @@ class LanguageServerE2eTest {
             val crashed = awaitServer(app) { it.state == LanguageServerState.Crashed }
             awaitTag(LanguageServerTags.statusLanguageServer(crashed.id)).performClick()
             val message = LanguageServerTags.languageServerMessage(crashed.id)
-            awaitCondition { textOf(message).contains("Argument \"disabledSupport\" has type \"bool\"") }
+            awaitCondition { textOf(message).contains("""Argument "disabledSupport" has type "bool"""") }
             assertFalse(textOf(message).contains("--no-loop"), textOf(message))
         }
 

@@ -679,7 +679,7 @@ internal class ManagedServer(
     // What the process wrote last on stderr, once read to its end: the exit may be reported before the last lines.
     private suspend fun explanation(): String? {
         withContext(Dispatchers.IO) { drainer?.join(DRAIN_WAIT_MS) }
-        return CrashReason.of(stderr.lines())
+        return CrashReason.explain(stderr.lines())
     }
 
     // Always read: a server whose stderr pipe is full blocks.

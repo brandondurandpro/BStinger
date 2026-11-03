@@ -74,7 +74,7 @@ class PhpactorIntegrationTest {
 
     private fun phpAvailable(): Boolean {
         val php = PhpServers.phpactor.requirements.firstOrNull()
-        val detected = php?.let { RuntimeDetector().detect(it.runtime, it.minimumVersion) }
+        val detected = php?.let { RuntimeDetector().detect(it.runtime, it.minimumVersion, it.extensions) }
         if (detected !is RuntimeStatus.Found) println("SKIPPED: no PHP for phpactor ($detected)")
         return detected is RuntimeStatus.Found
     }

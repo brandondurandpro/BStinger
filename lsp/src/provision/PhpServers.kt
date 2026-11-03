@@ -22,6 +22,9 @@ object PhpServers {
     private const val PHPACTOR_SHA_256 = "b28bf6166e016d539fc2f2aec18ef918b12590e436a6f1ccbdf30b5bbdbdb16b"
     private const val PHPACTOR_PHP_MINIMUM = "8.2"
 
+    // What bin/phpactor checks before it starts; it exits with code 255 without one of them.
+    private val PHPACTOR_PHP_EXTENSIONS = listOf("mbstring", "posix", "tokenizer")
+
     private const val INTELEPHENSE_VERSION = "1.18.5"
     private const val INTELEPHENSE_SHA_512 =
         "dqCH1YNCRlHGBLND+iUFjBJlGwM4pPimX2jm8AaP/6K2WZNM2K2+E8dOWCD3ZYMP2zC2ICBD9Soe2oxKtU9d9A=="
@@ -73,7 +76,7 @@ object PhpServers {
             licence = "MIT (free and open source)",
             strengths = PHPACTOR_STRENGTHS,
             drawbacks = PHPACTOR_DRAWBACKS,
-            requirements = listOf(Requirement(RuntimeKind.Php, PHPACTOR_PHP_MINIMUM)),
+            requirements = listOf(Requirement(RuntimeKind.Php, PHPACTOR_PHP_MINIMUM, PHPACTOR_PHP_EXTENSIONS)),
             tool =
             PinnedTool(
                 name = PHPACTOR,
