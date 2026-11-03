@@ -176,11 +176,16 @@ class CodeInsightState(
         }
     }
 
-    /** The language server restarted, or another one serves the files: the usage counts are asked again. */
+    /**
+     * The language server restarted, another one serves the files, or it began or ended indexing: the usage counts
+     * are asked again. A document still asking finishes first, then asks again: phpactor reports each search of
+     * references as a progress, so cancelling it at each change would restart its counts forever.
+     */
     fun refreshAll() =
         insights.values.forEach { insight ->
             insight.typeFormattingTriggers = null
-            refreshUsages(insight, delayed = false)
+            val asking = insight.usagesJob?.isActive == true
+            if (asking) insight.askAgain = true else refreshUsages(insight, delayed = false)
         }
 
     private fun onEdit(insight: DocumentInsight, change: TextChange) {
@@ -200,14 +205,21 @@ class CodeInsightState(
         insight.usagesJob =
             scope.launch {
                 if (delayed) delay(USAGES_DELAY_MS)
-                countUsages(insight)
-                codeLensesFromServer(insight)
-                documentLinksFromServer(insight)
-                formatTriggersFromServer(insight)
-                foldingFromServer(insight)
-                inlayHintsFromServer(insight)
-                semanticTokensFromServer(insight)
+                do {
+                    insight.askAgain = false
+                    askEverything(insight)
+                } while (insight.askAgain)
             }
+    }
+
+    private suspend fun askEverything(insight: DocumentInsight) {
+        countUsages(insight)
+        codeLensesFromServer(insight)
+        documentLinksFromServer(insight)
+        formatTriggersFromServer(insight)
+        foldingFromServer(insight)
+        inlayHintsFromServer(insight)
+        semanticTokensFromServer(insight)
     }
 
     private suspend fun countUsages(insight: DocumentInsight) {

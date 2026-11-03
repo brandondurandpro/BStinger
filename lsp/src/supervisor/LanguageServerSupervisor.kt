@@ -156,6 +156,12 @@ class LanguageServerSupervisor(
         retired.forEach { it.send(Command.Discard) }
     }
 
+    /** Stops now the servers of [project] (their root is inside it) that nobody uses: the project was left. */
+    fun discardInside(project: String) {
+        val retired = servingInside(project).filter { synchronized(lock) { it.users.isEmpty() } }
+        retired.forEach { it.send(Command.Discard) }
+    }
+
     private fun newServer(target: ServerTarget) =
         ManagedServer(target, scope, sampler, reaper, timings, clock, ::forget, onChange, documents, hooks)
 

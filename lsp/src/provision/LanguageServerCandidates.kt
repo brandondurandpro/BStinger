@@ -3,12 +3,14 @@ package org.example.kotlineditor.lsp.provision
 import kotlinx.serialization.json.JsonElement
 import java.nio.file.Path
 
-/** A runtime a language server needs, at a minimum version. */
+/** A runtime a language server needs, at a minimum version, with extensions loaded. */
 data class Requirement(
     /** The runtime. */
     val runtime: RuntimeKind,
     /** Oldest version that works, or null for any. */
     val minimumVersion: String?,
+    /** Extensions it must have loaded (`mbstring` for PHP), in lower case. */
+    val extensions: List<String> = emptyList(),
 )
 
 /**
@@ -70,7 +72,7 @@ class CandidateRegistry(
     }
 
     private fun status(candidate: LanguageServerCandidate): CandidateStatus {
-        val results = candidate.requirements.map { detector.detect(it.runtime, it.minimumVersion) }
+        val results = candidate.requirements.map { detector.detect(it.runtime, it.minimumVersion, it.extensions) }
         return CandidateStatus(
             candidate = candidate,
             available = results.all { it is RuntimeStatus.Found },
@@ -93,5 +95,25 @@ class CandidateRegistry(
             is RuntimeStatus.TooOld -> {
                 "${status.kind.displayName} ${status.version} found, but ${status.minimum} or newer is needed"
             }
+
+            is RuntimeStatus.MissingExtensions -> {
+                missingExtensions(status)
+            }
         }
+
+    // `PHP 8.5.0 at /usr/bin/php8.5 lacks mbstring: install php8.5-mbstring...`, with the packages of the
+    // distributions that split PHP extensions (Debian and Ubuntu version them, Fedora does not).
+    private fun missingExtensions(status: RuntimeStatus.MissingExtensions): String {
+        val name = status.kind.displayName
+        val lacking = status.missing.joinToString(", ")
+        val branch =
+            status.version
+                .split('.')
+                .take(2)
+                .joinToString(".")
+        val debian = status.missing.joinToString(" ") { "${status.kind.executable}$branch-$it" }
+        val fedora = status.missing.joinToString(" ") { "${status.kind.executable}-$it" }
+        return "$name ${status.version} at ${status.path} lacks $lacking: install it (apt install $debian, " +
+            "dnf install $fedora) or set another $name in Preferences › Language servers"
+    }
 }

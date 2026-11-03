@@ -100,6 +100,9 @@ class DocumentInsight internal constructor(val document: Document) {
         internal set
     internal var usagesJob: Job? = null
 
+    // The server changed while [usagesJob] asked: it asks everything again once done, rather than being cancelled.
+    internal var askAgain = false
+
     /** Errors among [diagnostics]. */
     val errorCount: Int get() = diagnostics.count { it.severity == DiagnosticSeverity.Error }
 

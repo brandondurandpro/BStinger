@@ -16,6 +16,7 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
@@ -189,6 +190,18 @@ class LanguageServerE2eTest {
                 ).contains("Fatal error: fake crash")
             }
             awaitTag(LanguageServerTags.languageServerStart(crashed.id))
+        }
+
+    @Test
+    fun `a server that prints its usage after the error is shown crashed with the error, not the usage`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, languageServers = servers("--crash-like-symfony").chosen().settings)
+            openFromTree("src/index.php")
+            val crashed = awaitServer(app) { it.state == LanguageServerState.Crashed }
+            awaitTag(LanguageServerTags.statusLanguageServer(crashed.id)).performClick()
+            val message = LanguageServerTags.languageServerMessage(crashed.id)
+            awaitCondition { textOf(message).contains("""Argument "disabledSupport" has type "bool"""") }
+            assertFalse(textOf(message).contains("--no-loop"), textOf(message))
         }
 
     @Test

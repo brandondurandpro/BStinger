@@ -63,6 +63,31 @@ class RuntimeDetectorTest {
     }
 
     @Test
+    fun `the newest PHP that has the needed extensions wins over a newer one without them`() {
+        executable("php8.4")
+        executable("php8.5")
+        val versions = mapOf("php8.4" to "8.4.10\nCore,mbstring,posix,Tokenizer", "php8.5" to "8.5.1\nCore,posix")
+        val status = detector(versions).detect(RuntimeKind.Php, "8.2", listOf("mbstring", "posix", "tokenizer"))
+        assertEquals(RuntimeStatus.Found(RuntimeKind.Php, bin.resolve("php8.4"), "8.4.10"), status)
+    }
+
+    @Test
+    fun `a recent PHP without the needed extensions says which ones it lacks`() {
+        executable("php")
+        executable("php8.5")
+        val versions = mapOf("php" to "7.0.33\nmbstring,posix,tokenizer", "php8.5" to "8.5.1\nposix")
+        val status = detector(versions).detect(RuntimeKind.Php, "8.2", listOf("mbstring", "posix", "tokenizer"))
+        val expected =
+            RuntimeStatus.MissingExtensions(
+                RuntimeKind.Php,
+                bin.resolve("php8.5"),
+                "8.5.1",
+                listOf("mbstring", "tokenizer"),
+            )
+        assertEquals(expected, status)
+    }
+
+    @Test
     fun `a runtime of a version manager is found outside the PATH`() {
         val nvm = Files.createDirectories(empty.resolve("nvm/v24.1.0/bin"))
         Files.createFile(nvm.resolve("node")).toFile().setExecutable(true)

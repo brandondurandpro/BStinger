@@ -2,6 +2,7 @@ package org.example.kotlineditor.e2e
 
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextContains
@@ -30,16 +31,23 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
+private const val TEN_MINUTES = 600_000L
+
 /** The menu of the project name in the toolbar, which lists the other recent projects and switches to them. */
 @OptIn(ExperimentalTestApi::class)
 class ProjectSwitcherE2eTest {
     private val project = SampleProject.standard()
     private val other = SampleProject().apply { file("Other.kt", "class Other") }
+    private val php = FakePhpServers.project()
+    private val phpServers = ArrayList<FakePhpServers>()
+    private var pid: Long? = null
 
     @AfterTest
     fun cleanup() {
         project.delete()
         other.delete()
+        php.delete()
+        phpServers.forEach { it.delete() }
     }
 
     @Test
@@ -105,6 +113,43 @@ class ProjectSwitcherE2eTest {
             awaitTag(AppTags.switchProject(project.path))
             awaitNoTag(AppTags.switchProject(other.path))
         }
+
+    @Test
+    fun `switching to another project stops the language server of the project left`() =
+        runComposeUiTest {
+            val app = launchWithPhpServer()
+            switchProjectTo(other.path)
+            awaitTag(TreeTags.treeRow("Other.kt"))
+            awaitStopped(app)
+        }
+
+    @Test
+    fun `going to the homepage stops the language server of the project left`() =
+        runComposeUiTest {
+            val app = launchWithPhpServer()
+            onNodeWithTag(AppTags.PROJECT_WIDGET).performClick()
+            awaitTag(AppTags.PROJECT_CLOSE).performClick()
+            awaitTag(AppTags.recentProject(other.path))
+            awaitStopped(app)
+        }
+
+    // The project with a PHP file open, its server running; it would stay idle for ten minutes if nothing stopped it.
+    private fun ComposeUiTest.launchWithPhpServer(): E2eApp {
+        val servers = FakePhpServers(idleStopMs = TEN_MINUTES).chosen().also { phpServers += it }
+        val app = launchApp(recent = listOf(php.path, other.path), languageServers = servers.settings)
+        openRecentFromWelcome(php.path)
+        openFromTree("src/index.php")
+        val running = awaitServer(app) { it.isRunning() }
+        pid = running.pid
+        return app
+    }
+
+    // Gone from the status, and its process ended: not left idle until the idle delay.
+    private fun ComposeUiTest.awaitStopped(app: E2eApp) {
+        awaitCondition(SERVER_START_MS) { app.languageServers.isEmpty() }
+        val process = pid?.let { ProcessHandle.of(it).orElse(null) }
+        awaitCondition(SERVER_START_MS) { process?.isAlive != true }
+    }
 
     @Test
     fun `switching back reopens the files of the project left`() =
