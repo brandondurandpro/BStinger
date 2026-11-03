@@ -3,6 +3,7 @@ package org.example.kotlineditor.rpc
 import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import org.example.kotlineditor.model.AgentAttachment
 import org.example.kotlineditor.model.AgentChoices
 import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.model.AgentSessions
@@ -25,6 +26,7 @@ class RemoteAgents(private val client: RpcClient) :
         itemId: String,
         text: String,
         session: String?,
+        attachments: List<AgentAttachment>,
     ) {
         client.call(Method.AgentPrompt) {
             put(CONVERSATION, conversation)
@@ -33,6 +35,7 @@ class RemoteAgents(private val client: RpcClient) :
             put("item", itemId)
             put("text", text)
             put(SESSION, session.orNull())
+            if (attachments.isNotEmpty()) put("attachments", attachments.attachmentsToJson())
         }
     }
 

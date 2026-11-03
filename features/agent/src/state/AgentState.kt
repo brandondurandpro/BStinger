@@ -60,6 +60,9 @@ class Conversation(val id: Int, title: String, val branch: String) {
             draftValue = TextFieldValue(value, TextRange(value.length))
         }
 
+    /** What the user joins to the next prompt: files, lines, images. */
+    val context = PromptContext()
+
     /** The commands the agent offers in its session (`/compact`…); empty before it said. */
     var commands: List<AgentSlashCommand> by mutableStateOf(emptyList())
         internal set
@@ -211,7 +214,8 @@ class Conversation(val id: Int, title: String, val branch: String) {
  */
 @Stable
 class AgentState(
-    private val project: AgentHost,
+    /** The project of agent mode. */
+    val project: AgentHost,
     private val agentCommand: () -> AgentCommand = { agentCommandOf("") },
 ) {
     private val git get() = project.services.git
@@ -332,15 +336,17 @@ class AgentState(
         conversation.draft = ""
         if (!conversation.started) conversation.title = titleOf(text)
         val itemId = "prompt-${UUID.randomUUID()}"
+        val attachments = conversation.context.take()
         // Shown at once; the server's copy of the prompt replaces it, under the same id.
-        conversation.upsert(AgentItem.UserText(itemId, 0, text))
+        conversation.upsert(AgentItem.UserText(itemId, 0, text, attachments.map { it.label }))
         conversations.remove(conversation)
         conversations.add(0, conversation)
         conversation.sending = true
-        conversation.job = project.scope.launch { deliver(conversation, itemId, text) }
+        val prompt = OutgoingPrompt(itemId, text, attachments)
+        conversation.job = project.scope.launch { deliver(conversation, prompt) }
     }
 
-    private suspend fun deliver(conversation: Conversation, itemId: String, text: String) {
+    private suspend fun deliver(conversation: Conversation, prompt: OutgoingPrompt) {
         try {
             conversation.prepareIn(project)
             conversation.preparing?.join()
@@ -353,7 +359,9 @@ class AgentState(
             workspace.editor.flush()
             options.beforePrompt(conversation)
             project.followTranscript(conversation)
-            agents.prompt(conversation.key, agentCommand(), workspace.root.path, itemId, text, conversation.session)
+            val directory = workspace.root.path
+            val (itemId, text, attachments) = prompt
+            agents.prompt(conversation.key, agentCommand(), directory, itemId, text, conversation.session, attachments)
         } catch (failure: IOException) {
             conversation.note("The prompt could not be sent: ${failure.message}")
         } finally {

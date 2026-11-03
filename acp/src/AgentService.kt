@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
 import org.example.kotlineditor.lsp.provision.ToolDownloader
+import org.example.kotlineditor.model.AgentAttachment
 import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.model.AgentTranscript
 import org.example.kotlineditor.model.AgentTurnState
@@ -85,7 +86,7 @@ class AgentService(
 
     /**
      * Sends [text] to the agent of [conversation], started with [agent] in [directory] when needed; a conversation
-     * this service does not know continues the agent's [session].
+     * this service does not know continues the agent's [session]; [attachments] go with the text.
      */
     fun prompt(
         conversation: String,
@@ -94,8 +95,10 @@ class AgentService(
         itemId: String,
         text: String,
         session: String? = null,
+        attachments: List<AgentAttachment> = emptyList(),
     ) {
-        conversation(conversation).prompt(itemId, text, directory, session) { processes.processFor(agent) }
+        val prompt = UserPrompt(itemId, text, attachments)
+        conversation(conversation).prompt(prompt, directory, session) { processes.processFor(agent) }
     }
 
     /** Opens the agent's [session] as [conversation]: the agent replays its history into the transcript. */

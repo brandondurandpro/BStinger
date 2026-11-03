@@ -88,9 +88,9 @@ private fun JsonObject.agentSession(): AgentSession? {
     return AgentSession(id, directory, text("title"), text("updatedAt"))
 }
 
-/** Sends [text] to [session] and waits for the end of the turn; returns why it ended (`end_turn`, `cancelled`). */
-internal suspend fun AgentProcess.prompt(session: String, text: String): String {
-    val answer = request("session/prompt", promptParams(session, text))
+/** Sends [blocks] to [session] and waits for the end of the turn; returns why it ended (`end_turn`, `cancelled`). */
+internal suspend fun AgentProcess.prompt(session: String, blocks: List<JsonObject>): String {
+    val answer = request("session/prompt", promptParams(session, blocks))
     return answer?.text("stopReason") ?: "end_turn"
 }
 

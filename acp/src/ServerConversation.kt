@@ -2,11 +2,14 @@ package org.example.kotlineditor.acp
 
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
 import org.example.kotlineditor.lsp.jsonrpc.LspResponseException
+import org.example.kotlineditor.model.AgentAttachment
 import org.example.kotlineditor.model.AgentItem
 import org.example.kotlineditor.model.AgentPermissionOption
 import org.example.kotlineditor.model.AgentToolStatus
@@ -40,14 +43,15 @@ internal class ServerConversation(
      * Starts answering [text], shown as item [itemId], in the agent's [session] when the conversation has none yet. A
      * prompt sent again (same item) is ignored.
      */
-    fun prompt(itemId: String, text: String, directory: String, session: String?, process: () -> AgentProcess) {
+    fun prompt(prompt: UserPrompt, directory: String, session: String?, process: () -> AgentProcess) {
+        val itemId = prompt.itemId
         synchronized(lock) {
             if (!prompted.add(itemId)) return
             check(job?.isActive != true) { "The agent is still answering" }
             session?.let { keeper.resume(it, replay = false) }
             stopping = false
             journal.setState(AgentTurnState.Starting)
-            job = scope.launch { run(itemId, text, directory, process) }
+            job = scope.launch { run(prompt, directory, process) }
         }
     }
 
@@ -101,16 +105,23 @@ internal class ServerConversation(
 
     override suspend fun requestPermission(params: JsonObject): String? = permissions.ask(params, cancelled = stopping)
 
-    private suspend fun run(itemId: String, text: String, directory: String, process: () -> AgentProcess) {
+    private suspend fun run(prompt: UserPrompt, directory: String, process: () -> AgentProcess) {
         var stopReason: String? = null
+        val context = prompt.attachments.map { it.label }
         // After the history the agent may replay, before what goes wrong.
-        val shown = { if (itemId !in journal) journal.add { AgentItem.UserText(itemId, it, text) } }
+        val shown = {
+            if (prompt.itemId !in journal) journal.add { AgentItem.UserText(prompt.itemId, it, prompt.text, context) }
+        }
         try {
             failures(writer, keeper, shown) {
                 val current = keeper.sessionFor(directory, process)
                 shown()
                 journal.setState(AgentTurnState.Running)
-                stopReason = current.process.prompt(current.id, text)
+                val take = current.process.ready().prompt
+                val content =
+                    withContext(Dispatchers.IO) { promptContent(prompt.text, prompt.attachments, directory, take) }
+                content.leftOut.forEach { writer.notice(it, error = true) }
+                stopReason = current.process.prompt(current.id, content.blocks)
             }
         } finally {
             shown()
@@ -131,6 +142,9 @@ internal class ServerConversation(
         journal.setState(AgentTurnState.Idle)
     }
 }
+
+/** A prompt of the user: [text], shown as item [itemId], and what the user joined to it. */
+internal class UserPrompt(val itemId: String, val text: String, val attachments: List<AgentAttachment> = emptyList())
 
 /** The permission requests of a conversation waiting for the user, each one an item of its journal. */
 private class Permissions(private val journal: Journal, private val writer: TranscriptWriter) {

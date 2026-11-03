@@ -95,18 +95,22 @@ internal class TranscriptWriter(
 
     // A chunk of text: it grows the text item it continues (same kind, same message), or starts one.
     private fun append(update: JsonObject, kind: Text) {
-        val chunk = update["content"].obj()?.contentText().orEmpty()
-        if (chunk.isEmpty()) return
+        val content = update["content"].obj()
+        // What the user joined to a prompt shows as such, not as its text.
+        val joined = content?.contextLabel()?.takeIf { kind == Text.User }
+        val chunk = if (joined != null) "" else content?.contentText().orEmpty()
+        if (chunk.isEmpty() && joined == null) return
+        val context = listOfNotNull(joined)
         val message = update.text("messageId")
         val sameMessage = message == null || message == messageId
         messageId = message
         val continued = journal.last()?.takeIf { sameMessage && kind.continues(it) }
         if (continued != null) {
-            journal.update(continued.id) { item, version -> appended(item, chunk, version) }
+            journal.update(continued.id) { item, version -> appended(item, chunk, version, context) }
             return
         }
         val id = journal.newId()
-        journal.add { version -> kind.item(id, version, chunk) }
+        journal.add { version -> kind.item(id, version, chunk, context) }
     }
 
     // The agent titled the session (`title` absent: unchanged; null: cleared).
@@ -182,9 +186,9 @@ private enum class Text {
             Thought -> item is AgentItem.Thought
         }
 
-    fun item(id: String, version: Long, text: String): AgentItem =
+    fun item(id: String, version: Long, text: String, context: List<String>): AgentItem =
         when (this) {
-            User -> AgentItem.UserText(id, version, text)
+            User -> AgentItem.UserText(id, version, text, context)
             Agent -> AgentItem.AgentText(id, version, text)
             Thought -> AgentItem.Thought(id, version, text)
         }
@@ -192,13 +196,19 @@ private enum class Text {
 
 private fun AgentItem.ToolCall.isRunning() = status == AgentToolStatus.Pending || status == AgentToolStatus.Running
 
-private fun appended(item: AgentItem, chunk: String, version: Long): AgentItem =
+private fun appended(item: AgentItem, chunk: String, version: Long, context: List<String>): AgentItem =
     when (item) {
-        is AgentItem.UserText -> item.copy(version = version, text = item.text + chunk)
+        is AgentItem.UserText -> item.continued(chunk, version, context)
         is AgentItem.Thought -> item.copy(version = version, text = item.text + chunk)
         is AgentItem.AgentText -> item.copy(version = version, text = item.text + chunk)
         else -> item
     }
+
+// The prompt of the user, with [chunk] of its text and [context] joined to it.
+private fun AgentItem.UserText.continued(chunk: String, version: Long, context: List<String>): AgentItem.UserText {
+    val joined = this.context + context
+    return copy(version = version, text = text + chunk, context = joined)
+}
 
 private fun newTool(id: String, version: Long, callId: String, update: JsonObject): AgentItem.ToolCall {
     val content = update.toolContent()

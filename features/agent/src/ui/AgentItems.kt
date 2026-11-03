@@ -39,8 +39,8 @@ private const val OUTPUT_LINES = 6
 private const val TERMINAL_LINES = 12
 
 @Composable
-internal fun UserBubble(text: String) {
-    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+internal fun UserBubble(text: String, context: List<String> = emptyList()) {
+    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
         BasicText(
             text,
             Modifier
@@ -50,6 +50,7 @@ internal fun UserBubble(text: String) {
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             style = bodyStyle,
         )
+        SentContext(context, Modifier.widthIn(max = 560.dp).padding(top = 4.dp))
     }
 }
 

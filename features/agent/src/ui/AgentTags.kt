@@ -57,6 +57,15 @@ object AgentTags {
     /** A suggestion of the completion of the prompt, by its label (`/echo`, `src/Main.kt`). */
     fun agentCompletion(label: String) = "agent.completion:$label"
 
+    /** Something joined to the prompt, by its label (`Main.kt`, `Main.kt:3-7`, `image-1.png`). */
+    fun agentAttachment(label: String) = "agent.attachment:$label"
+
+    /** The button that removes something joined to the prompt, by its label. */
+    fun agentAttachmentRemove(label: String) = "agent.attachment.remove:$label"
+
+    /** Something joined to a prompt sent, as the transcript shows it, by its label. */
+    fun agentSentAttachment(label: String) = "agent.sent.attachment:$label"
+
     /** A button of the pending permission request, by the id of its option (`allow`). */
     fun agentPermission(option: String) = "agent.permission:$option"
 }

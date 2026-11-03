@@ -11,6 +11,9 @@ interface AgentWorkspace {
     /** The files and diffs opened under the conversation. */
     val editor: EditorState
 
+    /** Its files, for the `@` mentions of the prompt. */
+    val fileIndex: FileIndex
+
     /** The branch checked out there, once Git said it. */
     val checkedOutBranch: String?
 

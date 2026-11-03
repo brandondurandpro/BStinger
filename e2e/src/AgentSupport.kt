@@ -9,6 +9,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.test.withKeyDown
 import org.example.kotlineditor.acp.AgentSettings
 import org.example.kotlineditor.model.AgentItem
 import org.example.kotlineditor.state.Conversation
@@ -19,6 +20,7 @@ import org.example.kotlineditor.testkit.acp.FakeAgentCommand
 import org.example.kotlineditor.testkit.acp.FakeSessions
 import org.example.kotlineditor.testkit.acp.FakeTurn
 import org.example.kotlineditor.ui.AgentTags
+import org.example.kotlineditor.ui.EditorTags
 
 /** How long the fake agent may take to start (a JVM) and answer, on a slow runner. */
 const val AGENT_TIMEOUT = 60_000L
@@ -202,3 +204,32 @@ fun ComposeUiTest.suggestions(): List<String> {
     val tags = nodes.mapNotNull { it.config.getOrElseNullable(SemanticsProperties.TestTag) { null } }
     return tags.map { it.removePrefix(prefix) }
 }
+
+/** Ctrl+V in the prompt: pastes what the in-memory clipboard holds. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.pasteInPrompt() {
+    awaitTag(AgentTags.AGENT_PROMPT).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.V) } }
+}
+
+/** Ctrl+Alt+K in the editor: sends its selection (or its file) to the prompt of the agent. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.sendSelectionToAgent() {
+    onNodeWithTag(EditorTags.EDITOR).performKeyInput {
+        withKeyDown(Key.CtrlLeft) { withKeyDown(Key.AltLeft) { pressKey(Key.K) } }
+    }
+}
+
+/** The labels of what is joined to the prompt, in order. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.attachments(): List<String> {
+    val prefix = AgentTags.agentAttachment("")
+    val nodes = onAllNodes(hasTestTagPrefix(prefix)).fetchSemanticsNodes()
+    val tags = nodes.mapNotNull { it.config.getOrElseNullable(SemanticsProperties.TestTag) { null } }
+    return tags.map { it.removePrefix(prefix) }
+}
+
+/** A PNG of one pixel, as a screenshot copied. */
+val ONE_PIXEL_PNG: ByteArray =
+    java.util.Base64.getDecoder().decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+    )

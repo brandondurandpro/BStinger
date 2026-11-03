@@ -13,8 +13,12 @@ import java.io.File
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 
-/** One prompt of a session of the [FakeAgent] and its answer. */
-class FakeTurn(val prompt: String, val reply: StringBuilder = StringBuilder())
+/** One prompt of a session of the [FakeAgent], the blocks joined to it ([context]) and its answer. */
+class FakeTurn(
+    val prompt: String,
+    val reply: StringBuilder = StringBuilder(),
+    val context: List<JsonObject> = emptyList(),
+)
 
 /** A session of the [FakeAgent], with its history, as a real agent keeps it. */
 class FakeSession(val id: String, val cwd: String) {
@@ -93,6 +97,7 @@ class FakeSessions(private val store: File?) {
                             buildJsonObject {
                                 put("prompt", turn.prompt)
                                 put("reply", turn.reply.toString())
+                                put("context", JsonArray(turn.context))
                             },
                         )
                     }
@@ -111,7 +116,9 @@ class FakeSessions(private val store: File?) {
         session.effort = json.text("effort") ?: session.effort
         (json["turns"] as? JsonArray).orEmpty().forEach { element ->
             val turn = element.jsonObject
-            session.turns.add(FakeTurn(turn.text("prompt").orEmpty(), StringBuilder(turn.text("reply").orEmpty())))
+            val context = (turn["context"] as? JsonArray).orEmpty().map { it.jsonObject }
+            val reply = StringBuilder(turn.text("reply").orEmpty())
+            session.turns.add(FakeTurn(turn.text("prompt").orEmpty(), reply, context))
         }
         return session
     }

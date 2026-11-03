@@ -143,6 +143,8 @@ sealed interface AgentItem {
         override val version: Long,
         /** What the user typed. */
         val text: String,
+        /** What the user joined to it, as the prompt shows it ([AgentAttachment.label]). */
+        val context: List<String> = emptyList(),
     ) : AgentItem
 
     /** Text of the agent, streamed: it grows until another item starts. */
@@ -219,6 +221,44 @@ sealed interface AgentItem {
 }
 
 private const val NO_SERVER = "No server runs the agents"
+
+/**
+ * Something the user joins to a prompt, such as a file of the project, lines of one or an image.
+ *
+ * A path is relative to the directory the agent works in, with `/`: the same file in the project and in a worktree.
+ */
+sealed interface AgentAttachment {
+    /** What the prompt shows of it, such as a file name or `Main.kt:3-7`. */
+    val label: String
+
+    /** A file, sent whole when the agent takes it, else as a link the agent reads. */
+    data class File(
+        /** Where it is. */
+        val path: String,
+    ) : AgentAttachment {
+        override val label: String get() = path.substringAfterLast('/')
+    }
+
+    /** Lines [first] to [last] of the file at [path] (from 1), whose text is [text]. */
+    data class Lines(val path: String, val first: Int, val last: Int, val text: String) : AgentAttachment {
+        override val label: String
+            get() {
+                val name = path.substringAfterLast('/')
+                return if (first == last) "$name:$first" else "$name:$first-$last"
+            }
+    }
+
+    /** An image pasted in the prompt, [data] being its bytes in Base64. */
+    data class Image(
+        /** What the prompt calls it (`image-1.png`). */
+        val name: String,
+        /** Its type (`image/png`). */
+        val mimeType: String,
+        val data: String,
+    ) : AgentAttachment {
+        override val label: String get() = name
+    }
+}
 
 /** A command the agent offers, typed in the prompt as `/name`, such as `/compact` or `/review`. */
 data class AgentSlashCommand(
@@ -347,7 +387,7 @@ interface Agents : AgentChoices {
     /**
      * Sends [text] to the agent of [conversation], started with [agent] in [directory] if it does not run yet. The
      * prompt shows as item [itemId]. A conversation the server does not know continues the agent's [session], when
-     * the agent can reopen it. A request sent twice is run once.
+     * the agent can reopen it. [attachments] go with the text. A request sent twice is run once.
      */
     suspend fun prompt(
         conversation: String,
@@ -356,6 +396,7 @@ interface Agents : AgentChoices {
         itemId: String,
         text: String,
         session: String? = null,
+        attachments: List<AgentAttachment> = emptyList(),
     )
 
     /**
@@ -394,6 +435,7 @@ interface Agents : AgentChoices {
             itemId: String,
             text: String,
             session: String?,
+            attachments: List<AgentAttachment>,
         ): Unit = throw java.io.IOException(NO_SERVER)
 
         override suspend fun open(conversation: String, agent: AgentCommand, directory: String, session: String): Unit =

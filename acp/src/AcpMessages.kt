@@ -3,7 +3,6 @@ package org.example.kotlineditor.acp
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
-import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
@@ -28,6 +27,16 @@ internal class AgentInfo(
     val authMethods: List<String>,
     /** What it can do with the sessions it keeps. */
     val sessions: SessionCapabilities = SessionCapabilities(),
+    /** What a prompt may hold besides text and links. */
+    val prompt: PromptCapabilities = PromptCapabilities(),
+)
+
+/** What a prompt may hold besides text and links to files, which every agent takes. */
+internal data class PromptCapabilities(
+    /** Images. */
+    val image: Boolean = false,
+    /** Files and lines sent with their text (embedded resources). */
+    val embedded: Boolean = false,
 )
 
 /** What an agent can do with the sessions it keeps, from its capabilities. */
@@ -76,8 +85,16 @@ internal fun agentInfo(answer: JsonObject?): AgentInfo {
         answer["authMethods"].array().mapNotNull { it.obj() }.map { method ->
             listOfNotNull(method.text("name"), method.text("description")).joinToString(": ")
         }
-    return AgentInfo(name, methods, sessionCapabilities(answer["agentCapabilities"].obj()))
+    val capabilities = answer["agentCapabilities"].obj()
+    return AgentInfo(name, methods, sessionCapabilities(capabilities), promptCapabilities(capabilities))
 }
+
+private fun promptCapabilities(capabilities: JsonObject?): PromptCapabilities {
+    val prompt = capabilities?.get("promptCapabilities").obj()
+    return PromptCapabilities(prompt.flag("image"), prompt.flag("embeddedContext"))
+}
+
+private fun JsonObject?.flag(name: String): Boolean = this?.get(name)?.jsonPrimitive?.booleanOrNull ?: false
 
 // `loadSession: true`, and the objects of `sessionCapabilities`: present means supported.
 private fun sessionCapabilities(capabilities: JsonObject?): SessionCapabilities {
@@ -119,15 +136,9 @@ internal fun listParams(directory: String, cursor: String?): JsonObject =
 /** A request about [session] alone: `session/close`, `session/delete`. */
 internal fun sessionParams(session: String): JsonObject = buildJsonObject { put(SESSION_ID, session) }
 
-/** `session/prompt`: [text] to [session]. */
-internal fun promptParams(session: String, text: String): JsonObject {
-    val block =
-        buildJsonObject {
-            put("type", "text")
-            put("text", text)
-        }
-    return buildJsonObject {
+/** `session/prompt`: [blocks] (the text of the user, then what it joined) to [session]. */
+internal fun promptParams(session: String, blocks: List<JsonObject>): JsonObject =
+    buildJsonObject {
         put(SESSION_ID, session)
-        put("prompt", buildJsonArray { add(block) })
+        put("prompt", JsonArray(blocks))
     }
-}

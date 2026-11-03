@@ -11,6 +11,8 @@ import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.PopupKind
 import org.example.kotlineditor.state.ProjectState
 import org.example.kotlineditor.state.ToolWindow
+import org.example.kotlineditor.state.attachToPrompt
+import org.example.kotlineditor.state.attachmentOf
 import org.example.kotlineditor.state.gotoDeclaration
 import org.example.kotlineditor.state.navigateBack
 import org.example.kotlineditor.state.openFileOfDiff
@@ -66,10 +68,26 @@ private fun bind(
 private val TOGGLE_AGENT_MODE =
     bind(setOf(Key.A), ctrl = true, alt = true) { if (app.agentModeEnabled) project.agentMode = !project.agentMode }
 
+// Ctrl+Alt+K, as in the IDE plugins of Claude Code: the lines selected in the editor shown (the file when nothing is
+// selected) join the prompt of the agent, in agent mode.
+private val SEND_TO_AGENT = bind(setOf(Key.K), ctrl = true, alt = true) { sendToAgent() }
+
+private fun IdeContext.sendToAgent() {
+    if (!app.agentModeEnabled) return
+    val agent = project.agent
+    val conversation = agent.current?.takeIf { !it.showsChat }
+    val conversationFile = conversation?.workspace?.editor
+    val editor = if (project.agentMode) conversationFile else project.editor
+    val attachment = editor?.activeTab?.let(::attachmentOf) ?: return
+    project.agentMode = true
+    agent.attachToPrompt(attachment)
+}
+
 // Agent mode hides the editors: only its own shortcuts apply, so nothing acts on a file the user cannot see.
 private val AGENT_SHORTCUTS =
     listOf(
         TOGGLE_AGENT_MODE,
+        SEND_TO_AGENT,
         bind(setOf(Key.N), ctrl = true, alt = true) { project.agent.newConversation() },
         bind(setOf(Key.F4), ctrl = true) { project.agent.closeActive() },
         bind(setOf(Key.Tab), ctrl = true) { project.agent.tabs.selectNext(if (it.shift) -1 else 1) },
@@ -79,6 +97,7 @@ private val AGENT_SHORTCUTS =
 private val IDE_SHORTCUTS =
     listOf(
         TOGGLE_AGENT_MODE,
+        SEND_TO_AGENT,
         bind(setOf(Key.N), ctrl = true, shift = true, alt = true) { project.showPopup(PopupKind.GotoSymbol) },
         bind(setOf(Key.N), ctrl = true, shift = true) { project.showPopup(PopupKind.GotoFile) },
         bind(setOf(Key.P), ctrl = true, shift = false) { project.showPopup(PopupKind.GotoFile) },

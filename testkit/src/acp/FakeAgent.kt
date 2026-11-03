@@ -43,6 +43,8 @@ private const val CLIENT_TIMEOUT_S = 60L
  * - `count`: the number of prompts of its session;
  * - `model`: `Model: <model>.`, the model of its session (`mode`: `Mode: <mode>.`, `write` asks nothing in
  *   `accept-edits`; `effort`: `Effort: <effort>.`); `fallback`: it moves to `fake-fast` itself and says so;
+ * - `context`: what the user joined to the prompt ([describeContext]), sent as the agent takes it: images unless
+ *   `--no-images`, files with their text (embedded context) unless `--no-embedded`;
  * - `markdown`: an answer in Markdown, streamed in pieces that cut its marks: a heading, bold, a list, code, a table;
  * - `run <n> <code>`: runs [FakeProgram] in a terminal of the client, which prints `n` lines and exits with `code`;
  *   `run forever`: one that never stops, killed when the prompt is cancelled; `run big <n>`: `n` lines, of which
@@ -123,6 +125,10 @@ class FakeAgent(private val options: FakeAgentOptions, private val out: PrintStr
             put("protocolVersion", 1)
             putJsonObject("agentCapabilities") {
                 put("loadSession", options.history && options.load)
+                putJsonObject("promptCapabilities") {
+                    put("image", options.images)
+                    put("embeddedContext", options.embedded)
+                }
                 if (options.history) {
                     putJsonObject("sessionCapabilities") {
                         putJsonObject("list") {}
@@ -176,6 +182,12 @@ class FakeAgent(private val options: FakeAgentOptions, private val out: PrintStr
             update(session.id, "user_message_chunk") {
                 put("messageId", "user-$index")
                 put("content", textBlock(turn.prompt))
+            }
+            turn.context.forEach { block ->
+                update(session.id, "user_message_chunk") {
+                    put("messageId", "user-$index")
+                    put("content", block)
+                }
             }
             update(session.id, "agent_message_chunk") {
                 put("messageId", "agent-$index")
@@ -237,9 +249,12 @@ class FakeAgent(private val options: FakeAgentOptions, private val out: PrintStr
     private fun prompt(params: JsonObject): JsonObject {
         val session = params.text("sessionId").orEmpty()
         cancelled.remove(session)
-        val prompt = (params["prompt"] as? JsonArray).orEmpty().joinToString("") { it.jsonObject.text("text").orEmpty() }
+        val blocks = (params["prompt"] as? JsonArray).orEmpty().map { it.jsonObject }
+        // The text typed is the first block; the others are what the user joined to it.
+        val prompt = blocks.firstOrNull()?.text("text").orEmpty()
+        val context = blocks.drop(1)
         val kept = store[session]
-        val turn = FakeTurn(prompt)
+        val turn = FakeTurn(prompt, context = context)
         kept?.turns?.add(turn)
         turns[session] = turn
         val count = kept?.turns?.size ?: 1
@@ -281,6 +296,7 @@ class FakeAgent(private val options: FakeAgentOptions, private val out: PrintStr
             "mode" -> chunks(session, listOf("Mode: ${store[session]?.mode}."))
             "effort" -> chunks(session, listOf("Effort: ${store[session]?.effort}."))
             "fallback" -> fellBack(session)
+            "context" -> chunks(session, listOf(describeContext(turns[session]?.context.orEmpty())))
             else -> chunks(session, listOf("You said: $prompt"))
         }
     }
@@ -567,11 +583,13 @@ data class FakeAgentOptions(
     val extraModels: Int = 0,
     val commands: Boolean = true,
     val extraCommands: Int = 0,
+    val images: Boolean = true,
+    val embedded: Boolean = true,
 ) {
     companion object {
         /**
          * Reads `--login`, `--store <dir>`, `--no-load`, `--no-history`, `--no-config`, `--models <n>`,
-         * `--no-commands` and `--commands <n>`.
+         * `--no-commands`, `--commands <n>`, `--no-images` and `--no-embedded`.
          */
         fun parse(args: List<String>): FakeAgentOptions {
             val store = valueOf(args, "--store")
@@ -586,6 +604,8 @@ data class FakeAgentOptions(
                 extraModels = models,
                 commands = "--no-commands" !in args,
                 extraCommands = commands,
+                images = "--no-images" !in args,
+                embedded = "--no-embedded" !in args,
             )
         }
 

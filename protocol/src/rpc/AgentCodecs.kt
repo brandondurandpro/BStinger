@@ -34,6 +34,7 @@ private const val TITLE = "title"
 private const val REPLAYED = "replayed"
 private const val OPTIONS = "options"
 private const val COMMANDS = "commands"
+private const val CONTEXT = "context"
 
 /** An agent command line. */
 fun AgentCommand.toJson(): JsonObject =
@@ -94,6 +95,7 @@ private fun AgentItem.toJson(): JsonObject =
         when (val item = this@toJson) {
             is AgentItem.UserText -> {
                 text("user", item.text)
+                if (item.context.isNotEmpty()) put(CONTEXT, JsonArray(item.context.map(::JsonPrimitive)))
             }
 
             is AgentItem.AgentText -> {
@@ -134,7 +136,7 @@ private fun JsonElement.agentItem(): AgentItem {
     val id = json.string(ID)
     val version = json.long(VERSION)
     return when (val type = json.string(TYPE)) {
-        "user" -> AgentItem.UserText(id, version, json.string(TEXT))
+        "user" -> AgentItem.UserText(id, version, json.string(TEXT), json[CONTEXT]?.strings().orEmpty())
         "agent" -> AgentItem.AgentText(id, version, json.string(TEXT))
         "thought" -> AgentItem.Thought(id, version, json.string(TEXT))
         "tool" -> json.toolCall(id, version)

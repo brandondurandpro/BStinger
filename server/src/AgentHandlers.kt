@@ -7,6 +7,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.model.AgentSessions
 import org.example.kotlineditor.rpc.Method
+import org.example.kotlineditor.rpc.agentAttachments
 import org.example.kotlineditor.rpc.agentCommand
 import org.example.kotlineditor.rpc.commandsToJson
 import org.example.kotlineditor.rpc.long
@@ -36,6 +37,7 @@ private fun conversationHandlers(services: LocalServices): Map<Method, Handler> 
                 params.string(ITEM),
                 params.string("text"),
                 params.stringOrNull(SESSION),
+                params["attachments"]?.agentAttachments().orEmpty(),
             )
             JsonNull
         },

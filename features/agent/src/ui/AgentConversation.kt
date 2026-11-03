@@ -152,7 +152,7 @@ internal val bodyStyle = TextStyle(color = IdeColors.Text, fontSize = 13.sp, lin
 @Composable
 private fun ItemView(agent: AgentState, conversation: Conversation, item: AgentItem) {
     when (item) {
-        is AgentItem.UserText -> UserBubble(item.text)
+        is AgentItem.UserText -> UserBubble(item.text, item.context)
         is AgentItem.AgentText -> MarkdownText(item.text.trimEnd(), Modifier.fillMaxWidth())
         is AgentItem.Thought -> ThoughtView(item.text)
         is AgentItem.ToolCall -> ToolCallCard(item)
@@ -170,7 +170,8 @@ internal fun LocalCodeStyleSmall(): TextStyle =
 @Composable
 private fun Prompt(agent: AgentState, conversation: Conversation) {
     val focus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    val context = conversation.context
+    LaunchedEffect(context.focusRequests) { runCatching { focus.requestFocus() } }
     Column(
         Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -178,10 +179,13 @@ private fun Prompt(agent: AgentState, conversation: Conversation) {
         // Where the agent works (the current branch or a worktree), just above what is sent to it.
         val width = Modifier.widthIn(max = CONTENT_WIDTH).fillMaxWidth()
         val commands = { conversation.commands.ifEmpty { agent.options.commands } }
-        val completion = remember(conversation) { PromptCompletion(conversation, commands) }
+        val files = remember(conversation) { FileSuggestions() }
+        val completion = remember(conversation) { PromptCompletion(conversation, commands, files::of) }
         // A `/` typed before the agent listed its commands asks for them again.
         val wantsCommands = completion.completing is Completing.Command && commands().isEmpty()
         LaunchedEffect(wantsCommands) { if (wantsCommands) agent.options.refreshCommands() }
+        val index = (conversation.workspace ?: agent.project).fileIndex
+        SearchesFiles(files, completion.completing as? Completing.File, index, context)
         CompletionList(completion, width.padding(bottom = 6.dp))
         WorkspaceStatus(agent, conversation, width.padding(horizontal = 4.dp, vertical = 6.dp))
         Column(
@@ -190,6 +194,7 @@ private fun Prompt(agent: AgentState, conversation: Conversation) {
                 .border(1.dp, IdeColors.InputBorder, RoundedCornerShape(8.dp))
                 .padding(10.dp),
         ) {
+            ContextChips(context, Modifier.fillMaxWidth().padding(bottom = 6.dp))
             Box(Modifier.fillMaxWidth().heightIn(min = 40.dp, max = 200.dp)) {
                 if (conversation.draft.isEmpty()) {
                     Label("Ask the agent… (Enter to send, Shift+Enter for a new line)", color = IdeColors.TextSecondary)
@@ -203,7 +208,8 @@ private fun Prompt(agent: AgentState, conversation: Conversation) {
                         .testTag(AgentTags.AGENT_PROMPT)
                         .onPreviewKeyEvent { event ->
                             // The list of suggestions first: Enter chooses one there, and sends otherwise.
-                            completion.handle(event) || sendsOnEnter(event) { agent.send(conversation) }
+                            val handled = completion.handle(event) || pastesImage(event, context)
+                            handled || sendsOnEnter(event) { agent.send(conversation) }
                         },
                     textStyle = bodyStyle,
                     cursorBrush = SolidColor(IdeColors.Caret),
