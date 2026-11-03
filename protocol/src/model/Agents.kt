@@ -25,22 +25,46 @@ enum class AgentTurnState {
 
 /** What a tool call does, from the agent: it picks the icon and how the call is shown. */
 enum class AgentToolKind {
+    /** Reads files. */
     Read,
+
+    /** Changes files. */
     Edit,
+
+    /** Deletes files. */
     Delete,
+
+    /** Moves or renames files. */
     Move,
+
+    /** Searches the project. */
     Search,
+
+    /** Runs a command. */
     Execute,
+
+    /** Thinks or plans, without touching anything. */
     Think,
+
+    /** Fetches from the network. */
     Fetch,
+
+    /** Anything else. */
     Other,
 }
 
 /** Progress of a tool call. */
 enum class AgentToolStatus {
+    /** Not started: waiting for its input or for a permission. */
     Pending,
+
+    /** Running. */
     Running,
+
+    /** Done. */
     Completed,
+
+    /** Failed, refused or stopped. */
     Failed,
 }
 
@@ -62,7 +86,7 @@ data class AgentPlanEntry(
     val status: String,
 )
 
-/** A choice offered by a permission request: allow once, allow always, reject… */
+/** A choice offered by a permission request: allow once, allow always, reject. */
 data class AgentPermissionOption(
     /** Id the agent gave the option. */
     val id: String,
@@ -73,28 +97,50 @@ data class AgentPermissionOption(
 )
 
 /**
- * One entry of a transcript. [id] never changes and is unique across restarts of the server; [version] is the
- * version of the transcript when the item last changed, so a client asks only for the items newer than its own.
+ * One entry of a transcript, which a client shows as it is. [id] never changes and is unique across restarts of the
+ * server; [version] is the version of the transcript when the item last changed, so a client asks only for the items
+ * newer than its own.
  */
 sealed interface AgentItem {
+    /** Identity of the item: a newer version of it replaces the one shown. */
     val id: String
+
+    /** Version of the transcript when the item last changed; 0 for an item the client added itself. */
     val version: Long
 
     /** A prompt of the user. */
-    data class UserText(override val id: String, override val version: Long, val text: String) : AgentItem
+    data class UserText(
+        override val id: String,
+        override val version: Long,
+        /** What the user typed. */
+        val text: String,
+    ) : AgentItem
 
     /** Text of the agent, streamed: it grows until another item starts. */
-    data class AgentText(override val id: String, override val version: Long, val text: String) : AgentItem
+    data class AgentText(
+        override val id: String,
+        override val version: Long,
+        /** The text received so far. */
+        val text: String,
+    ) : AgentItem
 
     /** What the agent thinks before it answers, streamed like [AgentText]. */
-    data class Thought(override val id: String, override val version: Long, val text: String) : AgentItem
+    data class Thought(
+        override val id: String,
+        override val version: Long,
+        /** The thought received so far. */
+        val text: String,
+    ) : AgentItem
 
-    /** An action of the agent on the project: read a file, edit it, run a command… */
+    /** An action of the agent on the project (read a file, edit it, run a command), shown as a card. */
     data class ToolCall(
         override val id: String,
         override val version: Long,
+        /** What it does, for people (`Read README.md`). */
         val title: String,
+        /** What kind of action it is. */
         val kind: AgentToolKind,
+        /** How far it got. */
         val status: AgentToolStatus,
         /** Text the tool produced (its output, or why it failed). */
         val output: String = "",
@@ -105,8 +151,12 @@ sealed interface AgentItem {
     ) : AgentItem
 
     /** The plan of the agent for the current prompt, replaced as it goes. */
-    data class Plan(override val id: String, override val version: Long, val entries: List<AgentPlanEntry>) :
-        AgentItem
+    data class Plan(
+        override val id: String,
+        override val version: Long,
+        /** Its steps, in order. */
+        val entries: List<AgentPlanEntry>,
+    ) : AgentItem
 
     /**
      * The agent asks before it runs a tool call. [chosen] is the option answered, null while it waits; a request
@@ -115,7 +165,9 @@ sealed interface AgentItem {
     data class Permission(
         override val id: String,
         override val version: Long,
+        /** The tool call it asks for. */
         val title: String,
+        /** The answers offered. */
         val options: List<AgentPermissionOption>,
         val chosen: String? = null,
         val cancelled: Boolean = false,
@@ -124,9 +176,15 @@ sealed interface AgentItem {
         val pending: Boolean get() = chosen == null && !cancelled
     }
 
-    /** Something the IDE says about the conversation: stopped, the agent failed, a new session started… */
-    data class Notice(override val id: String, override val version: Long, val text: String, val error: Boolean) :
-        AgentItem
+    /** Something the IDE says about the conversation: it was stopped, the agent failed, a new session started. */
+    data class Notice(
+        override val id: String,
+        override val version: Long,
+        /** What happened. */
+        val text: String,
+        /** Whether it went wrong (shown in red). */
+        val error: Boolean,
+    ) : AgentItem
 }
 
 /**
@@ -139,7 +197,9 @@ data class AgentTranscript(
     val version: Long,
     /** Instance of the server: a client that sees another one asks for everything again. */
     val epoch: String,
+    /** Whether the server knows the conversation. */
     val known: Boolean,
+    /** What the agent is doing. */
     val state: AgentTurnState,
     /** Items that changed since the version asked for, oldest first. */
     val items: List<AgentItem>,

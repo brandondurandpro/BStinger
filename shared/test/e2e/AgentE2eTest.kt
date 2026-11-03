@@ -49,7 +49,10 @@ class AgentE2eTest {
             awaitIdle(conversation)
             assertEquals("Fake Agent 1.0", textOf(AppTags.AGENT_NAME))
             assertEquals(1, conversation.itemsOf<AgentItem.AgentText>().size)
-            assertEquals(listOf("echo hello from the agent"), conversation.itemsOf<AgentItem.UserText>().map { it.text })
+            assertEquals(
+                listOf("echo hello from the agent"),
+                conversation.itemsOf<AgentItem.UserText>().map { it.text },
+            )
             assertEquals("echo hello from the agent", conversation.title)
         }
 
@@ -129,7 +132,11 @@ class AgentE2eTest {
                 pressKey(Key.Enter)
                 pressKey(Key.Enter)
             }
-            awaitCondition { app.project.editor.activeTab?.document?.isModified == true }
+            awaitCondition {
+                app.project.editor.activeTab
+                    ?.document
+                    ?.isModified == true
+            }
             val conversation = startConversation(app)
             sendPrompt("read ${project.root.resolve("README.md")}")
             awaitShown(conversation, "Read")

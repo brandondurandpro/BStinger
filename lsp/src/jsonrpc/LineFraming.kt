@@ -24,14 +24,21 @@ object LineFraming : MessageFraming {
         while (true) {
             val byte = input.read()
             when {
-                byte < 0 && line.size() == 0 -> return null
-                byte < 0 -> throw LspFramingException("Stream ended inside a message")
+                byte < 0 && line.size() == 0 -> {
+                    return null
+                }
+
+                byte < 0 -> {
+                    throw LspFramingException("Stream ended inside a message")
+                }
+
                 byte != LF -> {
                     if (line.size() >= maxSize) {
                         throw LspFramingException("Message larger than the $maxSize bytes allowed")
                     }
                     line.write(byte)
                 }
+
                 else -> {
                     val body = withoutCarriageReturn(line.toByteArray())
                     if (body.any { !it.toInt().toChar().isWhitespace() }) return body

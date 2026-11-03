@@ -6,13 +6,14 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import org.example.kotlineditor.model.AgentDiff
-import org.example.kotlineditor.model.AgentPermissionOption
 import org.example.kotlineditor.model.AgentPlanEntry
 import org.example.kotlineditor.model.AgentToolKind
 import org.example.kotlineditor.model.AgentToolStatus
 
 // Reading the JSON of ACP (version 1): content blocks, tool calls, plans and permission options. Unknown values are
 // read as the closest known one, never as an error: agents add fields and kinds faster than the protocol.
+
+private const val CONTENT = "content"
 
 internal fun JsonElement?.obj(): JsonObject? = this as? JsonObject
 
@@ -60,12 +61,12 @@ internal fun toolStatus(status: String?): AgentToolStatus? =
 internal class ToolContent(val output: String, val diffs: List<AgentDiff>)
 
 internal fun JsonObject.toolContent(): ToolContent? {
-    val content = get("content") as? JsonArray ?: return null
+    val content = get(CONTENT) as? JsonArray ?: return null
     val texts = mutableListOf<String>()
     val diffs = mutableListOf<AgentDiff>()
     for (entry in content.mapNotNull { it.obj() }) {
         when (entry.text("type")) {
-            "content" -> entry["content"].obj()?.contentText()?.let(texts::add)
+            CONTENT -> entry[CONTENT].obj()?.contentText()?.let(texts::add)
             "diff" -> entry.diff()?.let(diffs::add)
             "terminal" -> texts.add("[terminal ${entry.text("terminalId").orEmpty()}]")
         }
@@ -86,11 +87,5 @@ internal fun JsonObject.toolLocations(): List<String>? {
 
 internal fun JsonObject.planEntries(): List<AgentPlanEntry> =
     get("entries").array().mapNotNull { it.obj() }.map { entry ->
-        AgentPlanEntry(entry.text("content").orEmpty(), entry.text("status") ?: "pending")
-    }
-
-internal fun JsonObject.permissionOptions(): List<AgentPermissionOption> =
-    get("options").array().mapNotNull { it.obj() }.mapNotNull { option ->
-        val id = option.text("optionId") ?: return@mapNotNull null
-        AgentPermissionOption(id, option.text("name") ?: id, option.text("kind").orEmpty())
+        AgentPlanEntry(entry.text(CONTENT).orEmpty(), entry.text("status") ?: "pending")
     }

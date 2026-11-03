@@ -16,13 +16,13 @@ class LineFramingTest {
     fun `a message is one line`() {
         val out = ByteArrayOutputStream()
         LineFraming.write(out, """{"a":"\n é"}""".toByteArray())
-        assertEquals("{\"a\":\"\\n é\"}\n", out.toString(Charsets.UTF_8))
+        assertEquals("""{"a":"\n é"}""" + "\n", out.toString(Charsets.UTF_8))
         assertEquals("""{"a":"\n é"}""", LineFraming.read(ByteArrayInputStream(out.toByteArray()))?.decodeToString())
     }
 
     @Test
     fun `messages follow each other, blank lines and CR are skipped`() {
-        val input = stream("{}\r\n\n  \n[1]\n")
+        val input = stream(listOf("{}\r", "", "  ", "[1]").joinToString("\n", postfix = "\n"))
         assertEquals("{}", LineFraming.read(input)?.decodeToString())
         assertEquals("[1]", LineFraming.read(input)?.decodeToString())
         assertNull(LineFraming.read(input))

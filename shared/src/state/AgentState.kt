@@ -7,26 +7,17 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.model.AgentItem
-import org.example.kotlineditor.model.AgentToolKind
-import org.example.kotlineditor.model.AgentToolStatus
-import org.example.kotlineditor.model.AgentTranscript
 import org.example.kotlineditor.model.AgentTurnState
 import org.example.kotlineditor.model.FileContent
 import java.io.IOException
 import java.util.UUID
 
 private const val TITLE_LENGTH = 40
-private const val RETRY_MS = 1_000L
-
-// Tool calls whose end changes files: the tree, Git and the open editors look at the disk again.
-private val WRITING_TOOLS = setOf(AgentToolKind.Edit, AgentToolKind.Delete, AgentToolKind.Move, AgentToolKind.Execute)
 
 /** Where the agent of a conversation works. */
 enum class WorkMode {
@@ -173,7 +164,7 @@ class AgentState(
     /** Opens [conversation] in a tab, or selects its tab, and prepares its worktree. */
     fun open(conversation: Conversation) {
         tabs.open(conversation)
-        prepare(conversation)
+        conversation.prepareIn(project)
     }
 
     /** Ctrl+F4: closes the file or diff shown, or the conversation when it is the one shown. */
@@ -206,7 +197,7 @@ class AgentState(
         conversations.remove(conversation)
         val started = conversation.started
         project.scope.launch { if (started) runCatching { agents.close(conversation.key) } }
-        closeWorktree(conversation)?.let { worktree ->
+        conversation.closeWorktree(project)?.let { worktree ->
             project.scope.launch { runCatching { git.removeWorktree(project.root.path, worktree.root.path) } }
         }
     }
@@ -217,7 +208,8 @@ class AgentState(
      */
     fun setMode(conversation: Conversation, mode: WorkMode) {
         val working = conversation.busy || conversation.preparingWorktree
-        if (conversation.mode == mode || working || conversation.started) return
+        val locked = working || conversation.started
+        if (conversation.mode == mode || locked) return
         val previous = conversation.mode
         conversation.mode = mode
         conversation.showsChat = true
@@ -260,7 +252,7 @@ class AgentState(
 
     private suspend fun deliver(conversation: Conversation, itemId: String, text: String) {
         try {
-            prepare(conversation)
+            conversation.prepareIn(project)
             conversation.preparing?.join()
             val workspace = conversation.workspace
             if (workspace == null) {
@@ -269,7 +261,7 @@ class AgentState(
                 return
             }
             workspace.editor.flush()
-            follow(conversation)
+            project.followTranscript(conversation)
             agents.prompt(conversation.key, agentCommand(), workspace.root.path, itemId, text)
         } catch (failure: IOException) {
             conversation.note("The prompt could not be sent: ${failure.message}")
@@ -306,94 +298,8 @@ class AgentState(
     fun dispose() {
         conversations.forEach {
             it.polling?.cancel()
-            closeWorktree(it)
+            it.closeWorktree(project)
         }
-    }
-
-    // Follows the transcript of [conversation] on the server, once: every answer is newer than what it shows.
-    private fun follow(conversation: Conversation) {
-        if (conversation.polling?.isActive == true) return
-        conversation.polling = project.scope.launch { poll(conversation) }
-    }
-
-    @Suppress("TooGenericExceptionCaught")
-    private suspend fun poll(conversation: Conversation) {
-        while (true) {
-            try {
-                val transcript = agents.transcript(conversation.key, conversation.epoch, conversation.since)
-                apply(conversation, transcript)
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (_: Exception) {
-                delay(RETRY_MS)
-            }
-        }
-    }
-
-    private fun apply(conversation: Conversation, transcript: AgentTranscript) {
-        val restarted = conversation.epoch.isNotEmpty() && conversation.epoch != transcript.epoch
-        conversation.epoch = transcript.epoch
-        conversation.since = transcript.version
-        if (!transcript.known) {
-            forgotten(conversation, restarted)
-            return
-        }
-        val wasBusy = conversation.state != AgentTurnState.Idle
-        var wrote = false
-        for (item in transcript.items) {
-            wrote = wrote || finishedWriting(conversation, item)
-            conversation.upsert(item)
-        }
-        conversation.state = transcript.state
-        transcript.agentName?.let { conversation.agentName = it }
-        val turnEnded = wasBusy && transcript.state == AgentTurnState.Idle
-        // The tree, the Git panel and the open editors pick the changes of the agent up.
-        if (wrote || turnEnded) conversation.workspace?.synchronize()
-    }
-
-    // The server does not know the conversation: it restarted and lost the session of the agent with it.
-    private fun forgotten(conversation: Conversation, restarted: Boolean) {
-        val wasBusy = conversation.state != AgentTurnState.Idle
-        conversation.state = AgentTurnState.Idle
-        val shownByServer = conversation.items.any { it.version > 0 }
-        if (restarted && shownByServer) {
-            conversation.note("The server restarted: the agent no longer remembers this conversation.", error = false)
-        } else if (wasBusy) {
-            conversation.note("The agent stopped.")
-        }
-    }
-
-    private fun finishedWriting(conversation: Conversation, item: AgentItem): Boolean {
-        if (item !is AgentItem.ToolCall || item.kind !in WRITING_TOOLS) return false
-        val done = item.status == AgentToolStatus.Completed || item.status == AgentToolStatus.Failed
-        val before = conversation.items.firstOrNull { it.id == item.id } as? AgentItem.ToolCall
-        return done && before?.status != item.status
-    }
-
-    // Closes the worktree project of the conversation (never the project itself) and returns it.
-    private fun closeWorktree(conversation: Conversation): ProjectState? {
-        conversation.preparing?.cancel()
-        val worktree = conversation.workspace?.takeIf { it !== project }
-        worktree?.dispose()
-        conversation.workspace = null
-        conversation.workspaceError = null
-        return worktree
-    }
-
-    // The project itself in direct mode; otherwise the worktree of the branch, created by the server on first use.
-    private fun prepare(conversation: Conversation) {
-        if (conversation.workspace != null || conversation.preparing?.isActive == true) return
-        conversation.workspaceError = null
-        if (conversation.mode == WorkMode.Direct) {
-            conversation.workspace = project
-            return
-        }
-        conversation.preparing =
-            project.scope.launch {
-                runCatching { project.openWorktree(conversation.branch) }
-                    .onSuccess { conversation.workspace = it }
-                    .onFailure { conversation.workspaceError = it.message ?: "The worktree could not be created" }
-            }
     }
 
     // A file or a diff opened from the tool windows is shown in place of the active conversation; selecting another

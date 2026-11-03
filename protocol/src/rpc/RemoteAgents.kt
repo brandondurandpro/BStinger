@@ -37,13 +37,15 @@ class RemoteAgents(private val client: RpcClient) : Agents {
         }
     }
 
-    override suspend fun transcript(conversation: String, epoch: String, since: Long): AgentTranscript =
-        client
-            .call(Method.AgentTranscript) {
+    override suspend fun transcript(conversation: String, epoch: String, since: Long): AgentTranscript {
+        val answer =
+            client.call(Method.AgentTranscript) {
                 put(CONVERSATION, conversation)
                 put("epoch", epoch)
                 put("since", since)
-            }.agentTranscript()
+            }
+        return answer.agentTranscript()
+    }
 
     override suspend fun close(conversation: String) {
         client.call(Method.AgentClose) { put(CONVERSATION, conversation) }

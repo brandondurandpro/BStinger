@@ -579,7 +579,12 @@ class AppState(
         val agentMode = PreferenceKeys.AGENT_MODE to agentModeEnabled.toString()
         val agent = PreferenceKeys.AGENT_COMMAND to agentCommand
         val app =
-            preferences + picker + fontSizePreference() + agentMode + agent + remotePreferences() +
+            preferences +
+                picker +
+                fontSizePreference() +
+                agentMode +
+                agent +
+                remotePreferences() +
                 telemetry.toPreferences()
         val project = (screen as? Screen.Project)?.project ?: return app
         val autoSelect = PreferenceKeys.AUTO_SELECT_OPENED_FILE to project.autoSelectOpenedFile.toString()

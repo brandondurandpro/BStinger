@@ -38,21 +38,29 @@ class AgentServiceTest {
         service.prompt(conversation, command, directory.toString(), "u${++prompts}", text)
     }
 
-    // Follows the transcript like the IDE until the turn is over, and returns every item.
+    // Follows the transcript like the IDE until the turn is over and [until] holds, and returns every item.
     private fun turn(conversation: String = "c1", until: (List<AgentItem>) -> Boolean = { true }): List<AgentItem> =
+        follow(conversation) { state, items -> state == AgentTurnState.Idle && until(items) }
+
+    // Follows the transcript until [until] holds, whatever the state.
+    private fun waitFor(until: (List<AgentItem>) -> Boolean): List<AgentItem> =
+        follow("c1") { _, items -> until(items) }
+
+    private fun follow(conversation: String, done: (AgentTurnState, List<AgentItem>) -> Boolean): List<AgentItem> =
         runBlocking {
             withTimeout(TIMEOUT_MS) {
                 val items = LinkedHashMap<String, AgentItem>()
                 var since = 0L
-                while (true) {
+                var state = AgentTurnState.Idle
+                var started = false
+                while (!started || !done(state, items.values.toList())) {
                     val transcript = service.transcript(conversation, service.epoch, since)
                     transcript.items.forEach { items[it.id] = it }
                     since = transcript.version
-                    val values = items.values.toList()
-                    if (transcript.state == AgentTurnState.Idle && until(values)) return@withTimeout values
+                    state = transcript.state
+                    started = true
                 }
-                @Suppress("UNREACHABLE_CODE")
-                emptyList()
+                items.values.toList()
             }
         }
 
@@ -189,19 +197,4 @@ class AgentServiceTest {
         assertEquals(1, plans.size)
         assertEquals(listOf("completed", "completed"), plans.first().entries.map { it.status })
     }
-
-    // Follows the transcript until [until] holds, whatever the state.
-    private fun waitFor(until: (List<AgentItem>) -> Boolean): List<AgentItem> =
-        runBlocking {
-            withTimeout(TIMEOUT_MS) {
-                val items = LinkedHashMap<String, AgentItem>()
-                var since = 0L
-                while (!until(items.values.toList())) {
-                    val transcript = service.transcript("c1", service.epoch, since)
-                    transcript.items.forEach { items[it.id] = it }
-                    since = transcript.version
-                }
-                items.values.toList()
-            }
-        }
 }

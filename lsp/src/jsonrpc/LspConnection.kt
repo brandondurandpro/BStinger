@@ -100,10 +100,10 @@ class LspConnection(
             send(message(id = JsonPrimitive(id), method = method, params = params))
             return answer.await()
         } catch (cancelled: CancellationException) {
-            val cancel = cancelMethod
-            if (pending.remove(id) != null && !closed.get() && cancel != null) {
-                runCatching { notify(cancel, buildJsonObject { put("id", id) }) }
-            }
+            val waiting = pending.remove(id) != null && !closed.get()
+            // The peer may stop working on a request nobody waits for any more, when the protocol says how.
+            val cancel = cancelMethod?.takeIf { waiting }
+            if (cancel != null) runCatching { notify(cancel, buildJsonObject { put("id", id) }) }
             throw cancelled
         } finally {
             pending.remove(id)

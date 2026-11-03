@@ -20,16 +20,21 @@ fun commandWords(line: String): List<String> {
         val opening = quote == null && (char == '"' || char == '\'')
         val separator = quote == null && char.isWhitespace()
         when {
-            closing -> quote = null
+            closing -> {
+                quote = null
+            }
+
             opening -> {
                 quote = char
                 started = true
             }
+
             separator -> {
                 if (started) words.add(word.toString())
                 word.clear()
                 started = false
             }
+
             else -> {
                 word.append(char)
                 started = true

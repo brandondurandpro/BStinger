@@ -19,8 +19,7 @@ import org.example.kotlineditor.ui.AppTags
 const val AGENT_TIMEOUT = 60_000L
 
 /** The command line of the fake ACP agent with [options], quoted as typed in the settings. */
-fun fakeAgentLine(vararg options: String): String =
-    FakeAgentCommand.command(*options).joinToString(" ") { "\"$it\"" }
+fun fakeAgentLine(vararg options: String): String = FakeAgentCommand.command(*options).joinToString(" ") { "\"$it\"" }
 
 /** Preferences with agent mode on and the fake agent (with [options]) as the agent. */
 fun agentPreferences(vararg options: String) =

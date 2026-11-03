@@ -1,0 +1,78 @@
+package org.example.kotlineditor.state
+
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import org.example.kotlineditor.model.AgentItem
+import org.example.kotlineditor.model.AgentToolKind
+import org.example.kotlineditor.model.AgentToolStatus
+import org.example.kotlineditor.model.AgentTranscript
+import org.example.kotlineditor.model.AgentTurnState
+
+// How a conversation follows its transcript on the server: a long poll, each answer newer than what it shows, so a
+// reconnection loses nothing and a restarted server is noticed.
+
+private const val RETRY_MS = 1_000L
+
+// Tool calls whose end changes files: the tree, Git and the open editors look at the disk again.
+private val WRITING_TOOLS = setOf(AgentToolKind.Edit, AgentToolKind.Delete, AgentToolKind.Move, AgentToolKind.Execute)
+
+// Follows the transcript of [conversation] on the server, once: every answer is newer than what it shows.
+internal fun ProjectState.followTranscript(conversation: Conversation) {
+    if (conversation.polling?.isActive == true) return
+    conversation.polling = scope.launch { poll(conversation) }
+}
+
+@Suppress("TooGenericExceptionCaught")
+private suspend fun ProjectState.poll(conversation: Conversation) {
+    while (true) {
+        try {
+            val transcript = services.agents.transcript(conversation.key, conversation.epoch, conversation.since)
+            apply(conversation, transcript)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            delay(RETRY_MS)
+        }
+    }
+}
+
+private fun apply(conversation: Conversation, transcript: AgentTranscript) {
+    val restarted = conversation.epoch.isNotEmpty() && conversation.epoch != transcript.epoch
+    conversation.epoch = transcript.epoch
+    conversation.since = transcript.version
+    if (!transcript.known) {
+        forgotten(conversation, restarted)
+        return
+    }
+    val wasBusy = conversation.state != AgentTurnState.Idle
+    var wrote = false
+    for (item in transcript.items) {
+        wrote = wrote || finishedWriting(conversation, item)
+        conversation.upsert(item)
+    }
+    conversation.state = transcript.state
+    transcript.agentName?.let { conversation.agentName = it }
+    val turnEnded = wasBusy && transcript.state == AgentTurnState.Idle
+    // The tree, the Git panel and the open editors pick the changes of the agent up.
+    if (wrote || turnEnded) conversation.workspace?.synchronize()
+}
+
+// The server does not know the conversation: it restarted and lost the session of the agent with it.
+private fun forgotten(conversation: Conversation, restarted: Boolean) {
+    val wasBusy = conversation.state != AgentTurnState.Idle
+    conversation.state = AgentTurnState.Idle
+    val shownByServer = conversation.items.any { it.version > 0 }
+    if (restarted && shownByServer) {
+        conversation.note("The server restarted: the agent no longer remembers this conversation.", error = false)
+    } else if (wasBusy) {
+        conversation.note("The agent stopped.")
+    }
+}
+
+private fun finishedWriting(conversation: Conversation, item: AgentItem): Boolean {
+    if (item !is AgentItem.ToolCall || item.kind !in WRITING_TOOLS) return false
+    val done = item.status == AgentToolStatus.Completed || item.status == AgentToolStatus.Failed
+    val before = conversation.items.firstOrNull { it.id == item.id } as? AgentItem.ToolCall
+    return done && before?.status != item.status
+}

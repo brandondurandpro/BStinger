@@ -102,5 +102,9 @@ class AgentPerformanceE2eTest {
         }
 
     private fun lastAnswer(conversation: org.example.kotlineditor.state.Conversation): String =
-        conversation.itemsOf<AgentItem.AgentText>().lastOrNull()?.text.orEmpty()
+        conversation
+            .itemsOf<AgentItem.AgentText>()
+            .lastOrNull()
+            ?.text
+            .orEmpty()
 }
