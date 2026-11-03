@@ -188,3 +188,12 @@ private fun Request.root() = params.string(ROOT)
 
 private fun Request.terminalOrFail(): ServerTerminal =
     checkNotNull(terminals[params.long(TERMINAL)]) { "This terminal has ended" }
+
+/** `telemetry/config`: the client says whether the user agreed to share performance measures. */
+internal fun telemetryHandlers(telemetry: ServerTelemetry): Map<Method, Handler> =
+    mapOf(
+        Method.TelemetryConfig to {
+            telemetry.configure(params.bool("enabled"), params.stringOrNull("instanceId"))
+            JsonNull
+        },
+    )

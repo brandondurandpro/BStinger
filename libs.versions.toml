@@ -3,6 +3,7 @@ logback = "1.6.2"
 androidx-activity-compose = "1.13.0"
 androidx-lifecycle = "2.11.0"
 kotlinx-coroutines = "1.11.0"
+opentelemetry = "1.45.0"
 kotlinx-serialization = "1.9.0"
 zstd = "1.5.6-10"
 ghostty = "0.1.237"
@@ -17,6 +18,9 @@ sshd = "2.20.1"
 compose = "1.12.1"
 
 [libraries]
+# OpenTelemetry, configured by hand (no autoconfigure: it relies on ServiceLoader), OTLP over HTTP (no gRPC).
+opentelemetry-sdk = { module = "io.opentelemetry:opentelemetry-sdk", version.ref = "opentelemetry" }
+opentelemetry-exporter-otlp = { module = "io.opentelemetry:opentelemetry-exporter-otlp", version.ref = "opentelemetry" }
 # Snapshot state and UI types for the modules compiled without the Compose plugin; see the `compose` version.
 compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "compose" }
 compose-foundation = { module = "org.jetbrains.compose.foundation:foundation", version.ref = "compose" }

@@ -19,6 +19,11 @@ import org.example.kotlineditor.model.SourceLocation
 import org.example.kotlineditor.model.TextChange
 import org.example.kotlineditor.model.TextRange
 import org.example.kotlineditor.syntax.treesitter.Snippet
+import org.example.kotlineditor.telemetry.Attribute
+import org.example.kotlineditor.telemetry.Attributes
+import org.example.kotlineditor.telemetry.ClientTelemetry
+import org.example.kotlineditor.telemetry.Operation
+import org.example.kotlineditor.telemetry.measureToFrame
 import java.io.IOException
 
 private const val HOVER_DELAY_MS = 500L
@@ -391,13 +396,27 @@ class CodeInsightState(
         link = null
         val request = NavigationRequest(path, document, pos, kind, wordRange(document, pos))
         scope.launch {
-            val version = document.version
-            val result =
-                whileIndexing(document, request.anchor) {
-                    askAt(path, document, pos) { servers, at -> servers.navigate(at, kind) }
-                } ?: LocationsResult.NotReady
-            if (document.version == version) navigated(request, result)
+            // From the shortcut to the frame that shows the declaration, or the list of the choices.
+            ClientTelemetry.measureToFrame(Operation.EditorNavigation, attributesOf = ::locationsOf) {
+                val version = document.version
+                val result =
+                    whileIndexing(document, request.anchor) {
+                        askAt(path, document, pos) { servers, at -> servers.navigate(at, kind) }
+                    } ?: LocationsResult.NotReady
+                if (document.version == version) navigated(request, result)
+                result
+            }
         }
+    }
+
+    private fun locationsOf(result: LocationsResult): Attributes {
+        val found =
+            when {
+                result.status == FeatureStatus.NotReady -> "partial"
+                result.locations.isEmpty() -> "empty"
+                else -> "found"
+            }
+        return Attributes.of(Attribute.Result to found)
     }
 
     private suspend fun navigated(request: NavigationRequest, result: LocationsResult) {

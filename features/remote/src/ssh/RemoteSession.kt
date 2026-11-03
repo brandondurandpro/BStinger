@@ -18,6 +18,9 @@ import org.example.kotlineditor.rpc.RpcClient
 import org.example.kotlineditor.rpc.appServices
 import org.example.kotlineditor.state.RemoteConnection
 import org.example.kotlineditor.state.RemoteFactory
+import org.example.kotlineditor.telemetry.ClientTelemetry
+import org.example.kotlineditor.telemetry.Operation
+import org.example.kotlineditor.telemetry.suspendSpan
 import kotlin.math.min
 
 /**
@@ -121,7 +124,10 @@ class RemoteSession(
             onProgress("Preparing the server on ${host.target.id}")
             val server =
                 try {
-                    installer.ensureServer(host.target, onProgress)
+                    // remote.deploy: checking, uploading and starting the server on the remote machine.
+                    ClientTelemetry.suspendSpan(
+                        Operation.RemoteDeploy,
+                    ) { installer.ensureServer(host.target, onProgress) }
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (e: Exception) {

@@ -17,6 +17,12 @@ import org.example.kotlineditor.syntax.SyntaxHighlighter
 import org.example.kotlineditor.syntax.treesitter.GrammarSpec
 import org.example.kotlineditor.syntax.treesitter.GrammarStore
 import org.example.kotlineditor.syntax.treesitter.SyntaxSession
+import org.example.kotlineditor.telemetry.Attribute
+import org.example.kotlineditor.telemetry.Attributes
+import org.example.kotlineditor.telemetry.ClientTelemetry
+import org.example.kotlineditor.telemetry.Operation
+import org.example.kotlineditor.telemetry.measureToFrame
+import org.example.kotlineditor.telemetry.sizeBucket
 import java.io.IOException
 
 private const val RECOMPUTE_DELAY_MS = 150L
@@ -41,13 +47,18 @@ internal class TabFiles(
         tab.job?.cancel()
         tab.job =
             scope.launch {
-                tab.status =
-                    try {
-                        val commit = tab.commit
-                        TabStatus.Diff(if (commit == null) diffs(tab.entry) else commitDiffs(tab.entry, commit))
-                    } catch (e: IOException) {
-                        TabStatus.Unsupported("Cannot compute the differences: ${e.message}")
-                    }
+                val commit = tab.commit
+                val operation = if (commit == null) Operation.EditorDiff else Operation.GitCommitDiff
+                ClientTelemetry.measureToFrame(operation, languageOf(tab), ::sizeOf) {
+                    val status =
+                        try {
+                            TabStatus.Diff(if (commit == null) diffs(tab.entry) else commitDiffs(tab.entry, commit))
+                        } catch (e: IOException) {
+                            TabStatus.Unsupported("Cannot compute the differences: ${e.message}")
+                        }
+                    tab.status = status
+                    status
+                }
             }
     }
 
@@ -72,44 +83,60 @@ internal class TabFiles(
         tab.blameJob?.cancel()
         tab.blameJob =
             scope.launch {
-                tab.blame =
-                    try {
-                        blames(tab.entry)
-                    } catch (_: IOException) {
-                        emptyList()
-                    }
+                ClientTelemetry.measureToFrame<List<BlameLine>>(
+                    Operation.EditorBlame,
+                    languageOf(tab),
+                    { linesAttributes(it.size) },
+                ) {
+                    val lines =
+                        try {
+                            blames(tab.entry)
+                        } catch (_: IOException) {
+                            emptyList()
+                        }
+                    tab.blame = lines
+                    lines
+                }
             }
     }
 
     private fun loadText(tab: EditorTab) {
         tab.job =
             scope.launch {
-                val content =
-                    try {
-                        fileSystem.read(tab.entry)
-                    } catch (e: IOException) {
-                        FileContent.Error("the server is unreachable (${e.message})")
-                    }
-                tab.status =
-                    when (content) {
-                        is FileContent.Text -> {
-                            TabStatus.Ready(open(tab, content))
-                        }
-
-                        FileContent.Binary -> {
-                            TabStatus.Unsupported("Binary file: content is not displayed")
-                        }
-
-                        is FileContent.TooLarge -> {
-                            TabStatus.Unsupported("File is too large to open (${content.size / MEGABYTE} MB)")
-                        }
-
-                        is FileContent.Error -> {
-                            TabStatus.Unsupported("Cannot read file: ${content.message}")
-                        }
-                    }
-                if (tab.status is TabStatus.Ready) loadChanges(tab)
+                // From the click to the frame that shows the file.
+                ClientTelemetry.measureToFrame(Operation.EditorOpenFile, languageOf(tab), ::sizeOf) {
+                    loadTextNow(tab)
+                    tab.status
+                }
             }
+    }
+
+    private suspend fun CoroutineScope.loadTextNow(tab: EditorTab) {
+        val content =
+            try {
+                fileSystem.read(tab.entry)
+            } catch (e: IOException) {
+                FileContent.Error("the server is unreachable (${e.message})")
+            }
+        tab.status =
+            when (content) {
+                is FileContent.Text -> {
+                    TabStatus.Ready(open(tab, content))
+                }
+
+                FileContent.Binary -> {
+                    TabStatus.Unsupported("Binary file: content is not displayed")
+                }
+
+                is FileContent.TooLarge -> {
+                    TabStatus.Unsupported("File is too large to open (${content.size / MEGABYTE} MB)")
+                }
+
+                is FileContent.Error -> {
+                    TabStatus.Unsupported("Cannot read file: ${content.message}")
+                }
+            }
+        if (tab.status is TabStatus.Ready) loadChanges(tab)
     }
 
     /** Saves [tab] in the background; if the server is unreachable it stays modified and is saved again later. */
@@ -125,10 +152,13 @@ internal class TabFiles(
     private suspend fun write(tab: EditorTab) {
         val document = tab.document
         if (document != null && document.isModified) {
-            val version = document.version
-            fileSystem.write(tab.entry, document.text())
-            if (document.version == version) document.markSaved()
-            onSaved(tab.entry)
+            val size = Attributes.of(Attribute.Size to sizeBucket(document.lineCount.toLong()))
+            ClientTelemetry.measureToFrame(Operation.EditorSave, languageOf(tab) + size) {
+                val version = document.version
+                fileSystem.write(tab.entry, document.text())
+                if (document.version == version) document.markSaved()
+                onSaved(tab.entry)
+            }
         }
     }
 
@@ -172,3 +202,21 @@ internal class TabFiles(
         }
     }
 }
+
+private fun languageOf(tab: EditorTab): Attributes {
+    val language = Language.fromFileName(tab.entry.name)
+    return Attributes.of(Attribute.Language to language.name.lowercase())
+}
+
+// The size of what a tab shows, in lines; nothing when it shows no text.
+private fun sizeOf(status: TabStatus): Attributes {
+    val lines =
+        when (status) {
+            is TabStatus.Ready -> status.document.lineCount
+            is TabStatus.Diff -> status.lines.size
+            else -> return Attributes.of(Attribute.Result to "empty")
+        }
+    return linesAttributes(lines)
+}
+
+private fun linesAttributes(lines: Int): Attributes = Attributes.of(Attribute.Size to sizeBucket(lines.toLong()))

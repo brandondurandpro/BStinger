@@ -1,0 +1,13 @@
+# The export of the telemetry to OpenTelemetry: traces and a duration histogram over OTLP/HTTP (protobuf), to
+# Grafana Alloy, Tempo and Mimir (tools/telemetry). Only created once the user agreed.
+product:
+  type: jvm/lib
+
+dependencies:
+  - //telemetry: exported
+  - $libs.opentelemetry.sdk
+  - $libs.opentelemetry.exporter.otlp
+
+test-dependencies:
+  - //testkit
+  - $kotlin.test

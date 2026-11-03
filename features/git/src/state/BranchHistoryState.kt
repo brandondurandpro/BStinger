@@ -12,6 +12,10 @@ import kotlinx.coroutines.launch
 import org.example.kotlineditor.model.GitClient
 import org.example.kotlineditor.model.GitCommit
 import org.example.kotlineditor.model.GitCommitDetails
+import org.example.kotlineditor.telemetry.ClientTelemetry
+import org.example.kotlineditor.telemetry.Operation
+import org.example.kotlineditor.telemetry.measureToFrame
+import org.example.kotlineditor.telemetry.outcome
 
 /** Commits loaded per request: a screen and a half, so that scrolling asks for the next page before the end. */
 const val HISTORY_PAGE = 100
@@ -139,17 +143,24 @@ class BranchHistoryState(private val root: String, private val git: GitClient, p
         val query = appliedQuery
         pageJob =
             scope.launch {
-                val page =
-                    runCatching {
-                        if (query.isEmpty()) {
-                            git.log(root, ref, skip, HISTORY_PAGE)
-                        } else {
-                            git.searchLog(root, ref, query, skip, HISTORY_PAGE)
+                // From the request to the frame that shows the page.
+                ClientTelemetry.measureToFrame(
+                    Operation.GitHistory,
+                    outcomeOf = { read: Result<*> -> read.outcome() },
+                ) {
+                    val page =
+                        runCatching {
+                            if (query.isEmpty()) {
+                                git.log(root, ref, skip, HISTORY_PAGE)
+                            } else {
+                                git.searchLog(root, ref, query, skip, HISTORY_PAGE)
+                            }
                         }
-                    }
-                ensureActive()
-                // A newer selection or reload replaced this request: its answer is out of date.
-                if (asked == generation) applyPage(ref, page)
+                    ensureActive()
+                    // A newer selection or reload replaced this request: its answer is out of date.
+                    if (asked == generation) applyPage(ref, page)
+                    page
+                }
             }
     }
 

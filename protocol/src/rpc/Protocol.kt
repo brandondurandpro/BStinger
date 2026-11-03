@@ -206,6 +206,11 @@ class Frame(
      */
     val code: Boolean = false,
     private var encoded: ByteArray? = null,
+    /**
+     * The W3C `traceparent` of the span the request is part of, when telemetry is on: the server measures its work as
+     * a child of it. Sent only when present; a peer that does not know it ignores it.
+     */
+    val trace: String? = null,
 ) {
     /** The JSON-RPC message, encoded once (pending requests and cached answers are sent again as they are). */
     val body: ByteArray get() = encoded ?: Protocol.encode(this).also { encoded = it }
@@ -442,6 +447,12 @@ enum class Method(
 
     /** Edits adapting the code to files about to be created, renamed or deleted. */
     LspWillChangeFiles("lsp/willChangeFiles"),
+
+    /**
+     * Client to server: whether the user agreed to share performance measures (`enabled`), and as which
+     * installation (`instanceId`). The server measures and exports only after the client said so.
+     */
+    TelemetryConfig("telemetry/config"),
 
     /** Inlay hints of a document. */
     LspInlayHints("lsp/inlayHints"),

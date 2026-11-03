@@ -13,6 +13,9 @@ import org.example.kotlineditor.model.FileOperation
 import org.example.kotlineditor.model.OperatedFile
 import org.example.kotlineditor.model.pathName
 import org.example.kotlineditor.syntax.Structure
+import org.example.kotlineditor.telemetry.ClientTelemetry
+import org.example.kotlineditor.telemetry.Operation
+import org.example.kotlineditor.telemetry.measureToFrame
 import java.io.IOException
 import java.nio.file.FileAlreadyExistsException
 import java.nio.file.NoSuchFileException
@@ -189,9 +192,12 @@ private fun separatorOf(path: String): String = if ('\\' in path && '/' !in path
 private fun ProjectState.fileOperation(block: suspend () -> Unit) {
     scope.launch {
         try {
-            block()
-            fileDialog = null
-            fileIndex.invalidate()
+            // From the confirmation to the frame that shows the tree changed; a failure is shown, and measured.
+            ClientTelemetry.measureToFrame(Operation.TreeFileOperation) {
+                block()
+                fileDialog = null
+                fileIndex.invalidate()
+            }
         } catch (e: IOException) {
             fileDialog = fileDialog?.withError(e.message ?: e::class.simpleName.orEmpty())
         }

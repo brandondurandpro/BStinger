@@ -13,6 +13,10 @@ import kotlinx.coroutines.withContext
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.ProjectSearch
 import org.example.kotlineditor.syntax.Declaration
+import org.example.kotlineditor.telemetry.ClientTelemetry
+import org.example.kotlineditor.telemetry.Operation
+import org.example.kotlineditor.telemetry.measureToFrame
+import org.example.kotlineditor.telemetry.sizeOf
 import java.io.IOException
 
 @Immutable
@@ -57,12 +61,18 @@ class FileIndex(private val root: FileEntry, private val search: ProjectSearch, 
         if (files == null && job?.isActive != true) {
             job =
                 scope.launch {
-                    files =
-                        try {
-                            search.walkFiles(root)
-                        } catch (expected: IOException) {
-                            emptyList() // server unreachable: an empty index, rebuilt on the next invalidation
+                    val walked =
+                        ClientTelemetry.measureToFrame(
+                            Operation.TreeIndex,
+                            attributesOf = { walked: List<FileEntry> -> sizeOf(walked.size) },
+                        ) {
+                            try {
+                                search.walkFiles(root)
+                            } catch (expected: IOException) {
+                                emptyList() // server unreachable: an empty index, rebuilt on the next invalidation
+                            }
                         }
+                    files = walked
                 }
         }
     }

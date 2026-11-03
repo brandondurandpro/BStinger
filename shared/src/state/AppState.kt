@@ -14,14 +14,23 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.example.kotlineditor.model.AppServices
+import org.example.kotlineditor.model.ConnectionStatus
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.remote.SshConfigHost
 import org.example.kotlineditor.remote.SshTarget
 import org.example.kotlineditor.syntax.treesitter.GrammarStore
+import org.example.kotlineditor.telemetry.Attribute
+import org.example.kotlineditor.telemetry.Attributes
+import org.example.kotlineditor.telemetry.ClientTelemetry
+import org.example.kotlineditor.telemetry.Operation
+import org.example.kotlineditor.telemetry.Telemetry
+import org.example.kotlineditor.telemetry.measureToFrame
 import java.io.IOException
 
 /** The whole IDE: the welcome screen or the open project, plus IDE-wide settings. */
@@ -37,6 +46,8 @@ class AppState(
     private val localServices: AppServices? = initialServices,
     /** Creates SSH sessions; null in previews and tests that do not exercise remote development. */
     private val remoteFactory: RemoteFactory? = null,
+    /** Makes the telemetry the user agrees to, for an installation id; null measures nothing (previews, tests). */
+    telemetryOf: ((instanceId: String) -> Telemetry)? = null,
 ) : RemoteHost,
     ProjectPickerHost {
     // Last preferences known: those of the open project are read live, these cover the welcome screen.
@@ -129,6 +140,9 @@ class AppState(
     var agentModeEnabled by mutableStateOf(preferences[PreferenceKeys.AGENT_MODE]?.toBooleanStrictOrNull() ?: false)
         private set
 
+    /** Whether the user shares anonymous performance measures: asked on the welcome screen, changed in the menu. */
+    val telemetry = TelemetryConsent(preferences, telemetryOf)
+
     /** Editor font size in points, shared by every editor (Alt+Shift+. / Alt+Shift+, / Ctrl+wheel). */
     var editorFontSize by mutableFloatStateOf(savedFontSize())
         private set
@@ -166,6 +180,7 @@ class AppState(
         scope.launch { savePreferencesOnChange() }
         scope.launch { declareOpenFiles() }
         scope.launch { syncOpenDocuments() }
+        scope.launch { shareTelemetryConsent() }
         reloadRecents()
     }
 
@@ -311,8 +326,10 @@ class AppState(
                 // as it returns, and the tunnel must not outlive a cancelled connection.
                 var connected: RemoteConnection? = null
                 try {
-                    withContext(Dispatchers.IO) {
-                        connected = factory.connect(target) { step -> scope.launch { remoteStatus = step } }
+                    ClientTelemetry.measureToFrame(Operation.RemoteConnect) {
+                        withContext(Dispatchers.IO) {
+                            connected = factory.connect(target) { step -> scope.launch { remoteStatus = step } }
+                        }
                     }
                     switchTo(checkNotNull(connected), target)
                 } catch (cancelled: CancellationException) {
@@ -401,21 +418,31 @@ class AppState(
         error = null
         opening = path
         scope.launch {
-            val root =
-                try {
-                    services.fileSystem.resolveDirectory(path) ?: run {
-                        if (request == openRequest) error = "Directory not found: $path"
-                        null
-                    }
-                } catch (e: IOException) {
-                    if (request == openRequest) error = "Cannot reach the server: ${e.message}"
+            // From the click to the frame that shows the project.
+            ClientTelemetry.measureToFrame(Operation.ProjectOpen, locationAttributes()) { openNow(path, request) }
+        }
+    }
+
+    private suspend fun openNow(path: String, request: Int) {
+        val root =
+            try {
+                services.fileSystem.resolveDirectory(path) ?: run {
+                    if (request == openRequest) error = "Directory not found: $path"
                     null
                 }
-            if (request == openRequest) {
-                opening = null
-                root?.let { open(it) }
+            } catch (e: IOException) {
+                if (request == openRequest) error = "Cannot reach the server: ${e.message}"
+                null
             }
+        if (request == openRequest) {
+            opening = null
+            root?.let { open(it) }
         }
+    }
+
+    private fun locationAttributes(): Attributes {
+        val location = if (isRemote) "remote" else "local"
+        return Attributes.of(Attribute.Location to location)
     }
 
     /** Opens the Open Project dialog, which browses the directories of the server's disk, local or remote. */
@@ -496,7 +523,8 @@ class AppState(
     private fun currentPreferences(): Map<String, String> {
         val picker = lastPickerDirectory?.let { listOf(PreferenceKeys.PICKER_DIRECTORY to it) }.orEmpty()
         val agentMode = PreferenceKeys.AGENT_MODE to agentModeEnabled.toString()
-        val app = preferences + picker + fontSizePreference() + agentMode + remotePreferences()
+        val app =
+            preferences + picker + fontSizePreference() + agentMode + remotePreferences() + telemetry.toPreferences()
         val project = (screen as? Screen.Project)?.project ?: return app
         val autoSelect = PreferenceKeys.AUTO_SELECT_OPENED_FILE to project.autoSelectOpenedFile.toString()
         val inlayHints = PreferenceKeys.INLAY_HINTS to project.inlayHintsMode.name
@@ -548,6 +576,22 @@ class AppState(
                     .orEmpty()
             Triple(languageServers, project?.root?.path, documents)
         }.collect { (servers, project, documents) -> servers.syncDocuments(project, documents) }
+    }
+
+    // The server measures only when the user agreed: it is told on each connection (a restarted server forgot it),
+    // for the server shown, and each time the user changes their mind.
+    private suspend fun shareTelemetryConsent() {
+        snapshotFlow { services to telemetry.shared }.collectLatest { (shown, consent) ->
+            shown.connection.filter { it == ConnectionStatus.Connected }.collect { tellServer(shown, consent) }
+        }
+    }
+
+    private suspend fun tellServer(shown: AppServices, consent: SharedConsent) {
+        try {
+            shown.telemetry.configure(consent.enabled, consent.instanceId)
+        } catch (_: IOException) {
+            // The link broke again (told on the next connection), or a server older than the telemetry refused.
+        }
     }
 
     private fun languageServersOf(services: AppServices) =

@@ -45,6 +45,11 @@ import org.example.kotlineditor.model.LanguageServerState
 import org.example.kotlineditor.model.Languages
 import org.example.kotlineditor.model.MemoryUsage
 import org.example.kotlineditor.model.TextChange
+import org.example.kotlineditor.telemetry.Attribute
+import org.example.kotlineditor.telemetry.Attributes
+import org.example.kotlineditor.telemetry.Operation
+import org.example.kotlineditor.telemetry.Outcome
+import org.example.kotlineditor.telemetry.Span
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
@@ -166,6 +171,8 @@ internal class ManagedServer(
     private var userStopped = false
     private var pendingIdle = false
     private var startJob: Job? = null
+
+    @Volatile private var startSpan: Span? = null
     private var waitJob: Job? = null
     private var samplerKey: String? = null
 
@@ -537,8 +544,30 @@ internal class ManagedServer(
             message = why
             indexing.value = new == LanguageServerState.Indexing
         }
+        measureStart(new)
         onChange()
     }
+
+    // lsp.start: from Starting to the answer of initialize (Running or Indexing), or to the failure.
+    private fun measureStart(new: LanguageServerState) {
+        val telemetry = hooks.telemetry()
+        val pending = startSpan
+        if (new == LanguageServerState.Starting) {
+            telemetry.end(pending, Outcome.Cancelled)
+            startSpan = telemetry.start(Operation.LspStart, Attributes.of(Attribute.Language to target.spec.language))
+            return
+        }
+        if (pending == null) return
+        startSpan = null
+        telemetry.end(pending, startOutcome(new))
+    }
+
+    private fun startOutcome(new: LanguageServerState): Outcome =
+        when (new) {
+            LanguageServerState.Running, LanguageServerState.Indexing -> Outcome.Ok
+            LanguageServerState.Stopped, LanguageServerState.Restarting -> Outcome.Cancelled
+            else -> Outcome.Error(new.name)
+        }
 
     private fun progressChanged() {
         val changed =

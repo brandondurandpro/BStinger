@@ -6,6 +6,8 @@ product:
 dependencies:
   - //shared: exported
   - //server: exported
+  # The real export of the measures, to a fake collector, for the telemetry chaos tests.
+  - //telemetry-otel: exported
   - //lsp: exported
   - //testkit: exported
   - $compose.uiTest: exported

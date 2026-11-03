@@ -48,6 +48,7 @@ import org.example.kotlineditor.model.Languages
 import org.example.kotlineditor.model.OperatedFile
 import org.example.kotlineditor.model.ServerMemory
 import org.example.kotlineditor.model.TextChange
+import org.example.kotlineditor.telemetry.Telemetry
 import java.io.Closeable
 import java.nio.file.Files
 import java.nio.file.Path
@@ -81,7 +82,11 @@ class LanguageServerSettings(
  * server for a language.
  */
 @Suppress("TooManyFunctions")
-class LanguageServerService(private val settings: LanguageServerSettings) : Closeable {
+class LanguageServerService(
+    private val settings: LanguageServerSettings,
+    /** What measures the starts of the servers, when the user agreed. */
+    private val telemetry: () -> Telemetry = { Telemetry.Disabled },
+) : Closeable {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val reader = ProcessMemoryReader.forCurrentOs()
     private val sampler = ProcessMemorySampler(reader, System::currentTimeMillis, scope, settings.sampleIntervalMs)
@@ -111,6 +116,7 @@ class LanguageServerService(private val settings: LanguageServerSettings) : Clos
                 onApplyEdit = intelligence::applyEdit,
                 onRestarted = intelligence::restarted,
                 onDiagnosticsRefresh = intelligence::diagnosticsRefresh,
+                telemetry = telemetry,
             ),
         )
 

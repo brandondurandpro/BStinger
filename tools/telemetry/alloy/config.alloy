@@ -1,0 +1,49 @@
+// Receives OTLP from the kotlin-editor client and server, sends traces to Tempo and metrics to Mimir.
+
+otelcol.receiver.otlp "default" {
+  grpc {
+    endpoint = "0.0.0.0:4317"
+  }
+
+  http {
+    endpoint = "0.0.0.0:4318"
+  }
+
+  output {
+    traces  = [otelcol.processor.batch.default.input]
+    metrics = [otelcol.processor.batch.default.input]
+  }
+}
+
+otelcol.processor.batch "default" {
+  output {
+    traces  = [otelcol.exporter.otlp.tempo.input]
+    metrics = [otelcol.exporter.prometheus.mimir.input]
+  }
+}
+
+// Traces -> Tempo (OTLP gRPC, plaintext inside the compose network).
+otelcol.exporter.otlp "tempo" {
+  client {
+    endpoint = "tempo:4317"
+
+    tls {
+      insecure = true
+    }
+  }
+}
+
+// Metrics -> Prometheus format. resource_to_telemetry_conversion copies the resource attributes
+// (service.name, service.version, service.instance.id, os.type) onto every series as labels
+// (service_name, service_version, service_instance_id, os_type), so the dashboard can filter the
+// histogram by version without joining target_info.
+otelcol.exporter.prometheus "mimir" {
+  resource_to_telemetry_conversion = true
+  forward_to                       = [prometheus.remote_write.mimir.receiver]
+}
+
+prometheus.remote_write "mimir" {
+  endpoint {
+    url = "http://mimir:9009/api/v1/push"
+  }
+}

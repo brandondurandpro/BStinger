@@ -55,11 +55,17 @@ class EditorServer(
     /** Secret a client must present in its handshake. */
     val token: String = newToken(),
     private val options: ServerOptions = ServerOptions(),
+    /** Off until a client says the user agreed; tests give one recording in memory. */
+    val telemetry: ServerTelemetry = ServerTelemetry(),
 ) : Closeable {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val sessions = ConcurrentHashMap<String, ServerSession>()
-    private val handlers = requestHandlers(services)
+    private val handlers = requestHandlers(services) + telemetryHandlers(telemetry)
     private var serverSocket: ServerSocket? = null
+
+    init {
+        services.telemetry = telemetry.telemetry
+    }
 
     @Volatile private var closed = false
 
@@ -105,6 +111,7 @@ class EditorServer(
         sessions.clear()
         scope.cancel()
         services.close()
+        telemetry.close()
     }
 
     /** Drops every connection abruptly while keeping sessions (tests simulate network failures with it). */
@@ -173,6 +180,7 @@ class EditorServer(
                 scope,
                 handlers,
                 options,
+                telemetry.telemetry,
                 onDispose = { id -> if (services.languageServersStarted) services.languageServers.release(id) },
             ).also { sessions[it.id] = it }
         session.attach(connection)

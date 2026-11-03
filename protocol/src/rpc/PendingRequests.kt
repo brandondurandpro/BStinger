@@ -9,6 +9,11 @@ internal class PendingRequests {
 
     class Pending(val frame: Frame) {
         val result = CompletableDeferred<Frame>()
+
+        /** Times the request was sent: more than once when it survived a reconnection. */
+        val sends =
+            java.util.concurrent.atomic
+                .AtomicInteger()
     }
 
     fun register(frame: Frame): Pending = Pending(frame).also { requests[frame.id] = it }
@@ -22,7 +27,11 @@ internal class PendingRequests {
     }
 
     /** Every unanswered request, in the order it was first sent (ids increase). */
-    fun inOrder(): List<Frame> = requests.entries.sortedBy { it.key }.map { it.value.frame }
+    fun inOrder(): List<Frame> =
+        requests.entries.sortedBy { it.key }.map { (_, pending) ->
+            pending.sends.incrementAndGet()
+            pending.frame
+        }
 
     fun failAll(cause: Throwable) = requests.values.forEach { it.result.completeExceptionally(cause) }
 }

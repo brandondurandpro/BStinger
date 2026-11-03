@@ -82,6 +82,7 @@ fun WelcomeScreen(state: AppState) {
         }
         VerticalDivider(Modifier.fillMaxHeight())
         Column(Modifier.weight(1f).fillMaxHeight().background(IdeColors.Editor)) {
+            TelemetryBanner(state.telemetry)
             if (state.recentProjects.isEmpty()) {
                 EmptyWelcome(state)
             } else {

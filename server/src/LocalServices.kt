@@ -4,6 +4,7 @@ import org.example.kotlineditor.lsp.LanguageServerService
 import org.example.kotlineditor.lsp.LanguageServerSettings
 import org.example.kotlineditor.model.ServerPlaces
 import org.example.kotlineditor.server.ripgrep.RipgrepSettings
+import org.example.kotlineditor.telemetry.Telemetry
 import java.io.File
 
 /**
@@ -16,7 +17,10 @@ class LocalServices(
     ripgrep: RipgrepSettings = RipgrepSettings(),
     languageServerSettings: LanguageServerSettings = LanguageServerSettings(dataDirectory.toPath()),
 ) {
-    private val languageServersLazy = lazy { LanguageServerService(languageServerSettings) }
+    private val languageServersLazy = lazy { LanguageServerService(languageServerSettings) { telemetry } }
+
+    /** What the server measures with (the language servers' starts), set by the server that uses these services. */
+    @Volatile var telemetry: Telemetry = Telemetry.Disabled
 
     /** Files of the projects. */
     val fileSystem = LocalFileSystem(maxFileSize)

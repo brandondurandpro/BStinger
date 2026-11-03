@@ -3,6 +3,8 @@ product:
 
 dependencies:
   - //compression: exported
+  # Each call is measured (rpc.client) when the user agreed, and names its span to the server.
+  - //telemetry: exported
   - $libs.kotlinx.coroutines.core
   # Only the JsonElement tree is used: the JSON-RPC messages are built by hand, no compiler plugin needed.
   - $libs.kotlinx.serialization.json: exported

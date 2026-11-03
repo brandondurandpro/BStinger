@@ -29,6 +29,10 @@ import org.example.kotlineditor.state.FileIndex
 import org.example.kotlineditor.state.FileMatch
 import org.example.kotlineditor.state.TreeHost
 import org.example.kotlineditor.state.relativePath
+import org.example.kotlineditor.telemetry.ClientTelemetry
+import org.example.kotlineditor.telemetry.Operation
+import org.example.kotlineditor.telemetry.measureToFrame
+import org.example.kotlineditor.telemetry.sizeOf
 
 /** Go to File (Ctrl+P or Ctrl+Shift+N) or, with [recentOnly], Recent Files (Ctrl+E). */
 @Composable
@@ -45,8 +49,15 @@ fun GotoFilePopup(project: TreeHost, onClose: () -> Unit, recentOnly: Boolean = 
     }
     LaunchedEffect(Unit) { focus.requestFocus() }
     LaunchedEffect(query, indexed) {
-        val results = matches(project, query, recentOnly)
-        found.update(query, indexed, results, firstSelection(recentOnly, query, results), open)
+        // From the query to the frame that shows its files.
+        ClientTelemetry.measureToFrame(
+            Operation.TreeGotoFile,
+            attributesOf = { files: List<FileMatch> -> sizeOf(files.size) },
+        ) {
+            val results = matches(project, query, recentOnly)
+            found.update(query, indexed, results, firstSelection(recentOnly, query, results), open)
+            results
+        }
     }
     val results = found.results
     PopupFrame(if (recentOnly) TreeTags.RECENT_FILES else TreeTags.GOTO_FILE, onClose) {

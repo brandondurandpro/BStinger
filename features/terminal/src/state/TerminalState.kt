@@ -12,6 +12,11 @@ import org.example.kotlineditor.model.TerminalKeyEvent
 import org.example.kotlineditor.model.TerminalLauncher
 import org.example.kotlineditor.model.TerminalProcess
 import org.example.kotlineditor.model.TerminalSnapshot
+import org.example.kotlineditor.telemetry.ClientTelemetry
+import org.example.kotlineditor.telemetry.Operation
+import org.example.kotlineditor.telemetry.Outcome
+import org.example.kotlineditor.telemetry.Span
+import org.example.kotlineditor.telemetry.endAtFrame
 
 // Grid used until the panel has been measured, so the shell has a sane size when it starts.
 private const val DEFAULT_COLUMNS = 80
@@ -32,7 +37,7 @@ class TerminalTab(
     /** Short name shown on the tab, like IntelliJ's: "Local", then "Local (2)" and so on. */
     val name: String,
     private val process: TerminalProcess,
-    scope: CoroutineScope,
+    private val scope: CoroutineScope,
 ) {
     /** The last complete screen, or `null` before the first one arrives. */
     var snapshot by mutableStateOf<TerminalSnapshot?>(null)
@@ -61,11 +66,18 @@ class TerminalTab(
     private var cellWidth = DEFAULT_CELL_WIDTH
     private var cellHeight = DEFAULT_CELL_HEIGHT
 
+    // terminal.start: from the new tab to the frame that shows the first screen of the shell.
+    private var startSpan: Span? = ClientTelemetry.start(Operation.TerminalStart)
+
+    // terminal.echo: from a keystroke to the frame that shows the next screen; one at a time, so it samples.
+    private var echoSpan: Span? = null
+
     private val job: Job =
         scope.launch {
             process.output.collect { screen ->
                 snapshot = screen
                 if (screen.title.isNotBlank()) title = screen.title
+                shown()
             }
             // An exiting shell sends a last screen saying it stopped; a lost one just stops sending.
             if (snapshot?.running != false) lost = true
@@ -73,7 +85,18 @@ class TerminalTab(
 
     /** Sends the characters the user typed, as if they came from the keyboard. */
     fun write(text: String) {
-        if (text.isNotEmpty()) process.write(text.encodeToByteArray())
+        if (text.isEmpty()) return
+        if (echoSpan == null) echoSpan = ClientTelemetry.start(Operation.TerminalEcho)
+        process.write(text.encodeToByteArray())
+    }
+
+    // A new screen arrived: the spans waiting for it end once it is drawn.
+    private fun shown() {
+        val pending = listOfNotNull(startSpan, echoSpan)
+        if (pending.isEmpty()) return
+        startSpan = null
+        echoSpan = null
+        pending.forEach { span -> scope.launch { ClientTelemetry.endAtFrame(span) } }
     }
 
     /** Sends a key, encoded by the terminal so that the running program gets what it expects. */
@@ -107,6 +130,8 @@ class TerminalTab(
 
     /** Stops the shell and the collector. */
     fun dispose() {
+        ClientTelemetry.end(startSpan, Outcome.Cancelled)
+        ClientTelemetry.end(echoSpan, Outcome.Cancelled)
         job.cancel()
         process.destroy()
     }

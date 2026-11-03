@@ -1,0 +1,11 @@
+# How long the features of the IDE take, client and server side: operations from a fixed catalog, bounded
+# attributes, hooks told when an operation starts and ends. Off unless the user agreed (see docs/telemetry.md); the
+# OpenTelemetry export is in telemetry-otel.
+product:
+  type: jvm/lib
+
+dependencies:
+  - $libs.kotlinx.coroutines.core: exported
+
+test-dependencies:
+  - $kotlin.test

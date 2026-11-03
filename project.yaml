@@ -18,6 +18,8 @@ modules:
   - serverApp
   - shared
   - syntax
+  - telemetry
+  - telemetry-otel
   - testkit
   - ui/kit
 

@@ -11,6 +11,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.example.kotlineditor.model.CompletionItem
 import org.example.kotlineditor.model.CompletionResult
+import org.example.kotlineditor.telemetry.Attribute
+import org.example.kotlineditor.telemetry.Attributes
+import org.example.kotlineditor.telemetry.ClientTelemetry
+import org.example.kotlineditor.telemetry.Operation
+import org.example.kotlineditor.telemetry.measureToFrame
+import org.example.kotlineditor.telemetry.sizeOf
 
 // Rows of the popup a Page Up or Page Down moves by.
 private const val PAGE_ROWS = 8
@@ -230,9 +236,13 @@ class CompletionState(
         val caret = document.caret
         job =
             scope.launch {
-                val result = source(path, document)
-                // Typed or moved meanwhile: a newer request is on its way, or the popup was closed.
-                if (document.version == version && document.caret == caret) show(document, caret, result)
+                // From the keystroke to the frame that shows the items; a newer keystroke cancels it.
+                ClientTelemetry.measureToFrame(Operation.EditorCompletion, attributesOf = ::itemsOf) {
+                    val result = source(path, document)
+                    // Typed or moved meanwhile: a newer request is on its way, or the popup was closed.
+                    if (document.version == version && document.caret == caret) show(document, caret, result)
+                    result
+                }
             }
     }
 
@@ -298,4 +308,14 @@ private class Describer(
                 if (stillSelected) shown.documentation = documentation
             }
     }
+}
+
+private fun itemsOf(result: CompletionResult): Attributes {
+    val found =
+        when {
+            !result.ready -> "partial"
+            result.items.isEmpty() -> "empty"
+            else -> "found"
+        }
+    return sizeOf(result.items.size) + Attributes.of(Attribute.Result to found)
 }

@@ -52,6 +52,10 @@ import org.example.kotlineditor.state.openFileOfDiff
 import org.example.kotlineditor.state.saveAll
 import org.example.kotlineditor.state.synchronize
 import org.example.kotlineditor.state.visualColumn
+import org.example.kotlineditor.telemetry.ClientTelemetry
+import org.example.kotlineditor.telemetry.Operation
+import org.example.kotlineditor.telemetry.measureToFrame
+import org.example.kotlineditor.telemetry.sizeOf
 
 @Composable
 fun ProjectScreen(app: AppState, project: ProjectState) {
@@ -301,13 +305,20 @@ private fun rememberSearchHighlights(project: ProjectState, document: Document):
     LaunchedEffect(document, find.visible, find.query, find.matchCase, document.version) {
         val query = find.query
         val active = find.visible && query.isNotEmpty()
-        val matches =
-            if (active) {
-                withContext(Dispatchers.Default) { document.findAll(query, ignoreCase = !find.matchCase) }
-            } else {
-                emptyList()
+        val caret = document.selectionRange()?.first ?: document.caret
+        if (active) {
+            // From the keystroke to the frame that highlights the matches.
+            ClientTelemetry.measureToFrame(
+                Operation.EditorFind,
+                attributesOf = { found: List<TextPos> -> sizeOf(found.size) },
+            ) {
+                val matches = withContext(Dispatchers.Default) { document.findAll(query, ignoreCase = !find.matchCase) }
+                find.setMatches(matches, caret)
+                matches
             }
-        find.setMatches(matches, document.selectionRange()?.first ?: document.caret)
+        } else {
+            find.setMatches(emptyList(), caret)
+        }
         if (active && find.pendingSelectNext) {
             find.pendingSelectNext = false
             find.selectCurrent(document)

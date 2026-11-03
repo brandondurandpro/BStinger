@@ -1,6 +1,7 @@
 package org.example.kotlineditor.lsp.supervisor
 
 import kotlinx.serialization.json.JsonObject
+import org.example.kotlineditor.telemetry.Telemetry
 
 /** What the language servers say besides their answers, by server id: the service routes it to the sessions. */
 class LanguageServerHooks(
@@ -12,4 +13,6 @@ class LanguageServerHooks(
     val onDiagnosticsRefresh: (server: String) -> Unit = {},
     /** A new process of the server is ready: what the previous one published is obsolete. */
     val onRestarted: (server: String) -> Unit = {},
+    /** What measures the starts of the servers (lsp.start), when the user agreed. */
+    val telemetry: () -> Telemetry = { Telemetry.Disabled },
 )
