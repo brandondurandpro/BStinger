@@ -75,9 +75,11 @@ class PhpTypeFormattingChaosE2eTest {
         // A restart and a new language server: more than the default minute on a slow runner.
         runComposeUiTest(testTimeout = 3.minutes) {
             val app = open()
+            val before = app.languageServers.map { it.pid }.toSet()
             app.process.restart()
             awaitReconnected()
-            awaitServer(app) { it.isRunning() }
+            // The status and the triggers of the old language server may still be shown: wait for the new process.
+            awaitServer(app) { it.isRunning() && it.pid !in before }
             awaitCondition(SERVER_START_MS) { app.triggersKnown() }
             typeCode(" ;")
             awaitCondition(SERVER_START_MS) { app.lines().getOrNull(STATEMENT_LINE) == FORMATTED_STATEMENT }
