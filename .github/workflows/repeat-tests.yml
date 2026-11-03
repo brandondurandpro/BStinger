@@ -1,0 +1,125 @@
+name: Repeat tests
+
+# Runs each test module several times on Windows, every run in a job of its own, to catch the hang of issue #120
+# (a Windows CI job that freezes until cancelled, without logs). A run that lasts too long gets its JVMs' threads and
+# the processes it started saved, then its JVMs stopped: the job fails with its log and the dumps (printed, and kept
+# as an artifact) instead of freezing.
+#
+# Started by hand (Actions > Repeat tests > Run workflow), and on a pull request that changes this workflow.
+
+on:
+  workflow_dispatch:
+    inputs:
+      runs:
+        description: Runs of each module
+        type: number
+        default: 3
+      module:
+        description: "One module (e.g. shared, or non-ui for the modules without UI tests); empty: every module"
+        type: string
+        default: ""
+  pull_request:
+    paths:
+      - .github/workflows/repeat-tests.yml
+      - tools/ci/hang-watch.ps1
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  KOTLIN_CLI_NO_WELCOME_BANNER: "1"
+  # A module takes up to about 15 minutes on a runner: past this, its run is taken as hung.
+  HANG_MINUTES: "25"
+
+jobs:
+  plan:
+    name: Plan
+    runs-on: ubuntu-24.04
+    outputs:
+      modules: ${{ steps.plan.outputs.modules }}
+      runs: ${{ steps.plan.outputs.runs }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # non-ui: the modules without UI tests, run together as run-tests does; then each UI module.
+      - id: plan
+        env:
+          MODULE: ${{ inputs.module }}
+          RUN_COUNT: ${{ inputs.runs || 3 }}
+        run: |
+          if [ -n "$MODULE" ]; then
+            modules=$(jq -nc --arg m "$MODULE" '[$m]')
+          else
+            modules=$(grep -vE '^[[:space:]]*(#|$)' tools/ui-test-modules.txt | jq -R . | jq -sc '["non-ui"] + .')
+          fi
+          runs=$(jq -nc --argjson n "$RUN_COUNT" '[range(1; $n + 1)]')
+          echo "modules=$modules" | tee -a "$GITHUB_OUTPUT"
+          echo "runs=$runs" | tee -a "$GITHUB_OUTPUT"
+
+  test:
+    name: ${{ matrix.module }} (run ${{ matrix.run }})
+    needs: plan
+    runs-on: windows-latest
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        module: ${{ fromJSON(needs.plan.outputs.modules) }}
+        run: ${{ fromJSON(needs.plan.outputs.runs) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/AppData/Local/JetBrains/Kotlin/cli
+            ~/.m2/repository
+          key: windows-${{ hashFiles('kotlin.bat', 'libs.versions.toml', 'project.yaml', '**/module.yaml') }}
+      - uses: actions/cache@v4
+        with:
+          path: ~/.kotlin-editor/tools
+          key: ripgrep-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('server/src/ripgrep/RipgrepRelease.kt') }}
+      - name: Build
+        shell: cmd
+        run: kotlin.bat build
+      - name: Watch for a hang
+        shell: pwsh
+        run: >
+          Start-Process pwsh -WindowStyle Hidden -ArgumentList
+          '-NoProfile', '-File', 'tools/ci/hang-watch.ps1', '-Minutes', $env:HANG_MINUTES, '-OutDir', "$env:RUNNER_TEMP\hang"
+      # As run-tests.bat runs it, through cmd, its output going to the runner.
+      - name: Test
+        shell: cmd
+        timeout-minutes: 35
+        env:
+          MODULE: ${{ matrix.module }}
+        run: |
+          setlocal enabledelayedexpansion
+          set args=-m %MODULE%
+          if "%MODULE%"=="non-ui" (
+            set args=
+            for /f "eol=# tokens=*" %%m in (tools\ui-test-modules.txt) do set args=!args! --exclude-module %%m
+          )
+          call kotlin.bat test !args!
+      # What a hang left: the dumps of the watcher, and the processes still alive (a console host left behind keeps
+      # a job from ending).
+      - name: Dumps and processes left
+        if: always()
+        shell: pwsh
+        run: |
+          Get-CimInstance Win32_Process |
+            Where-Object { $_.Name -match '^(java|cmd|conhost|OpenConsole|php|node|rg|git)\.exe$' } |
+            ForEach-Object { '{0} {1}<{2} {3}' -f $_.Name, $_.ProcessId, $_.ParentProcessId, $_.CommandLine }
+          $dumps = "$env:RUNNER_TEMP\hang"
+          Get-ChildItem $dumps -File -ErrorAction SilentlyContinue | ForEach-Object {
+            "===== $($_.Name)"
+            Get-Content $_.FullName
+          }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: hang-${{ matrix.module }}-${{ matrix.run }}
+          path: ${{ runner.temp }}/hang
+          if-no-files-found: ignore
