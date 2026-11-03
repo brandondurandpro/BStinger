@@ -186,18 +186,6 @@ class E2eApp(
  * Starts the app as in production: a real [EditorServer] (data in a temporary directory) and the UI talking to
  * it through the network client. Everything the e2e tests do therefore goes through the protocol.
  */
-private fun tempDumpThreads(why: String) {
-    val dump = StringBuilder("WATCHDOG thread dump $why\n")
-    for ((thread, stack) in Thread.getAllStackTraces()) {
-        dump.append("\"${thread.name}\" ${thread.state}\n")
-        stack.forEach { dump.append("    at $it\n") }
-    }
-    System.out.println(dump)
-    System.out.flush()
-}
-
-private val TEMP_WATCHDOG = java.util.concurrent.atomic.AtomicReference<Thread?>(null)
-
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.launchApp(
     recent: List<String> = emptyList(),
@@ -209,21 +197,6 @@ fun ComposeUiTest.launchApp(
     telemetry: TelemetryCapture? = null,
 ): E2eApp {
     TextClipboard.useSystem = false
-    TEMP_WATCHDOG.getAndSet(
-        Thread {
-            try {
-                Thread.sleep(120_000)
-                tempDumpThreads("after 2 minutes")
-                Thread.sleep(180_000)
-                tempDumpThreads("after 5 minutes, halting")
-                Runtime.getRuntime().halt(3)
-            } catch (_: InterruptedException) {
-            }
-        }.apply {
-            isDaemon = true
-            start()
-        },
-    )?.interrupt()
     val data = Files.createTempDirectory("kotlin-editor-server").toFile()
     val process = ServerProcess(data, languageServers, telemetry?.serverHook ?: InMemoryHook())
     val token = process.server.token
