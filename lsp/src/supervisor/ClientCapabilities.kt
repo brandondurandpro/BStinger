@@ -136,7 +136,7 @@ private val CODE_ACTION: JsonObject
     get() =
         buildJsonObject {
             put("isPreferredSupport", true)
-            putJsonObject("disabledSupport") {}
+            put("disabledSupport", true)
             putJsonObject("codeActionLiteralSupport") {
                 putJsonObject("codeActionKind") { putJsonArray(VALUE_SET) { CODE_ACTION_KINDS.forEach { add(it) } } }
             }

@@ -129,6 +129,11 @@ internal class ManagedServer(
 
     val log = LogRing()
 
+    // The stderr of the current process only, read when it crashes to tell why.
+    @Volatile private var stderr = LogRing(STDERR_TAIL)
+
+    @Volatile private var drainer: Thread? = null
+
     private val commands = Channel<Command>(Channel.UNLIMITED)
     private val progress = ConcurrentHashMap<String, Progress>()
     private val crashes = ArrayDeque<Long>()
@@ -374,7 +379,7 @@ internal class ManagedServer(
                 while (crashes.isNotEmpty() && now - crashes.first() > timings.crashWindowMs) crashes.removeFirst()
                 crashes.size
             }
-        val lastLine = log.last()?.let { ": $it" }.orEmpty()
+        val lastLine = explanation()?.let { ": $it" }.orEmpty()
         if (count >= timings.maxCrashes) {
             setState(LanguageServerState.Crashed, "Crashed $count times in a few minutes. $reason$lastLine")
             return
@@ -671,24 +676,39 @@ internal class ManagedServer(
         progressChanged()
     }
 
+    // What the process wrote last on stderr, once read to its end: the exit may be reported before the last lines.
+    private suspend fun explanation(): String? {
+        withContext(Dispatchers.IO) { drainer?.join(DRAIN_WAIT_MS) }
+        return CrashReason.of(stderr.lines())
+    }
+
     // Always read: a server whose stderr pipe is full blocks.
-    private fun drain(stderr: InputStream) {
-        thread(name = "lsp-stderr-$id", isDaemon = true) {
-            val lines = LogLines(log)
-            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-            try {
-                stderr.use { input ->
-                    var read = input.read(buffer)
-                    while (read >= 0) {
-                        lines.feed(buffer, read)
-                        read = input.read(buffer)
-                    }
-                }
-            } catch (_: IOException) {
-                // The process is gone.
+    private fun drain(input: InputStream) {
+        val tail = LogRing(STDERR_TAIL)
+        stderr = tail
+        drainer =
+            thread(name = "lsp-stderr-$id", isDaemon = true) { readLines(input, tail) }
+    }
+
+    private fun readLines(stream: InputStream, tail: LogRing) {
+        val lines =
+            LogLines { line ->
+                log.add(line)
+                tail.add(line)
             }
-            lines.flush()
+        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+        try {
+            stream.use { input ->
+                var read = input.read(buffer)
+                while (read >= 0) {
+                    lines.feed(buffer, read)
+                    read = input.read(buffer)
+                }
+            }
+        } catch (_: IOException) {
+            // The process is gone.
         }
+        lines.flush()
     }
 
     private fun folder() =
@@ -740,5 +760,11 @@ internal class ManagedServer(
     private companion object {
         const val MILLIS = 1_000L
         const val FULL_SYNC = 1
+
+        // Enough for a stack trace and the error block above it.
+        const val STDERR_TAIL = 200
+
+        // How long a crash waits for the last lines of stderr; a child keeping the pipe open must not delay it.
+        const val DRAIN_WAIT_MS = 500L
     }
 }

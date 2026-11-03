@@ -38,7 +38,8 @@ import kotlin.system.exitProcess
  * - memory: `--leak-mb-per-s <n>`, `--sawtooth <lowMb>:<highMb>:<periodS>`,
  *   `--spike-then-plateau <spikeMb>:<plateauMb>:<spikeS>`, `--child-mb <n>` (a child process holding n MB);
  * - lifecycle: `--crash-on-start`, `--crash-after <n requests>` (exit code 3), `--hang-on-initialize`,
- *   `--ignore-shutdown`;
+ *   `--ignore-shutdown`, `--crash-like-symfony` (crashes at start like phpactor: an error block, then the usage of
+ *   its command);
  * - output: `--garbage-stdout`, `--huge-message <mb>` (the hover answer), `--stderr-flood`;
  * - timing and questions: `--latency-ms <n>`, `--ask-configuration` (asks `workspace/configuration` after
  *   `initialized` and writes the answer to stderr), `--diagnostics`, `--progress <seconds>` (reports an
@@ -61,6 +62,8 @@ object FakeLanguageServer {
     private const val TICK_MS = 100L
     private const val MILLIS_PER_SECOND = 1000L
     private const val WATCHED_DELETED = 3
+    private const val SYMFONY_WIDTH = 66
+    private const val SYMFONY_EXIT = 255
 
     /** Starts the server (or, with `--hold-mb n`, a child that only holds n MB until its stdin closes). */
     @JvmStatic
@@ -71,6 +74,7 @@ object FakeLanguageServer {
             return
         }
         if (options.crashOnStart) crash()
+        if (options.crashLikeSymfony) crashLikeSymfony()
         Server(options, System.`in`, System.out, System.err).run()
     }
 
@@ -87,6 +91,21 @@ object FakeLanguageServer {
         exitProcess(CRASH_EXIT)
     }
 
+    // What a Symfony Console command prints when it throws: the error block, padded, then the usage of the command.
+    private fun crashLikeSymfony(): Nothing {
+        val padding = " ".repeat(SYMFONY_WIDTH)
+        listOf(
+            "Starting language server, use -vvv for verbose output",
+            "In ArgumentAssert.php line 52:",
+            padding,
+            "  Argument \"disabledSupport\" has type \"bool\" but was passed \"array\"  ",
+            padding,
+            "language-server [--address ADDRESS] [--no-loop]",
+        ).forEach(System.err::println)
+        System.err.flush()
+        exitProcess(SYMFONY_EXIT)
+    }
+
     /** The options of the command line. */
     private class Options(
         val leakMbPerSecond: Int = 0,
@@ -95,6 +114,7 @@ object FakeLanguageServer {
         val childMb: Int? = null,
         val holdMb: Int? = null,
         val crashOnStart: Boolean = false,
+        val crashLikeSymfony: Boolean = false,
         val crashAfter: Int? = null,
         val hangOnInitialize: Boolean = false,
         val ignoreShutdown: Boolean = false,
@@ -137,6 +157,7 @@ object FakeLanguageServer {
                     childMb = int("child-mb"),
                     holdMb = int("hold-mb"),
                     crashOnStart = "crash-on-start" in values,
+                    crashLikeSymfony = "crash-like-symfony" in values,
                     crashAfter = int("crash-after"),
                     hangOnInitialize = "hang-on-initialize" in values,
                     ignoreShutdown = "ignore-shutdown" in values,

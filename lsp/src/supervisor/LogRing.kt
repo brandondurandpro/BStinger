@@ -2,8 +2,8 @@ package org.example.kotlineditor.lsp.supervisor
 
 import java.io.ByteArrayOutputStream
 
-/** Splits a byte stream into the lines of [log], decoding UTF-8 per line; a line without end cannot grow. */
-internal class LogLines(private val log: LogRing) {
+/** Splits a byte stream into lines given to [sink], decoding UTF-8 per line; a line without end cannot grow. */
+internal class LogLines(private val sink: (String) -> Unit) {
     private val line = ByteArrayOutputStream()
 
     fun feed(bytes: ByteArray, count: Int) {
@@ -17,7 +17,7 @@ internal class LogLines(private val log: LogRing) {
     }
 
     fun flush() {
-        if (line.size() > 0) log.add(line.toString(Charsets.UTF_8).trimEnd('\r'))
+        if (line.size() > 0) sink(line.toString(Charsets.UTF_8).trimEnd('\r'))
         line.reset()
     }
 
