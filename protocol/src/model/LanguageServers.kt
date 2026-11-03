@@ -70,6 +70,11 @@ data class LanguageServerInfo(
     val recentCrashes: Int,
     /** How many IDE sessions use it. */
     val users: Int,
+    /**
+     * Why it shows no inlay hints (intelephense: they need its Premium licence), once it answered `initialize`
+     * without them; null when it gives them or has not started.
+     */
+    val inlayHintsNote: String? = null,
 )
 
 /** Memory of the IDE server itself, shown next to the language servers. */

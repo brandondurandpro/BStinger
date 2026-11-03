@@ -1,5 +1,6 @@
 package org.example.kotlineditor.lsp.provision
 
+import kotlinx.serialization.json.JsonElement
 import java.nio.file.Path
 
 /** A runtime a language server needs, at a minimum version. */
@@ -33,6 +34,10 @@ data class LanguageServerCandidate(
     val tool: PinnedTool?,
     /** The command line, from the found runtimes and the installed artifact (null without [tool]). */
     val command: (runtimes: Map<RuntimeKind, Path>, installed: Path?) -> List<String>,
+    /** `initializationOptions` of its `initialize` request: what it leaves off unless asked (phpactor's hints). */
+    val initializationOptions: JsonElement? = null,
+    /** Why it may give no inlay hints, shown in the Language Servers window when it gives none. */
+    val withoutInlayHints: String? = null,
 )
 
 /** A candidate and whether it can run on this server machine. */

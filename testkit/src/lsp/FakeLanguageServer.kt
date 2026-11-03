@@ -8,6 +8,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.int
@@ -207,6 +208,11 @@ object FakeLanguageServer {
         private val documents = HashMap<String, MutableList<String>>()
         private var rootUri: String? = null
 
+        // Its configuration, from initializationOptions, like phpactor's: the inlay hints, and the types among them.
+        // Unlike phpactor, the hints are on when the client says nothing, so that the tests need not configure them.
+        private var hintsEnabled = true
+        private var typeHints = false
+
         // The files on disk as indexed with `--index`, by URI.
         private var indexed: MutableMap<String, List<String>>? = null
 
@@ -273,6 +279,7 @@ object FakeLanguageServer {
             when (method) {
                 "initialize" -> {
                     rootUri = (message["params"] as? JsonObject)?.get("rootUri")?.let { (it as? JsonPrimitive)?.contentOrNull }
+                    configure(message["params"])
                     if (!options.hangOnInitialize) reply(id, capabilities())
                 }
                 "initialized" -> {
@@ -310,7 +317,7 @@ object FakeLanguageServer {
                 "workspace/symbol" -> reply(id, intelligence().workspaceSymbols(message["params"]))
                 "textDocument/selectionRange" -> reply(id, intelligence().selectionRanges(message["params"]))
                 "textDocument/foldingRange" -> reply(id, intelligence().foldingRanges(message["params"]))
-                "textDocument/inlayHint" -> reply(id, intelligence().inlayHints(message["params"]))
+                "textDocument/inlayHint" -> reply(id, intelligence().inlayHints(message["params"], typeHints))
                 "textDocument/codeLens" -> reply(id, FakeCodeLens(phpCode()).lenses(message["params"]))
                 "codeLens/resolve" -> reply(id, FakeCodeLens(phpCode()).resolve(message["params"]))
                 "textDocument/onTypeFormatting" -> reply(id, FakeTypeFormatting(phpCode()).format(message["params"]))
@@ -405,6 +412,13 @@ object FakeLanguageServer {
 
         private fun provided(name: String) = name !in options.without
 
+        private fun configure(params: JsonElement?) {
+            val configuration = (params as? JsonObject)?.get("initializationOptions") as? JsonObject
+            fun flag(name: String) = (configuration?.get("language_server_worse_reflection.inlay_hints.$name") as? JsonPrimitive)?.booleanOrNull
+            hintsEnabled = flag("enable") ?: true
+            typeHints = flag("types") ?: false
+        }
+
         private fun capabilities() =
             buildJsonObject {
                 putJsonObject("capabilities") {
@@ -424,7 +438,7 @@ object FakeLanguageServer {
                     put("workspaceSymbolProvider", provided("workspaceSymbol"))
                     put("selectionRangeProvider", provided("selectionRange"))
                     put("foldingRangeProvider", provided("foldingRange"))
-                    put("inlayHintProvider", provided("inlayHint"))
+                    put("inlayHintProvider", provided("inlayHint") && hintsEnabled)
                     put("callHierarchyProvider", provided("callHierarchy"))
                     if (provided("semanticTokens")) put("semanticTokensProvider", fakeSemanticTokensProvider())
                     put("typeHierarchyProvider", provided("typeHierarchy"))

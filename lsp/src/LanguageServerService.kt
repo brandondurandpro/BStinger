@@ -357,11 +357,14 @@ class LanguageServerService(
     }
 
     // The requirements are checked again at each start: PHP may have been installed since.
-    private fun specOf(language: String, id: String) =
-        LanguageServerSpec(id, language) {
+    private fun specOf(language: String, id: String): LanguageServerSpec {
+        val candidate = settings.candidates.offered(language).firstOrNull { it.id == id }
+        val options = candidate?.initializationOptions
+        return LanguageServerSpec(id, language, options, candidate?.withoutInlayHints) {
             val status = settings.candidates.candidates(language).first { it.candidate.id == id }
             settings.candidates.commandFor(status, downloader)
         }
+    }
 
     // PHP: the closest composer.json between the file and the project, the project otherwise. A root that is the
     // project is named as the client names it: the status bar matches servers to projects by their root.

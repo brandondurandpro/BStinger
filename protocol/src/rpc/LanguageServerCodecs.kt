@@ -85,6 +85,7 @@ private fun LanguageServerInfo.toJson(): JsonObject =
         put(MESSAGE, message?.let(::JsonPrimitive) ?: JsonNull)
         put("recentCrashes", recentCrashes)
         put("users", users)
+        put("inlayHintsNote", inlayHintsNote?.let(::JsonPrimitive) ?: JsonNull)
     }
 
 private fun JsonObject.languageServerInfo(): LanguageServerInfo {
@@ -107,6 +108,7 @@ private fun JsonObject.languageServerInfo(): LanguageServerInfo {
         message = stringOrNull(MESSAGE),
         recentCrashes = int("recentCrashes"),
         users = int("users"),
+        inlayHintsNote = stringOrNull("inlayHintsNote"),
     )
 }
 

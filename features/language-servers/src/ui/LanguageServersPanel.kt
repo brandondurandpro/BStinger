@@ -137,6 +137,7 @@ private fun ColumnScope.LanguageServersContent(project: LanguageServersHost, sta
     }
     val servers = state.status.servers
     InlayHintsModeRow(project)
+    InlayHintsNote(servers)
     Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
         IdeServerRow(state.status.server)
         if (servers.isEmpty()) {
@@ -184,6 +185,21 @@ private fun InlayHintsModeRow(project: LanguageServersHost) {
 }
 
 private val MODE_SHAPE = RoundedCornerShape(4.dp)
+
+// Why the running servers that give no inlay hints give none (intelephense without its licence): the mode chosen
+// above would otherwise seem to do nothing.
+@Composable
+private fun InlayHintsNote(servers: List<LanguageServerInfo>) {
+    val notes = servers.mapNotNull { it.inlayHintsNote }.distinct()
+    if (notes.isEmpty()) return
+    Label(
+        notes.joinToString("\n"),
+        Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp).testTag(LanguageServerTags.INLAY_HINTS_NOTE),
+        color = IdeColors.TextSecondary,
+        fontSize = 11.sp,
+        maxLines = 4,
+    )
+}
 
 @Composable
 private fun IdeServerRow(server: ServerMemory) {

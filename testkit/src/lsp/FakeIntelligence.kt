@@ -22,6 +22,11 @@ import kotlinx.serialization.json.putJsonObject
 // A call: a name, then its opening parenthesis.
 private val CALL = Regex("""([A-Za-z_][A-Za-z0-9_]*)\s*\(""")
 
+// A variable assigned a new object: `$greeter = new Greeter(`.
+private val CREATED = Regex("""(\$[A-Za-z_][A-Za-z0-9_]*)\s*=\s*new\s+([A-Za-z_][A-Za-z0-9_]*)""")
+private const val CLASS_KIND = 5
+private const val TYPE_HINT = 1
+
 /**
  * The answers of the [FakeLanguageServer] to the code intelligence requests, computed from [FakePhpCode] like
  * phpactor answers them: Markdown hovers with the docblock and the signature, a definition range covering the whole
@@ -171,11 +176,16 @@ internal class FakeIntelligence(private val code: FakePhpCode) {
         }
     }
 
-    // Like phpactor: `name:` before each argument of a call of a known function or method (kind 2, padded right).
-    fun inlayHints(params: JsonElement?): JsonElement {
+    /**
+     * Like phpactor: `name:` before each argument of a call of a known function or method (kind 2, padded right);
+     * with [types], `: Greeter` after a variable assigned a `new Greeter`, and `class Greeter` after the brace that
+     * closes the class (kind 1).
+     */
+    fun inlayHints(params: JsonElement?, types: Boolean = false): JsonElement {
         val uri = (params as? JsonObject)?.get("textDocument")?.jsonObject?.get("uri")?.jsonPrimitive?.contentOrNull
         val lines = uri?.let { code.files[it] } ?: return JsonNull
         return buildJsonArray {
+            if (types) typeHints(uri, lines).forEach(::add)
             lines.forEachIndexed { index, line ->
                 CALL.findAll(line).forEach { call ->
                     val name = call.groupValues[1]
@@ -201,6 +211,34 @@ internal class FakeIntelligence(private val code: FakePhpCode) {
             }
         }
     }
+
+    // phpactor's type hints: after each variable assigned a new object, and after the brace closing each class.
+    private fun typeHints(uri: String, lines: List<String>): List<JsonObject> {
+        val variables =
+            lines.flatMapIndexed { index, line ->
+                CREATED.findAll(line).map { found ->
+                    val variable = found.groups[1]?.range ?: found.range
+                    typeHint(index, variable.last + 1, ": ${found.groupValues[2]}", padded = false)
+                }.toList()
+            }
+        val classes =
+            code.declarations.filter { it.uri == uri && it.kind == CLASS_KIND }.mapNotNull { declaration ->
+                val closing = lines.getOrNull(declaration.endLine)?.lastIndexOf('}') ?: -1
+                closing.takeIf { it >= 0 }?.let { typeHint(declaration.endLine, it + 1, "class ${declaration.name}", padded = true) }
+            }
+        return variables + classes
+    }
+
+    private fun typeHint(line: Int, column: Int, label: String, padded: Boolean): JsonObject =
+        buildJsonObject {
+            putJsonObject("position") {
+                put("line", line)
+                put("character", column)
+            }
+            put("label", label)
+            put("kind", TYPE_HINT)
+            if (padded) put("paddingLeft", true)
+        }
 
     // The names of the parameters of a declaration, without their `$`.
     private fun parametersOf(declaration: FakeDeclaration): List<String> {
