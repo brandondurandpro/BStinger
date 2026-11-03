@@ -136,6 +136,7 @@ private fun gitHandlers(git: GitClient): Map<Method, Handler> =
         },
         Method.GitPull to { JsonPrimitive(git.pull(root())) },
         Method.GitPush to { JsonPrimitive(git.push(root())) },
+        Method.GitFetch to { nothing { git.fetch(root()) } },
         Method.GitPushBranch to { JsonPrimitive(git.pushBranch(root(), params.string(BRANCH))) },
         Method.GitPullBranch to { JsonPrimitive(git.pullBranch(root(), params.string(BRANCH))) },
         Method.GitWorktree to { JsonPrimitive(git.worktree(root(), params.string("branch"))) },
