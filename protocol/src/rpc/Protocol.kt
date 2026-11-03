@@ -346,6 +346,9 @@ enum class Method(
     /** Pushes the current branch. */
     GitPush("git/push", mutating = true),
 
+    /** Fetches every remote; running it twice is harmless, so a retry needs no deduplication. */
+    GitFetch("git/fetch"),
+
     /** Pushes a local branch, current or not. */
     GitPushBranch("git/pushBranch", mutating = true),
 

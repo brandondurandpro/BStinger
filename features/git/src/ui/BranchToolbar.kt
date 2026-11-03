@@ -1,5 +1,7 @@
 package org.example.kotlineditor.ui
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.TooltipArea
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,6 +25,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -33,8 +36,8 @@ import org.example.kotlineditor.state.BranchSync
 import org.example.kotlineditor.state.GitHost
 import org.example.kotlineditor.state.ToolWindow
 
-// The branch widget of the toolbar: the current branch (opens the branch picker), the pinned branches and their
-// menu (checkout, pull, push, changes), and the result of the last pull or push.
+// The branch widget of the toolbar: the current branch (opens the branch picker), its Pull button, the pinned
+// branches and their menu (checkout, pull, push, changes), and the result of the last pull or push.
 
 @Composable
 fun BranchWidget(project: GitHost, modifier: Modifier = Modifier) {
@@ -67,6 +70,7 @@ fun BranchWidget(project: GitHost, modifier: Modifier = Modifier) {
             current?.let { BranchSyncBadge(it, compact = true, modifier = Modifier.padding(start = 6.dp)) }
             Chevron(expanded = false, Modifier.padding(start = 2.dp))
         }
+        current?.let { QuickPullButton(project, it) }
         // Lazy: "Select all" then "Pin" can pin thousands of branches, and only the visible chips are composed.
         LazyRow(
             Modifier.weight(1f, fill = false),
@@ -78,6 +82,43 @@ fun BranchWidget(project: GitHost, modifier: Modifier = Modifier) {
         project.git.branchSync?.let { BranchSyncStatus(project, it) }
     }
 }
+
+// Pulls the current branch in one click, fast-forward only: a branch that diverged from its remote is refused with
+// Git's reason, never merged behind the user's back. Highlighted when the last fetch found commits to pull.
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun QuickPullButton(project: GitHost, current: GitBranchInfo) {
+    val enabled = !project.git.busy && current.hasUpstream
+    val behind = current.behind > 0
+    val color =
+        when {
+            !enabled -> IdeColors.TextSecondary.copy(alpha = DISABLED_ALPHA)
+            behind -> IdeColors.GitBehind
+            else -> IdeColors.TextSecondary
+        }
+    val tooltip =
+        when {
+            !current.hasUpstream -> "${current.name} tracks no remote branch"
+            behind -> "Pull ${current.behind} commits into ${current.name} (fast-forward)"
+            else -> "Pull ${current.name} (fast-forward)"
+        }
+    TooltipArea(tooltip = { Tooltip(tooltip) }) {
+        Row(
+            Modifier
+                .height(22.dp)
+                .clip(RoundedCornerShape(5.dp))
+                .clickable(enabled = enabled) { project.git.syncBranch(current.name, BranchSync.Action.Pull) }
+                .testTag(GitTags.QUICK_PULL)
+                .padding(start = 2.dp, end = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ArrowIcon(up = false, color = color)
+            Label("Pull", color = color, fontSize = 11.sp)
+        }
+    }
+}
+
+private const val DISABLED_ALPHA = 0.5f
 
 // Result of the last pull or push of a chip: kept until dismissed or replaced, so an error can be read.
 @Composable

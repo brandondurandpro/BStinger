@@ -29,6 +29,9 @@ object PreferenceKeys {
     const val INLAY_HINTS = "editor.inlayHints"
     const val LAYOUT_PREFIX = "layout."
 
+    /** Branches pinned in the toolbar, per project: the key ends with the project's path (`GitState`). */
+    const val PINNED_BRANCHES_PREFIX = "git.pinnedBranches."
+
     /** Whether the user agreed to share anonymous performance measures; absent until asked, which means no. */
     const val TELEMETRY_ENABLED = "telemetry.enabled"
 

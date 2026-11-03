@@ -155,6 +155,11 @@ class CliGitClient :
     override suspend fun push(root: String): String =
         withContext(Dispatchers.IO) { runGit(root, NETWORK_TIMEOUT_SECONDS, "push") }
 
+    // `--prune` drops the remote-tracking branches deleted on the remote: their local branches then show "gone".
+    override suspend fun fetch(root: String) {
+        withContext(Dispatchers.IO) { runGit(root, NETWORK_TIMEOUT_SECONDS, "fetch", "--all", "--prune", QUIET) }
+    }
+
     // `--porcelain` would hide the summary the IDE shows; Git prints it on stderr, so the output is often empty.
     override suspend fun pushBranch(root: String, branch: String): String =
         withContext(Dispatchers.IO) {

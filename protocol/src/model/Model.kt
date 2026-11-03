@@ -376,6 +376,12 @@ interface GitClient : WorktreeClient {
     suspend fun push(root: String): String
 
     /**
+     * Fetches every remote, dropping the remote-tracking branches deleted there, so that [branchDetails] counts the
+     * commits to pull against what the remotes have now. Changes no local branch and no file.
+     */
+    suspend fun fetch(root: String)
+
+    /**
      * Pushes [branch] to the remote branch it tracks, or to a new branch of the same name on `origin` (which it then
      * tracks) when it tracks none. Works for any local branch, without checking it out; returns what Git printed.
      */
@@ -433,6 +439,8 @@ interface GitClient : WorktreeClient {
         override suspend fun pull(root: String): String = ""
 
         override suspend fun push(root: String): String = ""
+
+        override suspend fun fetch(root: String) = Unit
 
         override suspend fun pushBranch(root: String, branch: String): String = ""
 

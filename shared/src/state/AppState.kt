@@ -579,7 +579,8 @@ class AppState(
         val project = (screen as? Screen.Project)?.project ?: return app
         val autoSelect = PreferenceKeys.AUTO_SELECT_OPENED_FILE to project.autoSelectOpenedFile.toString()
         val inlayHints = PreferenceKeys.INLAY_HINTS to project.inlayHintsMode.name
-        return app + project.toolWindows.toPreferences() + autoSelect + inlayHints
+        val pins = project.git.pinnedBranchesPreference()
+        return app + project.toolWindows.toPreferences() + autoSelect + inlayHints + pins
     }
 
     private fun remotePreferences(): Map<String, String> =
@@ -665,6 +666,8 @@ class AppState(
         val project =
             ProjectState(root, services, scope, preferences, grammars = grammars, languageServers = languageServers)
         runCatching { services.sessions.load(root.path) }.getOrNull()?.let(project::restoreSession)
+        // The worktrees of agent mode share this repository: only the opened project fetches its remotes.
+        project.git.startAutoFetch()
         screen = Screen.Project(project)
     }
 
