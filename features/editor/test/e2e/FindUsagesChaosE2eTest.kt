@@ -14,6 +14,7 @@ import org.example.kotlineditor.ui.EditorTags
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.time.Duration.Companion.minutes
 
 /**
  * Find usages while the network or the IDE server fails, with a language server that indexes the project for a while
@@ -78,7 +79,8 @@ class FindUsagesChaosE2eTest {
 
     @Test
     fun `a restart of the IDE server while the usages wait for the index lists them once it indexed again`() =
-        runComposeUiTest {
+        // Two indexings and a restart: more than the default minute on a slow runner.
+        runComposeUiTest(testTimeout = RESTART_TEST_TIMEOUT) {
             val app = open()
             findUsagesOfGreet()
             awaitCondition(SERVER_START_MS) { notice() == INDEXING }
@@ -105,6 +107,7 @@ class FindUsagesChaosE2eTest {
         }
 
     private companion object {
+        val RESTART_TEST_TIMEOUT = 3.minutes
         const val INDEXING_SECONDS = 4
         const val SLOW_LINK_MS = 400L
         const val INDEXING = "Indexing the project… the results will show once it is done"
