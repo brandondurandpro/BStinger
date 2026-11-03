@@ -32,6 +32,8 @@ class MirroredDocument internal constructor(
     /** `file:` URI given to the language servers. */
     val uri: String = Paths.get(path).toUri().toString()
 
+    internal val normalizedPath = Paths.get(path).toAbsolutePath().normalize()
+
     internal val lines = ArrayList<String>()
     private val clientVersions = MutableStateFlow(ClientVersion("", 0))
 
@@ -176,6 +178,22 @@ class OpenDocuments {
                 .forEach { close(session, it, onClosed) }
         }
     }
+
+    /** The document whose URI is [uri], null when not open. */
+    fun byUri(uri: String): MirroredDocument? {
+        // Servers may encode a URI otherwise (`%2A` for `*`): compared as paths when the text differs.
+        val path = runCatching { Paths.get(java.net.URI(uri)).toAbsolutePath().normalize() }.getOrNull()
+        return synchronized(lock) {
+            documents.values.firstOrNull { it.uri == uri } ?: documents.values.firstOrNull { it.normalizedPath == path }
+        }
+    }
+
+    /** Every open document. */
+    fun all(): List<MirroredDocument> = synchronized(lock) { documents.values.toList() }
+
+    /** The documents [session] has open. */
+    fun openedBy(session: String): List<MirroredDocument> =
+        synchronized(lock) { documents.values.filter { session in it.openers }.sortedBy { it.path } }
 
     /** The document at [path], null when not open. */
     fun get(path: String): MirroredDocument? = synchronized(lock) { documents[path] }

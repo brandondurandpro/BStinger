@@ -30,12 +30,17 @@ import org.example.kotlineditor.rpc.RpcClient
 import org.example.kotlineditor.rpc.appServices
 import org.example.kotlineditor.server.EditorServer
 import org.example.kotlineditor.server.LocalServices
+import org.example.kotlineditor.server.ServerTelemetry
 import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.InMemoryPreferenceStore
 import org.example.kotlineditor.state.PreferenceStore
 import org.example.kotlineditor.state.ProjectState
 import org.example.kotlineditor.state.Screen
 import org.example.kotlineditor.syntax.treesitter.GrammarStore
+import org.example.kotlineditor.telemetry.ClientTelemetry
+import org.example.kotlineditor.telemetry.InMemoryHook
+import org.example.kotlineditor.telemetry.Telemetry
+import org.example.kotlineditor.telemetry.TelemetryHook
 import org.example.kotlineditor.testkit.ChaosProxy
 import org.example.kotlineditor.ui.AppTags
 import org.example.kotlineditor.ui.EditorTags
@@ -116,12 +121,18 @@ class SampleProject(val root: Path = Files.createTempDirectory("kotlin-editor-e2
  * The server process of an e2e app, which a chaos test can stop and start again on the same port and data, as when
  * it crashes or is redeployed: its sessions (shells, cached answers) are lost, the files and stores are not.
  */
-class ServerProcess(private val data: java.io.File, private val languageServers: LanguageServerSettings? = null) :
-    AutoCloseable {
-    var server: EditorServer = EditorServer(services()).start()
+class ServerProcess(
+    private val data: java.io.File,
+    private val languageServers: LanguageServerSettings? = null,
+    // What each server measures; never exported to a real collector by the tests.
+    private val telemetryHook: TelemetryHook = InMemoryHook(),
+) : AutoCloseable {
+    var server: EditorServer = EditorServer(services(), telemetry = telemetry()).start()
         private set
     val port: Int = server.port
     private var running = true
+
+    private fun telemetry() = ServerTelemetry(forbidden = false, hookOf = { telemetryHook })
 
     private fun services() =
         LocalServices(data, languageServerSettings = languageServers ?: LanguageServerSettings(data.toPath()))
@@ -135,7 +146,7 @@ class ServerProcess(private val data: java.io.File, private val languageServers:
     /** Starts a new server on the same port and data, presenting [token] (the same one by default). */
     fun start(token: String = server.token) {
         check(!running) { "The server is already running" }
-        server = EditorServer(services(), token).start(port = port)
+        server = EditorServer(services(), token, telemetry = telemetry()).start(port = port)
         running = true
     }
 
@@ -158,6 +169,8 @@ class E2eApp(
     private val proxy: ChaosProxy?,
     /** What the UI sent to the shells of the terminal. */
     val terminalInput: TerminalInputRecorder,
+    /** What the UI and the server measured, for an app launched with a [TelemetryCapture]. */
+    val telemetry: TelemetryCapture?,
 ) {
     val server: EditorServer get() = process.server
 
@@ -181,10 +194,11 @@ fun ComposeUiTest.launchApp(
     chaos: Boolean = false,
     grammars: GrammarStore? = TestGrammars.shared,
     languageServers: LanguageServerSettings? = null,
+    telemetry: TelemetryCapture? = null,
 ): E2eApp {
     TextClipboard.useSystem = false
     val data = Files.createTempDirectory("kotlin-editor-server").toFile()
-    val process = ServerProcess(data, languageServers)
+    val process = ServerProcess(data, languageServers, telemetry?.serverHook ?: InMemoryHook())
     val token = process.server.token
     // Chaos tests go through a proxy that breaks the network, and notice a dead link within a second.
     val proxy = if (chaos) ChaosProxy(process.port) else null
@@ -211,15 +225,19 @@ fun ComposeUiTest.launchApp(
             remote.connection,
             remote.network,
             remote.languageServers,
+            remote.telemetry,
         )
     var created: AppState? = null
+    val measured = telemetry?.factory
     setContent {
         val scope = rememberCoroutineScope()
-        val state = remember { AppState(services, scope, preferences, grammars, remoteFactory = JvmRemoteFactory) }
+        val state =
+            remember { AppState(services, scope, preferences, grammars, services, JvmRemoteFactory, measured) }
         created = state
         DisposableEffect(Unit) {
             onDispose {
                 created?.dispose()
+                ClientTelemetry.switchTo(Telemetry.Disabled)
                 client.close()
                 proxy?.close()
                 process.close()
@@ -229,7 +247,7 @@ fun ComposeUiTest.launchApp(
     }
     waitForIdle()
     if (recent.isNotEmpty()) waitUntil(timeoutMillis = TIMEOUT) { created!!.recentProjects.size == recent.size }
-    return E2eApp(created!!, services.recentProjects, process, client, proxy, terminalInput)
+    return E2eApp(created!!, services.recentProjects, process, client, proxy, terminalInput, telemetry)
 }
 
 /** Opens the Open Project dialog from the welcome screen and waits for it to list a directory. */
@@ -291,9 +309,16 @@ fun ComposeUiTest.launchWithProject(
     chaos: Boolean = false,
     grammars: GrammarStore? = TestGrammars.shared,
     languageServers: LanguageServerSettings? = null,
+    telemetry: TelemetryCapture? = null,
 ): E2eApp {
     val app =
-        launchApp(preferences = preferences, chaos = chaos, grammars = grammars, languageServers = languageServers)
+        launchApp(
+            preferences = preferences,
+            chaos = chaos,
+            grammars = grammars,
+            languageServers = languageServers,
+            telemetry = telemetry,
+        )
     openProjectDirectoryFromWelcome(project.path)
     awaitTag(TreeTags.treeRow("src"))
     return app
@@ -310,8 +335,8 @@ fun ComposeUiTest.awaitTag(tag: String, timeout: Long = TIMEOUT, unmerged: Boole
 }
 
 @OptIn(ExperimentalTestApi::class)
-fun ComposeUiTest.awaitNoTag(tag: String, timeout: Long = TIMEOUT) {
-    waitUntil(timeoutMillis = timeout) { onAllNodes(hasTestTag(tag)).fetchSemanticsNodes().isEmpty() }
+fun ComposeUiTest.awaitNoTag(tag: String, timeout: Long = TIMEOUT, unmerged: Boolean = false) {
+    waitUntil(timeoutMillis = timeout) { onAllNodes(hasTestTag(tag), unmerged).fetchSemanticsNodes().isEmpty() }
 }
 
 @OptIn(ExperimentalTestApi::class)

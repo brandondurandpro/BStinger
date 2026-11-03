@@ -24,8 +24,10 @@ import org.example.kotlineditor.model.GitChangeKind
 import org.example.kotlineditor.model.GitLineChange
 import org.example.kotlineditor.state.Document
 import org.example.kotlineditor.state.EditorTab
+import org.example.kotlineditor.state.ScreenLine
 import org.example.kotlineditor.state.placeholder
-import org.example.kotlineditor.state.visualColumn
+import org.example.kotlineditor.state.screenLine
+import org.example.kotlineditor.state.visualColumnOf
 import kotlin.math.ceil
 import kotlin.math.roundToInt
 
@@ -58,6 +60,7 @@ internal fun EditorCanvas(
     highlights: SearchHighlights?,
     hints: CaretHints,
     caretOn: State<Boolean>,
+    insight: InsightMarks = InsightMarks.None,
 ) {
     val measurer = rememberTextMeasurer(cacheSize = 0)
     val cache =
@@ -68,7 +71,7 @@ internal fun EditorCanvas(
             Modifier
                 .fillMaxSize()
                 .graphicsLayer()
-                .drawBehind { drawRows(tab, document, metrics, highlights, hints, cache, marks) },
+                .drawBehind { drawRows(tab, document, metrics, highlights, hints, cache, marks, insight) },
         )
         Spacer(
             Modifier
@@ -76,7 +79,7 @@ internal fun EditorCanvas(
                 .graphicsLayer()
                 .drawBehind { if (caretOn.value) drawCaret(tab, document, metrics) },
         )
-        EditorLineSemantics(tab, document, metrics, marks)
+        EditorLineSemantics(tab, document, metrics, marks, insight)
     }
 }
 
@@ -88,6 +91,7 @@ private fun DrawScope.drawRows(
     hints: CaretHints,
     cache: LineRenderCache,
     marks: GutterMarks,
+    insight: InsightMarks,
 ) {
     val scroll = tab.verticalScroll
     val folding = document.folding
@@ -98,7 +102,7 @@ private fun DrawScope.drawRows(
     for (row in first until last) {
         val index = folding.lineAt(row)
         translate(top = (row - first) * lineHeight - scroll.rowOffsetPx) {
-            drawRow(index, document, metrics, highlights, hints, cache, marks, tab.horizontalScroll.offset)
+            drawRow(index, document, metrics, highlights, hints, cache, marks, insight, tab.horizontalScroll.offset)
         }
     }
 }
@@ -112,15 +116,23 @@ private fun DrawScope.drawRow(
     hints: CaretHints,
     cache: LineRenderCache,
     marks: GutterMarks,
+    insight: InsightMarks,
     horizontalOffset: Float,
 ) {
     val folding = document.folding
     val line = document.lines[index]
+    val screenLine = document.screenLine(index)
     val folded = folding.isFolded(index)
     val deletedAtEnd = index == document.lines.lastIndex && document.lineCount in marks.deleted
     val deleted = index in marks.deleted || deletedAtEnd
     val decorations =
-        decorations(document, index, line, highlights, hints, marks.changed[index], deleted, marks.blame?.get(index))
+        decorations(
+            document, index, line, highlights, hints, marks.changed[index], deleted,
+            marks.blame?.get(
+                index,
+            ),
+            insight.hasHighlights,
+        )
     val lineHeight = metrics.lineHeightPx
     if (decorations.isCaretLine && !decorations.hasSelection) {
         drawRect(IdeColors.CurrentLine, Offset.Zero, Size(size.width, lineHeight))
@@ -136,14 +148,33 @@ private fun DrawScope.drawRow(
             folded,
             if (folded) folding.placeholder(index, document.lines) else null,
             document.syntax?.highlights?.spansFor(index, line),
+            screenLine.inlays,
+            insight.semantic[index],
         )
     // Layout places the text area on a whole pixel: so does this, or glyphs would be antialiased differently.
     val textLeft = metrics.gutterPx.roundToInt().toFloat()
     clipRect(left = textLeft, top = 0f, right = size.width, bottom = lineHeight) {
         val origin = textLeft + TEXT_PADDING.toPx() - horizontalOffset
-        translate(left = origin) { drawDecorations(decorations, 0f, metrics.charWidth, lineHeight) }
+        translate(left = origin) {
+            drawSymbolHighlights(insight.highlights[index], screenLine, metrics.charWidth, lineHeight)
+            drawDecorations(decorations, 0f, metrics.charWidth, lineHeight)
+        }
         val textX = textLeft + TEXT_PADDING.roundToPx() - horizontalOffset.roundToInt()
         drawText(cache.line(source), topLeft = Offset(textX, 0f))
+        translate(left = origin) {
+            drawProblems(insight.problems[index], screenLine, metrics.charWidth, lineHeight)
+            drawLink(insight.link, index, screenLine, metrics.charWidth, lineHeight)
+        }
+        // Folded, the usage hint and the lenses go after the placeholder.
+        val shown = if (folded) ScreenLine(line + " " + source.placeholder.orEmpty(), screenLine.inlays) else screenLine
+        val hint = insight.hints[index]
+        hint?.let { drawUsageHint(cache.hint(it), textX + hintColumn(shown) * metrics.charWidth, lineHeight) }
+        insight.lenses[index]?.let { lenses ->
+            val columns = lensColumns(shown, hint, lenses)
+            lenses.forEachIndexed { at, lens ->
+                drawUsageHint(cache.hint(lens.title), textX + columns[at] * metrics.charWidth, lineHeight)
+            }
+        }
     }
 }
 
@@ -189,10 +220,14 @@ private fun DrawScope.drawCaret(tab: EditorTab, document: Document, metrics: Edi
     val scroll = tab.verticalScroll
     val y = (folding.rowOf(caret.line) - scroll.firstRow) * metrics.lineHeightPx - scroll.rowOffsetPx
     if (y + metrics.lineHeightPx < 0 || y > size.height) return
-    val column = visualColumn(document.lines[caret.line], caret.column)
+    val column = document.visualColumnOf(caret.line, caret.column)
     val textLeft = metrics.gutterPx.roundToInt().toFloat()
     val x = textLeft + TEXT_PADDING.toPx() - tab.horizontalScroll.offset + column * metrics.charWidth
     clipRect(left = textLeft) {
         drawRect(IdeColors.Caret, Offset(x, y), Size(CARET_WIDTH.toPx(), metrics.lineHeightPx))
     }
+}
+
+private fun DrawScope.drawUsageHint(layout: TextLayoutResult, x: Float, lineHeight: Float) {
+    drawText(layout, topLeft = Offset(x, (lineHeight - layout.size.height) / 2))
 }

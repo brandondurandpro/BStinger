@@ -29,6 +29,12 @@ import org.example.kotlineditor.state.TextPos
 import org.example.kotlineditor.state.TreeHost
 import org.example.kotlineditor.state.relativePath
 import org.example.kotlineditor.state.selectedText
+import org.example.kotlineditor.telemetry.Attribute
+import org.example.kotlineditor.telemetry.Attributes
+import org.example.kotlineditor.telemetry.ClientTelemetry
+import org.example.kotlineditor.telemetry.Operation
+import org.example.kotlineditor.telemetry.measureToFrame
+import org.example.kotlineditor.telemetry.sizeOf
 import java.io.IOException
 
 private const val DEBOUNCE_MS = 150L
@@ -51,7 +57,7 @@ fun FindInFilesPopup(project: TreeHost, onClose: () -> Unit) {
     LaunchedEffect(query, matchCase) {
         if (query.isNotEmpty()) delay(DEBOUNCE_MS) // restarted on every keystroke
         results = null
-        results = search(project, query, matchCase)
+        results = measuredSearch(project, query, matchCase)
         cursor.selected = 0
     }
     val list = results.orEmpty()
@@ -100,6 +106,17 @@ private suspend fun search(project: TreeHost, query: String, matchCase: Boolean)
     } catch (expected: IOException) {
         emptyList() // server unreachable: no results until it is back
     }
+
+// From the query to the frame that shows its results.
+private suspend fun measuredSearch(project: TreeHost, query: String, matchCase: Boolean): List<SearchHit> =
+    ClientTelemetry.measureToFrame(Operation.SearchFindInFiles, attributesOf = ::resultsOf) {
+        search(project, query, matchCase)
+    }
+
+private fun resultsOf(results: List<SearchHit>): Attributes {
+    val result = if (results.isEmpty()) "empty" else "found"
+    return sizeOf(results.size) + Attributes.of(Attribute.Result to result)
+}
 
 private fun status(results: List<SearchHit>?, query: String): String =
     when {

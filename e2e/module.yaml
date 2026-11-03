@@ -6,6 +6,8 @@ product:
 dependencies:
   - //shared: exported
   - //server: exported
+  # The real export of the measures, to a fake collector, for the telemetry chaos tests.
+  - //telemetry-otel: exported
   - //lsp: exported
   - //testkit: exported
   - $compose.uiTest: exported
@@ -14,6 +16,7 @@ dependencies:
   # Grammar jars served by the loopback Maven repository of TestGrammars.
   - $libs.tree.sitter.kotlin: exported
   - $libs.tree.sitter.json: exported
+  - $libs.tree.sitter.php: exported
   # A real SSH server for the remote development end-to-end tests; the client is the system OpenSSH.
   - $libs.sshd.core: exported
   - $libs.sshd.sftp: exported

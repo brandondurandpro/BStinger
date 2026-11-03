@@ -16,8 +16,13 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
 import org.example.kotlineditor.lsp.completion.CompletionAnswers
+import org.example.kotlineditor.lsp.completion.OfferedCompletions
 import org.example.kotlineditor.lsp.documents.MirroredDocument
 import org.example.kotlineditor.lsp.documents.OpenDocuments
+import org.example.kotlineditor.lsp.intelligence.CodeIntelligenceService
+import org.example.kotlineditor.lsp.intelligence.IntelligenceSettings
+import org.example.kotlineditor.lsp.intelligence.fileOperationParams
+import org.example.kotlineditor.lsp.intelligence.filesMatching
 import org.example.kotlineditor.lsp.jsonrpc.LspConnectionClosedException
 import org.example.kotlineditor.lsp.jsonrpc.LspResponseException
 import org.example.kotlineditor.lsp.memory.ProcessMemoryReader
@@ -26,19 +31,24 @@ import org.example.kotlineditor.lsp.provision.CandidateRegistry
 import org.example.kotlineditor.lsp.provision.CandidateStatus
 import org.example.kotlineditor.lsp.provision.LanguageServerChoiceStore
 import org.example.kotlineditor.lsp.provision.ToolDownloader
+import org.example.kotlineditor.lsp.supervisor.LanguageServerHooks
 import org.example.kotlineditor.lsp.supervisor.LanguageServerSpec
 import org.example.kotlineditor.lsp.supervisor.LanguageServerSupervisor
+import org.example.kotlineditor.lsp.supervisor.ManagedServer
 import org.example.kotlineditor.lsp.supervisor.OrphanReaper
 import org.example.kotlineditor.lsp.supervisor.ServerTarget
 import org.example.kotlineditor.lsp.supervisor.SupervisorTimings
 import org.example.kotlineditor.model.CompletionResult
+import org.example.kotlineditor.model.FileOperation
 import org.example.kotlineditor.model.LanguageServerCandidateInfo
 import org.example.kotlineditor.model.LanguageServerChoice
 import org.example.kotlineditor.model.LanguageServerInfo
 import org.example.kotlineditor.model.LanguageServersStatus
 import org.example.kotlineditor.model.Languages
+import org.example.kotlineditor.model.OperatedFile
 import org.example.kotlineditor.model.ServerMemory
 import org.example.kotlineditor.model.TextChange
+import org.example.kotlineditor.telemetry.Telemetry
 import java.io.Closeable
 import java.nio.file.Files
 import java.nio.file.Path
@@ -62,6 +72,8 @@ class LanguageServerSettings(
     val sampleIntervalMs: Long = 2_000,
     /** How long a completion waits for the edits it follows, then for the language server's answer. */
     val completionTimeoutMs: Long = 10_000,
+    /** Delays and limits of hover, navigation, usages, diagnostics... */
+    val intelligence: IntelligenceSettings = IntelligenceSettings(),
 )
 
 /**
@@ -70,7 +82,11 @@ class LanguageServerSettings(
  * server for a language.
  */
 @Suppress("TooManyFunctions")
-class LanguageServerService(private val settings: LanguageServerSettings) : Closeable {
+class LanguageServerService(
+    private val settings: LanguageServerSettings,
+    /** What measures the starts of the servers, when the user agreed. */
+    private val telemetry: () -> Telemetry = { Telemetry.Disabled },
+) : Closeable {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val reader = ProcessMemoryReader.forCurrentOs()
     private val sampler = ProcessMemorySampler(reader, System::currentTimeMillis, scope, settings.sampleIntervalMs)
@@ -81,6 +97,11 @@ class LanguageServerService(private val settings: LanguageServerSettings) : Clos
     private val lastFiles = HashMap<String, Pair<String, List<String>>>()
     private val specs = ConcurrentHashMap<String, LanguageServerSpec>()
     private val documents = OpenDocuments()
+    private val completions = OfferedCompletions(settings.completionTimeoutMs)
+
+    /** Hover, navigation, usages, diagnostics, rename, formatting and code actions of the open documents. */
+    val intelligence: CodeIntelligenceService =
+        CodeIntelligenceService(documents, ::serversOf, settings.intelligence, ::serversOfSession, scope)
     private val supervisor =
         LanguageServerSupervisor(
             scope,
@@ -89,6 +110,14 @@ class LanguageServerService(private val settings: LanguageServerSettings) : Clos
             settings.timings,
             onChange = { changes.trySend(Unit) },
             documents = documents,
+            hooks =
+            LanguageServerHooks(
+                onDiagnostics = intelligence::published,
+                onApplyEdit = intelligence::applyEdit,
+                onRestarted = intelligence::restarted,
+                onDiagnosticsRefresh = intelligence::diagnosticsRefresh,
+                telemetry = telemetry,
+            ),
         )
 
     // When the last status was published, in milliseconds since the epoch.
@@ -119,7 +148,9 @@ class LanguageServerService(private val settings: LanguageServerSettings) : Clos
     /** [session] ended. */
     fun release(session: String) {
         synchronized(lastFiles) { lastFiles.remove(session) }
-        documents.release(session) { document -> serversOf(document).forEach { it.didClose(document) } }
+        documents.release(session) { document -> closed(document) }
+        completions.release(session)
+        intelligence.released(session)
         supervisor.release(session)
     }
 
@@ -135,6 +166,7 @@ class LanguageServerService(private val settings: LanguageServerSettings) : Clos
                 server.didOpen(document)
             }
         }
+        documents.get(path)?.let(intelligence::changed)
     }
 
     /** Applies the edits of [session] to [path]; throws [org.example.kotlineditor.lsp.documents.OutOfSyncException]. */
@@ -143,11 +175,18 @@ class LanguageServerService(private val settings: LanguageServerSettings) : Clos
         documents.change(session, path, version, changes) { document ->
             serversOf(document).forEach { it.didChange(document, changes) }
         }
+        // Outside the lock of the documents.
+        documents.get(path)?.let(intelligence::changed)
     }
 
     /** [session] closed [path]. */
     fun closeDocument(session: String, path: String) {
-        documents.close(session, path) { document -> serversOf(document).forEach { it.didClose(document) } }
+        documents.close(session, path, ::closed)
+    }
+
+    private fun closed(document: MirroredDocument) {
+        serversOf(document).forEach { it.didClose(document) }
+        intelligence.closed(document)
     }
 
     /**
@@ -167,13 +206,17 @@ class LanguageServerService(private val settings: LanguageServerSettings) : Clos
                     matchingVersion != null
                 }
         return if (document != null && hasValidClientVersion) {
-            ask(document, line, column)
+            ask(session, document, line, column)
         } else {
             CompletionResult.NotReady
         }
     }
 
-    private suspend fun ask(document: MirroredDocument, line: Int, column: Int): CompletionResult {
+    /** The documentation of item [index] of [session]'s completion answer [token]; see [OfferedCompletions]. */
+    suspend fun resolveCompletion(session: String, token: String, index: Int): String? =
+        completions.resolve(session, token, index)
+
+    private suspend fun ask(session: String, document: MirroredDocument, line: Int, column: Int): CompletionResult {
         val text = documents.locked { document.line(line) }
         val params =
             buildJsonObject {
@@ -185,11 +228,16 @@ class LanguageServerService(private val settings: LanguageServerSettings) : Clos
             }
         return try {
             // While another server takes over the language, the old one, stopping, is not ready any more.
-            val answer =
+            val answered =
                 withTimeoutOrNull(settings.completionTimeoutMs) {
-                    serversOf(document).firstNotNullOfOrNull { it.request("textDocument/completion", params) }
+                    serversOf(document).firstNotNullOfOrNull { server ->
+                        server.request("textDocument/completion", params)?.let { server to it }
+                    }
                 }
-            answer?.let { CompletionAnswers.translate(it, text, column) } ?: CompletionResult.NotReady
+            answered?.let { (server, answer) ->
+                val (result, items) = CompletionAnswers.translateWithItems(answer, text, column)
+                result.copy(token = completions.offer(session, server, items))
+            } ?: CompletionResult.NotReady
         } catch (_: LspConnectionClosedException) {
             CompletionResult.NotReady
         } catch (_: LspResponseException) {
@@ -198,7 +246,43 @@ class LanguageServerService(private val settings: LanguageServerSettings) : Clos
         }
     }
 
-    private fun serversOf(document: MirroredDocument) = supervisor.serving(document.language, document.root)
+    private fun serversOf(document: MirroredDocument): List<ManagedServer> =
+        supervisor.serving(document.language, document.root)
+
+    /**
+     * Files changed on disk through the IDE ([DiskChange] by absolute path): the servers whose root holds them are
+     * told (`workspace/didChangeWatchedFiles`), and an open document that was written is saved (`didSave`).
+     */
+    fun diskChanged(changes: List<Pair<String, DiskChange>>) {
+        // One notification per server, with all its files.
+        val byServer = LinkedHashMap<ManagedServer, MutableList<Pair<String, Int>>>()
+        for ((path, change) in changes) {
+            val uri = Paths.get(path).toUri().toString()
+            supervisor.servingPath(path).forEach { byServer.getOrPut(it) { ArrayList() } += uri to change.type }
+        }
+        byServer.forEach { (server, files) -> server.filesChanged(files) }
+        val written = changes.filter { it.second == DiskChange.Changed }.mapNotNull { documents.get(it.first) }
+        written.forEach { saved -> documents.locked { serversOf(saved).forEach { it.didSave(saved) } } }
+    }
+
+    /**
+     * [files] were created, renamed or deleted through the IDE ([operation]): the servers whose root holds them and
+     * whose `fileOperations.did<Operation>` filters match are told (`workspace/didRenameFiles`...).
+     */
+    fun filesOperated(operation: FileOperation, files: List<OperatedFile>) {
+        val name = "did${operation.lspName}"
+        val servers = files.flatMap { supervisor.servingPath(it.path) }.distinct()
+        for (server in servers) {
+            val concerned = filesMatching(server.capability("workspace"), name, files)
+            if (concerned.isNotEmpty()) server.filesOperated(operation, fileOperationParams(operation, concerned))
+        }
+    }
+
+    // The servers of the project [session] has open.
+    private fun serversOfSession(session: String): List<ManagedServer> {
+        val project = synchronized(lastFiles) { lastFiles[session]?.first } ?: return emptyList()
+        return supervisor.servingInside(project)
+    }
 
     /** See [LanguageServerSupervisor.restart]. */
     fun restart(id: String, generation: Long) = supervisor.restart(id, generation)
@@ -365,3 +449,20 @@ class LanguageServerService(private val settings: LanguageServerSettings) : Clos
         const val MIN_MOVE_RATIO = 0.02
     }
 }
+
+/** What happened to a file on disk, as the language servers are told (LSP FileChangeType). */
+enum class DiskChange(
+    /** The FileChangeType value. */
+    val type: Int,
+) {
+    /** It was created. */
+    Created(1),
+
+    /** Its content changed (written, saved). */
+    Changed(2),
+
+    /** It was deleted. */
+    Deleted(DELETED_TYPE),
+}
+
+private const val DELETED_TYPE = 3

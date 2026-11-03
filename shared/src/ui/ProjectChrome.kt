@@ -181,6 +181,20 @@ private fun ProjectMenuItems(app: AppState, close: () -> Unit) {
         },
         modifier = Modifier.testTag(AppTags.PROJECT_AGENT_MODE),
     )
+    // The telemetry consent, also asked by the welcome screen: takes effect at once.
+    if (!app.telemetry.forbidden) {
+        DropdownMenuItem(
+            text = {
+                val check = if (app.telemetry.enabled) "✓  " else "     "
+                Text("${check}Share Performance Measures", fontSize = 13.sp)
+            },
+            onClick = {
+                close()
+                app.telemetry.choose(!app.telemetry.enabled)
+            },
+            modifier = Modifier.testTag(AppTags.PROJECT_TELEMETRY),
+        )
+    }
     val others = app.otherProjects
     if (others.isNotEmpty()) {
         HorizontalDivider(color = IdeColors.Border)

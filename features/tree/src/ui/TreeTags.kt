@@ -25,6 +25,8 @@ object TreeTags {
     const val GOTO_SYMBOL_INPUT = "gotoSymbol.input"
     const val STRUCTURE = "structure"
     const val STRUCTURE_INPUT = "structure.input"
+    const val STRUCTURE_LOADING = "structure.loading"
+    const val GOTO_SYMBOL_SEARCHING = "gotoSymbol.searching"
 
     fun treeRow(relativePath: String) = "tree:$relativePath"
 

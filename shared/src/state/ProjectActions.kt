@@ -9,9 +9,16 @@ import org.example.kotlineditor.model.DiffKind
 import org.example.kotlineditor.model.DiffLine
 import org.example.kotlineditor.model.FileContent
 import org.example.kotlineditor.model.FileEntry
+import org.example.kotlineditor.model.FileOperation
+import org.example.kotlineditor.model.OperatedFile
 import org.example.kotlineditor.model.pathName
 import org.example.kotlineditor.syntax.Structure
+import org.example.kotlineditor.telemetry.ClientTelemetry
+import org.example.kotlineditor.telemetry.Operation
+import org.example.kotlineditor.telemetry.measureToFrame
 import java.io.IOException
+import java.nio.file.FileAlreadyExistsException
+import java.nio.file.NoSuchFileException
 
 internal const val MAX_BACK_STEPS = 100
 
@@ -53,18 +60,39 @@ fun ProjectState.navigateBack() {
 }
 
 /**
- * Ctrl+B: jumps to the declaration of the identifier at the caret, looking in the current file first,
- * then in the whole project (regex-based outline, no compiler).
+ * Ctrl+B and Ctrl+click: jumps to the declaration of the identifier at [at] (the caret by default). The language
+ * server of the file finds it when there is one (its usages when already on it); otherwise it is searched by name.
  */
 fun ProjectState.gotoDeclaration(at: TextPos? = null) {
-    val tab = editor.activeTab ?: return
-    val document = tab.document ?: return
+    val tab = editor.activeTab
+    val document = tab?.document ?: return
     val pos = at ?: document.caret
-    document.identifierAt(pos)?.let { name ->
-        scope.launch {
-            declarationOf(name, tab.entry, document, pos)?.let { (entry, target) -> navigate(entry, target) }
-        }
+    val insightful = hasInsight(tab)
+    // A link of the language server (a required file, an address) is followed rather than the word in it.
+    val followed = insightful && insight.followLink(document, pos)
+    when {
+        followed -> Unit
+        insightful -> insight.gotoDeclaration(tab.entry.path, document, pos)
+        else -> declarationByName(pos)
     }
+}
+
+/**
+ * The declaration of the identifier at [pos] by name, looking in the current file first, then in the whole project
+ * (regex-based outline, no compiler).
+ */
+fun ProjectState.declarationByName(pos: TextPos) {
+    scope.launch { goToDeclarationByName(pos) }
+}
+
+/** Goes to the declaration named like the word at [pos], found in the file or the project; false if there is none. */
+internal suspend fun ProjectState.goToDeclarationByName(pos: TextPos): Boolean {
+    val tab = editor.activeTab
+    val document = tab?.document
+    val name = document?.identifierAt(pos)
+    val found = name?.let { declarationOf(it, tab.entry, document, pos) }
+    found?.let { (entry, target) -> navigate(entry, target) }
+    return found != null
 }
 
 private suspend fun ProjectState.declarationOf(
@@ -91,6 +119,12 @@ private suspend fun ProjectState.declarationOf(
 
 fun ProjectState.createFile(directory: FileEntry, name: String, isDirectory: Boolean) =
     fileOperation {
+        val path = directory.path.trimEnd('/', '\\') + separatorOf(directory.path) + name
+        // A file that exists already is not created: nothing to adapt.
+        // Without a running language server nothing is asked: the creation is the only request.
+        if (adaptsCode() && services.fileSystem.fileAt(path) == null) {
+            adaptCodeTo(FileOperation.Create, OperatedFile(path, directory = isDirectory))
+        }
         val fs = services.fileSystem
         val created = if (isDirectory) fs.createDirectory(directory, name) else fs.createFile(directory, name)
         tree.expand(directory)
@@ -102,6 +136,7 @@ fun ProjectState.createFile(directory: FileEntry, name: String, isDirectory: Boo
 fun ProjectState.rename(entry: FileEntry, newName: String) =
     fileOperation {
         val reopen = editor.allTabs.any { it.entry.path == entry.path && !it.isDiff }
+        adaptCodeToRename(entry, newName)
         editor.flush()
         val renamed = services.fileSystem.rename(entry, newName)
         editor.discard(entry.path)
@@ -112,6 +147,7 @@ fun ProjectState.rename(entry: FileEntry, newName: String) =
 
 fun ProjectState.delete(entry: FileEntry) =
     fileOperation {
+        if (adaptsCode()) adaptCodeTo(FileOperation.Delete, OperatedFile(entry.path, directory = entry.isDirectory))
         services.fileSystem.delete(entry)
         editor.discard(entry.path)
         tree.parentOf(entry)?.let {
@@ -120,13 +156,48 @@ fun ProjectState.delete(entry: FileEntry) =
         }
     }
 
+// The code adapted to the rename of [entry] to [newName], once the rename is known to be possible: the code must not
+// change for a rename that then fails (a file of that name exists already, the file is gone).
+private suspend fun ProjectState.adaptCodeToRename(entry: FileEntry, newName: String) {
+    val validName = newName.isNotBlank() && '/' !in newName && '\\' !in newName
+    // Only the case changes: the same file on some disks, and no new name for the code.
+    val sameName = newName.equals(entry.name, ignoreCase = true)
+    // Without a running language server nothing is asked: the rename is the only request.
+    if (!adaptsCode()) return
+    if (!validName || sameName) return
+    val newPath = entry.path.dropLast(entry.name.length) + newName
+    val fs = services.fileSystem
+    // Deleted by another program meanwhile: the rename fails, the code stays.
+    if (fs.fileAt(entry.path) == null) throw NoSuchFileException(entry.path)
+    if (fs.fileAt(newPath) != null) throw FileAlreadyExistsException(newPath)
+    adaptCodeTo(FileOperation.Rename, OperatedFile(entry.path, newPath, entry.isDirectory))
+}
+
+// The edits the language servers make before [operation] of [file] (`workspace/willRenameFiles`: the class renamed
+// with its file), applied. The operation runs anyway when no server is ready or answers.
+private suspend fun ProjectState.adaptCodeTo(operation: FileOperation, file: OperatedFile) {
+    val servers = languageServers ?: return
+    val edit = servers.intelligence.willChangeFiles(operation, listOf(file))
+    // A file the edit could not change does not stop the operation: retrying it would apply the others twice.
+    if (edit.changes.isNotEmpty()) applyEdit(edit)
+}
+
+// Whether a language server runs to adapt the code to a file operation.
+private fun ProjectState.adaptsCode(): Boolean = languageServers?.anyRunning == true
+
+// The separator of the paths of the server machine, as [path] uses it.
+private fun separatorOf(path: String): String = if ('\\' in path && '/' !in path) "\\" else "/"
+
 // Runs a file operation; failures are shown in the open dialog, success closes it.
 private fun ProjectState.fileOperation(block: suspend () -> Unit) {
     scope.launch {
         try {
-            block()
-            fileDialog = null
-            fileIndex.invalidate()
+            // From the confirmation to the frame that shows the tree changed; a failure is shown, and measured.
+            ClientTelemetry.measureToFrame(Operation.TreeFileOperation) {
+                block()
+                fileDialog = null
+                fileIndex.invalidate()
+            }
         } catch (e: IOException) {
             fileDialog = fileDialog?.withError(e.message ?: e::class.simpleName.orEmpty())
         }

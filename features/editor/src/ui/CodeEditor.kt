@@ -4,7 +4,6 @@ import androidx.compose.animation.core.withInfiniteAnimationFrameMillis
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -31,22 +30,23 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
-import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.isCtrlPressed
 import androidx.compose.ui.input.pointer.isMetaPressed
 import androidx.compose.ui.input.pointer.onPointerEvent
-import androidx.compose.ui.input.pointer.pointerHoverIcon
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.IntSize
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import org.example.kotlineditor.model.BlameLine
 import org.example.kotlineditor.model.GitChangeKind
+import org.example.kotlineditor.state.CodeInsightState
 import org.example.kotlineditor.state.CompletionState
 import org.example.kotlineditor.state.DEFAULT_EDITOR_FONT_SIZE
 import org.example.kotlineditor.state.Document
@@ -54,11 +54,14 @@ import org.example.kotlineditor.state.EditorTab
 import org.example.kotlineditor.state.HorizontalScroll
 import org.example.kotlineditor.state.TextPos
 import org.example.kotlineditor.state.VerticalScroll
+import org.example.kotlineditor.state.extendSelection
 import org.example.kotlineditor.state.identifierAt
 import org.example.kotlineditor.state.matchingBracket
 import org.example.kotlineditor.state.reveal
 import org.example.kotlineditor.state.visualColumn
+import org.example.kotlineditor.state.visualColumnOf
 import org.example.kotlineditor.state.wordOccurrences
+import kotlin.math.roundToInt
 
 private const val CARET_BLINK_MILLIS = 530L
 private const val CARET_MARGIN_COLUMNS = 4
@@ -90,6 +93,10 @@ fun CodeEditor(
     // Code completion, and the path of the file it asks the language server about; null when the file has none.
     completion: CompletionState? = null,
     path: String? = null,
+    // Hover, navigation, problems, usages: null when the file has no language server.
+    insight: CodeInsightState? = null,
+    // A click on a blame annotation: the commit that last changed the line.
+    onBlameClick: (BlameLine) -> Unit = {},
 ) {
     var viewportWidth by remember { mutableFloatStateOf(0f) }
     var viewportHeight by remember { mutableFloatStateOf(0f) }
@@ -126,7 +133,7 @@ fun CodeEditor(
             .onSizeChanged(onSize)
             .focusRequester(focusRequester)
             .onFocusChanged { focused = it.isFocused }
-            .onKeyEvent(editorKeys(document, completion, path) { viewport.visibleRows(metrics.lineHeightPx) })
+            .onKeyEvent(editorKeys(document, completion, path, insight) { viewport.visibleRows(metrics.lineHeightPx) })
             .focusable()
             .scrollable(tab.horizontalScroll.scrollableState, Orientation.Horizontal)
             // reverseDirection: the wheel and drags give negative deltas going down, as for any vertical list.
@@ -135,35 +142,45 @@ fun CodeEditor(
     ) {
         // Text cursor and mouse selection only over the text: the scrollbars are siblings drawn on top, so pressing
         // them never reaches this box (siblings do not share pointer events) and never selects text.
-        Box(
-            Modifier
-                .fillMaxSize()
-                .testTag(EditorTags.EDITOR_TEXT)
-                .pointerHoverIcon(PointerIcon.Text)
-                .pointerInput(document) {
-                    val target =
-                        GestureTarget(document, tab, viewport, metrics, clicks, focusRequester, onCtrlClick) { delta ->
-                            scope.launch { viewport.scrollBy(delta) }
-                        }
-                    awaitEachGesture { editorGesture(target) }
-                },
-        ) {
-            EditorCanvas(tab, document, metrics, highlights, hints, caretOn)
-        }
+        val onBlame: (Int) -> Unit = { line -> tab.blame?.firstOrNull { it.line == line }?.let(onBlameClick) }
+        val autoScroll: (Float) -> Unit = { delta -> scope.launch { viewport.scrollBy(delta) } }
+        val gestures = EditorGestures(clicks, focusRequester, onCtrlClick, onBlame, autoScroll)
+        EditorTextArea(TextAreaContent(tab, document, metrics, highlights, hints, caretOn), insight, path, gestures)
         EditorScrollbars(tab, metrics) { viewportWidth }
         if (completion != null) FollowCompletion(completion, tab, document, metrics) { viewportHeight }
+        if (insight != null && path != null) {
+            InsightLayer(
+                insight,
+                path,
+                tab,
+                document,
+                metrics,
+                focusRequester,
+            ) { IntSize(viewportWidth.roundToInt(), viewportHeight.roundToInt()) }
+        }
     }
 }
 
-// Keys go through the IntelliJ keymap, and through the completion popup first when the file has one.
+// Keys go through the IntelliJ keymap, and through the completion popup first when the file has one, then
+// through the lists code intelligence shows.
 private fun editorKeys(
     document: Document,
     completion: CompletionState?,
     path: String?,
+    insight: CodeInsightState?,
     page: () -> Int,
 ): (KeyEvent) -> Boolean =
     { event ->
-        if (completion != null && path != null) {
+        val completionShown = completion?.popup?.document === document
+        insight?.let { ctrlKey(event, it) }
+        val byInsight = insight != null && !completionShown
+        val smartPath = path?.takeIf { byInsight && isExtendSelection(event) }
+        if (smartPath != null && insight != null) {
+            insight.extendSelection(smartPath, document)
+            true
+        } else if (byInsight && insightKey(event, insight, document)) {
+            true
+        } else if (completion != null && path != null) {
             completionKey(event, completion, path, document) { handleEditorKey(event, document, page()) }
         } else {
             handleEditorKey(event, document, page())
@@ -198,33 +215,54 @@ internal fun decorations(
     change: GitChangeKind?,
     deleted: Boolean,
     blame: String?,
+    // The language server highlights the occurrences of the symbol at the caret: no word-based ones.
+    serverHighlights: Boolean = false,
 ): LineDecorations {
     val caret = document.caret
+    val inlays = document.inlays[index]
     val selection = document.selectionRange()?.takeIf { index in it.first.line..it.second.line }
-    val selectionStart = selection?.let { if (index == it.first.line) visualColumn(line, it.first.column) else 0 } ?: -1
+    val selectionStart =
+        selection?.let {
+            if (index == it.first.line) {
+                visualColumn(
+                    line,
+                    it.first.column,
+                    inlays,
+                )
+            } else {
+                0
+            }
+        } ?: -1
     val selectionEnd =
         selection?.let {
             if (index == it.second.line) {
-                visualColumn(line, it.second.column)
+                visualColumn(line, it.second.column, inlays)
             } else {
-                visualColumn(line, line.length) + 1
+                visualColumn(line, line.length, inlays) + 1
             }
         } ?: -1
-    val word = hints.identifier
+    val word = hints.identifier.takeUnless { serverHighlights }
     val bracketColumns =
         hints.brackets
             ?.toList()
             ?.filter { it.line == index }
-            ?.map { visualColumn(line, it.column) }
+            ?.map { visualColumn(line, it.column, inlays) }
     return LineDecorations(
-        caretColumn = if (caret.line == index) visualColumn(line, caret.column) else -1,
+        caretColumn = if (caret.line == index) visualColumn(line, caret.column, inlays) else -1,
         selectionStart = selectionStart,
         selectionEnd = selectionEnd,
         matches = highlights?.byLine?.get(index),
         matchLength = highlights?.length ?: 0,
-        currentMatch = highlights?.current?.takeIf { it.line == index }?.let { visualColumn(line, it.column) } ?: -1,
+        currentMatch =
+        highlights?.current?.takeIf { it.line == index }?.let {
+            visualColumn(
+                line,
+                it.column,
+                inlays,
+            )
+        } ?: -1,
         brackets = bracketColumns?.takeIf { it.isNotEmpty() }?.toIntArray(),
-        usages = word?.let { wordOccurrences(line, it) }?.map { visualColumn(line, it) }?.toIntArray(),
+        usages = word?.let { wordOccurrences(line, it) }?.map { visualColumn(line, it, inlays) }?.toIntArray(),
         usageLength = word?.length ?: 0,
         change = change,
         deleted = deleted,
@@ -278,14 +316,21 @@ private fun FollowCaret(
     viewportWidth: () -> Float,
 ) {
     LaunchedEffect(document) {
-        // drop(1): coming back to a tab must restore its scroll position, not jump to the caret.
-        snapshotFlow { document.caret }.drop(1).collect { caret ->
+        val reveal: suspend (TextPos) -> Unit = { caret ->
+            tab.revealCaret = false
             // A search or "go to line" may land inside a folded region: unfold it, like IntelliJ.
             if (document.folding.isHidden(caret.line)) document.folding.reveal(caret.line)
             scrollToRow(viewport, metrics, document.folding.rowOf(caret.line))
-            val x = visualColumn(document.lines[caret.line], caret.column) * metrics.charWidth + metrics.paddingPx
+            val x = document.visualColumnOf(caret.line, caret.column) * metrics.charWidth + metrics.paddingPx
             scrollToX(tab.horizontalScroll, metrics, x, viewportWidth() - metrics.gutterPx)
         }
+        // A file opened by a jump shows where it landed, once the editor knows how tall it is.
+        if (tab.revealCaret) {
+            snapshotFlow { viewport.viewportHeightPx }.first { it > 0f }
+            reveal(document.caret)
+        }
+        // drop(1): coming back to a tab must restore its scroll position, not jump to the caret.
+        snapshotFlow { document.caret }.drop(1).collect(reveal)
     }
 }
 

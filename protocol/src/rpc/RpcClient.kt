@@ -20,6 +20,14 @@ import kotlinx.serialization.json.put
 import org.example.kotlineditor.model.ConnectionStatus
 import org.example.kotlineditor.model.NetworkInspector
 import org.example.kotlineditor.model.TerminalSnapshot
+import org.example.kotlineditor.telemetry.Attribute
+import org.example.kotlineditor.telemetry.Attributes
+import org.example.kotlineditor.telemetry.ClientTelemetry
+import org.example.kotlineditor.telemetry.CurrentSpan
+import org.example.kotlineditor.telemetry.Operation
+import org.example.kotlineditor.telemetry.Outcome
+import org.example.kotlineditor.telemetry.Span
+import org.example.kotlineditor.telemetry.Telemetry
 import java.io.Closeable
 import java.io.IOException
 import java.net.InetSocketAddress
@@ -48,6 +56,9 @@ class ClientOptions(
 /** Thrown when the server refuses the client (bad token or protocol version): retrying would not help. */
 class RejectedException(message: String) : IOException(message)
 
+// The outcome of a request the server answered with an error.
+private const val REMOTE_ERROR = "RemoteException"
+
 /**
  * Client side of the protocol: one TCP connection, multiplexed requests, automatic reconnection.
  *
@@ -56,8 +67,13 @@ class RejectedException(message: String) : IOException(message)
  * - Streams (shell output) carry sequence numbers; out-of-order events are buffered, duplicates dropped, and
  *   after a reconnection the client asks the server to replay what it missed.
  */
-class RpcClient(host: String, port: Int, token: String, private val options: ClientOptions = ClientOptions()) :
-    Closeable {
+class RpcClient(
+    host: String,
+    port: Int,
+    token: String,
+    private val options: ClientOptions = ClientOptions(),
+    private val telemetry: Telemetry = ClientTelemetry,
+) : Closeable {
     /** Scope of the client's background work, cancelled by [close]. */
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val nextId = AtomicLong(1)
@@ -96,6 +112,31 @@ class RpcClient(host: String, port: Int, token: String, private val options: Cli
 
     init {
         scope.launch { connector.run(this) }
+        scope.launch { measureReconnections() }
+    }
+
+    // connection.reconnect: from the link lost to the link back (the first connection is not a reconnection).
+    private suspend fun measureReconnections() {
+        var connectedOnce = false
+        var lost: Span? = null
+        status.collect { now ->
+            when (now) {
+                ConnectionStatus.Connected -> {
+                    telemetry.end(lost)
+                    lost = null
+                    connectedOnce = true
+                }
+
+                ConnectionStatus.Reconnecting -> {
+                    if (connectedOnce && lost == null) lost = telemetry.start(Operation.Reconnect)
+                }
+
+                ConnectionStatus.Disconnected -> {
+                    telemetry.end(lost, Outcome.Cancelled)
+                    lost = null
+                }
+            }
+        }
     }
 
     /** A new request id; ids increase, which keeps retried requests in their original order. */
@@ -150,6 +191,7 @@ class RpcClient(host: String, port: Int, token: String, private val options: Cli
         params: JsonObjectBuilder.() -> Unit,
     ): Frame {
         connector.rejection?.let { throw it }
+        val span = startSpan(method)
         val call =
             pending.register(
                 Frame(
@@ -158,16 +200,47 @@ class RpcClient(host: String, port: Int, token: String, private val options: Cli
                     buildJsonObject(params),
                     method,
                     code = method == Method.Write || method == Method.CreateFile,
+                    trace = span?.context?.traceparent(),
                 ),
             )
+        var outcome: Outcome = Outcome.Ok
         try {
-            connector.link?.send(call.frame) // otherwise sent as soon as a connection is established
-            return withTimeoutOrNull(timeoutMs) { call.result.await() }
-                ?: throw IOException("No answer from the server for $method after ${timeoutMs}ms")
+            val answer = sendAndAwait(call, method, timeoutMs)
+            if (answer.kind == FrameKind.Error) outcome = Outcome.Error(REMOTE_ERROR)
+            return answer
+        } catch (@Suppress("TooGenericExceptionCaught") failure: Throwable) {
+            // measured, then thrown on
+            outcome = Outcome.of(failure)
+            throw failure
         } finally {
             pending.remove(id)
             // Timed out or cancelled: the server can stop working on it.
             if (!call.result.isCompleted) connector.link?.send(Frame(FrameKind.Cancel, id))
+            telemetry.end(span, outcome, retriedOf(call, span))
         }
     }
+
+    private suspend fun sendAndAwait(call: PendingRequests.Pending, method: Method, timeoutMs: Long): Frame {
+        // Otherwise sent as soon as a connection is established.
+        connector.link?.let { link ->
+            call.sends.incrementAndGet()
+            link.send(call.frame)
+        }
+        return withTimeoutOrNull(timeoutMs) { call.result.await() }
+            ?: throw IOException("No answer from the server for $method after ${timeoutMs}ms")
+    }
+
+    // The rpc.client span of a call, child of the span of the calling coroutine; null when telemetry is off.
+    private suspend fun startSpan(method: Method): Span? {
+        if (!telemetry.isEnabled) return null
+        val parent = CurrentSpan.ofCoroutine()?.context
+        return telemetry.start(Operation.RpcClient, Attributes.of(Attribute.Method to method.rpcName), parent)
+    }
+}
+
+// Whether the request was sent again on a new connection; nothing to say when it is not measured.
+private fun retriedOf(call: PendingRequests.Pending, span: Span?): Attributes {
+    if (span == null) return Attributes.NONE
+    val retried = call.sends.get() > 1
+    return Attributes.of(Attribute.Retried to retried.toString())
 }

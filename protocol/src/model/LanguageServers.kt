@@ -130,7 +130,7 @@ data class LanguageServerChoice(
 
 /** Language servers running on the server machine for the open projects. */
 @Suppress("TooManyFunctions", "ComplexInterface")
-interface LanguageServers {
+interface LanguageServers : CodeIntelligence {
     /**
      * The status once its version is greater than [since], or the current one after a while (a long poll): a
      * newer snapshot replaces an older one, so a late or repeated answer never shows an older state.
@@ -182,6 +182,12 @@ interface LanguageServers {
      * language server can answer now.
      */
     suspend fun complete(path: String, version: Int, line: Int, column: Int): CompletionResult
+
+    /**
+     * The documentation (Markdown) of item [index] of the completion answer [token], asked to the language server
+     * that proposed it; null when it has none or the answer was replaced.
+     */
+    suspend fun resolveCompletion(token: String, index: Int): String? = null
 
     /** No language servers (an IDE without a server, most unit tests). */
     @Suppress("TooManyFunctions")
@@ -289,6 +295,10 @@ data class CompletionItem(
     val detail: String?,
     /** The text that replaces the typed prefix when the item is accepted. */
     val insertText: String,
+    /** Its documentation in Markdown, when the server sent it with the item. */
+    val documentation: String? = null,
+    /** Its index for [LanguageServers.resolveCompletion], -1 when the server cannot tell more about it. */
+    val resolveIndex: Int = -1,
 )
 
 /** The answer to a completion request. */
@@ -304,6 +314,8 @@ data class CompletionResult(
     val incomplete: Boolean,
     /** False when no language server could answer (none for this file, not started yet, crashed). */
     val ready: Boolean,
+    /** Names this answer for [LanguageServers.resolveCompletion]; empty when its items cannot be resolved. */
+    val token: String = "",
 ) {
     /** Answers shared by every client. */
     companion object {

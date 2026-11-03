@@ -3,6 +3,8 @@ package org.example.kotlineditor.e2e
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.pressKey
@@ -12,6 +14,7 @@ import java.nio.file.Files
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /** Code completion when the network or the server fails: edits are never lost, late answers never win. */
 @OptIn(ExperimentalTestApi::class)
@@ -86,12 +89,34 @@ class CompletionChaosE2eTest {
         }
 
     @Test
+    fun `on a slow link a late answer keeps the item chosen with the arrows`() =
+        runComposeUiTest {
+            val app = openPhp()
+            typeCode("str")
+            awaitCompletion("strlen")
+            app.network.latencyMs = 400
+            // Narrowed, then widened again by the popup itself, before the server answers.
+            typeCode("t")
+            awaitCondition { completionLabels() == listOf("strtoupper") }
+            editorKeys { pressKey(Key.Backspace) }
+            awaitCondition { completionLabels().size == 3 }
+            val narrowed = app.project.completion.popup
+            editorKeys { pressKey(Key.DirectionDown) }
+            // The answer for "str" arrives after the arrow was pressed.
+            awaitCondition { app.project.completion.popup !== narrowed }
+            waitForIdle()
+            onNodeWithTag(EditorTags.completionItem("strlen"), useUnmergedTree = true).assertIsSelected()
+        }
+
+    @Test
     fun `after the IDE server restarts the document is sent again`() =
         runComposeUiTest {
             val app = openPhp()
+            val before = awaitServer(app) { it.isRunning() }
             app.process.restart()
             awaitReconnected()
-            awaitServer(app) { it.isRunning() }
+            // The status of the server before the restart is still shown for a moment: wait for the new process.
+            awaitServer(app) { it.isRunning() && it.pid != before.pid }
             typeCode("function afterRestart() {}\nafterR")
             awaitCompletion("afterRestart")
         }
@@ -104,4 +129,61 @@ class CompletionChaosE2eTest {
             typeCode("strl")
             awaitCompletion("strlen")
         }
+
+    @Test
+    fun `on a slow link the documentation of an item left behind never shows`() =
+        runComposeUiTest {
+            val app = openPhp()
+            app.network.latencyMs = 400
+            typeCode("str")
+            awaitCompletion("strtoupper")
+            val first =
+                app.project.completion.popup
+                    ?.selectedItem
+                    ?.label
+            // Left before its documentation arrived.
+            mainClock.advanceTimeBy(DOCUMENTATION_WAIT_MS)
+            editorKeys { pressKey(Key.DirectionDown) }
+            val second =
+                app.project.completion.popup
+                    ?.selectedItem
+                    ?.label
+            awaitCondition(
+                SERVER_START_MS,
+            ) { second != null && second in textOrEmpty(EditorTags.COMPLETION_DOCUMENTATION) }
+            assertTrue(first == null || first !in textOrEmpty(EditorTags.COMPLETION_DOCUMENTATION))
+        }
+
+    @Test
+    fun `documentation asked while the network is down shows once it is back`() =
+        runComposeUiTest {
+            val app = openPhp()
+            typeCode("str")
+            awaitCompletion("strtoupper")
+            val first =
+                app.project.completion.popup
+                    ?.selectedItem
+                    ?.label!!
+            awaitCondition(SERVER_START_MS) { first in textOrEmpty(EditorTags.COMPLETION_DOCUMENTATION) }
+            app.network.goDown()
+            awaitReconnecting()
+            editorKeys { pressKey(Key.DirectionDown) }
+            val second =
+                app.project.completion.popup
+                    ?.selectedItem
+                    ?.label!!
+            // The documentation of the item left does not stay, and the list still answers the arrows.
+            awaitNoTag(EditorTags.COMPLETION_DOCUMENTATION)
+            app.network.comeBack()
+            awaitReconnected()
+            awaitCondition(SERVER_START_MS) { second in textOrEmpty(EditorTags.COMPLETION_DOCUMENTATION) }
+        }
+
+    private fun ComposeUiTest.textOrEmpty(tag: String): String {
+        val shown = onAllNodes(hasTestTag(tag)).fetchSemanticsNodes().isNotEmpty()
+        return if (shown) textOf(tag) else ""
+    }
 }
+
+// Longer than the delay before the documentation of a selected item is asked.
+private const val DOCUMENTATION_WAIT_MS = 250L

@@ -31,12 +31,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.example.kotlineditor.model.LanguageServerInfo
 import org.example.kotlineditor.model.LanguageServerState
 import org.example.kotlineditor.model.ServerMemory
+import org.example.kotlineditor.state.InlayHintsMode
 import org.example.kotlineditor.state.LanguageServersHost
 import org.example.kotlineditor.state.LanguageServersState
 import org.example.kotlineditor.state.ToolWindow
@@ -133,6 +136,7 @@ private fun ColumnScope.LanguageServersContent(project: LanguageServersHost, sta
         )
     }
     val servers = state.status.servers
+    InlayHintsModeRow(project)
     Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
         IdeServerRow(state.status.server)
         if (servers.isEmpty()) {
@@ -150,6 +154,36 @@ private fun ColumnScope.LanguageServersContent(project: LanguageServersHost, sta
         LogView(log.lines, Modifier.weight(1f))
     }
 }
+
+// How the inlay hints (`name:` before an argument) show in the editors: not at all, above the caret's line, or in
+// the code.
+@Composable
+private fun InlayHintsModeRow(project: LanguageServersHost) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Label("Inlay hints", color = IdeColors.TextSecondary, fontSize = 12.sp)
+        for (mode in InlayHintsMode.entries) {
+            val chosen = project.inlayHintsMode == mode
+            Label(
+                mode.name,
+                Modifier
+                    .background(if (chosen) IdeColors.Selection else Color.Transparent, MODE_SHAPE)
+                    .border(1.dp, IdeColors.Separator, MODE_SHAPE)
+                    .clickable { project.inlayHintsMode = mode }
+                    .pointerHoverIcon(PointerIcon.Hand)
+                    .semantics { selected = chosen }
+                    .testTag(LanguageServerTags.inlayHintsMode(mode.name))
+                    .padding(horizontal = 8.dp, vertical = 2.dp),
+                fontSize = 12.sp,
+            )
+        }
+    }
+}
+
+private val MODE_SHAPE = RoundedCornerShape(4.dp)
 
 @Composable
 private fun IdeServerRow(server: ServerMemory) {

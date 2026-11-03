@@ -38,6 +38,9 @@ class Document(initialLines: List<String>, val language: Language, val lineSepar
     var maxLineLength by mutableIntStateOf(initialLines.maxOfOrNull { visualColumn(it, it.length) } ?: 0)
         private set
 
+    /** The hints drawn in lines between their characters, by line (see [LineInlays]); none by default. */
+    var inlays by mutableStateOf<Map<Int, LineInlays>>(emptyMap())
+
     /** Folded regions; its regions are recomputed by [EditorState] after edits. */
     val folding = FoldingModel(this)
 
@@ -53,6 +56,9 @@ class Document(initialLines: List<String>, val language: Language, val lineSepar
      * the language servers' copy of the document follows it (see [DocumentSync]).
      */
     var editListener: ((TextChange) -> Unit)? = null
+
+    /** Told of every change too, after [editListener]: the diagnostics and usage hints shown follow the text. */
+    var markerListener: ((TextChange) -> Unit)? = null
 
     /** Selections before each Ctrl+W, for Ctrl+Shift+W. */
     val selectionHistory = ArrayDeque<Pair<TextPos?, TextPos>>()
@@ -112,14 +118,14 @@ class Document(initialLines: List<String>, val language: Language, val lineSepar
         val target = clamp(pos)
         anchor = if (extendSelection) anchor ?: caret else null
         caret = target
-        preferredVisualColumn = visualColumn(lines[target.line], target.column)
+        preferredVisualColumn = visualColumnOf(target.line, target.column)
     }
 
     /** Moves to [targetLine] keeping the column the caret had before vertical moves started. */
     fun moveVerticallyTo(targetLine: Int, extend: Boolean = false) {
         val line = targetLine.coerceIn(0, lines.lastIndex)
         val keep = preferredVisualColumn
-        moveTo(TextPos(line, columnForVisual(lines[line], keep)), extend)
+        moveTo(TextPos(line, columnOfVisual(line, keep)), extend)
         preferredVisualColumn = keep
     }
 
@@ -134,7 +140,7 @@ class Document(initialLines: List<String>, val language: Language, val lineSepar
         val after = applyRaw(s, e, text)
         anchor = null
         caret = after
-        preferredVisualColumn = visualColumn(lines[after.line], after.column)
+        preferredVisualColumn = visualColumnOf(after.line, after.column)
         redoStack.clear()
         folding.onEdit()
         selectionHistory.clear()
@@ -176,7 +182,9 @@ class Document(initialLines: List<String>, val language: Language, val lineSepar
     }
 
     private fun applyRaw(start: TextPos, end: TextPos, text: String): TextPos {
-        editListener?.invoke(TextChange(start.line, start.column, end.line, end.column, text))
+        val change = TextChange(start.line, start.column, end.line, end.column, text)
+        editListener?.invoke(change)
+        markerListener?.invoke(change)
         val prefix = lines[start.line].substring(0, start.column)
         val suffix = lines[end.line].substring(end.column)
         val parts = text.split('\n')

@@ -23,7 +23,7 @@ import org.example.kotlineditor.state.EditorTab
 import org.example.kotlineditor.state.HorizontalScroll
 import org.example.kotlineditor.state.TextPos
 import org.example.kotlineditor.state.VerticalScroll
-import org.example.kotlineditor.state.columnForVisual
+import org.example.kotlineditor.state.columnOfVisual
 import org.example.kotlineditor.state.selectWordAt
 import org.example.kotlineditor.state.toggle
 import kotlin.math.floor
@@ -39,6 +39,9 @@ private const val MEASURED_CHARS = 100
 private const val MIN_LINE_NUMBER_DIGITS = 3
 private const val SLACK_COLUMNS = 8
 private const val MULTI_CLICK_MILLIS = 400L
+
+// How far the mouse may move between the clicks of a double click, like the systems' own tolerance.
+private const val MULTI_CLICK_SLOP_PX = 6f
 private val GUTTER_PADDING = 28.dp
 private val BLAME_WIDTH = 170.dp
 private val BLAME_FONT_SIZE = 10.sp
@@ -56,12 +59,16 @@ internal class EditorMetrics(
     val foldZonePx: Float,
     val blameWidth: Dp,
     val blameStyle: TextStyle,
+    val blameWidthPx: Float = 0f,
 ) {
     /** Horizontal scroll range: widest line plus some slack, minus what fits on screen. */
     fun maxHorizontalOffset(maxLineLength: Int, viewportWidth: Float): Float =
         maxOf(0f, (maxLineLength + SLACK_COLUMNS) * charWidth + paddingPx - (viewportWidth - gutterPx))
 
     fun isOnFoldMarker(x: Float): Boolean = x in gutterPx - foldZonePx..gutterPx
+
+    /** Whether [x] is over the blame annotations of the gutter (when they are shown). */
+    fun isOnBlame(x: Float): Boolean = blameWidthPx > 0f && x >= gutterPx - blameWidthPx && x < gutterPx - foldZonePx
 
     /** Document position under [position] (in the editor's coordinates). */
     fun hit(position: Offset, viewport: VerticalScroll, horizontal: HorizontalScroll, document: Document): TextPos {
@@ -72,7 +79,24 @@ internal class EditorMetrics(
             ((position.x - gutterPx - paddingPx + horizontal.offset) / charWidth)
                 .roundToInt()
                 .coerceAtLeast(0)
-        return TextPos(line, columnForVisual(document.lines[line], visual))
+        return TextPos(line, document.columnOfVisual(line, visual))
+    }
+
+    /**
+     * The character under [position] (not the boundary nearest to it, as [hit]): null over the gutter, past the end
+     * of the line, or below the last line.
+     */
+    fun cellAt(position: Offset, viewport: VerticalScroll, horizontal: HorizontalScroll, document: Document): TextPos? {
+        val folding = document.folding
+        val rowOffset = floor((position.y + viewport.rowOffsetPx) / lineHeightPx).toInt()
+        val row = viewport.firstRow + rowOffset
+        val x = position.x - gutterPx - paddingPx + horizontal.offset
+        if (row !in 0 until folding.rowCount() || x < 0) return null
+        val line = folding.lineAt(row)
+        val text = document.lines[line]
+        val visual = floor(x / charWidth).toInt()
+        val column = document.columnOfVisual(line, visual)
+        return if (column < text.length) TextPos(line, column) else null
     }
 }
 
@@ -100,6 +124,7 @@ internal fun rememberEditorMetrics(lineCount: Int, fontSize: Float, blameVisible
                 foldZonePx = FOLD_ZONE.toPx(),
                 blameWidth = blameWidth,
                 blameStyle = codeStyle.copy(color = IdeColors.TextSecondary, fontSize = BLAME_FONT_SIZE),
+                blameWidthPx = blameWidth.toPx(),
             )
         }
     }
@@ -108,13 +133,16 @@ internal fun rememberEditorMetrics(lineCount: Int, fontSize: Float, blameVisible
 /** Counts successive clicks on the same line: 1 places the caret, 2 selects a word, 3 the line. */
 internal class ClickCounter {
     private var lastTime = 0L
-    private var lastLine = -1
+    private var lastPosition: Offset? = null
     private var count = 0
 
-    fun register(time: Long, line: Int): Int {
-        count = if (time - lastTime < MULTI_CLICK_MILLIS && line == lastLine) count + 1 else 1
+    /** A press at [position]: 2 for a double click, 3 for a triple one, when quick and at the same place. */
+    fun register(time: Long, position: Offset): Int {
+        val quick = time - lastTime < MULTI_CLICK_MILLIS
+        val samePlace = lastPosition?.let { (it - position).getDistance() <= MULTI_CLICK_SLOP_PX } == true
+        count = if (quick && samePlace) count + 1 else 1
         lastTime = time
-        lastLine = line
+        lastPosition = position
         return count
     }
 }
@@ -128,6 +156,10 @@ internal class GestureTarget(
     val clicks: ClickCounter,
     val focus: FocusRequester,
     val onCtrlClick: (TextPos) -> Unit,
+    // A click on the usage hint of a line: true when it was one.
+    val onHintClick: (TextPos, Offset) -> Boolean = { _, _ -> false },
+    // A click on the blame annotation of a line.
+    val onBlameClick: (Int) -> Unit = {},
     val autoScroll: (Float) -> Unit,
 )
 
@@ -142,8 +174,16 @@ internal suspend fun AwaitPointerEventScope.editorGesture(target: GestureTarget)
             target.document.folding.toggle(pos.line)
         }
 
+        target.tab.blameVisible && target.metrics.isOnBlame(down.position.x) -> {
+            target.onBlameClick(pos.line)
+        }
+
         modifiers.isCtrlPressed || modifiers.isMetaPressed -> {
             target.onCtrlClick(pos)
+        }
+
+        target.onHintClick(pos, down.position) -> {
+            // the click listed the usages of the declaration
         }
 
         else -> {
@@ -159,7 +199,7 @@ private suspend fun AwaitPointerEventScope.click(
     shift: Boolean,
 ) {
     val document = target.document
-    when (target.clicks.register(down.uptimeMillis, pos.line)) {
+    when (target.clicks.register(down.uptimeMillis, down.position)) {
         1 -> {
             document.moveTo(pos, extendSelection = shift)
             drag(target)

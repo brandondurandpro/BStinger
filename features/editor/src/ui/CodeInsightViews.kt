@@ -1,0 +1,360 @@
+package org.example.kotlineditor.ui
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.onPointerEvent
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.text
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import org.example.kotlineditor.model.Diagnostic
+import org.example.kotlineditor.state.CodeInsightState
+import org.example.kotlineditor.state.Document
+import org.example.kotlineditor.state.EditorTab
+import org.example.kotlineditor.state.TextPos
+import org.example.kotlineditor.state.applyCodeAction
+import org.example.kotlineditor.state.cancelRename
+import org.example.kotlineditor.state.confirmRename
+import org.example.kotlineditor.state.visualColumn
+import kotlin.math.roundToInt
+
+private val POPUP_SHAPE = RoundedCornerShape(4.dp)
+private val HOVER_MAX_WIDTH = 620.dp
+private val HOVER_MAX_HEIGHT = 420.dp
+internal val LIST_WIDTH = 640.dp
+internal val LIST_ROW_HEIGHT = 22.dp
+internal const val LIST_ROWS = 12
+internal val POPUP_LABEL_STYLE = TextStyle(color = IdeColors.Text, fontSize = 13.sp)
+internal val POPUP_SECONDARY_STYLE = TextStyle(color = IdeColors.TextSecondary, fontSize = 12.sp)
+
+/** Where an overlay is placed relative to its anchor's line. */
+internal enum class Placement { Below, Above }
+
+// A box placed at the anchor, under its line (above with Placement.Above, or when it does not fit below): read in the
+// layout phase, so that scrolling moves it without recomposing.
+@Composable
+internal fun Anchored(
+    document: Document,
+    anchor: TextPos,
+    tab: EditorTab,
+    metrics: EditorMetrics,
+    viewport: () -> IntSize,
+    placement: Placement = Placement.Below,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    var size by remember { mutableStateOf(IntSize.Zero) }
+    Box(
+        modifier
+            .onSizeChanged { size = it }
+            .offset {
+                val line = document.lines.getOrElse(anchor.line) { "" }
+                val inlays = document.inlays[anchor.line]
+                val column = visualColumn(line, anchor.column.coerceAtMost(line.length), inlays)
+                val textLeft = metrics.gutterPx + metrics.paddingPx - tab.horizontalScroll.offset
+                val area = viewport()
+                val rightmost = (area.width - size.width).toFloat()
+                val x = (textLeft + column * metrics.charWidth).coerceAtMost(rightmost).coerceAtLeast(0f)
+                val rowTop = document.folding.rowOf(anchor.line) * metrics.lineHeightPx - tab.verticalScroll.offsetPx
+                val below = rowTop + metrics.lineHeightPx
+                val above = rowTop - size.height
+                val fitsBelow = below + size.height <= area.height
+                val fitsAbove = above >= 0
+                val wantsAbove = placement == Placement.Above || !fitsBelow
+                val goesAbove = wantsAbove && fitsAbove
+                IntOffset(x.roundToInt(), (if (goesAbove) above else below).roundToInt())
+            },
+    ) { content() }
+}
+
+internal fun Modifier.popupFrame() =
+    background(IdeColors.Popup, POPUP_SHAPE)
+        .border(1.dp, IdeColors.Separator, POPUP_SHAPE)
+
+// Clicks on an overlay stay on it: they must not move the caret of the editor below.
+internal fun Modifier.swallowClicks() = pointerInput(Unit) { detectTapGestures { } }
+
+/** Everything code intelligence shows over [document]: documentation, lists, parameter info, rename, messages. */
+@Composable
+internal fun CodeInsightOverlays(
+    insight: CodeInsightState,
+    tab: EditorTab,
+    document: Document,
+    metrics: EditorMetrics,
+    editorFocus: FocusRequester,
+    viewport: () -> IntSize,
+) {
+    val signature = insight.signature?.takeIf { it.document === document }
+    signature?.let { popup ->
+        Anchored(document, popup.anchor, tab, metrics, viewport, Placement.Above) { SignatureView(popup.help) }
+    }
+    // Popup mode: the line of the caret with its hints, above it (the parameter info takes its place).
+    if (signature == null) CaretLineHints(insight, document, tab, metrics, viewport)
+    insight.hover?.takeIf { it.document === document }?.let { popup ->
+        Anchored(document, popup.anchor, tab, metrics, viewport) {
+            HoverView(popup.markdown, popup.problems, insight)
+        }
+    }
+    insight.locations?.takeIf { it.document === document }?.let { popup ->
+        Anchored(document, popup.anchor, tab, metrics, viewport) { LocationsView(popup, insight) }
+    }
+    insight.codeActions?.takeIf { it.document === document }?.let { popup ->
+        Anchored(document, popup.anchor, tab, metrics, viewport) { CodeActionsView(popup, insight) }
+    }
+    insight.rename?.takeIf { it.document === document }?.let { popup ->
+        val anchor = TextPos(popup.range.startLine, popup.range.startColumn)
+        Anchored(document, anchor, tab, metrics, viewport) { RenameView(popup, insight, editorFocus) }
+    }
+    insight.notice?.takeIf { it.document === document }?.let { notice ->
+        Anchored(document, notice.anchor, tab, metrics, viewport, Placement.Above) {
+            Box(
+                Modifier
+                    .background(IdeColors.Popup, POPUP_SHAPE)
+                    .border(1.dp, IdeColors.ProblemWarning.copy(alpha = 0.6f), POPUP_SHAPE)
+                    .padding(horizontal = 10.dp, vertical = 5.dp)
+                    .testTag(EditorTags.NOTICE),
+            ) { BasicText(notice.text, style = POPUP_LABEL_STYLE) }
+        }
+    }
+}
+
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+private fun HoverView(markdown: String?, problems: List<Diagnostic>, insight: CodeInsightState) {
+    Column(
+        Modifier
+            .widthIn(max = HOVER_MAX_WIDTH)
+            .heightIn(max = HOVER_MAX_HEIGHT)
+            .popupFrame()
+            .onPointerEvent(PointerEventType.Enter) { insight.hoverPopupHovered(true) }
+            .onPointerEvent(PointerEventType.Exit) { insight.hoverPopupHovered(false) }
+            .swallowClicks()
+            .verticalScroll(rememberScrollState())
+            .testTag(EditorTags.HOVER),
+    ) {
+        if (problems.isNotEmpty()) {
+            Column(
+                Modifier.padding(horizontal = 12.dp, vertical = 8.dp).testTag(EditorTags.HOVER_PROBLEMS),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                for (problem in problems) ProblemLine(problem)
+            }
+            if (markdown != null) Box(Modifier.fillMaxWidth().height(1.dp).background(IdeColors.Separator))
+        }
+        if (markdown != null) {
+            MarkdownText(
+                markdown,
+                Modifier.padding(horizontal = 12.dp, vertical = 8.dp).testTag(EditorTags.HOVER_DOCUMENTATION),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ProblemLine(problem: Diagnostic) {
+    Row(verticalAlignment = Alignment.Top) {
+        Box(
+            Modifier
+                .padding(top = 4.dp)
+                .size(8.dp)
+                .background(problemColor(problem.severity), RoundedCornerShape(4.dp)),
+        )
+        val source = listOfNotNull(problem.source, problem.code).joinToString(" ")
+        val text =
+            buildAnnotatedString {
+                append(problem.message)
+                if (source.isNotEmpty()) withStyle(SpanStyle(color = IdeColors.TextSecondary)) { append("  $source") }
+            }
+        BasicText(text, Modifier.padding(start = 8.dp), style = POPUP_LABEL_STYLE)
+    }
+}
+
+@Composable
+private fun CodeActionsView(popup: org.example.kotlineditor.state.CodeActionsPopup, insight: CodeInsightState) {
+    Column(
+        Modifier
+            .widthIn(min = 260.dp, max = LIST_WIDTH)
+            .popupFrame()
+            .swallowClicks()
+            .testTag(EditorTags.CODE_ACTIONS),
+    ) {
+        popup.actions.forEachIndexed { index, action ->
+            val selected = index == popup.selected
+            Row(
+                Modifier
+                    .height(LIST_ROW_HEIGHT)
+                    .background(if (selected) IdeColors.Selection else IdeColors.Popup)
+                    .pointerInput(index) { detectTapGestures { insight.applyCodeAction(index) } }
+                    .semantics { this.selected = selected }
+                    .testTag(EditorTags.codeAction(action.title))
+                    .padding(horizontal = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                val isFix = action.kind?.startsWith("quickfix") == true
+                val color = if (isFix) IdeColors.ProblemWarning else IdeColors.Accent
+                Box(
+                    Modifier
+                        .size(8.dp)
+                        .background(color, RoundedCornerShape(4.dp)),
+                )
+                BasicText(action.title, Modifier.padding(start = 8.dp), style = POPUP_LABEL_STYLE, maxLines = 1)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SignatureView(help: org.example.kotlineditor.model.SignatureHelpResult) {
+    val signature = help.signatures.getOrNull(help.activeSignature) ?: help.signatures.firstOrNull() ?: return
+    val parameter = signature.parameters.getOrNull(help.activeParameter)
+    val label =
+        buildAnnotatedString {
+            append(signature.label)
+            if (parameter != null) {
+                addStyle(
+                    SpanStyle(fontWeight = FontWeight.Bold, color = IdeColors.Text),
+                    parameter.start,
+                    parameter.end,
+                )
+            }
+        }
+    Column(
+        Modifier
+            .widthIn(max = HOVER_MAX_WIDTH)
+            .popupFrame()
+            .swallowClicks()
+            .testTag(EditorTags.SIGNATURE)
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+    ) {
+        BasicText(label, style = LocalCodeStyle.current.copy(color = IdeColors.TextSecondary, fontSize = 12.5.sp))
+        if (parameter != null) {
+            val text = signature.label.substring(parameter.start, parameter.end)
+            Box(
+                Modifier
+                    .size(0.dp)
+                    .semantics { this.text = AnnotatedString(text) }
+                    .testTag(EditorTags.SIGNATURE_ACTIVE_PARAMETER),
+            )
+        }
+        val documentation =
+            parameter?.documentation?.takeIf {
+                it !=
+                    signature.label.substring(
+                        parameter.start,
+                        parameter.end,
+                    )
+            } ?: signature.documentation
+        documentation?.let { MarkdownText(it, Modifier.padding(top = 4.dp)) }
+    }
+}
+
+@Composable
+private fun RenameView(
+    popup: org.example.kotlineditor.state.RenamePopup,
+    insight: CodeInsightState,
+    editorFocus: FocusRequester,
+) {
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(popup) { runCatching { focus.requestFocus() } }
+    val close = { action: () -> Unit ->
+        action()
+        runCatching { editorFocus.requestFocus() }
+        Unit
+    }
+    Column(
+        Modifier
+            .width(320.dp)
+            .popupFrame()
+            .swallowClicks()
+            .testTag(EditorTags.RENAME)
+            .padding(8.dp),
+    ) {
+        BasicText("Rename '${popup.oldName}' and its usages to:", style = POPUP_SECONDARY_STYLE)
+        BasicTextField(
+            popup.name,
+            { popup.name = it },
+            Modifier
+                .fillMaxWidth()
+                .padding(top = 6.dp)
+                .background(IdeColors.Input, RoundedCornerShape(3.dp))
+                .border(1.dp, IdeColors.Accent, RoundedCornerShape(3.dp))
+                .padding(horizontal = 6.dp, vertical = 4.dp)
+                .focusRequester(focus)
+                .onPreviewKeyEvent { event -> renameKey(event, insight, close) }
+                .testTag(EditorTags.RENAME_INPUT),
+            enabled = !popup.applying,
+            singleLine = true,
+            textStyle = LocalCodeStyle.current.copy(color = IdeColors.Text),
+            cursorBrush = SolidColor(IdeColors.Caret),
+        )
+        BasicText(
+            "Enter to rename, Escape to cancel",
+            Modifier.padding(top = 4.dp),
+            style = POPUP_SECONDARY_STYLE.copy(fontSize = 11.sp),
+        )
+    }
+}
+
+// Enter renames, Escape cancels; the other keys type the name.
+private fun renameKey(event: KeyEvent, insight: CodeInsightState, close: (() -> Unit) -> Unit): Boolean {
+    val down = event.type == KeyEventType.KeyDown
+    val enter = event.key == Key.Enter || event.key == Key.NumPadEnter
+    val action: (() -> Unit)? =
+        when {
+            !down -> null
+            enter -> insight::confirmRename
+            event.key == Key.Escape -> insight::cancelRename
+            else -> null
+        }
+    action?.let(close)
+    return action != null
+}

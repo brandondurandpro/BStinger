@@ -10,6 +10,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
 import org.example.kotlineditor.lsp.jsonrpc.LspConnection
+import org.example.kotlineditor.model.FileOperation
 import org.example.kotlineditor.model.TextChange
 
 /** How a language server wants the edits: the whole text each time, or only what changed. */
@@ -79,6 +80,25 @@ internal class DocumentOutbox(private val link: LspConnection, scope: CoroutineS
 
     fun didClose(document: MirroredDocument) =
         send("textDocument/didClose", buildJsonObject { putJsonObject(TEXT_DOCUMENT) { put(URI, document.uri) } })
+
+    fun didSave(document: MirroredDocument) =
+        send("textDocument/didSave", buildJsonObject { putJsonObject(TEXT_DOCUMENT) { put(URI, document.uri) } })
+
+    /** Files changed on disk: their URI and FileChangeType (1 created, 2 changed, 3 deleted). */
+    fun filesChanged(changes: List<Pair<String, Int>>) {
+        val encoded =
+            changes.map { (uri, type) ->
+                buildJsonObject {
+                    put(URI, uri)
+                    put("type", type)
+                }
+            }
+        send("workspace/didChangeWatchedFiles", buildJsonObject { put("changes", JsonArray(encoded)) })
+    }
+
+    /** Files were created, renamed or deleted (`workspace/didRenameFiles`...): [params] from [fileOperationParams]. */
+    fun filesOperated(operation: FileOperation, params: JsonObject) =
+        send("workspace/did${operation.lspName}Files", params)
 
     /** Returns once everything queued before has been written to the server. */
     suspend fun flush() {

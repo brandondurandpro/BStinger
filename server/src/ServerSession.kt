@@ -5,6 +5,7 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import org.example.kotlineditor.rpc.Frame
@@ -14,8 +15,18 @@ import org.example.kotlineditor.rpc.Method
 import org.example.kotlineditor.rpc.Protocol
 import org.example.kotlineditor.rpc.params
 import org.example.kotlineditor.rpc.rpcError
+import org.example.kotlineditor.telemetry.Attribute
+import org.example.kotlineditor.telemetry.Attributes
+import org.example.kotlineditor.telemetry.Operation
+import org.example.kotlineditor.telemetry.Outcome
+import org.example.kotlineditor.telemetry.SpanContext
+import org.example.kotlineditor.telemetry.SpanElement
+import org.example.kotlineditor.telemetry.Telemetry
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
+
+// The outcome of a request answered with an error.
+private const val REMOTE_ERROR = "RemoteError"
 
 // Methods run on the reading thread, in arrival order: they are quick and their order matters.
 private val ORDERED =
@@ -76,6 +87,7 @@ internal class ServerSession(
     private val scope: CoroutineScope,
     private val handlers: Map<Method, suspend Request.() -> JsonElement>,
     private val options: ServerOptions,
+    private val telemetry: Telemetry = Telemetry.Disabled,
     private val onDispose: (String) -> Unit = {},
 ) {
     @Volatile
@@ -137,14 +149,15 @@ internal class ServerSession(
             // a retry of an executed request: same answer, no second execution
             method == null -> send(failure(frame.id, "Unknown method", Protocol.METHOD_NOT_FOUND))
 
-            method in ORDERED -> complete(frame.id, method, runBlocking { execute(frame.id, method, frame.payload) })
+            method in ORDERED -> complete(frame.id, method, runBlocking { measured(frame, method) })
 
-            else -> launchRequest(frame.id, method, frame.payload)
+            else -> launchRequest(frame, method)
         }
     }
 
-    private fun launchRequest(id: Long, method: Method, params: JsonElement) {
-        val job = scope.launch(start = CoroutineStart.LAZY) { complete(id, method, execute(id, method, params)) }
+    private fun launchRequest(frame: Frame, method: Method) {
+        val id = frame.id
+        val job = scope.launch(start = CoroutineStart.LAZY) { complete(id, method, measured(frame, method)) }
         // Already running (sent again after a reconnection): its answer will be sent when it completes.
         if (inFlight.putIfAbsent(id, job) == null) job.start() else job.cancel()
     }
@@ -153,6 +166,31 @@ internal class ServerSession(
         if (method.mutating) synchronized(answers) { answers[id] = answer }
         inFlight.remove(id)
         send(answer)
+    }
+
+    // The rpc.server span of a request, child of the client's span named by its traceparent. A retry of a request
+    // already answered or running is not executed again, so it is not measured twice.
+    private suspend fun measured(frame: Frame, method: Method): Frame {
+        if (!telemetry.isEnabled) return execute(frame.id, method, frame.payload)
+        val attributes = Attributes.of(Attribute.Method to method.rpcName)
+        val span = telemetry.start(Operation.RpcServer, attributes, SpanContext.parse(frame.trace))
+        var outcome: Outcome = Outcome.Ok
+        try {
+            val answer =
+                if (span == null) {
+                    execute(frame.id, method, frame.payload)
+                } else {
+                    withContext(SpanElement(span)) { execute(frame.id, method, frame.payload) }
+                }
+            if (answer.kind == FrameKind.Error) outcome = Outcome.Error(REMOTE_ERROR)
+            return answer
+        } catch (@Suppress("TooGenericExceptionCaught") failure: Throwable) {
+            // measured, then thrown on
+            outcome = Outcome.of(failure)
+            throw failure
+        } finally {
+            telemetry.end(span, outcome)
+        }
     }
 
     private suspend fun execute(id: Long, method: Method, params: JsonElement): Frame =

@@ -53,6 +53,8 @@ class LanguageServerSupervisor(
     private val onChange: () -> Unit = {},
     // The documents open in the IDE, sent to the servers whose root has them.
     private val documents: OpenDocuments? = null,
+    // Diagnostics and edits the servers send.
+    private val hooks: LanguageServerHooks = LanguageServerHooks(),
 ) : Closeable {
     private val lock = Any()
     private val managed = LinkedHashMap<String, ManagedServer>()
@@ -115,6 +117,20 @@ class LanguageServerSupervisor(
     internal fun serving(language: String, root: String): List<ManagedServer> =
         synchronized(lock) { managed.values.filter { it.language == language && it.root == root } }
 
+    /** The servers whose root is [project] or inside it. */
+    internal fun servingInside(project: String): List<ManagedServer> =
+        synchronized(lock) { managed.values.filter { isWithin(it.root, project) } }
+
+    /** The servers whose root holds the file or directory at [path]. */
+    internal fun servingPath(path: String): List<ManagedServer> =
+        synchronized(lock) { managed.values.filter { isWithin(path, it.root) } }
+
+    // Whether [path] is [directory] or inside it.
+    private fun isWithin(path: String, directory: String): Boolean {
+        val prefix = directory.trimEnd('/', '\\')
+        return path == prefix || path.startsWith("$prefix/") || path.startsWith("$prefix\\")
+    }
+
     /** The pid of [id]'s process while it runs (tests). */
     fun pidOf(id: String): Long? = synchronized(lock) { managed[id] }?.pid
 
@@ -141,7 +157,7 @@ class LanguageServerSupervisor(
     }
 
     private fun newServer(target: ServerTarget) =
-        ManagedServer(target, scope, sampler, reaper, timings, clock, ::forget, onChange, documents)
+        ManagedServer(target, scope, sampler, reaper, timings, clock, ::forget, onChange, documents, hooks)
 
     private fun forget(server: ManagedServer): Boolean {
         val removed =

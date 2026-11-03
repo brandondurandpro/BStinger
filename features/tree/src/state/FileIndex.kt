@@ -13,6 +13,10 @@ import kotlinx.coroutines.withContext
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.ProjectSearch
 import org.example.kotlineditor.syntax.Declaration
+import org.example.kotlineditor.telemetry.ClientTelemetry
+import org.example.kotlineditor.telemetry.Operation
+import org.example.kotlineditor.telemetry.measureToFrame
+import org.example.kotlineditor.telemetry.sizeOf
 import java.io.IOException
 
 @Immutable
@@ -57,12 +61,18 @@ class FileIndex(private val root: FileEntry, private val search: ProjectSearch, 
         if (files == null && job?.isActive != true) {
             job =
                 scope.launch {
-                    files =
-                        try {
-                            search.walkFiles(root)
-                        } catch (expected: IOException) {
-                            emptyList() // server unreachable: an empty index, rebuilt on the next invalidation
+                    val walked =
+                        ClientTelemetry.measureToFrame(
+                            Operation.TreeIndex,
+                            attributesOf = { walked: List<FileEntry> -> sizeOf(walked.size) },
+                        ) {
+                            try {
+                                search.walkFiles(root)
+                            } catch (expected: IOException) {
+                                emptyList() // server unreachable: an empty index, rebuilt on the next invalidation
+                            }
                         }
+                    files = walked
                 }
         }
     }
@@ -91,6 +101,13 @@ class FileIndex(private val root: FileEntry, private val search: ProjectSearch, 
                 }
             matches.sortedWith(BEST_SYMBOL_FIRST).take(limit)
         }
+    }
+
+    /** [declaration] of [entry] as Go to Symbol lists it for [query], null when its name does not match. */
+    fun symbolMatch(entry: FileEntry, declaration: Declaration, query: String): SymbolMatch? {
+        val matched = fuzzyMatch(query.trim(), declaration.name) ?: return null
+        val (score, indices) = matched
+        return SymbolMatch(entry, relativePath(entry), declaration, score, indices)
     }
 
     fun relativePath(entry: FileEntry): String =
@@ -136,5 +153,9 @@ class FileIndex(private val root: FileEntry, private val search: ProjectSearch, 
     companion object {
         /** See [FuzzyMatch]. */
         fun fuzzyMatch(query: String, name: String): Pair<Int, List<Int>>? = FuzzyMatch.match(query, name)
+
+        /** [matches] best first, at most [limit]. */
+        fun rankSymbols(matches: List<SymbolMatch>, limit: Int = DEFAULT_RESULTS): List<SymbolMatch> =
+            matches.sortedWith(BEST_SYMBOL_FIRST).take(limit)
     }
 }

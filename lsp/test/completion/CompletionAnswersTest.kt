@@ -92,4 +92,23 @@ class CompletionAnswersTest {
         val array = Json.parseToJsonElement("[${item("xyz")}]")
         assertEquals(listOf("xyz"), CompletionAnswers.translate(array, "x", 1).items.map { it.label })
     }
+
+    @Test
+    fun `each item knows the server's item behind it, and its documentation sent with it`() {
+        val markup = ""","documentation":{"kind":"markdown","value":"Get **string** length"}"""
+        val plain = ""","documentation":"Uppercase""""
+        val answer = list(item("strtoupper", extra = plain), item("array_map"), item("strlen", extra = markup))
+        val (result, raws) = CompletionAnswers.translateWithItems(answer, "echo str", 8)
+        assertEquals(listOf("strlen", "strtoupper"), result.items.map { it.label })
+        assertEquals(listOf("Get **string** length", "Uppercase"), result.items.map { it.documentation })
+        assertEquals(listOf(0, 1), result.items.map { it.resolveIndex })
+        // Resolved with the item the server sent, in the order of the result.
+        assertEquals(listOf("\"strlen\"", "\"strtoupper\""), raws.map { it["label"].toString() })
+    }
+
+    @Test
+    fun `an item without documentation has none`() {
+        val result = CompletionAnswers.translate(list(item("strlen", extra = ""","documentation":""""")), "str", 3)
+        assertEquals(null, result.items.firstOrNull()?.documentation)
+    }
 }

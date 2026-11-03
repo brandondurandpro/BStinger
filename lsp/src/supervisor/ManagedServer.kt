@@ -9,6 +9,8 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -17,6 +19,8 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.add
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
@@ -35,11 +39,17 @@ import org.example.kotlineditor.lsp.leak.LeakReport
 import org.example.kotlineditor.lsp.leak.Verdict
 import org.example.kotlineditor.lsp.memory.MemoryHistory
 import org.example.kotlineditor.lsp.memory.ProcessMemorySampler
+import org.example.kotlineditor.model.FileOperation
 import org.example.kotlineditor.model.LanguageServerInfo
 import org.example.kotlineditor.model.LanguageServerState
 import org.example.kotlineditor.model.Languages
 import org.example.kotlineditor.model.MemoryUsage
 import org.example.kotlineditor.model.TextChange
+import org.example.kotlineditor.telemetry.Attribute
+import org.example.kotlineditor.telemetry.Attributes
+import org.example.kotlineditor.telemetry.Operation
+import org.example.kotlineditor.telemetry.Outcome
+import org.example.kotlineditor.telemetry.Span
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
@@ -47,6 +57,9 @@ import java.nio.file.Paths
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
+
+private const val CAPABILITIES = "capabilities"
+private const val NANOS_PER_MILLI = 1_000_000L
 
 /** What a [ManagedServer] is asked to do; its coroutine handles them one at a time, in order. */
 internal sealed interface Command {
@@ -103,6 +116,8 @@ internal class ManagedServer(
     private val onChange: () -> Unit,
     // The documents open in the IDE: those under its root are opened in each process it starts.
     private val documents: OpenDocuments? = null,
+    // What the server says besides answers: diagnostics, edits it asks for.
+    private val hooks: LanguageServerHooks = LanguageServerHooks(),
 ) {
     val id = target.id
     val language get() = target.spec.language
@@ -134,6 +149,9 @@ internal class ManagedServer(
 
     @Volatile private var leak: LeakReport? = null
 
+    // The capabilities the current process answered to initialize; null while none is ready.
+    @Volatile private var capabilities: JsonObject? = null
+
     @Volatile var history: MemoryHistory? = null
         private set
 
@@ -143,11 +161,18 @@ internal class ManagedServer(
     @Volatile var indexingEndedAt: Long? = null
         private set
 
+    // Whether the process indexes the project, and until when (System.nanoTime) it may still begin to after it started.
+    private val indexing = MutableStateFlow(false)
+
+    @Volatile private var indexingMayBeginUntil = 0L
+
     val pid: Long? get() = process?.takeIf { it.isAlive }?.pid()
 
     private var userStopped = false
     private var pendingIdle = false
     private var startJob: Job? = null
+
+    @Volatile private var startSpan: Span? = null
     private var waitJob: Job? = null
     private var samplerKey: String? = null
 
@@ -207,6 +232,24 @@ internal class ManagedServer(
         outbox?.didClose(document)
     }
 
+    /** Tells the process [document] was saved, if it asked to know (`textDocumentSync.save`). */
+    fun didSave(document: MirroredDocument) {
+        val sync = capability("textDocumentSync") as? JsonObject
+        val save = sync?.get("save")?.takeIf { it != JsonNull }
+        val refused = (save as? JsonPrimitive)?.booleanOrNull == false
+        if (save != null && !refused) outbox?.didSave(document)
+    }
+
+    /** Tells the process files changed on disk: their URI and FileChangeType (1 created, 2 changed, 3 deleted). */
+    fun filesChanged(changes: List<Pair<String, Int>>) {
+        if (changes.isNotEmpty()) outbox?.filesChanged(changes)
+    }
+
+    /** Tells the process files were created, renamed or deleted through the IDE. */
+    fun filesOperated(operation: FileOperation, params: JsonObject) {
+        outbox?.filesOperated(operation, params)
+    }
+
     /**
      * Sends [method] once the document notifications queued before were written, and returns its answer; null
      * when no process is ready. Fails like [LspConnection.request] when the process stops meanwhile.
@@ -218,6 +261,20 @@ internal class ManagedServer(
         box.flush()
         return link.request(method, params)
     }
+
+    /**
+     * Whether the ready process offers [capability] (`hoverProvider`): present and not false. Null when no process
+     * is ready.
+     */
+    fun supports(capability: String): Boolean? {
+        // Absent: not offered.
+        val value = capabilities?.let { it[capability] ?: JsonNull }
+        val disabled = value is JsonPrimitive && value.booleanOrNull == false
+        return value?.let { it != JsonNull && !disabled }
+    }
+
+    /** The value of capability [name] of the ready process, null when it has none or no process is ready. */
+    fun capability(name: String): JsonElement? = capabilities?.get(name)
 
     /** Kills what is left without asking (after [Command.Close], or when it did not answer in time). */
     fun kill() {
@@ -401,7 +458,7 @@ internal class ManagedServer(
             }
 
             failure != null -> {
-                Unit
+                // the link broke: the server exited, and its exit is reported
             }
 
             answered.getOrNull() == null -> {
@@ -415,11 +472,30 @@ internal class ManagedServer(
     }
 
     private fun ready(launched: Process, link: LspConnection, initialized: JsonElement?) {
+        val answer = initialized as? JsonObject
+        val offered = answer?.get(CAPABILITIES) as? JsonObject
+        capabilities = offered ?: JsonObject(emptyMap())
+        hooks.onRestarted(id)
         runCatching { link.notify("initialized", JsonObject(emptyMap())) }
         openDocuments(DocumentOutbox(link, scope, syncKindOf(initialized)))
         // A key per process: the old one may still be untracked after a new one started.
         samplerKey = "$id#${launched.pid()}".also { history = sampler?.track(it, launched.toHandle()) }
+        indexingMayBeginUntil = System.nanoTime() + timings.indexingStartMs * NANOS_PER_MILLI
         setState(if (progress.isEmpty()) LanguageServerState.Running else LanguageServerState.Indexing, null)
+    }
+
+    /**
+     * Suspends while the server indexes the project, or may still begin to just after it started, at most [maxMs]:
+     * until then a server such as intelephense finds no usage (it answers an empty list). False when it still indexes.
+     */
+    suspend fun awaitIndexed(maxMs: Long): Boolean {
+        val done =
+            withTimeoutOrNull(maxMs) {
+                val beginsWithin = (indexingMayBeginUntil - System.nanoTime()) / NANOS_PER_MILLI
+                if (beginsWithin > 0) delay(beginsWithin)
+                indexing.first { !it }
+            }
+        return done != null
     }
 
     // Under the documents' lock: an edit arriving meanwhile is either replayed here or sent after.
@@ -432,6 +508,7 @@ internal class ManagedServer(
     }
 
     private fun closeOutbox() {
+        capabilities = null
         val close = {
             outbox?.close()
             outbox = null
@@ -465,9 +542,32 @@ internal class ManagedServer(
         synchronized(stateLock) {
             state = new
             message = why
+            indexing.value = new == LanguageServerState.Indexing
         }
+        measureStart(new)
         onChange()
     }
+
+    // lsp.start: from Starting to the answer of initialize (Running or Indexing), or to the failure.
+    private fun measureStart(new: LanguageServerState) {
+        val telemetry = hooks.telemetry()
+        val pending = startSpan
+        if (new == LanguageServerState.Starting) {
+            telemetry.end(pending, Outcome.Cancelled)
+            startSpan = telemetry.start(Operation.LspStart, Attributes.of(Attribute.Language to target.spec.language))
+            return
+        }
+        if (pending == null) return
+        startSpan = null
+        telemetry.end(pending, startOutcome(new))
+    }
+
+    private fun startOutcome(new: LanguageServerState): Outcome =
+        when (new) {
+            LanguageServerState.Running, LanguageServerState.Indexing -> Outcome.Ok
+            LanguageServerState.Stopped, LanguageServerState.Restarting -> Outcome.Cancelled
+            else -> Outcome.Error(new.name)
+        }
 
     private fun progressChanged() {
         val changed =
@@ -475,11 +575,13 @@ internal class ManagedServer(
                 when {
                     state == LanguageServerState.Running && progress.isNotEmpty() -> {
                         state = LanguageServerState.Indexing
+                        indexing.value = true
                         true
                     }
 
                     state == LanguageServerState.Indexing && progress.isEmpty() -> {
                         state = LanguageServerState.Running
+                        indexing.value = false
                         indexingEndedAt = clock()
                         true
                     }
@@ -504,9 +606,20 @@ internal class ManagedServer(
                 buildJsonArray { add(folder()) }
             }
 
+            "workspace/diagnostic/refresh" -> {
+                hooks.onDiagnosticsRefresh(id)
+                JsonNull
+            }
+
+            "workspace/applyEdit" -> {
+                val edit = params as? JsonObject
+                val applied = edit != null && hooks.onApplyEdit(id, edit)
+                buildJsonObject { put("applied", applied) }
+            }
+
             "window/workDoneProgress/create", "client/registerCapability", "client/unregisterCapability",
             "window/showMessageRequest", "workspace/semanticTokens/refresh", "workspace/inlayHint/refresh",
-            "workspace/diagnostic/refresh", "workspace/codeLens/refresh",
+            "workspace/codeLens/refresh",
             -> {
                 JsonNull
             }
@@ -520,11 +633,15 @@ internal class ManagedServer(
         val fields = params as? JsonObject
         when {
             fields == null -> {
-                Unit
+                // a notification without parameters: none the IDE follows
             }
 
             method == "\$/progress" -> {
                 onProgress(fields)
+            }
+
+            method == "textDocument/publishDiagnostics" -> {
+                hooks.onDiagnostics(id, fields)
             }
 
             method == "window/logMessage" || method == "window/showMessage" -> {
@@ -581,24 +698,10 @@ internal class ManagedServer(
             put("rootUri", rootUri())
             put("rootPath", target.root)
             putJsonArray("workspaceFolders") { add(folder()) }
-            putJsonObject("capabilities") {
+            putJsonObject(CAPABILITIES) {
                 putJsonObject("window") { put("workDoneProgress", true) }
-                putJsonObject("workspace") {
-                    put("configuration", true)
-                    put("workspaceFolders", true)
-                }
-                putJsonObject("textDocument") {
-                    putJsonObject("synchronization") { put("dynamicRegistration", false) }
-                    putJsonObject("publishDiagnostics") {}
-                    putJsonObject("completion") {
-                        put("contextSupport", false)
-                        putJsonObject("completionItem") {
-                            // The editor inserts plain text: no tab stops to fill.
-                            put("snippetSupport", false)
-                            put("insertReplaceSupport", false)
-                        }
-                    }
-                }
+                put("workspace", WORKSPACE_CAPABILITIES)
+                put("textDocument", TEXT_DOCUMENT_CAPABILITIES)
             }
             target.spec.initializationOptions?.let { put("initializationOptions", it) }
         }
@@ -606,7 +709,7 @@ internal class ManagedServer(
     // textDocumentSync is a number or an object whose change is one; Full is 1, Incremental 2, None 0.
     private fun syncKindOf(initialized: JsonElement?): SyncKind {
         val initializeResult = initialized as? JsonObject
-        val capabilities = initializeResult?.get("capabilities") as? JsonObject
+        val capabilities = initializeResult?.get(CAPABILITIES) as? JsonObject
         val syncElement = capabilities?.get("textDocumentSync")
 
         val syncAsPrimitive = syncElement as? JsonPrimitive

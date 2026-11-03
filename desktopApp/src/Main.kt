@@ -1,7 +1,9 @@
 package org.example.kotlineditor
 
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
@@ -16,7 +18,15 @@ import org.example.kotlineditor.server.LocalServices
 import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.FilePreferenceStore
 import org.example.kotlineditor.syntax.treesitter.GrammarStore
+import org.example.kotlineditor.telemetry.ClientTelemetry
+import org.example.kotlineditor.telemetry.HookedTelemetry
+import org.example.kotlineditor.telemetry.Operation
+import org.example.kotlineditor.telemetry.Side
+import org.example.kotlineditor.telemetry.Telemetry
+import org.example.kotlineditor.telemetry.otel.ExportConfig
+import org.example.kotlineditor.telemetry.otel.OtelHook
 import java.io.File
+import java.lang.management.ManagementFactory
 
 /**
  * The IDE is a client of the Kotlin Editor server. By default the server is embedded (started on loopback with a
@@ -40,17 +50,28 @@ fun main(args: Array<String>) {
     // Only an embedded server can be returned to when the remote session ends.
     val localServices = services.takeIf { embedded != null }
 
+    val exporter = DesktopExporter()
     application {
         val scope = rememberCoroutineScope()
         val state =
             remember {
-                AppState(services, scope, FilePreferenceStore(), grammarStore(), localServices, JvmRemoteFactory)
+                AppState(
+                    services,
+                    scope,
+                    FilePreferenceStore(),
+                    grammarStore(),
+                    localServices,
+                    JvmRemoteFactory,
+                    telemetryOf = exporter::telemetryOf,
+                )
             }
+        LaunchedEffect(Unit) { measureStartup() }
         Window(
             onCloseRequest = {
                 state.exit {
                     client.close()
                     embedded?.close()
+                    exporter.close()
                     exitApplication()
                 }
             },
@@ -59,6 +80,38 @@ fun main(args: Array<String>) {
         ) {
             App(state)
         }
+    }
+}
+
+// From the start of the JVM to the first frame drawn.
+private suspend fun measureStartup() {
+    repeat(2) { withFrameNanos {} }
+    val uptime = ManagementFactory.getRuntimeMXBean().uptime
+    ClientTelemetry.record(Operation.AppStartup, uptime * NANOS_PER_MILLI)
+}
+
+private const val NANOS_PER_MILLI = 1_000_000L
+
+/** The telemetry of the IDE window, exported to OpenTelemetry once the user agreed. */
+private class DesktopExporter : AutoCloseable {
+    private var hook: OtelHook? = null
+
+    fun telemetryOf(instanceId: String): Telemetry {
+        val config =
+            ExportConfig(
+                endpoint = ExportConfig.endpointOf(),
+                serviceName = "kotlin-editor-desktop",
+                serviceVersion = Protocol.APP_VERSION,
+                instanceId = instanceId,
+            )
+        val created = OtelHook(config)
+        hook = created
+        return HookedTelemetry(listOf(created), Side.Client)
+    }
+
+    // What is queued leaves before the IDE exits, waiting at most the export's timeout.
+    override fun close() {
+        hook?.close()
     }
 }
 

@@ -136,7 +136,12 @@ class SearchE2eTest {
             awaitCondition { app.project.fileIndex.files != null }
             // The list of every file is shown first.
             waitForIdle()
+            // Typed into the field once it has the focus, like a user who sees the popup: else the keys go elsewhere.
+            val input = onNodeWithTag(TreeTags.GOTO_FILE_INPUT)
+            awaitCondition { runCatching { input.assertIsFocused() }.isSuccess }
             onNodeWithTag(TreeTags.GOTO_FILE_INPUT).performTextInput("strkt")
+            // The text is in the field at once; only the search lags behind.
+            onNodeWithTag(TreeTags.GOTO_FILE_INPUT).assertTextEquals("strkt")
             onNodeWithTag(TreeTags.GOTO_FILE_INPUT).performKeyInput { pressKey(Key.Enter) }
             awaitTag(EditorTags.tab("src/main/kotlin/util/Strings.kt"))
             awaitNoTag(TreeTags.GOTO_FILE)

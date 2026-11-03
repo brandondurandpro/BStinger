@@ -12,9 +12,11 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import org.example.kotlineditor.model.AppServices
+import org.example.kotlineditor.model.BlameLine
 import org.example.kotlineditor.model.CompletionResult
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.GitCommit
+import org.example.kotlineditor.model.GitCommitDetails
 import org.example.kotlineditor.model.GitCommitFile
 import org.example.kotlineditor.model.GitFileStatus
 import org.example.kotlineditor.syntax.treesitter.GrammarStore
@@ -64,9 +66,16 @@ class ProjectState(
 
     /** Code completion in the editors, from the language servers. */
     val completion =
-        CompletionState(scope) { path, document ->
-            languageServers?.complete(path, document) ?: CompletionResult.NotReady
-        }
+        CompletionState(
+            scope,
+            resolve = { token, index -> languageServers?.resolveCompletion(token, index) },
+        ) { path, document -> languageServers?.complete(path, document) ?: CompletionResult.NotReady }
+
+    /** Opens a web address in the browser of the machine of the IDE; tests replace it. */
+    var openUrl: (String) -> Unit = ::openInBrowser
+
+    /** Hover, navigation, usages, problems, rename, reformat and quick fixes, from the language servers. */
+    val insight = CodeInsightState(scope, { insightBackend() }, ProjectInsightHost { this })
     val terminal = TerminalState(root.path, services.terminal, scope)
 
     /** Git: branch, status, commit, branches of the toolbar, and the Branches tool window's history. */
@@ -90,6 +99,17 @@ class ProjectState(
     override var autoSelectOpenedFile by
         mutableStateOf(preferences[PreferenceKeys.AUTO_SELECT_OPENED_FILE]?.toBooleanStrictOrNull() ?: true)
 
+    override var inlayHintsMode: InlayHintsMode
+        get() = insight.inlayHintsMode
+        set(value) {
+            insight.inlayHintsMode = value
+        }
+
+    init {
+        val saved = preferences[PreferenceKeys.INLAY_HINTS]
+        insight.inlayHintsMode = InlayHintsMode.entries.firstOrNull { it.name == saved } ?: InlayHintsMode.Popup
+    }
+
     /** Diff viewer layout: old and new files side by side (two panes) instead of the unified view. */
     var diffSideBySide by mutableStateOf(false)
 
@@ -99,6 +119,7 @@ class ProjectState(
     init {
         git.refresh()
         followActiveFile()
+        followInsight()
     }
 
     /** Shows or hides a tool window (Alt+1, Alt+9, Alt+F12, Ctrl+Alt+Shift+D or its button in the left strip). */
@@ -143,8 +164,38 @@ class ProjectState(
 
     /** Opens the diff of [file] in [commit] (a click on a changed file in the Branches window). */
     override fun openCommitDiff(commit: GitCommit, file: GitCommitFile) {
-        val target = CommitDiffTarget(commit.hash, commit.shortHash, file.oldPath)
+        val date = localDate(commit.time)
+        val header = CommitHeader(commit.author, date, commit.subject)
+        val target = CommitDiffTarget(commit.hash, commit.shortHash, file.oldPath, header)
         editor.openCommitDiff(entryAt(file.path), target)
+    }
+
+    /**
+     * A click on the blame annotation of [line] in [tab]: the diff of the file in the commit that last changed the
+     * line, its whole message above. Lines not committed yet have no commit to show.
+     */
+    fun openBlameCommit(tab: EditorTab, line: BlameLine) {
+        if (line.commit.all { it == '0' }) return
+        scope.launch {
+            val details = runCatching { services.git.commitDetails(root.path, line.commit) }.getOrNull()
+            if (details != null && details.hash.isNotEmpty()) openCommitOf(tab, line, details)
+        }
+    }
+
+    private fun openCommitOf(tab: EditorTab, line: BlameLine, details: GitCommitDetails) {
+        run {
+            val relative = tree.relativePath(tab.entry)
+            val file = details.files.firstOrNull { it.path == relative }
+            val header = CommitHeader(line.author, line.date, details.message)
+            val target =
+                CommitDiffTarget(
+                    details.hash,
+                    GitCommit(details.hash, emptyList(), line.author, 0, "").shortHash,
+                    file?.oldPath,
+                    header,
+                )
+            editor.openCommitDiff(tab.entry, target)
+        }
     }
 
     /** Opens [entry] at [start]..[end], remembering where we came from. */
@@ -155,6 +206,10 @@ class ProjectState(
         if (backStack.size > MAX_BACK_STEPS) backStack.removeFirst()
         editor.openAt(entry, start, end)
     }
+
+    override suspend fun serverOutline(document: Document) = outlineFromServer(document)
+
+    override suspend fun serverSymbols(query: String) = symbolsFromServers(query)
 
     // Selects the active file in the tree whenever it changes (and when the option is turned back on).
     private fun followActiveFile() {
@@ -174,4 +229,10 @@ class ProjectState(
         terminal.stop()
         scope.cancel()
     }
+}
+
+// `yyyy-MM-dd` of a commit time (seconds since the epoch), in the local time zone.
+private fun localDate(seconds: Long): String {
+    val instant = java.time.Instant.ofEpochSecond(seconds)
+    return instant.atZone(java.time.ZoneId.systemDefault()).toLocalDate().toString()
 }

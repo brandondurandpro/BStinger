@@ -19,6 +19,7 @@ fun CompletionResult.toJson(): JsonObject =
         put("from", replaceFrom)
         put("incomplete", incomplete)
         put("ready", ready)
+        if (token.isNotEmpty()) put("token", token)
         put(
             "items",
             JsonArray(
@@ -28,6 +29,8 @@ fun CompletionResult.toJson(): JsonObject =
                         put("k", item.kind.name)
                         item.detail?.let { put("d", it) }
                         if (item.insertText != item.label) put("i", item.insertText)
+                        item.documentation?.let { put("m", it) }
+                        if (item.resolveIndex >= 0) put("r", item.resolveIndex)
                     }
                 },
             ),
@@ -44,6 +47,7 @@ fun JsonElement.completionResult(): CompletionResult {
         items = items,
         incomplete = result.bool("incomplete"),
         ready = result.bool("ready"),
+        token = result.stringOrNull("token").orEmpty(),
     )
 }
 
@@ -54,5 +58,6 @@ private fun JsonObject.completionItem(): CompletionItem {
     val kind = knownKind ?: CompletionKind.Other
     // The insert text travels only when it differs from the label.
     val insertText = stringOrNull("i") ?: label
-    return CompletionItem(label, kind, stringOrNull("d"), insertText)
+    val resolveIndex = get("r")?.let { int("r") } ?: -1
+    return CompletionItem(label, kind, stringOrNull("d"), insertText, stringOrNull("m"), resolveIndex)
 }

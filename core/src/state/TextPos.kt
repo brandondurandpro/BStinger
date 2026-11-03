@@ -11,19 +11,28 @@ data class TextPos(val line: Int, val column: Int) : Comparable<TextPos> {
 
 const val TAB_SIZE = 4
 
-/** Column on screen of [column] in [line], tabs counting as [TAB_SIZE] cells. */
-fun visualColumn(line: String, column: Int): Int =
-    (0 until minOf(column, line.length)).sumOf { if (line[it] == '\t') TAB_SIZE else 1 }
+/**
+ * Column on screen of [column] in [line], tabs counting as [TAB_SIZE] cells, and the cells of the [inlays] drawn
+ * before it (those at [column] included: the caret goes after a hint, before the character it precedes).
+ */
+fun visualColumn(line: String, column: Int, inlays: LineInlays? = null): Int {
+    val cells = (0 until minOf(column, line.length)).sumOf { if (line[it] == '\t') TAB_SIZE else 1 }
+    return cells + (inlays?.cellsBefore(column) ?: 0)
+}
 
-/** Inverse of [visualColumn]: the character column closest to the [visual] cell. */
-fun columnForVisual(line: String, visual: Int): Int {
+/** Inverse of [visualColumn]: the character column closest to the [visual] cell; a cell of a hint is its column. */
+fun columnForVisual(line: String, visual: Int, inlays: LineInlays? = null): Int {
     var cells = 0
     var column = 0
-    while (column < line.length) {
+    var found = false
+    while (column < line.length && !found) {
+        cells += inlays?.cellsAt(column) ?: 0
         val width = if (line[column] == '\t') TAB_SIZE else 1
-        if (visual < cells + (width + 1) / 2) break
-        cells += width
-        column++
+        found = visual < cells + (width + 1) / 2
+        if (!found) {
+            cells += width
+            column++
+        }
     }
     return column
 }

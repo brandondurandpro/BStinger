@@ -26,7 +26,14 @@ object PreferenceKeys {
     const val EDITOR_FONT_SIZE = "editor.fontSize"
     const val AUTO_SELECT_OPENED_FILE = "project.autoSelectOpenedFile"
     const val AGENT_MODE = "experimental.agentMode"
+    const val INLAY_HINTS = "editor.inlayHints"
     const val LAYOUT_PREFIX = "layout."
+
+    /** Whether the user agreed to share anonymous performance measures; absent until asked, which means no. */
+    const val TELEMETRY_ENABLED = "telemetry.enabled"
+
+    /** The random id of this installation in the measures, made when the user agreed. */
+    const val TELEMETRY_INSTANCE = "telemetry.instanceId"
 
     /** Last directory the Open Project dialog browsed, as the absolute path chosen. */
     const val PICKER_DIRECTORY = "picker.directory"

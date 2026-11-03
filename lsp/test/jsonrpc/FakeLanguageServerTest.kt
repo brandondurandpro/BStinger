@@ -113,7 +113,10 @@ class FakeLanguageServerTest {
         runBlocking<Unit> {
             val server = start()
             val result = server.connection.initialize()
-            assertEquals(JsonPrimitive(2), result.jsonObject["capabilities"]!!.jsonObject["textDocumentSync"])
+            val sync = result.jsonObject["capabilities"]!!.jsonObject["textDocumentSync"]!!.jsonObject
+            // Incremental changes, and the saves.
+            assertEquals(JsonPrimitive(2), sync["change"])
+            assertTrue("save" in sync)
             withTimeout(ANSWER_MS) { server.connection.request("shutdown") }
             server.connection.notify("exit")
             assertTrue(server.process.waitFor(ANSWER_MS, TimeUnit.MILLISECONDS))

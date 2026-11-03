@@ -54,7 +54,25 @@ object IdeColors {
     val TextSelection = Color(0xFF214283)
     val BracketMatch = Color(0xFF3B514D)
     val IdentifierUsage = Color(0xFF373B39)
+    val IdentifierWrite = Color(0xFF472C47)
+    val ProblemError = Color(0xFFF75464)
+    val ProblemWarning = Color(0xFFE5B53D)
+    val ProblemInformation = Color(0xFF7E838B)
+    val InlayHint = Color(0xFF868A91)
+    val DocumentationCode = Color(0xFF1E1F22)
     val FoldPlaceholder = Color(0xFF393B40)
+
+    /** A class, interface or enum, as the language server tells (semantic tokens). */
+    val SemanticType = Color(0xFF6FAFBD)
+
+    /** A call of a function or method, as the language server tells. */
+    val SemanticCall = Color(0xFF57AAF7)
+
+    /** A parameter, as the language server tells. */
+    val SemanticParameter = Color(0xFFD0A86C)
+
+    /** Background of an inlay hint. */
+    val InlayHintBackground = Color(0xFF3B3D42)
 
     val Keyword = Color(0xFFCF8E6D)
     val StringLiteral = Color(0xFF6AAB73)

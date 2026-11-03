@@ -6,6 +6,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
@@ -25,6 +26,7 @@ internal object JsonRpc {
     private const val RESULT = "result"
     private const val ERROR = "error"
     private const val STREAM = "stream"
+    private const val TRACE = "trace"
 
     private val methods = Method.entries.associateBy { it.rpcName }
 
@@ -39,6 +41,7 @@ internal object JsonRpc {
                 FrameKind.Request -> {
                     val method = checkNotNull(frame.method) { "Request without method" }
                     request(frame.id, method.rpcName, frame.payload)
+                    frame.trace?.let { put(TRACE, it) }
                 }
 
                 FrameKind.Welcome, FrameKind.Response -> {
@@ -89,14 +92,14 @@ internal object JsonRpc {
             PING -> Frame(FrameKind.Ping, 0, encoded = body)
             PONG -> Frame(FrameKind.Pong, 0, encoded = body)
             CANCEL -> Frame(FrameKind.Cancel, params.jsonObject.long(ID), encoded = body)
-            else -> request(method, id, params, body)
+            else -> request(method, id, params, body, (message[TRACE] as? JsonPrimitive)?.contentOrNull)
         }
     }
 
     // An unknown method keeps a null method: the server answers it with METHOD_NOT_FOUND.
-    private fun request(method: String, id: Long?, params: JsonElement, body: ByteArray): Frame {
+    private fun request(method: String, id: Long?, params: JsonElement, body: ByteArray, trace: String?): Frame {
         requireNotNull(id) { "Request without id" }
-        return Frame(FrameKind.Request, id, params, methods[method], encoded = body)
+        return Frame(FrameKind.Request, id, params, methods[method], encoded = body, trace = trace)
     }
 
     // The handshake is the only request with HELLO_ID: its answer is a Welcome or a Reject.

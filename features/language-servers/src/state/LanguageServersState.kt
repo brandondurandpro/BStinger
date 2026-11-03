@@ -16,8 +16,10 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
+import org.example.kotlineditor.model.CodeIntelligence
 import org.example.kotlineditor.model.CompletionResult
 import org.example.kotlineditor.model.ConnectionStatus
+import org.example.kotlineditor.model.DiagnosticsSnapshot
 import org.example.kotlineditor.model.LanguageServerCandidateInfo
 import org.example.kotlineditor.model.LanguageServerChoice
 import org.example.kotlineditor.model.LanguageServerInfo
@@ -61,6 +63,9 @@ class LanguageServersState(
     var status by mutableStateOf(LanguageServersStatus.Empty)
         private set
 
+    /** Whether a language server runs: before that, nothing can adapt the code to a file operation. */
+    val anyRunning: Boolean get() = status.servers.any { it.state == LanguageServerState.Running }
+
     /** The choice offered (the banner above the editors), null when none. */
     var choice: LanguageServerChoice? by mutableStateOf(null)
         private set
@@ -81,6 +86,13 @@ class LanguageServersState(
     var error: String? by mutableStateOf(null)
         private set
 
+    /** The problems of the open documents, as the server last sent them. */
+    var diagnostics by mutableStateOf(DiagnosticsSnapshot.Empty)
+        private set
+
+    /** The requests of hover, navigation, usages, problems and edits. */
+    val intelligence: CodeIntelligence get() = servers
+
     /** The log open in the Language Servers window. */
     var log: LanguageServerLog? by mutableStateOf(null)
         private set
@@ -94,6 +106,7 @@ class LanguageServersState(
 
     init {
         scope.launch { poll() }
+        scope.launch { pollDiagnostics() }
         // One at a time, in order: each declaration replaces the previous one on the server.
         scope.launch { declarations.filterNotNull().collect(::send) }
         // A restarted server lost the sessions and what they declared: declared again at each reconnection.
@@ -136,6 +149,17 @@ class LanguageServersState(
             CompletionResult.NotReady
         }
     }
+
+    /** The documentation of item [index] of the completion answer [token]; null when none, or unreachable. */
+    suspend fun resolveCompletion(token: String, index: Int): String? =
+        try {
+            servers.resolveCompletion(token, index)
+        } catch (_: IOException) {
+            null
+        }
+
+    /** Version of [path] the server has once the edits made so far are sent; null when it is not mirrored. */
+    fun versionOf(path: String, document: Document): Int? = documents.versionOf(path, document)
 
     /** Uses [candidate] for the language of the choice panel. */
     fun choose(candidate: String) {
@@ -268,6 +292,23 @@ class LanguageServersState(
             try {
                 val next = servers.status(since)
                 status = next
+                since = next.version
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                delay(RETRY_MS)
+            }
+        }
+    }
+
+    // Long poll, like the status: a server that restarted answers its own (lower) version at once.
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun pollDiagnostics() {
+        var since = 0L
+        while (true) {
+            try {
+                val next = servers.diagnostics(since)
+                diagnostics = next
                 since = next.version
             } catch (cancelled: CancellationException) {
                 throw cancelled

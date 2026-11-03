@@ -7,6 +7,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
+import org.example.kotlineditor.lsp.intelligence.contentsMarkdown
 import org.example.kotlineditor.model.CompletionItem
 import org.example.kotlineditor.model.CompletionKind
 import org.example.kotlineditor.model.CompletionResult
@@ -19,6 +20,8 @@ private val SNIPPET_PLACEHOLDER = Regex("""\$\{\d+(?::([^}]*))?}|\$\d+""")
 
 /** An item of the language server's answer, before filtering. */
 private class Candidate(
+    // The item as the server sent it, to resolve it later.
+    val raw: JsonObject,
     val item: CompletionItem,
     // What the typed text is compared to.
     val filterText: String,
@@ -66,7 +69,19 @@ object CompletionAnswers {
     }
 
     /** The result for an [answer] (a `CompletionList`, an array of items, or null) at [column] of [line]. */
-    fun translate(answer: JsonElement?, line: String, column: Int, max: Int = MAX_COMPLETION_ITEMS): CompletionResult {
+    fun translate(answer: JsonElement?, line: String, column: Int, max: Int = MAX_COMPLETION_ITEMS): CompletionResult =
+        translateWithItems(answer, line, column, max).first
+
+    /**
+     * Like [translate], with the server's item behind each item of the result, in the same order: item `i` is
+     * resolved with the `i`th of them, its [CompletionItem.resolveIndex].
+     */
+    fun translateWithItems(
+        answer: JsonElement?,
+        line: String,
+        column: Int,
+        max: Int = MAX_COMPLETION_ITEMS,
+    ): Pair<CompletionResult, List<JsonObject>> {
         val caret = column.coerceIn(0, line.length)
         val typedWordStart = wordStart(line, caret)
 
@@ -91,12 +106,15 @@ object CompletionAnswers {
                     .thenBy { it.second.sortText }
                     .thenBy { it.second.item.label },
             )
-        return CompletionResult(
-            replaceFrom = from,
-            items = sorted.take(max).map { it.third },
-            incomplete = serverIncomplete || sorted.size > max,
-            ready = true,
-        )
+        val kept = sorted.take(max)
+        val result =
+            CompletionResult(
+                replaceFrom = from,
+                items = kept.mapIndexed { index, ranked -> ranked.third.copy(resolveIndex = index) },
+                incomplete = serverIncomplete || sorted.size > max,
+                ready = true,
+            )
+        return result to kept.map { it.second.raw }
     }
 
     // The candidate with its score, inserted from [from]; null when the typed text does not match it.
@@ -124,11 +142,12 @@ object CompletionAnswers {
         val kindNumber = kindElement?.intOrNull
         val detail = item.string("detail")
         val visibleDetail = detail?.takeIf { it.isNotBlank() }
-        val completionItem = CompletionItem(label, kindOf(kindNumber), visibleDetail, insertedText)
+        val documentation = contentsMarkdown(item["documentation"])?.takeIf { it.isNotBlank() }
+        val completionItem = CompletionItem(label, kindOf(kindNumber), visibleDetail, insertedText, documentation)
 
         val filterText = item.string("filterText") ?: label
         val sortText = item.string("sortText") ?: label
-        return Candidate(completionItem, filterText, sortText, editStartOf(edit, caret))
+        return Candidate(item, completionItem, filterText, sortText, editStartOf(edit, caret))
     }
 
     // What accepting the item inserts: the edit's text, else insertText, else the label; snippets as plain text.
@@ -175,9 +194,9 @@ object CompletionAnswers {
             else -> CompletionKind.Other
         }
 
-    private fun isWordChar(c: Char) = c.isLetterOrDigit() || c == '_' || c == '$'
-
     private fun JsonObject.string(key: String) = (get(key) as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull
 
     private fun JsonObject.int(key: String) = (get(key) as? JsonPrimitive)?.intOrNull
 }
+
+private fun isWordChar(c: Char) = c.isLetterOrDigit() || c == '_' || c == '$'

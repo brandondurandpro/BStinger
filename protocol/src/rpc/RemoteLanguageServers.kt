@@ -1,17 +1,48 @@
 package org.example.kotlineditor.rpc
 
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
+import org.example.kotlineditor.model.CodeActionsResult
+import org.example.kotlineditor.model.CodeLensesResult
 import org.example.kotlineditor.model.CompletionResult
+import org.example.kotlineditor.model.DiagnosticsSnapshot
+import org.example.kotlineditor.model.DocumentLinksResult
+import org.example.kotlineditor.model.DocumentPosition
+import org.example.kotlineditor.model.EditResult
+import org.example.kotlineditor.model.FileOperation
+import org.example.kotlineditor.model.FoldingRangesResult
+import org.example.kotlineditor.model.FormatOptions
+import org.example.kotlineditor.model.HierarchyDirection
+import org.example.kotlineditor.model.HierarchyItem
+import org.example.kotlineditor.model.HierarchyKind
+import org.example.kotlineditor.model.HierarchyResult
+import org.example.kotlineditor.model.HoverResult
+import org.example.kotlineditor.model.InlayHintsResult
 import org.example.kotlineditor.model.LanguageServerChoice
 import org.example.kotlineditor.model.LanguageServers
 import org.example.kotlineditor.model.LanguageServersStatus
+import org.example.kotlineditor.model.LocationsResult
+import org.example.kotlineditor.model.NavigationKind
+import org.example.kotlineditor.model.OperatedFile
+import org.example.kotlineditor.model.OutlineResult
+import org.example.kotlineditor.model.RenameTarget
+import org.example.kotlineditor.model.SelectionRangesResult
+import org.example.kotlineditor.model.SemanticTokensResult
+import org.example.kotlineditor.model.SignatureHelpResult
+import org.example.kotlineditor.model.SymbolHighlight
 import org.example.kotlineditor.model.TextChange
+import org.example.kotlineditor.model.TextRange
+import org.example.kotlineditor.model.TypeFormattingTriggers
+import org.example.kotlineditor.model.UsageCountsResult
+import org.example.kotlineditor.model.WorkspaceSymbolsResult
 
 private const val ID = "id"
 private const val LANGUAGE = "language"
 private const val PROJECT = "project"
 private const val PATH = "path"
 private const val VERSION = "version"
+private const val TOKEN = "token"
+private const val INDEX = "index"
 
 /** [LanguageServers] of the server. */
 @Suppress("TooManyFunctions")
@@ -92,5 +123,215 @@ class RemoteLanguageServers(private val client: RpcClient) : LanguageServers {
                 put("column", column)
             }
         return result.completionResult()
+    }
+
+    override suspend fun resolveCompletion(token: String, index: Int): String? {
+        val result =
+            client.call(Method.LspResolveCompletion) {
+                put(TOKEN, token)
+                put(INDEX, index)
+            }
+        return result.jsonObject.stringOrNull("documentation")
+    }
+
+    override suspend fun hover(at: DocumentPosition): HoverResult =
+        client.call(Method.LspHover) { putPosition(at) }.hoverResult()
+
+    override suspend fun navigate(at: DocumentPosition, kind: NavigationKind): LocationsResult {
+        val result =
+            client.call(Method.LspNavigate) {
+                putPosition(at)
+                put("kind", kind.name)
+            }
+        return result.locationsResult()
+    }
+
+    override suspend fun references(at: DocumentPosition, includeDeclaration: Boolean): LocationsResult {
+        val result =
+            client.call(Method.LspReferences) {
+                putPosition(at)
+                put("includeDeclaration", includeDeclaration)
+            }
+        return result.locationsResult()
+    }
+
+    override suspend fun highlights(at: DocumentPosition): List<SymbolHighlight> =
+        client.call(Method.LspHighlights) { putPosition(at) }.symbolHighlights()
+
+    override suspend fun signatureHelp(at: DocumentPosition): SignatureHelpResult =
+        client.call(Method.LspSignatureHelp) { putPosition(at) }.signatureHelpResult()
+
+    override suspend fun outline(path: String, version: Int): OutlineResult {
+        val result =
+            client.call(Method.LspOutline) {
+                put(PATH, path)
+                put(VERSION, version)
+            }
+        return result.outlineResult()
+    }
+
+    override suspend fun prepareHierarchy(at: DocumentPosition, kind: HierarchyKind): HierarchyResult {
+        val result =
+            client.call(Method.LspPrepareHierarchy) {
+                putPosition(at)
+                put("kind", kind.name)
+            }
+        return result.hierarchyResult()
+    }
+
+    override suspend fun hierarchyChildren(
+        path: String,
+        item: HierarchyItem,
+        direction: HierarchyDirection,
+    ): HierarchyResult {
+        val result =
+            client.call(Method.LspHierarchyChildren) {
+                put(PATH, path)
+                put("item", item.toJson())
+                put("direction", direction.name)
+            }
+        return result.hierarchyResult()
+    }
+
+    override suspend fun semanticTokens(path: String, version: Int): SemanticTokensResult {
+        val result =
+            client.call(Method.LspSemanticTokens) {
+                put(PATH, path)
+                put(VERSION, version)
+            }
+        return result.semanticTokensResult()
+    }
+
+    override suspend fun documentLinks(path: String, version: Int): DocumentLinksResult {
+        val result =
+            client.call(Method.LspDocumentLinks) {
+                put(PATH, path)
+                put(VERSION, version)
+            }
+        return result.documentLinksResult()
+    }
+
+    override suspend fun codeLenses(path: String, version: Int): CodeLensesResult {
+        val result =
+            client.call(Method.LspCodeLenses) {
+                put(PATH, path)
+                put(VERSION, version)
+            }
+        return result.codeLensesResult()
+    }
+
+    override suspend fun runCodeLens(token: String, index: Int): EditResult {
+        val result =
+            client.call(Method.LspRunCodeLens) {
+                put(TOKEN, token)
+                put(INDEX, index)
+            }
+        return result.editResult()
+    }
+
+    override suspend fun inlayHints(path: String, version: Int): InlayHintsResult {
+        val result =
+            client.call(Method.LspInlayHints) {
+                put(PATH, path)
+                put(VERSION, version)
+            }
+        return result.inlayHintsResult()
+    }
+
+    override suspend fun foldingRanges(path: String, version: Int): FoldingRangesResult {
+        val result =
+            client.call(Method.LspFoldingRanges) {
+                put(PATH, path)
+                put(VERSION, version)
+            }
+        return result.foldingRangesResult()
+    }
+
+    override suspend fun selectionRanges(at: DocumentPosition): SelectionRangesResult =
+        client.call(Method.LspSelectionRanges) { putPosition(at) }.selectionRangesResult()
+
+    override suspend fun workspaceSymbols(query: String): WorkspaceSymbolsResult =
+        client.call(Method.LspWorkspaceSymbols) { put("query", query) }.workspaceSymbolsResult()
+
+    override suspend fun usageCounts(path: String, version: Int): UsageCountsResult {
+        val result =
+            client.call(Method.LspUsageCounts) {
+                put(PATH, path)
+                put(VERSION, version)
+            }
+        return result.usageCountsResult()
+    }
+
+    override suspend fun diagnostics(since: Long): DiagnosticsSnapshot =
+        client.call(Method.LspDiagnostics) { put("since", since) }.diagnosticsSnapshot()
+
+    override suspend fun prepareRename(at: DocumentPosition): RenameTarget =
+        client.call(Method.LspPrepareRename) { putPosition(at) }.renameTarget()
+
+    override suspend fun rename(at: DocumentPosition, newName: String): EditResult {
+        val result =
+            client.call(Method.LspRename) {
+                putPosition(at)
+                put("newName", newName)
+            }
+        return result.editResult()
+    }
+
+    override suspend fun format(path: String, version: Int, range: TextRange?, options: FormatOptions): EditResult {
+        val result =
+            client.call(Method.LspFormat) {
+                put(PATH, path)
+                put(VERSION, version)
+                range?.let { put("range", it.toJson()) }
+                put("options", options.toJson())
+            }
+        return result.editResult()
+    }
+
+    override suspend fun typeFormattingTriggers(path: String, version: Int): TypeFormattingTriggers {
+        val result =
+            client.call(Method.LspTypeFormattingTriggers) {
+                put(PATH, path)
+                put(VERSION, version)
+            }
+        return result.typeFormattingTriggers()
+    }
+
+    override suspend fun formatOnType(at: DocumentPosition, character: String, options: FormatOptions): EditResult {
+        val result =
+            client.call(Method.LspFormatOnType) {
+                putPosition(at)
+                put("character", character)
+                put("options", options.toJson())
+            }
+        return result.editResult()
+    }
+
+    override suspend fun willChangeFiles(operation: FileOperation, files: List<OperatedFile>): EditResult {
+        val result =
+            client.call(Method.LspWillChangeFiles) {
+                put("operation", operation.name)
+                put("files", files.toJson())
+            }
+        return result.editResult()
+    }
+
+    override suspend fun codeActions(path: String, version: Int, range: TextRange): CodeActionsResult {
+        val result =
+            client.call(Method.LspCodeActions) {
+                put(PATH, path)
+                put(VERSION, version)
+                put("range", range.toJson())
+            }
+        return result.codeActionsResult()
+    }
+
+    override suspend fun applyCodeAction(token: String, index: Int): EditResult {
+        val result =
+            client.call(Method.LspApplyCodeAction) {
+                put(TOKEN, token)
+                put(INDEX, index)
+            }
+        return result.editResult()
     }
 }

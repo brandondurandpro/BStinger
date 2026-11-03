@@ -3,6 +3,7 @@ logback = "1.6.2"
 androidx-activity-compose = "1.13.0"
 androidx-lifecycle = "2.11.0"
 kotlinx-coroutines = "1.11.0"
+opentelemetry = "1.45.0"
 kotlinx-serialization = "1.9.0"
 zstd = "1.5.6-10"
 ghostty = "0.1.237"
@@ -10,12 +11,16 @@ pty4j21 = "0.22.2"
 jtreesitter = "0.26.1"
 tree-sitter-kotlin = "0.3.8.1"
 tree-sitter-json = "0.24.8"
+tree-sitter-php = "0.24.2"
 sshd = "2.20.1"
 # The Compose version the Kotlin Toolchain uses (`./kotlin show dependencies -m shared`): modules without the Compose
 # plugin (syntax, core) take its runtime as a plain library, and must stay on the same version.
 compose = "1.12.1"
 
 [libraries]
+# OpenTelemetry, configured by hand (no autoconfigure: it relies on ServiceLoader), OTLP over HTTP (no gRPC).
+opentelemetry-sdk = { module = "io.opentelemetry:opentelemetry-sdk", version.ref = "opentelemetry" }
+opentelemetry-exporter-otlp = { module = "io.opentelemetry:opentelemetry-exporter-otlp", version.ref = "opentelemetry" }
 # Snapshot state and UI types for the modules compiled without the Compose plugin; see the `compose` version.
 compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "compose" }
 compose-foundation = { module = "org.jetbrains.compose.foundation:foundation", version.ref = "compose" }
@@ -42,6 +47,7 @@ pty4j21 = { module = "com.sshtools:pty4j21", version.ref = "pty4j21" }
 jtreesitter = { module = "io.github.tree-sitter:jtreesitter", version.ref = "jtreesitter" }
 tree-sitter-kotlin = { module = "io.github.bonede:tree-sitter-kotlin", version.ref = "tree-sitter-kotlin" }
 tree-sitter-json = { module = "io.github.bonede:tree-sitter-json", version.ref = "tree-sitter-json" }
+tree-sitter-php = { module = "io.github.bonede:tree-sitter-php", version.ref = "tree-sitter-php" }
 # Test-only SSH server: the end-to-end tests connect the real OpenSSH client to it.
 sshd-core = { module = "org.apache.sshd:sshd-core", version.ref = "sshd" }
 sshd-sftp = { module = "org.apache.sshd:sshd-sftp", version.ref = "sshd" }

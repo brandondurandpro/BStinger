@@ -11,6 +11,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.ProjectFileSystem
+import org.example.kotlineditor.telemetry.ClientTelemetry
+import org.example.kotlineditor.telemetry.Operation
+import org.example.kotlineditor.telemetry.measureToFrame
+import org.example.kotlineditor.telemetry.outcome
 
 @Immutable
 data class TreeRow(val entry: FileEntry, val depth: Int, val expanded: Boolean, val loading: Boolean)
@@ -101,9 +105,16 @@ class FileTreeState(val root: FileEntry, private val fileSystem: ProjectFileSyst
         directories[directory.path] = directory
         loading[directory.path] = true
         scope.launch {
-            val list = runCatching { fileSystem.list(directory) }.getOrElse { emptyList() }
-            children[directory.path] = list
-            loading.remove(directory.path)
+            // From the click to the frame that shows the children.
+            ClientTelemetry.measureToFrame(
+                Operation.TreeExpand,
+                outcomeOf = { listed: Result<List<FileEntry>> -> listed.outcome() },
+            ) {
+                val listed = runCatching { fileSystem.list(directory) }
+                children[directory.path] = listed.getOrElse { emptyList() }
+                loading.remove(directory.path)
+                listed
+            }
         }
     }
 

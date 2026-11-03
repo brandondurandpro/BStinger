@@ -1,6 +1,7 @@
 package org.example.kotlineditor.testkit.lsp
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -8,6 +9,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
@@ -39,7 +41,9 @@ import kotlin.system.exitProcess
  * - output: `--garbage-stdout`, `--huge-message <mb>` (the hover answer), `--stderr-flood`;
  * - timing and questions: `--latency-ms <n>`, `--ask-configuration` (asks `workspace/configuration` after
  *   `initialized` and writes the answer to stderr), `--diagnostics`, `--progress <seconds>` (reports an
- *   "Indexing" progress from 0 to 100 % over that many seconds after `initialized`);
+ *   "Indexing" progress from 0 to 100 % over that many seconds after `initialized`), `--blind-until-indexed` (with
+ *   `--progress`: like intelephense, finds no definition nor usage until its indexing ended, which begins a moment
+ *   after `initialized`);
  * - completion: `--completion-items <n>` (n more functions, `generated_00001`...), `--full-sync` (asks for the whole
  *   text at each change), `--no-completion` (answers completion with an error).
  * A crash writes `Fatal error: fake crash` on stderr first, like a real server would.
@@ -51,9 +55,11 @@ object FakeLanguageServer {
     private const val CHUNK_MB = 4
     private const val CRASH_EXIT = 3
     private const val PROGRESS_STEPS = 10
+    private const val INDEXING_START_MS = 200L
     private const val PERCENT = 100
     private const val TICK_MS = 100L
     private const val MILLIS_PER_SECOND = 1000L
+    private const val WATCHED_DELETED = 3
 
     /** Starts the server (or, with `--hold-mb n`, a child that only holds n MB until its stdin closes). */
     @JvmStatic
@@ -101,6 +107,14 @@ object FakeLanguageServer {
         val completionItems: Int = 0,
         val fullSync: Boolean = false,
         val noCompletion: Boolean = false,
+        val without: Set<String> = emptySet(),
+        val noDiagnostics: Boolean = false,
+        // Gives the diagnostics when asked (textDocument/diagnostic) instead of publishing them.
+        val pullDiagnostics: Boolean = false,
+        // Reads the files on disk once, like a server that indexes them, then only what didChangeWatchedFiles names.
+        val index: Boolean = false,
+        // With progressSeconds: no definition nor usage until the indexing ended, as intelephense answers.
+        val blindUntilIndexed: Boolean = false,
     ) {
         val allocates get() = leakMbPerSecond > 0 || sawtooth != null || spikeThenPlateau != null
 
@@ -135,6 +149,11 @@ object FakeLanguageServer {
                     completionItems = int("completion-items") ?: 0,
                     fullSync = "full-sync" in values,
                     noCompletion = "no-completion" in values,
+                    without = values["without"]?.split(',')?.toSet().orEmpty(),
+                    noDiagnostics = "no-diagnostics" in values,
+                    pullDiagnostics = "pull-diagnostics" in values,
+                    index = "index" in values,
+                    blindUntilIndexed = "blind-until-indexed" in values,
                 )
             }
 
@@ -150,6 +169,7 @@ object FakeLanguageServer {
                     "latency-ms",
                     "progress",
                     "completion-items",
+                    "without",
                 )
         }
     }
@@ -185,6 +205,41 @@ object FakeLanguageServer {
         private var shutdown = false
         private var child: Process? = null
         private val documents = HashMap<String, MutableList<String>>()
+        private var rootUri: String? = null
+
+        // The files on disk as indexed with `--index`, by URI.
+        private var indexed: MutableMap<String, List<String>>? = null
+
+        // False until the indexing of `--progress` ended, with `--blind-until-indexed`: no definition nor usage.
+        @Volatile private var sees = !(options.blindUntilIndexed && options.progressSeconds != null)
+
+        // executeCommand requests waiting for the answer to the applyEdit they sent, by the applyEdit's id.
+        private val pendingCommands = HashMap<String, JsonElement>()
+        private var nextEditId = 0
+
+        private fun intelligence() = FakeIntelligence(phpCode())
+
+        private fun hierarchy() = FakeHierarchy(phpCode())
+
+        private fun phpCode() = FakePhpCode(documents.mapValues { it.value.toList() }, rootUri, disk())
+
+        private fun disk(): Map<String, List<String>>? =
+            if (options.index) indexed ?: FakePhpCode.readDisk(rootUri).toMutableMap().also { indexed = it } else null
+
+        // Updates the index with the files the client says changed: 1 created, 2 changed, 3 deleted.
+        private fun watchedFilesChanged(params: JsonElement?) {
+            val changes = (params as? JsonObject)?.get("changes") as? JsonArray ?: return
+            for (change in changes) {
+                val fields = change as? JsonObject ?: continue
+                val uri = (fields["uri"] as? JsonPrimitive)?.contentOrNull ?: continue
+                val type = (fields["type"] as? JsonPrimitive)?.intOrNull
+                log.println("watched $type $uri")
+                val index = indexed ?: continue
+                val lines = if (type == WATCHED_DELETED) null else FakePhpCode.readFile(uri)
+                if (lines == null) index.remove(uri) else index[uri] = lines
+            }
+            log.flush()
+        }
 
         fun run() {
             if (options.stderrFlood) thread(isDaemon = true, name = "stderr-flood") { flood() }
@@ -206,6 +261,8 @@ object FakeLanguageServer {
             if (method == null) {
                 log.println("response ${message["id"]}: ${message["result"] ?: message["error"]}")
                 log.flush()
+                val answered = (message["id"] as? JsonPrimitive)?.contentOrNull
+                pendingCommands.remove(answered)?.let { command -> reply(command, JsonNull) }
                 return
             }
             if (id != null) {
@@ -214,7 +271,10 @@ object FakeLanguageServer {
             }
             if (options.latencyMs > 0) Thread.sleep(options.latencyMs)
             when (method) {
-                "initialize" -> if (!options.hangOnInitialize) reply(id, capabilities())
+                "initialize" -> {
+                    rootUri = (message["params"] as? JsonObject)?.get("rootUri")?.let { (it as? JsonPrimitive)?.contentOrNull }
+                    if (!options.hangOnInitialize) reply(id, capabilities())
+                }
                 "initialized" -> {
                     if (options.askConfiguration) askConfiguration()
                     options.progressSeconds?.let { seconds -> thread(isDaemon = true) { reportProgress(seconds) } }
@@ -224,10 +284,54 @@ object FakeLanguageServer {
                 "textDocument/hover" -> reply(id, hover(message["params"]))
                 "textDocument/didOpen" -> {
                     opened(message["params"])
-                    if (options.diagnostics) publishDiagnostics(message["params"])
+                    if (options.diagnostics) publishDiagnostics(message["params"]) else publishProblems()
                 }
-                "textDocument/didChange" -> changed(message["params"])
+                "textDocument/didChange" -> {
+                    changed(message["params"])
+                    if (!options.diagnostics) publishProblems()
+                }
                 "textDocument/didClose" -> documents.remove(uriOf(message["params"]))
+                "textDocument/didSave" -> log.println("saved ${uriOf(message["params"])}").also { log.flush() }
+                "workspace/didChangeWatchedFiles" -> {
+                    watchedFilesChanged(message["params"])
+                    refreshPulledDiagnostics()
+                }
+                "textDocument/diagnostic" -> reply(id, diagnosticReport(message["params"]))
+                "workspace/willRenameFiles" -> reply(id, FakeFileOperations(phpCode(), intelligence()).willRename(message["params"]))
+                "workspace/willCreateFiles", "workspace/willDeleteFiles" -> reply(id, JsonNull)
+                "workspace/didCreateFiles", "workspace/didRenameFiles", "workspace/didDeleteFiles" ->
+                    log.println("${method.removePrefix("workspace/")} ${message["params"]}").also { log.flush() }
+                "textDocument/definition", "textDocument/references" -> if (!sees) reply(id, JsonArray(emptyList())) else answerNavigation(id, method, message["params"])
+                "textDocument/declaration" -> reply(id, intelligence().definition(message["params"]))
+                "textDocument/typeDefinition" -> reply(id, intelligence().typeDefinition(message["params"]))
+                "textDocument/implementation" -> reply(id, intelligence().implementation(message["params"]))
+                "textDocument/documentHighlight" -> reply(id, intelligence().highlights(message["params"]))
+                "textDocument/documentSymbol" -> reply(id, intelligence().documentSymbols(message["params"]))
+                "workspace/symbol" -> reply(id, intelligence().workspaceSymbols(message["params"]))
+                "textDocument/selectionRange" -> reply(id, intelligence().selectionRanges(message["params"]))
+                "textDocument/foldingRange" -> reply(id, intelligence().foldingRanges(message["params"]))
+                "textDocument/inlayHint" -> reply(id, intelligence().inlayHints(message["params"]))
+                "textDocument/codeLens" -> reply(id, FakeCodeLens(phpCode()).lenses(message["params"]))
+                "codeLens/resolve" -> reply(id, FakeCodeLens(phpCode()).resolve(message["params"]))
+                "textDocument/onTypeFormatting" -> reply(id, FakeTypeFormatting(phpCode()).format(message["params"]))
+                "textDocument/documentLink" -> reply(id, FakeDocumentLinks(phpCode()).links(message["params"]))
+                "documentLink/resolve" -> reply(id, FakeDocumentLinks(phpCode()).resolve(message["params"]))
+                "textDocument/semanticTokens/full" -> reply(id, FakeSemanticTokens(phpCode()).tokens(message["params"]))
+                "textDocument/semanticTokens/range" -> reply(id, FakeSemanticTokens(phpCode()).tokens(message["params"]))
+                "textDocument/prepareCallHierarchy" -> reply(id, hierarchy().prepareCalls(message["params"]))
+                "callHierarchy/incomingCalls" -> reply(id, hierarchy().incomingCalls(message["params"]))
+                "callHierarchy/outgoingCalls" -> reply(id, hierarchy().outgoingCalls(message["params"]))
+                "textDocument/prepareTypeHierarchy" -> reply(id, hierarchy().prepareTypes(message["params"]))
+                "typeHierarchy/supertypes" -> reply(id, hierarchy().supertypes(message["params"]))
+                "typeHierarchy/subtypes" -> reply(id, hierarchy().subtypes(message["params"]))
+                "textDocument/signatureHelp" -> reply(id, intelligence().signatureHelp(message["params"]))
+                "textDocument/prepareRename" -> reply(id, intelligence().prepareRename(message["params"]))
+                "textDocument/rename" -> reply(id, intelligence().rename(message["params"]))
+                "textDocument/formatting" -> reply(id, intelligence().format(message["params"], range = false))
+                "textDocument/rangeFormatting" -> reply(id, intelligence().format(message["params"], range = true))
+                "textDocument/codeAction" -> reply(id, intelligence().codeActions(message["params"]))
+                "workspace/executeCommand" -> executeCommand(id!!, message["params"])
+                "completionItem/resolve" -> reply(id, intelligence().resolveCompletion(message["params"]))
                 "textDocument/completion" ->
                     if (options.noCompletion) {
                         error(id!!, CONTENT_MODIFIED, "Content modified")
@@ -247,13 +351,115 @@ object FakeLanguageServer {
             exitProcess(code)
         }
 
+        // `add_docblock` asks the client to apply its edit, and answers once the client did.
+        private fun executeCommand(id: JsonElement, params: JsonElement?) {
+            val fields = params as? JsonObject
+            val name = (fields?.get("command") as? JsonPrimitive)?.contentOrNull
+            val edit = if (name == "add_docblock") intelligence().docblockEdit(fields["arguments"] as? JsonArray) else null
+            if (edit == null) {
+                reply(id, JsonNull)
+                return
+            }
+            val editId = "apply-${++nextEditId}"
+            pendingCommands[editId] = id
+            send(request(editId, "workspace/applyEdit", edit))
+        }
+
+        // A pulled report: unchanged when the text is the one of [previousResultId].
+        private fun diagnosticReport(params: JsonElement?): JsonObject {
+            val uri = uriOf(params).orEmpty()
+            val resultId = documents[uri]?.joinToString("\n").hashCode().toString()
+            val previous = ((params as? JsonObject)?.get("previousResultId") as? JsonPrimitive)?.contentOrNull
+            log.println("pulled diagnostics of $uri, ${if (previous == resultId) "unchanged" else "full"}")
+            log.flush()
+            return buildJsonObject {
+                put("resultId", resultId)
+                if (previous == resultId) {
+                    put("kind", "unchanged")
+                } else {
+                    put("kind", "full")
+                    put("items", intelligence().diagnostics(uri))
+                }
+            }
+        }
+
+        // Files changed on disk may declare what was missing: the client pulls the diagnostics again.
+        private fun refreshPulledDiagnostics() {
+            if (!options.pullDiagnostics) return
+            send(request("refresh-${++nextEditId}", "workspace/diagnostic/refresh", JsonObject(emptyMap())))
+        }
+
+        private fun publishProblems() {
+            if (options.noDiagnostics || options.pullDiagnostics) return
+            val intelligence = intelligence()
+            for (uri in documents.keys) {
+                notify(
+                    "textDocument/publishDiagnostics",
+                    buildJsonObject {
+                        put("uri", uri)
+                        put("diagnostics", intelligence.diagnostics(uri))
+                    },
+                )
+            }
+        }
+
+        private fun provided(name: String) = name !in options.without
+
         private fun capabilities() =
             buildJsonObject {
                 putJsonObject("capabilities") {
-                    put("textDocumentSync", if (options.fullSync) 1 else 2)
-                    put("hoverProvider", true)
+                    putJsonObject("textDocumentSync") {
+                        put("openClose", true)
+                        put("change", if (options.fullSync) 1 else 2)
+                        putJsonObject("save") { put("includeText", false) }
+                    }
+                    put("hoverProvider", provided("hover"))
+                    put("definitionProvider", provided("definition"))
+                    put("declarationProvider", provided("declaration"))
+                    put("typeDefinitionProvider", provided("typeDefinition"))
+                    put("implementationProvider", provided("implementation"))
+                    put("referencesProvider", provided("references"))
+                    put("documentHighlightProvider", provided("documentHighlight"))
+                    put("documentSymbolProvider", provided("documentSymbol"))
+                    put("workspaceSymbolProvider", provided("workspaceSymbol"))
+                    put("selectionRangeProvider", provided("selectionRange"))
+                    put("foldingRangeProvider", provided("foldingRange"))
+                    put("inlayHintProvider", provided("inlayHint"))
+                    put("callHierarchyProvider", provided("callHierarchy"))
+                    if (provided("semanticTokens")) put("semanticTokensProvider", fakeSemanticTokensProvider())
+                    put("typeHierarchyProvider", provided("typeHierarchy"))
+                    put("documentFormattingProvider", provided("formatting"))
+                    put("documentRangeFormattingProvider", provided("rangeFormatting"))
+                    if (provided("rename")) putJsonObject("renameProvider") { put("prepareProvider", true) }
+                    if (provided("signatureHelp")) {
+                        putJsonObject("signatureHelpProvider") {
+                            put("triggerCharacters", buildJsonArray { add(JsonPrimitive("(")); add(JsonPrimitive(",")) })
+                        }
+                    }
+                    if (provided("codeAction")) putJsonObject("codeActionProvider") { put("resolveProvider", false) }
+                    if (options.pullDiagnostics) {
+                        putJsonObject("diagnosticProvider") {
+                            put("interFileDependencies", true)
+                            put("workspaceDiagnostics", false)
+                        }
+                    }
+                    if (provided("codeLens")) putJsonObject("codeLensProvider") { put("resolveProvider", true) }
+                    if (provided("onTypeFormatting")) {
+                        putJsonObject("documentOnTypeFormattingProvider") {
+                            put("firstTriggerCharacter", ";")
+                            put("moreTriggerCharacter", buildJsonArray { add(JsonPrimitive("}")) })
+                        }
+                    }
+                    if (provided("documentLink")) putJsonObject("documentLinkProvider") { put("resolveProvider", true) }
+                    if (provided("fileOperations")) {
+                        putJsonObject("workspace") { put("fileOperations", fakeFileOperationsCapability()) }
+                    }
+                    putJsonObject("executeCommandProvider") {
+                        put("commands", buildJsonArray { add(JsonPrimitive("add_docblock")) })
+                    }
                     putJsonObject("completionProvider") {
                         put("triggerCharacters", buildJsonArray { add(JsonPrimitive("$")) })
+                        put("resolveProvider", provided("completionResolve"))
                     }
                 }
                 putJsonObject("serverInfo") {
@@ -263,6 +469,7 @@ object FakeLanguageServer {
             }
 
         private fun hover(params: JsonElement?): JsonElement {
+            if (options.hugeMessageMb == null && uriOf(params) in documents) return intelligence().hover(params)
             val huge = options.hugeMessageMb
             val text =
                 if (huge != null) {
@@ -389,7 +596,14 @@ object FakeLanguageServer {
             )
         }
 
+        private fun answerNavigation(id: JsonElement?, method: String, params: JsonElement?) {
+            val answer = if (method == "textDocument/references") intelligence().references(params) else intelligence().definition(params)
+            reply(id, answer)
+        }
+
         private fun reportProgress(seconds: Int) {
+            // A blind server begins to index a moment after initialized, as intelephense once its configuration came.
+            if (!sees) Thread.sleep(INDEXING_START_MS)
             send(request("progress-1", "window/workDoneProgress/create", buildJsonObject { put("token", "index") }))
             val steps = PROGRESS_STEPS
             for (step in 0..steps) {
@@ -414,6 +628,7 @@ object FakeLanguageServer {
                 put("token", "index")
                 put("value", buildJsonObject { put("kind", "end") })
             })
+            sees = true
         }
 
         private fun request(id: String, method: String, params: JsonObject) =

@@ -32,8 +32,10 @@ import kotlinx.coroutines.launch
 import org.example.kotlineditor.model.GitChangeKind
 import org.example.kotlineditor.state.Document
 import org.example.kotlineditor.state.EditorTab
+import org.example.kotlineditor.state.ScreenLine
 import org.example.kotlineditor.state.VerticalScroll
 import org.example.kotlineditor.state.placeholder
+import org.example.kotlineditor.state.screenLine
 import kotlin.math.ceil
 import kotlin.math.roundToInt
 
@@ -45,7 +47,13 @@ import kotlin.math.roundToInt
  * once the scroll ends. Composing them on every frame of a scroll would cost far more than drawing the lines.
  */
 @Composable
-internal fun EditorLineSemantics(tab: EditorTab, document: Document, metrics: EditorMetrics, marks: GutterMarks) {
+internal fun EditorLineSemantics(
+    tab: EditorTab,
+    document: Document,
+    metrics: EditorMetrics,
+    marks: GutterMarks,
+    insight: InsightMarks = InsightMarks.None,
+) {
     val scroll = tab.verticalScroll
     val folding = document.folding
     val scope = rememberCoroutineScope()
@@ -73,7 +81,26 @@ internal fun EditorLineSemantics(tab: EditorTab, document: Document, metrics: Ed
                         marks.changed[index],
                         GitChangeKind.Deleted.takeIf { index in marks.deleted || deletedAtEnd },
                     )
-                LineNode(row, index, tab, document, metrics, kinds, marks.blame?.containsKey(index) == true)
+                val link = insight.link?.takeIf { it.line == index }?.let { it.start to it.end }
+                val lineInsight =
+                    LineInsight(
+                        insight.problems[index],
+                        insight.hints[index],
+                        insight.highlights[index],
+                        link,
+                        insight.semantic[index],
+                        insight.lenses[index],
+                    )
+                LineNode(
+                    row,
+                    index,
+                    tab,
+                    document,
+                    metrics,
+                    kinds,
+                    marks.blame?.containsKey(index) == true,
+                    lineInsight,
+                )
             }
         }
     }
@@ -88,13 +115,14 @@ private fun LineNode(
     metrics: EditorMetrics,
     changes: List<GitChangeKind>,
     annotated: Boolean,
+    insight: LineInsight,
 ) {
     val scroll = tab.verticalScroll
     val folding = document.folding
     val line = document.lines[index]
     val folded = folding.isFolded(index)
     val placeholder = if (folded) folding.placeholder(index, document.lines) else null
-    val text by rememberLineText(document, index, line, placeholder)
+    val text by rememberLineText(document, index, line, placeholder, insight.semantic)
     val density = LocalDensity.current
     val gutter = with(density) { metrics.gutterPx.toDp() }
     val textWidth = with(density) { (text.length * metrics.charWidth).toDp() }
@@ -139,29 +167,109 @@ private fun LineNode(
                 .semantics { this.text = text }
                 .testTag(EditorTags.lineText(index)),
         )
+        InsightNodes(index, document.screenLine(index), tab, metrics, insight)
+    }
+}
+
+/** What the language server marks on one line, for its semantics nodes. */
+internal class LineInsight(
+    val problems: List<LineProblem>?,
+    val hint: String?,
+    val highlights: List<LineHighlight>?,
+    val link: Pair<Int, Int>?,
+    val semantic: LineSemantic? = null,
+    val lenses: List<LineLens>? = null,
+)
+
+// The problems, occurrences and usage hint of a line, where the canvas draws them: tests find and click them.
+@Composable
+private fun InsightNodes(index: Int, line: ScreenLine, tab: EditorTab, metrics: EditorMetrics, insight: LineInsight) {
+    val density = LocalDensity.current
+    val cell = with(density) { metrics.charWidth.toDp() }
+
+    @Composable
+    fun Node(startColumn: Int, columns: Int, tag: String, label: String? = null) {
+        val labelled =
+            label?.let {
+                Modifier.semantics {
+                    text =
+                        androidx.compose.ui.text.AnnotatedString(
+                            it,
+                        )
+                }
+            } ?: Modifier
+        val left = (startColumn * metrics.charWidth).roundToInt()
+        Box(
+            Modifier
+                .offset { IntOffset(textLeft(metrics, tab.horizontalScroll.offset) + left, 0) }
+                .size(cell * columns.coerceAtLeast(1), metrics.lineHeight)
+                .then(labelled)
+                .testTag(tag),
+        )
+    }
+    insight.problems?.forEach { problem ->
+        val start = line.startOf(problem.start)
+        val end = line.endOf(problem.end)
+        Node(start, end - start, EditorTags.diagnostic(index, problem.severity.name))
+    }
+    insight.highlights?.forEach { highlight ->
+        val start = line.startOf(highlight.start)
+        val end = line.endOf(highlight.end)
+        Node(start, end - start, EditorTags.symbolHighlight(index, highlight.kind.name))
+    }
+    insight.hint?.let { hint -> Node(hintColumn(line), hint.length, EditorTags.usageHint(index), hint) }
+    insight.lenses?.let { lenses ->
+        val columns = lensColumns(line, insight.hint, lenses)
+        lenses.forEachIndexed { at, lens ->
+            Node(columns[at], lens.title.length, EditorTags.codeLens(index, at), lens.title)
+        }
+    }
+    line.inlays?.let { inlays ->
+        for (at in 0 until inlays.size) {
+            val column = inlays.columns[at]
+            val label = inlays.labels[at]
+            // Its cells end where the character it precedes starts.
+            Node(line.startOf(column) - label.length, label.length, EditorTags.inlayHint(index, column), label)
+        }
+    }
+    insight.link?.let { (start, end) ->
+        val text = line.text
+        val from = line.startOf(start)
+        Node(
+            from,
+            line.endOf(end) - from,
+            EditorTags.LINK,
+            text.substring(start.coerceIn(0, text.length), end.coerceIn(0, text.length)),
+        )
     }
 }
 
 // The colored text of a line, as drawn: tests read its colors here. Derived, so that the colors published for the
 // other lines (after each edit) do not compose this line again.
 @Composable
-private fun rememberLineText(document: Document, index: Int, line: String, placeholder: String?) =
-    remember(document, index, line, placeholder) {
-        derivedStateOf(structuralEqualityPolicy()) {
-            highlighted(
-                LineSource(
-                    index,
-                    line,
-                    document.language,
-                    document.commentStates?.getOrNull(index) == true,
-                    foldable = false,
-                    folded = placeholder != null,
-                    placeholder,
-                    document.syntax?.highlights?.spansFor(index, line),
-                ),
-            )
-        }
+private fun rememberLineText(
+    document: Document,
+    index: Int,
+    line: String,
+    placeholder: String?,
+    semantic: LineSemantic?,
+) = remember(document, index, line, placeholder, semantic) {
+    derivedStateOf(structuralEqualityPolicy()) {
+        highlighted(
+            LineSource(
+                index,
+                line,
+                document.language,
+                document.commentStates?.getOrNull(index) == true,
+                foldable = false,
+                folded = placeholder != null,
+                placeholder,
+                document.syntax?.highlights?.spansFor(index, line),
+                semantic = semantic,
+            ),
+        )
     }
+}
 
 // The first row on screen, left as it was while a scroll is in progress.
 @Composable

@@ -25,6 +25,7 @@ import org.example.kotlineditor.model.ProjectSession
 import org.example.kotlineditor.model.RecentProjectsStore
 import org.example.kotlineditor.model.ServerPlaces
 import org.example.kotlineditor.model.SessionStore
+import org.example.kotlineditor.model.TelemetrySettings
 import org.example.kotlineditor.model.TerminalKeyEvent
 import org.example.kotlineditor.model.TerminalLauncher
 import org.example.kotlineditor.model.TerminalProcess
@@ -56,7 +57,18 @@ fun RpcClient.appServices(): AppServices =
         connection = status,
         network = network,
         languageServers = RemoteLanguageServers(this),
+        telemetry = RemoteTelemetrySettings(this),
     )
+
+/** [TelemetrySettings] of the server. */
+class RemoteTelemetrySettings(private val client: RpcClient) : TelemetrySettings {
+    override suspend fun configure(enabled: Boolean, instanceId: String?) {
+        client.call(Method.TelemetryConfig) {
+            put("enabled", enabled)
+            if (instanceId != null) put("instanceId", instanceId)
+        }
+    }
+}
 
 /** [ServerPlaces] of the server. */
 class RemotePlaces(private val client: RpcClient) : ServerPlaces {

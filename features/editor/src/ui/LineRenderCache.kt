@@ -3,6 +3,7 @@ package org.example.kotlineditor.ui
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
+import org.example.kotlineditor.state.LineInlays
 import org.example.kotlineditor.syntax.Language
 import org.example.kotlineditor.syntax.treesitter.LineSpans
 
@@ -25,6 +26,8 @@ internal class LineRenderCache(
         val startsInComment: Boolean,
         val placeholder: String?,
         val spans: LineSpans?,
+        val inlays: LineInlays?,
+        val semantic: LineSemantic?,
     )
 
     private val lines = LruMap<LineKey, TextLayoutResult>(lineCapacity)
@@ -35,6 +38,9 @@ internal class LineRenderCache(
     // Consecutive lines of a commit share their annotation.
     private val blames = LruMap<String, TextLayoutResult>(BLAME_CAPACITY)
 
+    // The usage hints share a few texts ("1 usage", "3 usages").
+    private val hints = LruMap<String, TextLayoutResult>(BLAME_CAPACITY)
+
     val size: Int get() = lines.size
 
     fun line(source: LineSource): TextLayoutResult =
@@ -42,11 +48,17 @@ internal class LineRenderCache(
             measurer.measure(highlighted(source), style, softWrap = false, maxLines = 1)
         }
 
-    private fun LineSource.key() = LineKey(text, language, startsInComment, placeholder, spans)
+    private fun LineSource.key() = LineKey(text, language, startsInComment, placeholder, spans, inlays, semantic)
 
     /** Line number [number] (one-based), without color: the caret line draws it brighter. */
     fun number(number: Int): TextLayoutResult =
         numbers.getOrPut(number) { measurer.measure(number.toString(), style, softWrap = false, maxLines = 1) }
+
+    /** Usage hint ("3 usages") drawn after the text of a declaration, in the code font. */
+    fun hint(text: String): TextLayoutResult =
+        hints.getOrPut(text) {
+            measurer.measure(text, style.copy(color = IdeColors.InlayHint), softWrap = false, maxLines = 1)
+        }
 
     /** Blame annotation ("author date") of a line. */
     fun blame(text: String): TextLayoutResult =

@@ -11,6 +11,10 @@ import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.GitBranchInfo
 import org.example.kotlineditor.model.GitClient
 import org.example.kotlineditor.model.GitFileStatus
+import org.example.kotlineditor.telemetry.ClientTelemetry
+import org.example.kotlineditor.telemetry.Operation
+import org.example.kotlineditor.telemetry.measureToFrame
+import org.example.kotlineditor.telemetry.outcome
 import java.io.IOException
 
 private const val MAX_MESSAGE_LENGTH = 300
@@ -112,9 +116,14 @@ class GitState(
      */
     fun refreshBranches() {
         scope.launch {
-            runCatching { git.branch(root.path) }.onSuccess {
-                currentBranch = it
-                isRepository = it != null
+            ClientTelemetry.measureToFrame(
+                Operation.GitBranch,
+                outcomeOf = { read: Result<String?> -> read.outcome() },
+            ) {
+                runCatching { git.branch(root.path) }.onSuccess {
+                    currentBranch = it
+                    isRepository = it != null
+                }
             }
             if (isRepository) {
                 runCatching { git.branchDetails(root.path) }
@@ -193,19 +202,24 @@ class GitState(
         statusJob?.cancel()
         statusJob =
             scope.launch {
-                runCatching { git.status(root.path) }.onSuccess {
-                    status = it
-                    // Files that left the status are unchecked, so the selection never points outside the list.
-                    selectedForCommit = selectedForCommit intersect it.keys
-                    if (editorsReloadPending) {
-                        editorsReloadPending = false
-                        editor.reloadDiffs()
-                        editor.reloadChanges()
-                        editor.reloadBlames()
-                    }
+                ClientTelemetry.measureToFrame(Operation.GitStatus, outcomeOf = { read: Result<*> -> read.outcome() }) {
+                    applyStatus()
                 }
             }
     }
+
+    private suspend fun applyStatus(): Result<*> =
+        runCatching { git.status(root.path) }.onSuccess {
+            status = it
+            // Files that left the status are unchecked, so the selection never points outside the list.
+            selectedForCommit = selectedForCommit intersect it.keys
+            if (editorsReloadPending) {
+                editorsReloadPending = false
+                editor.reloadDiffs()
+                editor.reloadChanges()
+                editor.reloadBlames()
+            }
+        }
 
     /**
      * Commits the changes the user checked in the Git panel ([selectedForCommit]) with the message [text]; the other

@@ -17,8 +17,10 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
@@ -51,6 +53,8 @@ private const val COMPLETION_ROWS = 10
 private val COMPLETION_ROW_HEIGHT = 22.dp
 private val COMPLETION_WIDTH = 460.dp
 private val COMPLETION_BADGE = 16.dp
+private val DOCUMENTATION_WIDTH = 420.dp
+private val POPUP_CORNERS = RoundedCornerShape(4.dp)
 
 /**
  * The completion popup, under the word being completed (above it when there is no room below), like IntelliJ's:
@@ -82,7 +86,7 @@ internal fun CompletionList(
     val place: Density.() -> IntOffset = {
         // Horizontally: the badge left of the word's first letter.
         val lineText = document.lines.getOrElse(popup.line) { "" }
-        val column = visualColumn(lineText, popup.replaceFrom)
+        val column = visualColumn(lineText, popup.replaceFrom, document.inlays[popup.line])
         val textLeft = metrics.gutterPx + metrics.paddingPx - tab.horizontalScroll.offset
         val wordLeft = textLeft + column * metrics.charWidth
         val badgeSpace = COMPLETION_BADGE.toPx() + 8.dp.toPx()
@@ -98,19 +102,38 @@ internal fun CompletionList(
         val y = if (overflowsBelow && fitsAbove) above else below
         IntOffset(x.roundToInt(), y.roundToInt())
     }
-    Box(
-        Modifier
-            .offset(place)
-            .width(COMPLETION_WIDTH)
-            .background(IdeColors.Popup, RoundedCornerShape(4.dp))
-            .border(1.dp, IdeColors.Separator, RoundedCornerShape(4.dp))
-            .testTag(EditorTags.COMPLETION),
-    ) {
-        LazyColumn(Modifier.fillMaxWidth().heightIn(max = COMPLETION_ROW_HEIGHT * COMPLETION_ROWS), state = listState) {
-            itemsIndexed(items, key = { index, item -> "$index:${item.label}" }) { index, item ->
-                CompletionRow(item, popup.typed, index == popup.selected) { completion.accept(index = index) }
+    Row(Modifier.offset(place), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        Box(
+            Modifier
+                .width(COMPLETION_WIDTH)
+                .background(IdeColors.Popup, POPUP_CORNERS)
+                .border(1.dp, IdeColors.Separator, POPUP_CORNERS)
+                .testTag(EditorTags.COMPLETION),
+        ) {
+            val listHeight = COMPLETION_ROW_HEIGHT * COMPLETION_ROWS
+            LazyColumn(Modifier.fillMaxWidth().heightIn(max = listHeight), state = listState) {
+                itemsIndexed(items, key = { index, item -> "$index:${item.label}" }) { index, item ->
+                    CompletionRow(item, popup.typed, index == popup.selected) { completion.accept(index = index) }
+                }
             }
         }
+        // Like IntelliJ's documentation next to the list, for the selected item.
+        popup.documentation?.let { CompletionDocumentation(it) }
+    }
+}
+
+@Composable
+private fun CompletionDocumentation(markdown: String) {
+    Box(
+        Modifier
+            .widthIn(max = DOCUMENTATION_WIDTH)
+            .heightIn(max = COMPLETION_ROW_HEIGHT * COMPLETION_ROWS)
+            .background(IdeColors.Popup, POPUP_CORNERS)
+            .border(1.dp, IdeColors.Separator, POPUP_CORNERS)
+            .verticalScroll(rememberScrollState())
+            .testTag(EditorTags.COMPLETION_DOCUMENTATION),
+    ) {
+        MarkdownText(markdown, Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
     }
 }
 

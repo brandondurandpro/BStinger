@@ -7,12 +7,22 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.example.kotlineditor.model.CompletionItem
 import org.example.kotlineditor.model.CompletionResult
+import org.example.kotlineditor.telemetry.Attribute
+import org.example.kotlineditor.telemetry.Attributes
+import org.example.kotlineditor.telemetry.ClientTelemetry
+import org.example.kotlineditor.telemetry.Operation
+import org.example.kotlineditor.telemetry.measureToFrame
+import org.example.kotlineditor.telemetry.sizeOf
 
 // Rows of the popup a Page Up or Page Down moves by.
 private const val PAGE_ROWS = 8
+
+// How long an item stays selected before its documentation is asked: the arrows run through items without asking.
+internal const val DOCUMENTATION_DELAY_MS = 200L
 
 /** What the completion popup shows: the server's items for a word, filtered by what was typed since. */
 @Stable
@@ -25,7 +35,20 @@ class CompletionPopup internal constructor(
     val replaceFrom: Int,
     /** Every item of the last answer. */
     private val all: List<CompletionItem>,
+    /** Names the answer to resolve its items; empty when they cannot be. */
+    internal val token: String = "",
 ) {
+    /** The documentation of the selected item (Markdown), null while unknown or when it has none. */
+    var documentation: String? by mutableStateOf(null)
+        internal set
+
+    // Documentation already resolved, by resolve index: moving back to an item does not ask again. An item without
+    // (or whose request failed, the link being down) is asked again when selected again.
+    internal val resolved = HashMap<Int, String>()
+
+    /** The selected item. */
+    val selectedItem: CompletionItem? get() = items.getOrNull(selected)
+
     /** The items matching the text typed since [replaceFrom], best first. */
     var items: List<CompletionItem> by mutableStateOf(emptyList())
         private set
@@ -34,9 +57,21 @@ class CompletionPopup internal constructor(
     var selected by mutableIntStateOf(0)
         internal set
 
+    // Chosen with the arrows: a newer answer keeps it rather than its best item.
+    internal var chosenByUser = false
+        private set
+
     /** The text between [replaceFrom] and the caret, which the items match. */
     var typed by mutableStateOf("")
         private set
+
+    // The label of the item chosen with the arrows, if any.
+    internal fun chosenLabel(): String? = items.getOrNull(selected)?.label?.takeIf { chosenByUser }
+
+    internal fun choose(index: Int) {
+        selected = index
+        chosenByUser = true
+    }
 
     internal fun refilter() {
         val caret = document.caret
@@ -46,7 +81,8 @@ class CompletionPopup internal constructor(
         val now = current.substring(typedStart, typedEnd)
         val unchanged = now == typed && items.isNotEmpty()
         if (unchanged) return
-        val previous = items.getOrNull(selected)
+        // The item chosen with the arrows stays chosen; otherwise the best match is.
+        val previous = items.getOrNull(selected)?.takeIf { chosenByUser }
         typed = now
         // Best match first; among equal matches, the server's order.
         val matching =
@@ -91,6 +127,8 @@ internal fun matchRank(typed: String, candidate: String): Int? {
 @Stable
 class CompletionState(
     private val scope: CoroutineScope,
+    // The documentation of an item of a completion answer (token, resolve index).
+    private val resolve: suspend (token: String, index: Int) -> String? = { _, _ -> null },
     // The server's proposals at the caret of a document.
     private val source: suspend (path: String, document: Document) -> CompletionResult,
 ) {
@@ -99,6 +137,10 @@ class CompletionState(
         private set
 
     private var job: Job? = null
+    private val describer = Describer(scope, resolve) { popup }
+
+    /** Whether the documentation of the selected item is being asked (waiting, or in flight). */
+    internal val describing: Boolean get() = describer.active
 
     /** Ctrl+Space: asks for the proposals at the caret. */
     fun explicit(path: String, document: Document) = request(path, document, keepOpen = true)
@@ -115,6 +157,7 @@ class CompletionState(
         when {
             shown != null && shown.document === document && isWordChar(c) -> {
                 shown.refilter()
+                describer.describe()
                 request(path, document, keepOpen = true)
             }
 
@@ -142,19 +185,23 @@ class CompletionState(
             dismiss()
         } else {
             shown.refilter()
+            describer.describe()
         }
     }
 
     /** Moves the selection by [delta] rows, wrapping around. */
     fun move(delta: Int) {
         val shown = popup ?: return
-        if (shown.items.isNotEmpty()) shown.selected = (shown.selected + delta).mod(shown.items.size)
+        if (shown.items.isNotEmpty()) shown.choose((shown.selected + delta).mod(shown.items.size))
+        describer.describe()
     }
 
     /** Moves the selection by a page, without wrapping. */
     fun page(direction: Int) {
         val shown = popup ?: return
-        shown.selected = (shown.selected + direction * PAGE_ROWS).coerceIn(0, (shown.items.size - 1).coerceAtLeast(0))
+        val last = (shown.items.size - 1).coerceAtLeast(0)
+        shown.choose((shown.selected + direction * PAGE_ROWS).coerceIn(0, last))
+        describer.describe()
     }
 
     /**
@@ -178,6 +225,7 @@ class CompletionState(
     fun dismiss() {
         job?.cancel()
         job = null
+        describer.cancel()
         popup = null
     }
 
@@ -188,9 +236,13 @@ class CompletionState(
         val caret = document.caret
         job =
             scope.launch {
-                val result = source(path, document)
-                // Typed or moved meanwhile: a newer request is on its way, or the popup was closed.
-                if (document.version == version && document.caret == caret) show(document, caret, result)
+                // From the keystroke to the frame that shows the items; a newer keystroke cancels it.
+                ClientTelemetry.measureToFrame(Operation.EditorCompletion, attributesOf = ::itemsOf) {
+                    val result = source(path, document)
+                    // Typed or moved meanwhile: a newer request is on its way, or the popup was closed.
+                    if (document.version == version && document.caret == caret) show(document, caret, result)
+                    result
+                }
             }
     }
 
@@ -200,8 +252,70 @@ class CompletionState(
             popup = null
             return
         }
-        popup = CompletionPopup(document, caret.line, result.replaceFrom, result.items).apply { refilter() }
+        val chosen = popup?.takeIf { it.document === document }?.chosenLabel()
+        val next =
+            CompletionPopup(
+                document,
+                caret.line,
+                result.replaceFrom,
+                result.items,
+                result.token,
+            ).apply { refilter() }
+        // A late answer keeps the item chosen with the arrows meanwhile.
+        val kept = next.items.indexOfFirst { it.label == chosen }
+        if (kept >= 0) next.choose(kept)
+        popup = next
+        describer.describe()
     }
 
     private fun isWordChar(c: Char) = c.isLetterOrDigit() || c == '_' || c == '$'
+}
+
+/**
+ * Shows the documentation of the selected item of the [current] popup: sent with it, already resolved, or asked to
+ * the server once it stays selected for [DOCUMENTATION_DELAY_MS].
+ */
+private class Describer(
+    private val scope: CoroutineScope,
+    private val resolve: suspend (token: String, index: Int) -> String?,
+    private val current: () -> CompletionPopup?,
+) {
+    private var job: Job? = null
+
+    val active: Boolean get() = job?.isActive == true
+
+    fun cancel() {
+        job?.cancel()
+        job = null
+    }
+
+    fun describe() {
+        cancel()
+        val shown = current() ?: return
+        val item = shown.selectedItem
+        val index = item?.resolveIndex ?: -1
+        val known = item?.documentation ?: shown.resolved[index]
+        val resolvable = shown.token.isNotEmpty() && index >= 0
+        shown.documentation = known
+        if (known != null || !resolvable) return
+        job =
+            scope.launch {
+                delay(DOCUMENTATION_DELAY_MS)
+                val documentation = resolve(shown.token, index)
+                documentation?.let { shown.resolved[index] = it }
+                // Another item may be selected meanwhile: its documentation is not this one.
+                val stillSelected = current() === shown && shown.selectedItem?.resolveIndex == index
+                if (stillSelected) shown.documentation = documentation
+            }
+    }
+}
+
+private fun itemsOf(result: CompletionResult): Attributes {
+    val found =
+        when {
+            !result.ready -> "partial"
+            result.items.isEmpty() -> "empty"
+            else -> "found"
+        }
+    return sizeOf(result.items.size) + Attributes.of(Attribute.Result to found)
 }

@@ -471,6 +471,17 @@ enum class ConnectionStatus {
     Disconnected,
 }
 
+/** Tells the server whether the user agreed to share anonymous performance measures. */
+interface TelemetrySettings {
+    /** The user agreed ([enabled]) as installation [instanceId], or refused (null id). */
+    suspend fun configure(enabled: Boolean, instanceId: String?)
+
+    /** No server to tell. */
+    object None : TelemetrySettings {
+        override suspend fun configure(enabled: Boolean, instanceId: String?) = Unit
+    }
+}
+
 /** Every service the IDE uses. */
 class AppServices(
     /** Files. */
@@ -493,6 +504,8 @@ class AppServices(
     val network: NetworkInspector? = null,
     /** Language servers run by the server. */
     val languageServers: LanguageServers = LanguageServers.None,
+    /** The telemetry consent of the server. */
+    val telemetry: TelemetrySettings = TelemetrySettings.None,
 )
 
 /** Last segment of a path, whatever the separator. */

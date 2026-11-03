@@ -46,7 +46,7 @@ import java.io.OutputStream
  */
 object Protocol {
     /** Version announced in the handshake; client and server must speak the same one. */
-    const val VERSION = 7
+    const val VERSION = 9
 
     /** Version of the application, shown in the welcome screen and used to identify remote server bundles. */
     const val APP_VERSION = "2026.1"
@@ -206,6 +206,11 @@ class Frame(
      */
     val code: Boolean = false,
     private var encoded: ByteArray? = null,
+    /**
+     * The W3C `traceparent` of the span the request is part of, when telemetry is on: the server measures its work as
+     * a child of it. Sent only when present; a peer that does not know it ignores it.
+     */
+    val trace: String? = null,
 ) {
     /** The JSON-RPC message, encoded once (pending requests and cached answers are sent again as they are). */
     val body: ByteArray get() = encoded ?: Protocol.encode(this).also { encoded = it }
@@ -391,6 +396,93 @@ enum class Method(
 
     /** Completion at a position of an open document. */
     LspCompletion("lsp/completion"),
+
+    /** Documentation of an item of a completion answer. */
+    LspResolveCompletion("lsp/resolveCompletion"),
+
+    /** Documentation of the symbol at a position. */
+    LspHover("lsp/hover"),
+
+    /** Declaration, type or implementations of the symbol at a position. */
+    LspNavigate("lsp/navigate"),
+
+    /** Usages of the symbol at a position. */
+    LspReferences("lsp/references"),
+
+    /** Occurrences of the symbol at a position in its document. */
+    LspHighlights("lsp/highlights"),
+
+    /** Signatures of the call around a position. */
+    LspSignatureHelp("lsp/signatureHelp"),
+
+    /** Usage counts of the declarations of a document. */
+    LspUsageCounts("lsp/usageCounts"),
+
+    /** Declarations of a document, nested. */
+    LspOutline("lsp/outline"),
+
+    /** The root of a call or type hierarchy. */
+    LspPrepareHierarchy("lsp/prepareHierarchy"),
+
+    /** The callers, callees, supertypes or subtypes of a hierarchy item. */
+    LspHierarchyChildren("lsp/hierarchyChildren"),
+
+    /** Semantic tokens of a document. */
+    LspSemanticTokens("lsp/semanticTokens"),
+
+    /** Characters that format while typed in a document. */
+    LspTypeFormattingTriggers("lsp/typeFormattingTriggers"),
+
+    /** Edits after a trigger character was typed. */
+    LspFormatOnType("lsp/formatOnType"),
+
+    /** Links of a document. */
+    LspDocumentLinks("lsp/documentLinks"),
+
+    /** Code lenses of a document. */
+    LspCodeLenses("lsp/codeLenses"),
+
+    /** Runs the command of a code lens. */
+    LspRunCodeLens("lsp/runCodeLens"),
+
+    /** Edits adapting the code to files about to be created, renamed or deleted. */
+    LspWillChangeFiles("lsp/willChangeFiles"),
+
+    /**
+     * Client to server: whether the user agreed to share performance measures (`enabled`), and as which
+     * installation (`instanceId`). The server measures and exports only after the client said so.
+     */
+    TelemetryConfig("telemetry/config"),
+
+    /** Inlay hints of a document. */
+    LspInlayHints("lsp/inlayHints"),
+
+    /** Regions of a document that can be folded. */
+    LspFoldingRanges("lsp/foldingRanges"),
+
+    /** Ranges to extend the selection to around a position. */
+    LspSelectionRanges("lsp/selectionRanges"),
+
+    /** Declarations of the project matching a name. */
+    LspWorkspaceSymbols("lsp/workspaceSymbols"),
+
+    /** Diagnostics of the session's documents, answered once newer than the client's version (long poll). */
+    LspDiagnostics("lsp/diagnostics"),
+
+    /** What can be renamed at a position. */
+    LspPrepareRename("lsp/prepareRename"),
+
+    /** Edits that rename a symbol. */
+    LspRename("lsp/rename"),
+
+    /** Edits that format a document or a range of it. */
+    LspFormat("lsp/format"),
+
+    /** Quick fixes and refactorings offered for a range. */
+    LspCodeActions("lsp/codeActions"),
+
+    /** Edits of one of the code actions offered; runs its command on the language server, once. */
+    LspApplyCodeAction("lsp/applyCodeAction", mutating = true),
 }
 
 /** A JSON-RPC error object `{"code": ..., "message": ...}`. */
