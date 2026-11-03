@@ -26,6 +26,20 @@ object AppTags {
     const val PROJECT_AGENT_MODE = "project.agentMode"
     const val PROJECT_OPEN_OTHER = "project.openOther"
     const val PROJECT_MENU = "project.menu"
+    const val PROJECT_SETTINGS = "project.settings"
+    const val WELCOME_SETTINGS = "welcome.settings"
+    const val SETTINGS = "settings"
+    const val SETTINGS_CLOSE = "settings.close"
+    const val SETTINGS_SEARCH = "settings.search"
+    const val SETTINGS_TITLE = "settings.title"
+    const val SETTINGS_EMPTY = "settings.empty"
+    const val SETTINGS_FONT_SIZE = "settings.fontSize"
+    const val SETTINGS_FONT_SMALLER = "settings.fontSize.smaller"
+    const val SETTINGS_FONT_LARGER = "settings.fontSize.larger"
+    const val SETTINGS_FONT_RESET = "settings.fontSize.reset"
+    const val SETTINGS_SERVERS_LOADING = "settings.servers.loading"
+    const val SETTINGS_SERVERS_ERROR = "settings.servers.error"
+    const val SETTINGS_TELEMETRY_FORBIDDEN = "settings.telemetry.forbidden"
     const val TOOL_PROJECT = "tool.project"
     const val TOOL_GIT = "tool.git"
     const val TOOL_BRANCHES = "tool.branches"
@@ -109,4 +123,22 @@ object AppTags {
     fun editorHintShortcut(action: String) = "editor.hint.shortcut:$action"
 
     fun networkRecord(seq: Long) = "network.record:$seq"
+
+    /** A category of the Settings dialog's list, by its enum name (`Editor`). */
+    fun settingsCategory(name: String) = "settings.category:$name"
+
+    /** A setting of the Settings dialog, by its enum name (`FontSize`). */
+    fun setting(name: String) = "settings.setting:$name"
+
+    /** The check box of an on/off setting, by its enum name (`AutoSelect`). */
+    fun settingToggle(name: String) = "settings.toggle:$name"
+
+    /** The button of an inlay hints mode (`Inline`) in the Settings dialog. */
+    fun settingsInlayHints(mode: String) = "settings.inlayHints:$mode"
+
+    /** A language server offered in the Settings dialog, by its id (`phpactor`). */
+    fun settingsServer(id: String) = "settings.server:$id"
+
+    /** The button that switches to a language server, by its id. */
+    fun settingsServerUse(id: String) = "settings.server.use:$id"
 }

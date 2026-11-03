@@ -52,6 +52,12 @@ enum class InlayHintsMode {
 
     /** In the code, between its characters, like IntelliJ. */
     Inline,
+    ;
+
+    companion object {
+        /** The mode saved as [saved] in the preferences, [Popup] when none or unknown. */
+        fun fromSaved(saved: String?): InlayHintsMode = entries.firstOrNull { it.name == saved } ?: Popup
+    }
 }
 
 /** Column on screen of [column] of the line [line] of the document: tabs, and the hints drawn before it. */

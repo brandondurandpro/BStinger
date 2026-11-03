@@ -96,8 +96,7 @@ class ProjectState(
     override var fileDialog: FileDialog? by mutableStateOf(null)
 
     /** "Always Select Opened File" (IntelliJ): the active file is selected and revealed in the project tree. */
-    override var autoSelectOpenedFile by
-        mutableStateOf(preferences[PreferenceKeys.AUTO_SELECT_OPENED_FILE]?.toBooleanStrictOrNull() ?: true)
+    override var autoSelectOpenedFile by mutableStateOf(autoSelectOf(preferences))
 
     override var inlayHintsMode: InlayHintsMode
         get() = insight.inlayHintsMode
@@ -106,8 +105,7 @@ class ProjectState(
         }
 
     init {
-        val saved = preferences[PreferenceKeys.INLAY_HINTS]
-        insight.inlayHintsMode = InlayHintsMode.entries.firstOrNull { it.name == saved } ?: InlayHintsMode.Popup
+        insight.inlayHintsMode = InlayHintsMode.fromSaved(preferences[PreferenceKeys.INLAY_HINTS])
     }
 
     /** Diff viewer layout: old and new files side by side (two panes) instead of the unified view. */
@@ -236,3 +234,7 @@ private fun localDate(seconds: Long): String {
     val instant = java.time.Instant.ofEpochSecond(seconds)
     return instant.atZone(java.time.ZoneId.systemDefault()).toLocalDate().toString()
 }
+
+/** "Always Select Opened File" as saved in [preferences]: on when it was never changed. */
+internal fun autoSelectOf(preferences: Map<String, String>): Boolean =
+    preferences[PreferenceKeys.AUTO_SELECT_OPENED_FILE]?.toBooleanStrictOrNull() ?: true
