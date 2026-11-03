@@ -9,6 +9,8 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -52,6 +54,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
 private const val CAPABILITIES = "capabilities"
+private const val NANOS_PER_MILLI = 1_000_000L
 
 /** What a [ManagedServer] is asked to do; its coroutine handles them one at a time, in order. */
 internal sealed interface Command {
@@ -152,6 +155,11 @@ internal class ManagedServer(
 
     @Volatile var indexingEndedAt: Long? = null
         private set
+
+    // Whether the process indexes the project, and until when (System.nanoTime) it may still begin to after it started.
+    private val indexing = MutableStateFlow(false)
+
+    @Volatile private var indexingMayBeginUntil = 0L
 
     val pid: Long? get() = process?.takeIf { it.isAlive }?.pid()
 
@@ -465,7 +473,22 @@ internal class ManagedServer(
         openDocuments(DocumentOutbox(link, scope, syncKindOf(initialized)))
         // A key per process: the old one may still be untracked after a new one started.
         samplerKey = "$id#${launched.pid()}".also { history = sampler?.track(it, launched.toHandle()) }
+        indexingMayBeginUntil = System.nanoTime() + timings.indexingStartMs * NANOS_PER_MILLI
         setState(if (progress.isEmpty()) LanguageServerState.Running else LanguageServerState.Indexing, null)
+    }
+
+    /**
+     * Suspends while the server indexes the project, or may still begin to just after it started, at most [maxMs]:
+     * until then a server such as intelephense finds no usage (it answers an empty list). False when it still indexes.
+     */
+    suspend fun awaitIndexed(maxMs: Long): Boolean {
+        val done =
+            withTimeoutOrNull(maxMs) {
+                val beginsWithin = (indexingMayBeginUntil - System.nanoTime()) / NANOS_PER_MILLI
+                if (beginsWithin > 0) delay(beginsWithin)
+                indexing.first { !it }
+            }
+        return done != null
     }
 
     // Under the documents' lock: an edit arriving meanwhile is either replayed here or sent after.
@@ -512,6 +535,7 @@ internal class ManagedServer(
         synchronized(stateLock) {
             state = new
             message = why
+            indexing.value = new == LanguageServerState.Indexing
         }
         onChange()
     }
@@ -522,11 +546,13 @@ internal class ManagedServer(
                 when {
                     state == LanguageServerState.Running && progress.isNotEmpty() -> {
                         state = LanguageServerState.Indexing
+                        indexing.value = true
                         true
                     }
 
                     state == LanguageServerState.Indexing && progress.isEmpty() -> {
                         state = LanguageServerState.Running
+                        indexing.value = false
                         indexingEndedAt = clock()
                         true
                     }

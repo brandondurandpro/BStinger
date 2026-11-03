@@ -72,6 +72,7 @@ class CodeIntelligenceTest {
     private val greeter = project.resolve("Greeter.php").toString()
     private val main = project.resolve("main.php").toString()
     private var options = arrayOf<String>()
+    private var indexingWaitMs = 60_000L
     private val service by lazy {
         val fake =
             LanguageServerCandidate(
@@ -98,7 +99,7 @@ class CodeIntelligenceTest {
                 toolsDirectory = data.resolve("tools"),
                 candidates = CandidateRegistry(nothing, listOf(fake)),
                 timings = SupervisorTimings(idleStopMs = 500, initializeTimeoutMs = 20_000, firstBackoffMs = 100),
-                intelligence = IntelligenceSettings(timeoutMs = 5_000, holdMs = 2_000),
+                intelligence = IntelligenceSettings(timeoutMs = 5_000, holdMs = 2_000, indexingWaitMs = indexingWaitMs),
             ),
         )
     }
@@ -109,6 +110,41 @@ class CodeIntelligenceTest {
         service.close()
         project.toFile().deleteRecursively()
         data.toFile().deleteRecursively()
+    }
+
+    @Test
+    fun `usages and declarations wait for a server indexing the project, which finds none before`() {
+        options = arrayOf("--progress", "2", "--blind-until-indexed")
+        openMain()
+        // No retry: the first answer is the one after the indexing.
+        val usages = runBlocking { intelligence.references(SESSION, position(2, 18), includeDeclaration = false) }
+        assertEquals(FeatureStatus.Ready, usages.status)
+        assertEquals(listOf(main to 2, main to 3), usages.locations.map { it.path to it.range.startLine })
+        val declaration = runBlocking { intelligence.navigate(SESSION, position(1, 17), NavigationKind.Definition) }
+        assertEquals(listOf(greeter), declaration.locations.map { it.path })
+    }
+
+    @Test
+    fun `usage counts are counted once the server indexed the project`() {
+        options = arrayOf("--progress", "2", "--blind-until-indexed")
+        Files.writeString(Paths.get(main), MAIN)
+        service.use(SESSION, project.toString(), listOf(greeter))
+        service.openDocument(SESSION, project.toString(), greeter, 1, GREETER)
+        awaitRunning()
+        val counts = runBlocking { intelligence.usageCounts(SESSION, greeter, 1) }
+        assertEquals(listOf("Greeter" to 1, "greet" to 2), counts.counts.map { it.name to it.count })
+    }
+
+    @Test
+    fun `a server indexing longer than the wait is not ready, rather than finding no usage`() {
+        options = arrayOf("--progress", "30", "--blind-until-indexed")
+        indexingWaitMs = 1_000
+        openMain()
+        val started = System.nanoTime()
+        val usages = runBlocking { intelligence.references(SESSION, position(2, 18), includeDeclaration = false) }
+        val waited = (System.nanoTime() - started) / 1_000_000
+        assertEquals(FeatureStatus.NotReady, usages.status)
+        assertTrue(waited in 900..10_000, "waited $waited ms")
     }
 
     // Greeter.php only on disk, main.php open: the server finds the class by reading the project.

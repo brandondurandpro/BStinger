@@ -35,4 +35,9 @@ class SupervisorTimings(
     val crashWindowMs: Long = FIVE_MINUTES,
     /** The leak detector judges each history this often. */
     val leakCheckMs: Long = 10_000L,
+    /**
+     * How long after `initialized` a server may still begin to index the project (intelephense begins once its
+     * configuration is answered): the requests whose answer needs the index wait this long at first.
+     */
+    val indexingStartMs: Long = 500L,
 )

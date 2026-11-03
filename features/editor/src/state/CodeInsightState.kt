@@ -33,6 +33,10 @@ private const val SIGNATURE_DELAY_MS = 150L
 /** What the user reads when the language server cannot answer yet (starting, or out of reach). */
 internal const val NOT_READY = "The language server is not ready"
 
+/** Said while usages or declarations wait for the language server to index the project. */
+internal const val INDEXING = "Indexing the project… the results will show once it is done"
+private const val INDEXING_CHECK_MS = 200L
+
 /** Where a navigation was asked from, and what it looks for. */
 private class NavigationRequest(
     val path: String,
@@ -389,11 +393,9 @@ class CodeInsightState(
         scope.launch {
             val version = document.version
             val result =
-                askAt(
-                    path,
-                    document,
-                    pos,
-                ) { servers, at -> servers.navigate(at, kind) } ?: LocationsResult.NotReady
+                whileIndexing(document, request.anchor) {
+                    askAt(path, document, pos) { servers, at -> servers.navigate(at, kind) }
+                } ?: LocationsResult.NotReady
             if (document.version == version) navigated(request, result)
         }
     }
@@ -480,11 +482,9 @@ class CodeInsightState(
         scope.launch {
             val version = document.version
             val result =
-                askAt(
-                    path,
-                    document,
-                    pos,
-                ) { servers, at -> servers.references(at, false) } ?: LocationsResult.NotReady
+                whileIndexing(document, anchor) {
+                    askAt(path, document, pos) { servers, at -> servers.references(at, false) }
+                } ?: LocationsResult.NotReady
             val message =
                 when {
                     result.status == FeatureStatus.NotReady -> NOT_READY
@@ -637,6 +637,22 @@ class CodeInsightState(
                 delay(NOTICE_MS)
                 notice = null
             }
+    }
+
+    // Runs [request]; while it waits because a language server indexes the project, says so at [anchor].
+    private suspend fun <T> whileIndexing(document: Document, anchor: TextPos, request: suspend () -> T): T {
+        val waiting =
+            scope.launch {
+                while (backend()?.indexing != true) delay(INDEXING_CHECK_MS)
+                noticeJob?.cancel()
+                notice = InsightNotice(document, anchor, INDEXING)
+            }
+        try {
+            return request()
+        } finally {
+            waiting.cancel()
+            if (notice?.text == INDEXING) dismissNotice()
+        }
     }
 
     // Null when there is no backend or the link failed: the caller shows "not ready".

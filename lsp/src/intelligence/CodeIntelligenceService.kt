@@ -89,6 +89,11 @@ class IntelligenceSettings(
     val holdMs: Long = 20_000,
     /** Most usages or definitions sent for one request. */
     val maxLocations: Int = 1_000,
+    /**
+     * How long usages wait for the language server to index the project: before, a server such as intelephense finds
+     * none (it answers an empty list).
+     */
+    val indexingWaitMs: Long = 60_000,
     /** Most declarations of a document whose usages are counted. */
     val maxCountedSymbols: Int = 150,
     /** References requests run at once to count usages. */
@@ -204,6 +209,7 @@ class CodeIntelligenceService internal constructor(
             capability,
             LocationsResult.NotReady,
             LocationsResult.Unsupported,
+            needsIndex = true,
         ) { document, request ->
             val found = locationsOf(request(method, params(document)))
             val kept = found.take(settings.maxLocations)
@@ -311,6 +317,7 @@ class CodeIntelligenceService internal constructor(
             DOCUMENT_SYMBOL_PROVIDER,
             notReady,
             unsupported,
+            needsIndex = true,
         ) { document, request ->
             val lspVersion = documents.locked { document.lspVersion }
             val cached = usageCache[document.uri]?.takeIf { it.first == lspVersion }
@@ -438,6 +445,7 @@ class CodeIntelligenceService internal constructor(
             EditResult.NotReady,
             EditResult.Unsupported,
             ::refusedEdit,
+            needsIndex = true,
         ) { document, request ->
             val params =
                 buildJsonObject {

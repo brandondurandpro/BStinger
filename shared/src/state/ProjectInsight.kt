@@ -6,6 +6,7 @@ import kotlinx.coroutines.launch
 import org.example.kotlineditor.model.EditResult
 import org.example.kotlineditor.model.FeatureStatus
 import org.example.kotlineditor.model.FileEntry
+import org.example.kotlineditor.model.LanguageServerState
 import org.example.kotlineditor.model.Languages
 import org.example.kotlineditor.model.pathName
 import org.example.kotlineditor.syntax.Declaration
@@ -18,6 +19,9 @@ internal fun ProjectState.insightBackend(): InsightBackend? {
     val servers = languageServers ?: return null
     return object : InsightBackend {
         override val intelligence = servers.intelligence
+
+        override val indexing: Boolean
+            get() = servers.status.servers.any { it.state == LanguageServerState.Indexing }
 
         override fun versionOf(path: String, document: Document): Int? = servers.versionOf(path, document)
     }
@@ -98,10 +102,19 @@ internal fun ProjectState.followInsight() {
     }
     scope.launch { snapshotFlow { servers.diagnostics }.collect { insight.applyDiagnostics(it) } }
     // A new process (a restart, another server chosen) knows nothing of the previous counts. After a restart of the IDE
-    // server its language servers start again at the same generation: their pid tells the new processes apart.
+    // server its language servers start again at the same generation: their pid tells the new processes apart. Once a
+    // server indexed the project it finds usages it could not before (intelephense finds none meanwhile).
     scope.launch {
-        snapshotFlow { servers.status.servers.map { Triple(it.id, it.generation, it.pid) } }
-            .distinctUntilChanged()
+        snapshotFlow {
+            servers.status.servers.map {
+                ServerIdentity(
+                    it.id,
+                    it.generation,
+                    it.pid,
+                    it.state == LanguageServerState.Indexing,
+                )
+            }
+        }.distinctUntilChanged()
             .collect { insight.refreshAll() }
     }
 }
@@ -116,3 +129,6 @@ fun ProjectState.withInsight(action: CodeInsightState.(path: String, document: D
     val document = tab.document ?: return
     if (hasInsight(tab)) insight.action(tab.entry.path, document)
 }
+
+// What makes the open documents ask their code intelligence again when it changes.
+private data class ServerIdentity(val id: String, val generation: Long, val pid: Long?, val indexing: Boolean)

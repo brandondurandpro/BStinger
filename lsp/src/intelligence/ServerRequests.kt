@@ -36,6 +36,7 @@ internal class ServerRequests(
         notReady: T,
         unsupported: T,
         refused: (LspResponseException) -> T = { notReady },
+        needsIndex: Boolean = false,
         block: suspend (MirroredDocument, suspend (String, JsonObject) -> JsonElement?) -> T,
     ): T {
         val document = awaitDocument(session, path, version)
@@ -44,6 +45,7 @@ internal class ServerRequests(
         return when {
             document == null || readyServers.isEmpty() -> notReady
             server == null -> unsupported
+            needsIndex && !server.awaitIndexed(settings.indexingWaitMs) -> notReady
             else -> answered(server, document, notReady, refused, block)
         }
     }

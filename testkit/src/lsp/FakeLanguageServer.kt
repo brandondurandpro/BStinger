@@ -41,7 +41,9 @@ import kotlin.system.exitProcess
  * - output: `--garbage-stdout`, `--huge-message <mb>` (the hover answer), `--stderr-flood`;
  * - timing and questions: `--latency-ms <n>`, `--ask-configuration` (asks `workspace/configuration` after
  *   `initialized` and writes the answer to stderr), `--diagnostics`, `--progress <seconds>` (reports an
- *   "Indexing" progress from 0 to 100 % over that many seconds after `initialized`);
+ *   "Indexing" progress from 0 to 100 % over that many seconds after `initialized`), `--blind-until-indexed` (with
+ *   `--progress`: like intelephense, finds no definition nor usage until its indexing ended, which begins a moment
+ *   after `initialized`);
  * - completion: `--completion-items <n>` (n more functions, `generated_00001`...), `--full-sync` (asks for the whole
  *   text at each change), `--no-completion` (answers completion with an error).
  * A crash writes `Fatal error: fake crash` on stderr first, like a real server would.
@@ -53,6 +55,7 @@ object FakeLanguageServer {
     private const val CHUNK_MB = 4
     private const val CRASH_EXIT = 3
     private const val PROGRESS_STEPS = 10
+    private const val INDEXING_START_MS = 200L
     private const val PERCENT = 100
     private const val TICK_MS = 100L
     private const val MILLIS_PER_SECOND = 1000L
@@ -110,6 +113,8 @@ object FakeLanguageServer {
         val pullDiagnostics: Boolean = false,
         // Reads the files on disk once, like a server that indexes them, then only what didChangeWatchedFiles names.
         val index: Boolean = false,
+        // With progressSeconds: no definition nor usage until the indexing ended, as intelephense answers.
+        val blindUntilIndexed: Boolean = false,
     ) {
         val allocates get() = leakMbPerSecond > 0 || sawtooth != null || spikeThenPlateau != null
 
@@ -148,6 +153,7 @@ object FakeLanguageServer {
                     noDiagnostics = "no-diagnostics" in values,
                     pullDiagnostics = "pull-diagnostics" in values,
                     index = "index" in values,
+                    blindUntilIndexed = "blind-until-indexed" in values,
                 )
             }
 
@@ -203,6 +209,9 @@ object FakeLanguageServer {
 
         // The files on disk as indexed with `--index`, by URI.
         private var indexed: MutableMap<String, List<String>>? = null
+
+        // False until the indexing of `--progress` ended, with `--blind-until-indexed`: no definition nor usage.
+        @Volatile private var sees = !(options.blindUntilIndexed && options.progressSeconds != null)
 
         // executeCommand requests waiting for the answer to the applyEdit they sent, by the applyEdit's id.
         private val pendingCommands = HashMap<String, JsonElement>()
@@ -292,11 +301,10 @@ object FakeLanguageServer {
                 "workspace/willCreateFiles", "workspace/willDeleteFiles" -> reply(id, JsonNull)
                 "workspace/didCreateFiles", "workspace/didRenameFiles", "workspace/didDeleteFiles" ->
                     log.println("${method.removePrefix("workspace/")} ${message["params"]}").also { log.flush() }
-                "textDocument/definition" -> reply(id, intelligence().definition(message["params"]))
+                "textDocument/definition", "textDocument/references" -> if (!sees) reply(id, JsonArray(emptyList())) else answerNavigation(id, method, message["params"])
                 "textDocument/declaration" -> reply(id, intelligence().definition(message["params"]))
                 "textDocument/typeDefinition" -> reply(id, intelligence().typeDefinition(message["params"]))
                 "textDocument/implementation" -> reply(id, intelligence().implementation(message["params"]))
-                "textDocument/references" -> reply(id, intelligence().references(message["params"]))
                 "textDocument/documentHighlight" -> reply(id, intelligence().highlights(message["params"]))
                 "textDocument/documentSymbol" -> reply(id, intelligence().documentSymbols(message["params"]))
                 "workspace/symbol" -> reply(id, intelligence().workspaceSymbols(message["params"]))
@@ -588,7 +596,14 @@ object FakeLanguageServer {
             )
         }
 
+        private fun answerNavigation(id: JsonElement?, method: String, params: JsonElement?) {
+            val answer = if (method == "textDocument/references") intelligence().references(params) else intelligence().definition(params)
+            reply(id, answer)
+        }
+
         private fun reportProgress(seconds: Int) {
+            // A blind server begins to index a moment after initialized, as intelephense once its configuration came.
+            if (!sees) Thread.sleep(INDEXING_START_MS)
             send(request("progress-1", "window/workDoneProgress/create", buildJsonObject { put("token", "index") }))
             val steps = PROGRESS_STEPS
             for (step in 0..steps) {
@@ -613,6 +628,7 @@ object FakeLanguageServer {
                 put("token", "index")
                 put("value", buildJsonObject { put("kind", "end") })
             })
+            sees = true
         }
 
         private fun request(id: String, method: String, params: JsonObject) =

@@ -30,6 +30,9 @@ interface InsightBackend {
     /** The language servers' requests. */
     val intelligence: CodeIntelligence
 
+    /** Whether a language server indexes the project: usages and declarations wait for it. */
+    val indexing: Boolean get() = false
+
     /** Version of [path] the server has once what is typed is sent; null when no language server mirrors it. */
     fun versionOf(path: String, document: Document): Int?
 }
