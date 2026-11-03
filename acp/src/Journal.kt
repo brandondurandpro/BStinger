@@ -20,12 +20,11 @@ internal class Journal(private val epoch: String) {
     /** Version of the latest change: it grows with every item added or changed, and with every state change. */
     val version: StateFlow<Long> get() = changes
 
-    var state: AgentTurnState = AgentTurnState.Idle
+    /** What the transcript says besides its items: the state of the agent, its name, its session. */
+    var header: Header = Header()
         private set
 
-    /** Name and version of the agent, once it introduced itself. */
-    var agentName: String? = null
-        private set
+    val state: AgentTurnState get() = header.state
 
     /** A new id, unique across restarts of the server thanks to its epoch. */
     fun newId(): String = synchronized(lock) { "$epoch-${++created}" }
@@ -63,30 +62,39 @@ internal class Journal(private val epoch: String) {
             true
         }
 
-    fun setState(state: AgentTurnState) {
+    /** Changes the [header]; a change makes a new version. */
+    fun describe(change: (Header) -> Header) {
         synchronized(lock) {
-            if (this.state == state) return
-            this.state = state
+            val changed = change(header)
+            if (changed == header) return
+            header = changed
             changes.value += 1
         }
     }
 
-    fun setAgentName(name: String?) {
-        synchronized(lock) {
-            if (agentName == name) return
-            agentName = name
-            changes.value += 1
-        }
-    }
+    fun setState(state: AgentTurnState) = describe { it.copy(state = state) }
 
     /** The version, the state and the items changed after [since], read together. */
     fun since(since: Long): Snapshot =
         synchronized(lock) {
-            Snapshot(changes.value, state, agentName, items.filter { it.version > since })
+            Snapshot(changes.value, header, items.filter { it.version > since })
         }
 
     /** What [since] returns. */
-    class Snapshot(val version: Long, val state: AgentTurnState, val agentName: String?, val items: List<AgentItem>)
+    class Snapshot(val version: Long, val header: Header, val items: List<AgentItem>)
+
+    /** What a transcript says besides its items. */
+    data class Header(
+        val state: AgentTurnState = AgentTurnState.Idle,
+        /** Name and version of the agent, once it introduced itself. */
+        val agentName: String? = null,
+        /** Id of the session of the agent. */
+        val session: String? = null,
+        /** Title of the session, from the agent. */
+        val title: String? = null,
+        /** Whether the items start with the history the agent replayed. */
+        val replayed: Boolean = false,
+    )
 }
 
 /** This item with another version. */

@@ -12,7 +12,10 @@ import org.example.kotlineditor.model.AgentItem
 import org.example.kotlineditor.state.Conversation
 import org.example.kotlineditor.state.InMemoryPreferenceStore
 import org.example.kotlineditor.state.PreferenceKeys
+import org.example.kotlineditor.state.PreferenceStore
 import org.example.kotlineditor.testkit.acp.FakeAgentCommand
+import org.example.kotlineditor.testkit.acp.FakeSessions
+import org.example.kotlineditor.testkit.acp.FakeTurn
 import org.example.kotlineditor.ui.AppTags
 
 /** How long the fake agent may take to start (a JVM) and answer, on a slow runner. */
@@ -29,6 +32,24 @@ fun agentPreferences(vararg options: String) =
             PreferenceKeys.AGENT_COMMAND to fakeAgentLine(*options),
         ),
     )
+
+/** The agent of the tests that choose none: a program that does not exist, never the real agent (npx). */
+const val NO_AGENT = "kotlin-editor-test-no-agent"
+
+/**
+ * [preferences], with [NO_AGENT] as the agent when they choose none: agent mode lists the sessions of the agent as it
+ * shows, and a test must not start (or download) the agent of the user.
+ */
+fun withoutRealAgent(preferences: PreferenceStore): PreferenceStore =
+    object : PreferenceStore {
+        override fun load(): Map<String, String> {
+            val values = preferences.load()
+            val chosen = values.containsKey(PreferenceKeys.AGENT_COMMAND)
+            return if (chosen) values else values + (PreferenceKeys.AGENT_COMMAND to NO_AGENT)
+        }
+
+        override fun save(values: Map<String, String>) = preferences.save(values)
+    }
 
 /** Switches the open project to agent mode and starts a conversation; returns it. */
 @OptIn(ExperimentalTestApi::class)
@@ -80,3 +101,25 @@ fun ComposeUiTest.answerPermission(option: String) {
 /** Leaves the node tagged [tag] alone: used to check a button is there without clicking it. */
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.isShown(tag: String): Boolean = runCatching { onNodeWithTag(tag).assertExists() }.isSuccess
+
+/**
+ * Writes a session of the fake agent into [store], as an earlier IDE left it: it works in [directory] and holds
+ * [turns], prompts and answers. Returns its id.
+ */
+fun pastSession(store: java.nio.file.Path, directory: String, turns: List<Pair<String, String>>): String {
+    val sessions = FakeSessions(store.toFile())
+    val session = sessions.create(directory)
+    session.title = turns.firstOrNull()?.first
+    turns.forEach { (prompt, reply) -> session.turns.add(FakeTurn(prompt, StringBuilder(reply))) }
+    sessions.save(session)
+    return session.id
+}
+
+/** Switches the open project to agent mode, and waits until the history of the agent lists [session]. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.awaitHistory(app: E2eApp, session: String): Conversation {
+    awaitTag(AppTags.MODE_AGENT).performClick()
+    val conversations = app.project.agent.conversations
+    awaitCondition(AGENT_TIMEOUT) { conversations.any { it.session == session } }
+    return checkNotNull(conversations.firstOrNull { it.session == session })
+}

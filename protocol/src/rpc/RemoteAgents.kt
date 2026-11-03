@@ -1,11 +1,17 @@
 package org.example.kotlineditor.rpc
 
+import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.example.kotlineditor.model.AgentCommand
+import org.example.kotlineditor.model.AgentSessions
 import org.example.kotlineditor.model.AgentTranscript
 import org.example.kotlineditor.model.Agents
 
 private const val CONVERSATION = "conversation"
+private const val AGENT = "agent"
+private const val DIRECTORY = "directory"
+private const val SESSION = "session"
 
 /** [Agents] run by the server. */
 class RemoteAgents(private val client: RpcClient) : Agents {
@@ -15,14 +21,43 @@ class RemoteAgents(private val client: RpcClient) : Agents {
         directory: String,
         itemId: String,
         text: String,
+        session: String?,
     ) {
         client.call(Method.AgentPrompt) {
             put(CONVERSATION, conversation)
-            put("agent", agent.toJson())
-            put("directory", directory)
+            put(AGENT, agent.toJson())
+            put(DIRECTORY, directory)
             put("item", itemId)
             put("text", text)
+            put(SESSION, session.orNull())
         }
+    }
+
+    override suspend fun open(conversation: String, agent: AgentCommand, directory: String, session: String) {
+        client.call(Method.AgentOpen) {
+            put(CONVERSATION, conversation)
+            put(AGENT, agent.toJson())
+            put(DIRECTORY, directory)
+            put(SESSION, session)
+        }
+    }
+
+    override suspend fun sessions(agent: AgentCommand, root: String): AgentSessions {
+        val answer =
+            client.call(Method.AgentSessions) {
+                put(AGENT, agent.toJson())
+                put("root", root)
+            }
+        return answer.agentSessions()
+    }
+
+    override suspend fun delete(agent: AgentCommand, session: String): Boolean {
+        val answer =
+            client.call(Method.AgentDelete) {
+                put(AGENT, agent.toJson())
+                put(SESSION, session)
+            }
+        return answer.jsonPrimitive.boolean
     }
 
     override suspend fun cancel(conversation: String) {

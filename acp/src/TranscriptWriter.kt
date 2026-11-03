@@ -17,16 +17,33 @@ internal class TranscriptWriter(private val journal: Journal) {
     // Journal item of each tool call of the current session, by the id the agent gave it.
     private val toolItems = ConcurrentHashMap<String, String>()
 
+    // Message the latest chunk belonged to, when the agent numbers its messages: a new one starts a new item.
+    @Volatile
+    private var messageId: String? = null
+
+    /**
+     * What becomes of the updates: [Mode.Live] for a prompt, [Mode.Replay] while the agent replays the history of a
+     * session (the user's messages too), [Mode.Muted] for a replay of what the journal already shows.
+     */
+    @Volatile
+    var mode = Mode.Live
+
     /** A new session started: its tool call ids are its own. */
-    fun newSession() = toolItems.clear()
+    fun newSession() {
+        toolItems.clear()
+        messageId = null
+    }
 
     /** Writes [update], a `session/update`; the kinds this IDE does not show are ignored. */
     fun write(update: JsonObject) {
+        if (mode == Mode.Muted) return
         when (update.text("sessionUpdate")) {
-            "agent_message_chunk" -> append(update, thought = false)
-            "agent_thought_chunk" -> append(update, thought = true)
+            "user_message_chunk" -> if (mode == Mode.Replay) append(update, Text.User)
+            "agent_message_chunk" -> append(update, Text.Agent)
+            "agent_thought_chunk" -> append(update, Text.Thought)
             "tool_call", "tool_call_update" -> tool(update)
             "plan" -> plan(update)
+            "session_info_update" -> info(update)
         }
     }
 
@@ -54,28 +71,28 @@ internal class TranscriptWriter(private val journal: Journal) {
         journal.add { AgentItem.Notice(id, it, text, error) }
     }
 
-    // A chunk of text: it grows the text item it continues, or starts one.
-    private fun append(update: JsonObject, thought: Boolean) {
+    // A chunk of text: it grows the text item it continues (same kind, same message), or starts one.
+    private fun append(update: JsonObject, kind: Text) {
         val chunk = update["content"].obj()?.contentText().orEmpty()
-        val last = journal.last()
-        val continued = if (thought) last is AgentItem.Thought else last is AgentItem.AgentText
         if (chunk.isEmpty()) return
-        if (last != null && continued) {
-            journal.update(last.id) { item, version -> appended(item, chunk, version) }
+        val message = update.text("messageId")
+        val sameMessage = message == null || message == messageId
+        messageId = message
+        val continued = journal.last()?.takeIf { sameMessage && kind.continues(it) }
+        if (continued != null) {
+            journal.update(continued.id) { item, version -> appended(item, chunk, version) }
             return
         }
         val id = journal.newId()
-        journal.add { version ->
-            if (thought) AgentItem.Thought(id, version, chunk) else AgentItem.AgentText(id, version, chunk)
-        }
+        journal.add { version -> kind.item(id, version, chunk) }
     }
 
-    private fun appended(item: AgentItem, chunk: String, version: Long): AgentItem =
-        when (item) {
-            is AgentItem.Thought -> item.copy(version = version, text = item.text + chunk)
-            is AgentItem.AgentText -> item.copy(version = version, text = item.text + chunk)
-            else -> item
-        }
+    // The agent titled the session (`title` absent: unchanged; null: cleared).
+    private fun info(update: JsonObject) {
+        if (!update.containsKey(TITLE)) return
+        val title = update.text(TITLE)
+        journal.describe { it.copy(title = title) }
+    }
 
     // A tool call starts or changes: the fields present replace those of the item.
     private fun tool(update: JsonObject) {
@@ -88,20 +105,6 @@ internal class TranscriptWriter(private val journal: Journal) {
         } else {
             journal.update(existing) { item, version -> changedTool(item as AgentItem.ToolCall, version, update) }
         }
-    }
-
-    private fun newTool(id: String, version: Long, callId: String, update: JsonObject): AgentItem.ToolCall {
-        val content = update.toolContent()
-        return AgentItem.ToolCall(
-            id = id,
-            version = version,
-            title = update.text(TITLE) ?: callId,
-            kind = toolKind(update.text(KIND)),
-            status = toolStatus(update.text(STATUS)) ?: AgentToolStatus.Pending,
-            output = content?.output.orEmpty(),
-            diffs = content?.diffs.orEmpty(),
-            locations = update.toolLocations().orEmpty(),
-        )
     }
 
     private fun changedTool(call: AgentItem.ToolCall, version: Long, update: JsonObject): AgentItem.ToolCall {
@@ -133,4 +136,51 @@ internal class TranscriptWriter(private val journal: Journal) {
     }
 }
 
+/** What a transcript writer does with the updates of its session. */
+internal enum class Mode { Live, Replay, Muted }
+
+// The kinds of text the agent streams in chunks.
+private enum class Text {
+    User,
+    Agent,
+    Thought,
+    ;
+
+    fun continues(item: AgentItem): Boolean =
+        when (this) {
+            User -> item is AgentItem.UserText
+            Agent -> item is AgentItem.AgentText
+            Thought -> item is AgentItem.Thought
+        }
+
+    fun item(id: String, version: Long, text: String): AgentItem =
+        when (this) {
+            User -> AgentItem.UserText(id, version, text)
+            Agent -> AgentItem.AgentText(id, version, text)
+            Thought -> AgentItem.Thought(id, version, text)
+        }
+}
+
 private fun AgentItem.ToolCall.isRunning() = status == AgentToolStatus.Pending || status == AgentToolStatus.Running
+
+private fun appended(item: AgentItem, chunk: String, version: Long): AgentItem =
+    when (item) {
+        is AgentItem.UserText -> item.copy(version = version, text = item.text + chunk)
+        is AgentItem.Thought -> item.copy(version = version, text = item.text + chunk)
+        is AgentItem.AgentText -> item.copy(version = version, text = item.text + chunk)
+        else -> item
+    }
+
+private fun newTool(id: String, version: Long, callId: String, update: JsonObject): AgentItem.ToolCall {
+    val content = update.toolContent()
+    return AgentItem.ToolCall(
+        id = id,
+        version = version,
+        title = update.text(TITLE) ?: callId,
+        kind = toolKind(update.text(KIND)),
+        status = toolStatus(update.text(STATUS)) ?: AgentToolStatus.Pending,
+        output = content?.output.orEmpty(),
+        diffs = content?.diffs.orEmpty(),
+        locations = update.toolLocations().orEmpty(),
+    )
+}

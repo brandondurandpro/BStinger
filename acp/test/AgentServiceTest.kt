@@ -1,7 +1,6 @@
 package org.example.kotlineditor.acp
 
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeout
 import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.model.AgentItem
 import org.example.kotlineditor.model.AgentToolKind
@@ -18,8 +17,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
-
-private const val TIMEOUT_MS = 30_000L
 
 /** The server side of agent mode, with the fake ACP agent in its own JVM. */
 class AgentServiceTest {
@@ -47,22 +44,7 @@ class AgentServiceTest {
         follow("c1") { _, items -> until(items) }
 
     private fun follow(conversation: String, done: (AgentTurnState, List<AgentItem>) -> Boolean): List<AgentItem> =
-        runBlocking {
-            withTimeout(TIMEOUT_MS) {
-                val items = LinkedHashMap<String, AgentItem>()
-                var since = 0L
-                var state = AgentTurnState.Idle
-                var started = false
-                while (!started || !done(state, items.values.toList())) {
-                    val transcript = service.transcript(conversation, service.epoch, since)
-                    transcript.items.forEach { items[it.id] = it }
-                    since = transcript.version
-                    state = transcript.state
-                    started = true
-                }
-                items.values.toList()
-            }
-        }
+        service.follow(conversation, done).items
 
     @Test
     fun `the chunks of an answer make one text item`() {

@@ -205,15 +205,63 @@ data class AgentTranscript(
     val items: List<AgentItem>,
     /** Name of the agent and its version, as it introduced itself; null before it started. */
     val agentName: String? = null,
+    /** Id of the session of the agent, kept by the agent itself: a conversation reopens it after a restart. */
+    val session: String? = null,
+    /** Title of the session, when the agent gave one. */
+    val title: String? = null,
+    /** Whether the items start with the history of the session the agent replayed: they replace those shown. */
+    val replayed: Boolean = false,
+)
+
+/** A session an agent keeps, as the agent lists it: the history of a conversation. */
+data class AgentSession(
+    /** Its id for the agent. */
+    val id: String,
+    /** Directory the agent worked in. */
+    val directory: String,
+    /** Its title, when the agent gave one. */
+    val title: String? = null,
+    /** When it last changed (ISO 8601), when the agent said. */
+    val updatedAt: String? = null,
+    /** Branch of the worktree of agent mode it worked in; null for the project itself. */
+    val branch: String? = null,
+)
+
+/** The sessions an agent keeps for a project. */
+data class AgentSessions(
+    /** False when the agent does not list its sessions. */
+    val supported: Boolean,
+    /** Its sessions, newest first. */
+    val sessions: List<AgentSession>,
 )
 
 /** Conversations with agents, run by the server. Every call returns at once except [transcript], a long poll. */
 interface Agents {
     /**
      * Sends [text] to the agent of [conversation], started with [agent] in [directory] if it does not run yet. The
-     * prompt shows as item [itemId]. A request sent twice is run once.
+     * prompt shows as item [itemId]. A conversation the server does not know continues the agent's [session], when
+     * the agent can reopen it. A request sent twice is run once.
      */
-    suspend fun prompt(conversation: String, agent: AgentCommand, directory: String, itemId: String, text: String)
+    suspend fun prompt(
+        conversation: String,
+        agent: AgentCommand,
+        directory: String,
+        itemId: String,
+        text: String,
+        session: String? = null,
+    )
+
+    /**
+     * Opens the agent's [session] (from [sessions]) as [conversation], working in [directory]: its transcript replays
+     * the history the agent kept. A request sent twice is run once.
+     */
+    suspend fun open(conversation: String, agent: AgentCommand, directory: String, session: String)
+
+    /** The sessions [agent] keeps for the project at [root] and its worktrees of agent mode, newest first. */
+    suspend fun sessions(agent: AgentCommand, root: String): AgentSessions
+
+    /** Deletes the agent's [session] and its history, when the agent can; returns whether it did. */
+    suspend fun delete(agent: AgentCommand, session: String): Boolean
 
     /** Stops the prompt running in [conversation]; its pending permission requests are cancelled. */
     suspend fun cancel(conversation: String)
@@ -238,7 +286,15 @@ interface Agents {
             directory: String,
             itemId: String,
             text: String,
+            session: String?,
         ): Unit = throw java.io.IOException("No server runs the agents")
+
+        override suspend fun open(conversation: String, agent: AgentCommand, directory: String, session: String): Unit =
+            throw java.io.IOException("No server runs the agents")
+
+        override suspend fun sessions(agent: AgentCommand, root: String) = AgentSessions(false, emptyList())
+
+        override suspend fun delete(agent: AgentCommand, session: String) = false
 
         override suspend fun cancel(conversation: String) = Unit
 

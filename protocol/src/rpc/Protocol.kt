@@ -498,6 +498,15 @@ enum class Method(
 
     /** Forgets a conversation and ends its session. */
     AgentClose("agent/close", mutating = true),
+
+    /** Opens a session the agent kept as a conversation, replaying its history. */
+    AgentOpen("agent/open", mutating = true),
+
+    /** The sessions an agent keeps for a project. */
+    AgentSessions("agent/sessions"),
+
+    /** Deletes a session the agent kept. */
+    AgentDelete("agent/delete", mutating = true),
 }
 
 /** A JSON-RPC error object `{"code": ..., "message": ...}`. */

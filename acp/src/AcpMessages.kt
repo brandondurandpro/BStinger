@@ -2,6 +2,7 @@ package org.example.kotlineditor.acp
 
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.intOrNull
@@ -25,6 +26,22 @@ internal class AgentInfo(
     val name: String?,
     /** How the user can log in to it, one line each. */
     val authMethods: List<String>,
+    /** What it can do with the sessions it keeps. */
+    val sessions: SessionCapabilities = SessionCapabilities(),
+)
+
+/** What an agent can do with the sessions it keeps, from its capabilities. */
+internal data class SessionCapabilities(
+    /** `session/load`: reopens a session and replays its history. */
+    val load: Boolean = false,
+    /** `session/list`: lists its sessions. */
+    val list: Boolean = false,
+    /** `session/resume`: reopens a session without replaying it. */
+    val resume: Boolean = false,
+    /** `session/close`: frees a session. */
+    val close: Boolean = false,
+    /** `session/delete`: deletes a session and its history. */
+    val delete: Boolean = false,
 )
 
 /** `initialize`: the version and the capabilities of this client, which serves file reads and writes. */
@@ -59,8 +76,23 @@ internal fun agentInfo(answer: JsonObject?): AgentInfo {
         answer["authMethods"].array().mapNotNull { it.obj() }.map { method ->
             listOfNotNull(method.text("name"), method.text("description")).joinToString(": ")
         }
-    return AgentInfo(name, methods)
+    return AgentInfo(name, methods, sessionCapabilities(answer["agentCapabilities"].obj()))
 }
+
+// `loadSession: true`, and the objects of `sessionCapabilities`: present means supported.
+private fun sessionCapabilities(capabilities: JsonObject?): SessionCapabilities {
+    val load = capabilities?.get("loadSession")?.jsonPrimitive?.booleanOrNull ?: false
+    val sessions = capabilities?.get("sessionCapabilities").obj()
+    return SessionCapabilities(
+        load = load,
+        list = sessions.has("list"),
+        resume = sessions.has("resume"),
+        close = sessions.has("close"),
+        delete = sessions.has("delete"),
+    )
+}
+
+private fun JsonObject?.has(name: String): Boolean = this?.get(name).obj() != null
 
 /** `session/new` in [directory], without MCP servers. */
 internal fun newSessionParams(directory: String): JsonObject =
@@ -68,6 +100,24 @@ internal fun newSessionParams(directory: String): JsonObject =
         put("cwd", directory)
         put("mcpServers", JsonArray(emptyList()))
     }
+
+/** `session/load` and `session/resume`: reopens [session] in [directory], without MCP servers. */
+internal fun reopenParams(session: String, directory: String): JsonObject =
+    buildJsonObject {
+        put(SESSION_ID, session)
+        put("cwd", directory)
+        put("mcpServers", JsonArray(emptyList()))
+    }
+
+/** `session/list` of the sessions working in [directory], from [cursor] on. */
+internal fun listParams(directory: String, cursor: String?): JsonObject =
+    buildJsonObject {
+        put("cwd", directory)
+        if (cursor != null) put("cursor", cursor)
+    }
+
+/** A request about [session] alone: `session/close`, `session/delete`. */
+internal fun sessionParams(session: String): JsonObject = buildJsonObject { put(SESSION_ID, session) }
 
 /** `session/prompt`: [text] to [session]. */
 internal fun promptParams(session: String, text: String): JsonObject {

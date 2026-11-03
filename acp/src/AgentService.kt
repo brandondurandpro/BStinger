@@ -65,15 +65,28 @@ class AgentService(
     val epoch: String = UUID.randomUUID().toString().take(EPOCH_LENGTH)
     private val conversations = ConcurrentHashMap<String, ServerConversation>()
     private val created = MutableStateFlow(0L)
-    private val processes = HashMap<AgentCommand, AgentProcess>()
 
-    /** Sends [text] to the agent of [conversation], started with [agent] in [directory] when needed. */
-    fun prompt(conversation: String, agent: AgentCommand, directory: String, itemId: String, text: String) {
-        val known = conversations[conversation]
-        val target =
-            known ?: conversations.computeIfAbsent(conversation) { ServerConversation(Journal(epoch), scope, settings) }
-        if (known == null) created.value += 1
-        target.prompt(itemId, text, directory) { processFor(agent) }
+    /** The agent processes, one per command line, and the sessions they keep. */
+    val processes = AgentProcesses(scope, files)
+
+    /**
+     * Sends [text] to the agent of [conversation], started with [agent] in [directory] when needed; a conversation
+     * this service does not know continues the agent's [session].
+     */
+    fun prompt(
+        conversation: String,
+        agent: AgentCommand,
+        directory: String,
+        itemId: String,
+        text: String,
+        session: String? = null,
+    ) {
+        conversation(conversation).prompt(itemId, text, directory, session) { processes.processFor(agent) }
+    }
+
+    /** Opens the agent's [session] as [conversation]: the agent replays its history into the transcript. */
+    fun open(conversation: String, agent: AgentCommand, directory: String, session: String) {
+        conversation(conversation).open(session, directory) { processes.processFor(agent) }
     }
 
     /** Stops the prompt running in [conversation]. */
@@ -96,7 +109,18 @@ class AgentService(
         val journal = target.journal
         if (journal.version.value <= from) withTimeoutOrNull(settings.holdMs) { journal.version.first { it > from } }
         val snapshot = journal.since(from)
-        return AgentTranscript(snapshot.version, this.epoch, true, snapshot.state, snapshot.items, snapshot.agentName)
+        val header = snapshot.header
+        return AgentTranscript(
+            version = snapshot.version,
+            epoch = this.epoch,
+            known = true,
+            state = header.state,
+            items = snapshot.items,
+            agentName = header.agentName,
+            session = header.session,
+            title = header.title,
+            replayed = header.replayed,
+        )
     }
 
     // A conversation this service does not know (yet): said at once to a client of another epoch, after a while (or
@@ -110,34 +134,26 @@ class AgentService(
     }
 
     /** Forgets [conversation]: its prompt stops and its agent process ends once no conversation uses it. */
-    fun close(conversation: String) {
+    suspend fun close(conversation: String) {
         val removed = conversations.remove(conversation) ?: return
         removed.close()
-        synchronized(processes) {
-            val unused = processes.filterValues { it.unused }
-            unused.values.forEach(AgentProcess::destroy)
-            unused.keys.forEach(processes::remove)
-        }
+        processes.destroyUnused()
     }
 
     override fun close() {
-        conversations.values.forEach(ServerConversation::close)
         conversations.clear()
-        synchronized(processes) {
-            processes.values.forEach(AgentProcess::destroy)
-            processes.clear()
-        }
+        processes.close()
         scope.cancel()
     }
 
-    // The running process of [agent], or a new one when it never ran or stopped.
-    private fun processFor(agent: AgentCommand): AgentProcess =
-        synchronized(processes) {
-            val known = processes[agent]
-            if (known != null && known.isAlive) return known
-            known?.destroy()
-            AgentProcess(agent, scope, files).also { processes[agent] = it }
-        }
+    // The conversation [key], created on first use.
+    private fun conversation(key: String): ServerConversation {
+        val known = conversations[key]
+        if (known != null) return known
+        val target = conversations.computeIfAbsent(key) { ServerConversation(Journal(epoch), scope, settings) }
+        created.value += 1
+        return target
+    }
 
     private companion object {
         const val EPOCH_LENGTH = 8

@@ -6,6 +6,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.model.AgentItem
 import org.example.kotlineditor.ui.AppTags
+import java.nio.file.Files
 import kotlin.io.path.readText
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -93,18 +94,58 @@ class AgentChaosE2eTest {
         }
 
     @Test
-    fun `after the server restarts the conversation says the agent forgot it, and goes on`() =
+    fun `after the server restarts the conversation goes on in the session the agent kept`() =
         runComposeUiTest {
-            val app = launchWithProject(project, agentPreferences(), chaos = true)
+            val store = Files.createTempDirectory("agent-store")
+            val app = launchWithProject(project, agentPreferences("--store", "$store"), chaos = true)
+            val conversation = startConversation(app)
+            sendPrompt("count")
+            awaitShown(conversation, "Prompt 1 of session-1.")
+            awaitIdle(conversation)
+            app.process.restart()
+            awaitReconnected()
+            sendPrompt("count")
+            // The agent reopened its session: it remembers the first prompt, and nothing says it forgot.
+            awaitShown(conversation, "Prompt 2 of session-1.")
+            awaitIdle(conversation)
+            assertEquals(2, conversation.itemsOf<AgentItem.UserText>().size)
+            assertTrue(conversation.itemsOf<AgentItem.Notice>().isEmpty(), shownConversation(conversation))
+            store.toFile().deleteRecursively()
+        }
+
+    @Test
+    fun `a conversation of the history opened while the network is down replays once it is back`() =
+        runComposeUiTest {
+            val store = Files.createTempDirectory("agent-store")
+            val app = launchWithProject(project, agentPreferences("--store", "$store"), chaos = true)
+            val session = pastSession(store, app.project.root.path, listOf("echo old" to "old answer "))
+            val conversation = awaitHistory(app, session)
+            app.network.goDown()
+            awaitReconnecting()
+            awaitTag(AppTags.agentConversation(conversation.id)).performClick()
+            app.network.comeBack()
+            awaitReconnected()
+            awaitShown(conversation, "old answer")
+            awaitIdle(conversation)
+            // Opened once: the history shows once.
+            assertEquals(1, conversation.itemsOf<AgentItem.UserText>().size)
+            assertEquals(1, conversation.itemsOf<AgentItem.AgentText>().size)
+            store.toFile().deleteRecursively()
+        }
+
+    @Test
+    fun `after the server restarts an agent without history says it forgot the conversation, and goes on`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, agentPreferences("--no-history"), chaos = true)
             val conversation = startConversation(app)
             sendPrompt("count")
             awaitShown(conversation, "Prompt 1 of")
             awaitIdle(conversation)
             app.process.restart()
             awaitReconnected()
-            awaitShown(conversation, "The server restarted")
             sendPrompt("count")
             // A new agent and a new session: its first prompt. What it showed before the restart is still there.
+            awaitShown(conversation, "no longer remembers")
             awaitCondition(AGENT_TIMEOUT) { conversation.itemsOf<AgentItem.AgentText>().size == 2 }
             awaitIdle(conversation)
             val answers = conversation.itemsOf<AgentItem.AgentText>().map { it.text }
@@ -121,7 +162,7 @@ class AgentChaosE2eTest {
             app.process.restart()
             awaitReconnected()
             awaitIdle(conversation)
-            assertContains(shownConversation(conversation), "The server restarted")
+            assertContains(shownConversation(conversation), "The agent stopped.")
             sendPrompt("echo still here")
             awaitShown(conversation, "still here")
         }

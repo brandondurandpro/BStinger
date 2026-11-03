@@ -91,18 +91,12 @@ internal class AgentProcess(val command: AgentCommand, scope: CoroutineScope, fi
             info ?: agentInfo(connection.request("initialize", initializeParams()).obj()).also { info = it }
         }
 
-    /** Starts a session working in [directory], whose updates go to [listener]; returns its id. */
-    suspend fun newSession(directory: String, listener: SessionListener): String {
-        val answer = connection.request("session/new", newSessionParams(directory)).obj()
-        val id = answer?.text(SESSION_ID) ?: throw IOException("The agent started a session without an id")
-        sessions[id] = listener
-        return id
-    }
+    /** Sends the request [method] to the agent and returns its answer, an object (null for anything else). */
+    suspend fun request(method: String, params: JsonObject): JsonObject? = connection.request(method, params).obj()
 
-    /** Sends [text] to [session] and waits for the end of the turn; returns why it ended (`end_turn`, `cancelled`). */
-    suspend fun prompt(session: String, text: String): String {
-        val answer = connection.request("session/prompt", promptParams(session, text)).obj()
-        return answer?.text("stopReason") ?: "end_turn"
+    /** Sends the updates and the permission requests of [session] to [listener] from now on. */
+    fun listen(session: String, listener: SessionListener) {
+        sessions[session] = listener
     }
 
     /** Asks the agent to stop the turn of [session]; it answers the prompt with `cancelled`. */

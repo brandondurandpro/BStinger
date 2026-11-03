@@ -1,6 +1,5 @@
 package org.example.kotlineditor.acp
 
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -15,20 +14,6 @@ import org.example.kotlineditor.model.AgentTurnState
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 
-private const val NEW_SESSION = "A new session of the agent started: it no longer remembers the previous messages."
-
-// The error ACP agents answer when the user must log in first.
-private const val AUTH_REQUIRED = -32_000
-
-/** The agent needs the user to log in before it starts a session. */
-private class LoginRequiredException(message: String) : IOException(message)
-
-/** A session of an agent process, and the process it belongs to. */
-private class AgentSession(val process: AgentProcess, val id: String, val directory: String) {
-    /** Whether it can take a prompt to work in [place]. */
-    fun serves(place: String): Boolean = process.isAlive && directory == place
-}
-
 /**
  * One conversation on the server: its [journal], the session of its agent, the prompt running and the permission
  * requests waiting for the user. The updates of the agent become items of the journal as they arrive.
@@ -40,23 +25,45 @@ internal class ServerConversation(
 ) : SessionListener {
     private val lock = Any()
     private val writer = TranscriptWriter(journal)
-    private var session: AgentSession? = null
-    private var hadSession = false
+    private val keeper = SessionKeeper(journal, writer, this)
+    private val prompted = HashSet<String>()
+    private var opened = false
     private var job: Job? = null
 
     @Volatile
     private var stopping = false
     private val permissions = ConcurrentHashMap<String, CompletableDeferred<String?>>()
 
-    /** Starts answering [text], shown as item [itemId]; a prompt sent again (same item) is ignored. */
-    fun prompt(itemId: String, text: String, directory: String, process: () -> AgentProcess) {
+    /**
+     * Starts answering [text], shown as item [itemId], in the agent's [session] when the conversation has none yet. A
+     * prompt sent again (same item) is ignored.
+     */
+    fun prompt(itemId: String, text: String, directory: String, session: String?, process: () -> AgentProcess) {
         synchronized(lock) {
-            if (itemId in journal) return
+            if (!prompted.add(itemId)) return
             check(job?.isActive != true) { "The agent is still answering" }
-            journal.add { AgentItem.UserText(itemId, it, text) }
+            session?.let { keeper.resume(it, replay = false) }
             stopping = false
             journal.setState(AgentTurnState.Starting)
-            job = scope.launch { answer(text, directory, process) }
+            job = scope.launch { run(itemId, text, directory, process) }
+        }
+    }
+
+    /** Opens the agent's [session], whose history replays into the journal; opening it again does nothing. */
+    fun open(session: String, directory: String, process: () -> AgentProcess) {
+        synchronized(lock) {
+            if (opened || job?.isActive == true) return
+            opened = true
+            keeper.resume(session, replay = true)
+            journal.setState(AgentTurnState.Starting)
+            job =
+                scope.launch {
+                    try {
+                        failures(writer, keeper, before = {}) { keeper.sessionFor(directory, process) }
+                    } finally {
+                        journal.setState(AgentTurnState.Idle)
+                    }
+                }
         }
     }
 
@@ -64,7 +71,7 @@ internal class ServerConversation(
     fun cancel() {
         val running = synchronized(lock) { job?.takeIf { it.isActive } } ?: return
         stopping = true
-        session?.let { it.process.cancel(it.id) }
+        keeper.current?.let { it.process.cancel(it.id) }
         cancelPermissions()
         scope.launch {
             delay(settings.cancelGraceMs)
@@ -77,12 +84,11 @@ internal class ServerConversation(
         permissions.remove(itemId)?.complete(option)
     }
 
-    /** Stops the prompt and ends the session. */
-    fun close() {
+    /** Stops the prompt and ends the session; the agent keeps its history. */
+    suspend fun close() {
         job?.cancel()
         cancelPermissions()
-        session?.let { it.process.release(it.id) }
-        session = null
+        keeper.close()
     }
 
     override fun onUpdate(update: JsonObject) = writer.write(update)
@@ -102,24 +108,19 @@ internal class ServerConversation(
         return chosen
     }
 
-    @Suppress("TooGenericExceptionCaught")
-    private suspend fun answer(text: String, directory: String, process: () -> AgentProcess) {
+    private suspend fun run(itemId: String, text: String, directory: String, process: () -> AgentProcess) {
         var stopReason: String? = null
+        // After the history the agent may replay, before what goes wrong.
+        val shown = { if (itemId !in journal) journal.add { AgentItem.UserText(itemId, it, text) } }
         try {
-            val current = sessionFor(directory, process)
-            journal.setState(AgentTurnState.Running)
-            stopReason = current.process.prompt(current.id, text)
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (login: LoginRequiredException) {
-            writer.notice(login.message.orEmpty(), error = true)
-        } catch (refused: LspResponseException) {
-            writer.notice(refusal(refused), error = true)
-        } catch (failure: IOException) {
-            val dead = session?.process?.takeUnless { it.isAlive }
-            writer.notice(dead?.exitReason() ?: (failure.message ?: "The agent failed"), error = true)
-            if (dead != null) session = null
+            failures(writer, keeper, shown) {
+                val current = keeper.sessionFor(directory, process)
+                shown()
+                journal.setState(AgentTurnState.Running)
+                stopReason = current.process.prompt(current.id, text)
+            }
         } finally {
+            shown()
             finish(stopReason)
         }
     }
@@ -135,27 +136,6 @@ internal class ServerConversation(
             stopReason == "refusal" -> writer.notice("The agent refused to go on.", error = true)
         }
         journal.setState(AgentTurnState.Idle)
-    }
-
-    // The session of the conversation, started (with its process) on first use or when the agent stopped since. Its
-    // exceptions say why it could not start; the caller turns them into a notice.
-    private suspend fun sessionFor(directory: String, process: () -> AgentProcess): AgentSession {
-        val current = session
-        if (current != null && current.serves(directory)) return current
-        current?.process?.release(current.id)
-        if (hadSession) writer.notice(NEW_SESSION)
-        val agent = process()
-        val info = agent.ready()
-        journal.setAgentName(info.name)
-        val id =
-            try {
-                agent.newSession(directory, this)
-            } catch (refused: LspResponseException) {
-                throw if (refused.code == AUTH_REQUIRED) loginRequired(refused, info) else refused
-            }
-        writer.newSession()
-        hadSession = true
-        return AgentSession(agent, id, directory).also { session = it }
     }
 
     private fun cancelPermissions() {
@@ -177,8 +157,25 @@ private fun refusal(refused: LspResponseException): String {
     return "The agent failed: $message"
 }
 
-private fun loginRequired(refused: LspResponseException, info: AgentInfo): IOException {
-    val methods = info.authMethods.joinToString("\n") { "- $it" }
-    val how = if (methods.isEmpty()) "" else "\n$methods"
-    return LoginRequiredException("Log in to the agent first (${refused.message}).$how")
+// Runs [work]; its failures become notices, written after what [before] writes.
+private suspend fun failures(
+    writer: TranscriptWriter,
+    keeper: SessionKeeper,
+    before: () -> Unit,
+    work: suspend () -> Unit,
+) {
+    try {
+        work()
+    } catch (login: LoginRequiredException) {
+        before()
+        writer.notice(login.message.orEmpty(), error = true)
+    } catch (refused: LspResponseException) {
+        before()
+        writer.notice(refusal(refused), error = true)
+    } catch (failure: IOException) {
+        before()
+        val dead = keeper.current?.process?.takeUnless { it.isAlive }
+        writer.notice(dead?.exitReason() ?: (failure.message ?: "The agent failed"), error = true)
+        if (dead != null) keeper.processDied()
+    }
 }

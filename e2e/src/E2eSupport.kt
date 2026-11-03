@@ -261,7 +261,9 @@ fun ComposeUiTest.launchApp(
     setContent {
         val scope = rememberCoroutineScope()
         val state =
-            remember { AppState(services, scope, preferences, grammars, services, JvmRemoteFactory, measured) }
+            remember {
+                AppState(services, scope, withoutRealAgent(preferences), grammars, services, JvmRemoteFactory, measured)
+            }
         created = state
         DisposableEffect(Unit) {
             onDispose {

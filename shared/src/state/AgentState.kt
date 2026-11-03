@@ -70,6 +70,17 @@ class Conversation(val id: Int, title: String, val branch: String) {
     internal var epoch = ""
     internal var since = 0L
 
+    /**
+     * Id of the session of the agent, which keeps the history: the conversation reopens it after a restart of the
+     * server, and a conversation of the history opens it. Never stored by the IDE.
+     */
+    var session: String? by mutableStateOf(null)
+        internal set
+
+    // Directory of a session of the history, until it opened; the epoch whose replay replaced the items.
+    internal var sessionDirectory: String? = null
+    internal var replayedEpoch = ""
+
     /** Direct by default; the agent moves to a worktree of [branch] on request, before the first prompt. */
     var mode by mutableStateOf(WorkMode.Direct)
         internal set
@@ -94,7 +105,7 @@ class Conversation(val id: Int, title: String, val branch: String) {
     val currentBranch: String? get() = workspace?.git?.currentBranch ?: branch.takeIf { mode == WorkMode.Worktree }
 
     /** Whether the agent already works somewhere: its place can no longer change. */
-    val started: Boolean get() = items.isNotEmpty()
+    val started: Boolean get() = items.isNotEmpty() || session != null
 
     /** Scroll position of the messages, kept when switching tabs. */
     val listState = LazyListState()
@@ -110,18 +121,40 @@ class Conversation(val id: Int, title: String, val branch: String) {
                 is AgentItem.Plan -> "Plan"
                 is AgentItem.Permission -> "Asks: ${last.title}"
                 is AgentItem.Notice -> last.text
-                null -> "No messages yet"
+                null -> if (session != null) "From the history of the agent" else "No messages yet"
             }.lineSequence().firstOrNull().orEmpty()
 
-    /** Adds [item], or replaces the item with its id: a newer version of it, or the prompt the server echoed. */
+    /**
+     * Adds [item], or replaces the item with its id: a newer version of it, or the prompt the server echoed, which
+     * moves after what the server showed before it (a replayed history).
+     */
     internal fun upsert(item: AgentItem) {
         val position = positions[item.id]
-        if (position == null) {
+        val echoed = position != null && items[position].version == 0L && item.version > 0L
+        if (echoed && position != items.lastIndex) {
+            items.removeAt(position)
+            reindex()
+        }
+        val now = positions[item.id]
+        if (now == null) {
             positions[item.id] = items.size
             items.add(item)
         } else {
-            items[position] = item
+            items[now] = item
         }
+    }
+
+    /** Replaces what the conversation shows by the history the agent replayed; the prompts not sent yet stay. */
+    internal fun replaceByHistory() {
+        val unsent = items.filter { it is AgentItem.UserText && it.version == 0L }
+        items.clear()
+        positions.clear()
+        unsent.forEach(::upsert)
+    }
+
+    private fun reindex() {
+        positions.clear()
+        items.forEachIndexed { index, item -> positions[item.id] = index }
     }
 
     /** A notice of the IDE itself, not of the server. */
@@ -155,16 +188,18 @@ class AgentState(
 
     /** Whether the conversation list is shown on the left. */
     var conversationsVisible by mutableStateOf(true)
-    private var nextId = 1
+    internal var nextId = 1
 
     init {
         followEditors()
+        followHistory(project, agentCommand)
     }
 
     /** Opens [conversation] in a tab, or selects its tab, and prepares its worktree. */
     fun open(conversation: Conversation) {
         tabs.open(conversation)
         conversation.prepareIn(project)
+        project.restore(conversation, agentCommand())
     }
 
     /** Ctrl+F4: closes the file or diff shown, or the conversation when it is the one shown. */
@@ -196,7 +231,13 @@ class AgentState(
         tabs.close(conversation)
         conversations.remove(conversation)
         val started = conversation.started
-        project.scope.launch { if (started) runCatching { agents.close(conversation.key) } }
+        val session = conversation.session
+        val agent = agentCommand()
+        project.scope.launch {
+            if (started) runCatching { agents.close(conversation.key) }
+            // The agent keeps the history: deleted there, or the conversation comes back with it.
+            if (session != null) runCatching { agents.delete(agent, session) }
+        }
         conversation.closeWorktree(project)?.let { worktree ->
             project.scope.launch { runCatching { git.removeWorktree(project.root.path, worktree.root.path) } }
         }
@@ -262,7 +303,7 @@ class AgentState(
             }
             workspace.editor.flush()
             project.followTranscript(conversation)
-            agents.prompt(conversation.key, agentCommand(), workspace.root.path, itemId, text)
+            agents.prompt(conversation.key, agentCommand(), workspace.root.path, itemId, text, conversation.session)
         } catch (failure: IOException) {
             conversation.note("The prompt could not be sent: ${failure.message}")
         } finally {

@@ -24,6 +24,14 @@ private const val TYPE = "type"
 private const val PATH = "path"
 private const val STATUS = "status"
 private const val NAME = "name"
+private const val EPOCH = "epoch"
+private const val KNOWN = "known"
+private const val STATE = "state"
+private const val ITEMS = "items"
+private const val AGENT_NAME = "agentName"
+private const val SESSION = "session"
+private const val TITLE = "title"
+private const val REPLAYED = "replayed"
 
 /** An agent command line. */
 fun AgentCommand.toJson(): JsonObject =
@@ -43,23 +51,32 @@ fun JsonElement.agentCommand(): AgentCommand {
 fun AgentTranscript.toJson(): JsonObject =
     buildJsonObject {
         put(VERSION, version)
-        put("epoch", epoch)
-        put("known", known)
-        put("state", state.name)
-        put("items", JsonArray(items.map { it.toJson() }))
-        put("agentName", agentName?.let(::JsonPrimitive) ?: JsonNull)
+        put(EPOCH, epoch)
+        put(KNOWN, known)
+        put(STATE, state.name)
+        put(ITEMS, JsonArray(items.map { it.toJson() }))
+        put(AGENT_NAME, agentName.orNull())
+        put(SESSION, session.orNull())
+        put(TITLE, title.orNull())
+        put(REPLAYED, replayed)
     }
+
+/** A string, or JSON null. */
+internal fun String?.orNull(): JsonElement = this?.let(::JsonPrimitive) ?: JsonNull
 
 /** Reads a transcript. */
 fun JsonElement.agentTranscript(): AgentTranscript {
     val json = jsonObject
     return AgentTranscript(
         version = json.long(VERSION),
-        epoch = json.string("epoch"),
-        known = json.bool("known"),
-        state = AgentTurnState.valueOf(json.string("state")),
-        items = json.field("items").jsonArray.map { it.agentItem() },
-        agentName = json.stringOrNull("agentName"),
+        epoch = json.string(EPOCH),
+        known = json.bool(KNOWN),
+        state = AgentTurnState.valueOf(json.string(STATE)),
+        items = json.field(ITEMS).jsonArray.map { it.agentItem() },
+        agentName = json.stringOrNull(AGENT_NAME),
+        session = json.stringOrNull(SESSION),
+        title = json.stringOrNull(TITLE),
+        replayed = json[REPLAYED]?.let { json.bool(REPLAYED) } ?: false,
     )
 }
 

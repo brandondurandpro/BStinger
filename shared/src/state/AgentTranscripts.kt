@@ -46,6 +46,13 @@ private fun apply(conversation: Conversation, transcript: AgentTranscript) {
         return
     }
     val wasBusy = conversation.state != AgentTurnState.Idle
+    transcript.session?.let { conversation.session = it }
+    transcript.title?.let { conversation.title = titleOf(it) }
+    // The history the agent replayed replaces what the conversation showed, once per server.
+    if (transcript.replayed && conversation.replayedEpoch != transcript.epoch) {
+        conversation.replayedEpoch = transcript.epoch
+        conversation.replaceByHistory()
+    }
     var wrote = false
     for (item in transcript.items) {
         wrote = wrote || finishedWriting(conversation, item)
@@ -58,12 +65,14 @@ private fun apply(conversation: Conversation, transcript: AgentTranscript) {
     if (wrote || turnEnded) conversation.workspace?.synchronize()
 }
 
-// The server does not know the conversation: it restarted and lost the session of the agent with it.
+// The server does not know the conversation: it restarted. The next prompt reopens the session of the agent, which
+// keeps it; a conversation without one is lost.
 private fun forgotten(conversation: Conversation, restarted: Boolean) {
     val wasBusy = conversation.state != AgentTurnState.Idle
     conversation.state = AgentTurnState.Idle
     val shownByServer = conversation.items.any { it.version > 0 }
-    if (restarted && shownByServer) {
+    val lost = shownByServer && conversation.session == null
+    if (restarted && lost) {
         conversation.note("The server restarted: the agent no longer remembers this conversation.", error = false)
     } else if (wasBusy) {
         conversation.note("The agent stopped.")

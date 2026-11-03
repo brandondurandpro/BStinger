@@ -43,15 +43,22 @@ private const val CLIENT_TIMEOUT_S = 60L
  * - `count`: the number of prompts of its session;
  * - anything else: `You said: <prompt>`.
  *
- * Options: `--login` refuses `session/new` until the user logs in.
+ * Its sessions keep their history (the prompts and the answers): it lists them (`session/list`), replays them
+ * (`session/load`), resumes them (`session/resume`), closes and deletes them, and titles them after their first prompt.
+ *
+ * Options: `--login` refuses `session/new` until the user logs in; `--store <dir>` keeps the sessions in a directory,
+ * so that they outlive the process; `--no-load` does not replay sessions (it still resumes them); `--no-history`
+ * neither lists nor reopens them.
  */
-class FakeAgent(private val loginRequired: Boolean, private val out: PrintStream = System.out) {
+class FakeAgent(private val options: FakeAgentOptions, private val out: PrintStream = System.out) {
+    private val loginRequired = options.loginRequired
+    private val store = FakeSessions(options.store)
+    private val turns = ConcurrentHashMap<String, FakeTurn>()
+
     private val writeLock = Any()
     private val ids = AtomicLong()
     private val answers = ConcurrentHashMap<Long, CompletableFuture<JsonElement>>()
     private val cancelled = ConcurrentHashMap.newKeySet<String>()
-    private val prompts = ConcurrentHashMap<String, Int>()
-    private var sessions = 0
 
     /** Reads the client's messages until stdin ends. */
     fun run() {
@@ -75,8 +82,13 @@ class FakeAgent(private val loginRequired: Boolean, private val out: PrintStream
         val reply =
             when (method) {
                 "initialize" -> success(id, initialized())
-                "session/new" -> newSession(id)
+                "session/new" -> newSession(id, params)
                 "session/prompt" -> success(id, prompt(params))
+                "session/load" -> reopen(id, params, replay = true)
+                "session/resume" -> reopen(id, params, replay = false)
+                "session/list" -> success(id, listed(params))
+                "session/close" -> success(id, JsonObject(emptyMap()))
+                "session/delete" -> deleted(id, params)
                 else -> failure(id, METHOD_NOT_FOUND, "Unknown method $method")
             }
         send(reply)
@@ -85,7 +97,17 @@ class FakeAgent(private val loginRequired: Boolean, private val out: PrintStream
     private fun initialized() =
         buildJsonObject {
             put("protocolVersion", 1)
-            putJsonObject("agentCapabilities") { put("loadSession", false) }
+            putJsonObject("agentCapabilities") {
+                put("loadSession", options.history && options.load)
+                if (options.history) {
+                    putJsonObject("sessionCapabilities") {
+                        putJsonObject("list") {}
+                        putJsonObject("resume") {}
+                        putJsonObject("close") {}
+                        putJsonObject("delete") {}
+                    }
+                }
+            }
             putJsonObject("agentInfo") {
                 put("name", "fake-agent")
                 put("title", "Fake Agent")
@@ -104,35 +126,103 @@ class FakeAgent(private val loginRequired: Boolean, private val out: PrintStream
             }
         }
 
-    private fun newSession(id: JsonElement): JsonObject {
+    private fun newSession(id: JsonElement, params: JsonObject): JsonObject {
         if (loginRequired) return failure(id, AUTH_REQUIRED, "Authentication required")
-        val session = synchronized(this) { "session-${++sessions}" }
-        return success(id, buildJsonObject { put("sessionId", session) })
+        val session = store.create(params.text("cwd").orEmpty())
+        return success(id, buildJsonObject { put("sessionId", session.id) })
+    }
+
+    // `session/load` replays the history before it answers; `session/resume` does not.
+    private fun reopen(id: JsonElement, params: JsonObject, replay: Boolean): JsonObject {
+        val session = params.text("sessionId")?.let(store::get)
+        val unsupported = !options.history || (replay && !options.load)
+        return when {
+            unsupported -> failure(id, METHOD_NOT_FOUND, "Sessions cannot be reopened")
+            session == null -> failure(id, RESOURCE_NOT_FOUND, "Unknown session ${params.text("sessionId")}")
+            else -> {
+                if (replay) replayed(session)
+                success(id, JsonObject(emptyMap()))
+            }
+        }
+    }
+
+    private fun replayed(session: FakeSession) {
+        session.title?.let { title -> update(session.id, "session_info_update") { put("title", title) } }
+        session.turns.toList().forEachIndexed { index, turn ->
+            update(session.id, "user_message_chunk") {
+                put("messageId", "user-$index")
+                put("content", textBlock(turn.prompt))
+            }
+            update(session.id, "agent_message_chunk") {
+                put("messageId", "agent-$index")
+                put("content", textBlock(turn.reply.toString()))
+            }
+        }
+    }
+
+    private fun listed(params: JsonObject) =
+        buildJsonObject {
+            putJsonArray("sessions") {
+                store.list(params.text("cwd")).forEach { session ->
+                    add(
+                        buildJsonObject {
+                            put("sessionId", session.id)
+                            put("cwd", session.cwd)
+                            put("title", session.title?.let(::JsonPrimitive) ?: JsonNull)
+                            put("updatedAt", session.updatedAt)
+                        },
+                    )
+                }
+            }
+        }
+
+    private fun deleted(id: JsonElement, params: JsonObject): JsonObject {
+        val session = params.text("sessionId").orEmpty()
+        if (!store.delete(session)) return failure(id, RESOURCE_NOT_FOUND, "Unknown session $session")
+        return success(id, JsonObject(emptyMap()))
     }
 
     private fun prompt(params: JsonObject): JsonObject {
         val session = params.text("sessionId").orEmpty()
         cancelled.remove(session)
-        val count = prompts.merge(session, 1, Int::plus) ?: 1
         val prompt = (params["prompt"] as? JsonArray).orEmpty().joinToString("") { it.jsonObject.text("text").orEmpty() }
+        val kept = store[session]
+        val turn = FakeTurn(prompt)
+        kept?.turns?.add(turn)
+        turns[session] = turn
+        val count = kept?.turns?.size ?: 1
+        if (kept != null && kept.title == null) titled(kept, prompt)
+        try {
+            return buildJsonObject { put("stopReason", answer(session, prompt, count)) }
+        } finally {
+            turns.remove(session)
+            kept?.let(store::save)
+        }
+    }
+
+    private fun titled(session: FakeSession, prompt: String) {
+        val title = prompt.trim().take(TITLE_LENGTH)
+        session.title = title
+        update(session.id, "session_info_update") { put("title", title) }
+    }
+
+    private fun answer(session: String, prompt: String, count: Int): String {
         val words = prompt.trim().split(Regex("\\s+"))
         val rest = prompt.trim().substringAfter(' ', "")
-        val stopReason =
-            when (words.firstOrNull()) {
-                "echo" -> chunks(session, rest.split(' ').map { "$it " })
-                "think" -> think(session, rest)
-                "read" -> read(session, rest)
-                "write" -> write(session, words.getOrNull(1).orEmpty(), rest.substringAfter(' ', ""))
-                "plan" -> plan(session)
-                "slow" -> slow(session, stubborn = false)
-                "stubborn" -> slow(session, stubborn = true)
-                "stream" -> chunks(session, List(words.getOrNull(1)?.toIntOrNull() ?: 1) { "chunk $it " })
-                "tools" -> tools(session, words.getOrNull(1)?.toIntOrNull() ?: 1)
-                "crash" -> crash()
-                "count" -> chunks(session, listOf("Prompt $count of $session."))
-                else -> chunks(session, listOf("You said: $prompt"))
-            }
-        return buildJsonObject { put("stopReason", stopReason) }
+        return when (words.firstOrNull()) {
+            "echo" -> chunks(session, rest.split(' ').map { "$it " })
+            "think" -> think(session, rest)
+            "read" -> read(session, rest)
+            "write" -> write(session, words.getOrNull(1).orEmpty(), rest.substringAfter(' ', ""))
+            "plan" -> plan(session)
+            "slow" -> slow(session, stubborn = false)
+            "stubborn" -> slow(session, stubborn = true)
+            "stream" -> chunks(session, List(words.getOrNull(1)?.toIntOrNull() ?: 1) { "chunk $it " })
+            "tools" -> tools(session, words.getOrNull(1)?.toIntOrNull() ?: 1)
+            "crash" -> crash()
+            "count" -> chunks(session, listOf("Prompt $count of $session."))
+            else -> chunks(session, listOf("You said: $prompt"))
+        }
     }
 
     private fun chunks(session: String, texts: List<String>): String {
@@ -246,8 +336,10 @@ class FakeAgent(private val loginRequired: Boolean, private val out: PrintStream
         exitProcess(CRASH_EXIT_CODE)
     }
 
-    private fun message(session: String, text: String) =
+    private fun message(session: String, text: String) {
+        turns[session]?.reply?.append(text)
         update(session, "agent_message_chunk") { put("content", textBlock(text)) }
+    }
 
     private fun tool(session: String, id: String, title: String, kind: String, status: String, path: String) =
         update(session, "tool_call") {
@@ -313,6 +405,8 @@ class FakeAgent(private val loginRequired: Boolean, private val out: PrintStream
         const val CANCELLED = "cancelled"
         const val METHOD_NOT_FOUND = -32_601
         const val AUTH_REQUIRED = -32_000
+        const val RESOURCE_NOT_FOUND = -32_002
+        const val TITLE_LENGTH = 30
 
         fun textBlock(text: String) =
             buildJsonObject {
@@ -350,7 +444,28 @@ class FakeAgent(private val loginRequired: Boolean, private val out: PrintStream
 
         /** Runs the fake agent on stdin and stdout. */
         @JvmStatic
-        fun main(args: Array<String>) = FakeAgent(loginRequired = "--login" in args).run()
+        fun main(args: Array<String>) = FakeAgent(FakeAgentOptions.parse(args.toList())).run()
+    }
+}
+
+/** What a [FakeAgent] does, from its command line options. */
+data class FakeAgentOptions(
+    val loginRequired: Boolean = false,
+    val store: java.io.File? = null,
+    val history: Boolean = true,
+    val load: Boolean = true,
+) {
+    companion object {
+        /** Reads `--login`, `--store <dir>`, `--no-load` and `--no-history`. */
+        fun parse(args: List<String>): FakeAgentOptions {
+            val store = args.indexOf("--store").takeIf { it >= 0 }?.let { args.getOrNull(it + 1) }
+            return FakeAgentOptions(
+                loginRequired = "--login" in args,
+                store = store?.let { java.io.File(it) },
+                history = "--no-history" !in args,
+                load = "--no-load" !in args,
+            )
+        }
     }
 }
 
