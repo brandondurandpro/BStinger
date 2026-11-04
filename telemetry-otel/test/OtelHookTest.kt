@@ -20,7 +20,11 @@ class OtelHookTest {
     @AfterTest
     fun cleanup() = collector.close()
 
-    private fun config(endpoint: String = collector.endpoint, queueSize: Int = 2048) =
+    private fun config(
+        endpoint: String = collector.endpoint,
+        queueSize: Int = 2048,
+        metricIntervalMs: Long = 100,
+    ) =
         ExportConfig(
             endpoint = endpoint,
             serviceName = "kotlin-editor-desktop",
@@ -28,7 +32,7 @@ class OtelHookTest {
             instanceId = "0b8a3f4e-instance",
             queueSize = queueSize,
             spanDelayMs = 50,
-            metricIntervalMs = 100,
+            metricIntervalMs = metricIntervalMs,
         )
 
     private fun awaitUntil(condition: () -> Boolean) {
@@ -101,6 +105,21 @@ class OtelHookTest {
     }
 
     @Test
+    fun `closing with a histogram still to send to a silent collector takes at most the timeout`() {
+        val (endpoint, silent) = FakeCollector.silentEndpoint()
+        silent.use {
+            // The histogram is never sent before the close, whose last export then waits for the silent collector.
+            val hook = OtelHook(config(endpoint, metricIntervalMs = NEVER_MS))
+            val telemetry = HookedTelemetry(listOf(hook), Side.Client)
+            telemetry.span(Operation.GitStatus) {}
+            val closing = System.nanoTime()
+            hook.close()
+            val closed = (System.nanoTime() - closing) / NANOS_PER_MILLI
+            assertTrue(closed < CLOSE_BUDGET_MS, "closed in $closed ms")
+        }
+    }
+
+    @Test
     fun `an unreachable port loses the batches quietly`() {
         val port = ServerSocket(0).use { it.localPort }
         val hook = OtelHook(config("http://127.0.0.1:$port"))
@@ -134,5 +153,6 @@ class OtelHookTest {
         const val MEASURE_BUDGET_MS = 10_000L
         const val MEMORY_BUDGET_MB = 64
         const val CLOSE_BUDGET_MS = 2_500L
+        const val NEVER_MS = 600_000L
     }
 }
