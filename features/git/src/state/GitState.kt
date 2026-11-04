@@ -25,9 +25,9 @@ import java.util.concurrent.atomic.AtomicLong
 
 private const val MAX_MESSAGE_LENGTH = 300
 
-// How long after an IDE Git action asked its refresh the watch of the disk may still report what the action wrote in
-// `.git` (it settles changes for 100 ms, then the client polls): a change of `.git` reported meanwhile reloads the
-// branches only once that time is past.
+// How long after the refresh of an IDE Git action read the branches the watch of the disk may still report what the
+// action wrote in `.git` (it settles changes for 100 ms, then the client polls): a change of `.git` reported until then
+// reloads the branches only once that time is past.
 private const val OWN_WRITES_MILLIS = 1_000L
 private const val NANOS_PER_MILLI = 1_000_000L
 
@@ -122,10 +122,14 @@ class GitState(
     private val branchLoadsAsked = AtomicLong()
     private val branchLoadsCovered = AtomicLong()
 
-    // When an IDE Git action (a fetch too) asked its refresh of the branches, which reads all the action wrote in
-    // `.git`; the watch of the disk reports those writes a little later (it settles them first).
+    // The load of the branches an IDE Git action (a fetch too) asked after it, which reads all it wrote in `.git`; the
+    // watch of the disk reports those writes a little later (it settles them first), often while that load still runs.
     @Volatile
-    private var actionRefreshAskedAt: Long? = null
+    private var actionLoad: Long? = null
+    private val branchLoadsDone = AtomicLong()
+
+    @Volatile
+    private var branchLoadDoneAt = 0L
     private var laterBranchReload: Job? = null
 
     // `.git` changed while an IDE Git action ran: the action's own refresh reloads the branches, after it, but a failed
@@ -174,6 +178,7 @@ class GitState(
         // again now would make the next action (a pull right after the fetch) wait for it. Read once that is past,
         // since another program may have moved a branch too; the status, cheap, is read now anyway.
         val ownWritesLikely = millisLeftOfOwnWrites() > 0
+        System.err.println("TRACE ${System.currentTimeMillis()} disk $branchesToo $busy $ownWritesLikely")
         if (branchesToo && ownWritesLikely) reloadBranchesLater()
         val branchesMoved = branchesToo && !ownWritesLikely
         if (branchesMoved) loadBranches()
@@ -185,9 +190,10 @@ class GitState(
     }
 
     private fun millisLeftOfOwnWrites(): Long {
-        val askedAt = actionRefreshAskedAt ?: return 0
-        val elapsedMillis = (System.nanoTime() - askedAt) / NANOS_PER_MILLI
-        return OWN_WRITES_MILLIS - elapsedMillis
+        val ticket = actionLoad ?: return 0
+        val stillReading = branchLoadsDone.get() < ticket
+        val elapsedMillis = (System.nanoTime() - branchLoadDoneAt) / NANOS_PER_MILLI
+        return if (stillReading) OWN_WRITES_MILLIS else OWN_WRITES_MILLIS - elapsedMillis
     }
 
     // Reloads the branches, the status and the editors once no IDE Git action may still be writing; an action that runs
@@ -213,16 +219,21 @@ class GitState(
 
     // The refresh of the branches after an IDE Git action that may have written in `.git`.
     private fun refreshBranchesAfterAction() {
-        actionRefreshAskedAt = System.nanoTime()
         refreshBranches()
+        actionLoad = branchLoadsAsked.get()
     }
 
     private suspend fun loadBranches(ticket: Long = branchLoadsAsked.incrementAndGet()) {
         branchLoads.withLock {
             // A load that started after this one was asked has read what it would read.
             if (branchLoadsCovered.get() >= ticket) return
-            branchLoadsCovered.set(branchLoadsAsked.get())
+            val covered = branchLoadsAsked.get()
+            branchLoadsCovered.set(covered)
+            System.err.println("TRACE ${System.currentTimeMillis()} start load $covered busy=$busy")
             readBranches()
+            System.err.println("TRACE ${System.currentTimeMillis()} end load $covered")
+            branchLoadDoneAt = System.nanoTime()
+            branchLoadsDone.set(covered)
         }
     }
 
@@ -486,8 +497,8 @@ class GitState(
             val output = block().trim().replace('\n', ' ').take(MAX_MESSAGE_LENGTH)
             message = output.ifBlank { "Done" }
             // Both reload the branches.
-            actionRefreshAskedAt = System.nanoTime()
             if (reloadFiles) synchronize() else refresh()
+            actionLoad = branchLoadsAsked.get()
             true
         } catch (e: IOException) {
             message = e.message ?: "Git command failed"
