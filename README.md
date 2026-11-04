@@ -64,7 +64,8 @@ A lightweight IDE in the style of IntelliJ IDEA (New UI, dark theme), written wi
 - **Saving like IntelliJ**: `Ctrl+S`, and automatic save when a tab, the project or the window is closed, or when the
   window loses focus; external changes are reloaded when it regains focus (unsaved edits are never overwritten).
 - **Navigation & search**: Go to File (`Ctrl+P`, `Ctrl+Shift+N` or double `Shift`, fuzzy matching), Recent Files (`Ctrl+E`),
-  Find in Files (`Ctrl+Shift+F`), Find in file (`Ctrl+F`, `Enter`/`Shift+Enter`, `F3`), Go to Line (`Ctrl+G`).
+  Find in Files (`Ctrl+Shift+F`, run by ripgrep on the server, see below), Find in file (`Ctrl+F`,
+  `Enter`/`Shift+Enter`, `F3`), Go to Line (`Ctrl+G`).
 - **Status bar & toolbar**: breadcrumbs, caret position, selection size, line separator, encoding, language, and a
   Git branch widget. It opens a searchable branch picker: pin one or several branches in the toolbar, read how many
   commits each is ahead (`↑`) or behind (`↓`) its remote-tracking branch, and click a branch to check it out. Tick
@@ -107,6 +108,25 @@ All the logic on files runs in a **server**; the IDE is a client that only displ
     (or `KOTLIN_EDITOR_SERVER` / `KOTLIN_EDITOR_TOKEN`) for a remote one.
 - **Remote development** – `features/remote/src/ssh` and `features/remote/src/ui/RemoteDialog.kt`. Server bundles are built with `tools/remote-bundle.sh` and looked up in `remote/`
   next to the application (see [docs/REMOTE.md](docs/REMOTE.md)).
+
+**Find in Files and ripgrep.** The server runs Find in Files with [ripgrep](https://github.com/BurntSushi/ripgrep)
+(`rg --json`, started directly, never through a shell; the query is passed on its standard input), pinned to one
+version (`RipgrepRelease.VERSION`, 15.2.0) whose checksums are in `server/src/ripgrep/RipgrepRelease.kt`. On the
+first search the server looks for it, in this order:
+
+1. the executable given by `--ripgrep <path>` (`serverApp`) or the `KOTLIN_EDITOR_RIPGREP` environment variable; when
+   it is set but does not run, no other copy is tried, so a wrong setting shows instead of being worked around;
+2. the copy shipped next to the server jar, in `ripgrep/rg` (`rg.exe` on Windows), used only if its SHA-256 is the
+   pinned one;
+3. the copy downloaded earlier into `~/.kotlin-editor/tools/ripgrep/<version>/`;
+4. a new download of the official release archive from GitHub (Linux x64 and arm64, macOS x64 and arm64, Windows
+   x64), verified (archive and executable SHA-256) before it is moved in place.
+
+When none is found (an offline machine, another platform) or ripgrep fails, the built-in Kotlin search
+(`LocalSearch`) answers instead. Both search the same files: hidden files are searched; `.git`, build output and
+dependency directories, binary files and files over the size limit are not. ripgrep also honours `.gitignore`
+(inside a Git repository), `.ignore` and `.rgignore`. The search matches the text literally, with or without
+letter case (the popup's `Cc` toggle); a search stops after 30 seconds and returns the lines found by then.
 
 **Protocol.** JSON-RPC 2.0 over TCP (`TCP_NODELAY`), framed like LSP (`Content-Length` header, then the JSON body):
 named params, methods such as `fs/read`, `git/status` or `terminal/start`, standard error codes, answers in any order,
