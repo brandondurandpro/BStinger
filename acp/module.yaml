@@ -5,7 +5,9 @@ product:
   type: jvm/lib
 
 dependencies:
-  - //protocol: exported
+  - //protocol-model: exported
+  # The application version announced to the agents (Protocol.APP_VERSION).
+  - //protocol-rpc
   # JSON-RPC over stdio (newline-delimited for ACP) and the log ring of the language servers.
   - //lsp
   - $libs.kotlinx.coroutines.core

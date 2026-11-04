@@ -330,7 +330,7 @@ class RemoteTerminalLauncher(private val client: RpcClient) : TerminalLauncher {
         cellHeightPx: Int,
     ): TerminalProcess {
         val id = client.newId()
-        val screens = client.openStream(id)
+        val screens = client.openStream(id) { it.snapshot() }
         val commands = Channel<suspend () -> Unit>(Channel.UNLIMITED)
         client.scope.launch {
             try {

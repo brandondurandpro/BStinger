@@ -83,7 +83,10 @@ A lightweight IDE in the style of IntelliJ IDEA (New UI, dark theme), written wi
 
 All the logic on files runs in a **server**; the IDE is a client that only displays.
 
-- `protocol` – model shared by both sides, JSON-RPC codecs, and the network client (`RpcClient`).
+- `protocol-model` – model shared by both sides: the data exchanged and the interfaces of the services. The client
+  modules depend on it alone.
+- `protocol-rpc` – the wire: JSON-RPC frames, the catalog of methods (`Method`), and the network client (`RpcClient`).
+- `protocol` – JSON codecs of the model, and the client side of each service (`RemoteFileSystem`, `RemoteGit`…).
 - `compression` – body codec: zstd level 3, with a 64 KiB dictionary for source code. The session protocol is
   unchanged; only the message body is compressed.
 - `server` – `EditorServer` and the local services: file system, project search (Find in Files and symbols run

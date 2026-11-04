@@ -4,7 +4,9 @@ product:
   type: jvm/lib
 
 dependencies:
-  - //protocol: exported
+  - //protocol-model: exported
+  # Every client module measures its operations.
+  - //telemetry: exported
   - //syntax: exported
   # Snapshot state and a few UI state types (LazyListState, FocusRequester), as plain libraries.
   - $libs.compose.runtime: exported

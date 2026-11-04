@@ -4,7 +4,9 @@ product:
   type: jvm/lib
 
 dependencies:
-  - //protocol: exported
+  - //protocol-model: exported
+  # Measures the starts of the language servers (lsp.start) when the user agreed.
+  - //telemetry
   - $libs.kotlinx.coroutines.core
   # Only the JsonElement tree is used: LSP messages are read and built by hand, no compiler plugin needed.
   - $libs.kotlinx.serialization.json

@@ -5,6 +5,8 @@ product:
 
 dependencies:
   - //ui/kit: exported
+  # Connects the IDE to a remote server (RpcClient and the remote services).
+  - //protocol
 
 settings:
   compose: enabled

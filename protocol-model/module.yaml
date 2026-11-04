@@ -1,0 +1,9 @@
+# What the IDE and its server agree on, without the wire: the data they exchange and the interfaces of the services
+# (files, search, Git, terminal, language servers, agents). The client modules build on it alone, so a change of the
+# transport or of the codecs does not recompile them.
+product:
+  type: jvm/lib
+
+dependencies:
+  # StateFlow and Flow appear in the service interfaces.
+  - $libs.kotlinx.coroutines.core: exported

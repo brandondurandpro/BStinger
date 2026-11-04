@@ -9,6 +9,8 @@ dependencies:
   - //features/remote: exported
   - //features/terminal: exported
   - //features/tree: exported
+  # The application version (Protocol.APP_VERSION), and the JSON of the frames the network inspector shows.
+  - //protocol
   - $libs.androidx.lifecycle.viewmodel.compose
   - $libs.androidx.lifecycle.runtime.compose
 

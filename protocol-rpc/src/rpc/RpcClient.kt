@@ -19,7 +19,6 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.example.kotlineditor.model.ConnectionStatus
 import org.example.kotlineditor.model.NetworkInspector
-import org.example.kotlineditor.model.TerminalSnapshot
 import org.example.kotlineditor.telemetry.Attribute
 import org.example.kotlineditor.telemetry.Attributes
 import org.example.kotlineditor.telemetry.ClientTelemetry
@@ -162,8 +161,11 @@ class RpcClient(
         return response.payload
     }
 
-    /** Registers the stream fed by the server under [id] (before the request creating it is sent). */
-    fun openStream(id: Long): Channel<TerminalSnapshot> = streams.open(id)
+    /**
+     * Registers the stream fed by the server under [id] (before the request creating it is sent); [decode] turns
+     * each snapshot it pushes into what the channel receives.
+     */
+    fun <T> openStream(id: Long, decode: (JsonElement) -> T): Channel<T> = streams.open(id, decode)
 
     /** Stops listening to the stream [id]. */
     fun closeStream(id: Long) = streams.close(id)

@@ -3,25 +3,28 @@ package org.example.kotlineditor.rpc
 import kotlinx.coroutines.channels.Channel
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonObject
-import org.example.kotlineditor.model.TerminalSnapshot
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Server-pushed terminal screens. Each event carries the sequence number of the complete snapshot it holds:
- * duplicates are dropped, and a snapshot that arrives after a gap simply replaces the state, because every
- * snapshot describes the whole screen.
+ * Server-pushed terminal screens, decoded by the function each stream was opened with. Each event carries the
+ * sequence number of the complete snapshot it holds: duplicates are dropped, and a snapshot that arrives after a gap
+ * simply replaces the state, because every snapshot describes the whole screen.
  */
 internal class StreamRegistry {
-    private val streams = ConcurrentHashMap<Long, StreamState>()
+    private val streams = ConcurrentHashMap<Long, StreamState<*>>()
 
-    private class StreamState(val channel: Channel<TerminalSnapshot>) {
+    private class StreamState<T>(val channel: Channel<T>, private val decode: (JsonElement) -> T) {
         var lastSeq = 0L
         var endSeq = Long.MAX_VALUE
+
+        fun deliver(snapshot: JsonElement) {
+            channel.trySend(decode(snapshot))
+        }
     }
 
-    fun open(id: Long): Channel<TerminalSnapshot> {
-        val channel = Channel<TerminalSnapshot>(Channel.UNLIMITED)
-        streams[id] = StreamState(channel)
+    fun <T> open(id: Long, decode: (JsonElement) -> T): Channel<T> {
+        val channel = Channel<T>(Channel.UNLIMITED)
+        streams[id] = StreamState(channel, decode)
         return channel
     }
 
@@ -44,11 +47,11 @@ internal class StreamRegistry {
         val stream = streams[id] ?: return
         val event = payload.jsonObject
         val seq = event.long("seq")
-        val snapshot = event.field("snapshot").snapshot()
+        val snapshot = event.field("snapshot")
         synchronized(stream) {
             if (seq > stream.lastSeq) {
                 stream.lastSeq = seq
-                stream.channel.trySend(snapshot)
+                stream.deliver(snapshot)
             }
             endIfDone(id, stream)
         }
@@ -62,7 +65,7 @@ internal class StreamRegistry {
         }
     }
 
-    private fun endIfDone(id: Long, stream: StreamState) {
+    private fun endIfDone(id: Long, stream: StreamState<*>) {
         if (stream.lastSeq >= stream.endSeq) {
             stream.channel.close()
             streams.remove(id)

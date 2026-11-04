@@ -4,7 +4,7 @@ product:
   type: jvm/lib
 
 dependencies:
-  - //protocol: exported
+  - //protocol-model: exported
   # Snapshot state only (mutableStateOf, snapshotFlow, @Stable): no composable, no Compose compiler plugin.
   - $libs.compose.runtime
   - $libs.kotlinx.coroutines.core

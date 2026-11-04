@@ -1,10 +1,9 @@
+# The services of the protocol on the wire: the JSON codecs of the model, shared by the client and the server, and
+# the client side of each service (RemoteFileSystem, RemoteGit…) over an RpcClient. Only the server and the code
+# that connects the IDE to it depend on it; the client modules use `protocol-model`.
 product:
   type: jvm/lib
 
 dependencies:
-  - //compression: exported
-  # Each call is measured (rpc.client) when the user agreed, and names its span to the server.
-  - //telemetry: exported
+  - //protocol-rpc: exported
   - $libs.kotlinx.coroutines.core
-  # Only the JsonElement tree is used: the JSON-RPC messages are built by hand, no compiler plugin needed.
-  - $libs.kotlinx.serialization.json: exported

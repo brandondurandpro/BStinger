@@ -16,6 +16,8 @@ modules:
   - lsp
   - packaging
   - protocol
+  - protocol-model
+  - protocol-rpc
   - server
   - serverApp
   - shared

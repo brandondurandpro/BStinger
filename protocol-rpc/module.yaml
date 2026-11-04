@@ -1,0 +1,13 @@
+# The wire protocol: JSON-RPC 2.0 frames over TCP, the catalog of methods (Method), the link and the client that
+# reconnects (RpcClient). It encodes no service's data: the codecs and the remote services are in `protocol`.
+product:
+  type: jvm/lib
+
+dependencies:
+  - //protocol-model: exported
+  - //compression: exported
+  # Each call is measured (rpc.client) when the user agreed, and names its span to the server.
+  - //telemetry: exported
+  - $libs.kotlinx.coroutines.core
+  # Only the JsonElement tree is used: the JSON-RPC messages are built by hand, no compiler plugin needed.
+  - $libs.kotlinx.serialization.json: exported
