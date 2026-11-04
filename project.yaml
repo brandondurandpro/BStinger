@@ -1,10 +1,12 @@
 modules:
+  - acp
   - benchmark
   - compression
   - core
   - desktopApp
   - detekt-rules
   - e2e
+  - features/agent
   - features/editor
   - features/git
   - features/language-servers

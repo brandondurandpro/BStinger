@@ -208,7 +208,7 @@ private fun ProjectState.fileOperation(block: suspend () -> Unit) {
  * IntelliJ synchronizes with the disk when its window regains focus: the tree is re-listed and unmodified
  * open files are reloaded if they were changed by another program.
  */
-fun ProjectState.synchronize() {
+internal fun ProjectState.synchronizeFiles() {
     tree.refresh()
     fileIndex.invalidate()
     git.refresh()

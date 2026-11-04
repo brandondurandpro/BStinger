@@ -521,6 +521,8 @@ class AppServices(
     val telemetry: TelemetrySettings = TelemetrySettings.None,
     /** What other programs change on the disk of the server. */
     val disk: DiskWatch = DiskWatch.None,
+    /** Conversations with the agents the server runs (agent mode). */
+    val agents: Agents = Agents.None,
 )
 
 private val UNIX_SEPARATORS = charArrayOf('/')

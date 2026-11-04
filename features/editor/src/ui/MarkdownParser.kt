@@ -14,6 +14,10 @@ private val RULE = Regex("""^([-*_])(\s*\1){2,}$""")
 private val LINK = Regex("""\[([^\]]+)]\(([^)\s]*)[^)]*\)""")
 private val BOLD = SpanStyle(fontWeight = FontWeight.Bold)
 private val ITALIC = SpanStyle(fontStyle = FontStyle.Italic)
+private val TABLE_ROW = Regex("""^\s*\|.*\|\s*$""")
+
+/** The language of the code block of a table, shown as it is written, in a fixed-width font. */
+internal const val TABLE = "markdown-table"
 private val LINK_STYLE = SpanStyle(color = IdeColors.Link, textDecoration = TextDecoration.Underline)
 
 /** One block of a Markdown document. */
@@ -62,6 +66,7 @@ private class MarkdownParser(private val lines: List<String>) {
         val item = ITEM.matchEntire(line)
         when {
             fence != null -> code(fence.groupValues[1], fence.groupValues[2].trim())
+            TABLE_ROW.matches(line) -> table(line)
             trimmed.isEmpty() -> flush()
             RULE.matches(trimmed) -> add(MarkdownBlock.Rule)
             heading != null -> add(headingOf(heading))
@@ -78,6 +83,16 @@ private class MarkdownParser(private val lines: List<String>) {
     private fun itemOf(match: MatchResult): MarkdownBlock {
         val (_, marker, text) = match.destructured
         return MarkdownBlock.Item(marker, text.trim())
+    }
+
+    // A table: its rows, as they are written, aligned in a fixed-width font.
+    private fun table(first: String) {
+        val rows = arrayListOf(first.trim())
+        while (index < lines.size && TABLE_ROW.matches(lines[index])) {
+            rows += lines[index].trim()
+            index++
+        }
+        add(MarkdownBlock.Code(TABLE, rows.joinToString("\n")))
     }
 
     // The lines up to the closing fence (or the end of the text).

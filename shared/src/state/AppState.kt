@@ -140,6 +140,12 @@ class AppState(
     var agentModeEnabled by mutableStateOf(preferences[PreferenceKeys.AGENT_MODE]?.toBooleanStrictOrNull() ?: false)
         private set
 
+    /** Command line of the agent of agent mode (any ACP agent); blank for the agent of the registry. */
+    var agentCommand by mutableStateOf(preferences[PreferenceKeys.AGENT_COMMAND].orEmpty())
+
+    /** Id of the agent of the ACP registry for agent mode, blank for [DEFAULT_AGENT]; a command line wins over it. */
+    var agentRegistry by mutableStateOf(preferences[PreferenceKeys.AGENT_REGISTRY].orEmpty())
+
     /** Whether the user shares anonymous performance measures: asked on the welcome screen, changed in the menu. */
     val telemetry = TelemetryConsent(preferences, telemetryOf)
 
@@ -574,8 +580,15 @@ class AppState(
     private fun currentPreferences(): Map<String, String> {
         val picker = lastPickerDirectory?.let { listOf(PreferenceKeys.PICKER_DIRECTORY to it) }.orEmpty()
         val agentMode = PreferenceKeys.AGENT_MODE to agentModeEnabled.toString()
+        val agent = mapOf(PreferenceKeys.AGENT_COMMAND to agentCommand, PreferenceKeys.AGENT_REGISTRY to agentRegistry)
         val app =
-            preferences + picker + fontSizePreference() + agentMode + remotePreferences() + telemetry.toPreferences()
+            preferences +
+                picker +
+                fontSizePreference() +
+                agentMode +
+                agent +
+                remotePreferences() +
+                telemetry.toPreferences()
         val project = (screen as? Screen.Project)?.project ?: return app
         val autoSelect = PreferenceKeys.AUTO_SELECT_OPENED_FILE to project.autoSelectOpenedFile.toString()
         val inlayHints = PreferenceKeys.INLAY_HINTS to project.inlayHintsMode.name
@@ -664,7 +677,15 @@ class AppState(
         recordRemoteWorkspace(root.path)
         (screen as? Screen.Project)?.project?.let { saveAndDispose(it) }
         val project =
-            ProjectState(root, services, scope, preferences, grammars = grammars, languageServers = languageServers)
+            ProjectState(
+                root,
+                services,
+                scope,
+                preferences,
+                grammars = grammars,
+                languageServers = languageServers,
+                agentCommand = { agentCommandOf(agentCommand, agentRegistry) },
+            )
         runCatching { services.sessions.load(root.path) }.getOrNull()?.let(project::restoreSession)
         // The worktrees of agent mode share this repository: only the opened project fetches its remotes.
         project.git.startAutoFetch()

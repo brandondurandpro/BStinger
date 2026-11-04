@@ -1,0 +1,21 @@
+# Agent mode: conversations with an ACP agent run by the server, each on the project or in a worktree of its own,
+# their history kept by the agent, and the agent chosen in the settings.
+# State in src/state, UI in src/ui, end-to-end tests in test/.
+product:
+  type: jvm/lib
+
+dependencies:
+  - //features/editor: exported
+  - //features/tree
+
+settings:
+  compose: enabled
+
+test-dependencies:
+  - //e2e
+
+test-settings:
+  jvm:
+    test:
+      freeJvmArgs:
+        - --enable-native-access=ALL-UNNAMED

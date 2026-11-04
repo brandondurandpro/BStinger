@@ -50,7 +50,6 @@ import org.example.kotlineditor.state.gotoDeclaration
 import org.example.kotlineditor.state.hasInsight
 import org.example.kotlineditor.state.openFileOfDiff
 import org.example.kotlineditor.state.saveAll
-import org.example.kotlineditor.state.synchronize
 import org.example.kotlineditor.state.visualColumn
 import org.example.kotlineditor.telemetry.ClientTelemetry
 import org.example.kotlineditor.telemetry.Operation

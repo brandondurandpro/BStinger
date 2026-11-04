@@ -18,7 +18,6 @@ import androidx.compose.ui.test.withKeyDown
 import org.example.kotlineditor.state.Screen
 import org.example.kotlineditor.state.TextPos
 import org.example.kotlineditor.state.delete
-import org.example.kotlineditor.state.synchronize
 import org.example.kotlineditor.ui.AppTags
 import org.example.kotlineditor.ui.EditorTags
 import org.example.kotlineditor.ui.GitTags

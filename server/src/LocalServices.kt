@@ -1,5 +1,9 @@
 package org.example.kotlineditor.server
 
+import org.example.kotlineditor.acp.AgentService
+import org.example.kotlineditor.acp.AgentSettings
+import org.example.kotlineditor.acp.FileAccess
+import org.example.kotlineditor.lsp.DiskChange
 import org.example.kotlineditor.lsp.LanguageServerService
 import org.example.kotlineditor.lsp.LanguageServerSettings
 import org.example.kotlineditor.model.ServerPlaces
@@ -16,8 +20,10 @@ class LocalServices(
     maxFileSize: Long = TextFiles.DEFAULT_MAX_SIZE,
     ripgrep: RipgrepSettings = RipgrepSettings(),
     languageServerSettings: LanguageServerSettings = LanguageServerSettings(dataDirectory.toPath()),
+    agentSettings: AgentSettings = AgentSettings(),
 ) {
     private val languageServersLazy = lazy { LanguageServerService(languageServerSettings) { telemetry } }
+    private val agentsLazy = lazy { AgentService(AgentFiles(), agentSettings) }
 
     /** What the server measures with (the language servers' starts), set by the server that uses these services. */
     @Volatile var telemetry: Telemetry = Telemetry.Disabled
@@ -49,10 +55,26 @@ class LocalServices(
     /** Whether [languageServers] was ever used (closing it otherwise would start it). */
     val languageServersStarted: Boolean get() = languageServersLazy.isInitialized()
 
-    /** Stops what runs in the background: the watches of the disk and the language servers. */
+    /** Conversations with the agents of agent mode, started on the first prompt. */
+    val agents: AgentService by agentsLazy
+
+    /** Stops what runs in the background: the watches of the disk, the language servers and the agents. */
     fun close() {
         disk.close()
         if (languageServersStarted) languageServers.close()
+        if (agentsLazy.isInitialized()) agents.close()
+    }
+
+    // The files the agents write go to the disk, and the language servers are told, as for the IDE's own writes.
+    private inner class AgentFiles : FileAccess {
+        override fun read(path: String): String = FileAccess.Disk.read(path)
+
+        override fun write(path: String, text: String) {
+            val existed = java.io.File(path).exists()
+            FileAccess.Disk.write(path, text)
+            val change = if (existed) DiskChange.Changed else DiskChange.Created
+            if (languageServersStarted) languageServers.diskChanged(listOf(path to change))
+        }
     }
 }
 

@@ -49,20 +49,20 @@ import org.example.kotlineditor.state.placeholder
 // Left panel of agent mode: the conversations of the project, filtered by title.
 
 @Composable
-internal fun ConversationList(agent: AgentState, modifier: Modifier) {
+fun ConversationList(agent: AgentState, modifier: Modifier) {
     var filter by remember { mutableStateOf("") }
-    Column(modifier.background(IdeColors.Panel).testTag(AppTags.AGENT_LIST)) {
+    Column(modifier.background(IdeColors.Panel).testTag(AgentTags.AGENT_LIST)) {
         Row(
             Modifier.fillMaxWidth().height(34.dp).padding(start = 12.dp, end = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Label("Conversations", Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
-            IconButton({ agent.newConversation() }, Modifier.testTag(AppTags.AGENT_NEW)) { PlusIcon() }
+            IconButton({ agent.newConversation() }, Modifier.testTag(AgentTags.AGENT_NEW)) { PlusIcon() }
         }
         IdeTextField(
             filter,
             { filter = it },
-            Modifier.fillMaxWidth().padding(horizontal = 8.dp).testTag(AppTags.AGENT_FILTER),
+            Modifier.fillMaxWidth().padding(horizontal = 8.dp).testTag(AgentTags.AGENT_FILTER),
             placeholder = "Search conversations",
             leading = { SearchIcon() },
         )
@@ -113,7 +113,7 @@ private fun ConversationRow(agent: AgentState, conversation: Conversation, selec
                 .hoverable(interaction)
                 .clickable(interaction, indication = null) { agent.open(conversation) }
                 .then(press)
-                .testTag(AppTags.agentConversation(conversation.id))
+                .testTag(AgentTags.agentConversation(conversation.id))
                 .padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -131,7 +131,7 @@ private fun ConversationRow(agent: AgentState, conversation: Conversation, selec
                         menu = null
                         agent.delete(conversation)
                     },
-                    modifier = Modifier.testTag(AppTags.AGENT_DELETE),
+                    modifier = Modifier.testTag(AgentTags.AGENT_DELETE),
                 )
             }
         }

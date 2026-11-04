@@ -103,6 +103,12 @@ class IntelligenceSettings(
 /** A code action offered to a session, kept until it asks for another list. */
 private class OfferedActions(val token: String, val server: ManagedServer, val actions: List<JsonObject>)
 
+/**
+ * The usage counts of a document, for its version [lspVersion] and the indexings its servers had ended by then
+ * ([indexed]): a server such as intelephense finds no usage before it indexed, so its counts are asked again after.
+ */
+private data class CountedUsages(val lspVersion: Int, val indexed: List<Long?>, val result: UsageCountsResult)
+
 /** Diagnostics of a document as one language server published them. */
 private data class Published(val server: String, val uri: String, val diagnostics: List<Diagnostic>)
 
@@ -137,7 +143,7 @@ class CodeIntelligenceService internal constructor(
     private val offered = ConcurrentHashMap<String, OfferedActions>()
     private val tokens = AtomicLong()
     private val tokenPrefix = newTokenPrefix()
-    private val usageCache = ConcurrentHashMap<String, Pair<Int, UsageCountsResult>>()
+    private val usageCache = ConcurrentHashMap<String, CountedUsages>()
 
     // Edits a running command asks for, by server id; a command runs alone on its server.
     private val collectors = ConcurrentHashMap<String, MutableList<FileChange>>()
@@ -320,8 +326,12 @@ class CodeIntelligenceService internal constructor(
             needsIndex = true,
         ) { document, request ->
             val lspVersion = documents.locked { document.lspVersion }
-            val cached = usageCache[document.uri]?.takeIf { it.first == lspVersion }
-            cached?.second ?: countUsages(document, request).also { usageCache[document.uri] = lspVersion to it }
+            // Read before counting: an indexing that ends meanwhile makes these counts obsolete.
+            val indexed = serversOf(document).map { it.indexingEndedAt }
+            val cached = usageCache[document.uri]?.takeIf { it.lspVersion == lspVersion && it.indexed == indexed }
+            cached?.result ?: countUsages(document, request).also {
+                usageCache[document.uri] = CountedUsages(lspVersion, indexed, it)
+            }
         }
     }
 

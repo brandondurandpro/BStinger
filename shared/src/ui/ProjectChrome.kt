@@ -46,6 +46,7 @@ import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.Document
 import org.example.kotlineditor.state.PopupKind
 import org.example.kotlineditor.state.ProjectState
+import org.example.kotlineditor.state.workspaceProject
 
 // The IDE frame around the editors: toolbar, tool window strip and panels, splitters, status bar.
 
@@ -64,14 +65,14 @@ internal fun Toolbar(app: AppState, project: ProjectState) {
             RemoteBadge(app)
         }
         // In agent mode, the branch of the project the agent of the active conversation works on.
-        val branchProject = if (project.agentMode) project.agent.current?.workspace else project
+        val branchProject = if (project.agentMode) project.agent.current?.workspaceProject else project
         if (branchProject == null || branchProject.git.currentBranch == null) {
             Spacer(Modifier.weight(1f))
         } else {
             BranchWidget(branchProject, Modifier.weight(1f).padding(start = 12.dp))
         }
         if (app.agentModeEnabled) {
-            ModeSwitch(project)
+            ModeSwitch(project.agentMode) { project.agentMode = it }
             Spacer(Modifier.width(10.dp))
         }
         IconButton({ project.showPopup(PopupKind.GotoFile) }) { SearchIcon(color = IdeColors.Text) }

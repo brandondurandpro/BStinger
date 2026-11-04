@@ -63,6 +63,7 @@ fun RpcClient.appServices(): AppServices =
         languageServers = RemoteLanguageServers(this),
         telemetry = RemoteTelemetrySettings(this),
         disk = RemoteDiskWatch(this),
+        agents = RemoteAgents(this),
     )
 
 /** [TelemetrySettings] of the server. */

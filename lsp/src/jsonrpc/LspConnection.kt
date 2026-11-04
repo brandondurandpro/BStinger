@@ -62,6 +62,12 @@ class LspConnection(
     private val onNotification: LspNotificationHandler = { _, _ -> },
     private val onClose: (failure: Throwable?) -> Unit = {},
     private val maxMessageSize: Int = LspFraming.DEFAULT_MAX_MESSAGE_SIZE,
+    /** How messages are delimited: `Content-Length` headers for LSP, one line each for ACP. */
+    private val framing: MessageFraming = LspFraming,
+    /** Notification sent when a request is cancelled, null when the protocol has none. */
+    private val cancelMethod: String? = CANCEL_REQUEST,
+    /** Who is at the other end, in the errors (`The language server connection is closed`). */
+    private val peer: String = CONNECTION,
 ) : Closeable {
     private val input = BufferedInputStream(input)
     private val output = BufferedOutputStream(output)
@@ -94,9 +100,10 @@ class LspConnection(
             send(message(id = JsonPrimitive(id), method = method, params = params))
             return answer.await()
         } catch (cancelled: CancellationException) {
-            if (pending.remove(id) != null && !closed.get()) {
-                runCatching { notify(CANCEL_REQUEST, buildJsonObject { put("id", id) }) }
-            }
+            val waiting = pending.remove(id) != null && !closed.get()
+            // The peer may stop working on a request nobody waits for any more, when the protocol says how.
+            val cancel = cancelMethod?.takeIf { waiting }
+            if (cancel != null) runCatching { notify(cancel, buildJsonObject { put("id", id) }) }
             throw cancelled
         } finally {
             pending.remove(id)
@@ -112,10 +119,10 @@ class LspConnection(
     private fun send(message: JsonObject) {
         if (closed.get()) throw closedException()
         try {
-            synchronized(writeLock) { LspFraming.write(output, message.toString().encodeToByteArray()) }
+            synchronized(writeLock) { framing.write(output, message.toString().encodeToByteArray()) }
         } catch (broken: IOException) {
             finish(broken)
-            throw LspConnectionClosedException("Cannot write to the language server: ${broken.message}", broken)
+            throw LspConnectionClosedException("Cannot write to ${peer.lowercaseFirst()}: ${broken.message}", broken)
         }
     }
 
@@ -123,7 +130,7 @@ class LspConnection(
         val failure =
             try {
                 while (!closed.get()) {
-                    val body = LspFraming.read(input, maxMessageSize) ?: break
+                    val body = framing.read(input, maxMessageSize) ?: break
                     dispatch(parse(body))
                 }
                 null
@@ -185,7 +192,7 @@ class LspConnection(
 
     private fun closedException(): LspConnectionClosedException {
         val reason = closeReason
-        val message = if (reason == null) "$CONNECTION is closed" else "$CONNECTION broke: ${reason.message}"
+        val message = if (reason == null) "$peer is closed" else "$peer broke: ${reason.message}"
         return LspConnectionClosedException(message, reason)
     }
 
@@ -236,11 +243,13 @@ class LspConnection(
     }
 }
 
+private fun String.lowercaseFirst() = replaceFirstChar { it.lowercase() }
+
 private fun parse(body: ByteArray): JsonObject =
     try {
         Json.parseToJsonElement(body.decodeToString()).jsonObject
     } catch (invalid: SerializationException) {
-        throw LspFramingException("Invalid JSON from the language server: ${invalid.message}", invalid)
+        throw LspFramingException("Invalid JSON: ${invalid.message}", invalid)
     } catch (invalid: IllegalArgumentException) {
         throw LspFramingException("Not a JSON-RPC message: ${invalid.message}", invalid)
     }
