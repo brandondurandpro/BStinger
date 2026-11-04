@@ -35,6 +35,11 @@ internal class ServerConversation(
     private var opened = false
     private var job: Job? = null
 
+    // Whether a prompt or an opening is under way: false once the turn is idle, before its coroutine returns, so that
+    // a prompt sent as soon as the previous one shows idle is not refused.
+    @Volatile
+    private var busy = false
+
     @Volatile
     private var stopping = false
     private val permissions = Permissions(journal, writer)
@@ -47,9 +52,10 @@ internal class ServerConversation(
         val itemId = prompt.itemId
         synchronized(lock) {
             if (!prompted.add(itemId)) return
-            check(job?.isActive != true) { "The agent is still answering" }
+            check(!busy) { "The agent is still answering" }
             session?.let { keeper.resume(it, replay = false) }
             stopping = false
+            busy = true
             journal.setState(AgentTurnState.Starting)
             job = scope.launch { run(prompt, directory, process) }
         }
@@ -58,15 +64,17 @@ internal class ServerConversation(
     /** Opens the agent's [session], whose history replays into the journal; opening it again does nothing. */
     fun open(session: String, directory: String, process: () -> AgentProcess) {
         synchronized(lock) {
-            if (opened || job?.isActive == true) return
+            if (opened || busy) return
             opened = true
             keeper.resume(session, replay = true)
+            busy = true
             journal.setState(AgentTurnState.Starting)
             job =
                 scope.launch {
                     try {
                         failures(writer, keeper, before = {}) { keeper.sessionFor(directory, process) }
                     } finally {
+                        busy = false
                         journal.setState(AgentTurnState.Idle)
                     }
                 }
@@ -139,6 +147,7 @@ internal class ServerConversation(
             stopReason == "max_turn_requests" -> writer.notice("The agent stopped: too many steps in one turn.", true)
             stopReason == "refusal" -> writer.notice("The agent refused to go on.", error = true)
         }
+        busy = false
         journal.setState(AgentTurnState.Idle)
     }
 }
