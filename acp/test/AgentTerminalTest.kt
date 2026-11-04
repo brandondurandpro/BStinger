@@ -45,6 +45,9 @@ class AgentTerminalTest {
 
     private fun commandOf(process: ProcessHandle): String = process.info().commandLine().orElse("")
 
+    // The lines a command printed, without the notice a JVM prints when JAVA_TOOL_OPTIONS is set (as on the CI).
+    private fun String.printed(): List<String> = lines().filterNot { it.startsWith("Picked up JAVA_TOOL_OPTIONS") }
+
     // The output of the command of the latest tool call.
     private fun List<AgentItem>.output(): String = call()?.terminal?.text.orEmpty()
 
@@ -55,7 +58,7 @@ class AgentTerminalTest {
         val call = items.call()
         assertEquals(AgentToolKind.Execute, call?.kind)
         assertEquals(AgentToolStatus.Completed, call?.status)
-        assertEquals(listOf("line 1", "line 2", "line 3", ""), call?.terminal?.text?.lines())
+        assertEquals(listOf("line 1", "line 2", "line 3", ""), call?.terminal?.text?.printed())
         assertEquals(0, call?.terminal?.exitCode)
         assertEquals(listOf("Exit code 0, 3 lines."), items.answers())
     }

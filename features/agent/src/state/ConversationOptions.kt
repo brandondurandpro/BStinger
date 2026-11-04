@@ -52,8 +52,10 @@ class ConversationOptions internal constructor(
             project.scope.launch {
                 val offered = offeredTo(project.root.path)
                 if (conversation.options.isEmpty()) conversation.options = offered
-                // Known once a session of the agent started: the one that read its settings, at the latest.
+                // Known once a session of the agent started: the one that read its settings, at the latest. The
+                // agent lists them a while after, and a `/` typed while it was starting gave up asking before.
                 commands = knownCommands().ifEmpty { commands }
+                refreshCommands()
             }
     }
 

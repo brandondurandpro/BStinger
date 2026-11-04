@@ -66,7 +66,7 @@ internal class AgentProcess(val command: AgentCommand, scope: CoroutineScope, fi
 
     private val process: Process =
         try {
-            ProcessBuilder(commandLine(command.command))
+            ProcessBuilder(startable(command.command))
                 .directory(File(System.getProperty("user.home")))
                 .apply { environment().putAll(command.environment) }
                 .start()
@@ -152,10 +152,39 @@ internal class AgentProcess(val command: AgentCommand, scope: CoroutineScope, fi
     }
 }
 
+private val isWindows = System.getProperty("os.name").startsWith("Windows")
+
 /** [command] as the system starts it: Windows starts `npx` (a .cmd script) only through cmd.exe, an .exe directly. */
 internal fun commandLine(command: List<String>): List<String> {
-    val windows = System.getProperty("os.name").startsWith("Windows")
     val program = command.firstOrNull()?.lowercase().orEmpty()
     val direct = program.endsWith(".exe") || program.endsWith(".com")
-    return if (windows && !direct) listOf("cmd.exe", "/c") + command else command
+    return if (isWindows && !direct) listOf("cmd.exe", "/c") + command else command
+}
+
+// The command line of an agent, once its program is found: cmd.exe starts even when the program is missing, and
+// only says so on its stderr, where the user would see a closed connection instead of the reason.
+private fun startable(command: List<String>): List<String> {
+    val line = commandLine(command)
+    val throughCmd = line.firstOrNull() != command.firstOrNull()
+    val program = command.firstOrNull().orEmpty()
+    if (throughCmd && !windowsFinds(program)) throw IOException("Cannot run program \"$program\": not found")
+    return line
+}
+
+/**
+ * Whether cmd.exe finds [program]: a path to a file, or a name in the directory it starts in ([start]) or in one of
+ * [path], as it is or with one of the [extensions] (`npx` is `npx.cmd`).
+ */
+internal fun windowsFinds(
+    program: String,
+    start: String = System.getProperty("user.home"),
+    path: String = System.getenv("PATH").orEmpty(),
+    extensions: String = System.getenv("PATHEXT") ?: ".COM;.EXE;.BAT;.CMD",
+): Boolean {
+    val suffixes = listOf("") + extensions.split(';').filter { it.isNotBlank() }
+    val names = suffixes.map { program + it }
+    val isPath = '/' in program || '\\' in program
+    val searched = listOf(start) + path.split(';').filter { it.isNotBlank() }
+    val directories = if (isPath) listOf(null) else searched
+    return directories.any { directory -> names.any { name -> File(directory, name).isFile } }
 }
