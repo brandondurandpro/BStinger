@@ -77,10 +77,12 @@ jobs:
       - run: ./lint
 
   test-linux:
-    name: Linux ${{ matrix.ubuntu }} · ${{ matrix.session }}
+    name: Linux ${{ matrix.ubuntu }} · ${{ matrix.session }}${{ matrix.runner == 'self-hosted' && ' · self-hosted' || '' }}
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ${{ matrix.runner }}
+    # On trial: the self-hosted runner's result does not decide the CI yet.
+    continue-on-error: ${{ matrix.runner == 'self-hosted' }}
     container:
       image: ubuntu:${{ matrix.ubuntu }}
       # An init as PID 1 reaps orphaned processes, as on a real system: tests check that killed processes are gone.
@@ -94,6 +96,12 @@ jobs:
       matrix:
         ubuntu: ["20.04", "22.04", "24.04"]
         session: [x11, wayland]
+        runner: [ubuntu-24.04]
+        # The same job on the project's self-hosted Linux runner, to compare its speed with GitHub's.
+        include:
+          - ubuntu: "24.04"
+            session: x11
+            runner: self-hosted
     steps:
       # Installed before checkout: the official Ubuntu image has no git, and
       # actions/checkout needs it. The 20.04 repositories may have moved to
