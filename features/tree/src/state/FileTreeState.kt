@@ -120,8 +120,11 @@ class FileTreeState(val root: FileEntry, private val fileSystem: ProjectFileSyst
         Snapshot.withMutableSnapshot {
             for ((directory, list) in reveal.levels) {
                 directories[directory.path] = directory
-                children[directory.path] = list
-                loading.remove(directory.path)
+                // A listing in place is at least as recent: this one may predate a reload that answered since.
+                if (directory.path !in children) {
+                    children[directory.path] = list
+                    loading.remove(directory.path)
+                }
                 expanded[directory.path] = true
             }
             selectedPath = reveal.path
