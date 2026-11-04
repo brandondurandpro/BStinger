@@ -147,6 +147,9 @@ internal class ManagedServer(
 
     @Volatile private var process: Process? = null
 
+    // Start time of [process], read when it started: its children can only be told apart with it once it exited.
+    @Volatile private var processStart = 0L
+
     @Volatile private var connection: LspConnection? = null
 
     // The documents are sent through it once the process answered initialize; null otherwise.
@@ -291,7 +294,8 @@ internal class ManagedServer(
 
     /** Kills what is left without asking (after [Command.Close], or when it did not answer in time). */
     fun kill() {
-        process?.let { OrphanReaper.killTree(it.toHandle()) }
+        val start = processStart
+        process?.let { OrphanReaper.killTree(it.toHandle(), start) }
     }
 
     private suspend fun handle(command: Command) {
@@ -435,6 +439,7 @@ internal class ManagedServer(
                 } catch (failure: IOException) {
                     throw Unavailable("Cannot run ${command.first()}: ${failure.message}", failure)
                 }
+            processStart = OrphanReaper.startOf(launched.toHandle())
             process = launched
             watch(launched)
             launched
@@ -534,6 +539,7 @@ internal class ManagedServer(
         startJob = null
         closeOutbox()
         val running = process ?: return
+        val start = processStart
         process = null
         val link = connection
         connection = null
@@ -543,7 +549,7 @@ internal class ManagedServer(
             runCatching { link.notify("exit") }
             withContext(Dispatchers.IO) { running.waitFor(timings.shutdownTimeoutMs, TimeUnit.MILLISECONDS) }
         }
-        OrphanReaper.killTree(running.toHandle())
+        OrphanReaper.killTree(running.toHandle(), start)
         link?.close()
         samplerKey?.let { sampler?.untrack(it) }
         samplerKey = null

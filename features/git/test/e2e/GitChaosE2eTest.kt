@@ -223,9 +223,14 @@ class GitChaosE2eTest {
         return app
     }
 
-    private fun ComposeUiTest.pushFeatureFromItsChip() {
+    private fun ComposeUiTest.openFeatureChipMenu() {
         onNodeWithTag(GitTags.pinnedBranchMenu("feature")).performClick()
-        awaitTag(GitTags.branchMenuPush("feature")).performClick()
+        awaitTag(GitTags.branchMenuPush("feature"))
+    }
+
+    private fun ComposeUiTest.pushFeatureFromItsChip() {
+        openFeatureChipMenu()
+        onNodeWithTag(GitTags.branchMenuPush("feature")).performClick()
     }
 
     @Test
@@ -235,8 +240,10 @@ class GitChaosE2eTest {
             try {
                 val app = pinnedFeatureAheadOfRemote(remote)
                 // The push is made, then the connection breaks before its answer: the retried push changes nothing.
+                // The menu opens first: only the push may be sent while answers are dropped, within deadAfterMs.
+                openFeatureChipMenu()
                 app.network.dropFromServer = true
-                pushFeatureFromItsChip()
+                onNodeWithTag(GitTags.branchMenuPush("feature")).performClick()
                 awaitCondition {
                     gitIn(remote, "rev-parse", "feature").trim() == project.git("rev-parse", "feature").trim()
                 }

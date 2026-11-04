@@ -5,6 +5,7 @@ import com.pty4j.PtyProcessBuilder
 import com.pty4j.WinSize
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import org.example.kotlineditor.lsp.supervisor.OrphanReaper
 import org.example.kotlineditor.model.TerminalKeyEvent
 import org.example.kotlineditor.model.TerminalSnapshot
 import org.example.kotlineditor.rpc.Frame
@@ -56,6 +57,9 @@ internal class ServerTerminal(
             Thread(task, "editor-terminal-publish-$id").apply { isDaemon = true }
         }
 
+    // Start time of the shell, read while it runs: its children can only be told apart with it once it exited.
+    private val processStart: Long
+
     private var seq = 0L
     private var lastFrame: Frame? = null
     private var endFrame: Frame? = null
@@ -96,6 +100,7 @@ internal class ServerTerminal(
                     }
                 }
             }
+        processStart = runCatching { OrphanReaper.startOf(process.toHandle()) }.getOrDefault(0L)
         publish(engine.snapshot())
         thread(name = "editor-terminal-$id", isDaemon = true) { pump() }
     }
@@ -163,7 +168,7 @@ internal class ServerTerminal(
             destroyed = true
         }
         scheduler.shutdownNow()
-        runCatching { process.descendants().forEach { it.destroy() } }
+        runCatching { OrphanReaper.ownDescendants(process.toHandle(), processStart).forEach { it.destroy() } }
         process.destroy()
     }
 
