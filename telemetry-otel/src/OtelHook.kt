@@ -30,6 +30,7 @@ import java.time.Duration
 import java.util.concurrent.TimeUnit
 import java.util.logging.Level
 import java.util.logging.Logger
+import kotlin.concurrent.thread
 import io.opentelemetry.api.common.Attributes as OtelAttributes
 import io.opentelemetry.api.trace.Span as OtelSpan
 import io.opentelemetry.api.trace.SpanContext as OtelSpanContext
@@ -195,9 +196,18 @@ class OtelHook(private val config: ExportConfig) :
 
     /** Sends what is queued (unless switched off) and stops, waiting at most the timeout. */
     override fun close() {
-        val half = config.timeoutMs / 2
-        tracerProvider.shutdown().join(half, TimeUnit.MILLISECONDS)
-        meterProvider.shutdown().join(half, TimeUnit.MILLISECONDS)
+        val deadline = System.nanoTime() + config.timeoutMs * NANOS_PER_MILLI
+        // The meter provider's shutdown sends the last histogram before it even returns its result, waiting for the
+        // collector for seconds: it runs on a daemon thread, side by side with the spans' shutdown.
+        val metrics = thread(isDaemon = true, name = "otel-metrics-shutdown") { meterProvider.shutdown() }
+        tracerProvider.shutdown().join(remainingMs(deadline), TimeUnit.MILLISECONDS)
+        metrics.join(remainingMs(deadline))
+    }
+
+    // What is left of the wait until [deadline], at least 1 ms: Thread.join(0) would wait forever.
+    private fun remainingMs(deadline: Long): Long {
+        val left = (deadline - System.nanoTime()) / NANOS_PER_MILLI
+        return left.coerceAtLeast(1L)
     }
 
     private fun spanExporter(): SpanExporter =
@@ -231,6 +241,7 @@ class OtelHook(private val config: ExportConfig) :
 
     private companion object {
         const val BATCH_SIZE = 512
+        const val NANOS_PER_MILLI = 1_000_000L
     }
 }
 
