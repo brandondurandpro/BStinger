@@ -1,7 +1,9 @@
 package org.example.kotlineditor.state
 
+import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.example.kotlineditor.model.DiskChanges
 import org.example.kotlineditor.model.DiskCursor
@@ -31,6 +33,10 @@ internal suspend fun ProjectState.followDisk() {
         // The first answer only says where the changes start: the project was just read.
         val first = cursor == DiskCursor.START
         cursor = answer.cursor
+        // An IDE Git action (a pull writing hundreds of files) is not slowed down by reloads while it writes: what it
+        // changed comes in one go once it is done, along with what other programs changed meanwhile.
+        if (!first && answer.paths.isNotEmpty()) snapshotFlow { git.busy }.first { !it }
+        System.err.println("TRACE ${System.currentTimeMillis()} batch ${answer.paths.size}")
         if (!first) applyDiskChanges(answer)
         diskWatched = true
     }
