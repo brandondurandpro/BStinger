@@ -212,7 +212,9 @@ private fun FollowSelection(scene: TreeScene) {
     val tree: FileTreeState = scene.tree
     val scroll = scene.scroll
     LaunchedEffect(scene) {
-        snapshotFlow { tree.selectedIndex() }.collectLatest { index ->
+        // Also once laid out: a reopened project shows its tree already unfolded down to the selected file.
+        val laidOut = { scroll.viewportHeightPx > 0f }
+        snapshotFlow { if (laidOut()) tree.selectedIndex() else -1 }.collectLatest { index ->
             val rowHeight = scene.geometry.rowHeight.toFloat()
             val viewport = scroll.viewportHeightPx
             if (index >= 0 && viewport > 0f) {

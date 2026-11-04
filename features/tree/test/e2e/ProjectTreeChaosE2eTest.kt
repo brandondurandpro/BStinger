@@ -19,6 +19,11 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
+private const val SLOW_LINK_MS = 400L
+
+// Far less than the server's watch of the disk takes to report a file over [SLOW_LINK_MS].
+private const val RIGHT_AWAY_MS = 200L
+
 /** Browsing and changing the project tree while the network fails, or while other programs change the disk. */
 @OptIn(ExperimentalTestApi::class)
 class ProjectTreeChaosE2eTest {
@@ -77,5 +82,23 @@ class ProjectTreeChaosE2eTest {
             awaitTag(EditorTags.EDITOR_MESSAGE).assertTextContains("Cannot read", substring = true)
             // Then the tree drops it.
             awaitNoTag(TreeTags.treeRow("README.md"))
+        }
+
+    @Test
+    fun `a file revealed while the tree is listed again does not bring back the listing from before`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, chaos = true)
+            awaitTag(TreeTags.treeRow("README.md"))
+            val deepFile = "src/main/kotlin/util/Strings.kt"
+            project.file("Added.md", "added\n")
+            // Over a slow link the listing of the root answers first, then those of the directories of the file.
+            app.network.latencyMs = SLOW_LINK_MS
+            runOnUiThread {
+                app.project.synchronize()
+                app.project.tree.reveal(project.root.resolve(deepFile).toString())
+            }
+            awaitTag(TreeTags.treeRow(deepFile))
+            // Shown already: waiting longer would let the server's watch of the disk repair the tree.
+            awaitTag(TreeTags.treeRow("Added.md"), timeout = RIGHT_AWAY_MS)
         }
 }

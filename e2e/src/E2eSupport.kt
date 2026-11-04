@@ -402,10 +402,10 @@ fun hasTestTagPrefix(prefix: String) =
             ?.startsWith(prefix) == true
     }
 
-/** Opens the context menu of the node tagged [tag]. */
+/** Opens the context menu of the node tagged [tag], once it is shown. */
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.rightClickOn(tag: String) {
-    onNodeWithTag(tag).performMouseInput {
+    awaitTag(tag).performMouseInput {
         moveTo(center)
         press(androidx.compose.ui.test.MouseButton.Secondary)
         release(androidx.compose.ui.test.MouseButton.Secondary)

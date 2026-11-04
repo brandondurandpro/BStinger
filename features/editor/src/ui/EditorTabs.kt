@@ -27,6 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
@@ -40,6 +41,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.flow.first
 import org.example.kotlineditor.state.EditorPane
 import org.example.kotlineditor.state.EditorState
 import org.example.kotlineditor.state.EditorTab
@@ -56,9 +58,19 @@ fun EditorTabs(editor: EditorState, pane: EditorPane, modifier: Modifier = Modif
     val active = pane.activeTab
     val density = LocalDensity.current
     var contextMenu by remember { mutableStateOf<Pair<String, DpOffset>?>(null) }
+    // Read by the effect only: changing it recomposes nothing.
+    val firstPlacement = remember { mutableStateOf(true) }
     LaunchedEffect(active) {
         val index = pane.tabs.indexOf(active)
-        if (index >= 0 && !isFullyVisible(listState, index)) listState.animateScrollToItem(index)
+        val first = firstPlacement.value
+        firstPlacement.value = false
+        // The first time (a reopened project), the strip is placed once laid out, without scrolling before the user.
+        if (first && index >= 0) snapshotFlow { listState.layoutInfo.visibleItemsInfo.isNotEmpty() }.first { it }
+        val hidden = index >= 0 && !isFullyVisible(listState, index)
+        when {
+            hidden && first -> listState.scrollToItem(index)
+            hidden -> listState.animateScrollToItem(index)
+        }
     }
     Box(
         modifier
