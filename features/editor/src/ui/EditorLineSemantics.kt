@@ -266,6 +266,7 @@ private fun rememberLineText(
                 placeholder,
                 document.syntax?.highlights?.spansFor(index, line),
                 semantic = semantic,
+                bracketDepth = document.bracketDepths?.getOrNull(index) ?: -1,
             ),
         )
     }

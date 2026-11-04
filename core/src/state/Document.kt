@@ -77,6 +77,9 @@ class Document(initialLines: List<String>, val language: Language, val lineSepar
     /** Precomputed block-comment state per line, see [org.example.kotlineditor.syntax.SyntaxHighlighter]. */
     var commentStates by mutableStateOf<BooleanArray?>(null)
 
+    /** Brackets open where each line starts, for their colors; see [org.example.kotlineditor.syntax.LineStarts]. */
+    var bracketDepths by mutableStateOf<IntArray?>(null)
+
     /** Tree-sitter highlighting, when the language has a grammar; the line lexer colors the rest. */
     var syntax: SyntaxSession? = null
         set

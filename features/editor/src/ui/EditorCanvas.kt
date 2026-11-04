@@ -154,6 +154,7 @@ private fun DrawScope.drawRow(
             document.syntax?.highlights?.spansFor(index, line),
             screenLine.inlays,
             insight.semantic[index],
+            document.bracketDepths?.getOrNull(index) ?: -1,
         )
     // Layout places the text area on a whole pixel: so does this, or glyphs would be antialiased differently.
     val textLeft = metrics.gutterPx.roundToInt().toFloat()
