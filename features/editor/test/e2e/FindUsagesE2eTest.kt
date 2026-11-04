@@ -65,11 +65,22 @@ class FindUsagesE2eTest {
     // Like intelephense: indexes the project for a while after it started, and finds no usage until it is done.
     private val indexing = FakePhpServers("--progress", "$INDEXING_SECONDS", "--blind-until-indexed").chosen()
 
+    // The same, slowed down by a loaded machine: it begins to index after the IDE stopped waiting for it to.
+    private val lateIndexing =
+        FakePhpServers(
+            "--progress",
+            "$INDEXING_SECONDS",
+            "--blind-until-indexed",
+            "--indexing-starts-after",
+            "$LATE_INDEXING_START_MS",
+        ).chosen()
+
     @AfterTest
     fun cleanup() {
         project.delete()
         servers.delete()
         indexing.delete()
+        lateIndexing.delete()
     }
 
     private fun ComposeUiTest.open(path: String, chosen: FakePhpServers = servers): E2eApp {
@@ -196,6 +207,16 @@ class FindUsagesE2eTest {
         }
 
     @Test
+    fun `the usage hints count the usages again once a server that began to index late indexed the project`() =
+        runComposeUiTest {
+            // Counted before the indexing began (none found), then once it ended: not kept from the first time.
+            open("src/Shop.php", lateIndexing)
+            awaitCondition(SERVER_START_MS) { hintText(10) == "2 usages" }
+            assertEquals("1 usage", hintText(2))
+            assertEquals("1 usage", hintText(4))
+        }
+
+    @Test
     fun `a click on a usage hint while the server indexes lists the usages once it is done`() =
         runComposeUiTest {
             val app = open("src/Shop.php", indexing)
@@ -231,6 +252,7 @@ class FindUsagesE2eTest {
 
     private companion object {
         const val INDEXING_SECONDS = 4
+        const val LATE_INDEXING_START_MS = 1_500
         const val INDEXING_NOTICE = "Indexing the project… the results will show once it is done"
     }
 }
