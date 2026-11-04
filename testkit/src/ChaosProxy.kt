@@ -8,6 +8,7 @@ import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CopyOnWriteArraySet
 import java.util.concurrent.LinkedBlockingQueue
 import kotlin.concurrent.thread
 
@@ -18,8 +19,9 @@ private const val BUFFER_SIZE = 16 * 1024
  * - [cutAll]: the connections break (Wi-Fi switch, VPN reconnect, server process killed);
  * - [goDown] / [comeBack]: the server cannot be reached at all for a while (network down, server restarting);
  * - [blackHole]: the link stays open but nothing goes through (laptop sleep, NAT or Wi-Fi gone silently);
- * - [dropFromServer]: requests reach the server but its answers are lost on the way back (follow it with [cutAll]:
- *   on a live TCP connection nothing is lost, an answer is lost because the connection breaks);
+ * - [dropFromServer]: requests reach the server but its answers are lost on the way back, on the connections open when
+ *   it is set (follow it with [cutAll]: on a live TCP connection nothing is lost, an answer is lost because the
+ *   connection breaks); a connection opened later goes through, as a reconnection after such a break would;
  * - [cutOnNextServerData]: the next bytes from the server cut the connection instead of being delivered;
  * - [latencyMs]: every chunk arrives that much later, like a slow remote link (the chunks in flight do not wait for
  *   each other: latency, not a narrow bandwidth).
@@ -34,8 +36,21 @@ class ChaosProxy(private val targetPort: Int) : Closeable {
     /** While true, bytes are swallowed in both directions without closing anything. */
     @Volatile var blackHole = false
 
-    /** While true, bytes from the server are swallowed; the client's still reach the server. */
+    /**
+     * While true, bytes from the server are swallowed on the connections open when it was set; the client's still
+     * reach the server. A connection opened afterwards is not affected: once the client gave up on the silent one
+     * (after its deadAfterMs), its reconnection and the requests it replays go through, instead of waiting forever
+     * for a handshake answer that would be swallowed too.
+     */
     @Volatile var dropFromServer = false
+        set(value) {
+            field = value
+            dropping.clear()
+            if (value) dropping.addAll(links)
+        }
+
+    // The links whose server bytes are swallowed while [dropFromServer] is set.
+    private val dropping = CopyOnWriteArraySet<Pair<Socket, Socket>>()
 
     /** When set, the next bytes coming from the server cut the connection instead of being delivered. */
     @Volatile var cutOnNextServerData = false
@@ -86,7 +101,8 @@ class ChaosProxy(private val targetPort: Int) : Closeable {
                     val cut = fromServer && cutOnNextServerData
                     if (cut) cutOnNextServerData = false
                     open = n >= 0 && !cut
-                    val swallowed = blackHole || (fromServer && dropFromServer)
+                    val dropped = fromServer && link in dropping
+                    val swallowed = blackHole || dropped
                     if (open && !swallowed) delayed.send(buffer.copyOf(n), latencyMs)
                 }
             } catch (ignored: IOException) {
@@ -100,6 +116,7 @@ class ChaosProxy(private val targetPort: Int) : Closeable {
 
     private fun close(link: Pair<Socket, Socket>) {
         links.remove(link)
+        dropping.remove(link)
         runCatching { link.first.close() }
         runCatching { link.second.close() }
     }
