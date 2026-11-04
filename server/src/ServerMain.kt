@@ -4,6 +4,7 @@ import kotlinx.coroutines.runBlocking
 import org.example.kotlineditor.rpc.Protocol
 import org.example.kotlineditor.server.ripgrep.RipgrepSettings
 import java.io.File
+import java.io.IOException
 import java.util.concurrent.CountDownLatch
 import kotlin.concurrent.thread
 import kotlin.system.exitProcess
@@ -11,7 +12,7 @@ import kotlin.system.exitProcess
 /**
  * Standalone server. Direct use:
  * ```
- * ./kotlin run -m serverApp -- --host 0.0.0.0 --port 7777 --token <secret>
+ * ./kotlin run -m serverApp -- --host 0.0.0.0 --port 7777 --token-file <file>
  * ```
  * Remote development uses it as a daemon, with the secret and the resulting port in files instead of arguments:
  * ```
@@ -51,7 +52,10 @@ object ServerMain {
         println("Kotlin Editor server ${Protocol.APP_VERSION}")
         println("Kotlin Editor server listening on ${options.host}:${server.port}")
         if (options.stateFile == null) {
-            println("Connect with: --server ${options.host}:${server.port} --token $token")
+            // The IDE takes the token from a file or the environment: a command line is visible to every user.
+            val address = "${options.host}:${server.port}"
+            println("Connect with: --server $address and, in KOTLIN_EDITOR_TOKEN or a --token-file, the token:")
+            println(token)
         }
         // Looks ripgrep up (downloading it if needed) now rather than on the first search.
         thread(name = "ripgrep-lookup", isDaemon = true) {
@@ -71,19 +75,13 @@ object ServerMain {
 
     private fun defaultDataDirectory(): File = File(System.getProperty("user.home"), ".kotlin-editor")
 
-    private fun readToken(file: File): String {
-        val token =
-            runCatching { file.readText().trim() }
-                .getOrElse {
-                    System.err.println("Cannot read the token file $file: ${it.message}")
-                    exitProcess(2)
-                }
-        if (token.isEmpty()) {
-            System.err.println("The token file $file is empty")
+    private fun readToken(file: File): String =
+        try {
+            TokenFile.read(file)
+        } catch (e: IOException) {
+            System.err.println(e.message)
             exitProcess(2)
         }
-        return token
-    }
 
     /** Options of the command line; parsed apart so the daemon script and the tests can rely on them. */
     internal data class LaunchOptions(

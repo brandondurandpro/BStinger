@@ -90,8 +90,9 @@ All the logic on files runs in a **server**; the IDE is a client that only displ
 - `server` – `EditorServer` and the local services: file system, project search (Find in Files and symbols run
   next to the files, only results travel), Git, shells, sessions and recent projects.
 - `serverApp` – standalone server for remote use:
-  `./kotlin run -m serverApp -- --host 0.0.0.0 --port 7777 --token <secret>`. It is also the daemon that remote
-  development installs and starts (`--token-file`/`--state-file`, `--version`).
+  `./kotlin run -m serverApp -- --host 0.0.0.0 --port 7777 --token-file <file>` (or the token in
+  `KOTLIN_EDITOR_TOKEN`; `--token <secret>` also works, but every user of the machine can read a command line).
+  It is also the daemon that remote development installs and starts (`--token-file`/`--state-file`, `--version`).
 - The client, from the bottom up:
   - `syntax` – syntax highlighting without the UI: line lexer, outlines, tree-sitter grammars and captures;
   - `core` – what every feature builds on: documents and their editing, folding, preferences, tool window layout,
@@ -104,8 +105,10 @@ All the logic on files runs in a **server**; the IDE is a client that only displ
   - `e2e` – the end-to-end test support (`launchApp`, `SampleProject`, fixtures) used by the tests of every module;
   - `shared` – the project and application state (`ProjectState`, `AppState`, agent mode), the screens and tool
     windows assembled from the features, and the end-to-end tests that span several features;
-  - `desktopApp` – the IDE. By default it embeds a server on loopback; use `--server host:port --token <secret>`
-    (or `KOTLIN_EDITOR_SERVER` / `KOTLIN_EDITOR_TOKEN`) for a remote one.
+  - `desktopApp` – the IDE. By default it embeds a server on loopback; use `--server host:port --token-file <file>`
+    (or `KOTLIN_EDITOR_SERVER` / `KOTLIN_EDITOR_TOKEN`) for a remote one. The file holds the token alone and should
+    be readable by its owner only (`chmod 600`). `--token <secret>` is deprecated and prints a warning: other users
+    of the machine can read it with `ps`.
 - **Remote development** – `features/remote/src/ssh` and `features/remote/src/ui/RemoteDialog.kt`. Server bundles are built with `tools/remote-bundle.sh` and looked up in `remote/`
   next to the application (see [docs/REMOTE.md](docs/REMOTE.md)).
 

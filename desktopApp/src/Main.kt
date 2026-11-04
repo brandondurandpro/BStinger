@@ -15,6 +15,7 @@ import org.example.kotlineditor.rpc.RpcClient
 import org.example.kotlineditor.rpc.appServices
 import org.example.kotlineditor.server.EditorServer
 import org.example.kotlineditor.server.LocalServices
+import org.example.kotlineditor.server.TokenFile
 import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.FilePreferenceStore
 import org.example.kotlineditor.syntax.treesitter.GrammarStore
@@ -26,12 +27,14 @@ import org.example.kotlineditor.telemetry.Telemetry
 import org.example.kotlineditor.telemetry.otel.ExportConfig
 import org.example.kotlineditor.telemetry.otel.OtelHook
 import java.io.File
+import java.io.IOException
 import java.lang.management.ManagementFactory
+import kotlin.system.exitProcess
 
 /**
  * The IDE is a client of the Kotlin Editor server. By default the server is embedded (started on loopback with a
- * random token); `--server host:port --token secret` (or KOTLIN_EDITOR_SERVER / KOTLIN_EDITOR_TOKEN) uses a remote one.
- * Remote Development from the welcome screen installs and tunnels to a server on another machine.
+ * random token); `--server host:port --token-file <file>` (or KOTLIN_EDITOR_SERVER / KOTLIN_EDITOR_TOKEN) uses
+ * another one. Remote Development from the welcome screen installs and tunnels to a server on another machine.
  */
 fun main(args: Array<String>) {
     fun option(name: String) = args.indexOf("--$name").takeIf { it >= 0 }?.let { args.getOrNull(it + 1) }
@@ -44,7 +47,7 @@ fun main(args: Array<String>) {
         } else {
             val host = remote!!.substringBeforeLast(':')
             val port = remote.substringAfterLast(':', "").toIntOrNull() ?: Protocol.DEFAULT_PORT
-            RpcClient(host, port, option("token") ?: System.getenv("KOTLIN_EDITOR_TOKEN").orEmpty())
+            RpcClient(host, port, serverToken(::option))
         }
     val services = client.appServices()
     // Only an embedded server can be returned to when the remote session ends.
@@ -81,6 +84,33 @@ fun main(args: Array<String>) {
             App(state)
         }
     }
+}
+
+// The secret of the server given with --server: --token-file, then --token (deprecated: every user of the machine
+// reads a command line with ps), then KOTLIN_EDITOR_TOKEN.
+private fun serverToken(option: (String) -> String?): String {
+    val file = option("token-file")?.let(::File)
+    val given = option("token")
+    return when {
+        file != null -> readTokenOrExit(file)
+        given != null -> given.also { warnTokenOnCommandLine() }
+        else -> System.getenv("KOTLIN_EDITOR_TOKEN").orEmpty()
+    }
+}
+
+private fun readTokenOrExit(file: File): String =
+    try {
+        TokenFile.read(file)
+    } catch (e: IOException) {
+        System.err.println(e.message)
+        exitProcess(2)
+    }
+
+private fun warnTokenOnCommandLine() {
+    System.err.println(
+        "Warning: --token is deprecated, other users of this machine can read it (ps). " +
+            "Use --token-file <file> or the KOTLIN_EDITOR_TOKEN environment variable.",
+    )
 }
 
 // From the start of the JVM to the first frame drawn.
