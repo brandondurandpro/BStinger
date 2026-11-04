@@ -83,6 +83,7 @@ class NetworkInspectorTest {
             val before = client.connections.value
             server.dropConnections()
             while (client.connections.value == before) delay(10)
+
             // The handshake is recorded as it goes: wait for it, not for a connected state the old link may still show.
             fun recordedHello() = client.network.snapshot().firstOrNull { it.kind == "Hello" }
             val hello =
