@@ -15,6 +15,7 @@ import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
+import java.io.IOException
 import java.io.PrintStream
 import java.nio.file.Files
 import java.util.concurrent.CompletableFuture
@@ -60,7 +61,11 @@ private const val CLIENT_TIMEOUT_S = 60L
  * offers `n` more models; it lists its commands ([COMMANDS], typed `/echo hi`), but none with `--no-commands`, and
  * `n` more with `--commands <n>`.
  */
-class FakeAgent(private val options: FakeAgentOptions, private val out: PrintStream = System.out) {
+// ACP speaks UTF-8; System.out writes the console's charset (Windows-1252 on Windows), which would mangle accents.
+class FakeAgent(
+    private val options: FakeAgentOptions,
+    private val out: PrintStream = PrintStream(System.out, true, Charsets.UTF_8),
+) {
     private val loginRequired = options.loginRequired
     private val store = FakeSessions(options.store)
     private val turns = ConcurrentHashMap<String, FakeTurn>()
@@ -68,6 +73,7 @@ class FakeAgent(private val options: FakeAgentOptions, private val out: PrintStr
 
     private val writeLock = Any()
     private val ids = AtomicLong()
+    private val writes = AtomicLong()
     private val answers = ConcurrentHashMap<Long, CompletableFuture<JsonElement>>()
     private val cancelled = ConcurrentHashMap.newKeySet<String>()
 
@@ -80,7 +86,7 @@ class FakeAgent(private val options: FakeAgentOptions, private val out: PrintStr
             when {
                 method != null && id != null -> thread(isDaemon = true) { answer(id, method, message.params()) }
                 method != null -> onNotification(method, message.params())
-                id != null -> answers.remove(id.jsonPrimitive.longOrNull)?.complete(message["result"] ?: JsonNull)
+                id != null -> answers.remove(id.jsonPrimitive.longOrNull)?.complete(message)
             }
         }
     }
@@ -283,6 +289,7 @@ class FakeAgent(private val options: FakeAgentOptions, private val out: PrintStr
             "think" -> think(session, rest)
             "read" -> read(session, rest)
             "write" -> write(session, words.getOrNull(1).orEmpty(), rest.substringAfter(' ', ""))
+            "rewrite" -> rewrite(session, rest)
             "plan" -> plan(session)
             "slow" -> slow(session, stubborn = false)
             "stubborn" -> slow(session, stubborn = true)
@@ -324,16 +331,31 @@ class FakeAgent(private val options: FakeAgentOptions, private val out: PrintStr
         return END_TURN
     }
 
+    // Reads [path] and writes it back as it read it, as an agent that edits a file sends all of it again.
+    private fun rewrite(session: String, path: String): String {
+        val read =
+            runCatching {
+                request("fs/read_text_file", buildJsonObject {
+                    put("sessionId", session)
+                    put("path", path)
+                }).jsonObject.text("content").orEmpty()
+            }
+        val content = read.getOrElse { return chunks(session, listOf("Cannot read: ${it.message}")) }
+        return write(session, path, content)
+    }
+
     private fun write(session: String, path: String, text: String): String {
-        tool(session, "write-1", "Write $path", "edit", "pending", path)
+        // One tool call per write, as a real agent: the first is write-1.
+        val call = "write-${writes.incrementAndGet()}"
+        tool(session, call, "Write $path", "edit", "pending", path)
         val asks = store[session]?.mode != FakeConfig.ACCEPT_EDITS
-        if (!asks) return written(session, path, text)
+        if (!asks) return written(session, call, path, text)
         val outcome =
             request(
                 "session/request_permission",
                 buildJsonObject {
                     put("sessionId", session)
-                    putJsonObject("toolCall") { put("toolCallId", "write-1") }
+                    putJsonObject("toolCall") { put("toolCallId", call) }
                     putJsonArray("options") {
                         add(option("allow", "Allow", "allow_once"))
                         add(option("reject", "Reject", "reject_once"))
@@ -342,21 +364,30 @@ class FakeAgent(private val options: FakeAgentOptions, private val out: PrintStr
             ).jsonObject["outcome"]?.jsonObject
         if (outcome?.text("outcome") == "cancelled") return CANCELLED
         if (outcome?.text("optionId") != "allow") {
-            toolUpdate(session, "write-1", "failed", "Rejected")
+            toolUpdate(session, call, "failed", "Rejected")
             message(session, "Not written.")
             return END_TURN
         }
-        return written(session, path, text)
+        return written(session, call, path, text)
     }
 
-    private fun written(session: String, path: String, text: String): String {
-        request("fs/write_text_file", buildJsonObject {
-            put("sessionId", session)
-            put("path", path)
-            put("content", text)
-        })
+    private fun written(session: String, call: String, path: String, text: String): String {
+        val write =
+            runCatching {
+                request("fs/write_text_file", buildJsonObject {
+                    put("sessionId", session)
+                    put("path", path)
+                    put("content", text)
+                })
+            }
+        val failure = write.exceptionOrNull()
+        if (failure != null) {
+            toolUpdate(session, call, "failed", "Not written: ${failure.message}")
+            message(session, "Not written: ${failure.message}")
+            return END_TURN
+        }
         update(session, "tool_call_update") {
-            put("toolCallId", "write-1")
+            put("toolCallId", call)
             put("status", "completed")
             putJsonArray("content") {
                 add(
@@ -480,7 +511,10 @@ class FakeAgent(private val options: FakeAgentOptions, private val out: PrintStr
                 put("params", params)
             },
         )
-        return answer.get(CLIENT_TIMEOUT_S, TimeUnit.SECONDS)
+        val reply = answer.get(CLIENT_TIMEOUT_S, TimeUnit.SECONDS).jsonObject
+        val error = reply["error"]?.jsonObject
+        if (error != null) throw IOException(error.text("message") ?: "$method failed")
+        return reply["result"] ?: JsonNull
     }
 
     private fun send(message: JsonObject) =

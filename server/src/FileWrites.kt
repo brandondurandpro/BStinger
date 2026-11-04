@@ -1,6 +1,7 @@
 package org.example.kotlineditor.server
 
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
 import java.nio.ByteBuffer
 import java.nio.file.AccessDeniedException
 import java.nio.file.Files
@@ -37,6 +38,12 @@ internal suspend fun writeFile(path: Path, bytes: ByteArray) {
     if (readOnly) throw AccessDeniedException(target.toString(), null, "The file is read-only")
     val replaced = exists && movable(target) && replaceKeepingAll(target, bytes)
     if (!replaced) Files.write(target, bytes, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)
+}
+
+/** [writeFile] for the callers that are not coroutines (the agents' requests), creating the missing directories. */
+internal fun writeFileNow(path: Path, bytes: ByteArray) {
+    path.parent?.let { Files.createDirectories(it) }
+    runBlocking { writeFile(path, bytes) }
 }
 
 // Writes through a temp file moved over [target], if the temp file can have all of [target]; false when it cannot.

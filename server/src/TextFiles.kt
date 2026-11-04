@@ -65,6 +65,15 @@ object TextFiles {
     }
 
     /**
+     * The whole text of the file at [path], line endings included, in its charset ([charsetOf]): what an agent reads
+     * and edits, and gives back to [encode].
+     */
+    fun readText(path: Path): String {
+        val bytes = Files.readAllBytes(path)
+        return String(bytes, charsetOf(bytes))
+    }
+
+    /**
      * The charset [bytes] are read and written with: UTF-8 when they are valid UTF-8, ISO-8859-1 otherwise (older
      * projects in Latin-1 or Windows-1252). ISO-8859-1 maps each byte to one character, so that a file saved without
      * changes keeps every byte, whatever its real encoding.

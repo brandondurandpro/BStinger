@@ -117,6 +117,13 @@ class ProjectWatches(
             watches[root]
         }
 
+    /** Whether a change of [path] reaches [onChanged] through a running watch: its writer need not tell it again. */
+    fun reports(path: String): Boolean {
+        val file = Paths.get(path)
+        val roots = synchronized(watches) { watches.filterValues { it.isOpen }.keys.toList() }
+        return roots.any { root -> isReported(Paths.get(root), file) }
+    }
+
     override fun close() {
         closed = true
         synchronized(watches) {
