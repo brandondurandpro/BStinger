@@ -491,10 +491,12 @@ class AppState(
                 if (request == openRequest) error = "Cannot reach the server: ${e.message}"
                 null
             }
-        if (request == openRequest) {
+        if (request != openRequest) return
+        if (root == null) {
             opening = null
-            root?.let { open(it) }
+            return
         }
+        open(root, request)
     }
 
     private fun locationAttributes(): Attributes {
@@ -668,7 +670,7 @@ class AppState(
         languageServers = languageServersOf(services)
     }
 
-    private suspend fun open(root: FileEntry) {
+    private suspend fun open(root: FileEntry, request: Int) {
         error = null
         recentProjects.remove(root.path)
         recentProjects.add(0, root.path)
@@ -686,7 +688,14 @@ class AppState(
                 languageServers = languageServers,
                 agentCommand = { agentCommandOf(agentCommand, agentRegistry) },
             )
-        runCatching { services.sessions.load(root.path) }.getOrNull()?.let(project::restoreSession)
+        // "Opening…" stays shown meanwhile: the project then appears with its tabs and tree as they were left.
+        project.restoreSession(RESTORE_WAIT_MILLIS)
+        if (request != openRequest) {
+            // Closed, or another project opened, while the session was restored.
+            project.dispose()
+            return
+        }
+        opening = null
         // The worktrees of agent mode share this repository: only the opened project fetches its remotes.
         project.git.startAutoFetch()
         screen = Screen.Project(project)
@@ -722,6 +731,9 @@ class AppState(
 
     companion object {
         private const val MAX_RECENT = 20
+
+        // How long opening a project waits for its session before showing it anyway (a slow or remote server).
+        private const val RESTORE_WAIT_MILLIS = 1_000L
         const val MIN_EDITOR_FONT_SIZE = 8f
         const val MAX_EDITOR_FONT_SIZE = 40f
     }

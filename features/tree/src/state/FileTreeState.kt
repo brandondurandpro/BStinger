@@ -7,14 +7,23 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.Snapshot
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.ProjectFileSystem
+import org.example.kotlineditor.model.slashed
 import org.example.kotlineditor.telemetry.ClientTelemetry
 import org.example.kotlineditor.telemetry.Operation
 import org.example.kotlineditor.telemetry.measureToFrame
 import org.example.kotlineditor.telemetry.outcome
+
+/** What revealing a file expands: each directory down to it, with its children. See [FileTreeState.listingsTo]. */
+@Immutable
+class TreeReveal(val path: String, val levels: List<Pair<FileEntry, List<FileEntry>>>)
 
 @Immutable
 data class TreeRow(val entry: FileEntry, val depth: Int, val expanded: Boolean, val loading: Boolean)
@@ -24,6 +33,7 @@ data class TreeRow(val entry: FileEntry, val depth: Int, val expanded: Boolean, 
  * visible (expanded) part of the tree is flattened into [rows], which feeds a virtualized list.
  */
 @Stable
+@Suppress("TooManyFunctions")
 class FileTreeState(val root: FileEntry, private val fileSystem: ProjectFileSystem, private val scope: CoroutineScope) {
     private val children = mutableStateMapOf<String, List<FileEntry>>()
     private val expanded = mutableStateMapOf<String, Boolean>()
@@ -80,22 +90,46 @@ class FileTreeState(val root: FileEntry, private val fileSystem: ProjectFileSyst
 
     /** Expands every ancestor of [path] and selects it, loading directories as needed. */
     fun reveal(path: String) {
-        scope.launch {
-            var current: FileEntry? = root
-            while (current != null && current.leadsTo(path)) {
-                val directory: FileEntry = current
-                expand(directory)
-                directories[directory.path] = directory
-                val list =
-                    children[directory.path]
-                        ?: runCatching {
-                            fileSystem.list(directory)
-                        }.getOrNull()?.also { children[directory.path] = it }
-                current = list?.firstOrNull { isSelfOrAncestor(it.path, path) }
+        scope.launch { show(listingsTo(path)) }
+    }
+
+    /**
+     * The directories from the root down to the parent of [path], each with its children, all listed at once: one
+     * round trip, however deep the file is. A directory missing on the way ends the list.
+     */
+    suspend fun listingsTo(path: String): TreeReveal {
+        val chain = ancestorsOf(root, path)
+        val listed =
+            coroutineScope {
+                chain.map { directory -> async { listingOf(directory) } }.awaitAll()
             }
-            selectedPath = path
+        val levels = ArrayList<Pair<FileEntry, List<FileEntry>>>()
+        for ((directory, list) in chain.zip(listed)) {
+            val parentChildren = levels.lastOrNull()?.second
+            // The entry the server listed, rather than the one built from the path (whose separators may be mixed).
+            val listedEntry = parentChildren?.firstOrNull { slashed(it.path) == slashed(directory.path) }
+            val entry = if (parentChildren == null) directory else listedEntry
+            if (list == null || entry == null) break
+            levels += entry to list
+        }
+        return TreeReveal(path, levels)
+    }
+
+    /** Expands the directories of [reveal] and selects its file in the same frame: the tree never unfolds by levels. */
+    fun show(reveal: TreeReveal) {
+        Snapshot.withMutableSnapshot {
+            for ((directory, list) in reveal.levels) {
+                directories[directory.path] = directory
+                children[directory.path] = list
+                loading.remove(directory.path)
+                expanded[directory.path] = true
+            }
+            selectedPath = reveal.path
         }
     }
+
+    private suspend fun listingOf(directory: FileEntry): List<FileEntry>? =
+        children[directory.path] ?: runCatching { fileSystem.list(directory) }.getOrNull()
 
     fun select(entry: FileEntry) {
         selectedPath = entry.path
@@ -131,8 +165,27 @@ class FileTreeState(val root: FileEntry, private val fileSystem: ProjectFileSyst
     }
 }
 
-private fun isSelfOrAncestor(candidate: String, path: String): Boolean =
-    path == candidate || path.startsWith("$candidate/") || path.startsWith("$candidate\\")
+private val SEPARATORS = setOf('/', '\\')
 
-// [path] is under this directory, deeper than it.
-private fun FileEntry.leadsTo(target: String): Boolean = path != target && target.startsWith(path)
+// [root], then each directory of [path] below it, built from the path itself so that they are listed together.
+private fun ancestorsOf(root: FileEntry, path: String): List<FileEntry> {
+    if (!root.leadsTo(path)) return emptyList()
+    val separators = SEPARATORS.toCharArray()
+    val chain = arrayListOf(root)
+    var end = path.indexOfAny(separators, root.path.length + 1)
+    while (end >= 0) {
+        val directory = path.substring(0, end)
+        val name = directory.substring(directory.lastIndexOfAny(separators) + 1)
+        chain += FileEntry(directory, name, isDirectory = true)
+        end = path.indexOfAny(separators, end + 1)
+    }
+    return chain
+}
+
+// [target] is under this directory, deeper than it.
+private fun FileEntry.leadsTo(target: String): Boolean {
+    val endsWithSeparator = path.lastOrNull() in SEPARATORS
+    val nextIsSeparator = target.getOrNull(path.length) in SEPARATORS
+    val below = endsWithSeparator || nextIsSeparator
+    return target.length > path.length && target.startsWith(path) && below
+}
