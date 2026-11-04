@@ -223,13 +223,17 @@ fun ProjectState.synchronize() {
  * in conflict otherwise (the user chooses, see `DiskBanner`). True when it was reloaded.
  */
 internal suspend fun ProjectState.reloadIfChanged(entry: FileEntry, document: Document): Boolean {
+    val stamp = document.saveStamp
     val content =
         try {
             services.fileSystem.read(entry)
         } catch (expected: IOException) {
             null // server unreachable: synchronized at the next focus
         }
-    val lines = (content as? FileContent.Text)?.lines ?: return false
+    // A save of the IDE ran meanwhile: the disk holds what it wrote, which the read may or may not have seen.
+    val overlappedSave = stamp % 2 == 1 || document.saveStamp != stamp
+    val lines = (content as? FileContent.Text)?.lines
+    if (lines == null || overlappedSave) return false
     val changedOutside = lines.hashCode() != document.diskLinesHash
     val stale = !document.isModified && lines != document.lines.toList()
     when {

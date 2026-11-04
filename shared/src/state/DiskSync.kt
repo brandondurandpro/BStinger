@@ -36,7 +36,7 @@ internal suspend fun ProjectState.followDisk() {
     }
 }
 
-private fun ProjectState.applyDiskChanges(changes: DiskChanges) {
+private suspend fun ProjectState.applyDiskChanges(changes: DiskChanges) {
     if (!changes.complete) {
         synchronize()
         return
@@ -45,12 +45,10 @@ private fun ProjectState.applyDiskChanges(changes: DiskChanges) {
     val gitPrefix = root.path + separator + GIT_DIRECTORY
     val (inGit, files) = changes.paths.partition { it == gitPrefix || it.startsWith(gitPrefix + separator) }
     if (files.isNotEmpty()) filesChanged(files, separator)
-    when {
-        // A checkout, a commit or a stage: the branch, the status and every editor's diff may have moved.
-        inGit.isNotEmpty() -> git.refresh()
-
-        files.isNotEmpty() -> git.refreshStatus(reloadEditors = false)
-    }
+    // A long poll that waited for nothing.
+    if (changes.paths.isEmpty()) return
+    // A checkout, a commit or a stage: the branch, the status and every editor's diff may have moved.
+    git.reloadAfterDiskChange(branchesToo = inGit.isNotEmpty())
 }
 
 // [separator] is the one of the disk of the server: on Linux and macOS a backslash is a character of a name.

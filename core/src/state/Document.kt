@@ -40,6 +40,12 @@ class Document(initialLines: List<String>, val language: Language, val lineSepar
      */
     var diskLinesHash: Int = initialLines.hashCode()
 
+    /**
+     * Bumped when a save of this document starts and when it ends (odd while one runs): a read of the disk that
+     * overlapped a save may have seen the file before or after it, and is not compared with [diskLinesHash].
+     */
+    var saveStamp: Int = 0
+
     /** Another program changed the file while it had unsaved edits: it is not saved until the user chooses. */
     var diskConflict by mutableStateOf(false)
 

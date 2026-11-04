@@ -171,15 +171,18 @@ internal class TabFiles(
             ClientTelemetry.measureToFrame(Operation.EditorSave, languageOf(tab) + size) {
                 val version = document.version
                 val lines = document.snapshotLines()
+                document.saveStamp++
                 try {
                     fileSystem.write(tab.entry, document.text())
+                    // What the disk now has, even when the user typed meanwhile: the watch reports this write too.
+                    document.diskLinesHash = lines.hashCode()
                 } catch (failed: IOException) {
                     document.saveError = failed.message ?: failed::class.simpleName.orEmpty()
                     throw failed
+                } finally {
+                    document.saveStamp++
                 }
                 document.saveError = null
-                // What the disk now has, even when the user typed meanwhile: the watch reports this write too.
-                document.diskLinesHash = lines.hashCode()
                 if (document.version == version) document.markSaved()
                 onSaved(tab.entry)
             }

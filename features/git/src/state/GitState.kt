@@ -130,25 +130,41 @@ class GitState(
      * keeps the last list, so the branch picker still shows what it knows while the link comes back.
      */
     fun refreshBranches() {
-        scope.launch {
-            ClientTelemetry.measureToFrame(
-                Operation.GitBranch,
-                outcomeOf = { read: Result<String?> -> read.outcome() },
-            ) {
-                runCatching { git.branch(root.path) }.onSuccess {
-                    currentBranch = it
-                    isRepository = it != null
+        scope.launch { loadBranches() }
+    }
+
+    /**
+     * Reloads what a change on disk may have moved ([branchesToo]: something changed in `.git`) and returns once it is
+     * shown: the watch of the disk waits for it before asking for more changes, so that a burst of them (thousands of
+     * branches deleted, a ref each) costs a reload or two, not one per change.
+     */
+    suspend fun reloadAfterDiskChange(branchesToo: Boolean) {
+        if (branchesToo) loadBranches()
+        editorsReloadPending = editorsReloadPending || branchesToo
+        statusJob?.cancel()
+        ClientTelemetry.measureToFrame(Operation.GitStatus, outcomeOf = { read: Result<*> -> read.outcome() }) {
+            applyStatus()
+        }
+    }
+
+    private suspend fun loadBranches() {
+        ClientTelemetry.measureToFrame(
+            Operation.GitBranch,
+            outcomeOf = { read: Result<String?> -> read.outcome() },
+        ) {
+            runCatching { git.branch(root.path) }.onSuccess {
+                currentBranch = it
+                isRepository = it != null
+            }
+        }
+        if (isRepository) {
+            runCatching { git.branchDetails(root.path) }
+                .onSuccess(::applyBranches)
+                .onFailure {
+                    // An older server knows the names but not their upstream: show the names at least.
+                    runCatching { git.branches(root.path) }
+                        .onSuccess { names -> applyBranches(names.map(::branchInfoOf)) }
                 }
-            }
-            if (isRepository) {
-                runCatching { git.branchDetails(root.path) }
-                    .onSuccess(::applyBranches)
-                    .onFailure {
-                        // An older server knows the names but not their upstream: show the names at least.
-                        runCatching { git.branches(root.path) }
-                            .onSuccess { names -> applyBranches(names.map(::branchInfoOf)) }
-                    }
-            }
         }
     }
 
