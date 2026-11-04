@@ -1,7 +1,6 @@
 package org.example.kotlineditor.server
 
 import org.example.kotlineditor.model.GitCommit
-import java.io.File
 import java.io.IOException
 import java.io.Reader
 
@@ -26,8 +25,7 @@ private const val SEARCH_FORMAT = "--format=%H%x00%P%x00%an%x00%at%x00%D%x00%s%x
 internal fun searchCommits(root: String, ref: String, query: String, skip: Int, limit: Int): List<GitCommit> {
     val needle = query.trim().lowercase()
     val process =
-        ProcessBuilder("git", "log", SEARCH_FORMAT, ref, "--")
-            .directory(File(root))
+        gitProcess(root, listOf("log", SEARCH_FORMAT, ref, "--"))
             .redirectError(ProcessBuilder.Redirect.DISCARD)
             .start()
     val page =

@@ -46,7 +46,7 @@ import java.io.OutputStream
  */
 object Protocol {
     /** Version announced in the handshake; client and server must speak the same one. */
-    const val VERSION = 9
+    const val VERSION = 10
 
     /** Version of the application, shown in the welcome screen and used to identify remote server bundles. */
     const val APP_VERSION = "2026.1"
@@ -252,6 +252,9 @@ enum class Method(
 
     /** Deletes a file or a directory tree. */
     Delete("fs/delete", mutating = true),
+
+    /** Changes on disk under a project after a cursor, whoever made them (long poll). */
+    DiskChanges("fs/changes"),
 
     /** Every file of a project. */
     WalkFiles("search/walkFiles"),

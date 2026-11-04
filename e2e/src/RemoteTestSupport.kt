@@ -203,6 +203,22 @@ object RemoteTestEnvironment {
         }
     }
 
+    /**
+     * Runs [use] with the commands of the test user in the locale [locale] (`LC_ALL`, no `LANG` nor `LC_*`), as an
+     * SSH session gets on a server whose client sends no locale: `C` names files in ASCII. The daemon is stopped
+     * first, so that it starts again in that locale.
+     */
+    fun <T> withLocale(locale: String, use: () -> T): T {
+        stopDaemon()
+        ssh.locale = locale
+        return try {
+            use()
+        } finally {
+            ssh.locale = null
+            stopDaemon()
+        }
+    }
+
     /** Text of the server log, for the assertion message when a remote connection fails. */
     fun diagnostics(): String =
         runCatching { Files.readString(home.resolve(".kotlin-editor/server/server.log")) }.getOrDefault("")
@@ -304,6 +320,9 @@ class RemoteSshServer(private val home: Path) : Closeable {
      */
     @Volatile var loginShell: String = "/bin/sh"
 
+    /** `LC_ALL` of the commands, which then get no `LANG` nor `LC_*`; null for the environment of the tests. */
+    @Volatile var locale: String? = null
+
     private var sshd: SshServer? = null
     private var hostKeys: SimpleGeneratorHostKeyProvider? = null
     private val clientPublic: java.security.PublicKey
@@ -337,7 +356,7 @@ class RemoteSshServer(private val home: Path) : Closeable {
                 username == "tester" && key.encoded.contentEquals(clientPublic.encoded)
             }
         server.passwordAuthenticator = org.apache.sshd.server.auth.password.RejectAllPasswordAuthenticator.INSTANCE
-        server.commandFactory = ShellCommandFactory(home) { loginShell }
+        server.commandFactory = ShellCommandFactory(home, { loginShell }) { locale }
         server.subsystemFactories = listOf(SftpSubsystemFactory())
         server.forwardingFilter = AcceptAllForwardingFilter.INSTANCE
         server.start()
@@ -415,13 +434,22 @@ class RemoteSshServer(private val home: Path) : Closeable {
     }
 }
 
-private class ShellCommandFactory(private val home: Path, private val shell: () -> String) : CommandFactory {
-    override fun createCommand(channel: ChannelSession, command: String): Command = ShellCommand(command, home, shell())
+private class ShellCommandFactory(
+    private val home: Path,
+    private val shell: () -> String,
+    private val locale: () -> String?,
+) : CommandFactory {
+    override fun createCommand(channel: ChannelSession, command: String): Command =
+        ShellCommand(command, home, shell(), locale())
 }
 
 /** Runs the command with the login shell, as a Linux SSH server does, with HOME pointed at the fake remote home. */
-private class ShellCommand(command: String, private val home: Path, private val shell: String) :
-    AbstractCommandSupport(command, null) {
+private class ShellCommand(
+    command: String,
+    private val home: Path,
+    private val shell: String,
+    private val locale: String?,
+) : AbstractCommandSupport(command, null) {
     @Volatile private var process: Process? = null
 
     override fun run() {
@@ -430,6 +458,7 @@ private class ShellCommand(command: String, private val home: Path, private val 
                 ProcessBuilder(shell, "-c", command)
                     .directory(home.toFile())
                     .apply { environment()["HOME"] = home.toAbsolutePath().toString() }
+                    .apply { locale?.let { inLocale(environment(), it) } }
                     .start()
             process = started
             val output = getOutputStream()
@@ -474,3 +503,9 @@ fun remoteEnvironment(): RemoteTestEnvironment? =
     } else {
         null
     }
+
+// Leaves [locale] as the only locale setting of [environment].
+private fun inLocale(environment: MutableMap<String, String>, locale: String) {
+    environment.keys.removeAll { it == "LANG" || it.startsWith("LC_") }
+    environment["LC_ALL"] = locale
+}

@@ -3,6 +3,9 @@ package org.example.kotlineditor.server
 import org.example.kotlineditor.model.FileContent
 import java.io.IOException
 import java.nio.ByteBuffer
+import java.nio.CharBuffer
+import java.nio.charset.CharacterCodingException
+import java.nio.charset.Charset
 import java.nio.charset.CodingErrorAction
 import java.nio.file.Files
 import java.nio.file.Path
@@ -45,15 +48,46 @@ object TextFiles {
     }
 
     private fun decode(bytes: ByteArray): FileContent =
-        if (isBinary(bytes)) {
-            FileContent.Binary
-        } else {
-            val text =
-                Charsets.UTF_8
-                    .newDecoder()
-                    .onMalformedInput(CodingErrorAction.REPLACE)
-                    .onUnmappableCharacter(CodingErrorAction.REPLACE)
-                    .decode(ByteBuffer.wrap(bytes))
-            splitLines(text)
+        if (isBinary(bytes)) FileContent.Binary else splitLines(utf8OrNull(bytes) ?: String(bytes, Charsets.ISO_8859_1))
+
+    // The text of [bytes] if they are valid UTF-8.
+    private fun utf8OrNull(bytes: ByteArray): CharSequence? {
+        val decoder =
+            Charsets.UTF_8
+                .newDecoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT)
+        return try {
+            decoder.decode(ByteBuffer.wrap(bytes))
+        } catch (_: CharacterCodingException) {
+            null
         }
+    }
+
+    /**
+     * The charset [bytes] are read and written with: UTF-8 when they are valid UTF-8, ISO-8859-1 otherwise (older
+     * projects in Latin-1 or Windows-1252). ISO-8859-1 maps each byte to one character, so that a file saved without
+     * changes keeps every byte, whatever its real encoding.
+     */
+    fun charsetOf(bytes: ByteArray): Charset = if (utf8OrNull(bytes) != null) Charsets.UTF_8 else Charsets.ISO_8859_1
+
+    /**
+     * The bytes of [text] in the charset of the file it replaces ([existing], `null` for a new file); fails rather
+     * than replace a character that charset cannot hold.
+     */
+    fun encode(text: String, existing: ByteArray?): ByteArray {
+        val charset = if (existing == null) Charsets.UTF_8 else charsetOf(existing)
+        val encoder =
+            charset
+                .newEncoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT)
+        val encoded =
+            try {
+                encoder.encode(CharBuffer.wrap(text))
+            } catch (e: CharacterCodingException) {
+                throw IOException("The file is in ${charset.name()}, which cannot hold every character typed", e)
+            }
+        return ByteArray(encoded.remaining()).also { encoded.get(it) }
+    }
 }

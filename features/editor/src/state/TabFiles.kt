@@ -29,6 +29,7 @@ private const val RECOMPUTE_DELAY_MS = 150L
 private const val MEGABYTE = 1024 * 1024
 
 /** Loads tabs' content from the server and saves it back. */
+@Suppress("TooManyFunctions")
 internal class TabFiles(
     private val fileSystem: ProjectFileSystem,
     private val scope: CoroutineScope,
@@ -146,16 +147,39 @@ internal class TabFiles(
         }
     }
 
+    /** Replaces the edits of [tab] with what another program wrote (the user chose the disk in a conflict). */
+    suspend fun reloadFromDisk(tab: EditorTab) {
+        val document = tab.document ?: return
+        val content = fileSystem.read(tab.entry)
+        if (content is FileContent.Text) document.reload(content.lines)
+    }
+
+    /** Saves the edits of [tab] over what another program wrote (the user chose them in a conflict). */
+    fun keepEdits(tab: EditorTab) {
+        val document = tab.document ?: return
+        document.diskConflict = false
+        save(tab)
+    }
+
     /** Saves every modified tab and returns once everything is on disk (closing the project or the IDE). */
     suspend fun flush(tabs: List<EditorTab>) = tabs.forEach { write(it) }
 
     private suspend fun write(tab: EditorTab) {
         val document = tab.document
-        if (document != null && document.isModified) {
+        if (document != null && document.savable()) {
             val size = Attributes.of(Attribute.Size to sizeBucket(document.lineCount.toLong()))
             ClientTelemetry.measureToFrame(Operation.EditorSave, languageOf(tab) + size) {
                 val version = document.version
-                fileSystem.write(tab.entry, document.text())
+                val lines = document.snapshotLines()
+                try {
+                    fileSystem.write(tab.entry, document.text())
+                } catch (failed: IOException) {
+                    document.saveError = failed.message ?: failed::class.simpleName.orEmpty()
+                    throw failed
+                }
+                document.saveError = null
+                // What the disk now has, even when the user typed meanwhile: the watch reports this write too.
+                document.diskLinesHash = lines.hashCode()
                 if (document.version == version) document.markSaved()
                 onSaved(tab.entry)
             }
@@ -202,6 +226,9 @@ internal class TabFiles(
         }
     }
 }
+
+// A conflict waits for the user: saving would silently drop what another program wrote.
+private fun Document.savable(): Boolean = isModified && !diskConflict
 
 private fun languageOf(tab: EditorTab): Attributes {
     val language = Language.fromFileName(tab.entry.name)

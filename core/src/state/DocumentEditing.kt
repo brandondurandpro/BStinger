@@ -122,4 +122,6 @@ fun Document.reload(newLines: List<String>) {
     replace(TextPos(0, 0), TextPos(lines.lastIndex, lines.last().length), newLines.joinToString("\n"))
     moveTo(keep)
     markSaved()
+    diskLinesHash = newLines.hashCode()
+    diskConflict = false
 }

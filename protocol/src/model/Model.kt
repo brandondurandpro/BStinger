@@ -519,12 +519,37 @@ class AppServices(
     val languageServers: LanguageServers = LanguageServers.None,
     /** The telemetry consent of the server. */
     val telemetry: TelemetrySettings = TelemetrySettings.None,
+    /** What other programs change on the disk of the server. */
+    val disk: DiskWatch = DiskWatch.None,
 )
+
+private val UNIX_SEPARATORS = charArrayOf('/')
+private val WINDOWS_SEPARATORS = charArrayOf('/', '\\')
+
+/**
+ * The characters that separate the names of [path]: `/`, and `\` too in a Windows path (`C:\p\a.kt`, or
+ * `C:\p/a.kt` when rebuilt from Git). The paths of a Linux or macOS server start with `/`, and a `\` there is a
+ * character of a name.
+ */
+fun separatorsOf(path: String): CharArray = if (path.startsWith('/')) UNIX_SEPARATORS else WINDOWS_SEPARATORS
+
+/**
+ * [path] with `/` between its names, whatever its separators (see [separatorsOf]); [root] is an absolute path of the
+ * same server, needed when [path] is relative.
+ */
+fun slashed(path: String, root: String = path): String = if (root.startsWith('/')) path else path.replace('\\', '/')
+
+/** [path], below the directory [root], relative to it with `/` separators (`src/a.kt`). */
+fun relativeToRoot(path: String, root: String): String {
+    val relative = path.removePrefix(root).trimStart(*separatorsOf(root))
+    return slashed(relative, root)
+}
 
 /** Last segment of a path, whatever the separator. */
 fun pathName(path: String): String {
-    val trimmed = path.trimEnd('/', '\\')
-    val name = trimmed.substring(trimmed.lastIndexOfAny(charArrayOf('/', '\\')) + 1)
+    val separators = separatorsOf(path)
+    val trimmed = path.trimEnd(*separators)
+    val name = trimmed.substring(trimmed.lastIndexOfAny(separators) + 1)
     return name.ifEmpty { path }
 }
 

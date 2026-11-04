@@ -82,6 +82,17 @@ if [ ! -s "$TOKEN" ]; then
     chmod 600 "$TOKEN"
 fi
 
+# Java names files in the charset of the locale, and an SSH session often has none (LANG unset: ASCII): accented
+# names would then be unreadable. Take a UTF-8 locale the machine has.
+if [ "$(locale charmap 2>/dev/null)" != "UTF-8" ]; then
+    for L in C.UTF-8 C.utf8 en_US.UTF-8 en_US.utf8; do
+        if [ "$(LC_ALL=$L locale charmap 2>/dev/null)" = "UTF-8" ]; then
+            export LC_ALL="$L"
+            break
+        fi
+    done
+fi
+
 JAVA="$D/runtime/bin/java"
 if [ ! -x "$JAVA" ]; then
     JAVA=java

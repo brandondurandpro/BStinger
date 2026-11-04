@@ -22,6 +22,7 @@ import org.example.kotlineditor.model.SymbolHighlight
 import org.example.kotlineditor.model.TextChange
 import org.example.kotlineditor.model.TextRange
 import org.example.kotlineditor.model.UsageCount
+import org.example.kotlineditor.model.slashed
 import org.example.kotlineditor.syntax.treesitter.LineSpans
 import org.example.kotlineditor.syntax.treesitter.Snippet
 
@@ -286,7 +287,7 @@ internal fun clamp(diagnostics: List<Diagnostic>, document: Document): List<Diag
 }
 
 /** [path] with `/` separators and no trailing one, to compare the paths the server and the client name. */
-fun normalized(path: String): String = path.replace('\\', '/').trimEnd('/')
+fun normalized(path: String): String = slashed(path).trimEnd('/')
 
 internal fun sameFile(first: String, second: String) = normalized(first) == normalized(second)
 

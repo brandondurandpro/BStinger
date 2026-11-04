@@ -34,6 +34,18 @@ class Document(initialLines: List<String>, val language: Language, val lineSepar
     var savedVersion by mutableIntStateOf(0)
         private set
 
+    /**
+     * Hash of the lines last read from or written to the disk ([List.hashCode]): when the disk has other lines, another
+     * program changed the file.
+     */
+    var diskLinesHash: Int = initialLines.hashCode()
+
+    /** Another program changed the file while it had unsaved edits: it is not saved until the user chooses. */
+    var diskConflict by mutableStateOf(false)
+
+    /** Why the last save failed (a read-only file, an encoding...), until a save works. */
+    var saveError: String? by mutableStateOf(null)
+
     /** Widest line in screen cells; widened on edits, never shrunk (cheap and good enough for scrolling). */
     var maxLineLength by mutableIntStateOf(initialLines.maxOfOrNull { visualColumn(it, it.length) } ?: 0)
         private set

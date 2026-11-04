@@ -227,6 +227,7 @@ fun ComposeUiTest.launchApp(
             remote.network,
             remote.languageServers,
             remote.telemetry,
+            remote.disk,
         )
     var created: AppState? = null
     val measured = telemetry?.factory
@@ -322,6 +323,8 @@ fun ComposeUiTest.launchWithProject(
         )
     openProjectDirectoryFromWelcome(project.path)
     awaitTag(TreeTags.treeRow("src"))
+    // What the test changes on disk from now on is seen by the server's watch.
+    awaitCondition { app.project.diskWatched }
     return app
 }
 

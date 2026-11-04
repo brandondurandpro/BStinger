@@ -61,10 +61,11 @@ class QuickPullPerformanceE2eTest {
     }
 
     @Test
-    fun `pulling many commits with thousands of pinned branches stays fast`() =
+    fun `pulling many commits with thousands of pinned branches stays fast`() {
+        // A thousand Git processes, nearly a minute on Windows: made before the UI test, whose body has one minute.
+        val default = remoteAhead()
+        createBranches()
         runComposeUiTest {
-            val default = remoteAhead()
-            createBranches()
             val app = launchWithProject(project)
             awaitCondition {
                 app.project.git.branchInfos.size > BRANCHES
@@ -89,6 +90,7 @@ class QuickPullPerformanceE2eTest {
             val composed = onAllNodes(hasTestTagPrefix("branch.pinned:")).fetchSemanticsNodes().size
             check(composed < MAX_COMPOSED_CHIPS) { "$composed pinned chips composed" }
         }
+    }
 }
 
 private const val MAX_COMPOSED_CHIPS = 100

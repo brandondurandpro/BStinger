@@ -26,6 +26,8 @@ import org.example.kotlineditor.ui.EditorTags
 import org.example.kotlineditor.ui.GitTags
 import org.example.kotlineditor.ui.Tags
 import org.example.kotlineditor.ui.TreeTags
+import java.nio.file.Files
+import java.nio.file.attribute.PosixFilePermissions
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -369,5 +371,52 @@ class GitPanelE2eTest {
                 app.project.editor.tabs
                     .none { it.isDiff },
             )
+        }
+
+    @Test
+    fun `a change saved then undone and saved again leaves the Git panel, the file keeping its permissions`() =
+        runComposeUiTest {
+            // An executable file: Git sees its mode, which a save must keep.
+            val readme = project.root.resolve("README.md")
+            val posix = readme.fileSystem.supportedFileAttributeViews().contains("posix")
+            if (posix) Files.setPosixFilePermissions(readme, PosixFilePermissions.fromString("rwxr-xr-x"))
+            project.commitAll()
+            val original = project.read("README.md")
+            launchWithProject(project)
+            onNodeWithTag(TreeTags.TREE).performClick()
+            onNodeWithTag(TreeTags.TREE).performKeyInput { withKeyDown(Key.AltLeft) { pressKey(Key.Nine) } }
+            awaitTag(GitTags.GIT_PANEL)
+            openFromTree("README.md")
+            onNodeWithTag(EditorTags.EDITOR).performClick()
+            typeCode("x")
+            onNodeWithTag(EditorTags.EDITOR).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.S) } }
+            awaitCondition { project.read("README.md") != original }
+            awaitTag(GitTags.gitChange("README.md"))
+            onNodeWithTag(EditorTags.EDITOR).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.Z) } }
+            onNodeWithTag(EditorTags.EDITOR).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.S) } }
+            awaitCondition { project.read("README.md") == original }
+            awaitNoTag(GitTags.gitChange("README.md"))
+            if (posix) assertEquals("rwxr-xr-x", PosixFilePermissions.toString(Files.getPosixFilePermissions(readme)))
+        }
+
+    @Test
+    fun `changes of files with accents, spaces or a line break in their names show in the Git panel`() =
+        runComposeUiTest {
+            val windows = System.getProperty("os.name").startsWith("Windows")
+            // Git quotes and escapes these names unless asked for them as they are (`-z`).
+            val names =
+                listOfNotNull(
+                    "docs/données é.md",
+                    "docs/two words.md",
+                    "docs/line\nbreak.md".takeUnless { windows },
+                )
+            names.forEach { project.file(it, "first\n") }
+            project.commitAll()
+            names.forEach { project.file(it, "changed\n") }
+            launchWithProject(project)
+            onNodeWithTag(TreeTags.TREE).performClick()
+            onNodeWithTag(TreeTags.TREE).performKeyInput { withKeyDown(Key.AltLeft) { pressKey(Key.Nine) } }
+            awaitTag(GitTags.GIT_PANEL)
+            names.forEach { awaitTag(GitTags.gitChange(it)) }
         }
 }

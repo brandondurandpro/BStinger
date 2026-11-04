@@ -282,6 +282,11 @@ private fun ReadyEditor(
     LaunchedEffect(Unit) {
         if (!find.visible && project.popup == null) runCatching { editorFocus.requestFocus() }
     }
+    DiskBanner(
+        document,
+        onReload = { project.editor.reloadFromDisk(tab) },
+        onKeep = { project.editor.keepEdits(tab) },
+    )
     CodeEditor(
         tab,
         document,

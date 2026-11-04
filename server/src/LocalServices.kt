@@ -31,6 +31,9 @@ class LocalServices(
     /** Git information. */
     val git = CliGitClient()
 
+    /** What changes on the disk of the projects, whoever changes it; the language servers are told too. */
+    val disk = ProjectWatches { changes -> if (languageServersStarted) languageServers.diskChanged(changes) }
+
     /** Recently opened projects. */
     val recentProjects = FileRecentProjectsStore(File(dataDirectory, "recent-projects.txt"))
 
@@ -46,8 +49,9 @@ class LocalServices(
     /** Whether [languageServers] was ever used (closing it otherwise would start it). */
     val languageServersStarted: Boolean get() = languageServersLazy.isInitialized()
 
-    /** Stops what runs in the background: the language servers. */
+    /** Stops what runs in the background: the watches of the disk and the language servers. */
     fun close() {
+        disk.close()
         if (languageServersStarted) languageServers.close()
     }
 }
