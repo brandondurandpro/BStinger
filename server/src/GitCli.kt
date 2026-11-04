@@ -36,16 +36,6 @@ internal fun runGit(root: String, vararg args: String): String = runGit(root, TI
 
 /** Same as [runGit], but gives up after [timeoutSeconds]: network operations can hang. */
 internal fun runGit(root: String, timeoutSeconds: Long, vararg args: String): String {
-    val started = System.currentTimeMillis()
-    System.err.println("TRACE $started git ${args.firstOrNull()}")
-    try {
-        return runGitTimed(root, timeoutSeconds, *args)
-    } finally {
-        System.err.println("TRACE ${System.currentTimeMillis()} git done ${args.firstOrNull()}")
-    }
-}
-
-private fun runGitTimed(root: String, timeoutSeconds: Long, vararg args: String): String {
     val process = gitProcess(root, args.toList()).start()
     val output = StringBuilder()
     val errors = StringBuilder()

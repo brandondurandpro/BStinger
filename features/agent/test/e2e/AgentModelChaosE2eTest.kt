@@ -34,6 +34,8 @@ class AgentModelChaosE2eTest {
             val conversation = startConversation(app)
             sendPrompt("echo warm up")
             awaitIdle(conversation)
+            // The models come with an update of the session, which may land after the answer: known before the cut.
+            awaitModel("Fast")
             app.network.goDown()
             awaitReconnecting()
             chooseModel("fake-smart")

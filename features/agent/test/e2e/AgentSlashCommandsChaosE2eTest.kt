@@ -28,6 +28,8 @@ class AgentSlashCommandsChaosE2eTest {
             val conversation = startConversation(app)
             sendPrompt("echo warm up")
             awaitIdle(conversation)
+            // The commands come with an update of the session, which may land after the answer: known before the cut.
+            awaitCondition(AGENT_TIMEOUT) { conversation.commands.any { it.name == "count" } }
             app.network.goDown()
             awaitReconnecting()
             typePrompt("/cou")

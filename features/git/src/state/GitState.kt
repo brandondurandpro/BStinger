@@ -58,6 +58,13 @@ class GitState(
     /** True while a Git action is running, so its buttons do not start another one. */
     var busy by mutableStateOf(false)
 
+    /**
+     * True while a background fetch runs: a pull or a push asked meanwhile waits for it (they would fail on the lock
+     * of the refs it updates), as in VS Code and IntelliJ, which run one Git command on the remotes at a time.
+     */
+    var fetching by mutableStateOf(false)
+        private set
+
     /** Text of the commit message field of the Git panel. */
     var commitMessage by mutableStateOf("")
 
@@ -178,7 +185,6 @@ class GitState(
         // again now would make the next action (a pull right after the fetch) wait for it. Read once that is past,
         // since another program may have moved a branch too; the status, cheap, is read now anyway.
         val ownWritesLikely = millisLeftOfOwnWrites() > 0
-        System.err.println("TRACE ${System.currentTimeMillis()} disk $branchesToo $busy $ownWritesLikely")
         if (branchesToo && ownWritesLikely) reloadBranchesLater()
         val branchesMoved = branchesToo && !ownWritesLikely
         if (branchesMoved) loadBranches()
@@ -229,9 +235,7 @@ class GitState(
             if (branchLoadsCovered.get() >= ticket) return
             val covered = branchLoadsAsked.get()
             branchLoadsCovered.set(covered)
-            System.err.println("TRACE ${System.currentTimeMillis()} start load $covered busy=$busy")
             readBranches()
-            System.err.println("TRACE ${System.currentTimeMillis()} end load $covered")
             branchLoadDoneAt = System.nanoTime()
             branchLoadsDone.set(covered)
         }
@@ -286,7 +290,13 @@ class GitState(
         }
 
     private suspend fun fetchRemotes() {
-        val fetched = remoteLock.withLock { runCatching { git.fetch(root.path) } }
+        fetching = true
+        val fetched =
+            try {
+                remoteLock.withLock { runCatching { git.fetch(root.path) } }
+            } finally {
+                fetching = false
+            }
         if (fetched.isSuccess) refreshBranchesAfterAction()
     }
 

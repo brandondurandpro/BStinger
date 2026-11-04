@@ -36,7 +36,6 @@ internal suspend fun ProjectState.followDisk() {
         // An IDE Git action (a pull writing hundreds of files) is not slowed down by reloads while it writes: what it
         // changed comes in one go once it is done, along with what other programs changed meanwhile.
         if (!first && answer.paths.isNotEmpty()) snapshotFlow { git.busy }.first { !it }
-        System.err.println("TRACE ${System.currentTimeMillis()} batch ${answer.paths.size}")
         if (!first) applyDiskChanges(answer)
         diskWatched = true
     }
