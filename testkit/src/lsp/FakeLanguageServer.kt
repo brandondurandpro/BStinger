@@ -46,7 +46,8 @@ import kotlin.system.exitProcess
  *   `initialized` and writes the answer to stderr), `--diagnostics`, `--progress <seconds>` (reports an
  *   "Indexing" progress from 0 to 100 % over that many seconds after `initialized`), `--blind-until-indexed` (with
  *   `--progress`: like intelephense, finds no definition nor usage until its indexing ended, which begins a moment
- *   after `initialized`);
+ *   after `initialized`), `--indexing-starts-after <ms>` (that moment, 200 ms by default: later than the IDE waits
+ *   for an indexing to begin, it counts usages before, like a server slowed down by a loaded machine);
  * - completion: `--completion-items <n>` (n more functions, `generated_00001`...), `--full-sync` (asks for the whole
  *   text at each change), `--no-completion` (answers completion with an error).
  * A crash writes `Fatal error: fake crash` on stderr first, like a real server would.
@@ -138,6 +139,8 @@ object FakeLanguageServer {
         val index: Boolean = false,
         // With progressSeconds: no definition nor usage until the indexing ended, as intelephense answers.
         val blindUntilIndexed: Boolean = false,
+        // With blindUntilIndexed: how long after initialized the indexing begins.
+        val indexingStartMs: Long = INDEXING_START_MS,
     ) {
         val allocates get() = leakMbPerSecond > 0 || sawtooth != null || spikeThenPlateau != null
 
@@ -179,6 +182,7 @@ object FakeLanguageServer {
                     pullDiagnostics = "pull-diagnostics" in values,
                     index = "index" in values,
                     blindUntilIndexed = "blind-until-indexed" in values,
+                    indexingStartMs = values["indexing-starts-after"]?.toLong() ?: INDEXING_START_MS,
                 )
             }
 
@@ -196,6 +200,7 @@ object FakeLanguageServer {
                     "progress",
                     "completion-items",
                     "without",
+                    "indexing-starts-after",
                 )
         }
     }
@@ -670,7 +675,7 @@ object FakeLanguageServer {
 
         private fun reportProgress(seconds: Int) {
             // A blind server begins to index a moment after initialized, as intelephense once its configuration came.
-            if (!sees) Thread.sleep(INDEXING_START_MS)
+            if (!sees) Thread.sleep(options.indexingStartMs)
             send(request("progress-1", "window/workDoneProgress/create", buildJsonObject { put("token", "index") }))
             val steps = PROGRESS_STEPS
             for (step in 0..steps) {
@@ -691,11 +696,12 @@ object FakeLanguageServer {
                 )
                 Thread.sleep(seconds * MILLIS_PER_SECOND / steps)
             }
+            // Like intelephense, it sees the project before it says the indexing ended: a count asked then finds it.
+            sees = true
             notify("\$/progress", buildJsonObject {
                 put("token", "index")
                 put("value", buildJsonObject { put("kind", "end") })
             })
-            sees = true
         }
 
         private fun request(id: String, method: String, params: JsonObject) =
