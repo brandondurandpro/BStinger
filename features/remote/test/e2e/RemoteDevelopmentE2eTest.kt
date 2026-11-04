@@ -57,6 +57,25 @@ class RemoteDevelopmentE2eTest {
         }
 
     @Test
+    fun `a server reached without a locale opens and saves a file with an accented name`() =
+        remoteUiTest {
+            project.file("docs/données é.md", "accents\n")
+            RemoteTestEnvironment.withLocale("C") {
+                launchApp()
+                connectRemoteTo(RemoteTestEnvironment, project.path)
+                awaitTag(TreeTags.treeRow("src"), timeout = 60_000)
+                openFromTree("docs/données é.md")
+                onNodeWithTag(EditorTags.EDITOR).performClick()
+                onNodeWithTag(EditorTags.EDITOR).performKeyInput {
+                    withKeyDown(Key.CtrlLeft) { pressKey(Key.MoveHome) }
+                    pressKey(Key.Q)
+                    withKeyDown(Key.CtrlLeft) { pressKey(Key.S) }
+                }
+                awaitCondition { project.read("docs/données é.md") == "qaccents\n" }
+            }
+        }
+
+    @Test
     fun `the language servers follow the switch to the remote server`() =
         remoteUiTest {
             val app = launchApp()

@@ -69,10 +69,13 @@ class ProjectTreeChaosE2eTest {
     @Test
     fun `a file deleted by another program says it cannot be read instead of loading forever`() =
         runComposeUiTest {
-            launchWithProject(project, chaos = true)
-            // The tree still shows the file: it was listed before another program deleted it.
+            val app = launchWithProject(project, chaos = true)
+            // Over a slow link the tree still shows the file when it is opened: the deletion has not reached it yet.
+            app.network.latencyMs = 400
             project.root.resolve("README.md").deleteExisting()
             onNodeWithTag(TreeTags.treeRow("README.md")).performDoubleClick()
             awaitTag(EditorTags.EDITOR_MESSAGE).assertTextContains("Cannot read", substring = true)
+            // Then the tree drops it.
+            awaitNoTag(TreeTags.treeRow("README.md"))
         }
 }

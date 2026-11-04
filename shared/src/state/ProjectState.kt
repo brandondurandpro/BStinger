@@ -121,6 +121,10 @@ class ProjectState(
         insight.inlayHintsMode = InlayHintsMode.fromSaved(preferences[PreferenceKeys.INLAY_HINTS])
     }
 
+    /** True once the server watches the disk of the project for this window (see `followDisk`). */
+    var diskWatched by mutableStateOf(false)
+        internal set
+
     /** Diff viewer layout: old and new files side by side (two panes) instead of the unified view. */
     var diffSideBySide by mutableStateOf(false)
 
@@ -129,6 +133,7 @@ class ProjectState(
 
     init {
         git.refresh()
+        scope.launch { followDisk() }
         followActiveFile()
         followInsight()
     }

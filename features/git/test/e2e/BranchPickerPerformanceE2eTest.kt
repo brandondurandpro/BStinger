@@ -186,6 +186,8 @@ class BranchPickerPerformanceE2eTest {
                     awaitTag(GitTags.branchMenuPush(first))
                     renderFrame()
                 }
+                // A push waits for the fetch of the opening, which may still run: what is measured is the push.
+                awaitCondition(timeout = 60_000) { !app.project.git.fetching }
                 // The push itself is one Git process; what is measured is the refresh of $BRANCHES branches after it.
                 measure("push a pinned branch, then refresh", budgetMillis = 10_000, budgetMegabytes = 150) {
                     onNodeWithTag(GitTags.branchMenuPush(first)).performClick()

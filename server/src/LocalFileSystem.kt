@@ -1,40 +1,16 @@
 package org.example.kotlineditor.server
 
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.example.kotlineditor.model.FileContent
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.ProjectFileSystem
-import java.nio.file.AccessDeniedException
 import java.nio.file.FileAlreadyExistsException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
-import java.nio.file.StandardCopyOption
 import kotlin.io.path.isDirectory
 import kotlin.io.path.name
-
-// Windows refuses to replace a file another process has open without FILE_SHARE_DELETE (a virus scanner, an
-// indexer, a backup tool), usually for a few milliseconds: retry for about two seconds before giving up.
-private const val REPLACE_ATTEMPTS = 40
-private const val REPLACE_RETRY_MS = 50L
-
-private val WINDOWS = System.getProperty("os.name").startsWith("Windows", ignoreCase = true)
-
-private suspend fun replace(source: Path, target: Path) {
-    var attempt = 1
-    while (true) {
-        try {
-            Files.move(source, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
-            return
-        } catch (e: AccessDeniedException) {
-            if (!WINDOWS || attempt == REPLACE_ATTEMPTS) throw e
-            attempt++
-            delay(REPLACE_RETRY_MS)
-        }
-    }
-}
 
 private val DIRECTORIES_FIRST =
     compareBy<FileEntry> { !it.isDirectory }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
@@ -76,15 +52,9 @@ class LocalFileSystem(private val maxFileSize: Long = TextFiles.DEFAULT_MAX_SIZE
 
     override suspend fun write(file: FileEntry, text: String) {
         withContext(Dispatchers.IO) {
-            // Write to a sibling temp file then move it, so a crash never leaves a half-written file.
-            val target = Paths.get(file.path)
-            val temp = Files.createTempFile(target.parent, ".${target.name}", ".tmp")
-            try {
-                Files.writeString(temp, text)
-                replace(temp, target)
-            } finally {
-                Files.deleteIfExists(temp)
-            }
+            val path = Paths.get(file.path)
+            val existing = if (Files.exists(path)) Files.readAllBytes(path) else null
+            writeFile(path, TextFiles.encode(text, existing))
         }
     }
 
@@ -106,9 +76,10 @@ class LocalFileSystem(private val maxFileSize: Long = TextFiles.DEFAULT_MAX_SIZE
 
     override suspend fun rename(entry: FileEntry, newName: String): FileEntry =
         withContext(Dispatchers.IO) {
-            require(newName.isNotBlank() && '/' !in newName && '\\' !in newName) { "Invalid name: $newName" }
+            require('/' !in newName && '\\' !in newName) { "Invalid name: $newName" }
+            requireValidName(newName)
             val source = Paths.get(entry.path)
-            val target = Files.move(source, source.resolveSibling(newName))
+            val target = moveRenaming(source, source.resolveSibling(newName))
             FileEntry(target.toString(), target.name, entry.isDirectory)
         }
 
@@ -121,6 +92,7 @@ class LocalFileSystem(private val maxFileSize: Long = TextFiles.DEFAULT_MAX_SIZE
 
     // Resolves `name` inside `directory`, refusing anything that would escape it (`../`).
     private fun child(directory: FileEntry, name: String): Path {
+        requireValidName(name.trim())
         val base = Paths.get(directory.path).normalize()
         val target = base.resolve(name.trim()).normalize()
         require(name.isNotBlank() && target.startsWith(base) && target != base) { "Invalid name: $name" }

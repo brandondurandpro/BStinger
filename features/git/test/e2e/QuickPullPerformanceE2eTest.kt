@@ -76,6 +76,9 @@ class QuickPullPerformanceE2eTest {
                 app.project.git.branchInfos.size > BRANCHES
             }
             awaitTag(GitTags.branchBehind(default), unmerged = true)
+            // The watch of the disk shows the remote's commits as the fetch of the opening writes its refs, before it
+            // ends; a pull clicked then waits for it. What is measured is the pull, not the rest of that fetch.
+            awaitCondition(timeout = 60_000) { !app.project.git.fetching }
             app.project.git.pickBranches(app.project.git.branches)
             app.project.git.pinPickedBranches()
             app.project.git.clearBranchPicks()

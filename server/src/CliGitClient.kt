@@ -30,7 +30,7 @@ class CliGitClient :
 
     override suspend fun status(root: String): Map<String, GitFileStatus> =
         withContext(Dispatchers.IO) {
-            gitOutput(root, "status", "--porcelain", "-uall")?.mapNotNull(::parse)?.toMap().orEmpty()
+            statusEntries(root).mapNotNull(::statusOf).toMap()
         }
 
     /** Reads `.git/HEAD` directly (or the HEAD of a worktree, whose `.git` names its Git directory): no git spawned. */
@@ -138,13 +138,9 @@ class CliGitClient :
     // would record the rename as the old file kept plus a new file. Copied paths (`C`, rare) are expanded alike.
     private fun selectedPaths(root: String, paths: List<String>): List<String> {
         val selected = LinkedHashSet(paths)
-        val statuses = gitOutput(root, "status", "--porcelain", "-uall").orEmpty()
-        statuses.forEach { line ->
-            val code = line.take(2)
-            if ('R' in code || 'C' in code) {
-                val (old, newPath) = line.substring(PATH_START).split(" -> ")
-                if (newPath.trim('"') in selected) selected += old.trim('"')
-            }
+        for (entry in statusEntries(root)) {
+            val old = entry.oldPath
+            if (old != null && entry.path in selected) selected += old
         }
         return selected.toList()
     }
@@ -368,12 +364,31 @@ class CliGitClient :
         return match?.groupValues?.get(TRACK_COUNT_GROUP)?.toIntOrNull() ?: 0
     }
 
-    // One `git status --porcelain` line: two status letters, a space, then the path (`old -> new` for renames).
-    private fun parse(line: String): Pair<String, GitFileStatus>? {
-        val code = line.take(2)
+    // One change of `git status --porcelain -z`: its two status letters, its path, and the old path of a rename.
+    private class StatusEntry(val code: String, val path: String, val oldPath: String?)
+
+    // `-z`: paths are given as they are (no quotes nor escapes for accents, spaces or line breaks), each record ends
+    // with a NUL, and a rename or copy is followed by the record of its old path.
+    private fun statusEntries(root: String): List<StatusEntry> {
+        val output = gitOutput(root, "status", "--porcelain", "-z", "-uall") ?: return emptyList()
+        val records = output.joinToString("\n").split('\u0000').filter { it.length > PATH_START }
+        val entries = ArrayList<StatusEntry>()
+        var index = 0
+        while (index < records.size) {
+            val record = records[index]
+            val code = record.take(2)
+            val moved = 'R' in code || 'C' in code
+            val old = if (moved) records.getOrNull(index + 1) else null
+            entries += StatusEntry(code, record.substring(PATH_START), old)
+            index += if (moved) 2 else 1
+        }
+        return entries
+    }
+
+    private fun statusOf(entry: StatusEntry): Pair<String, GitFileStatus>? {
+        val code = entry.code
         val status =
             when {
-                line.length <= PATH_START -> null
                 code == "??" -> GitFileStatus.Untracked
                 'R' in code -> GitFileStatus.Renamed
                 'A' in code -> GitFileStatus.Added
@@ -381,7 +396,7 @@ class CliGitClient :
                 'M' in code -> GitFileStatus.Modified
                 else -> null
             }
-        return status?.let { line.substring(PATH_START).substringAfter(" -> ").trim('"') to it }
+        return status?.let { entry.path to it }
     }
 
     private companion object {

@@ -10,6 +10,7 @@ import org.example.kotlineditor.rpc.bool
 import org.example.kotlineditor.rpc.branchesJson
 import org.example.kotlineditor.rpc.commitsJson
 import org.example.kotlineditor.rpc.diffJson
+import org.example.kotlineditor.rpc.diskCursor
 import org.example.kotlineditor.rpc.entry
 import org.example.kotlineditor.rpc.int
 import org.example.kotlineditor.rpc.keyEvent
@@ -79,6 +80,9 @@ private fun fileHandlers(services: LocalServices): Map<Method, Handler> {
                 fs.delete(deleted)
                 disk.deleted(before, deleted)
             }
+        },
+        Method.DiskChanges to {
+            services.disk.changes(params.string(ROOT), params.read("since") { it.diskCursor() }).toJson()
         },
         Method.RecentLoad to { services.recentProjects.load().toJson() },
         Method.RecentSave to { nothing { services.recentProjects.save(params.read("paths") { it.strings() }) } },

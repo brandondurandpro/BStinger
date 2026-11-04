@@ -10,6 +10,9 @@ import org.example.kotlineditor.model.ServerPlaces
 import org.example.kotlineditor.server.ripgrep.RipgrepSettings
 import org.example.kotlineditor.telemetry.Telemetry
 import java.io.File
+import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.Paths
 
 /**
  * Everything the server does on its machine. [dataDirectory] holds recent projects and sessions; [ripgrep] says
@@ -37,6 +40,9 @@ class LocalServices(
     /** Git information. */
     val git = CliGitClient()
 
+    /** What changes on the disk of the projects, whoever changes it; the language servers are told too. */
+    val disk = ProjectWatches { changes -> if (languageServersStarted) languageServers.diskChanged(changes) }
+
     /** Recently opened projects. */
     val recentProjects = FileRecentProjectsStore(File(dataDirectory, "recent-projects.txt"))
 
@@ -55,21 +61,30 @@ class LocalServices(
     /** Conversations with the agents of agent mode, started on the first prompt. */
     val agents: AgentService by agentsLazy
 
-    /** Stops what runs in the background: the language servers and the agents. */
+    /** Stops what runs in the background: the watches of the disk, the language servers and the agents. */
     fun close() {
+        disk.close()
         if (languageServersStarted) languageServers.close()
         if (agentsLazy.isInitialized()) agents.close()
     }
 
-    // The files the agents write go to the disk, and the language servers are told, as for the IDE's own writes.
+    // The files of the agents are read and written as the editor does: in their charset, keeping what the file is
+    // (permissions, links, attributes); the language servers are told, by the watch when it sees the file.
     private inner class AgentFiles : FileAccess {
-        override fun read(path: String): String = FileAccess.Disk.read(path)
+        override fun read(path: String): String =
+            try {
+                TextFiles.readText(Paths.get(path))
+            } catch (failure: IOException) {
+                throw IOException("Cannot read $path: ${failure.message}", failure)
+            }
 
         override fun write(path: String, text: String) {
-            val existed = java.io.File(path).exists()
-            FileAccess.Disk.write(path, text)
-            val change = if (existed) DiskChange.Changed else DiskChange.Created
-            if (languageServersStarted) languageServers.diskChanged(listOf(path to change))
+            val file = Paths.get(path)
+            val existing = if (Files.exists(file)) Files.readAllBytes(file) else null
+            writeFileNow(file, TextFiles.encode(text, existing))
+            val change = if (existing != null) DiskChange.Changed else DiskChange.Created
+            val told = disk.reports(path)
+            if (languageServersStarted && !told) languageServers.diskChanged(listOf(path to change))
         }
     }
 }

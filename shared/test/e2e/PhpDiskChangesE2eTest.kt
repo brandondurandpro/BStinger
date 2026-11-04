@@ -20,8 +20,8 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 
 /**
- * The files the IDE creates, writes, renames and deletes, told to a PHP language server that indexes the disk once
- * (`workspace/didChangeWatchedFiles`, `didSave`): Go to Symbol follows them.
+ * The files the IDE or another program creates, writes, renames and deletes, told to a PHP language server that
+ * indexes the disk once (`workspace/didChangeWatchedFiles`, `didSave`): Go to Symbol follows them.
  */
 @OptIn(ExperimentalTestApi::class)
 class PhpDiskChangesE2eTest {
@@ -168,5 +168,25 @@ class PhpDiskChangesE2eTest {
             awaitTag(LanguageServerTags.LANGUAGE_SERVERS_LOG)
             awaitCondition { "saved file:" in textOf(LanguageServerTags.LANGUAGE_SERVERS_LOG) }
             awaitCondition { "index.php" in textOf(LanguageServerTags.LANGUAGE_SERVERS_LOG) }
+        }
+
+    @Test
+    fun `a PHP file created by another program is found by Go to Symbol`() =
+        runComposeUiTest {
+            open()
+            project.file("src/Outside.php", listOf("<?php", "class Outside", "{", "}", "").joinToString("\n"))
+            assertFound("Outside", "src/Outside.php")
+        }
+
+    @Test
+    fun `a PHP file deleted by another program is no longer found by Go to Symbol`() =
+        runComposeUiTest {
+            project.file("src/ShyToo.php", listOf("<?php", "class ShyToo", "{", "}", "").joinToString("\n"))
+            open()
+            project.root
+                .resolve("src/Shy.php")
+                .toFile()
+                .delete()
+            assertNotFound("Shy", "src/Shy.php", witness = "ShyToo" to "src/ShyToo.php")
         }
 }

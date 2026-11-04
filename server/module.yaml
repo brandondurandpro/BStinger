@@ -12,6 +12,7 @@ dependencies:
   - $libs.kotlinx.serialization.json
   - $libs.pty4j21
   - $libs.ghostty.linux
+  - $libs.directory.watcher
 
 test-dependencies:
   - //testkit

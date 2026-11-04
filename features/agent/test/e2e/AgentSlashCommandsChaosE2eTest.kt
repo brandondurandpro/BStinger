@@ -28,12 +28,17 @@ class AgentSlashCommandsChaosE2eTest {
             val conversation = startConversation(app)
             sendPrompt("echo warm up")
             awaitIdle(conversation)
+            // The commands come with an update of the session, which may land after the answer: known before the cut.
+            awaitCondition(AGENT_TIMEOUT) { conversation.commands.any { it.name == "count" } }
             app.network.goDown()
             awaitReconnecting()
             typePrompt("/cou")
             awaitTag(AgentTags.agentCompletion("/count"))
+            // Each Enter once the previous one shows: the first chooses the command, the second sends it.
             pressInPrompt(Key.Enter)
+            awaitCondition { conversation.draft.trim() == "/count" }
             pressInPrompt(Key.Enter)
+            awaitCondition { conversation.itemsOf<org.example.kotlineditor.model.AgentItem.UserText>().size == 2 }
             app.network.comeBack()
             awaitReconnected()
             awaitShown(conversation, "Prompt 2 of")
@@ -54,6 +59,7 @@ class AgentSlashCommandsChaosE2eTest {
             typePrompt("/c")
             awaitTag(AgentTags.agentCompletion("/count"), timeout = AGENT_TIMEOUT)
             pressInPrompt(Key.Enter)
+            awaitCondition { conversation.draft.trim() == "/count" }
             pressInPrompt(Key.Enter)
             awaitShown(conversation, "Prompt 2 of")
             awaitIdle(conversation)

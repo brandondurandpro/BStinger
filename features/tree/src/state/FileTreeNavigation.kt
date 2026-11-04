@@ -1,6 +1,7 @@
 package org.example.kotlineditor.state
 
 import org.example.kotlineditor.model.FileEntry
+import org.example.kotlineditor.model.relativeToRoot
 
 // Keyboard navigation in the project tree, and project-relative paths.
 
@@ -43,4 +44,4 @@ fun FileTreeState.collapseOrAscend() {
 fun FileTreeState.relativePath(entry: FileEntry): String = relativePath(entry.path)
 
 fun FileTreeState.relativePath(path: String): String =
-    if (path == root.path) root.name else path.removePrefix(root.path).trimStart('/', '\\').replace('\\', '/')
+    if (path == root.path) root.name else relativeToRoot(path, root.path)

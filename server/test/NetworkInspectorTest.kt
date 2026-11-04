@@ -2,6 +2,7 @@ package org.example.kotlineditor.server
 
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.example.kotlineditor.model.Direction
 import org.example.kotlineditor.model.NetworkInspector
 import org.example.kotlineditor.rpc.Protocol
@@ -82,8 +83,14 @@ class NetworkInspectorTest {
             val before = client.connections.value
             server.dropConnections()
             while (client.connections.value == before) delay(10)
-            client.awaitConnected()
-            val hello = client.network.snapshot().first { it.kind == "Hello" }
+
+            // The handshake is recorded as it goes: wait for it, not for a connected state the old link may still show.
+            fun recordedHello() = client.network.snapshot().firstOrNull { it.kind == "Hello" }
+            val hello =
+                withTimeout(HANDSHAKE_TIMEOUT_MS) {
+                    while (recordedHello() == null) delay(10)
+                    checkNotNull(recordedHello())
+                }
             assertTrue(hello.redacted)
             assertTrue(hello.body.isEmpty())
             assertTrue(hello.size > server.token.length)
@@ -111,3 +118,5 @@ class NetworkInspectorTest {
         assertEquals(0, inspector.totals.value.frames)
     }
 }
+
+private const val HANDSHAKE_TIMEOUT_MS = 10_000L

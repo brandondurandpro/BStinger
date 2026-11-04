@@ -200,7 +200,12 @@ class OtelHook(private val config: ExportConfig) :
         // The meter provider's shutdown sends the last histogram before it even returns its result, waiting for the
         // collector for seconds: it runs on a daemon thread, side by side with the spans' shutdown.
         val metrics = thread(isDaemon = true, name = "otel-metrics-shutdown") { meterProvider.shutdown() }
-        tracerProvider.shutdown().join(remainingMs(deadline), TimeUnit.MILLISECONDS)
+        // The spans' shutdown may block before it returns too (a full queue sent to a silent collector): the same.
+        val spans =
+            thread(isDaemon = true, name = "otel-spans-shutdown") {
+                tracerProvider.shutdown().join(config.timeoutMs, TimeUnit.MILLISECONDS)
+            }
+        spans.join(remainingMs(deadline))
         metrics.join(remainingMs(deadline))
     }
 

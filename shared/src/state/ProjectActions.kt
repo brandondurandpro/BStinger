@@ -214,21 +214,32 @@ internal fun ProjectState.synchronizeFiles() {
     git.refresh()
     for (tab in editor.allTabs.filterNot { it.isDiff }.distinctBy { it.entry.path }) {
         val document = tab.document
-        if (document != null && !document.isModified) scope.launch { reloadIfChanged(tab.entry, document) }
+        if (document != null) scope.launch { reloadIfChanged(tab.entry, document) }
     }
 }
 
-private suspend fun ProjectState.reloadIfChanged(entry: FileEntry, document: Document) {
+/**
+ * Follows the disk in [document] when another program changed its file: reloaded when it has no edit of its own,
+ * in conflict otherwise (the user chooses, see `DiskBanner`). True when it was reloaded.
+ */
+internal suspend fun ProjectState.reloadIfChanged(entry: FileEntry, document: Document): Boolean {
+    val stamp = document.saveStamp
     val content =
         try {
             services.fileSystem.read(entry)
         } catch (expected: IOException) {
             null // server unreachable: synchronized at the next focus
         }
+    // A save of the IDE ran meanwhile: the disk holds what it wrote, which the read may or may not have seen.
+    val overlappedSave = stamp % 2 == 1 || document.saveStamp != stamp
     val lines = (content as? FileContent.Text)?.lines
-    if (lines != null && isStale(document, lines)) document.reload(lines)
+    if (lines == null || overlappedSave) return false
+    val changedOutside = lines.hashCode() != document.diskLinesHash
+    val stale = !document.isModified && lines != document.lines.toList()
+    when {
+        stale -> document.reload(lines)
+        changedOutside && document.isModified -> document.diskConflict = true
+        else -> Unit
+    }
+    return stale
 }
-
-// The disk has other lines, and the document has no edit of its own to keep.
-private fun isStale(document: Document, lines: List<String>): Boolean =
-    !document.isModified && lines != document.lines.toList()

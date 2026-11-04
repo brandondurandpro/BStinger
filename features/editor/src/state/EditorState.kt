@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import org.example.kotlineditor.model.BlameLine
 import org.example.kotlineditor.model.DiffLine
 import org.example.kotlineditor.model.FileEntry
@@ -22,7 +23,7 @@ private const val MAX_RECENT_FILES = 50
 @Suppress("TooManyFunctions")
 class EditorState(
     fileSystem: ProjectFileSystem,
-    scope: CoroutineScope,
+    private val scope: CoroutineScope,
     private val relativePath: (FileEntry) -> String = { it.name },
     onSaved: (FileEntry) -> Unit = {},
     diffs: suspend (FileEntry) -> List<DiffLine> = { emptyList() },
@@ -176,6 +177,14 @@ class EditorState(
     fun save(tab: EditorTab? = activeTab) {
         tab?.let(files::save)
     }
+
+    /** A conflict resolved for the disk: the edits of [tab] give way to what another program wrote. */
+    fun reloadFromDisk(tab: EditorTab) {
+        scope.launch { runCatching { files.reloadFromDisk(tab) } }
+    }
+
+    /** A conflict resolved for the edits of [tab]: they are saved over what another program wrote. */
+    fun keepEdits(tab: EditorTab) = files.keepEdits(tab)
 
     /** Saves every modified tab and returns once everything is on disk (closing the project or the IDE). */
     suspend fun flush() = files.flush(allTabs)

@@ -14,6 +14,7 @@ import org.example.kotlineditor.model.BlameLine
 import org.example.kotlineditor.model.DiffLine
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.GitLineChange
+import org.example.kotlineditor.model.slashed
 
 sealed interface TabStatus {
     data object Loading : TabStatus
@@ -58,7 +59,7 @@ class HorizontalScroll {
  * `C:\p/a.kt`, and both must open the same tab.
  */
 fun tabKey(entry: FileEntry, isDiff: Boolean, commit: CommitDiffTarget?): String {
-    val path = entry.path.replace('\\', '/')
+    val path = slashed(entry.path)
     return when {
         commit != null -> "diff@${commit.hash}:$path"
         isDiff -> "diff:$path"

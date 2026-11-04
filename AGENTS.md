@@ -43,7 +43,8 @@ The CI can run on your machine, on the current working tree (uncommitted files i
 A feature, or a fix of user-visible behavior, is not done until an e2e test exercises it through the real UI.
 
 - **New feature**: add e2e tests covering its main path and its edge cases (empty input, errors, cancelling),
-  e2e performance tests and, when it talks to the server, e2e chaos tests (see below).
+  e2e performance tests, when it talks to the server e2e chaos tests and, when it changes the project or its
+  repository, e2e side-effect tests (see below).
 - **Bug fix**: first write an e2e test that reproduces the bug and fails, then fix it.
 - **Changed behavior**: update the e2e tests that describe it; never delete or weaken a test just to make it pass.
 - Unit tests (`<module>/test`, e.g. `core/test`, `syntax/test`, `server/test`) are welcome for logic, protocol and server code, but they do
@@ -105,6 +106,35 @@ tests, which check what the user sees when the network or the server fails.
   frames): they are covered by the server's tests, not by the UI.
 - Assert what the user sees and what ends up on disk: the status bar (`awaitReconnecting`, `awaitReconnected`), the
   data (written once, nothing lost), and that nothing stays stuck loading or pretends to work.
+
+### Writing e2e side-effect tests
+
+A feature is also tested for what it must not change: the user's project and repository are not test data, and a
+change nobody asked for (a lost executable bit, a re-encoded file, a link replaced by a copy) goes unseen until Git
+shows it.
+
+- **Scope**: every feature that changes the project or its repository, that is whose code ends in a mutating
+  request of the protocol on the project (`fs/write`, `fs/createFile`, `fs/createDirectory`, `fs/rename`,
+  `fs/delete`, the `git/*` methods marked `mutating`) or applies edits to files (refactorings, code actions,
+  formatting, replace in files), and every feature that starts a process in the project (language servers, Git).
+  Read-only features (search, navigation, highlighting) are covered by checking that opening files changes
+  nothing. Out of scope: what the user runs in the terminal, and the IDE's own data (`~/.kotlin-editor`,
+  preferences, sessions), which have their own tests.
+- **What must not change**, unless it is what the feature is for:
+  - the other files of the project, byte for byte, and no file left behind (temp files, caches);
+  - in the files the feature writes, everything but the text the user changed: encoding, BOM, line endings, final
+    newline, permissions (the executable bit), and a symbolic link stays a link to the same file;
+  - the repository: HEAD, branches, index; and a round trip (an edit undone then saved, a rename then renamed back)
+    leaves `git status` clean.
+- **Accepted changes**, to assert as such rather than leave untested: a modified file with mixed line endings is
+  saved with one (like IntelliJ); a character the file's encoding cannot hold fails the save instead of being
+  replaced.
+- **How**: take `DiskSnapshot.take(project)` before the feature runs and call `assertUnchanged(project, except =
+  setOf(...))` after, on a project made with `commitAll()`, naming in `except` only the files the feature is meant
+  to change. Features that write file contents also run on `SampleProject.withUnusualFiles()` (see
+  `unusualFiles()`), like `DiskInvariantsE2eTest`.
+- A bug of this kind is fixed by adding the case that was missing to `withUnusualFiles()` (or to `DiskSnapshot`),
+  so that every feature that writes is tested against it, not by a test of the one feature that showed it.
 
 ## Before opening a pull request
 

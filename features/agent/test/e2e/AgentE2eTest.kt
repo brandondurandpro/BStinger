@@ -48,7 +48,8 @@ class AgentE2eTest {
             sendPrompt("echo hello from the agent")
             awaitShown(conversation, "hello from the agent")
             awaitIdle(conversation)
-            assertEquals("Fake Agent 1.0", textOf(AgentTags.AGENT_NAME))
+            // The name comes with an update of the transcript, which may land after the answer.
+            awaitCondition(AGENT_TIMEOUT) { textOf(AgentTags.AGENT_NAME) == "Fake Agent 1.0" }
             assertEquals(1, conversation.itemsOf<AgentItem.AgentText>().size)
             assertEquals(
                 listOf("echo hello from the agent"),

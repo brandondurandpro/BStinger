@@ -11,6 +11,9 @@ import kotlinx.serialization.json.put
 import org.example.kotlineditor.model.AppServices
 import org.example.kotlineditor.model.BlameLine
 import org.example.kotlineditor.model.DiffLine
+import org.example.kotlineditor.model.DiskChanges
+import org.example.kotlineditor.model.DiskCursor
+import org.example.kotlineditor.model.DiskWatch
 import org.example.kotlineditor.model.FileContent
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.FileSymbol
@@ -59,6 +62,7 @@ fun RpcClient.appServices(): AppServices =
         network = network,
         languageServers = RemoteLanguageServers(this),
         telemetry = RemoteTelemetrySettings(this),
+        disk = RemoteDiskWatch(this),
         agents = RemoteAgents(this),
     )
 
@@ -126,6 +130,18 @@ class RemoteFileSystem(private val client: RpcClient) : ProjectFileSystem {
 
     override suspend fun delete(entry: FileEntry) {
         client.call(Method.Delete) { put(ENTRY, entry.toJson()) }
+    }
+}
+
+/** [DiskWatch] of the server. */
+class RemoteDiskWatch(private val client: RpcClient) : DiskWatch {
+    override suspend fun changes(root: String, since: DiskCursor): DiskChanges {
+        val result =
+            client.call(Method.DiskChanges) {
+                put(ROOT, root)
+                put("since", since.toJson())
+            }
+        return result.diskChanges()
     }
 }
 

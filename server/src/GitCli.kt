@@ -10,10 +10,23 @@ internal const val SHORT_HASH_LENGTH = 8
 private const val TIMEOUT_SECONDS = 60L
 private const val READER_JOIN_MILLIS = 1000L
 
+/**
+ * Git run in [root], never asking for a password on a terminal it has not. Without optional locks, a command that
+ * only reads (`git status`, `git diff`) leaves the index alone: rewriting it would wake the watch of the disk, which
+ * refreshes the status again; the commands that change the repository still take the locks they need.
+ */
+internal fun gitProcess(root: String, args: List<String>): ProcessBuilder =
+    ProcessBuilder(listOf("git") + args)
+        .directory(File(root))
+        .apply {
+            environment()["GIT_OPTIONAL_LOCKS"] = "0"
+            environment()["GIT_TERMINAL_PROMPT"] = "0"
+        }
+
 /** Runs Git in [root] and returns its lines, or `null` when it fails (read-only queries). */
 internal fun gitOutput(root: String, vararg args: String): List<String>? =
     runCatching {
-        val process = ProcessBuilder(listOf("git") + args).directory(File(root)).start()
+        val process = gitProcess(root, args.toList()).start()
         val output = process.inputStream.bufferedReader().readLines()
         output.takeIf { process.waitFor() == 0 }
     }.getOrNull()
@@ -23,11 +36,7 @@ internal fun runGit(root: String, vararg args: String): String = runGit(root, TI
 
 /** Same as [runGit], but gives up after [timeoutSeconds]: network operations can hang. */
 internal fun runGit(root: String, timeoutSeconds: Long, vararg args: String): String {
-    val process =
-        ProcessBuilder(listOf("git") + args)
-            .directory(File(root))
-            .apply { environment()["GIT_TERMINAL_PROMPT"] = "0" }
-            .start()
+    val process = gitProcess(root, args.toList()).start()
     val output = StringBuilder()
     val errors = StringBuilder()
     val readers = listOf(drain(process.inputStream, output), drain(process.errorStream, errors))

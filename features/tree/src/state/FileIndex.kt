@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.ProjectSearch
+import org.example.kotlineditor.model.relativeToRoot
 import org.example.kotlineditor.syntax.Declaration
 import org.example.kotlineditor.telemetry.ClientTelemetry
 import org.example.kotlineditor.telemetry.Operation
@@ -110,11 +111,7 @@ class FileIndex(private val root: FileEntry, private val search: ProjectSearch, 
         return SymbolMatch(entry, relativePath(entry), declaration, score, indices)
     }
 
-    fun relativePath(entry: FileEntry): String =
-        entry.path
-            .removePrefix(root.path)
-            .trimStart('/', '\\')
-            .replace('\\', '/')
+    fun relativePath(entry: FileEntry): String = relativeToRoot(entry.path, root.path)
 
     /** Go to File: fuzzy matching on the file names (the index is local, results are instant). */
     suspend fun searchFiles(query: String, limit: Int = DEFAULT_RESULTS): List<FileMatch> {

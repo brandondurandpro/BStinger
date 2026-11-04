@@ -21,8 +21,15 @@ import org.example.kotlineditor.telemetry.Operation
 import org.example.kotlineditor.telemetry.measureToFrame
 import org.example.kotlineditor.telemetry.outcome
 import java.io.IOException
+import java.util.concurrent.atomic.AtomicLong
 
 private const val MAX_MESSAGE_LENGTH = 300
+
+// How long after the refresh of an IDE Git action read the branches the watch of the disk may still report what the
+// action wrote in `.git` (it settles changes for 100 ms, then the client polls): a change of `.git` reported until then
+// reloads the branches only once that time is past.
+private const val OWN_WRITES_MILLIS = 1_000L
+private const val NANOS_PER_MILLI = 1_000_000L
 
 /** Time between two background fetches of the remotes, while the project is open. */
 const val AUTO_FETCH_MILLIS = 5 * 60 * 1000L
@@ -50,6 +57,13 @@ class GitState(
 
     /** True while a Git action is running, so its buttons do not start another one. */
     var busy by mutableStateOf(false)
+
+    /**
+     * True while a background fetch runs: a pull or a push asked meanwhile waits for it (they would fail on the lock
+     * of the refs it updates), as in VS Code and IntelliJ, which run one Git command on the remotes at a time.
+     */
+    var fetching by mutableStateOf(false)
+        private set
 
     /** Text of the commit message field of the Git panel. */
     var commitMessage by mutableStateOf("")
@@ -109,6 +123,27 @@ class GitState(
     // A refresh asked to reload every editor; kept when a later refresh (a save) cancels it.
     private var editorsReloadPending = false
 
+    // One load of the branches at a time, and the loads asked meanwhile make one more: with thousands of branches, two
+    // loads in parallel (a push refreshing, the watch of the disk seeing the refs it wrote) each take twice as long.
+    private val branchLoads = Mutex()
+    private val branchLoadsAsked = AtomicLong()
+    private val branchLoadsCovered = AtomicLong()
+
+    // The load of the branches an IDE Git action (a fetch too) asked after it, which reads all it wrote in `.git`; the
+    // watch of the disk reports those writes a little later (it settles them first), often while that load still runs.
+    @Volatile
+    private var actionLoad: Long? = null
+    private val branchLoadsDone = AtomicLong()
+
+    @Volatile
+    private var branchLoadDoneAt = 0L
+    private var laterBranchReload: Job? = null
+
+    // `.git` changed while an IDE Git action ran: the action's own refresh reloads the branches, after it, but a failed
+    // action refreshes only the status.
+    @Volatile
+    private var branchesChangedDuringAction = false
+
     /** Checks or unchecks [path] (the checkbox of a change in the Git panel) for the next commit. */
     fun toggleCommitSelection(path: String) {
         selectedForCommit = if (path in selectedForCommit) selectedForCommit - path else selectedForCommit + path
@@ -130,25 +165,100 @@ class GitState(
      * keeps the last list, so the branch picker still shows what it knows while the link comes back.
      */
     fun refreshBranches() {
-        scope.launch {
-            ClientTelemetry.measureToFrame(
-                Operation.GitBranch,
-                outcomeOf = { read: Result<String?> -> read.outcome() },
-            ) {
-                runCatching { git.branch(root.path) }.onSuccess {
-                    currentBranch = it
-                    isRepository = it != null
+        // Asked now, not once the coroutine runs: a reload of the watch of the disk asked meanwhile waits behind it.
+        val ticket = branchLoadsAsked.incrementAndGet()
+        scope.launch { loadBranches(ticket) }
+    }
+
+    /**
+     * Reloads what a change on disk may have moved ([branchesToo]: something changed in `.git`) and returns once it is
+     * shown: the watch of the disk waits for it before asking for more changes, so that a burst of them (thousands of
+     * branches deleted, a ref each) costs a reload or two, not one per change.
+     */
+    suspend fun reloadAfterDiskChange(branchesToo: Boolean) {
+        // An IDE Git action runs: its own refresh, after it, reads everything it wrote.
+        if (busy) {
+            branchesChangedDuringAction = branchesChangedDuringAction || branchesToo
+            return
+        }
+        // Most likely what an action just wrote in `.git`, reported after its refresh started: reading every branch
+        // again now would make the next action (a pull right after the fetch) wait for it. Read once that is past,
+        // since another program may have moved a branch too; the status, cheap, is read now anyway.
+        val ownWritesLikely = millisLeftOfOwnWrites() > 0
+        if (branchesToo && ownWritesLikely) reloadBranchesLater()
+        val branchesMoved = branchesToo && !ownWritesLikely
+        if (branchesMoved) loadBranches()
+        editorsReloadPending = editorsReloadPending || branchesMoved
+        statusJob?.cancel()
+        ClientTelemetry.measureToFrame(Operation.GitStatus, outcomeOf = { read: Result<*> -> read.outcome() }) {
+            applyStatus()
+        }
+    }
+
+    private fun millisLeftOfOwnWrites(): Long {
+        val ticket = actionLoad ?: return 0
+        val stillReading = branchLoadsDone.get() < ticket
+        val elapsedMillis = (System.nanoTime() - branchLoadDoneAt) / NANOS_PER_MILLI
+        return if (stillReading) OWN_WRITES_MILLIS else OWN_WRITES_MILLIS - elapsedMillis
+    }
+
+    // Reloads the branches, the status and the editors once no IDE Git action may still be writing; an action that runs
+    // by then reloads them itself.
+    private fun reloadBranchesLater() {
+        if (laterBranchReload?.isActive == true) return
+        laterBranchReload =
+            scope.launch {
+                var leftMillis = millisLeftOfOwnWrites()
+                while (leftMillis > 0) {
+                    // Wall-clock time, also under a test's virtual clock, like the fetches.
+                    withContext(Dispatchers.Default) { delay(leftMillis) }
+                    leftMillis = millisLeftOfOwnWrites()
+                }
+                if (busy) {
+                    branchesChangedDuringAction = true
+                } else {
+                    loadBranches()
+                    refreshStatus()
                 }
             }
-            if (isRepository) {
-                runCatching { git.branchDetails(root.path) }
-                    .onSuccess(::applyBranches)
-                    .onFailure {
-                        // An older server knows the names but not their upstream: show the names at least.
-                        runCatching { git.branches(root.path) }
-                            .onSuccess { names -> applyBranches(names.map(::branchInfoOf)) }
-                    }
+    }
+
+    // The refresh of the branches after an IDE Git action that may have written in `.git`.
+    private fun refreshBranchesAfterAction() {
+        refreshBranches()
+        actionLoad = branchLoadsAsked.get()
+    }
+
+    private suspend fun loadBranches(ticket: Long = branchLoadsAsked.incrementAndGet()) {
+        branchLoads.withLock {
+            // A load that started after this one was asked has read what it would read.
+            if (branchLoadsCovered.get() >= ticket) return
+            val covered = branchLoadsAsked.get()
+            branchLoadsCovered.set(covered)
+            readBranches()
+            branchLoadDoneAt = System.nanoTime()
+            branchLoadsDone.set(covered)
+        }
+    }
+
+    private suspend fun readBranches() {
+        ClientTelemetry.measureToFrame(
+            Operation.GitBranch,
+            outcomeOf = { read: Result<String?> -> read.outcome() },
+        ) {
+            runCatching { git.branch(root.path) }.onSuccess {
+                currentBranch = it
+                isRepository = it != null
             }
+        }
+        if (isRepository) {
+            runCatching { git.branchDetails(root.path) }
+                .onSuccess(::applyBranches)
+                .onFailure {
+                    // An older server knows the names but not their upstream: show the names at least.
+                    runCatching { git.branches(root.path) }
+                        .onSuccess { names -> applyBranches(names.map(::branchInfoOf)) }
+                }
         }
     }
 
@@ -180,8 +290,14 @@ class GitState(
         }
 
     private suspend fun fetchRemotes() {
-        val fetched = remoteLock.withLock { runCatching { git.fetch(root.path) } }
-        if (fetched.isSuccess) refreshBranches()
+        fetching = true
+        val fetched =
+            try {
+                remoteLock.withLock { runCatching { git.fetch(root.path) } }
+            } finally {
+                fetching = false
+            }
+        if (fetched.isSuccess) refreshBranchesAfterAction()
     }
 
     /** Pins or unpins [name] in the toolbar. */
@@ -390,14 +506,18 @@ class GitState(
             editor.flush()
             val output = block().trim().replace('\n', ' ').take(MAX_MESSAGE_LENGTH)
             message = output.ifBlank { "Done" }
+            // Both reload the branches.
             if (reloadFiles) synchronize() else refresh()
+            actionLoad = branchLoadsAsked.get()
             true
         } catch (e: IOException) {
             message = e.message ?: "Git command failed"
             messageIsError = true
             refreshStatus()
+            if (branchesChangedDuringAction) refreshBranchesAfterAction()
             false
         } finally {
+            branchesChangedDuringAction = false
             busy = false
         }
     }

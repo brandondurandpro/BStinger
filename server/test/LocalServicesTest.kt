@@ -11,10 +11,13 @@ import org.example.kotlineditor.syntax.DeclarationKind
 import java.io.File
 import java.io.FileInputStream
 import java.nio.file.Files
+import java.nio.file.attribute.PosixFilePermissions
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -53,6 +56,84 @@ class LocalServicesTest {
             fs.write(entry, "new")
             release.join()
             assertEquals("new", Files.readString(file))
+        }
+
+    @Test
+    fun `a Latin-1 file is read and saved with its own bytes`() =
+        runBlocking {
+            val file = root.resolve("old.php")
+            val bytes = "<?php // caf\u00e9\n".toByteArray(Charsets.ISO_8859_1)
+            Files.write(file, bytes)
+            val fs = LocalFileSystem()
+            val entry = checkNotNull(fs.fileAt(file.toString()))
+            val text = (fs.read(entry) as FileContent.Text).lines.joinToString("\n")
+            assertEquals("<?php // caf\u00e9\n", text)
+            fs.write(entry, text)
+            assertTrue(bytes.contentEquals(Files.readAllBytes(file)))
+            // A character Latin-1 cannot hold fails the save rather than being replaced.
+            assertFailsWith<java.io.IOException> { fs.write(entry, "<?php // \u20ac\n") }
+            assertTrue(bytes.contentEquals(Files.readAllBytes(file)))
+        }
+
+    @Test
+    fun `saving through a symbolic link writes the file it points to`() =
+        runBlocking {
+            val target = root.resolve("target.txt")
+            Files.writeString(target, "old")
+            val link = root.resolve("link.txt")
+            val linked = runCatching { Files.createSymbolicLink(link, target.fileName) }.isSuccess
+            // Windows creates links only with a privilege the CI runner may lack.
+            if (linked) {
+                val fs = LocalFileSystem()
+                fs.write(checkNotNull(fs.fileAt(link.toString())), "new")
+                assertTrue(Files.isSymbolicLink(link))
+                assertEquals("new", Files.readString(target))
+            }
+        }
+
+    @Test
+    fun `a saved file keeps its permissions`() =
+        runBlocking {
+            val file = root.resolve("run.sh")
+            Files.writeString(file, "echo old")
+            if (file.fileSystem.supportedFileAttributeViews().contains("posix")) {
+                Files.setPosixFilePermissions(file, PosixFilePermissions.fromString("rwxr-xr-x"))
+                val fs = LocalFileSystem()
+                fs.write(checkNotNull(fs.fileAt(file.toString())), "echo new")
+                assertEquals("echo new", Files.readString(file))
+                assertEquals("rwxr-xr-x", PosixFilePermissions.toString(Files.getPosixFilePermissions(file)))
+            }
+        }
+
+    @Test
+    fun `a file whose path is longer than 260 characters is read and saved`() =
+        runBlocking {
+            val directory =
+                (1..7).fold(
+                    root,
+                ) { parent, depth -> parent.resolve("a-directory-name-of-forty-characters-x$depth") }
+            Files.createDirectories(directory)
+            val file = directory.resolve("long.txt")
+            Files.writeString(file, "first\n")
+            assertTrue(file.toString().length > 260)
+            val fs = LocalFileSystem()
+            val entry = assertNotNull(fs.fileAt(file.toString()))
+            assertIs<FileContent.Text>(fs.read(entry))
+            fs.write(entry, "second\n")
+            assertEquals("second\n", Files.readString(file))
+        }
+
+    @Test
+    fun `a rename that only changes the case of the name renames the file, on any disk`() =
+        runBlocking {
+            Files.writeString(root.resolve("readme.md"), "text")
+            val fs = LocalFileSystem()
+            val entry = fs.list(fs.resolveDirectory(root.toString())!!).firstOrNull { it.name == "readme.md" }
+            val renamed = fs.rename(assertNotNull(entry), "README.md")
+            assertEquals("README.md", renamed.name)
+            val names = Files.list(root).use { paths -> paths.map { it.fileName.toString() }.toList() }
+            assertEquals(listOf("README.md"), names)
+            assertEquals("text", Files.readString(root.resolve("README.md")))
         }
 
     @Test
