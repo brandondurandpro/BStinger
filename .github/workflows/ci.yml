@@ -149,16 +149,21 @@ jobs:
             libgl1 libx11-6 libxext6 libxrender1 libxtst6 libxi6 \
             fontconfig fonts-dejavu-core
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # In the container, HOME (the ~ of these paths and of the kotlin script, which keeps its own runtime in cli) is
+      # /github/home, but the JVM's user.home is /root, from /etc/passwd: the Kotlin CLI puts the JDK, the Maven
+      # dependencies (.m2.cache) and its downloads there, and the server its ripgrep.
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
-            ~/.cache/JetBrains/Kotlin
-            ~/.m2/repository
+            ~/.cache/JetBrains/Kotlin/cli
+            /root/.cache/JetBrains/Kotlin
+            !/root/.cache/JetBrains/Kotlin/telemetry
+            /root/.m2/repository
           key: linux-${{ matrix.ubuntu }}-${{ hashFiles('kotlin', 'libs.versions.toml', 'project.yaml', '**/module.yaml') }}
       # ripgrep, downloaded and verified on first use by the server (and its tests).
       - uses: actions/cache@v4
         with:
-          path: ~/.kotlin-editor/tools
+          path: /root/.kotlin-editor/tools
           key: ripgrep-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('server/src/ripgrep/RipgrepRelease.kt') }}
       - name: Start X11 (Xvfb)
         if: matrix.session == 'x11'
@@ -246,8 +251,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
+          # The whole Kotlin cache, not only cli: the JDK (download.cache, extract.cache) and the Maven dependencies
+          # (.m2.cache) are next to it.
           path: |
-            ~/AppData/Local/JetBrains/Kotlin/cli
+            ~/AppData/Local/JetBrains/Kotlin
+            !~/AppData/Local/JetBrains/Kotlin/telemetry
             ~/.m2/repository
           key: windows-${{ hashFiles('kotlin.bat', 'libs.versions.toml', 'project.yaml', '**/module.yaml') }}
       # ripgrep, downloaded and verified on first use by the server (and its tests).
