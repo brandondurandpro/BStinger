@@ -34,8 +34,11 @@ class AgentSlashCommandsChaosE2eTest {
             awaitReconnecting()
             typePrompt("/cou")
             awaitTag(AgentTags.agentCompletion("/count"))
+            // Each Enter once the previous one shows: the first chooses the command, the second sends it.
             pressInPrompt(Key.Enter)
+            awaitCondition { conversation.draft.trim() == "/count" }
             pressInPrompt(Key.Enter)
+            awaitCondition { conversation.itemsOf<org.example.kotlineditor.model.AgentItem.UserText>().size == 2 }
             app.network.comeBack()
             awaitReconnected()
             awaitShown(conversation, "Prompt 2 of")
@@ -56,6 +59,7 @@ class AgentSlashCommandsChaosE2eTest {
             typePrompt("/c")
             awaitTag(AgentTags.agentCompletion("/count"), timeout = AGENT_TIMEOUT)
             pressInPrompt(Key.Enter)
+            awaitCondition { conversation.draft.trim() == "/count" }
             pressInPrompt(Key.Enter)
             awaitShown(conversation, "Prompt 2 of")
             awaitIdle(conversation)
