@@ -9,9 +9,9 @@ import java.nio.file.Path
  * A minimal reader of the tar archives npm publishes (the gzip layer is the caller's): ustar entries, regular files
  * and directories, with the long names of the ustar prefix field, of PAX `path` records and of GNU `L` entries.
  * Links, devices and other special entries are rejected rather than extracted approximately, and no entry may
- * place a file outside the extraction directory.
+ * place a file outside the extraction directory. The agents of the ACP registry are installed with it too.
  */
-internal object TarArchive {
+object TarArchive {
     private const val BLOCK = 512
     private const val NAME_LENGTH = 100
     private const val SIZE_OFFSET = 124

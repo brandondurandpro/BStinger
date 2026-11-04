@@ -22,6 +22,7 @@ import androidx.compose.ui.test.printToString
 import androidx.compose.ui.test.requestFocus
 import kotlinx.coroutines.runBlocking
 import org.example.kotlineditor.App
+import org.example.kotlineditor.acp.AgentSettings
 import org.example.kotlineditor.lsp.LanguageServerSettings
 import org.example.kotlineditor.model.AppServices
 import org.example.kotlineditor.remote.JvmRemoteFactory
@@ -126,6 +127,8 @@ class ServerProcess(
     private val languageServers: LanguageServerSettings? = null,
     // What each server measures; never exported to a real collector by the tests.
     private val telemetryHook: TelemetryHook = InMemoryHook(),
+    // The agents: by default, a registry nobody answers at, never the real one.
+    private val agents: AgentSettings? = null,
 ) : AutoCloseable {
     var server: EditorServer = EditorServer(services(), telemetry = telemetry()).start()
         private set
@@ -135,7 +138,11 @@ class ServerProcess(
     private fun telemetry() = ServerTelemetry(forbidden = false, hookOf = { telemetryHook })
 
     private fun services() =
-        LocalServices(data, languageServerSettings = languageServers ?: LanguageServerSettings(data.toPath()))
+        LocalServices(
+            data,
+            languageServerSettings = languageServers ?: LanguageServerSettings(data.toPath()),
+            agentSettings = agents ?: offlineAgents(data),
+        )
 
     /** Kills the server: connections drop and new ones are refused until [start]. */
     fun stop() {
@@ -195,10 +202,11 @@ fun ComposeUiTest.launchApp(
     grammars: GrammarStore? = TestGrammars.shared,
     languageServers: LanguageServerSettings? = null,
     telemetry: TelemetryCapture? = null,
+    agents: AgentSettings? = null,
 ): E2eApp {
     TextClipboard.useSystem = false
     val data = Files.createTempDirectory("kotlin-editor-server").toFile()
-    val process = ServerProcess(data, languageServers, telemetry?.serverHook ?: InMemoryHook())
+    val process = ServerProcess(data, languageServers, telemetry?.serverHook ?: InMemoryHook(), agents)
     val token = process.server.token
     // Chaos tests go through a proxy that breaks the network, and notice a dead link within a second.
     val proxy = if (chaos) ChaosProxy(process.port) else null
@@ -227,13 +235,16 @@ fun ComposeUiTest.launchApp(
             remote.network,
             remote.languageServers,
             remote.telemetry,
+            remote.agents,
         )
     var created: AppState? = null
     val measured = telemetry?.factory
     setContent {
         val scope = rememberCoroutineScope()
         val state =
-            remember { AppState(services, scope, preferences, grammars, services, JvmRemoteFactory, measured) }
+            remember {
+                AppState(services, scope, withoutRealAgent(preferences), grammars, services, JvmRemoteFactory, measured)
+            }
         created = state
         DisposableEffect(Unit) {
             onDispose {
@@ -311,6 +322,7 @@ fun ComposeUiTest.launchWithProject(
     grammars: GrammarStore? = TestGrammars.shared,
     languageServers: LanguageServerSettings? = null,
     telemetry: TelemetryCapture? = null,
+    agents: AgentSettings? = null,
 ): E2eApp {
     val app =
         launchApp(
@@ -319,6 +331,7 @@ fun ComposeUiTest.launchWithProject(
             grammars = grammars,
             languageServers = languageServers,
             telemetry = telemetry,
+            agents = agents,
         )
     openProjectDirectoryFromWelcome(project.path)
     awaitTag(TreeTags.treeRow("src"))

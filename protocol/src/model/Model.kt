@@ -519,6 +519,8 @@ class AppServices(
     val languageServers: LanguageServers = LanguageServers.None,
     /** The telemetry consent of the server. */
     val telemetry: TelemetrySettings = TelemetrySettings.None,
+    /** Conversations with the agents the server runs (agent mode). */
+    val agents: Agents = Agents.None,
 )
 
 /** Last segment of a path, whatever the separator. */

@@ -30,11 +30,11 @@ private val HEADING_SIZE = 15.sp
 private val TEXT_SIZE = 13.sp
 
 /**
- * [markdown] laid out like IntelliJ's documentation popup: headings, paragraphs, lists, rules and code blocks, the
- * PHP code colored like the editor.
+ * [markdown] laid out like IntelliJ's documentation popup: headings, paragraphs, lists, rules, tables and code blocks,
+ * the code colored like the editor. The documentation of the language servers and the answers of the agent use it.
  */
 @Composable
-internal fun MarkdownText(markdown: String, modifier: Modifier = Modifier) {
+fun MarkdownText(markdown: String, modifier: Modifier = Modifier) {
     val blocks = remember(markdown) { parseMarkdown(markdown) }
     val codeStyle = LocalCodeStyle.current
     val text = TextStyle(color = IdeColors.Text, fontSize = TEXT_SIZE, lineHeight = 19.sp)
@@ -88,8 +88,7 @@ private fun CodeBlock(block: MarkdownBlock.Code) {
     val codeStyle = LocalCodeStyle.current.copy(fontSize = 12.5.sp, lineHeight = 18.sp, color = IdeColors.Code)
     // `<?php ` only tells the highlighter the language: it is not shown.
     val code = block.text.removePrefix("<?php ").removePrefix("<?php\n")
-    // PHP and the languages hovers show are C-like for the line lexer.
-    val language = if (block.language == "sh" || block.language == "bash") Language.Script else Language.CLike
+    val language = fenceLanguage(block.language)
     val highlighted = remember(code) { highlightedCode(code, language) }
     Box(
         Modifier
@@ -100,6 +99,17 @@ private fun CodeBlock(block: MarkdownBlock.Code) {
         BasicText(highlighted, style = codeStyle)
     }
 }
+
+// The language of a fence (```kotlin): PHP and most languages are C-like for the line lexer; a table or a fence
+// without a language is plain text.
+private fun fenceLanguage(name: String): Language =
+    when (name.lowercase()) {
+        "kotlin", "kt", "kts" -> Language.Kotlin
+        "java" -> Language.Java
+        "sh", "bash", "shell", "zsh", "console", "python", "py", "yaml", "yml", "toml", "ruby" -> Language.Script
+        "", "text", "txt", "plain", TABLE -> Language.Plain
+        else -> Language.CLike
+    }
 
 private fun highlightedCode(code: String, language: Language): AnnotatedString =
     buildAnnotatedString {

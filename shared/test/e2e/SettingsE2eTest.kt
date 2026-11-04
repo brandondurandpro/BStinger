@@ -21,6 +21,7 @@ import org.example.kotlineditor.state.InlayHintsMode
 import org.example.kotlineditor.state.PreferenceKeys
 import org.example.kotlineditor.state.Setting
 import org.example.kotlineditor.state.SettingsCategory
+import org.example.kotlineditor.ui.AgentTags
 import org.example.kotlineditor.ui.AppTags
 import org.example.kotlineditor.ui.LanguageServerTags
 import java.nio.file.Files
@@ -193,7 +194,7 @@ class SettingsE2eTest {
             openSettingsFromMenu()
             category(SettingsCategory.Experimental)
             onNodeWithTag(AppTags.settingToggle(Setting.AgentMode.name)).assertIsOff().performClick()
-            awaitTag(AppTags.MODE_SWITCH)
+            awaitTag(AgentTags.MODE_SWITCH)
             category(SettingsCategory.Privacy)
             onNodeWithTag(AppTags.settingToggle(Setting.Telemetry.name)).assertIsOff().performClick()
             onNodeWithTag(AppTags.settingToggle(Setting.Telemetry.name)).assertIsOn()

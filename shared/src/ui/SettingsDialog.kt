@@ -44,6 +44,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.example.kotlineditor.state.AppState
+import org.example.kotlineditor.state.DEFAULT_AGENT
 import org.example.kotlineditor.state.Setting
 import org.example.kotlineditor.state.SettingsCategory
 import org.example.kotlineditor.state.SettingsState
@@ -199,5 +200,29 @@ private fun SettingControl(app: AppState, settings: SettingsState, setting: Sett
         Setting.AutoSelect -> SettingCheckBox(setting, app.autoSelectOpenedFile) { app.autoSelectOpenedFile = it }
         Setting.Telemetry -> TelemetryControl(app)
         Setting.AgentMode -> SettingCheckBox(setting, app.agentModeEnabled) { app.enableAgentMode(it) }
+        Setting.Agent -> RegistryAgentChoice(app)
+        Setting.AgentCommand -> AgentCommandField(app)
     }
+}
+
+// The agent of the ACP registry; choosing one clears the command line, since a command line wins over it.
+@Composable
+private fun RegistryAgentChoice(app: AppState) {
+    val chosen = app.agentRegistry.ifBlank { DEFAULT_AGENT }.takeIf { app.agentCommand.isBlank() }
+    AgentRegistryControl(app.services.agents, chosen) { id ->
+        app.agentRegistry = id
+        app.agentCommand = ""
+    }
+}
+
+// The command line of the agent; it applies to the next agent started.
+@Composable
+private fun AgentCommandField(app: AppState) {
+    IdeTextField(
+        app.agentCommand,
+        { app.agentCommand = it },
+        Modifier.fillMaxWidth().testTag(AppTags.SETTINGS_AGENT_COMMAND),
+        placeholder = "npx -y @agentclientprotocol/claude-agent-acp",
+        monospace = true,
+    )
 }

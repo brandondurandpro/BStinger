@@ -22,6 +22,33 @@ internal fun gitDirectory(root: String): File {
     }
 }
 
+/**
+ * The worktrees of agent mode of the repository of [root]: their directory and their branch. Empty outside a Git
+ * repository.
+ */
+internal fun agentWorktrees(root: String): Map<String, String> {
+    val common = gitOutput(root, "rev-parse", "--path-format=absolute", "--git-common-dir")?.firstOrNull()
+    val prefix = common?.let { File(it, AGENT_WORKTREES).path + File.separator } ?: return emptyMap()
+    val found = LinkedHashMap<String, String>()
+    var path: String? = null
+    for (line in gitOutput(root, WORKTREE, "list", "--porcelain").orEmpty()) {
+        when {
+            line.startsWith(WORKTREE_PREFIX) -> {
+                path = File(line.removePrefix(WORKTREE_PREFIX)).path
+            }
+
+            line.startsWith(BRANCH_PREFIX) -> {
+                val agentWorktree = path?.takeIf { it.startsWith(prefix) }
+                if (agentWorktree != null) found[agentWorktree] = line.removePrefix(BRANCH_PREFIX)
+            }
+        }
+    }
+    return found
+}
+
+// Where the worktrees of agent mode live, in the Git directory of the repository.
+private const val AGENT_WORKTREES = "kotlin-editor/worktrees"
+
 /** Worktrees of the branches the agent works on, kept in the Git directory so they never show in the project. */
 internal class CliWorktrees : WorktreeClient {
     override suspend fun worktree(root: String, branch: String): String =
@@ -33,7 +60,7 @@ internal class CliWorktrees : WorktreeClient {
 
     private fun create(root: String, branch: String): String {
         val common = runGit(root, "rev-parse", "--path-format=absolute", "--git-common-dir").trim()
-        val directory = File(common, "$DIRECTORY/${branch.replace(UNSAFE, "-")}")
+        val directory = File(common, "$AGENT_WORKTREES/${branch.replace(UNSAFE, "-")}")
         val known = gitOutput(root, "show-ref", "--verify", "--quiet", "refs/heads/$branch") != null
         if (known) {
             runGit(root, WORKTREE, "add", directory.path, branch)
@@ -56,7 +83,6 @@ internal class CliWorktrees : WorktreeClient {
     }
 
     private companion object {
-        const val DIRECTORY = "kotlin-editor/worktrees"
         val UNSAFE = Regex("[^A-Za-z0-9._-]")
     }
 }

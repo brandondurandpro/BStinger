@@ -30,6 +30,9 @@ enum class RuntimeKind(
 
     /** Node.js. */
     Node("Node.js", "node", listOf("--version")),
+
+    /** uv's `uvx`, which runs Python packages (agents of the ACP registry). */
+    Uvx("uv", "uvx", listOf("--version")),
 }
 
 /** What [RuntimeDetector] found for a [RuntimeKind]. */

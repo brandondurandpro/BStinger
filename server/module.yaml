@@ -4,6 +4,7 @@ product:
 dependencies:
   - //protocol: exported
   - //lsp
+  - //acp
   # Measures its handlers (rpc.server) once a client says the user agreed, exported to OpenTelemetry.
   - //telemetry-otel
   - $libs.kotlinx.coroutines.core

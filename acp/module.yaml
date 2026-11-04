@@ -1,0 +1,16 @@
+# Agent Client Protocol: the server is the client of coding agents (Claude Code, Codex, Gemini CLI…) run as
+# processes next to the sources, and keeps the transcript of each conversation for the IDE. Runs in the server,
+# never in the UI; tested on its own (`./kotlin test -m acp`).
+product:
+  type: jvm/lib
+
+dependencies:
+  - //protocol: exported
+  # JSON-RPC over stdio (newline-delimited for ACP) and the log ring of the language servers.
+  - //lsp
+  - $libs.kotlinx.coroutines.core
+  # Only the JsonElement tree is used: ACP messages are read and built by hand, no compiler plugin needed.
+  - $libs.kotlinx.serialization.json
+
+test-dependencies:
+  - //testkit
