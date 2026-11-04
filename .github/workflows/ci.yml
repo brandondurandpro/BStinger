@@ -5,6 +5,11 @@ name: CI
 # The 20.04 GitHub runner image was retired in April 2025, so older Ubuntu
 # versions run in their official container image on an ubuntu-24.04 runner.
 #
+# Each Ubuntu version and session runs the tests in a few jobs side by side,
+# one per group of tools/ci/linux-test-groups.txt. A pull request runs two of
+# the six (the oldest and newest Ubuntu, one session each), or all six when it
+# changes code that differs between them; main runs all six after the merge.
+#
 # A pull request that only touches documentation skips the lint and the tests.
 # Branch protection requires the single "CI passed" check, which succeeds when
 # every job either passed or was skipped, so such a pull request can merge.
@@ -32,6 +37,7 @@ jobs:
     outputs:
       code: ${{ steps.filter.outputs.code }}
       windows-modules: ${{ steps.modules.outputs.modules }}
+      linux-matrix: ${{ steps.linux.outputs.matrix }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -54,6 +60,32 @@ jobs:
           git diff --name-only "$BASE...$HEAD" | tee changed.txt
           if grep -qvE '(\.md$|^docs/)' changed.txt; then code=true; else code=false; fi
           echo "code=$code" >> "$GITHUB_OUTPUT"
+      # The Linux jobs: each group of tools/ci/linux-test-groups.txt, for each Ubuntu version and display session.
+      # A pull request tests the six only when it changes what differs between them: the shells of the terminal,
+      # the display, the packaging, the CI itself.
+      - id: linux
+        run: |
+          lines() { grep -vE '^[[:space:]]*(#|$)' "$1"; }
+          expected=$( { echo non-ui; lines tools/ui-test-modules.txt; } | sort)
+          grouped=$(lines tools/ci/linux-test-groups.txt | tr ',' '\n' | sort)
+          if [ "$expected" != "$grouped" ]; then
+            echo "::error file=tools/ci/linux-test-groups.txt::each test step must be in exactly one group"
+            diff <(echo "$expected") <(echo "$grouped")
+            exit 1
+          fi
+          all='[["20.04","x11"],["20.04","wayland"],["22.04","x11"],["22.04","wayland"],["24.04","x11"],["24.04","wayland"]]'
+          combos=$all
+          platform='^(\.github/workflows/ci\.yml|tools/linux-vm/|run-tests$|kotlin$|features/terminal/|desktopApp/|packaging/)'
+          if [ "$GITHUB_EVENT_NAME" = pull_request ] && ! grep -qE "$platform" changed.txt; then
+            combos='[["24.04","x11"],["20.04","wayland"]]'
+          fi
+          matrix=$(lines tools/ci/linux-test-groups.txt | jq -R . | jq -sc --argjson combos "$combos" '{include: [
+            $combos[] as [$ubuntu, $session] | .[] | {
+              ubuntu: $ubuntu, session: $session, steps: ., group: (split(",") | join(" + ")),
+              app: (split(",") | index("non-ui") != null)
+            }
+          ]}')
+          echo "matrix=$matrix" | tee -a "$GITHUB_OUTPUT"
 
   lint:
     name: Lint (detekt + ktlint)
@@ -82,7 +114,7 @@ jobs:
       - run: ./lint
 
   test-linux:
-    name: Linux ${{ matrix.ubuntu }} · ${{ matrix.session }}
+    name: Linux ${{ matrix.ubuntu }} · ${{ matrix.session }} · ${{ matrix.group }}
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
@@ -93,12 +125,10 @@ jobs:
       # The image's default POSIX locale makes the JVM reject non-ASCII file names.
       env:
         LANG: C.UTF-8
-    timeout-minutes: 45
+    timeout-minutes: 30
     strategy:
       fail-fast: false
-      matrix:
-        ubuntu: ["20.04", "22.04", "24.04"]
-        session: [x11, wayland]
+      matrix: ${{ fromJSON(needs.changes.outputs.linux-matrix) }}
     steps:
       # Installed before checkout: the official Ubuntu image has no git, and
       # actions/checkout needs it. The 20.04 repositories may have moved to
@@ -168,7 +198,9 @@ jobs:
         run: ./kotlin build
       - name: Test
         # RUNNER_TEMP is the path inside the container; ${{ runner.temp }} is the host's.
-        run: JAVA_TOOL_OPTIONS="-XX:ErrorFile=$RUNNER_TEMP/hs_err_%p.log" ./run-tests
+        env:
+          STEPS: ${{ matrix.steps }}
+        run: JAVA_TOOL_OPTIONS="-XX:ErrorFile=$RUNNER_TEMP/hs_err_%p.log" ./run-tests --only "$STEPS"
       - name: Display server and JVM crash logs
         if: failure()
         run: |
@@ -182,6 +214,7 @@ jobs:
       # Its JVM is up about 15 s after the command (a JBR download included):
       # a minute leaves room for a crash at startup to show.
       - name: Desktop app starts in the session
+        if: matrix.app
         env:
           SKIKO_RENDER_API: SOFTWARE
         run: |
@@ -263,6 +296,19 @@ jobs:
           path: ${{ runner.temp }}/hang
           if-no-files-found: ignore
 
+  # The check the ruleset of main requires: green when every Linux group passed.
+  linux:
+    name: Linux
+    needs: [changes, test-linux]
+    if: always() && needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - env:
+          RESULT: ${{ needs.test-linux.result }}
+        run: |
+          echo "Linux groups: $RESULT"
+          [ "$RESULT" = success ]
+
   # The check the ruleset of main requires: green when every Windows module passed.
   windows:
     name: Windows
@@ -280,7 +326,7 @@ jobs:
   ci-passed:
     name: CI passed
     if: always()
-    needs: [changes, lint, test-linux, test-windows, windows]
+    needs: [changes, lint, test-linux, linux, test-windows, windows]
     runs-on: ubuntu-24.04
     steps:
       - env:

@@ -16,7 +16,8 @@ Use `./kotlin` (`kotlin.bat` on Windows); it downloads the toolchain on first us
 
 - Desktop app: `./kotlin run -m desktopApp` (embeds a server on loopback).
 - All tests: `./run-tests` (`run-tests.bat`), which runs the UI modules one at a time, as the CI does (see the
-  script); `./kotlin test` runs them all at once. One module: `./kotlin test -m shared`.
+  script); `./kotlin test` runs them all at once. One module: `./kotlin test -m shared`. One Linux CI job:
+  `./run-tests --only shared,terminal` (its line of `tools/ci/linux-test-groups.txt`).
 - One test class: `./kotlin test -m shared --include-classes='*EditorTabsE2eTest'`; one test: `--include-test=<fqn>.method`.
 - Lint: `./lint`.
 
