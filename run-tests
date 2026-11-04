@@ -5,9 +5,18 @@
 # performance budgets: side by side on the few cores of a CI runner, they slow each other down and miss their budgets
 # and timeouts. So the other modules run first, together, then each module of tools/ui-test-modules.txt alone.
 #
-# With arguments, runs `./kotlin test` with them as they are (e.g. ./run-tests -m server).
+# With --only, runs only the steps listed, separated by commas: `non-ui` (the modules without UI tests) and UI
+# modules (e.g. ./run-tests --only non-ui,agent). Each Linux CI job runs a group of tools/ci/linux-test-groups.txt.
+#
+# With other arguments, runs `./kotlin test` with them as they are (e.g. ./run-tests -m server).
 set -u
 cd "$(dirname "$0")"
+
+only=""
+if [ "${1:-}" = --only ]; then
+    only=",${2:?--only needs the steps to run, separated by commas},"
+    shift 2
+fi
 if [ $# -gt 0 ]; then exec ./kotlin test "$@"; fi
 
 modules=()
@@ -16,13 +25,30 @@ while read -r module; do
     modules+=("$module")
 done < tools/ui-test-modules.txt
 
+# Whether the step is run: every step without --only.
+selected() {
+    [ -z "$only" ] || [[ "$only" == *",$1,"* ]]
+}
+
+# A misspelled step would silently run nothing.
+IFS=, read -r -a wanted <<< "${only#,}"
+for step in "${wanted[@]}"; do
+    case " non-ui ${modules[*]} " in
+        *" $step "*) ;;
+        *) echo "run-tests: unknown step '$step' (non-ui or a line of tools/ui-test-modules.txt)" >&2; exit 2 ;;
+    esac
+done
+
 excludes=()
 for module in "${modules[@]}"; do excludes+=(--exclude-module "$module"); done
 
 failed=()
-echo "run-tests: modules without UI tests"
-./kotlin test "${excludes[@]}" || failed+=("modules without UI tests")
+if selected non-ui; then
+    echo "run-tests: modules without UI tests"
+    ./kotlin test "${excludes[@]}" || failed+=("modules without UI tests")
+fi
 for module in "${modules[@]}"; do
+    selected "$module" || continue
     echo "run-tests: $module"
     ./kotlin test -m "$module" || failed+=("$module")
 done
