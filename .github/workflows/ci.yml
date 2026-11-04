@@ -179,12 +179,14 @@ jobs:
       # The tests render off-screen, so this is what proves the desktop app
       # really starts in the session under test. A timeout (124) means it was
       # still running when killed; any other exit code is a startup failure.
+      # Its JVM is up about 15 s after the command (a JBR download included):
+      # a minute leaves room for a crash at startup to show.
       - name: Desktop app starts in the session
         env:
           SKIKO_RENDER_API: SOFTWARE
         run: |
           set +e
-          timeout -k 10 180 ./kotlin run -m desktopApp
+          timeout -k 10 60 ./kotlin run -m desktopApp
           code=$?
           set -e
           if [ "$code" -ne 124 ]; then
