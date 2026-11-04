@@ -31,11 +31,16 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       code: ${{ steps.filter.outputs.code }}
+      windows-modules: ${{ steps.modules.outputs.modules }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: github.event_name == 'pull_request'
         with:
           fetch-depth: 0
+      # The Windows jobs, one per module: non-ui (the modules without UI tests, together), then each UI module.
+      - id: modules
+        run: |
+          modules=$(grep -vE '^[[:space:]]*(#|$)' tools/ui-test-modules.txt | jq -R . | jq -sc '["non-ui"] + .')
+          echo "modules=$modules" | tee -a "$GITHUB_OUTPUT"
       # Pushes and manual runs always test everything.
       - id: filter
         env:
@@ -174,12 +179,14 @@ jobs:
       # The tests render off-screen, so this is what proves the desktop app
       # really starts in the session under test. A timeout (124) means it was
       # still running when killed; any other exit code is a startup failure.
+      # Its JVM is up about 15 s after the command (a JBR download included):
+      # a minute leaves room for a crash at startup to show.
       - name: Desktop app starts in the session
         env:
           SKIKO_RENDER_API: SOFTWARE
         run: |
           set +e
-          timeout -k 10 180 ./kotlin run -m desktopApp
+          timeout -k 10 60 ./kotlin run -m desktopApp
           code=$?
           set -e
           if [ "$code" -ne 124 ]; then
@@ -187,12 +194,21 @@ jobs:
             exit 1
           fi
 
+  # One job per module, as run-tests.bat runs them one after the other: a module that hangs (issue #120) fails its
+  # own job, with its log and the dumps of the hang watch, and the modules run side by side.
   test-windows:
-    name: Windows
+    name: Windows · ${{ matrix.module }}
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: windows-latest
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        module: ${{ fromJSON(needs.changes.outputs.windows-modules) }}
+    env:
+      # A module takes up to about 15 minutes on a runner: past this, its run is taken as hung.
+      HANG_MINUTES: "25"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -209,17 +225,62 @@ jobs:
       - name: Build
         shell: cmd
         run: kotlin.bat build
+      - name: Watch for a hang
+        shell: pwsh
+        run: >
+          Start-Process pwsh -WindowStyle Hidden -ArgumentList
+          '-NoProfile', '-File', 'tools/ci/hang-watch.ps1', '-Minutes', $env:HANG_MINUTES, '-OutDir', "$env:RUNNER_TEMP\hang"
       # Below the job's limit: a test that hangs fails this step, whose log is kept (a job out of time loses it).
       - name: Test
         shell: cmd
         timeout-minutes: 35
-        run: run-tests.bat
+        env:
+          MODULE: ${{ matrix.module }}
+        run: |
+          setlocal enabledelayedexpansion
+          set args=-m %MODULE%
+          if "%MODULE%"=="non-ui" (
+            set args=
+            for /f "eol=# tokens=*" %%m in (tools\ui-test-modules.txt) do set args=!args! --exclude-module %%m
+          )
+          call kotlin.bat test !args!
+      # What a hang left: the dumps of the watch, and the processes still alive.
+      - name: Dumps and processes left
+        if: failure() || cancelled()
+        shell: pwsh
+        run: |
+          Get-CimInstance Win32_Process |
+            Where-Object { $_.Name -match '^(java|cmd|conhost|OpenConsole|php|node|rg|git)\.exe$' } |
+            ForEach-Object { '{0} {1}<{2} {3}' -f $_.Name, $_.ProcessId, $_.ParentProcessId, $_.CommandLine }
+          Get-ChildItem "$env:RUNNER_TEMP\hang" -File -ErrorAction SilentlyContinue | ForEach-Object {
+            "===== $($_.Name)"
+            Get-Content $_.FullName
+          }
+      - uses: actions/upload-artifact@v4
+        if: failure() || cancelled()
+        with:
+          name: hang-windows-${{ matrix.module }}
+          path: ${{ runner.temp }}/hang
+          if-no-files-found: ignore
+
+  # The check the ruleset of main requires: green when every Windows module passed.
+  windows:
+    name: Windows
+    needs: [changes, test-windows]
+    if: always() && needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - env:
+          RESULT: ${{ needs.test-windows.result }}
+        run: |
+          echo "Windows modules: $RESULT"
+          [ "$RESULT" = success ]
 
   # The only required check: green when every job passed or was skipped.
   ci-passed:
     name: CI passed
     if: always()
-    needs: [changes, lint, test-linux, test-windows]
+    needs: [changes, lint, test-linux, test-windows, windows]
     runs-on: ubuntu-24.04
     steps:
       - env:
