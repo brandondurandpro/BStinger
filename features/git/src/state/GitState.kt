@@ -21,6 +21,7 @@ import org.example.kotlineditor.telemetry.Operation
 import org.example.kotlineditor.telemetry.measureToFrame
 import org.example.kotlineditor.telemetry.outcome
 import java.io.IOException
+import java.util.concurrent.atomic.AtomicLong
 
 private const val MAX_MESSAGE_LENGTH = 300
 
@@ -109,6 +110,16 @@ class GitState(
     // A refresh asked to reload every editor; kept when a later refresh (a save) cancels it.
     private var editorsReloadPending = false
 
+    // One load of the branches at a time, and the loads asked meanwhile make one more: with thousands of branches, two
+    // loads in parallel (a push refreshing, the watch of the disk seeing the refs it wrote) each take twice as long.
+    private val branchLoads = Mutex()
+    private val branchLoadsAsked = AtomicLong()
+    private val branchLoadsCovered = AtomicLong()
+
+    // `.git` changed while an IDE Git action ran: the action's own refresh reloads the branches, after it.
+    @Volatile
+    private var branchesChangedDuringAction = false
+
     /** Checks or unchecks [path] (the checkbox of a change in the Git panel) for the next commit. */
     fun toggleCommitSelection(path: String) {
         selectedForCommit = if (path in selectedForCommit) selectedForCommit - path else selectedForCommit + path
@@ -139,7 +150,12 @@ class GitState(
      * branches deleted, a ref each) costs a reload or two, not one per change.
      */
     suspend fun reloadAfterDiskChange(branchesToo: Boolean) {
-        if (branchesToo) loadBranches()
+        val actionRefreshes = branchesToo && busy
+        if (actionRefreshes) {
+            branchesChangedDuringAction = true
+        } else if (branchesToo) {
+            loadBranches()
+        }
         editorsReloadPending = editorsReloadPending || branchesToo
         statusJob?.cancel()
         ClientTelemetry.measureToFrame(Operation.GitStatus, outcomeOf = { read: Result<*> -> read.outcome() }) {
@@ -148,6 +164,16 @@ class GitState(
     }
 
     private suspend fun loadBranches() {
+        val ticket = branchLoadsAsked.incrementAndGet()
+        branchLoads.withLock {
+            // A load that started after this one was asked has read what it would read.
+            if (branchLoadsCovered.get() >= ticket) return
+            branchLoadsCovered.set(branchLoadsAsked.get())
+            readBranches()
+        }
+    }
+
+    private suspend fun readBranches() {
         ClientTelemetry.measureToFrame(
             Operation.GitBranch,
             outcomeOf = { read: Result<String?> -> read.outcome() },
@@ -412,8 +438,10 @@ class GitState(
             message = e.message ?: "Git command failed"
             messageIsError = true
             refreshStatus()
+            if (branchesChangedDuringAction) refreshBranches()
             false
         } finally {
+            branchesChangedDuringAction = false
             busy = false
         }
     }
