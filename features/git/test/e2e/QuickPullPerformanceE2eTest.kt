@@ -41,7 +41,8 @@ class QuickPullPerformanceE2eTest {
         }
     }
 
-    // A remote [REMOTE_COMMITS] commits ahead of the project's default branch, not fetched yet.
+    // A remote [REMOTE_COMMITS] commits ahead of the project's default branch, not fetched yet. `git fast-import`
+    // writes them in one process: two processes per commit took about a minute on a Windows runner.
     private fun remoteAhead(): String {
         project.commitAll()
         val default = project.git("rev-parse", "--abbrev-ref", "HEAD").trim()
@@ -49,20 +50,24 @@ class QuickPullPerformanceE2eTest {
         gitIn(remote, "init", "-q", "--bare")
         project.git("remote", "add", "origin", remote.toString())
         project.git("push", "-q", "-u", "origin", "HEAD")
-        val clone = Files.createTempDirectory("kotlin-editor-clone").also { extras.add(it) }
-        gitIn(clone, "clone", "-q", "-c", "core.autocrlf=false", remote.toString(), ".")
+        val script = StringBuilder()
         repeat(REMOTE_COMMITS) { index ->
-            clone.resolve("remote-$index.txt").writeText("$index\n")
-            gitIn(clone, "add", "-A")
-            gitIn(clone, "commit", "-q", "-m", "remote $index")
+            val message = "remote $index"
+            val content = "$index\n"
+            script.append("commit refs/heads/$default\n")
+            script.append("committer Test <test@example.com> ${1_700_000_000 + index} +0000\n")
+            script.append("data ${message.length}\n$message\n")
+            if (index == 0) script.append("from $default^0\n")
+            script.append("M 644 inline remote-$index.txt\n")
+            script.append("data ${content.length}\n$content\n")
         }
-        gitIn(clone, "push", "-q")
+        gitFastImport(remote, script.toString())
         return default
     }
 
     @Test
     fun `pulling many commits with thousands of pinned branches stays fast`() {
-        // A thousand Git processes, nearly a minute on Windows: made before the UI test, whose body has one minute.
+        // Built before runComposeUiTest, whose one-minute timeout is for the app, not for the repository.
         val default = remoteAhead()
         createBranches()
         runComposeUiTest {

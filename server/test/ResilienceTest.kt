@@ -12,6 +12,14 @@ import org.example.kotlineditor.rpc.ClientOptions
 import org.example.kotlineditor.rpc.RemoteFileSystem
 import org.example.kotlineditor.rpc.RemoteTerminalLauncher
 import org.example.kotlineditor.rpc.RpcClient
+import org.example.kotlineditor.telemetry.Attributes
+import org.example.kotlineditor.telemetry.HookedTelemetry
+import org.example.kotlineditor.telemetry.InMemoryHook
+import org.example.kotlineditor.telemetry.Operation
+import org.example.kotlineditor.telemetry.Outcome
+import org.example.kotlineditor.telemetry.Side
+import org.example.kotlineditor.telemetry.Span
+import org.example.kotlineditor.telemetry.TelemetryHook
 import org.example.kotlineditor.testkit.ChaosProxy
 import java.nio.file.Files
 import kotlin.io.path.writeText
@@ -19,6 +27,9 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+
+private const val CUTS = 20
+private const val SLOW_EXPORT_MS = 50L
 
 /** Network failures injected between the client and the server: the IDE must not notice them. */
 class ResilienceTest {
@@ -55,6 +66,34 @@ class ResilienceTest {
             repeat(300) { assertEquals(listOf("stable"), (fs.read(file) as FileContent.Text).lines) }
             chaos.join()
             assertTrue(client.connections.value > 1, "the client reconnected ${client.connections.value - 1} times")
+        }
+
+    @Test
+    fun `every reconnection is measured, even one back before anyone looked`() =
+        runBlocking {
+            val spans = InMemoryHook()
+            // A slow export, as on a loaded machine: the link comes back while the last measure is still being
+            // written, so Reconnecting is over before a collector of the status could see it.
+            val slow =
+                object : TelemetryHook {
+                    override fun onEnd(span: Span, durationNanos: Long, outcome: Outcome, attributes: Attributes) {
+                        Thread.sleep(SLOW_EXPORT_MS)
+                    }
+                }
+            val telemetry = HookedTelemetry(listOf(spans, slow), Side.Client)
+            val measured = RpcClient("127.0.0.1", proxy.port, token, options, telemetry)
+            val reconnections = { spans.spans.count { it.operation == Operation.Reconnect } }
+            try {
+                measured.awaitConnected()
+                repeat(CUTS) { cut ->
+                    proxy.cutAll()
+                    withTimeout(5_000) { measured.connections.first { it == cut + 2L } }
+                }
+                withTimeout(5_000) { while (reconnections() < CUTS) delay(20) }
+                assertEquals(CUTS, reconnections())
+            } finally {
+                measured.close()
+            }
         }
 
     @Test

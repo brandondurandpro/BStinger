@@ -31,7 +31,9 @@ class LanguageServerSupervisorTest {
     private val pids: Path = createTempDirectory("lsp-pids")
     private val reader = ProcessMemoryReader.forCurrentOs()
     private val sampler = ProcessMemorySampler(reader, System::currentTimeMillis, scope, intervalMs = 200)
-    private val seen = mutableSetOf<Long>()
+
+    // The processes seen, by pid, with their start time: a pid may belong to another process by the cleanup.
+    private val seen = mutableMapOf<Long, Long>()
     private val timings =
         SupervisorTimings(
             idleStopMs = 500,
@@ -49,7 +51,17 @@ class LanguageServerSupervisorTest {
         sampler.close()
         reader.close()
         scope.cancel()
-        seen.forEach { pid -> ProcessHandle.of(pid).ifPresent(OrphanReaper::killTree) }
+        seen.forEach { (pid, start) ->
+            ProcessHandle
+                .of(pid)
+                .filter { OrphanReaper.startOf(it) == start }
+                .ifPresent { OrphanReaper.killTree(it, start) }
+        }
+    }
+
+    private fun see(pid: Long) {
+        val start = ProcessHandle.of(pid).map(OrphanReaper::startOf).orElse(0L)
+        seen.putIfAbsent(pid, start)
     }
 
     private fun target(vararg options: String, name: String = "fake") =
@@ -67,7 +79,7 @@ class LanguageServerSupervisorTest {
 
     private fun awaitState(id: String, state: LanguageServerState): LanguageServerInfo {
         await("$id $state") { server(id)?.state == state }
-        return server(id)!!.also { info -> info.pid?.let { seen += it } }
+        return server(id)!!.also { info -> info.pid?.let(::see) }
     }
 
     private fun gone(pid: Long) = !ProcessHandle.of(pid).map { it.isAlive }.orElse(false)
@@ -176,7 +188,7 @@ class LanguageServerSupervisorTest {
         val process = ProcessHandle.of(pid).get()
         await("its child") { process.children().count() > 0 }
         val child = process.children().use { children -> children.findFirst().get() }.pid()
-        seen += child
+        see(child)
         supervisor.stop(target.id)
         val stopped = awaitState(target.id, LanguageServerState.Stopped)
         assertEquals("Stopped by the user", stopped.message)
@@ -234,12 +246,12 @@ class LanguageServerSupervisorTest {
     @Test
     fun `servers left by a crashed IDE server are reaped at the next start`() {
         val orphan = FakeLanguageServerCommand.start()
-        seen += orphan.pid()
+        see(orphan.pid())
         val start = OrphanReaper.startOf(orphan.toHandle())
         // Recorded by an IDE server that is gone: pid 1 never started at that time.
         Files.writeString(pids.resolve("999999999-1-${orphan.pid()}"), start.toString())
         val alive = FakeLanguageServerCommand.start()
-        seen += alive.pid()
+        see(alive.pid())
         val self = ProcessHandle.current()
         val ours = pids.resolve("${self.pid()}-${OrphanReaper.startOf(self)}-${alive.pid()}")
         Files.writeString(ours, OrphanReaper.startOf(alive.toHandle()).toString())
@@ -272,7 +284,7 @@ class LanguageServerSupervisorTest {
             ProcessHandle.current().descendants().use { stream ->
                 stream.filter { !isConsoleHost(it) }.map { it.pid() }.toList()
             }
-        return (seen.filter { !gone(it) } + children).distinct()
+        return (seen.keys.filter { !gone(it) } + children).distinct()
     }
 
     private fun isConsoleHost(process: ProcessHandle): Boolean {
