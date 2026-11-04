@@ -116,7 +116,8 @@ class GitState(
     private val branchLoadsAsked = AtomicLong()
     private val branchLoadsCovered = AtomicLong()
 
-    // `.git` changed while an IDE Git action ran: the action's own refresh reloads the branches, after it.
+    // `.git` changed while an IDE Git action ran: the action's own refresh reloads the branches, after it, but a failed
+    // action refreshes only the status.
     @Volatile
     private var branchesChangedDuringAction = false
 
@@ -141,7 +142,9 @@ class GitState(
      * keeps the last list, so the branch picker still shows what it knows while the link comes back.
      */
     fun refreshBranches() {
-        scope.launch { loadBranches() }
+        // Asked now, not once the coroutine runs: a reload of the watch of the disk asked meanwhile waits behind it.
+        val ticket = branchLoadsAsked.incrementAndGet()
+        scope.launch { loadBranches(ticket) }
     }
 
     /**
@@ -150,21 +153,21 @@ class GitState(
      * branches deleted, a ref each) costs a reload or two, not one per change.
      */
     suspend fun reloadAfterDiskChange(branchesToo: Boolean) {
-        val actionRefreshes = branchesToo && busy
-        if (actionRefreshes) {
-            branchesChangedDuringAction = true
-        } else if (branchesToo) {
-            loadBranches()
+        // An IDE Git action runs: its own refresh, after it, reads everything it wrote.
+        if (busy) {
+            branchesChangedDuringAction = branchesChangedDuringAction || branchesToo
+            return
         }
+        if (branchesToo) loadBranches()
         editorsReloadPending = editorsReloadPending || branchesToo
-        statusJob?.cancel()
+        // A refresh in flight (an action's) is shown first, rather than cancelled and read again in parallel.
+        statusJob?.join()
         ClientTelemetry.measureToFrame(Operation.GitStatus, outcomeOf = { read: Result<*> -> read.outcome() }) {
             applyStatus()
         }
     }
 
-    private suspend fun loadBranches() {
-        val ticket = branchLoadsAsked.incrementAndGet()
+    private suspend fun loadBranches(ticket: Long = branchLoadsAsked.incrementAndGet()) {
         branchLoads.withLock {
             // A load that started after this one was asked has read what it would read.
             if (branchLoadsCovered.get() >= ticket) return
