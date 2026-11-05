@@ -24,6 +24,17 @@ import kotlin.test.assertTrue
 
 private const val WAIT_MS = 60_000L
 
+// The service's close waits for a polite shutdown, then for the exit: a margin over both.
+private const val LEFT_WAIT_MS = 15_000L
+private const val TYPING_PAUSE_MS = 20L
+
+// 64 KB per version: 4 MB at most, well past the bound of the test, before it gives up typing.
+private const val MAX_TYPED_VERSION = 66
+
+// 1.25 MB typed: far more than a pipe holds.
+private const val BLOCKING_VERSION = 22
+private val LONG_COMMENT = "/* ${"x".repeat(64 * 1024)} */\n"
+
 /** Documents and completion through the service, against a real fake-server process. */
 class DocumentSyncTest {
     private val project = createTempDirectory("lsp-project")
@@ -31,6 +42,7 @@ class DocumentSyncTest {
     private val file = project.resolve("index.php").toString()
     private var options = arrayOf<String>()
     private var maxUnreadBytes = SupervisorTimings().maxUnreadBytes
+    private var closed = false
     private val service by lazy {
         val fake =
             LanguageServerCandidate(
@@ -70,9 +82,52 @@ class DocumentSyncTest {
 
     @AfterTest
     fun cleanup() {
-        service.close()
-        project.toFile().deleteRecursively()
-        data.toFile().deleteRecursively()
+        try {
+            if (!closed) service.close()
+            awaitNoServerLeft()
+        } finally {
+            // A process left by a failing test would fail the next tests that count the processes.
+            serversLeft().forEach { it.destroyForcibly() }
+            project.toFile().deleteRecursively()
+            data.toFile().deleteRecursively()
+        }
+    }
+
+    // The fake servers still running; not Windows' console hosts, which belong to the console of a process.
+    private fun serversLeft(): List<ProcessHandle> =
+        ProcessHandle.current().descendants().use { stream ->
+            stream.filter { !isConsoleHost(it) }.toList()
+        }
+
+    private fun isConsoleHost(process: ProcessHandle): Boolean {
+        val command = process.info().command()
+        return command.map { it.lowercase().endsWith("conhost.exe") }.orElse(false)
+    }
+
+    private fun awaitNoServerLeft() {
+        val deadline = System.currentTimeMillis() + LEFT_WAIT_MS
+        var left = serversLeft()
+        while (left.isNotEmpty()) {
+            val described = left.map { "${it.pid()} ${it.info().command().orElse("?")}" }
+            check(System.currentTimeMillis() < deadline) { "Left running: $described" }
+            Thread.sleep(20)
+            left = serversLeft()
+        }
+    }
+
+    // Starts the server, then makes it stop reading its input; returns it as it was before.
+    private fun hangServer(): LanguageServerInfo {
+        service.use("s1", project.toString(), listOf(file))
+        service.openDocument("s1", project.toString(), file, 1, "<?php\nfunction before() {}\n")
+        awaitRunning()
+        val hung = server()
+        service.changeDocument("s1", file, 2, listOf(TextChange(2, 0, 2, 0, "// HANG\n")))
+        return hung
+    }
+
+    // Types a comment of 64 KB on line 3, as [version].
+    private fun typeComment(version: Int) {
+        service.changeDocument("s1", file, version, listOf(TextChange(3, 0, 3, 0, LONG_COMMENT)))
     }
 
     private fun running(): Boolean =
@@ -146,32 +201,47 @@ class DocumentSyncTest {
     fun `a server that stops reading its input is restarted, with the documents opened again`() {
         options = arrayOf("--stop-reading-on-change", "HANG")
         maxUnreadBytes = 512L * 1024
-        service.use("s1", project.toString(), listOf(file))
-        service.openDocument("s1", project.toString(), file, 1, "<?php\nfunction before() {}\n")
-        awaitRunning()
-        val hung = server()
-        service.changeDocument("s1", file, 2, listOf(TextChange(2, 0, 2, 0, "// HANG\n")))
-        // Typed on a server that no longer reads: the pipe fills, then the changes wait, more than it may leave unread.
-        val comment = "/* ${"x".repeat(64 * 1024)} */\n"
-        val typed = 3..22
-        typed.forEach { version ->
-            service.changeDocument(
-                "s1",
-                file,
-                version,
-                listOf(TextChange(3, 0, 3, 0, comment)),
-            )
-        }
+        val hung = hangServer()
+        // Typed on a server that no longer reads: the pipe fills, then a change waits to be written while more is
+        // typed, past what it may leave unread. Typing goes on until then, like a user does: the changes typed
+        // before one is being written are merged into it and do not count (see DocumentOutbox), and a burst may
+        // all be merged before the outbox's coroutine runs.
+        var version = 2
         val deadline = System.currentTimeMillis() + WAIT_MS
+        while (server().pid == hung.pid) {
+            check(System.currentTimeMillis() < deadline) { "Not found stuck: ${server()}" }
+            if (version < MAX_TYPED_VERSION) {
+                version++
+                typeComment(version)
+            }
+            Thread.sleep(TYPING_PAUSE_MS)
+        }
         while (server().generation == hung.generation || !running()) {
             check(System.currentTimeMillis() < deadline) { "Not restarted: ${server()}" }
             Thread.sleep(20)
         }
         assertTrue(server().pid != hung.pid, "the hung process was replaced")
+        val log = service.log(hung.id)
+        assertTrue(log.any { "Stopped reading its input" in it }, "restarted as stuck: $log")
 
         // The new process got the text as it is now, and the changes that follow.
-        service.changeDocument("s1", file, 23, listOf(TextChange(0, 5, 0, 5, "\nfunction after() {}\naf")))
-        assertEquals(listOf("after"), complete(23, 2, 2).items.map { it.label })
+        version++
+        service.changeDocument("s1", file, version, listOf(TextChange(0, 5, 0, 5, "\nfunction after() {}\naf")))
+        assertEquals(listOf("after"), complete(version, 2, 2).items.map { it.label })
+    }
+
+    @Test
+    fun `closing the service kills a server that stopped reading its input`() {
+        options = arrayOf("--stop-reading-on-change", "HANG")
+        // With the default bound, these changes do not make it stuck: the write of one of them stays blocked.
+        hangServer()
+        (3..BLOCKING_VERSION).forEach { version ->
+            typeComment(version)
+            Thread.sleep(TYPING_PAUSE_MS)
+        }
+        closed = true
+        service.close()
+        awaitNoServerLeft()
     }
 
     @Test

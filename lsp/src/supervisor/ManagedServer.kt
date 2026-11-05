@@ -559,17 +559,33 @@ internal class ManagedServer(
         val link = connection
         connection = null
         val polite = graceful && link?.isClosed == false
-        if (polite && running.isAlive) {
-            withTimeoutOrNull(timings.shutdownTimeoutMs) { runCatching { link.request("shutdown") } }
-            runCatching { link.notify("exit") }
-            withContext(Dispatchers.IO) { running.waitFor(timings.shutdownTimeoutMs, TimeUnit.MILLISECONDS) }
-        }
+        if (polite && running.isAlive) askToExit(link, running)
         OrphanReaper.killTree(running.toHandle(), start)
         link?.close()
         samplerKey?.let { sampler?.untrack(it) }
         samplerKey = null
         reaper?.forget(running.pid())
         progress.clear()
+    }
+
+    /**
+     * Asks [running] to shut down and exit, then waits for it a while. The messages are written on a thread of
+     * their own: a process that stopped reading its input blocks them behind the write of the outbox, under the
+     * connection's lock, which no timeout interrupts. That thread is then left blocked until the kill that follows
+     * breaks the pipe, and the process is not waited for, since it was not told to exit.
+     */
+    private suspend fun askToExit(link: LspConnection, running: Process) {
+        val asking =
+            scope.launch(Dispatchers.IO) {
+                withTimeoutOrNull(timings.shutdownTimeoutMs) { runCatching { link.request("shutdown") } }
+                runCatching { link.notify("exit") }
+            }
+        val asked = withTimeoutOrNull(timings.shutdownTimeoutMs + EXIT_WRITE_MS) { asking.join() }
+        if (asked == null) {
+            log.add("Could not ask it to exit: it does not read its input")
+            return
+        }
+        withContext(Dispatchers.IO) { running.waitFor(timings.shutdownTimeoutMs, TimeUnit.MILLISECONDS) }
     }
 
     private fun setState(new: LanguageServerState, why: String?) {
@@ -788,5 +804,8 @@ internal class ManagedServer(
 
         // How long a crash waits for the last lines of stderr; a child keeping the pipe open must not delay it.
         const val DRAIN_WAIT_MS = 500L
+
+        // How long writing exit may take after shutdown went unanswered; within the supervisor's margin to close.
+        const val EXIT_WRITE_MS = 500L
     }
 }
