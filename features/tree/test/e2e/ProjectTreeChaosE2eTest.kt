@@ -5,6 +5,7 @@ import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.state.delete
@@ -69,6 +70,47 @@ class ProjectTreeChaosE2eTest {
             awaitTag(EditorTags.tab("docs/notes.md"))
             awaitTag(TreeTags.treeRow("docs/notes.md"))
             assertEquals(1, onAllNodesWithTag(TreeTags.treeRow("docs/notes.md")).fetchSemanticsNodes().size)
+        }
+
+    @Test
+    fun `a file whose creation answer is lost while the server restarts is created once, without an error`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, chaos = true)
+            rightClickOn(TreeTags.treeRow("docs"))
+            awaitTag(TreeTags.MENU_NEW_FILE).performClick()
+            awaitTag(AppTags.FILE_DIALOG_INPUT).performTextInput("notes.md")
+            app.network.dropFromServer = true
+            onNodeWithTag(AppTags.FILE_DIALOG_OK).performClick()
+            awaitCondition { project.root.resolve("docs/notes.md").exists() }
+            // The new server has no answer for the request: running it again would fail with "already exists".
+            app.process.restart()
+            app.network.dropFromServer = false
+            app.network.cutAll()
+            awaitNoTag(AppTags.FILE_DIALOG)
+            assertTrue(onAllNodesWithTag(AppTags.FILE_DIALOG_ERROR).fetchSemanticsNodes().isEmpty())
+            awaitTag(EditorTags.tab("docs/notes.md"))
+            awaitTag(TreeTags.treeRow("docs/notes.md"))
+            assertEquals(1, onAllNodesWithTag(TreeTags.treeRow("docs/notes.md")).fetchSemanticsNodes().size)
+        }
+
+    @Test
+    fun `a rename whose answer is lost while the server restarts is done once, without an error`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, chaos = true)
+            rightClickOn(TreeTags.treeRow("README.md"))
+            awaitTag(TreeTags.MENU_RENAME).performClick()
+            awaitTag(AppTags.FILE_DIALOG_INPUT).performTextClearance()
+            onNodeWithTag(AppTags.FILE_DIALOG_INPUT).performTextInput("INTRO.md")
+            app.network.dropFromServer = true
+            onNodeWithTag(AppTags.FILE_DIALOG_OK).performClick()
+            awaitCondition { project.root.resolve("INTRO.md").exists() }
+            app.process.restart()
+            app.network.dropFromServer = false
+            app.network.cutAll()
+            awaitNoTag(AppTags.FILE_DIALOG)
+            assertTrue(onAllNodesWithTag(AppTags.FILE_DIALOG_ERROR).fetchSemanticsNodes().isEmpty())
+            awaitTag(TreeTags.treeRow("INTRO.md"))
+            awaitNoTag(TreeTags.treeRow("README.md"))
         }
 
     @Test

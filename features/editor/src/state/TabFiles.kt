@@ -11,6 +11,7 @@ import org.example.kotlineditor.model.BlameLine
 import org.example.kotlineditor.model.DiffLine
 import org.example.kotlineditor.model.FileContent
 import org.example.kotlineditor.model.FileEntry
+import org.example.kotlineditor.model.OutcomeUnknownException
 import org.example.kotlineditor.model.ProjectFileSystem
 import org.example.kotlineditor.syntax.Language
 import org.example.kotlineditor.syntax.SyntaxHighlighter
@@ -173,7 +174,7 @@ internal class TabFiles(
                 val lines = document.snapshotLines()
                 document.saveStamp++
                 try {
-                    fileSystem.write(tab.entry, document.text())
+                    writtenOnce(tab.entry, document.text(), lines)
                     // What the disk now has, even when the user typed meanwhile: the watch reports this write too.
                     document.diskLinesHash = lines.hashCode()
                 } catch (failed: IOException) {
@@ -186,6 +187,23 @@ internal class TabFiles(
                 if (document.version == version) document.markSaved()
                 onSaved(tab.entry)
             }
+        }
+    }
+
+    // Writes [text] (made of [lines]). A server that restarted before answering may or may not have written it: it is
+    // not asked again, the disk says whether it was; it was when it holds [lines], and the save then ends as answered.
+    private suspend fun writtenOnce(entry: FileEntry, text: String, lines: List<String>) {
+        try {
+            fileSystem.write(entry, text)
+        } catch (unknown: OutcomeUnknownException) {
+            val disk =
+                try {
+                    fileSystem.read(entry)
+                } catch (unreachable: IOException) {
+                    unknown.addSuppressed(unreachable)
+                    throw unknown
+                }
+            if ((disk as? FileContent.Text)?.lines != lines) throw unknown
         }
     }
 
