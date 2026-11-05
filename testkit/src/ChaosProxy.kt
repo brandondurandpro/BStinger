@@ -81,12 +81,18 @@ class ChaosProxy(private val targetPort: Int) : Closeable {
         if (upstream == null) {
             client.close() // server down: refuse like the real network would
         } else {
-            client.tcpNoDelay = true
-            upstream.tcpNoDelay = true
             val link = client to upstream
-            links += link
-            pump(client.getInputStream(), upstream.getOutputStream(), link, fromServer = false)
-            pump(upstream.getInputStream(), client.getOutputStream(), link, fromServer = true)
+            try {
+                client.tcpNoDelay = true
+                upstream.tcpNoDelay = true
+                links += link
+                pump(client.getInputStream(), upstream.getOutputStream(), link, fromServer = false)
+                pump(upstream.getInputStream(), client.getOutputStream(), link, fromServer = true)
+            } catch (ignored: IOException) {
+                // Cut ([cutAll], or a side closed) while being set up: over before it started. The proxy goes on
+                // accepting; letting this end the accepting thread would refuse every later connection.
+                close(link)
+            }
         }
     }
 
