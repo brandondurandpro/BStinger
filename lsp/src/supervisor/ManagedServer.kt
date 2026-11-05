@@ -561,7 +561,9 @@ internal class ManagedServer(
         val polite = graceful && link?.isClosed == false
         if (polite && running.isAlive) askToExit(link, running)
         OrphanReaper.killTree(running.toHandle(), start)
-        link?.close()
+        // Closing waits for the lock of a write blocked on a process that stopped reading, until the kill breaks
+        // the pipe: never on this coroutine, whatever the system takes to do it.
+        link?.let { thread(isDaemon = true, name = "lsp-close") { it.close() } }
         samplerKey?.let { sampler?.untrack(it) }
         samplerKey = null
         reaper?.forget(running.pid())

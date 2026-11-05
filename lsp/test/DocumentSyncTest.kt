@@ -7,6 +7,7 @@ import org.example.kotlineditor.lsp.documents.OutOfSyncException
 import org.example.kotlineditor.lsp.provision.CandidateRegistry
 import org.example.kotlineditor.lsp.provision.LanguageServerCandidate
 import org.example.kotlineditor.lsp.provision.RuntimeDetector
+import org.example.kotlineditor.lsp.supervisor.OrphanReaper
 import org.example.kotlineditor.lsp.supervisor.SupervisorTimings
 import org.example.kotlineditor.model.CompletionResult
 import org.example.kotlineditor.model.LanguageServerInfo
@@ -93,11 +94,13 @@ class DocumentSyncTest {
         }
     }
 
-    // The fake servers still running; not Windows' console hosts, which belong to the console of a process.
-    private fun serversLeft(): List<ProcessHandle> =
-        ProcessHandle.current().descendants().use { stream ->
-            stream.filter { !isConsoleHost(it) }.toList()
-        }
+    // The fake servers still running: the processes the tests started, not Windows' console hosts, which belong to
+    // the console of a process. Only those started after this JVM: Windows also lists as descendants the processes
+    // whose dead parent had its pid, such as the CI runner's own, which must never be killed.
+    private fun serversLeft(): List<ProcessHandle> {
+        val tests = ProcessHandle.current()
+        return OrphanReaper.ownDescendants(tests, OrphanReaper.startOf(tests)).filter { !isConsoleHost(it) }
+    }
 
     private fun isConsoleHost(process: ProcessHandle): Boolean {
         val command = process.info().command()
