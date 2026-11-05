@@ -19,10 +19,11 @@ import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 private const val MIB = 1024 * 1024
-private const val QUEUED_MS = 1_000L
+private const val SEND_TIMEOUT_MS = 10_000L
 
 private fun screen(seq: Int, text: String) =
     buildJsonObject {
@@ -54,8 +55,8 @@ class ServerConnectionTest {
     @Test
     fun `small frames go before the large ones waiting to be written`() =
         connectedTo { connection, client ->
-            // The client does not read yet: the writer is stuck in the first large frame, the others wait. Sent from
-            // another thread, as a sender may wait for the writer.
+            // The client does not read yet: the writer is stuck in the first large frame (larger than the socket
+            // buffers once compressed), the others wait in the queue.
             val frames =
                 listOf(
                     Frame(FrameKind.Response, 1, JsonPrimitive(noise(24 * MIB))),
@@ -65,8 +66,9 @@ class ServerConnectionTest {
                 )
             frames.forEach { it.body } // encoded beforehand: only their compression is left to the sender
             val sender = thread { frames.forEach(connection::send) }
-            // Once the four are queued (or written, if the socket buffers took the first one whole).
-            Thread.sleep(QUEUED_MS)
+            // Queued without waiting for the writer: the lanes have room.
+            sender.join(SEND_TIMEOUT_MS)
+            assertFalse(sender.isAlive, "a sender waited for the large frame to be written")
             val input = BufferedInputStream(client.getInputStream())
             Protocol.newCodec().use { codec ->
                 val order = List(4) { Protocol.read(input, codec).id }
@@ -74,7 +76,6 @@ class ServerConnectionTest {
                 assertTrue(order.indexOf(4) < order.indexOf(2), "the screen waited for the large answer: $order")
                 assertTrue(order.indexOf(1) < order.indexOf(2), "the large answers were swapped: $order")
             }
-            sender.join()
         }
 
     @Test

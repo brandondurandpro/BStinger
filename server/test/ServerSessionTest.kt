@@ -32,11 +32,9 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
-import kotlin.test.assertTrue
 
 private const val ANSWER_TIMEOUT_MS = 5_000
 private const val SILENCE_MS = 500
-private const val SLOW_MS = 1_500L
 
 /** A [ServerSession] fed frames as the reading thread does, its answers read at the other end of a loopback socket. */
 private class SessionHarness(handlers: Map<Method, Handler>) : AutoCloseable {
@@ -79,6 +77,10 @@ private class SessionHarness(handlers: Map<Method, Handler>) : AutoCloseable {
         listener.close()
     }
 }
+
+// Handlers and tests wait for each other with latches, never for a duration.
+private fun CountDownLatch.awaitOrFail() =
+    check(await(ANSWER_TIMEOUT_MS.toLong(), TimeUnit.MILLISECONDS)) { "not released within $ANSWER_TIMEOUT_MS ms" }
 
 private fun terminal(id: Long) = buildJsonObject { put("terminal", id) }
 
@@ -147,12 +149,17 @@ class ServerSessionTest {
     @Test
     fun `a cancelled request is not answered and can be sent again`() {
         val runs = AtomicInteger()
+        val firstRunning = CountDownLatch(1)
         val slow: Handler = {
-            if (runs.incrementAndGet() == 1) delay(10_000)
+            if (runs.incrementAndGet() == 1) {
+                firstRunning.countDown()
+                delay(10_000)
+            }
             JsonPrimitive("done")
         }
         SessionHarness(mapOf(Method.GitStatus to slow)).use { harness ->
             harness.request(4, Method.GitStatus)
+            firstRunning.awaitOrFail()
             harness.cancel(4)
             assertNull(harness.next(SILENCE_MS))
             harness.request(4, Method.GitStatus)
@@ -185,21 +192,20 @@ class ServerSessionTest {
 
     @Test
     fun `a slow ordered request holds back neither a ping nor a request of another key`() {
+        val release = CountDownLatch(1)
         val slowStart: Handler = {
-            // Blocking, like the spawning of a shell.
-            Thread.sleep(SLOW_MS)
+            // Blocking, like the spawning of a shell, until the test saw the other answers.
+            release.awaitOrFail()
             JsonNull
         }
         val quick: Handler = { JsonPrimitive("status") }
         SessionHarness(mapOf(Method.TerminalStart to slowStart, Method.GitStatus to quick)).use { harness ->
-            val started = System.nanoTime()
             harness.request(1, Method.TerminalStart)
             harness.ping()
             assertEquals(FrameKind.Pong, harness.answer().kind)
             harness.request(2, Method.GitStatus)
             assertEquals(2, harness.answer().id)
-            val waitedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started)
-            assertTrue(waitedMs < SLOW_MS, "the ping and the other request waited $waitedMs ms")
+            release.countDown()
             assertEquals(1, harness.answer().id)
         }
     }
@@ -207,9 +213,10 @@ class ServerSessionTest {
     @Test
     fun `the commands of a terminal apply in arrival order while another terminal goes on`() {
         val applied = ConcurrentLinkedQueue<String>()
+        val release = CountDownLatch(1)
         val write: Handler = {
             val text = params.string("text")
-            if (text == "slow") Thread.sleep(SLOW_MS / 3)
+            if (text == "slow") release.awaitOrFail()
             applied += "${params.long("terminal")}:$text"
             JsonNull
         }
@@ -227,8 +234,9 @@ class ServerSessionTest {
             send(2, Method.TerminalKey, 5, "a")
             send(3, Method.TerminalWrite, 5, "b")
             send(4, Method.TerminalWrite, 6, "c")
-            val order = List(4) { harness.answer().id }
-            assertEquals(4, order.firstOrNull(), "the other terminal waited: $order")
+            assertEquals(4, harness.answer().id, "the other terminal waited")
+            release.countDown()
+            assertEquals(listOf(1L, 2L, 3L), List(3) { harness.answer().id })
             assertEquals(listOf("6:c", "5:slow", "5:a", "5:b"), applied.toList())
         }
     }
@@ -236,9 +244,10 @@ class ServerSessionTest {
     @Test
     fun `the edits of a document apply in order and a request about it waits for them`() {
         val applied = ConcurrentLinkedQueue<String>()
-        val recording = { name: String, delayMs: Long ->
+        val release = CountDownLatch(1)
+        val recording = { name: String, blocks: Boolean ->
             val handler: Handler = {
-                if (delayMs > 0) Thread.sleep(delayMs)
+                if (blocks) release.awaitOrFail()
                 applied += "$name ${params.string("path")}"
                 JsonNull
             }
@@ -246,10 +255,10 @@ class ServerSessionTest {
         }
         val handlers =
             mapOf(
-                Method.DocOpen to recording("open", SLOW_MS / 3),
-                Method.DocChange to recording("change", 0),
-                Method.DocClose to recording("close", 0),
-                Method.LspHover to recording("hover", 0),
+                Method.DocOpen to recording("open", true),
+                Method.DocChange to recording("change", false),
+                Method.DocClose to recording("close", false),
+                Method.LspHover to recording("hover", false),
             )
         SessionHarness(handlers).use { harness ->
             harness.request(1, Method.DocOpen, document("a.kt"))
@@ -257,8 +266,9 @@ class ServerSessionTest {
             harness.request(3, Method.LspHover, document("a.kt"))
             harness.request(4, Method.DocClose, document("a.kt"))
             harness.request(5, Method.LspHover, document("b.kt"))
-            val order = List(5) { harness.answer().id }
-            assertEquals(5, order.firstOrNull(), "a request about another document waited: $order")
+            assertEquals(5, harness.answer().id, "a request about another document waited")
+            release.countDown()
+            assertEquals(setOf(1L, 2L, 3L, 4L), List(4) { harness.answer().id }.toSet())
             val sequence = applied.toList()
             assertEquals(listOf("hover b.kt", "open a.kt", "change a.kt"), sequence.take(3))
             // The hover waits for the edits sent before it, not for the requests sent after it.
@@ -269,15 +279,24 @@ class ServerSessionTest {
     @Test
     fun `lsp use calls apply in arrival order`() {
         val applied = ConcurrentLinkedQueue<String>()
+        val firstRunning = CountDownLatch(1)
+        val release = CountDownLatch(1)
         val use: Handler = {
             val project = params.string("project")
-            if (project == "first") Thread.sleep(SLOW_MS / 3)
+            if (project == "first") {
+                firstRunning.countDown()
+                release.awaitOrFail()
+            }
             applied += project
             JsonNull
         }
         SessionHarness(mapOf(Method.LspUse to use)).use { harness ->
             harness.request(1, Method.LspUse, buildJsonObject { put("project", "first") })
             harness.request(2, Method.LspUse, buildJsonObject { put("project", "second") })
+            firstRunning.awaitOrFail()
+            // The second waits for the first, however long it takes.
+            assertNull(harness.next(SILENCE_MS))
+            release.countDown()
             assertEquals(listOf(1L, 2L), List(2) { harness.answer().id })
             assertEquals(listOf("first", "second"), applied.toList())
         }
@@ -288,7 +307,7 @@ class ServerSessionTest {
         val runs = ConcurrentLinkedQueue<Long>()
         val release = CountDownLatch(1)
         val write: Handler = {
-            if (id == 1L) release.await(ANSWER_TIMEOUT_MS.toLong(), TimeUnit.MILLISECONDS)
+            if (id == 1L) release.awaitOrFail()
             runs += id
             JsonNull
         }

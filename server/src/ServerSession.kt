@@ -86,6 +86,11 @@ private fun orderingKey(method: Method, frame: Frame): String? =
 /** A request being executed: [cancellable] by the client, unless it is one of a sequential queue. */
 private class Running(val job: Job, val cancellable: Boolean)
 
+// Only the entry of the job [self]: a retry dispatched once it was released has its own.
+private fun ConcurrentHashMap<Long, Running>.release(id: Long, self: Job) {
+    computeIfPresent(id) { _, running -> running.takeIf { it.job !== self } }
+}
+
 /** One request being executed: its id, its named params, the session's terminals and the session's id. */
 internal class Request(
     val id: Long,
@@ -214,12 +219,12 @@ internal class ServerSession(
             val previous = key?.let { queues[it] } ?: documentQueue
             val job =
                 scope.launch(start = CoroutineStart.LAZY) {
+                    val self = coroutineContext.job
                     try {
                         previous?.join()
-                        complete(id, method, measured(frame, method))
+                        complete(id, method, measured(frame, method), self)
                     } finally {
-                        inFlight.remove(id)
-                        val self = coroutineContext.job
+                        inFlight.release(id, self)
                         key?.let { queues.remove(it, self) }
                     }
                 }
@@ -229,8 +234,11 @@ internal class ServerSession(
         }
     }
 
-    private fun complete(id: Long, method: Method, answer: Frame) {
+    // Cached, then no longer running, then sent: a retry sent as soon as the answer arrived finds it cached, or runs
+    // again, instead of being dropped as still running.
+    private fun complete(id: Long, method: Method, answer: Frame, self: Job) {
         if (method.mutating) synchronized(answers) { answers[id] = answer }
+        inFlight.release(id, self)
         send(answer)
     }
 

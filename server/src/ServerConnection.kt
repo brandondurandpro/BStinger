@@ -198,7 +198,10 @@ internal class ServerConnection(private val socket: Socket) : Closeable {
                 if (outbox.isEmpty()) output.flush()
             }
         } catch (ignored: IOException) {
-            close() // the reading thread ends; the client reconnects and retries or resumes
+            // The connection is lost: the client reconnects and retries or resumes.
+        } finally {
+            // Whatever ended the writer, nothing waits for it any more: the senders are released, the reader ends.
+            close()
         }
     }
 
