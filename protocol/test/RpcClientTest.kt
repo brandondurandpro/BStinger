@@ -193,7 +193,7 @@ class RpcClientTest {
             val replayed = server.next()
             assertEquals(2, replayed.connection)
             assertEquals(Method.Read, replayed.method)
-            server.answer(replayed.id, "content")
+            server.answer(replayed, "content")
             assertEquals("\"content\"", read.await().toString())
             // Pending requests are sent again first: a mutation sent again would arrive before this one.
             val probe = async(Dispatchers.IO) { runCatching { client.call(Method.LspHover) } }
@@ -216,7 +216,7 @@ class RpcClientTest {
             server.comeBack(client, before)
             val request = server.next()
             assertEquals(Method.CreateFile, request.method)
-            server.answer(request.id, "created")
+            server.answer(request, "created")
             assertEquals("\"created\"", created.await().toString())
         }
 }

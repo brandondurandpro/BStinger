@@ -26,6 +26,7 @@ import kotlin.time.measureTime
 
 private const val COMMANDS = 50
 private const val ORDER_FILE = "order.txt"
+private const val WARM_UP_CALLS = 3_000
 
 /** The client and the server talking over a real socket. */
 class RemoteServicesTest {
@@ -103,7 +104,9 @@ class RemoteServicesTest {
             project.resolve("big.kt").writeText((1..200_000).joinToString("\n") { "fun f$it(x: Int) = x * $it" })
             val root = fs.resolveDirectory(project.toString())!!
             val small = fs.fileAt(project.resolve("small.txt").toString())!!
-            repeat(200) { fs.read(small) } // warm-up
+            // Until the JIT compiled the path of a call: after 200 calls a round trip still cost 3 to 5 times its
+            // steady cost, and that compilation, slower on a loaded runner, was most of what the budget measured.
+            repeat(WARM_UP_CALLS) { fs.read(small) }
             val sequential = measureTime { repeat(2000) { fs.read(small) } }
             val perCall = sequential.inWholeMicroseconds / 2000
             println("Sequential round trip: ${perCall}µs")
