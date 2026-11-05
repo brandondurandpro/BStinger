@@ -59,14 +59,14 @@ private val RowShape = RoundedCornerShape(6.dp)
  */
 @Composable
 fun SettingsDialog(app: AppState) {
-    val settings = app.settings ?: return
+    val settings = app.settings.dialog ?: return
     val search = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { search.requestFocus() } }
     Box(
         Modifier
             .fillMaxSize()
             .background(Backdrop)
-            .pointerInput(Unit) { detectTapGestures { app.closeSettings() } },
+            .pointerInput(Unit) { detectTapGestures { app.settings.close() } },
         contentAlignment = Alignment.Center,
     ) {
         Column(
@@ -92,7 +92,7 @@ fun SettingsDialog(app: AppState) {
 private fun Modifier.closesOnEscape(app: AppState): Modifier =
     onPreviewKeyEvent { event ->
         val closes = event.type == KeyEventType.KeyDown && event.key == Key.Escape
-        if (closes) app.closeSettings()
+        if (closes) app.settings.close()
         closes
     }
 
@@ -103,7 +103,7 @@ private fun SettingsTitle(app: AppState) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Label("Settings", Modifier.weight(1f), fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-        IconButton(app::closeSettings, Modifier.testTag(AppTags.SETTINGS_CLOSE)) { CloseIcon() }
+        IconButton({ app.settings.close() }, Modifier.testTag(AppTags.SETTINGS_CLOSE)) { CloseIcon() }
     }
     Box(Modifier.fillMaxWidth().height(1.dp).background(IdeColors.Separator))
 }
@@ -194,24 +194,56 @@ private fun SettingRow(app: AppState, settings: SettingsState, setting: Setting,
 @Composable
 private fun SettingControl(app: AppState, settings: SettingsState, setting: Setting) {
     when (setting) {
-        Setting.FontSize -> FontSizeControl(app)
-        Setting.InlayHints -> InlayHintsControl(app)
-        Setting.PhpServer -> ServerControl(settings)
-        Setting.AutoSelect -> SettingCheckBox(setting, app.autoSelectOpenedFile) { app.autoSelectOpenedFile = it }
-        Setting.Telemetry -> TelemetryControl(app)
-        Setting.AgentMode -> SettingCheckBox(setting, app.agentModeEnabled) { app.enableAgentMode(it) }
-        Setting.Agent -> RegistryAgentChoice(app)
-        Setting.AgentCommand -> AgentCommandField(app)
+        Setting.FontSize -> {
+            FontSizeControl(app)
+        }
+
+        Setting.InlayHints -> {
+            InlayHintsControl(app)
+        }
+
+        Setting.PhpServer -> {
+            ServerControl(settings)
+        }
+
+        Setting.AutoSelect -> {
+            SettingCheckBox(
+                setting,
+                app.settings.autoSelectOpenedFile,
+            ) { app.settings.autoSelectOpenedFile = it }
+        }
+
+        Setting.Telemetry -> {
+            TelemetryControl(app)
+        }
+
+        Setting.AgentMode -> {
+            SettingCheckBox(
+                setting,
+                app.settings.agentModeEnabled,
+            ) { app.settings.enableAgentMode(it) }
+        }
+
+        Setting.Agent -> {
+            RegistryAgentChoice(app)
+        }
+
+        Setting.AgentCommand -> {
+            AgentCommandField(app)
+        }
     }
 }
 
 // The agent of the ACP registry; choosing one clears the command line, since a command line wins over it.
 @Composable
 private fun RegistryAgentChoice(app: AppState) {
-    val chosen = app.agentRegistry.ifBlank { DEFAULT_AGENT }.takeIf { app.agentCommand.isBlank() }
-    AgentRegistryControl(app.services.agents, chosen) { id ->
-        app.agentRegistry = id
-        app.agentCommand = ""
+    val chosen =
+        app.settings.agentRegistry
+            .ifBlank { DEFAULT_AGENT }
+            .takeIf { app.settings.agentCommand.isBlank() }
+    AgentRegistryControl(app.session.services.agents, chosen) { id ->
+        app.settings.agentRegistry = id
+        app.settings.agentCommand = ""
     }
 }
 
@@ -219,8 +251,8 @@ private fun RegistryAgentChoice(app: AppState) {
 @Composable
 private fun AgentCommandField(app: AppState) {
     IdeTextField(
-        app.agentCommand,
-        { app.agentCommand = it },
+        app.settings.agentCommand,
+        { app.settings.agentCommand = it },
         Modifier.fillMaxWidth().testTag(AppTags.SETTINGS_AGENT_COMMAND),
         placeholder = "npx -y @agentclientprotocol/claude-agent-acp",
         monospace = true,

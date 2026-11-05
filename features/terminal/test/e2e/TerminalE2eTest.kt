@@ -358,7 +358,7 @@ class TerminalE2eTest {
             val terminalTab = app.project.terminal.active
             assertFalse(terminalTab?.running ?: true)
             val terminal = app.project.terminal
-            runOnUiThread { app.state.closeProject() }
+            runOnUiThread { app.state.session.closeProject() }
             awaitTag(AppTags.WELCOME)
             awaitCondition { terminal.tabs.isEmpty() }
         }

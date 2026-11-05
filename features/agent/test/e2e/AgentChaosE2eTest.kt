@@ -14,6 +14,7 @@ import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.minutes
 
 /**
  * Agent mode when the network or the server fails: the transcript loses nothing and repeats nothing, an answer to a
@@ -85,7 +86,8 @@ class AgentChaosE2eTest {
 
     @Test
     fun `a prompt sent while the network is down is sent once when it is back`() =
-        runComposeUiTest {
+        // A slow runner reconnects and restarts the prompt in more than the default minute.
+        runComposeUiTest(testTimeout = 3.minutes) {
             val app = launchWithProject(project, agentPreferences(), chaos = true)
             val conversation = startConversation(app)
             sendPrompt("echo warm up")

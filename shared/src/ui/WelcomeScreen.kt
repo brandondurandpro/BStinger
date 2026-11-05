@@ -64,7 +64,7 @@ fun WelcomeScreen(state: AppState) {
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .clickable { state.openRemoteDialog() }
+                    .clickable { state.remote.openDialog() }
                     .testTag(AppTags.WELCOME_REMOTE)
                     .padding(horizontal = 10.dp, vertical = 6.dp),
             ) {
@@ -73,13 +73,13 @@ fun WelcomeScreen(state: AppState) {
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .clickable { state.openSettings() }
+                    .clickable { state.settings.open() }
                     .testTag(AppTags.WELCOME_SETTINGS)
                     .padding(horizontal = 10.dp, vertical = 6.dp),
             ) {
                 Label("Settings")
             }
-            state.remoteLabel?.let { destination ->
+            state.session.remoteLabel?.let { destination ->
                 Spacer(Modifier.height(12.dp))
                 Label("Connected to $destination", color = IdeColors.TextSecondary, fontSize = 11.sp)
                 IdeButton(
@@ -91,8 +91,8 @@ fun WelcomeScreen(state: AppState) {
         }
         VerticalDivider(Modifier.fillMaxHeight())
         Column(Modifier.weight(1f).fillMaxHeight().background(IdeColors.Editor)) {
-            TelemetryBanner(state.telemetry)
-            if (state.recentProjects.isEmpty()) {
+            TelemetryBanner(state.settings.telemetry)
+            if (state.session.recentProjects.isEmpty()) {
                 EmptyWelcome(state)
             } else {
                 RecentProjects(state)
@@ -114,7 +114,7 @@ private fun EmptyWelcome(state: AppState) {
         Spacer(Modifier.height(24.dp))
         IdeButton(
             "Open",
-            onClick = state::browseForProject,
+            onClick = { state.session.browseForProject() },
             primary = true,
             modifier = Modifier.testTag(AppTags.WELCOME_OPEN),
         )
@@ -127,7 +127,7 @@ private fun RecentProjects(state: AppState) {
     var query by remember { mutableStateOf("") }
     val filtered by remember(state) {
         derivedStateOf {
-            state.recentProjects.filter { query.isBlank() || it.contains(query.trim(), ignoreCase = true) }
+            state.session.recentProjects.filter { query.isBlank() || it.contains(query.trim(), ignoreCase = true) }
         }
     }
     Column(Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 16.dp)) {
@@ -138,11 +138,11 @@ private fun RecentProjects(state: AppState) {
                 Modifier.weight(1f).testTag(AppTags.WELCOME_SEARCH),
                 placeholder = "Search projects",
                 leading = { SearchIcon() },
-                onSubmit = { filtered.firstOrNull()?.let(state::openProject) },
+                onSubmit = { filtered.firstOrNull()?.let { state.session.openProject(it) } },
             )
             IdeButton(
                 "Open",
-                onClick = state::browseForProject,
+                onClick = { state.session.browseForProject() },
                 primary = true,
                 modifier = Modifier.testTag(AppTags.WELCOME_OPEN),
             )
@@ -155,8 +155,8 @@ private fun RecentProjects(state: AppState) {
                 items(filtered, key = { it }) { path ->
                     RecentProjectRow(
                         path,
-                        onOpen = { state.openProject(path) },
-                        onRemove = { state.removeRecent(path) },
+                        onOpen = { state.session.openProject(path) },
+                        onRemove = { state.session.removeRecent(path) },
                     )
                 }
             }
@@ -193,6 +193,6 @@ private fun RecentProjectRow(path: String, onOpen: () -> Unit, onRemove: () -> U
 
 @Composable
 private fun ErrorMessage(state: AppState) {
-    val error = state.error ?: return
+    val error = state.session.error ?: return
     Label(error, color = IdeColors.Error, modifier = Modifier.padding(top = 8.dp).testTag(AppTags.WELCOME_ERROR))
 }
