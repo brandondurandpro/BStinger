@@ -19,6 +19,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.example.kotlineditor.model.ConnectionStatus
 import org.example.kotlineditor.model.NetworkInspector
+import org.example.kotlineditor.model.OutcomeUnknownException
 import org.example.kotlineditor.model.TerminalSnapshot
 import org.example.kotlineditor.telemetry.Attribute
 import org.example.kotlineditor.telemetry.Attributes
@@ -62,8 +63,11 @@ private const val REMOTE_ERROR = "RemoteException"
 /**
  * Client side of the protocol: one TCP connection, multiplexed requests, automatic reconnection.
  *
+ * - A call never writes on its caller's thread: its request is queued, and a writer on [Dispatchers.IO] encodes,
+ *   compresses and writes it (see [Outbox]).
  * - Requests are registered before being sent and stay registered until answered: when the link breaks they
- *   are simply sent again on the next connection, with the same id (the server deduplicates).
+ *   are simply sent again on the next connection, with the same id (the server deduplicates). When the server
+ *   restarted meanwhile it cannot: a mutation already sent then fails with [OutcomeUnknownException] instead.
  * - Streams (shell output) carry sequence numbers; out-of-order events are buffered, duplicates dropped, and
  *   after a reconnection the client asks the server to replay what it missed.
  */
@@ -78,6 +82,7 @@ class RpcClient(
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val nextId = AtomicLong(1)
     private val pending = PendingRequests()
+    private val outbox = Outbox(pending, options.heartbeatMs)
     private val streams = StreamRegistry()
     private val mutableStatus = MutableStateFlow(ConnectionStatus.Reconnecting)
 
@@ -90,6 +95,7 @@ class RpcClient(
             token,
             options,
             pending,
+            outbox,
             streams,
             mutableStatus,
             ::measureReconnections,
@@ -206,9 +212,11 @@ class RpcClient(
                     trace = span?.context?.traceparent(),
                 ),
             )
+        // Written by the outbox's writer, off this thread (the UI's, often), on the current connection or the next.
+        outbox.request(call)
         var outcome: Outcome = Outcome.Ok
         try {
-            val answer = sendAndAwait(call, method, timeoutMs)
+            val answer = awaitAnswer(call, method, timeoutMs)
             if (answer.kind == FrameKind.Error) outcome = Outcome.Error(REMOTE_ERROR)
             return answer
         } catch (@Suppress("TooGenericExceptionCaught") failure: Throwable) {
@@ -216,22 +224,17 @@ class RpcClient(
             outcome = Outcome.of(failure)
             throw failure
         } finally {
+            val written = call.abandon()
             pending.remove(id)
-            // Timed out or cancelled: the server can stop working on it.
-            if (!call.result.isCompleted) connector.link?.send(Frame(FrameKind.Cancel, id))
+            // Timed out or cancelled once sent: the server can stop working on it.
+            if (written && !call.result.isCompleted) outbox.notify(Frame(FrameKind.Cancel, id))
             telemetry.end(span, outcome, retriedOf(call, span))
         }
     }
 
-    private suspend fun sendAndAwait(call: PendingRequests.Pending, method: Method, timeoutMs: Long): Frame {
-        // Otherwise sent as soon as a connection is established.
-        connector.link?.let { link ->
-            call.sends.incrementAndGet()
-            link.send(call.frame)
-        }
-        return withTimeoutOrNull(timeoutMs) { call.result.await() }
+    private suspend fun awaitAnswer(call: PendingRequests.Pending, method: Method, timeoutMs: Long): Frame =
+        withTimeoutOrNull(timeoutMs) { call.result.await() }
             ?: throw IOException("No answer from the server for $method after ${timeoutMs}ms")
-    }
 
     // The rpc.client span of a call, child of the span of the calling coroutine; null when telemetry is off.
     private suspend fun startSpan(method: Method): Span? {
@@ -244,6 +247,6 @@ class RpcClient(
 // Whether the request was sent again on a new connection; nothing to say when it is not measured.
 private fun retriedOf(call: PendingRequests.Pending, span: Span?): Attributes {
     if (span == null) return Attributes.NONE
-    val retried = call.sends.get() > 1
+    val retried = call.sends > 1
     return Attributes.of(Attribute.Retried to retried.toString())
 }
