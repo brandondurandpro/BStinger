@@ -69,7 +69,7 @@ class RemoteOpenProjectE2eTest {
             onNodeWithTag(RemoteTags.OPEN_PROJECT_OPEN).performClick()
 
             awaitTag(TreeTags.treeRow("README.md"), timeout = 60_000)
-            assertTrue(app.state.isRemote)
+            assertTrue(app.state.session.isRemote)
         }
 
     @Test
@@ -177,8 +177,8 @@ class RemoteOpenProjectE2eTest {
             awaitTag(RemoteTags.OPEN_PROJECT, timeout = 60_000)
             onNodeWithTag(RemoteTags.OPEN_PROJECT_CANCEL).performClick()
             awaitNoTag(RemoteTags.OPEN_PROJECT)
-            assertTrue(app.state.screen == Screen.Welcome)
-            assertTrue(app.state.isRemote)
+            assertTrue(app.state.session.screen == Screen.Welcome)
+            assertTrue(app.state.session.isRemote)
         }
 
     @Test
@@ -201,8 +201,8 @@ class RemoteOpenProjectE2eTest {
         remoteUiTest {
             val project = checkNotNull(demo)
             val app = launchApp()
-            awaitCondition { app.state.serverHome != null }
-            val localHome = app.state.serverHome
+            awaitCondition { app.state.session.home != null }
+            val localHome = app.state.session.home
             connectRemoteTo(RemoteTestEnvironment, null)
             awaitTag(RemoteTags.OPEN_PROJECT, timeout = 60_000)
             showDirectoryInProjectPicker(project.toString())
@@ -213,7 +213,7 @@ class RemoteOpenProjectE2eTest {
             onNodeWithTag(AppTags.TOP_REMOTE).performClick()
             awaitTag(AppTags.REMOTE_DISCONNECT).performClick()
             awaitTag(AppTags.WELCOME)
-            awaitCondition { !app.state.isRemote }
+            awaitCondition { !app.state.session.isRemote }
             openProjectPickerFromWelcome()
             awaitCondition { shownDirectoryInProjectPicker() == localHome }
         }

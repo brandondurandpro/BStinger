@@ -4,13 +4,20 @@ import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.example.kotlineditor.model.BlameLine
 import org.example.kotlineditor.model.DiffLine
 import org.example.kotlineditor.model.FileContent
 import org.example.kotlineditor.model.FileEntry
+import org.example.kotlineditor.model.OutcomeUnknownException
 import org.example.kotlineditor.model.ProjectFileSystem
 import org.example.kotlineditor.syntax.Language
 import org.example.kotlineditor.syntax.SyntaxHighlighter
@@ -24,9 +31,23 @@ import org.example.kotlineditor.telemetry.Operation
 import org.example.kotlineditor.telemetry.measureToFrame
 import org.example.kotlineditor.telemetry.sizeBucket
 import java.io.IOException
+import java.util.WeakHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 
 private const val RECOMPUTE_DELAY_MS = 150L
 private const val MEGABYTE = 1024 * 1024
+
+/** A file whose edits could not be saved, and why (shown to the user, who may try again). */
+data class UnsavedFile(val entry: FileEntry, val relativePath: String, val reason: String)
+
+// The saves of one document, one at a time and in the order they were asked: two writes of a file in flight
+// together may land in any order, leaving the older text on disk while the editor says it is saved.
+private class SaveQueue {
+    val mutex = Mutex()
+
+    // A save waits for the one running: asking again changes nothing, it writes the text as it is when it starts.
+    val waiting = AtomicBoolean(false)
+}
 
 /** Loads tabs' content from the server and saves it back. */
 @Suppress("TooManyFunctions")
@@ -39,6 +60,9 @@ internal class TabFiles(
     private val commitDiffs: suspend (FileEntry, CommitDiffTarget) -> List<DiffLine>,
     private val grammars: GrammarStore?,
 ) {
+    // By document: the two panes may show one document, through two tabs.
+    private val saveQueues = WeakHashMap<Document, SaveQueue>()
+
     fun load(tab: EditorTab) {
         if (tab.isDiff) loadDiff(tab) else loadText(tab)
     }
@@ -140,12 +164,38 @@ internal class TabFiles(
         if (tab.status is TabStatus.Ready) loadChanges(tab)
     }
 
-    /** Saves [tab] in the background; if the server is unreachable it stays modified and is saved again later. */
+    /**
+     * Saves [tab] in the background; if the server is unreachable it stays modified and is saved again later. A save
+     * asked while one of the same document runs is done after it, once, with the text as it is then.
+     */
     fun save(tab: EditorTab) {
-        if (tab.document?.isModified == true) {
-            scope.launch { runCatching { write(tab) } }
+        val document = tab.document ?: return
+        val queue = queueOf(document)
+        // When a save of this document waits already, it will write the text as it is when it starts.
+        val queued = document.isModified && queue.waiting.compareAndSet(false, true)
+        if (queued) launchSave(tab, queue)
+    }
+
+    private fun launchSave(tab: EditorTab, queue: SaveQueue) {
+        scope.launch {
+            var started = false
+            try {
+                runCatching {
+                    queue.mutex.withLock {
+                        started = true
+                        queue.waiting.set(false)
+                        write(tab)
+                    }
+                }
+            } finally {
+                // Cancelled while it waited (the project closed): the next save is not taken for this one.
+                if (!started) queue.waiting.set(false)
+            }
         }
     }
+
+    private fun queueOf(document: Document): SaveQueue =
+        synchronized(saveQueues) { saveQueues.getOrPut(document, ::SaveQueue) }
 
     /** Replaces the edits of [tab] with what another program wrote (the user chose the disk in a conflict). */
     suspend fun reloadFromDisk(tab: EditorTab) {
@@ -161,8 +211,29 @@ internal class TabFiles(
         save(tab)
     }
 
-    /** Saves every modified tab and returns once everything is on disk (closing the project or the IDE). */
-    suspend fun flush(tabs: List<EditorTab>) = tabs.forEach { write(it) }
+    /**
+     * Saves every modified tab of [tabs], each whatever happens to the others, and returns once all are done (closing
+     * the project or the IDE, before a rename or a Git action): the files that could not be saved, with why. A save
+     * that takes longer than [timeoutMillis] (the server is out of reach) is given up, its tab left modified.
+     */
+    suspend fun flush(tabs: List<EditorTab>, timeoutMillis: Long = Long.MAX_VALUE): List<UnsavedFile> =
+        coroutineScope {
+            val modified = tabs.filter { it.document?.savable() == true }.distinctBy { it.document }
+            val saves = modified.map { tab -> async { saveNow(tab, timeoutMillis) } }
+            saves.awaitAll().filterNotNull()
+        }
+
+    // Saves [tab] after the save of its document already running, if any; why it could not, or null once saved.
+    private suspend fun saveNow(tab: EditorTab, timeoutMillis: Long): UnsavedFile? {
+        val document = tab.document ?: return null
+        val queue = queueOf(document)
+        return try {
+            val done = withTimeoutOrNull(timeoutMillis) { queue.mutex.withLock { write(tab) } }
+            if (done == null) UnsavedFile(tab.entry, tab.relativePath, "the server did not answer in time") else null
+        } catch (failed: IOException) {
+            UnsavedFile(tab.entry, tab.relativePath, failed.message ?: failed::class.simpleName.orEmpty())
+        }
+    }
 
     private suspend fun write(tab: EditorTab) {
         val document = tab.document
@@ -173,7 +244,7 @@ internal class TabFiles(
                 val lines = document.snapshotLines()
                 document.saveStamp++
                 try {
-                    fileSystem.write(tab.entry, document.text())
+                    writtenOnce(tab.entry, document.text(), lines)
                     // What the disk now has, even when the user typed meanwhile: the watch reports this write too.
                     document.diskLinesHash = lines.hashCode()
                 } catch (failed: IOException) {
@@ -186,6 +257,23 @@ internal class TabFiles(
                 if (document.version == version) document.markSaved()
                 onSaved(tab.entry)
             }
+        }
+    }
+
+    // Writes [text] (made of [lines]). A server that restarted before answering may or may not have written it: it is
+    // not asked again, the disk says whether it was; it was when it holds [lines], and the save then ends as answered.
+    private suspend fun writtenOnce(entry: FileEntry, text: String, lines: List<String>) {
+        try {
+            fileSystem.write(entry, text)
+        } catch (unknown: OutcomeUnknownException) {
+            val disk =
+                try {
+                    fileSystem.read(entry)
+                } catch (unreachable: IOException) {
+                    unknown.addSuppressed(unreachable)
+                    throw unknown
+                }
+            if ((disk as? FileContent.Text)?.lines != lines) throw unknown
         }
     }
 

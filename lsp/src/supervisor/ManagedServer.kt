@@ -40,6 +40,7 @@ import org.example.kotlineditor.telemetry.Operation
 import org.example.kotlineditor.telemetry.Outcome
 import org.example.kotlineditor.telemetry.Span
 import java.util.concurrent.TimeUnit
+import kotlin.concurrent.thread
 
 private const val NANOS_PER_MILLI = 1_000_000L
 
@@ -453,7 +454,15 @@ internal class ManagedServer(
         capabilities = capabilitiesOf(initialized)
         hooks.onRestarted(id)
         runCatching { link.notify("initialized", JsonObject(emptyMap())) }
-        mirror.open(DocumentOutbox(link, scope, syncKindOf(initialized)))
+        val box =
+            DocumentOutbox(
+                link,
+                scope,
+                syncKindOf(initialized),
+                maxUnreadBytes = timings.maxUnreadBytes,
+                onStuck = { unreadBytes -> stuck(launched, unreadBytes) },
+            )
+        mirror.open(box)
         // A key per process: the old one may still be untracked after a new one started.
         samplerKey = "$id#${launched.pid()}".also { history = sampler?.track(it, launched.toHandle()) }
         indexingMayBeginUntil = System.nanoTime() + timings.indexingStartMs * NANOS_PER_MILLI
@@ -474,6 +483,13 @@ internal class ManagedServer(
         return done != null
     }
 
+    // Called under the documents' lock: only queues the restart, as a crash, whose stop kills the process.
+    private fun stuck(launched: Process, unreadBytes: Long) {
+        val reason = "Stopped reading its input, ${unreadBytes / BYTES_PER_MEGABYTE} MB left unread"
+        log.add(reason)
+        send(Command.Failed(launched, reason))
+    }
+
     private fun closeOutbox() {
         capabilities = null
         mirror.close()
@@ -489,17 +505,33 @@ internal class ManagedServer(
         val link = connection
         connection = null
         val polite = graceful && link?.isClosed == false
-        if (polite && running.isAlive) {
-            withTimeoutOrNull(timings.shutdownTimeoutMs) { runCatching { link.request("shutdown") } }
-            runCatching { link.notify("exit") }
-            withContext(Dispatchers.IO) { running.waitFor(timings.shutdownTimeoutMs, TimeUnit.MILLISECONDS) }
-        }
+        if (polite && running.isAlive) askToExit(link, running)
         OrphanReaper.killTree(running.toHandle(), start)
-        link?.close()
+        // Closing waits for the lock of a write blocked on a process that stopped reading, until the kill breaks
+        // the pipe: never on this coroutine, whatever the system takes to do it.
+        link?.let { thread(isDaemon = true, name = "lsp-close") { it.close() } }
         samplerKey?.let { sampler?.untrack(it) }
         samplerKey = null
         reaper?.forget(running.pid())
         progress.clear()
+    }
+
+    // Asks the process to shut down and exit, then waits for it a while. The messages are written on a thread of
+    // their own: a process that stopped reading its input blocks them behind the write of the outbox, under the
+    // connection's lock, which no timeout interrupts. That thread is then left blocked until the kill that follows
+    // breaks the pipe, and the process is not waited for, since it was not told to exit.
+    private suspend fun askToExit(link: LspConnection, running: Process) {
+        val asking =
+            scope.launch(Dispatchers.IO) {
+                withTimeoutOrNull(timings.shutdownTimeoutMs) { runCatching { link.request("shutdown") } }
+                runCatching { link.notify("exit") }
+            }
+        val asked = withTimeoutOrNull(timings.shutdownTimeoutMs + EXIT_WRITE_MS) { asking.join() }
+        if (asked == null) {
+            log.add("Could not ask it to exit: it does not read its input")
+            return
+        }
+        withContext(Dispatchers.IO) { running.waitFor(timings.shutdownTimeoutMs, TimeUnit.MILLISECONDS) }
     }
 
     private fun setState(new: LanguageServerState, why: String?) {
@@ -583,5 +615,10 @@ internal class ManagedServer(
 
     private companion object {
         const val MILLIS = 1_000L
+
+        const val BYTES_PER_MEGABYTE = 1024L * 1024
+
+        // How long writing exit may take after shutdown went unanswered; within the supervisor's margin to close.
+        const val EXIT_WRITE_MS = 500L
     }
 }

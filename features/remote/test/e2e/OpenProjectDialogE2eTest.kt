@@ -44,9 +44,9 @@ class OpenProjectDialogE2eTest {
     fun `Open starts in the home directory of the server`() =
         runComposeUiTest {
             val app = launchApp()
-            awaitCondition { app.state.serverHome != null }
+            awaitCondition { app.state.session.home != null }
             openProjectPickerFromWelcome()
-            awaitCondition { shownDirectoryInProjectPicker() == app.state.serverHome }
+            awaitCondition { shownDirectoryInProjectPicker() == app.state.session.home }
         }
 
     // The children are sorted directories first, then by name: .git, docs, src.
@@ -128,7 +128,7 @@ class OpenProjectDialogE2eTest {
                         .assertTextEquals("Directory not found: /no/such/project/directory")
                 }.isSuccess
             }
-            assertIs<Screen.Welcome>(app.state.screen)
+            assertIs<Screen.Welcome>(app.state.session.screen)
             // The failed navigation does not block the next one.
             showDirectoryInProjectPicker(project.path)
             awaitTag(RemoteTags.pickerDirectory(pathInProject("src").toString())).assertIsDisplayed()
@@ -189,11 +189,11 @@ class OpenProjectDialogE2eTest {
     fun `Home shows the home directory of the server`() =
         runComposeUiTest {
             val app = launchApp()
-            awaitCondition { app.state.serverHome != null }
+            awaitCondition { app.state.session.home != null }
             openProjectPickerFromWelcome()
             showDirectoryInProjectPicker(project.path)
             onNodeWithTag(RemoteTags.OPEN_PROJECT_HOME).performClick()
-            awaitCondition { shownDirectoryInProjectPicker() == app.state.serverHome }
+            awaitCondition { shownDirectoryInProjectPicker() == app.state.session.home }
         }
 
     @Test

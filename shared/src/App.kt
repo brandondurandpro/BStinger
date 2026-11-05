@@ -12,19 +12,21 @@ import org.example.kotlineditor.ui.OpenProjectDialog
 import org.example.kotlineditor.ui.ProjectScreen
 import org.example.kotlineditor.ui.RemoteDialog
 import org.example.kotlineditor.ui.SettingsDialog
+import org.example.kotlineditor.ui.UnsavedOnExitDialog
 import org.example.kotlineditor.ui.WelcomeScreen
 
 @Composable
 fun App(state: AppState) {
     IdeTheme {
         Box(Modifier.fillMaxSize()) {
-            when (val screen = state.screen) {
+            when (val screen = state.session.screen) {
                 Screen.Welcome -> WelcomeScreen(state)
                 is Screen.Project -> key(screen.project) { ProjectScreen(state, screen.project) }
             }
-            state.remoteDialog?.let { RemoteDialog(state, it) }
+            state.remote.dialog?.let { RemoteDialog(state.remote, it) }
         }
-        if (state.projectPickerOpen) OpenProjectDialog(state)
+        if (state.session.projectPickerOpen) OpenProjectDialog(state.session)
         SettingsDialog(state)
+        state.exiting.failure?.let { UnsavedOnExitDialog(state, it) }
     }
 }

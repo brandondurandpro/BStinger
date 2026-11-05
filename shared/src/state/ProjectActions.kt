@@ -11,6 +11,7 @@ import org.example.kotlineditor.model.FileContent
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.FileOperation
 import org.example.kotlineditor.model.OperatedFile
+import org.example.kotlineditor.model.OutcomeUnknownException
 import org.example.kotlineditor.model.pathName
 import org.example.kotlineditor.syntax.Structure
 import org.example.kotlineditor.telemetry.ClientTelemetry
@@ -125,8 +126,7 @@ fun ProjectState.createFile(directory: FileEntry, name: String, isDirectory: Boo
         if (adaptsCode() && services.fileSystem.fileAt(path) == null) {
             adaptCodeTo(FileOperation.Create, OperatedFile(path, directory = isDirectory))
         }
-        val fs = services.fileSystem
-        val created = if (isDirectory) fs.createDirectory(directory, name) else fs.createFile(directory, name)
+        val created = createdOnce(directory, name, isDirectory, path)
         tree.expand(directory)
         tree.reload(directory.path)
         tree.reveal(created.path)
@@ -138,7 +138,7 @@ fun ProjectState.rename(entry: FileEntry, newName: String) =
         val reopen = editor.allTabs.any { it.entry.path == entry.path && !it.isDiff }
         adaptCodeToRename(entry, newName)
         editor.flush()
-        val renamed = services.fileSystem.rename(entry, newName)
+        val renamed = renamedOnce(entry, newName)
         editor.discard(entry.path)
         tree.parentOf(entry)?.let { tree.reload(it.path) }
         tree.reveal(renamed.path)
@@ -148,13 +148,54 @@ fun ProjectState.rename(entry: FileEntry, newName: String) =
 fun ProjectState.delete(entry: FileEntry) =
     fileOperation {
         if (adaptsCode()) adaptCodeTo(FileOperation.Delete, OperatedFile(entry.path, directory = entry.isDirectory))
-        services.fileSystem.delete(entry)
+        deletedOnce(entry)
         editor.discard(entry.path)
         tree.parentOf(entry)?.let {
             tree.reload(it.path)
             tree.select(it)
         }
     }
+
+// A server that restarted before answering a change may or may not have made it; it is not asked again (it could
+// apply twice), the disk says whether it was. These operations end as if answered when it was, and throw otherwise.
+
+private suspend fun ProjectState.createdOnce(
+    directory: FileEntry,
+    name: String,
+    isDirectory: Boolean,
+    path: String,
+): FileEntry {
+    val fs = services.fileSystem
+    return try {
+        if (isDirectory) fs.createDirectory(directory, name) else fs.createFile(directory, name)
+    } catch (unknown: OutcomeUnknownException) {
+        entryAt(path, isDirectory) ?: throw unknown
+    }
+}
+
+private suspend fun ProjectState.renamedOnce(entry: FileEntry, newName: String): FileEntry =
+    try {
+        services.fileSystem.rename(entry, newName)
+    } catch (unknown: OutcomeUnknownException) {
+        val renamed = entryAt(entry.path.dropLast(entry.name.length) + newName, entry.isDirectory)
+        val left = entryAt(entry.path, entry.isDirectory)
+        if (renamed == null || left != null) throw unknown
+        renamed
+    }
+
+private suspend fun ProjectState.deletedOnce(entry: FileEntry) {
+    try {
+        services.fileSystem.delete(entry)
+    } catch (unknown: OutcomeUnknownException) {
+        if (entryAt(entry.path, entry.isDirectory) != null) throw unknown
+    }
+}
+
+// The file or directory at [path] on the server, null when there is none.
+private suspend fun ProjectState.entryAt(path: String, isDirectory: Boolean): FileEntry? {
+    val fs = services.fileSystem
+    return if (isDirectory) fs.resolveDirectory(path) else fs.fileAt(path)
+}
 
 // The code adapted to the rename of [entry] to [newName], once the rename is known to be possible: the code must not
 // change for a rename that then fails (a file of that name exists already, the file is gone).
@@ -200,6 +241,8 @@ private fun ProjectState.fileOperation(block: suspend () -> Unit) {
             }
         } catch (e: IOException) {
             fileDialog = fileDialog?.withError(e.message ?: e::class.simpleName.orEmpty())
+            // The server restarted before saying whether it was done: the tree shows what the disk now holds.
+            if (e is OutcomeUnknownException) tree.refresh()
         }
     }
 }

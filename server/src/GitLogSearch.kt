@@ -24,10 +24,11 @@ private const val SEARCH_FORMAT = "--format=%H%x00%P%x00%an%x00%at%x00%D%x00%s%x
  */
 internal fun searchCommits(root: String, ref: String, query: String, skip: Int, limit: Int): List<GitCommit> {
     val needle = query.trim().lowercase()
-    val process =
+    val builder =
         gitProcess(root, listOf("log", SEARCH_FORMAT, ref, "--"))
             .redirectError(ProcessBuilder.Redirect.DISCARD)
-            .start()
+    val child = startGit(builder)
+    val process = child.process
     val page =
         runCatching {
             process.inputStream.bufferedReader().use { reader ->
@@ -40,7 +41,7 @@ internal fun searchCommits(root: String, ref: String, query: String, skip: Int, 
                     .map { it.commit }
                     .toList()
             }
-        }.onFailure { process.destroy() }
+        }.onFailure { child.destroyTree() }
             .getOrThrow()
     // A full page leaves the rest of the history unread: Git is stopped. Otherwise it ran to its end, and its exit
     // code tells whether the ref existed.
@@ -54,13 +55,14 @@ internal fun searchCommits(root: String, ref: String, query: String, skip: Int, 
     return page
 }
 
-// The records Git prints, as they come.
+// The records Git prints, as they come; a cancelled request (its thread interrupted) stops the reading.
 private fun records(reader: Reader): Sequence<String> =
     sequence {
         val record = StringBuilder()
         var c = reader.read()
         while (c >= 0) {
             if (c.toChar() == RECORD_END) {
+                if (Thread.currentThread().isInterrupted) throw InterruptedException("history search cancelled")
                 yield(record.toString())
                 record.setLength(0)
             } else {

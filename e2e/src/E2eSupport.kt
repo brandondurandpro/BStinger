@@ -50,7 +50,9 @@ import org.example.kotlineditor.ui.TextClipboard
 import org.example.kotlineditor.ui.TreeTags
 import java.nio.file.Files
 import java.nio.file.Path
+import kotlin.io.path.ExperimentalPathApi
 import kotlin.io.path.createDirectories
+import kotlin.io.path.deleteRecursively
 import kotlin.io.path.writeBytes
 import kotlin.io.path.writeText
 
@@ -81,7 +83,15 @@ class SampleProject(val root: Path = Files.createTempDirectory("kotlin-editor-e2
 
     fun read(relative: String): String = Files.readString(root.resolve(relative))
 
-    fun delete() = root.toFile().deleteRecursively()
+    /**
+     * Deletes the project, and the directory outside it that its links may point to ([outsideDirectory]); a link is
+     * deleted, never what it points to. Best effort, like a temp directory: what cannot be deleted stays.
+     */
+    @OptIn(ExperimentalPathApi::class)
+    fun delete() {
+        runCatching { root.deleteRecursively() }
+        runCatching { outsideDirectory().deleteRecursively() }
+    }
 
     companion object {
         val APP_KT =
@@ -178,6 +188,8 @@ class E2eApp(
     val terminalInput: TerminalInputRecorder,
     /** What the UI and the server measured, for an app launched with a [TelemetryCapture]. */
     val telemetry: TelemetryCapture?,
+    /** What the UI declared and mirrored to the language servers of the app's own (local) server. */
+    val localLanguageServers: LanguageServersRecorder,
 ) {
     val server: EditorServer get() = process.server
 
@@ -186,7 +198,7 @@ class E2eApp(
 
     val recentPaths: List<String> get() = runBlocking { recentStore.load() }
 
-    val project: ProjectState get() = (state.screen as Screen.Project).project
+    val project: ProjectState get() = (state.session.screen as Screen.Project).project
 }
 
 /**
@@ -221,23 +233,8 @@ fun ComposeUiTest.launchApp(
     val remote = client.appServices()
     if (recent.isNotEmpty()) runBlocking { remote.recentProjects.save(recent) }
     val terminalInput = TerminalInputRecorder(remote.terminal)
-    val services =
-        AppServices(
-            remote.fileSystem,
-            remote.search,
-            remote.recentProjects,
-            remote.places,
-            terminalInput,
-            sessions ?: remote.sessions,
-            remote.git,
-            remote.connection,
-            remote.connections,
-            remote.network,
-            remote.languageServers,
-            remote.telemetry,
-            remote.disk,
-            remote.agents,
-        )
+    val languageServerCalls = LanguageServersRecorder(remote.languageServers)
+    val services = withRecorders(remote, terminalInput, languageServerCalls, sessions)
     var created: AppState? = null
     val measured = telemetry?.factory
     setContent {
@@ -259,9 +256,42 @@ fun ComposeUiTest.launchApp(
         App(state)
     }
     waitForIdle()
-    if (recent.isNotEmpty()) waitUntil(timeoutMillis = TIMEOUT) { created!!.recentProjects.size == recent.size }
-    return E2eApp(created!!, services.recentProjects, process, client, proxy, terminalInput, telemetry)
+    if (recent.isNotEmpty()) waitUntil(timeoutMillis = TIMEOUT) { created!!.session.recentProjects.size == recent.size }
+    return E2eApp(
+        created!!,
+        services.recentProjects,
+        process,
+        client,
+        proxy,
+        terminalInput,
+        telemetry,
+        languageServerCalls,
+    )
 }
+
+// The app's services, with the recorders in front of the terminal and the language servers.
+private fun withRecorders(
+    remote: AppServices,
+    terminalInput: TerminalInputRecorder,
+    languageServerCalls: LanguageServersRecorder,
+    sessions: org.example.kotlineditor.model.SessionStore?,
+): AppServices =
+    AppServices(
+        remote.fileSystem,
+        remote.search,
+        remote.recentProjects,
+        remote.places,
+        terminalInput,
+        sessions ?: remote.sessions,
+        remote.git,
+        remote.connection,
+        remote.connections,
+        remote.network,
+        languageServerCalls,
+        remote.telemetry,
+        remote.disk,
+        remote.agents,
+    )
 
 /** Opens the Open Project dialog from the welcome screen and waits for it to list a directory. */
 @OptIn(ExperimentalTestApi::class)

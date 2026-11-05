@@ -61,7 +61,7 @@ internal fun Toolbar(app: AppState, project: ProjectState) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         ProjectWidget(app, project)
-        if (app.isRemote) {
+        if (app.session.isRemote) {
             RemoteBadge(app)
         }
         // In agent mode, the branch of the project the agent of the active conversation works on.
@@ -71,7 +71,7 @@ internal fun Toolbar(app: AppState, project: ProjectState) {
         } else {
             BranchWidget(branchProject, Modifier.weight(1f).padding(start = 12.dp))
         }
-        if (app.agentModeEnabled) {
+        if (app.settings.agentModeEnabled) {
             ModeSwitch(project.agentMode) { project.agentMode = it }
             Spacer(Modifier.width(10.dp))
         }
@@ -85,11 +85,11 @@ private val MENU_MAX_WIDTH = 900.dp
 @Composable
 private fun RemoteBadge(app: AppState) {
     var menuOpen by remember { mutableStateOf(false) }
-    val connection by app.connection.collectAsState()
-    val failure by app.remoteFailure.collectAsState()
+    val connection by app.session.connection.collectAsState()
+    val failure by app.session.remoteFailure.collectAsState()
     val failing = failure != null || connection != ConnectionStatus.Connected
     val border = if (failing) IdeColors.Error else IdeColors.Separator
-    val label = app.remoteLabel ?: "remote"
+    val label = app.session.remoteLabel ?: "remote"
     Box {
         Row(
             Modifier
@@ -159,7 +159,7 @@ private fun SettingsMenuItem(app: AppState, close: () -> Unit) {
         trailingIcon = { Text("Ctrl+Alt+S", fontSize = 12.sp, color = IdeColors.TextSecondary) },
         onClick = {
             close()
-            app.openSettings()
+            app.settings.open()
         },
         modifier = Modifier.testTag(AppTags.PROJECT_SETTINGS),
     )
@@ -171,7 +171,7 @@ private fun ProjectMenuItems(app: AppState, close: () -> Unit) {
         text = { Text("Open Project…", fontSize = 13.sp) },
         onClick = {
             close()
-            app.browseForProject()
+            app.session.browseForProject()
         },
         modifier = Modifier.testTag(AppTags.PROJECT_OPEN_OTHER),
     )
@@ -179,7 +179,7 @@ private fun ProjectMenuItems(app: AppState, close: () -> Unit) {
         text = { Text("Go Homepage", fontSize = 13.sp) },
         onClick = {
             close()
-            app.closeProject()
+            app.session.closeProject()
         },
         modifier = Modifier.testTag(AppTags.PROJECT_CLOSE),
     )
@@ -187,30 +187,30 @@ private fun ProjectMenuItems(app: AppState, close: () -> Unit) {
     // Feature flag of the experimental agent mode, saved with the preferences.
     DropdownMenuItem(
         text = {
-            val check = if (app.agentModeEnabled) "✓  " else "     "
+            val check = if (app.settings.agentModeEnabled) "✓  " else "     "
             Text("${check}Agent Mode (Experimental)", fontSize = 13.sp)
         },
         onClick = {
             close()
-            app.enableAgentMode(!app.agentModeEnabled)
+            app.settings.enableAgentMode(!app.settings.agentModeEnabled)
         },
         modifier = Modifier.testTag(AppTags.PROJECT_AGENT_MODE),
     )
     // The telemetry consent, also asked by the welcome screen: takes effect at once.
-    if (!app.telemetry.forbidden) {
+    if (!app.settings.telemetry.forbidden) {
         DropdownMenuItem(
             text = {
-                val check = if (app.telemetry.enabled) "✓  " else "     "
+                val check = if (app.settings.telemetry.enabled) "✓  " else "     "
                 Text("${check}Share Performance Measures", fontSize = 13.sp)
             },
             onClick = {
                 close()
-                app.telemetry.choose(!app.telemetry.enabled)
+                app.settings.telemetry.choose(!app.settings.telemetry.enabled)
             },
             modifier = Modifier.testTag(AppTags.PROJECT_TELEMETRY),
         )
     }
-    val others = app.otherProjects
+    val others = app.session.otherProjects
     if (others.isNotEmpty()) {
         HorizontalDivider(color = IdeColors.Border)
         Label(
@@ -222,7 +222,7 @@ private fun ProjectMenuItems(app: AppState, close: () -> Unit) {
         others.forEach { path ->
             RecentProjectItem(path) {
                 close()
-                app.openProject(path)
+                app.session.openProject(path)
             }
         }
     }
@@ -314,7 +314,7 @@ internal fun StatusBar(app: AppState, project: ProjectState) {
             color = IdeColors.TextSecondary,
             fontSize = 12.sp,
         )
-        app.remoteLabel?.let {
+        app.session.remoteLabel?.let {
             Label(
                 "Remote: $it",
                 Modifier.testTag(AppTags.STATUS_REMOTE),
@@ -322,7 +322,7 @@ internal fun StatusBar(app: AppState, project: ProjectState) {
                 fontSize = 12.sp,
             )
         }
-        app.opening?.let {
+        app.session.opening?.let {
             Label(
                 "Opening ${pathName(it)}…",
                 Modifier.testTag(AppTags.STATUS_OPENING),
@@ -330,7 +330,7 @@ internal fun StatusBar(app: AppState, project: ProjectState) {
                 fontSize = 12.sp,
             )
         }
-        app.error?.let {
+        app.session.error?.let {
             Label(it, Modifier.testTag(AppTags.STATUS_ERROR), color = IdeColors.Error, fontSize = 12.sp)
         }
         LanguageServerStatusItems(project)
@@ -342,8 +342,8 @@ internal fun StatusBar(app: AppState, project: ProjectState) {
 // What is wrong with the link to the server, if anything: SSH refusing the host first, then the protocol client.
 @Composable
 private fun LinkStatus(app: AppState) {
-    val connection by app.connection.collectAsState()
-    val remoteFailure by app.remoteFailure.collectAsState()
+    val connection by app.session.connection.collectAsState()
+    val remoteFailure by app.session.remoteFailure.collectAsState()
     val message =
         when {
             remoteFailure != null -> "SSH: $remoteFailure"

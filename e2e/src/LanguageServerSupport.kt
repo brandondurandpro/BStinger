@@ -111,7 +111,7 @@ class FakePhpServers(vararg options: String, idleStopMs: Long = 1_000, alternati
 }
 
 /** The language servers of the app's status, as the server last sent them. */
-val E2eApp.languageServers: List<LanguageServerInfo> get() = state.languageServers.status.servers
+val E2eApp.languageServers: List<LanguageServerInfo> get() = state.session.languageServers.status.servers
 
 /** Waits for a language server matching [predicate], and returns it. */
 @OptIn(ExperimentalTestApi::class)

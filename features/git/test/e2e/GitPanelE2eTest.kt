@@ -363,7 +363,7 @@ class GitPanelE2eTest {
             awaitTag(GitTags.gitChange("README.md"))
             onNodeWithTag(GitTags.gitChange("README.md")).performClick()
             awaitTag(EditorTags.diffTab("README.md"))
-            runOnUiThread { app.state.closeProject() }
+            runOnUiThread { app.state.session.closeProject() }
             awaitTag(AppTags.WELCOME)
             onNodeWithTag(AppTags.recentProject(project.path)).performClick()
             awaitTag(TreeTags.treeRow("src"))

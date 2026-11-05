@@ -1,6 +1,8 @@
 package org.example.kotlineditor.lsp.supervisor
 
 import kotlinx.serialization.json.JsonElement
+import org.example.kotlineditor.lsp.documents.DEFAULT_MAX_UNREAD_BYTES
+import org.example.kotlineditor.lsp.documents.DocumentOutbox
 
 /** How to run one language server; the supervisor runs one process per spec and root directory. */
 class LanguageServerSpec(
@@ -21,7 +23,7 @@ class LanguageServerSpec(
 
 private const val FIVE_MINUTES = 300_000L
 
-/** Delays of the supervisor, shortened by tests. */
+/** Delays and bounds of the supervisor, shortened by tests. */
 class SupervisorTimings(
     /** A server nobody uses any more is stopped after this long (a project switched back and forth keeps it). */
     val idleStopMs: Long = FIVE_MINUTES,
@@ -42,4 +44,10 @@ class SupervisorTimings(
      * configuration is answered): the requests whose answer needs the index wait this long at first.
      */
     val indexingStartMs: Long = 500L,
+    /**
+     * A process given this many bytes of document notifications while it does not read the one being written to
+     * it (alive, but hung or no longer reading its input) is restarted, its documents opened again in the next one;
+     * see [DocumentOutbox].
+     */
+    val maxUnreadBytes: Long = DEFAULT_MAX_UNREAD_BYTES,
 )

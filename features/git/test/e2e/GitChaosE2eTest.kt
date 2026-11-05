@@ -20,6 +20,7 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 // Slow (a 600 ms round trip), but under the 1 s after which the chaos client treats a silent link as dead.
 private const val SLOW_BRANCH_LINK_MS = 300L
@@ -320,6 +321,31 @@ class GitChaosE2eTest {
             awaitCondition { !app.project.git.busy && app.project.git.status.keys == setOf("notes.txt") }
             assertEquals("Committed 1 file", app.project.git.message)
             assertEquals(2, project.commitCount(), "the retried commit must not run twice")
+        }
+
+    @Test
+    fun `a commit whose answer is lost while the server restarts is made once and said to be unconfirmed`() =
+        runComposeUiTest {
+            project.commitAll()
+            project.file("README.md", "# Changed\n")
+            project.file("notes.txt", "other\n")
+            val app = launchWithProject(project, chaos = true)
+            onNodeWithTag(AppTags.TOOL_GIT).performClick()
+            awaitTag(GitTags.gitChange("README.md"))
+            awaitTag(GitTags.gitChangeCheck("README.md")).performClick()
+            awaitTag(GitTags.GIT_COMMIT_MESSAGE).performTextInput("Update the readme")
+            app.network.dropFromServer = true
+            onNodeWithTag(GitTags.GIT_COMMIT).performClick()
+            awaitCondition { project.lastCommitSubject() == "Update the readme" }
+            // The new server has no answer for the request: running it again would find nothing to commit.
+            app.process.restart()
+            app.network.dropFromServer = false
+            app.network.cutAll()
+            awaitCondition { !app.project.git.busy && app.project.git.status.keys == setOf("notes.txt") }
+            val panel = app.project.git
+            val message = panel.message.orEmpty()
+            assertTrue("restarted" in message && "git/commit" in message, message)
+            assertEquals(2, project.commitCount(), "the commit must not run twice")
         }
 
     @Test

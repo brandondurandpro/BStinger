@@ -218,12 +218,12 @@ class AgentE2eTest {
     fun `the agent command is set in the settings`() =
         runComposeUiTest {
             val app = launchWithProject(project, agentPreferences())
-            app.state.openSettings()
+            app.state.settings.open()
             awaitTag(AppTags.settingsCategory("Experimental")).performClick()
             val field = awaitTag(AppTags.SETTINGS_AGENT_COMMAND)
             field.performTextClearance()
             field.performTextInput("no-such-agent-43")
-            awaitCondition { app.state.agentCommand == "no-such-agent-43" }
+            awaitCondition { app.state.settings.agentCommand == "no-such-agent-43" }
             onNodeWithTag(AppTags.SETTINGS_CLOSE).performClick()
             val conversation = startConversation(app)
             sendPrompt("echo hi")

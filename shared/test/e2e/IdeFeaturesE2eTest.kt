@@ -72,9 +72,9 @@ class IdeFeaturesE2eTest {
             onNodeWithTag(EditorTags.EDITOR).performClick()
             onNodeWithTag(EditorTags.EDITOR).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.MoveHome) } }
             typeInEditor(Key.Y)
-            runOnUiThread { app.state.closeProject() }
+            runOnUiThread { app.state.session.closeProject() }
             awaitTag(AppTags.WELCOME)
-            assertIs<Screen.Welcome>(app.state.screen)
+            assertIs<Screen.Welcome>(app.state.session.screen)
             awaitCondition { project.read("README.md").startsWith("y# Demo") }
         }
 
@@ -257,17 +257,17 @@ class IdeFeaturesE2eTest {
                 withKeyDown(Key.AltLeft) { withKeyDown(Key.ShiftLeft) { pressKey(Key.Period) } }
                 withKeyDown(Key.AltLeft) { withKeyDown(Key.ShiftLeft) { pressKey(Key.Period) } }
             }
-            awaitCondition { app.state.editorFontSize == 15f }
+            awaitCondition { app.state.settings.editorFontSize == 15f }
             waitForIdle()
             assertTrue(onNodeWithTag(EditorTags.line(0)).fetchSemanticsNode().size.height > before)
             onNodeWithTag(
                 EditorTags.EDITOR,
             ).performKeyInput { withKeyDown(Key.AltLeft) { withKeyDown(Key.ShiftLeft) { pressKey(Key.Comma) } } }
-            awaitCondition { app.state.editorFontSize == 14f }
+            awaitCondition { app.state.settings.editorFontSize == 14f }
             onNodeWithTag(
                 EditorTags.EDITOR,
             ).performKeyInput { withKeyDown(Key.AltLeft) { withKeyDown(Key.ShiftLeft) { pressKey(Key.Zero) } } }
-            awaitCondition { app.state.editorFontSize == 13f }
+            awaitCondition { app.state.settings.editorFontSize == 13f }
             waitForIdle()
             assertEquals(before, onNodeWithTag(EditorTags.line(0)).fetchSemanticsNode().size.height)
         }
@@ -289,7 +289,7 @@ class IdeFeaturesE2eTest {
                     withKeyDown(Key.AltLeft) { withKeyDown(Key.ShiftLeft) { pressKey(Key.Period) } }
                 }
             }
-            awaitCondition { app.state.editorFontSize == 17f }
+            awaitCondition { app.state.settings.editorFontSize == 17f }
             waitForIdle()
             clickBefore(2, 2)
             awaitCondition { document()?.caret == TextPos(2, 2) }
@@ -300,7 +300,7 @@ class IdeFeaturesE2eTest {
                     withKeyDown(Key.AltLeft) { withKeyDown(Key.ShiftLeft) { pressKey(Key.Comma) } }
                 }
             }
-            awaitCondition { app.state.editorFontSize == 10f }
+            awaitCondition { app.state.settings.editorFontSize == 10f }
             waitForIdle()
             clickBefore(2, 14)
             awaitCondition { document()?.caret == TextPos(2, 14) }
@@ -317,6 +317,6 @@ class IdeFeaturesE2eTest {
                 scroll(-1f)
             }
             onNodeWithTag(EditorTags.EDITOR).performKeyInput { keyUp(Key.CtrlLeft) }
-            awaitCondition { app.state.editorFontSize == 14f }
+            awaitCondition { app.state.settings.editorFontSize == 14f }
         }
 }

@@ -16,6 +16,7 @@ import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.GitBranchInfo
 import org.example.kotlineditor.model.GitClient
 import org.example.kotlineditor.model.GitFileStatus
+import org.example.kotlineditor.model.OutcomeUnknownException
 import org.example.kotlineditor.telemetry.ClientTelemetry
 import org.example.kotlineditor.telemetry.Operation
 import org.example.kotlineditor.telemetry.measureToFrame
@@ -427,6 +428,12 @@ class GitState(
             if (reloadFiles) synchronize() else refresh()
             branchLoads.markActionLoad()
             true
+        } catch (unknown: OutcomeUnknownException) {
+            // The server restarted before saying whether the action ran: all it may have changed is read again.
+            message = unknown.message
+            messageIsError = true
+            if (reloadFiles) synchronize() else refresh()
+            false
         } catch (e: IOException) {
             message = e.message ?: "Git command failed"
             messageIsError = true

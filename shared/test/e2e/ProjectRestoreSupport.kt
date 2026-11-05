@@ -24,7 +24,7 @@ class RestoreRecorder(private val app: E2eApp, private val project: SampleProjec
         get() = synchronized(recorded) { recorded.toList() }
 
     private fun record() {
-        val screen = app.state.screen as? Screen.Project ?: return
+        val screen = app.state.session.screen as? Screen.Project ?: return
         val shown = screen.project
         val tabs = shown.editor.tabs.map { relative(it.entry.path) }
         val active =

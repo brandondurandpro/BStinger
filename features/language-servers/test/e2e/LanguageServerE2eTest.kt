@@ -240,7 +240,7 @@ class LanguageServerE2eTest {
             val app = launchWithProject(project, languageServers = servers().chosen().settings)
             openFromTree("src/index.php")
             val running = awaitServer(app) { it.state == LanguageServerState.Running }
-            app.state.closeProject()
+            app.state.session.closeProject()
             awaitCondition(SERVER_START_MS) { app.languageServers.isEmpty() }
             awaitCondition { !isAlive(running.pid!!) }
         }

@@ -1,7 +1,7 @@
 package org.example.kotlineditor.server
 
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.runInterruptible
 import org.example.kotlineditor.model.BlameLine
 import org.example.kotlineditor.model.DiffLine
 import org.example.kotlineditor.model.GitBranchInfo
@@ -12,29 +12,27 @@ import org.example.kotlineditor.model.GitFileStatus
 import org.example.kotlineditor.model.WorktreeClient
 import java.io.File
 import java.io.IOException
-import java.util.concurrent.ConcurrentHashMap
 
 private const val REV_PARSE = "rev-parse"
 
-/** Git through its command line; no repository or no git means no status. */
+/**
+ * Git through its command line; no repository or no git means no status. Every call runs in `runInterruptible`: a
+ * cancelled request stops its Git process (see [execGit]).
+ */
 @Suppress("TooManyFunctions")
 class CliGitClient :
     GitClient,
     WorktreeClient by CliWorktrees() {
-    private data class BlameVersion(val head: String?, val modified: Long, val size: Long)
-
-    private class CachedBlame(val version: BlameVersion, val lines: List<BlameLine>)
-
-    private val blames = ConcurrentHashMap<String, CachedBlame>()
+    private val blames = BlameCache(MAX_CACHED_BLAMES)
 
     override suspend fun status(root: String): Map<String, GitFileStatus> =
-        withContext(Dispatchers.IO) {
+        runInterruptible(Dispatchers.IO) {
             statusEntries(root).mapNotNull(::statusOf).toMap()
         }
 
     /** Reads `.git/HEAD` directly (or the HEAD of a worktree, whose `.git` names its Git directory): no git spawned. */
     override suspend fun branch(root: String): String? =
-        withContext(Dispatchers.IO) {
+        runInterruptible(Dispatchers.IO) {
             val ref = runCatching { File(gitDirectory(root), "HEAD").readLines().firstOrNull()?.trim() }.getOrNull()
             when {
                 ref.isNullOrEmpty() -> null
@@ -45,7 +43,7 @@ class CliGitClient :
 
     /** Differences with HEAD (with the index in a repository without commits); untracked files are all added. */
     override suspend fun diff(root: String, path: String): List<DiffLine> =
-        withContext(Dispatchers.IO) {
+        runInterruptible(Dispatchers.IO) {
             val tracked = gitOutput(root, "ls-files", "--error-unmatch", "--", path) != null
             if (tracked) {
                 val output =
@@ -63,7 +61,7 @@ class CliGitClient :
      * the distance from the last fetch: the popup fetches nothing, so that opening it never touches the network.
      */
     override suspend fun branchDetails(root: String): List<GitBranchInfo> =
-        withContext(Dispatchers.IO) {
+        runInterruptible(Dispatchers.IO) {
             gitOutput(root, FOR_EACH_REF, "--format=$BRANCH_FORMAT", "refs/heads")
                 ?.mapNotNull(::parseBranch)
                 .orEmpty()
@@ -73,8 +71,11 @@ class CliGitClient :
         branchDetails(root)
             .map { it.name }
 
+    // A checked name cannot start with '-', so Git never reads it as an option (`--end-of-options` is no help here:
+    // before Git 2.44, checkout takes it for a branch name).
     override suspend fun checkout(root: String, branch: String) {
-        withContext(Dispatchers.IO) { runGit(root, "checkout", branch) }
+        requireBranchName(branch)
+        runInterruptible(Dispatchers.IO) { runGitOnIndex(root, "checkout", branch) }
     }
 
     /**
@@ -83,9 +84,10 @@ class CliGitClient :
      * branch that another program already deleted counts as deleted, which makes a retry after a lost answer safe.
      */
     override suspend fun deleteBranches(root: String, branches: List<String>) {
-        withContext(Dispatchers.IO) {
+        runInterruptible(Dispatchers.IO) {
             require(branches.isNotEmpty()) { "No branch to delete" }
             val names = branches.filter { it.isNotBlank() }.distinct()
+            names.forEach(::requireBranchName)
             val current = gitOutput(root, "symbolic-ref", "--short", "-q", "HEAD")?.firstOrNull()?.trim()
             require(current == null || current !in names) { "Cannot delete the current branch: $current" }
             val failures = mutableListOf<String>()
@@ -95,15 +97,24 @@ class CliGitClient :
     }
 
     private fun deleteChunk(root: String, chunk: List<String>, failures: MutableList<String>) {
-        val error = runCatching { runGit(root, "branch", "-D", "--", *chunk.toTypedArray()) }.exceptionOrNull()
+        val error = deletionFailure(root, chunk)
         if (error == null) return
         chunk.forEach { name ->
-            val failure = runCatching { runGit(root, "branch", "-D", "--", name) }.exceptionOrNull()
+            val failure = deletionFailure(root, listOf(name))
             if (failure != null && branchExists(root, name)) {
                 failures += failure.message ?: "git branch: cannot delete $name"
             }
         }
     }
+
+    // Git's refusal, or null once deleted; a cancellation (an interruption) is not a refusal and stops the deletion.
+    private fun deletionFailure(root: String, names: List<String>): IOException? =
+        try {
+            runGit(root, "branch", "-D", "--", *names.toTypedArray())
+            null
+        } catch (refusal: IOException) {
+            refusal
+        }
 
     private fun branchExists(root: String, name: String): Boolean =
         gitOutput(root, "show-ref", VERIFY, QUIET, "refs/heads/$name") != null
@@ -117,18 +128,18 @@ class CliGitClient :
     override suspend fun commit(root: String, message: String, paths: List<String>) {
         require(message.isNotBlank()) { "A commit message is required" }
         require(paths.isNotEmpty()) { "No file to commit" }
-        withContext(Dispatchers.IO) {
+        runInterruptible(Dispatchers.IO) {
             if (paths.size > COMMIT_CHUNK_SIZE) {
                 // Too many files for one command line (Windows bounds it): stage them chunk by chunk, then commit.
                 paths.chunked(COMMIT_CHUNK_SIZE).forEach { chunk ->
-                    runGit(root, "add", "-A", "--", *chunk.toTypedArray())
+                    runGitOnIndex(root, "add", "-A", "--", *chunk.toTypedArray())
                 }
-                runGit(root, "commit", "-m", message)
+                runGitOnIndex(root, "commit", "-m", message)
             } else {
-                runGit(root, "add", "-A", "--", *paths.toTypedArray())
+                runGitOnIndex(root, "add", "-A", "--", *paths.toTypedArray())
                 // The commit also takes the old path of a selected rename, so Git records a rename and not the old
                 // file kept plus a new one; `add` uses the user's paths only: a rename staged ahead owns none.
-                runGit(root, "commit", "-m", message, "--", *selectedPaths(root, paths).toTypedArray())
+                runGitOnIndex(root, "commit", "-m", message, "--", *selectedPaths(root, paths).toTypedArray())
             }
         }
     }
@@ -145,19 +156,22 @@ class CliGitClient :
     }
 
     override suspend fun pull(root: String): String =
-        withContext(Dispatchers.IO) { runGit(root, NETWORK_TIMEOUT_SECONDS, "pull") }
+        runInterruptible(Dispatchers.IO) { runGitOnIndex(root, NETWORK_TIMEOUT_SECONDS, "pull") }
 
     override suspend fun push(root: String): String =
-        withContext(Dispatchers.IO) { runGit(root, NETWORK_TIMEOUT_SECONDS, "push") }
+        runInterruptible(Dispatchers.IO) { runGit(root, NETWORK_TIMEOUT_SECONDS, "push") }
 
     // `--prune` drops the remote-tracking branches deleted on the remote: their local branches then show "gone".
     override suspend fun fetch(root: String) {
-        withContext(Dispatchers.IO) { runGit(root, NETWORK_TIMEOUT_SECONDS, "fetch", "--all", "--prune", QUIET) }
+        runInterruptible(Dispatchers.IO) {
+            runGit(root, NETWORK_TIMEOUT_SECONDS, "fetch", "--all", "--prune", QUIET)
+        }
     }
 
     // `--porcelain` would hide the summary the IDE shows; Git prints it on stderr, so the output is often empty.
     override suspend fun pushBranch(root: String, branch: String): String =
-        withContext(Dispatchers.IO) {
+        runInterruptible(Dispatchers.IO) {
+            requireBranchName(branch)
             requireLocalBranch(root, branch)
             val upstream = upstreamOf(root, branch)
             if (upstream == null) {
@@ -171,11 +185,12 @@ class CliGitClient :
     // Fetching into the branch updates it only by fast-forward (no `+`), and Git refuses to touch a branch that is
     // checked out, here or in another worktree: the current branch goes through a real pull.
     override suspend fun pullBranch(root: String, branch: String): String =
-        withContext(Dispatchers.IO) {
+        runInterruptible(Dispatchers.IO) {
+            requireBranchName(branch)
             requireLocalBranch(root, branch)
             val current = gitOutput(root, "symbolic-ref", "--short", "-q", "HEAD")?.firstOrNull()?.trim()
             if (current == branch) {
-                runGit(root, NETWORK_TIMEOUT_SECONDS, "pull", "--ff-only")
+                runGitOnIndex(root, NETWORK_TIMEOUT_SECONDS, "pull", "--ff-only")
             } else {
                 val upstream = upstreamOf(root, branch) ?: throw IOException("$branch tracks no remote branch")
                 runGit(root, NETWORK_TIMEOUT_SECONDS, "fetch", upstream.remote, "${upstream.ref}:refs/heads/$branch")
@@ -183,7 +198,7 @@ class CliGitClient :
         }
 
     override suspend fun remoteBranches(root: String): List<String> =
-        withContext(Dispatchers.IO) {
+        runInterruptible(Dispatchers.IO) {
             gitOutput(root, FOR_EACH_REF, "--format=%(refname:short)%00%(symref)", "refs/remotes")
                 .orEmpty()
                 .map { it.split('\u0000') }
@@ -195,7 +210,7 @@ class CliGitClient :
 
     // One record per commit (see parseCommit). `--` keeps a ref named like a file from being read as a path.
     override suspend fun log(root: String, ref: String, skip: Int, limit: Int): List<GitCommit> =
-        withContext(Dispatchers.IO) {
+        runInterruptible(Dispatchers.IO) {
             require(limit in 1..MAX_LOG_PAGE) { "A page holds 1 to $MAX_LOG_PAGE commits" }
             require(!ref.startsWith("-")) { "Not a ref: $ref" }
             val output =
@@ -212,14 +227,14 @@ class CliGitClient :
         }
 
     override suspend fun searchLog(root: String, ref: String, query: String, skip: Int, limit: Int): List<GitCommit> =
-        withContext(Dispatchers.IO) {
+        runInterruptible(Dispatchers.IO) {
             require(limit in 1..MAX_LOG_PAGE) { "A page holds 1 to $MAX_LOG_PAGE commits" }
             require(!ref.startsWith("-")) { "Not a ref: $ref" }
             searchCommits(root, ref, query, skip.coerceAtLeast(0), limit)
         }
 
     override suspend fun commitDetails(root: String, hash: String): GitCommitDetails =
-        withContext(Dispatchers.IO) {
+        runInterruptible(Dispatchers.IO) {
             require(hash.matches(HASH)) { "Not a commit hash: $hash" }
             // A short hash (from the blame) is answered with the full one, the identity of the commit everywhere.
             val full = gitOutput(root, REV_PARSE, VERIFY, QUIET, "$hash^{commit}")?.firstOrNull()?.trim() ?: hash
@@ -233,7 +248,7 @@ class CliGitClient :
     // parent); a first commit, with `--root`, is compared with nothing. Both paths of a rename are given, so that
     // `-M` sees the rename and shows only the lines that changed.
     override suspend fun commitDiff(root: String, hash: String, path: String, oldPath: String?): List<DiffLine> =
-        withContext(Dispatchers.IO) {
+        runInterruptible(Dispatchers.IO) {
             require(hash.matches(HASH)) { "Not a commit hash: $hash" }
             val paths = listOfNotNull(oldPath, path).distinct()
             val parent = gitOutput(root, REV_PARSE, VERIFY, QUIET, "$hash^1")?.firstOrNull()?.trim()
@@ -265,30 +280,49 @@ class CliGitClient :
     private data class Upstream(val remote: String, val ref: String)
 
     /**
-     * Kept until HEAD or the file changes: blaming a large file takes git hundreds of milliseconds, and the editor
-     * asks again every time the window regains focus.
+     * Kept while HEAD, the content of the file and its being tracked stay the same (see [BlameCache]): blaming a
+     * large file takes git hundreds of milliseconds, and the editor asks again every time the window regains focus.
      */
     override suspend fun blame(root: String, path: String): List<BlameLine> =
-        withContext(Dispatchers.IO) {
-            if (gitOutput(root, "ls-files", "--error-unmatch", "--", path) == null) {
-                emptyList()
-            } else {
-                val file = File(root, path)
-                val head = gitOutput(root, REV_PARSE, "HEAD")?.firstOrNull()
-                val version = BlameVersion(head, file.lastModified(), file.length())
-                val cached = blames[file.absolutePath]?.takeIf { it.version == version }
-                cached?.lines ?: freshBlame(root, path, file.absolutePath, version)
-            }
+        runInterruptible(Dispatchers.IO) {
+            val file = File(root, path)
+            val index = IndexStamp.read(root)
+            val version = blameVersion(root, file)
+            val cached = version?.let { blames.get(file.absolutePath, it, index) { isTracked(root, path) } }
+            cached ?: freshBlame(root, path, version, index)
         }
 
-    // A failure gives no annotation and is not cached.
-    private fun freshBlame(root: String, path: String, key: String, version: BlameVersion): List<BlameLine> {
-        val lines = runCatching { parseBlame(runGit(root, "blame", "--line-porcelain", "--", path)) }.getOrNull()
-        if (lines != null) {
-            if (blames.size >= MAX_CACHED_BLAMES) blames.clear()
-            blames[key] = CachedBlame(version, lines)
+    // An untracked file has no blame, a failure gives none either, and neither is cached. A blame is kept only when
+    // nothing changed while Git ran, or it would stand for a version it does not describe.
+    private fun freshBlame(
+        root: String,
+        path: String,
+        version: BlameCache.Version?,
+        index: IndexStamp?,
+    ): List<BlameLine> {
+        val output = if (isTracked(root, path)) blameOutput(root, path) else null
+        val lines = output?.let(::parseBlame) ?: return emptyList()
+        val file = File(root, path)
+        val unchanged = version != null && version == blameVersion(root, file)
+        if (unchanged) blames.put(file.absolutePath, version, index, lines)
+        return lines
+    }
+
+    private fun blameOutput(root: String, path: String): String? =
+        try {
+            runGit(root, "blame", "--line-porcelain", "--", path)
+        } catch (_: IOException) {
+            null
         }
-        return lines.orEmpty()
+
+    private fun isTracked(root: String, path: String): Boolean =
+        gitOutput(root, "ls-files", "--error-unmatch", "--", path) != null
+
+    // The content first, then HEAD: read from its files, or asked to Git when they cannot tell.
+    private fun blameVersion(root: String, file: File): BlameCache.Version? {
+        val content = contentDigest(file) ?: return null
+        val head = headFromFiles(root) ?: gitOutput(root, REV_PARSE, VERIFY, QUIET, "HEAD")?.firstOrNull()?.trim()
+        return BlameCache.Version(head, content)
     }
 
     private fun statusEntries(root: String): List<StatusEntry> {

@@ -12,6 +12,7 @@ import org.example.kotlineditor.model.DiffLine
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.ProjectFileSystem
 import org.example.kotlineditor.syntax.treesitter.GrammarStore
+import java.io.IOException
 
 private const val MAX_RECENT_FILES = 50
 
@@ -186,8 +187,21 @@ class EditorState(
     /** A conflict resolved for the edits of [tab]: they are saved over what another program wrote. */
     fun keepEdits(tab: EditorTab) = files.keepEdits(tab)
 
-    /** Saves every modified tab and returns once everything is on disk (closing the project or the IDE). */
-    suspend fun flush() = files.flush(allTabs)
+    /**
+     * Saves every modified tab and returns once everything is on disk (before a rename or a Git action); once every
+     * tab was tried, fails if one of them could not be saved.
+     */
+    suspend fun flush() {
+        val unsaved = files.flush(allTabs)
+        val first = unsaved.firstOrNull() ?: return
+        throw IOException("Cannot save ${first.entry.name}: ${first.reason}")
+    }
+
+    /**
+     * Saves every modified tab, each whatever happens to the others, giving up a save that takes longer than
+     * [timeoutMillis] (closing the IDE while the server is out of reach): the files that could not be saved.
+     */
+    suspend fun saveAllNow(timeoutMillis: Long): List<UnsavedFile> = files.flush(allTabs, timeoutMillis)
 }
 
 internal fun EditorState.paneOf(tab: EditorTab): EditorPane? = panes.firstOrNull { tab in it.tabs }

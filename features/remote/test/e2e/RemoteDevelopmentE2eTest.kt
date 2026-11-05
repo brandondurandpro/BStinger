@@ -43,7 +43,7 @@ class RemoteDevelopmentE2eTest {
             val app = launchApp()
             connectRemoteTo(RemoteTestEnvironment, project.path)
             awaitTag(TreeTags.treeRow("src"), timeout = 60_000)
-            assertTrue(app.state.isRemote, "the IDE should show the remote server")
+            assertTrue(app.state.session.isRemote, "the IDE should show the remote server")
             onNodeWithTag(AppTags.STATUS_REMOTE).assertTextContains("Remote: tester@127.0.0.1", substring = true)
 
             openFromTree("README.md")
@@ -79,13 +79,42 @@ class RemoteDevelopmentE2eTest {
     fun `the language servers follow the switch to the remote server`() =
         remoteUiTest {
             val app = launchApp()
-            val local = app.state.languageServers
+            val local = app.state.session.languageServers
             connectRemoteTo(RemoteTestEnvironment, project.path)
             awaitTag(TreeTags.treeRow("src"), timeout = 60_000)
             // A new state polls the remote server; the local one stopped.
-            awaitCondition { app.state.languageServers !== local }
-            awaitCondition { app.state.languageServers.status.server.heapMaxBytes > 0 }
+            awaitCondition { app.state.session.languageServers !== local }
+            awaitCondition { app.state.session.languageServers.status.server.heapMaxBytes > 0 }
             awaitTag(LanguageServerTags.STATUS_SERVER_MEMORY)
+        }
+
+    @Test
+    fun `while remote, the local server is told nothing of the files open there, and is told again once back`() =
+        remoteUiTest {
+            val app = launchApp()
+            connectRemoteTo(RemoteTestEnvironment, project.path)
+            awaitTag(TreeTags.treeRow("src"), timeout = 60_000)
+            openFromTree("README.md")
+            onNodeWithTag(EditorTags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performKeyInput {
+                withKeyDown(Key.CtrlLeft) { pressKey(Key.MoveHome) }
+                pressKey(Key.Q)
+                withKeyDown(Key.CtrlLeft) { pressKey(Key.S) }
+            }
+            awaitCondition { project.read("README.md").startsWith("q# Demo") }
+            waitForIdle()
+            assertEquals(emptyList(), app.localLanguageServers.calls, "what the local server was told while remote")
+
+            onNodeWithTag(AppTags.PROJECT_WIDGET).performClick()
+            onNodeWithTag(AppTags.PROJECT_CLOSE).performClick()
+            awaitTag(AppTags.WELCOME)
+            onNodeWithTag(AppTags.REMOTE_DISCONNECT).performClick()
+            awaitCondition { !app.state.session.isRemote }
+            openProjectDirectoryFromWelcome(project.path)
+            awaitTag(TreeTags.treeRow("src"))
+            openFromTree("README.md")
+            // Back on the local server, the open files are declared to it again.
+            awaitCondition { app.localLanguageServers.calls.any { it.method == "use" && it.target == project.path } }
         }
 
     @Test
@@ -96,7 +125,7 @@ class RemoteDevelopmentE2eTest {
             awaitTag(RemoteTags.REMOTE_DIALOG)
             onNodeWithTag(RemoteTags.REMOTE_CANCEL).performClick()
             awaitNoTag(RemoteTags.REMOTE_DIALOG)
-            assertFalse(app.state.isRemote, "cancelling must not connect")
+            assertFalse(app.state.session.isRemote, "cancelling must not connect")
             awaitTag(AppTags.WELCOME)
         }
 
@@ -111,7 +140,7 @@ class RemoteDevelopmentE2eTest {
             onNodeWithTag(RemoteTags.REMOTE_HOST).performTextClearance()
             onNodeWithTag(RemoteTags.REMOTE_CONNECT).performClick()
             awaitTag(RemoteTags.REMOTE_ERROR).assertTextContains("Enter a host", substring = true)
-            assertFalse(app.state.isRemote)
+            assertFalse(app.state.session.isRemote)
         }
 
     @Test
@@ -125,7 +154,7 @@ class RemoteDevelopmentE2eTest {
             onNodeWithTag(AppTags.TOP_REMOTE).performClick()
             awaitTag(AppTags.REMOTE_DISCONNECT).performClick()
             awaitTag(AppTags.WELCOME)
-            awaitCondition { !app.state.isRemote }
+            awaitCondition { !app.state.session.isRemote }
             awaitNoTag(AppTags.TOP_REMOTE)
         }
 
@@ -135,7 +164,7 @@ class RemoteDevelopmentE2eTest {
             val app = launchApp()
             connectRemoteTo(RemoteTestEnvironment, project.path, identity = "/does/not/exist/id_rsa")
             awaitTag(RemoteTags.REMOTE_ERROR, timeout = 30_000)
-            assertFalse(app.state.isRemote)
+            assertFalse(app.state.session.isRemote)
             awaitTag(RemoteTags.REMOTE_DIALOG)
         }
 
@@ -150,12 +179,12 @@ class RemoteDevelopmentE2eTest {
             onNodeWithTag(AppTags.PROJECT_CLOSE).performClick()
             awaitTag(AppTags.WELCOME)
             onNodeWithTag(AppTags.REMOTE_DISCONNECT).performClick()
-            awaitCondition { !app.state.isRemote }
+            awaitCondition { !app.state.session.isRemote }
 
             // The Open Project dialog browses the local server again.
             openProjectDirectoryFromWelcome(project.path)
             awaitTag(TreeTags.treeRow("src"))
-            assertFalse(app.state.isRemote)
+            assertFalse(app.state.session.isRemote)
         }
 
     @Test
@@ -168,15 +197,20 @@ class RemoteDevelopmentE2eTest {
             onNodeWithTag(AppTags.PROJECT_CLOSE).performClick()
             awaitTag(AppTags.WELCOME)
             // The daemon is shared by the tests: its list holds their projects too.
-            assertTrue(project.path in app.state.recentProjects, "the remote server's recents")
+            assertTrue(project.path in app.state.session.recentProjects, "the remote server's recents")
 
             // A slow link to the local server: its list takes a while to come back.
             app.network.latencyMs = 400
             onNodeWithTag(AppTags.REMOTE_DISCONNECT).performClick()
             // From the moment the IDE says it is local, the list is the local one: a remote path shown there would
             // be opened on the local disk, and the screen would still change under the user's click.
-            awaitCondition { !app.state.isRemote }
-            assertEquals(emptyList(), app.state.recentProjects.toList(), "the local server has no recent project")
+            awaitCondition { !app.state.session.isRemote }
+            assertEquals(
+                emptyList(),
+                app.state.session.recentProjects
+                    .toList(),
+                "the local server has no recent project",
+            )
             openProjectPickerFromWelcome()
         }
 
@@ -192,7 +226,7 @@ class RemoteDevelopmentE2eTest {
             onNodeWithTag(AppTags.PROJECT_CLOSE).performClick()
             awaitTag(AppTags.WELCOME)
             onNodeWithTag(AppTags.REMOTE_DISCONNECT).performClick()
-            awaitCondition { !app.state.isRemote }
+            awaitCondition { !app.state.session.isRemote }
 
             // The dialog remembers the last connection; connecting again must reuse the daemon.
             onNodeWithTag(AppTags.WELCOME_REMOTE).performClick()
@@ -225,7 +259,7 @@ class RemoteDevelopmentE2eTest {
             assertTrue(runningBuild in installed, "the bundle of the running daemon must stay: $installed")
             assertEquals(firstPid, RemoteTestEnvironment.daemonPid(), "the daemon of the same protocol is reused")
             assertEquals(runningBuild, RemoteTestEnvironment.runningBuild())
-            assertTrue(app.state.isRemote)
+            assertTrue(app.state.session.isRemote)
         }
 
     @Test
@@ -235,7 +269,7 @@ class RemoteDevelopmentE2eTest {
             RemoteTestEnvironment.forgetHostKey()
             connectRemoteTo(RemoteTestEnvironment, project.path)
             awaitTag(RemoteTags.REMOTE_ERROR, timeout = 30_000).assertTextContains("known_hosts", substring = true)
-            assertFalse(app.state.isRemote)
+            assertFalse(app.state.session.isRemote)
             awaitTag(RemoteTags.REMOTE_DIALOG)
         }
 
@@ -253,7 +287,7 @@ class RemoteDevelopmentE2eTest {
                 // Before, the ssh command ran on (an upload for minutes) after the dialog was gone.
                 awaitCondition { sshProcesses(wrapper) == 0 }
             }
-            assertFalse(app.state.isRemote)
+            assertFalse(app.state.session.isRemote)
             awaitTag(AppTags.WELCOME)
         }
 
@@ -281,7 +315,7 @@ class RemoteDevelopmentE2eTest {
                         awaitTag(TreeTags.treeRow("src"), timeout = 60_000)
                         RemoteBundles.buildId(rebuilt.toFile())
                     }
-                assertTrue(app.state.isRemote)
+                assertTrue(app.state.session.isRemote)
                 val installed = RemoteTestEnvironment.installedBuilds()
                 assertTrue(rebuiltBuild in installed, "installed through $name: $installed")
                 openFromTree("README.md")
@@ -300,7 +334,7 @@ class RemoteDevelopmentE2eTest {
         onNodeWithTag(AppTags.TOP_REMOTE).performClick()
         awaitTag(AppTags.REMOTE_DISCONNECT).performClick()
         awaitTag(AppTags.WELCOME)
-        awaitCondition { !app.state.isRemote }
+        awaitCondition { !app.state.session.isRemote }
     }
 
     private fun runsWrapper(process: ProcessHandle, wrapper: java.nio.file.Path): Boolean {
