@@ -568,12 +568,10 @@ internal class ManagedServer(
         progress.clear()
     }
 
-    /**
-     * Asks [running] to shut down and exit, then waits for it a while. The messages are written on a thread of
-     * their own: a process that stopped reading its input blocks them behind the write of the outbox, under the
-     * connection's lock, which no timeout interrupts. That thread is then left blocked until the kill that follows
-     * breaks the pipe, and the process is not waited for, since it was not told to exit.
-     */
+    // Asks the process to shut down and exit, then waits for it a while. The messages are written on a thread of
+    // their own: a process that stopped reading its input blocks them behind the write of the outbox, under the
+    // connection's lock, which no timeout interrupts. That thread is then left blocked until the kill that follows
+    // breaks the pipe, and the process is not waited for, since it was not told to exit.
     private suspend fun askToExit(link: LspConnection, running: Process) {
         val asking =
             scope.launch(Dispatchers.IO) {
