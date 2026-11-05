@@ -5,12 +5,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancelAndJoin
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.put
+import org.example.kotlineditor.model.ConnectionStatus
 import org.example.kotlineditor.model.OutcomeUnknownException
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -24,7 +24,6 @@ import kotlin.test.assertTrue
 private const val LARGE_TEXT = 32 * 1024 * 1024
 private const val PROBE_TIMEOUT_S = 3L
 private const val WAIT_MS = 10_000L
-private const val SMALL_REQUEST_BUDGET_MS = 150L
 
 // A paste or an edit larger than the threshold under which frames keep their queued order.
 private const val LARGE_PASTE = 8 * LARGE_FRAME_CHARS
@@ -48,6 +47,18 @@ class RpcClientTest {
         val random = Random(size)
         val letters = CharArray(size) { 'a' + random.nextInt(26) }
         return String(letters)
+    }
+
+    // Takes the server down and waits for [client] to have noticed: what it queues then waits for [comeBack].
+    private suspend fun FakeServer.goDown(client: RpcClient) {
+        down = true
+        cutAll()
+        withTimeout(WAIT_MS) { client.status.first { it == ConnectionStatus.Reconnecting } }
+    }
+
+    private suspend fun FakeServer.comeBack(client: RpcClient, before: Long) {
+        down = false
+        withTimeout(WAIT_MS) { client.connections.first { it > before } }
     }
 
     private fun FakeServer.next(): Received = checkNotNull(requests.poll(WAIT_MS, TimeUnit.MILLISECONDS))
@@ -80,20 +91,22 @@ class RpcClientTest {
             val client = clientOf(server)
             client.awaitConnected()
             val text = randomLetters(LARGE_TEXT)
+            // Both are queued before the writer sees either: whatever the speed of the machine, the save is not
+            // prepared yet when the writer finds the read behind it.
+            val before = client.connections.value
+            server.goDown(client)
             val save =
                 launch(Dispatchers.IO, CoroutineStart.UNDISPATCHED) {
                     client.call(Method.Write) { put("text", text) }
                 }
-            val queuedAt = System.nanoTime()
             val read = launch(Dispatchers.IO, CoroutineStart.UNDISPATCHED) { client.call(Method.Read) }
+            server.comeBack(client, before)
             val first = server.next()
             val second = server.next()
             assertEquals(Method.Read, first.method)
             assertEquals(Method.Write, second.method)
-            val waitedMs = (first.atNanos - queuedAt) / 1_000_000
-            println("PERF small request written ${waitedMs}ms after being queued behind a 32 MB save")
-            // Encoding, compressing and writing the save first takes hundreds of milliseconds.
-            assertTrue(waitedMs < SMALL_REQUEST_BUDGET_MS, "written ${waitedMs}ms after being queued")
+            val aheadMs = (second.atNanos - first.atNanos) / 1_000_000
+            println("PERF small request read ${aheadMs}ms before the 32 MB save queued ahead of it")
             save.cancelAndJoin()
             read.cancelAndJoin()
         }
@@ -105,6 +118,9 @@ class RpcClientTest {
             val client = clientOf(server)
             client.awaitConnected()
             val paste = randomLetters(LARGE_PASTE)
+            // All queued before the writer sees any: the paste cannot be prepared before the others are known.
+            val before = client.connections.value
+            server.goDown(client)
             val calls =
                 listOf(
                     launch(Dispatchers.IO, CoroutineStart.UNDISPATCHED) {
@@ -119,6 +135,7 @@ class RpcClientTest {
                     // Not ordered by the server: it may go first.
                     launch(Dispatchers.IO, CoroutineStart.UNDISPATCHED) { client.call(Method.LspHover) },
                 )
+            server.comeBack(client, before)
             val received = List(calls.size) { server.next().method }
             assertEquals(Method.LspHover, received.firstOrNull())
             assertEquals(listOf(Method.TerminalPaste, Method.TerminalKey, Method.DocChange), received.drop(1))
@@ -178,8 +195,10 @@ class RpcClientTest {
             assertEquals(Method.Read, replayed.method)
             server.answer(replayed.id, "content")
             assertEquals("\"content\"", read.await().toString())
-            delay(100)
-            assertTrue(server.requests.none { it.method == Method.CreateFile }, "the mutation is not run again")
+            // Pending requests are sent again first: a mutation sent again would arrive before this one.
+            val probe = async(Dispatchers.IO) { runCatching { client.call(Method.LspHover) } }
+            assertEquals(Method.LspHover, server.next().method, "the mutation is not run again")
+            probe.cancelAndJoin()
         }
 
     @Test
@@ -188,13 +207,13 @@ class RpcClientTest {
             val server = FakeServer(resumed = { false }).closedAfter()
             val client = clientOf(server)
             client.awaitConnected()
-            val connected = client.connections.value
-            server.cutAll()
+            val before = client.connections.value
+            server.goDown(client)
             val created =
                 async(Dispatchers.IO, CoroutineStart.UNDISPATCHED) {
                     client.call(Method.CreateFile) { put("name", "later.txt") }
                 }
-            withTimeout(WAIT_MS) { client.connections.first { it > connected } }
+            server.comeBack(client, before)
             val request = server.next()
             assertEquals(Method.CreateFile, request.method)
             server.answer(request.id, "created")

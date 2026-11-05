@@ -38,10 +38,18 @@ class FakeServer(
     @Volatile var connections = 0
         private set
 
+    /** While true, connections are closed as soon as they are accepted, as when the server cannot be reached. */
+    @Volatile var down = false
+
     init {
         thread(isDaemon = true, name = "fake-server-accept") {
             var socket = runCatching { server.accept() }.getOrNull()
             while (socket != null) {
+                if (down) {
+                    socket.close()
+                    socket = runCatching { server.accept() }.getOrNull()
+                    continue
+                }
                 connections++
                 val connection = connections
                 sockets += socket
