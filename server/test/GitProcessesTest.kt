@@ -192,11 +192,13 @@ class GitProcessesTest {
     @Test
     fun `cancelling a request stops Git and the helper it runs`() =
         runBlocking {
-            // A textconv helper that hangs, as a slow or broken one does: `git diff` runs it.
+            // A textconv helper that hangs, as a slow or broken one does: `git diff` runs it. The command is the helper
+            // alone, as a real one (`pdftotext - -`) is: on Windows, Git runs a compound command (`sh 'helper'; cat`)
+            // through an extra MSYS2 shell whose Windows parent link Java cannot see, so no kill could reach it.
             repository.write(".gitattributes", "*.slow diff=slow\n")
             repository.write("a.slow", "one\n")
             repository.commitAll()
-            repository.git("config", "diff.slow.textconv", "$helper; cat")
+            repository.git("config", "diff.slow.textconv", helper)
             repository.write("a.slow", "two\n")
             val client = CliGitClient()
             // Not a child of runBlocking, which would wait for it without end if the cancellation did not stop it.
