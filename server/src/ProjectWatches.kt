@@ -5,13 +5,17 @@ import io.methvin.watcher.DirectoryChangeEvent.EventType
 import io.methvin.watcher.DirectoryChangeListener
 import io.methvin.watcher.DirectoryWatcher
 import io.methvin.watcher.visitor.FileTreeVisitor
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.example.kotlineditor.lsp.DiskChange
 import org.example.kotlineditor.model.DiskChanges
@@ -70,9 +74,16 @@ class ProjectWatches(
     Closeable {
     private val watches = HashMap<String, RootWatch>()
 
+    // The watches being created, by root; guarded by [lock], held only to look them up (see #155).
+    private val starting = HashMap<String, Deferred<RootWatch>>()
+
     // The roots that could not be watched, with the failure and when it happened; guarded by [lock].
     private val failures = HashMap<String, Pair<IOException, Long>>()
     private val lock = Mutex()
+
+    // Creates the watches apart from the polls that asked for them: a poll cancelled meanwhile leaves neither the
+    // others waiting for nothing nor a watch open for nobody.
+    private val creations = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     // Each watch runs its event loop on a thread of its own, blocked on the watch service.
     private val loops =
@@ -82,28 +93,53 @@ class ProjectWatches(
 
     override suspend fun changes(root: String, since: DiskCursor): DiskChanges = watchOf(root).changesAfter(since)
 
-    private suspend fun watchOf(root: String): RootWatch =
+    // Registering a large tree holds up the polls of that project only: the lock covers the lookup, not the creation.
+    private suspend fun watchOf(root: String): RootWatch {
+        val running = runningWatch(root)
+        if (running != null) return running
+        val creation = lock.withLock { creationOf(root) }
+        return creation.await()
+    }
+
+    // Under [lock]: the watch of [root] being created, else a new creation, unless [root] failed a moment ago.
+    private fun creationOf(root: String): Deferred<RootWatch> {
+        // Created since the caller looked: a second watch would replace it without closing it.
+        val running = runningWatch(root)
+        val known = starting[root] ?: running?.let { CompletableDeferred(it) }
+        return known ?: newCreation(root)
+    }
+
+    // Under [lock]: starts creating the watch of [root], unless it failed a moment ago.
+    private fun newCreation(root: String): Deferred<RootWatch> {
+        val failure = failures[root]
+        val recent = failure != null && System.currentTimeMillis() - failure.second < settings.retryFailedMs
+        if (failure != null && recent) throw failure.first
+        val creation = creations.async { create(root) }
+        starting[root] = creation
+        return creation
+    }
+
+    // Registers every directory before answering, so that nothing that changes afterwards is missed.
+    private suspend fun create(root: String): RootWatch {
+        val outcome = runCatching { RootWatch(Paths.get(root), settings, onChanged, loops) }
+        val started = outcome.getOrNull()
+        if (started != null) publish(root, started)
         lock.withLock {
-            val running = runningWatch(root)
-            if (running != null) return running
-            val failure = failures[root]
-            val recent = failure != null && System.currentTimeMillis() - failure.second < settings.retryFailedMs
-            if (failure != null && recent) throw failure.first
-            // Registers every directory before answering, so that nothing that changes afterwards is missed.
-            val started =
-                try {
-                    withContext(Dispatchers.IO) { RootWatch(Paths.get(root), settings, onChanged, loops) }
-                } catch (failed: IOException) {
-                    failures[root] = failed to System.currentTimeMillis()
-                    throw failed
-                }
-            failures.remove(root)
-            synchronized(watches) {
-                if (closed) started.close() else watches[root] = started
-            }
-            check(!closed) { "The server is stopping" }
-            started
+            starting.remove(root)
+            val failed = outcome.exceptionOrNull() as? IOException
+            if (failed != null) failures[root] = failed to System.currentTimeMillis()
+            if (started != null) failures.remove(root)
         }
+        check(!closed) { "The server is stopping" }
+        return outcome.getOrThrow()
+    }
+
+    // A watch created while the server stops is closed at once.
+    private fun publish(root: String, started: RootWatch) {
+        synchronized(watches) {
+            if (closed) started.close() else watches[root] = started
+        }
+    }
 
     // The open watch of [root], once the idle ones are closed.
     private fun runningWatch(root: String): RootWatch? =
