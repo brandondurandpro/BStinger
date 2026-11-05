@@ -18,6 +18,7 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 private const val SLOW_LINK_MS = 300L
@@ -96,6 +97,26 @@ class EditorChaosE2eTest {
             save()
             awaitCondition { project.read("README.md") == "qw$readme" }
             awaitNoTag(EditorTags.tabModified("README.md"))
+        }
+
+    @Test
+    fun `a save whose answer is lost while the server restarts ends saved, without an error`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, chaos = true)
+            openFromTree("README.md")
+            typeAtStart(Key.Q)
+            app.network.dropFromServer = true
+            save()
+            awaitCondition { project.read("README.md") == "q$readme" }
+            // The new server has no answer for the write: the disk tells it was made.
+            app.process.restart()
+            app.network.dropFromServer = false
+            app.network.cutAll()
+            awaitNoTag(EditorTags.tabModified("README.md"))
+            val tab = app.project.editor.activeTab
+            val document = tab?.document
+            assertNull(document?.saveError)
+            assertEquals("q$readme", project.read("README.md"))
         }
 
     @Test
