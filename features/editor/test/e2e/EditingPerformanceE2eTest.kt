@@ -32,7 +32,8 @@ class EditingPerformanceE2eTest {
             project.file("large.txt", (1..LINES).joinToString("\n") { "line $it of a large file" })
             val app = launchWithProject(project)
             openFromTree("large.txt")
-            val document = checkNotNull(app.project.editor.activeTab?.document)
+            val tab = checkNotNull(app.project.editor.activeTab)
+            val document = checkNotNull(tab.document)
             onNodeWithTag(EditorTags.EDITOR).performClick()
             pressInEditor(Key.A, ctrl = true)
             measure("type a key over the $LINES lines selected", EDIT_BUDGET_MS) {

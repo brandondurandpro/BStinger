@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import org.example.kotlineditor.model.TextChange
 import org.example.kotlineditor.syntax.Language
 import org.example.kotlineditor.syntax.treesitter.SyntaxSession
@@ -216,7 +217,7 @@ class Document(initialLines: List<String>, val language: Language, val lineSepar
         if (start.line == end.line && replacement.size == 1) {
             lines[start.line] = replacement[0]
         } else if (removedLines > BULK_REMOVAL_LINES) {
-            rebuildLines(start.line, end.line, replacement)
+            lines.rebuild(start.line, end.line, replacement)
         } else {
             // Remove then insert in bulk: a single snapshot write instead of one per line.
             lines.removeRange(start.line, end.line + 1)
@@ -226,24 +227,25 @@ class Document(initialLines: List<String>, val language: Language, val lineSepar
         return TextPos(start.line + parts.lastIndex, replacement.last().length - suffix.length)
     }
 
-    // The snapshot list removes a range one line at a time, each removal moving every line after it: replacing the
-    // whole of a 200,000-line file (Ctrl+A, then a key) took 15 seconds. Its lines are built again instead, at once.
-    private fun rebuildLines(firstLine: Int, lastLine: Int, replacement: List<String>) {
-        val kept = lines.size - (lastLine - firstLine + 1)
-        val rebuilt = ArrayList<String>(kept + replacement.size)
-        rebuilt.addAll(lines.subList(0, firstLine))
-        rebuilt.addAll(replacement)
-        rebuilt.addAll(lines.subList(lastLine + 1, lines.size))
-        lines.clear()
-        lines.addAll(rebuilt)
-    }
-
     private companion object {
         const val MAX_UNDO = 1000
 
-        // Above this many lines removed by one edit, [rebuildLines] is cheaper than removing them from the list.
+        // Above this many lines removed by one edit, [rebuild] is cheaper than removing them from the list.
         const val BULK_REMOVAL_LINES = 64
     }
+}
+
+// The snapshot list removes a range one line at a time, each removal moving every line after it: replacing the whole
+// of a 200,000-line file (Ctrl+A, then a key) took 15 seconds. Lines [firstLine]..[lastLine] are replaced by
+// [replacement] by building the list again instead, at once.
+private fun SnapshotStateList<String>.rebuild(firstLine: Int, lastLine: Int, replacement: List<String>) {
+    val kept = size - (lastLine - firstLine + 1)
+    val rebuilt = ArrayList<String>(kept + replacement.size)
+    rebuilt.addAll(subList(0, firstLine))
+    rebuilt.addAll(replacement)
+    rebuilt.addAll(subList(lastLine + 1, size))
+    clear()
+    addAll(rebuilt)
 }
 
 // Position right after `text` inserted at `start`.
