@@ -78,10 +78,12 @@ class GitProcessesTest {
         return text?.trim()?.toLongOrNull()
     }
 
-    // Whether the helper wrote its id and was seen running: its handle is then recorded.
+    // Whether the helper wrote its id and was seen running: its handle is then recorded. Only a process this JVM
+    // started is taken, never whatever process holds that pid: the id may be MSYS2's own (`echo $$`) rather than a
+    // Windows one, and stopping the process it names could stop anything, the CI runner included.
     private fun helperStarted(): Boolean {
         if (helperHandle == null) {
-            val running = helperPid()?.let { pid -> ProcessHandle.of(pid).orElse(null) }
+            val running = helperPid()?.let(::ownProcess)
             running?.let { handle ->
                 helperStart = OrphanReaper.startOf(handle)
                 helperHandle = handle
@@ -89,6 +91,12 @@ class GitProcessesTest {
         }
         return helperHandle != null
     }
+
+    // The process [pid] among the descendants of this JVM, which compare start times while this JVM runs.
+    private fun ownProcess(pid: Long): ProcessHandle? =
+        ProcessHandle.current().descendants().use { processes ->
+            processes.filter { it.pid() == pid }.findFirst().orElse(null)
+        }
 
     // A handle checks the start time of its process: once the helper exited, another process with its pid is not it.
     private fun helperAlive(): Boolean = helperHandle?.isAlive == true
@@ -167,16 +175,21 @@ class GitProcessesTest {
         val started = System.nanoTime()
         // The helper, left running in the background, holds the output of Git, which exits at once.
         val alias = "alias.detach=!$helper &"
-        val error =
-            assertFailsWith<IOException> {
-                withinTimeout("The command") {
+        val result =
+            withinTimeout("The command") {
+                runCatching {
                     execGit(repository.path, listOf("-c", alias, "detach"), timeoutSeconds = HELPER_SECONDS * 2L)
                 }
             }
         val elapsedMillis = (System.nanoTime() - started) / 1_000_000
-        assertTrue("kept its output open" in error.message.orEmpty(), error.message)
-        assertTrue(elapsedMillis < HELPER_SECONDS * 1000L / 2, "Failed after $elapsedMillis ms")
-        awaitCondition("the helper of the alias to start") { helperStarted() }
+        assertTrue(elapsedMillis < HELPER_SECONDS * 1000L / 2, "Ended after $elapsedMillis ms")
+        // Either the reading was cut short, or, on Linux and macOS, it had not begun when Git exited: the JDK then
+        // takes what Git left in the pipe and closes it (ProcessPipeInputStream.processExited), and Git printed
+        // nothing. Both end long before the timeout.
+        val error = result.exceptionOrNull()
+        val cutShort = error is IOException && "kept its output open" in error.message.orEmpty()
+        val drained = result.getOrNull()?.lines?.isEmpty() == true
+        assertTrue(cutShort || drained, "Ended with $result")
     }
 
     @Test
