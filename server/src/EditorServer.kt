@@ -51,7 +51,9 @@ class ServerOptions(
 
 /**
  * The Kotlin Editor server: all file system, search, Git and shell logic runs here; clients only display.
- * One thread per connection reads messages; requests run concurrently on coroutines and answer in any order.
+ * One thread per connection reads messages and another writes them, small ones first; requests run concurrently on
+ * coroutines (those whose order matters in one queue per terminal, per document and for lsp/use) and answer in any
+ * order.
  */
 class EditorServer(
     private val services: LocalServices = LocalServices(),
@@ -183,7 +185,10 @@ class EditorServer(
                 !MessageDigest.isEqual(presented.encodeToByteArray(), token.encodeToByteArray()) -> "Invalid token"
                 else -> null
             }
-        reason?.let { connection.send(Frame(FrameKind.Reject, Protocol.HELLO_ID, rpcError(Protocol.REJECTED, it))) }
+        reason?.let {
+            connection.send(Frame(FrameKind.Reject, Protocol.HELLO_ID, rpcError(Protocol.REJECTED, it)))
+            connection.awaitSent(REJECT_FLUSH_MS)
+        }
         return if (reason != null) null else join(connection, previous)
     }
 
@@ -226,6 +231,7 @@ class EditorServer(
         private const val TOKEN_BYTES = 24
         private const val MIN_SWEEP_MS = 50L
         private const val MAX_SWEEP_MS = 10_000L
+        private const val REJECT_FLUSH_MS = 1_000L
 
         // A hello holds a version, a token and a session id: well under a kilobyte.
         private const val MAX_HELLO = 16 * 1024

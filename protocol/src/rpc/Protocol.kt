@@ -96,14 +96,26 @@ object Protocol {
     fun newCodec(): BodyCodec = ZstdBodyCodec(Dictionaries.generic, maxSize = MAX_FRAME)
 
     /** Writes and flushes [frame]; callers serialize writes to the same stream. */
-    fun write(out: OutputStream, frame: Frame, codec: BodyCodec) {
-        // A server reads the hello before it knows who sent it: it is never compressed.
+    fun write(out: OutputStream, frame: Frame, codec: BodyCodec) = write(out, prepare(frame, codec))
+
+    /**
+     * [frame] as it goes on the wire: encoded, then compressed by [codec] when it is worth it. The costly part of a
+     * write, which can run outside the lock that serializes the writes; a hello is never compressed, because a
+     * server reads it before it knows who sent it.
+     */
+    fun prepare(frame: Frame, codec: BodyCodec): WireFrame {
         val compressed = if (frame.kind == FrameKind.Hello) null else codec.compress(frame.body, frame.code)
         val body = compressed ?: frame.body
         val encoding = if (compressed != null) "Content-Encoding: $ZSTD\r\n" else ""
-        out.write("Content-Length: ${body.size}\r\n$encoding\r\n".toByteArray(Charsets.US_ASCII))
-        out.write(body)
-        out.flush()
+        val headers = "Content-Length: ${body.size}\r\n$encoding\r\n".toByteArray(Charsets.US_ASCII)
+        return WireFrame(frame, headers, body)
+    }
+
+    /** Writes [wire], then flushes [out] unless [flush] is false; callers serialize writes to the same stream. */
+    fun write(out: OutputStream, wire: WireFrame, flush: Boolean = true) {
+        out.write(wire.headers)
+        out.write(wire.body)
+        if (flush) out.flush()
     }
 
     /**
@@ -184,6 +196,19 @@ class ReadLimits(
         /** Any message up to [Protocol.MAX_FRAME], compressed or not. */
         val Default = ReadLimits()
     }
+}
+
+/** A message ready to be written by [Protocol.write]: its headers, then its body, compressed when it was worth it. */
+class WireFrame(
+    /** The message. */
+    val frame: Frame,
+    /** `Content-Length` and, when compressed, `Content-Encoding`, then the empty line. */
+    val headers: ByteArray,
+    /** The body as sent. */
+    val body: ByteArray,
+) {
+    /** Bytes on the wire. */
+    val size: Int get() = headers.size + body.size
 }
 
 /** What a message is; the mapping to JSON-RPC messages is described by [Protocol]. */
