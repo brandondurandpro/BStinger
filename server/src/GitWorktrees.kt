@@ -1,7 +1,7 @@
 package org.example.kotlineditor.server
 
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.runInterruptible
 import org.example.kotlineditor.model.WorktreeClient
 import java.io.File
 
@@ -51,11 +51,15 @@ private const val AGENT_WORKTREES = "kotlin-editor/worktrees"
 
 /** Worktrees of the branches the agent works on, kept in the Git directory so they never show in the project. */
 internal class CliWorktrees : WorktreeClient {
-    override suspend fun worktree(root: String, branch: String): String =
-        withContext(Dispatchers.IO) { existing(root, branch) ?: create(root, branch) }
+    override suspend fun worktree(root: String, branch: String): String {
+        requireBranchName(branch)
+        return runInterruptible(Dispatchers.IO) { existing(root, branch) ?: create(root, branch) }
+    }
 
+    // `--`: a path starting with '-' is still a path, never an option.
     override suspend fun removeWorktree(root: String, path: String) {
-        withContext(Dispatchers.IO) { runGit(root, WORKTREE, "remove", path) }
+        require(path.isNotBlank()) { "No worktree to remove" }
+        runInterruptible(Dispatchers.IO) { runGit(root, WORKTREE, "remove", "--", path) }
     }
 
     private fun create(root: String, branch: String): String {
@@ -63,9 +67,9 @@ internal class CliWorktrees : WorktreeClient {
         val directory = File(common, "$AGENT_WORKTREES/${branch.replace(UNSAFE, "-")}")
         val known = gitOutput(root, "show-ref", "--verify", "--quiet", "refs/heads/$branch") != null
         if (known) {
-            runGit(root, WORKTREE, "add", directory.path, branch)
+            runGit(root, WORKTREE, "add", "--", directory.path, branch)
         } else {
-            runGit(root, WORKTREE, "add", "-b", branch, directory.path)
+            runGit(root, WORKTREE, "add", "-b", branch, "--", directory.path)
         }
         return directory.path
     }
