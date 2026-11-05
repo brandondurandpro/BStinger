@@ -4,11 +4,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.cancelAndJoin
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import java.io.File
 import java.io.IOException
+import java.nio.file.Files
 import kotlin.concurrent.thread
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -19,7 +19,6 @@ import kotlin.test.assertTrue
 
 // The helper the tests leave hanging: `sleep` for a number of seconds no other test uses.
 private const val HELPER_SECONDS = 41
-private const val HELPER = "sleep $HELPER_SECONDS"
 private const val WAIT_MILLIS = 15_000L
 private const val POLL_MILLIS = 20L
 private const val FLOOD_BYTES = 200_000
@@ -27,10 +26,21 @@ private const val FLOOD_BYTES = 200_000
 /** How Git is run: both outputs read, standard input closed, a timeout, and a cancellation that stops it. */
 class GitProcessesTest {
     private val repository = TestRepository("git-processes")
+    private val pidFile = repository.root.resolve("helper.pid")
+
+    // A shell command that writes the process id of its shell to [pidFile], then hangs. Under Git for Windows, whose
+    // shell is MSYS2's, the id is the Windows one (`/proc/$$/winpid`): the tests find their helper by that id rather
+    // than by the name of a process.
+    private val helper: String
+        get() {
+            val target = pidFile.toString().replace('\\', '/')
+            return "(cat /proc/\$\$/winpid 2>/dev/null || echo \$\$) > '$target'; sleep $HELPER_SECONDS"
+        }
 
     @AfterTest
     fun cleanup() {
-        // A failing test must not leave its helpers behind.
+        // A failing test must not leave its helper behind.
+        helperProcess()?.destroyForcibly()
         ProcessHandle
             .current()
             .descendants()
@@ -44,21 +54,19 @@ class GitProcessesTest {
         return name == "sleep" || name == "head"
     }
 
-    // The `sleep` processes the tests started (on Windows, Git's own sh starts them, whose arguments Java cannot read).
-    private fun helpers(): List<ProcessHandle> =
-        ProcessHandle
-            .current()
-            .descendants()
-            .filter(::isHelper)
-            .toList()
-
-    private fun isHelper(process: ProcessHandle): Boolean {
-        val info = process.info()
-        val name = File(info.command().orElse("")).name.removeSuffix(".exe")
-        val arguments = info.arguments().orElse(emptyArray())
-        val ours = arguments.isEmpty() || HELPER_SECONDS.toString() in arguments
-        return name == "sleep" && ours
+    // The id the helper wrote, once it wrote all of it.
+    private fun helperPid(): Long? {
+        val text = runCatching { Files.readString(pidFile) }.getOrNull()
+        return text?.trim()?.toLongOrNull()
     }
+
+    // The shell of the helper, while it runs.
+    private fun helperProcess(): ProcessHandle? {
+        val pid = helperPid() ?: return null
+        return ProcessHandle.of(pid).orElse(null)
+    }
+
+    private fun helperAlive(): Boolean = helperProcess()?.isAlive == true
 
     private fun awaitCondition(what: String, condition: () -> Boolean) {
         val deadline = System.currentTimeMillis() + WAIT_MILLIS
@@ -115,13 +123,14 @@ class GitProcessesTest {
         val error =
             assertFailsWith<IOException> {
                 withinTimeout("The command") {
-                    execGit(repository.path, listOf("-c", "alias.nap=!$HELPER", "nap"), timeoutSeconds = 1)
+                    execGit(repository.path, listOf("-c", "alias.nap=!$helper", "nap"), timeoutSeconds = 1)
                 }
             }
         val elapsedMillis = (System.nanoTime() - started) / 1_000_000
         assertTrue("timed out" in error.message.orEmpty(), error.message)
         assertTrue(elapsedMillis < HELPER_SECONDS * 1000L / 2, "Stopped after $elapsedMillis ms")
-        awaitCondition("the helper of the alias to stop") { helpers().isEmpty() }
+        assertTrue(helperPid() != null, "The helper of the alias never started")
+        awaitCondition("the helper of the alias to stop") { !helperAlive() }
     }
 
     @Test
@@ -131,14 +140,20 @@ class GitProcessesTest {
             repository.write(".gitattributes", "*.slow diff=slow\n")
             repository.write("a.slow", "one\n")
             repository.commitAll()
-            repository.git("config", "diff.slow.textconv", "$HELPER; cat")
+            repository.git("config", "diff.slow.textconv", "$helper; cat")
             repository.write("a.slow", "two\n")
             val client = CliGitClient()
-            val request = launch(Dispatchers.Default) { client.diff(repository.path, "a.slow") }
-            awaitCondition("the textconv helper to start") { helpers().isNotEmpty() }
+            val request = async(Dispatchers.Default) { runCatching { client.diff(repository.path, "a.slow") } }
+            awaitCondition("the textconv helper to start") {
+                // A diff that ended first never ran the helper: say what it answered.
+                val answer = if (request.isCompleted) runBlocking { request.await() } else null
+                check(answer == null) { "The diff ended without the helper: $answer" }
+                helperPid() != null
+            }
+            assertTrue(helperAlive(), "The helper is not running")
 
             withTimeout(WAIT_MILLIS) { request.cancelAndJoin() }
-            awaitCondition("the textconv helper to stop") { helpers().isEmpty() }
+            awaitCondition("the textconv helper to stop") { !helperAlive() }
         }
 
     @Test
