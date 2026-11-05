@@ -32,6 +32,8 @@ private val WINDOWS = System.getProperty("os.name").startsWith("Windows", ignore
  * give) they are written in place, as the move would lose what makes the file what it is. A read-only file is not
  * written. The bytes are on the disk itself before the move (and the move too, where the directory can be synced),
  * so that a power loss or a kernel panic leaves the old file or the new one, never an empty or truncated one.
+ *
+ * Callers that may write one file concurrently serialize their writes with [withPathLock].
  */
 internal suspend fun writeFile(path: Path, bytes: ByteArray, sync: DiskSync = DurableSync) {
     val exists = Files.exists(path)
@@ -45,7 +47,7 @@ internal suspend fun writeFile(path: Path, bytes: ByteArray, sync: DiskSync = Du
 /** [writeFile] for the callers that are not coroutines (the agents' requests), creating the missing directories. */
 internal fun writeFileNow(path: Path, bytes: ByteArray) {
     path.parent?.let { Files.createDirectories(it) }
-    runBlocking { writeFile(path, bytes) }
+    runBlocking { withPathLock(path) { writeFile(path, bytes) } }
 }
 
 // Writes through a temp file moved over [target], if the temp file can have all of [target]; false when it cannot.

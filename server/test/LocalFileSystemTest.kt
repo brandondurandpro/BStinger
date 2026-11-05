@@ -1,7 +1,10 @@
 package org.example.kotlineditor.server
 
+import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import org.example.kotlineditor.model.FileEntry
+import org.example.kotlineditor.rpc.RemoteFileSystem
+import org.example.kotlineditor.rpc.RpcClient
 import java.nio.channels.FileChannel
 import java.nio.file.FileSystemException
 import java.nio.file.Files
@@ -18,8 +21,10 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
+private const val LARGE_TEXT_CHARS = 20 * 1024 * 1024
+private const val ORDERED_WRITES = 5
 
-/** What the server's file system does to the disk. */
+/** What the server's file system does to the disk: deletions, saves and their order. */
 @OptIn(ExperimentalPathApi::class)
 class LocalFileSystemTest {
     private val base = Files.createTempDirectory("local-file-system")
@@ -104,6 +109,50 @@ class LocalFileSystemTest {
             fs.delete(FileEntry(project.resolve("gone").toString(), "gone", true))
             fs.delete(FileEntry(project.resolve("gone.txt").toString(), "gone.txt", false))
             assertTrue(Files.isDirectory(project))
+        }
+
+    @Test
+    fun `two writes of one file sent in order land in that order, the first one the slower`() {
+        val data = Files.createDirectories(base.resolve("data"))
+        val server = EditorServer(LocalServices(data.toFile())).start()
+        val client = RpcClient("127.0.0.1", server.port, server.token)
+        try {
+            val remote = RemoteFileSystem(client)
+            val file = project.resolve("ordered.txt")
+            file.writeText("start")
+            val entry = entryOf(file)
+            val large = "x".repeat(LARGE_TEXT_CHARS)
+            val outOfOrder =
+                (1..ORDERED_WRITES).count { round ->
+                    runBlocking {
+                        val first = async { remote.write(entry, large) }
+                        val second = async { remote.write(entry, "short $round") }
+                        first.await()
+                        second.await()
+                    }
+                    file.readText() != "short $round"
+                }
+            assertEquals(0, outOfOrder, "Writes that landed out of order, out of $ORDERED_WRITES")
+        } finally {
+            client.close()
+            server.close()
+        }
+    }
+
+    @Test
+    fun `a write that reaches a file after a newer one of the same writer is dropped`() =
+        runBlocking {
+            val file = project.resolve("late.txt")
+            file.writeText("start")
+            val entry = entryOf(file)
+            fs.write(entry, "newer", writer = "client", order = 2)
+            fs.write(entry, "older", writer = "client", order = 1)
+            assertEquals("newer", file.readText())
+            // Another client's writes are not ordered with this one's.
+            fs.write(entry, "another client", writer = "other", order = 1)
+            assertEquals("another client", file.readText())
+            fs.write(entry, "newest", writer = "client", order = 3)
+            assertEquals("newest", file.readText())
         }
 
     // Records when each step of a save makes it durable, with what the file holds at that moment.

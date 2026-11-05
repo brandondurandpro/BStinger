@@ -22,6 +22,7 @@ private val DIRECTORIES_FIRST =
     compareBy<FileEntry> { !it.isDirectory }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
 
 /** [ProjectFileSystem] on the server's disk (NIO, on the IO dispatcher). */
+@Suppress("TooManyFunctions")
 class LocalFileSystem(private val maxFileSize: Long = TextFiles.DEFAULT_MAX_SIZE) : ProjectFileSystem {
     override suspend fun resolveDirectory(path: String): FileEntry? =
         withContext(Dispatchers.IO) {
@@ -56,12 +57,29 @@ class LocalFileSystem(private val maxFileSize: Long = TextFiles.DEFAULT_MAX_SIZE
             if (p != null && Files.isRegularFile(p)) FileEntry(p.toString(), p.name, false) else null
         }
 
+    // One write of a file at a time.
     override suspend fun write(file: FileEntry, text: String) {
         withContext(Dispatchers.IO) {
             val path = Paths.get(file.path)
-            val existing = if (Files.exists(path)) Files.readAllBytes(path) else null
-            writeFile(path, TextFiles.encode(text, existing))
+            withPathLock(path) { writeText(path, text) }
         }
+    }
+
+    /**
+     * [write] asked by [writer] (a client's session) with its request [order] (its ids increase): one write of a file
+     * at a time, and a write sent before another of the same file by the same writer, which reaches the file after
+     * it, is dropped, the file keeping the newer text.
+     */
+    suspend fun write(file: FileEntry, text: String, writer: String, order: Long) {
+        withContext(Dispatchers.IO) {
+            val path = Paths.get(file.path)
+            writeInOrder(path, writer, order) { writeText(path, text) }
+        }
+    }
+
+    private suspend fun writeText(path: Path, text: String) {
+        val existing = if (Files.exists(path)) Files.readAllBytes(path) else null
+        writeFile(path, TextFiles.encode(text, existing))
     }
 
     override suspend fun createFile(directory: FileEntry, name: String): FileEntry =

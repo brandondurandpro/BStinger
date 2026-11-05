@@ -6,6 +6,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.example.kotlineditor.model.BlameLine
 import org.example.kotlineditor.model.DiffLine
@@ -24,9 +26,20 @@ import org.example.kotlineditor.telemetry.Operation
 import org.example.kotlineditor.telemetry.measureToFrame
 import org.example.kotlineditor.telemetry.sizeBucket
 import java.io.IOException
+import java.util.WeakHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 
 private const val RECOMPUTE_DELAY_MS = 150L
 private const val MEGABYTE = 1024 * 1024
+
+// The saves of one document, one at a time and in the order they were asked: two writes of a file in flight
+// together may land in any order, leaving the older text on disk while the editor says it is saved.
+private class SaveQueue {
+    val mutex = Mutex()
+
+    // A save waits for the one running: asking again changes nothing, it writes the text as it is when it starts.
+    val waiting = AtomicBoolean(false)
+}
 
 /** Loads tabs' content from the server and saves it back. */
 @Suppress("TooManyFunctions")
@@ -39,6 +52,9 @@ internal class TabFiles(
     private val commitDiffs: suspend (FileEntry, CommitDiffTarget) -> List<DiffLine>,
     private val grammars: GrammarStore?,
 ) {
+    // By document: the two panes may show one document, through two tabs.
+    private val saveQueues = WeakHashMap<Document, SaveQueue>()
+
     fun load(tab: EditorTab) {
         if (tab.isDiff) loadDiff(tab) else loadText(tab)
     }
@@ -140,12 +156,38 @@ internal class TabFiles(
         if (tab.status is TabStatus.Ready) loadChanges(tab)
     }
 
-    /** Saves [tab] in the background; if the server is unreachable it stays modified and is saved again later. */
+    /**
+     * Saves [tab] in the background; if the server is unreachable it stays modified and is saved again later. A save
+     * asked while one of the same document runs is done after it, once, with the text as it is then.
+     */
     fun save(tab: EditorTab) {
-        if (tab.document?.isModified == true) {
-            scope.launch { runCatching { write(tab) } }
+        val document = tab.document ?: return
+        val queue = queueOf(document)
+        // When a save of this document waits already, it will write the text as it is when it starts.
+        val queued = document.isModified && queue.waiting.compareAndSet(false, true)
+        if (queued) launchSave(tab, queue)
+    }
+
+    private fun launchSave(tab: EditorTab, queue: SaveQueue) {
+        scope.launch {
+            var started = false
+            try {
+                runCatching {
+                    queue.mutex.withLock {
+                        started = true
+                        queue.waiting.set(false)
+                        write(tab)
+                    }
+                }
+            } finally {
+                // Cancelled while it waited (the project closed): the next save is not taken for this one.
+                if (!started) queue.waiting.set(false)
+            }
         }
     }
+
+    private fun queueOf(document: Document): SaveQueue =
+        synchronized(saveQueues) { saveQueues.getOrPut(document, ::SaveQueue) }
 
     /** Replaces the edits of [tab] with what another program wrote (the user chose the disk in a conflict). */
     suspend fun reloadFromDisk(tab: EditorTab) {
@@ -162,7 +204,11 @@ internal class TabFiles(
     }
 
     /** Saves every modified tab and returns once everything is on disk (closing the project or the IDE). */
-    suspend fun flush(tabs: List<EditorTab>) = tabs.forEach { write(it) }
+    suspend fun flush(tabs: List<EditorTab>) =
+        tabs.forEach { tab ->
+            val document = tab.document
+            if (document != null) queueOf(document).mutex.withLock { write(tab) }
+        }
 
     private suspend fun write(tab: EditorTab) {
         val document = tab.document

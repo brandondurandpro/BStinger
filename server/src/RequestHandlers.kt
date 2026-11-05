@@ -60,7 +60,8 @@ private fun fileHandlers(services: LocalServices): Map<Method, Handler> {
         Method.Write to {
             val file = entry("file")
             nothing {
-                fs.write(file, params.string("text"))
+                // In the order the client sent its saves of the file, whatever order they reach it in.
+                fs.write(file, params.string("text"), writer = session, order = id)
                 disk.written(file)
             }
         },

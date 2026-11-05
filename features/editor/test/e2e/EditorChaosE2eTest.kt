@@ -18,8 +18,11 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 private const val SLOW_LINK_MS = 300L
+private const val LARGE_FILE_LINES = 200_000
+private const val LARGE_SAVE_TIMEOUT = 30_000L
 
 /** Opening, editing and saving files while the network or the server fails, as they do for a remote server. */
 @OptIn(ExperimentalTestApi::class)
@@ -107,5 +110,51 @@ class EditorChaosE2eTest {
             onNodeWithTag(EditorTags.line(0)).assertTextContains("q# Demo", substring = true)
             save()
             awaitCondition { project.read("README.md") == "q$readme" }
+        }
+
+    @Test
+    fun `two saves in a row on a slow link leave the last text on disk, and the tab saved`() =
+        runComposeUiTest {
+            // Large, so that its write takes the server longer than the short text saved right after it.
+            val large = (1..LARGE_FILE_LINES).joinToString("\n") { "line $it of a file large enough to be slow" }
+            project.file("large.txt", large)
+            val app = launchWithProject(project, chaos = true)
+            app.network.latencyMs = SLOW_LINK_MS
+            openFromTree("large.txt")
+            typeAtStart(Key.Q)
+            save()
+            onNodeWithTag(EditorTags.EDITOR).performKeyInput {
+                withKeyDown(Key.CtrlLeft) { pressKey(Key.A) }
+                pressKey(Key.W)
+            }
+            save()
+            val tab = checkNotNull(app.project.editor.activeTab)
+            val document = checkNotNull(tab.document)
+            // Both saves done: each one bumps the stamp when it starts and when it ends.
+            awaitCondition(LARGE_SAVE_TIMEOUT) { document.saveStamp == 4 }
+            assertEquals("w", project.read("large.txt"))
+            awaitNoTag(EditorTags.tabModified("large.txt"))
+        }
+
+    @Test
+    fun `a save asked while the previous one is unanswered is sent once that one is answered`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, chaos = true)
+            openFromTree("README.md")
+            // The server runs the first save, its answer is lost: the client waits, then reconnects and retries.
+            app.network.dropFromServer = true
+            val connections = app.network.connectionsAccepted
+            typeAtStart(Key.Q)
+            save()
+            awaitCondition { project.read("README.md") == "q$readme" }
+            onNodeWithTag(EditorTags.EDITOR).performKeyInput { pressKey(Key.W) }
+            save()
+            // Two writes in flight together may land in any order: the second one waits for the first answer.
+            awaitCondition { project.read("README.md") == "qw$readme" }
+            val reconnected = app.network.connectionsAccepted > connections
+            assertTrue(reconnected, "The second save was sent before the first answer")
+            app.network.dropFromServer = false
+            awaitNoTag(EditorTags.tabModified("README.md"))
+            assertEquals("qw$readme", project.read("README.md"))
         }
 }
