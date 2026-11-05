@@ -104,7 +104,7 @@ class AgentPerformanceE2eTest {
             val registry = FakeRegistry(registryPlatformForTests(), extraAgents = REGISTRY_AGENTS)
             val data = Files.createTempDirectory("agent-data").toFile()
             val app = launchWithProject(project, agentPreferences(), agents = agentSettings(registry.url, data))
-            app.state.openSettings()
+            app.state.settings.open()
             measure("Registry of $REGISTRY_AGENTS agents listed", REGISTRY_BUDGET_MS, BUDGET_MB) {
                 awaitTag(AppTags.settingsCategory("Experimental")).performClick()
                 awaitTag(AgentTags.settingsAgent("fake-agent"), timeout = REGISTRY_BUDGET_MS)

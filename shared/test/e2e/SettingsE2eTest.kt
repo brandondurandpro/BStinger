@@ -136,16 +136,16 @@ class SettingsE2eTest {
             onNodeWithTag(AppTags.SETTINGS_FONT_LARGER).performClick()
             onNodeWithTag(AppTags.SETTINGS_FONT_LARGER).performClick()
             onNodeWithTag(AppTags.SETTINGS_FONT_SMALLER).performClick()
-            awaitCondition { app.state.editorFontSize == 14f }
+            awaitCondition { app.state.settings.editorFontSize == 14f }
             onNodeWithTag(AppTags.SETTINGS_FONT_SIZE).assertTextEquals("14 pt")
             awaitCondition { preferences().load()[PreferenceKeys.EDITOR_FONT_SIZE] == "14.0" }
         }
         runComposeUiTest {
             val app = launchApp(preferences = preferences())
-            assertEquals(14f, app.state.editorFontSize)
+            assertEquals(14f, app.state.settings.editorFontSize)
             onNodeWithTag(AppTags.WELCOME_SETTINGS).performClick()
             awaitTag(AppTags.SETTINGS_FONT_RESET).performClick()
-            awaitCondition { app.state.editorFontSize == 13f }
+            awaitCondition { app.state.settings.editorFontSize == 13f }
         }
     }
 
@@ -182,7 +182,7 @@ class SettingsE2eTest {
             onNodeWithTag(AppTags.SETTINGS_CLOSE).performClick()
             awaitNoTag(AppTags.SETTINGS)
             openProjectDirectoryFromWelcome(project.path)
-            awaitCondition { app.state.screen is org.example.kotlineditor.state.Screen.Project }
+            awaitCondition { app.state.session.screen is org.example.kotlineditor.state.Screen.Project }
             assertEquals(InlayHintsMode.Off, app.project.inlayHintsMode)
             assertFalse(app.project.autoSelectOpenedFile)
         }
@@ -198,7 +198,7 @@ class SettingsE2eTest {
             category(SettingsCategory.Privacy)
             onNodeWithTag(AppTags.settingToggle(Setting.Telemetry.name)).assertIsOff().performClick()
             onNodeWithTag(AppTags.settingToggle(Setting.Telemetry.name)).assertIsOn()
-            assertTrue(app.state.telemetry.enabled)
+            assertTrue(app.state.settings.telemetry.enabled)
             awaitCondition {
                 val saved = preferences().load()
                 saved[PreferenceKeys.AGENT_MODE] == "true" && saved[PreferenceKeys.TELEMETRY_ENABLED] == "true"

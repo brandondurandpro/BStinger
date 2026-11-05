@@ -43,13 +43,13 @@ private val Success = Color(0xFF5FAD65)
 @Composable
 internal fun FontSizeControl(app: AppState) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        IdeButton("−", { app.zoomEditor(-1f) }, Modifier.testTag(AppTags.SETTINGS_FONT_SMALLER))
+        IdeButton("−", { app.settings.zoomEditor(-1f) }, Modifier.testTag(AppTags.SETTINGS_FONT_SMALLER))
         Label(
-            "${app.editorFontSize.roundToInt()} pt",
+            "${app.settings.editorFontSize.roundToInt()} pt",
             Modifier.widthIn(min = 44.dp).testTag(AppTags.SETTINGS_FONT_SIZE),
         )
-        IdeButton("+", { app.zoomEditor(1f) }, Modifier.testTag(AppTags.SETTINGS_FONT_LARGER))
-        IdeButton("Reset", app::resetEditorZoom, Modifier.testTag(AppTags.SETTINGS_FONT_RESET))
+        IdeButton("+", { app.settings.zoomEditor(1f) }, Modifier.testTag(AppTags.SETTINGS_FONT_LARGER))
+        IdeButton("Reset", { app.settings.resetEditorZoom() }, Modifier.testTag(AppTags.SETTINGS_FONT_RESET))
     }
 }
 
@@ -58,13 +58,16 @@ internal fun FontSizeControl(app: AppState) {
 internal fun InlayHintsControl(app: AppState) {
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         for (mode in InlayHintsMode.entries) {
-            val chosen = app.inlayHintsMode == mode
+            val chosen = app.settings.inlayHintsMode == mode
             Label(
                 mode.name,
                 Modifier
                     .background(if (chosen) IdeColors.Selection else Color.Transparent, ChipShape)
                     .border(1.dp, IdeColors.Separator, ChipShape)
-                    .clickable(remember { MutableInteractionSource() }, indication = null) { app.inlayHintsMode = mode }
+                    .clickable(
+                        remember { MutableInteractionSource() },
+                        indication = null,
+                    ) { app.settings.inlayHintsMode = mode }
                     .pointerHoverIcon(PointerIcon.Hand)
                     .semantics { selected = chosen }
                     .testTag(AppTags.settingsInlayHints(mode.name))
@@ -105,7 +108,7 @@ internal fun SettingCheckBox(
 /** The telemetry consent; turned off by `KOTLIN_EDITOR_TELEMETRY`, it cannot be turned on and says why. */
 @Composable
 internal fun TelemetryControl(app: AppState) {
-    val consent = app.telemetry
+    val consent = app.settings.telemetry
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         SettingCheckBox(Setting.Telemetry, consent.enabled, enabled = !consent.forbidden, onChange = consent::choose)
         if (consent.forbidden) {

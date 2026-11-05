@@ -41,7 +41,7 @@ class AgentRegistryChaosE2eTest {
         runComposeUiTest {
             registry.down = true
             val app = launchWithProject(project, preferences, agents = agentSettings(registry.url, data))
-            app.state.openSettings()
+            app.state.settings.open()
             awaitTag(AppTags.settingsCategory("Experimental")).performClick()
             awaitCondition { "The registry could not be read" in textOf(AppTags.setting("Agent")) }
         }

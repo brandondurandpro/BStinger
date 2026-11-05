@@ -106,7 +106,7 @@ class OpenProjectDialogPerformanceE2eTest {
         runComposeUiTest {
             repeat(DIRECTORIES) { directory(it) }
             val app = launchApp()
-            awaitCondition { app.state.serverHome != null }
+            awaitCondition { app.state.session.home != null }
             openProjectPickerFromWelcome()
 
             measure("list $DIRECTORIES directories", budgetMillis = 10_000, budgetMegabytes = 200) {
