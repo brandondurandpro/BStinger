@@ -10,17 +10,22 @@ import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.test.withKeyDown
+import org.example.kotlineditor.ui.AppTags
 import org.example.kotlineditor.ui.EditorTags
+import org.example.kotlineditor.ui.TreeTags
 import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.nio.file.Path
 import kotlin.test.AfterTest
 import kotlin.test.Test
+import kotlin.test.assertTrue
 import kotlin.test.fail
 
 /**
  * What the IDE writes changes only what the user changed: an edit undone and saved again, or a file only opened,
  * leaves every file of the project byte for byte, with its permissions and links, and Git as they were. Run on the
- * files real projects have ([withUnusualFiles]): line endings, encodings, permissions, links, names.
+ * files real projects have ([withUnusualFiles]): line endings, encodings, permissions, links, names. What it
+ * deletes is only what the user deleted: never what a link points to.
  */
 @OptIn(ExperimentalTestApi::class)
 class DiskInvariantsE2eTest {
@@ -38,6 +43,46 @@ class DiskInvariantsE2eTest {
     }
 
     private fun bytesOf(path: String): ByteArray = Files.readAllBytes(project.root.resolve(path))
+
+    // Deletes [path] from the project view, as a user does, and waits until the tree no longer shows it.
+    private fun ComposeUiTest.deleteFromTree(path: String) {
+        rightClickOn(TreeTags.treeRow(path))
+        awaitTag(TreeTags.MENU_DELETE).performClick()
+        awaitTag(AppTags.FILE_DIALOG)
+        onNodeWithTag(AppTags.FILE_DIALOG_OK).performClick()
+        awaitNoTag(TreeTags.treeRow(path))
+    }
+
+    private fun existsOnDisk(path: String): Boolean =
+        Files.exists(project.root.resolve(path), LinkOption.NOFOLLOW_LINKS)
+
+    @Test
+    fun `deleting a directory holding a link to a directory outside the project leaves what the link points to`() =
+        runComposeUiTest {
+            // Windows: no link without a privilege, nothing to delete.
+            if (project.hasOutsideLink()) {
+                val before = DiskSnapshot.take(project)
+                launchWithProject(project)
+                deleteFromTree("linked")
+                awaitCondition { !existsOnDisk("linked") }
+                before.assertUnchanged(project, except = setOf(OUTSIDE_LINK))
+            }
+        }
+
+    @Test
+    fun `deleting a link to a directory outside the project deletes the link, not what it points to`() =
+        runComposeUiTest {
+            if (project.hasOutsideLink()) {
+                val before = DiskSnapshot.take(project)
+                launchWithProject(project)
+                awaitTag(TreeTags.treeChevron("linked")).performClick()
+                awaitTag(TreeTags.treeRow(OUTSIDE_LINK))
+                deleteFromTree(OUTSIDE_LINK)
+                awaitCondition { !existsOnDisk(OUTSIDE_LINK) }
+                assertTrue(existsOnDisk("linked"))
+                before.assertUnchanged(project, except = setOf(OUTSIDE_LINK))
+            }
+        }
 
     // Types, saves, undoes and saves again [file]; the problem, if the disk is not as before.
     private fun ComposeUiTest.roundTrip(file: UnusualFile, before: DiskSnapshot): String? {
