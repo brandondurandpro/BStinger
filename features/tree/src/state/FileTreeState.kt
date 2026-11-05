@@ -21,9 +21,13 @@ import org.example.kotlineditor.telemetry.Operation
 import org.example.kotlineditor.telemetry.measureToFrame
 import org.example.kotlineditor.telemetry.outcome
 
+/** The children of a directory, [ticket] telling how recent they are. See [FileTreeState]. */
+@Immutable
+class TreeListing(val entries: List<FileEntry>, val ticket: Long)
+
 /** What revealing a file expands: each directory down to it, with its children. See [FileTreeState.listingsTo]. */
 @Immutable
-class TreeReveal(val path: String, val levels: List<Pair<FileEntry, List<FileEntry>>>)
+class TreeReveal(val path: String, val levels: List<Pair<FileEntry, TreeListing>>)
 
 @Immutable
 data class TreeRow(val entry: FileEntry, val depth: Int, val expanded: Boolean, val loading: Boolean)
@@ -31,6 +35,9 @@ data class TreeRow(val entry: FileEntry, val depth: Int, val expanded: Boolean, 
 /**
  * Project tree with lazy loading: a directory is listed only the first time it is expanded, and only the
  * visible (expanded) part of the tree is flattened into [rows], which feeds a virtualized list.
+ *
+ * Listings are requested concurrently and answer in any order: each request takes a ticket, and a directory only takes
+ * a listing at least as recent as the one it holds (see [store]), so that the tree never goes back to an older state.
  */
 @Stable
 @Suppress("TooManyFunctions")
@@ -39,6 +46,8 @@ class FileTreeState(val root: FileEntry, private val fileSystem: ProjectFileSyst
     private val expanded = mutableStateMapOf<String, Boolean>()
     private val loading = mutableStateMapOf<String, Boolean>()
     private val directories = HashMap<String, FileEntry>()
+    private val heldTickets = HashMap<String, Long>()
+    private var lastTicket = 0L
 
     var selectedPath: String? by mutableStateOf(root.path)
 
@@ -71,7 +80,7 @@ class FileTreeState(val root: FileEntry, private val fileSystem: ProjectFileSyst
     fun refresh() {
         children.keys.toList().forEach { path ->
             val directory = directories[path]
-            if (directory != null && expanded[path] == true) load(directory) else children.remove(path)
+            if (directory != null && expanded[path] == true) load(directory) else forget(path)
         }
     }
 
@@ -103,14 +112,14 @@ class FileTreeState(val root: FileEntry, private val fileSystem: ProjectFileSyst
             coroutineScope {
                 chain.map { directory -> async { listingOf(directory) } }.awaitAll()
             }
-        val levels = ArrayList<Pair<FileEntry, List<FileEntry>>>()
-        for ((directory, list) in chain.zip(listed)) {
-            val parentChildren = levels.lastOrNull()?.second
+        val levels = ArrayList<Pair<FileEntry, TreeListing>>()
+        for ((directory, listing) in chain.zip(listed)) {
+            val parentChildren = levels.lastOrNull()?.second?.entries
             // The entry the server listed, rather than the one built from the path (whose separators may be mixed).
             val listedEntry = parentChildren?.firstOrNull { slashed(it.path) == slashed(directory.path) }
             val entry = if (parentChildren == null) directory else listedEntry
-            if (list == null || entry == null) break
-            levels += entry to list
+            if (listing == null || entry == null) break
+            levels += entry to listing
         }
         return TreeReveal(path, levels)
     }
@@ -118,21 +127,23 @@ class FileTreeState(val root: FileEntry, private val fileSystem: ProjectFileSyst
     /** Expands the directories of [reveal] and selects its file in the same frame: the tree never unfolds by levels. */
     fun show(reveal: TreeReveal) {
         Snapshot.withMutableSnapshot {
-            for ((directory, list) in reveal.levels) {
+            for ((directory, listing) in reveal.levels) {
                 directories[directory.path] = directory
-                // A listing in place is at least as recent: this one may predate a reload that answered since.
-                if (directory.path !in children) {
-                    children[directory.path] = list
-                    loading.remove(directory.path)
-                }
-                expanded[directory.path] = true
+                store(directory, listing)
+                // Listed again if a refresh forgot it since: its listing above was refused.
+                expand(directory)
             }
             selectedPath = reveal.path
         }
     }
 
-    private suspend fun listingOf(directory: FileEntry): List<FileEntry>? =
-        children[directory.path] ?: runCatching { fileSystem.list(directory) }.getOrNull()
+    private suspend fun listingOf(directory: FileEntry): TreeListing? {
+        val cached = children[directory.path]
+        if (cached != null) return TreeListing(cached, heldTickets[directory.path] ?: 0L)
+        val ticket = nextTicket()
+        val listed = runCatching { fileSystem.list(directory) }.getOrNull()
+        return listed?.let { TreeListing(it, ticket) }
+    }
 
     fun select(entry: FileEntry) {
         selectedPath = entry.path
@@ -141,6 +152,7 @@ class FileTreeState(val root: FileEntry, private val fileSystem: ProjectFileSyst
     private fun load(directory: FileEntry) {
         directories[directory.path] = directory
         loading[directory.path] = true
+        val ticket = nextTicket()
         scope.launch {
             // From the click to the frame that shows the children.
             ClientTelemetry.measureToFrame(
@@ -148,11 +160,31 @@ class FileTreeState(val root: FileEntry, private val fileSystem: ProjectFileSyst
                 outcomeOf = { listed: Result<List<FileEntry>> -> listed.outcome() },
             ) {
                 val listed = runCatching { fileSystem.list(directory) }
-                children[directory.path] = listed.getOrElse { emptyList() }
-                loading.remove(directory.path)
+                store(directory, TreeListing(listed.getOrElse { emptyList() }, ticket))
                 listed
             }
         }
+    }
+
+    private fun nextTicket(): Long {
+        lastTicket += 1
+        return lastTicket
+    }
+
+    // The only way into [children]: a listing older than the one held is refused, whatever the order of the answers.
+    private fun store(directory: FileEntry, listing: TreeListing) {
+        val held = heldTickets[directory.path] ?: 0L
+        if (listing.ticket < held) return
+        heldTickets[directory.path] = listing.ticket
+        children[directory.path] = listing.entries
+        loading.remove(directory.path)
+    }
+
+    // Drops the listing of [path], and refuses the answers requested before: it is listed again when next expanded.
+    private fun forget(path: String) {
+        heldTickets[path] = nextTicket()
+        children.remove(path)
+        loading.remove(path)
     }
 
     private fun buildRows(): List<TreeRow> {

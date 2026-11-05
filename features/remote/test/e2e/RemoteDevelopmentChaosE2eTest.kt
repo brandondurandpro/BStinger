@@ -8,6 +8,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.withKeyDown
+import org.example.kotlineditor.remote.RemoteBundles
 import org.example.kotlineditor.ui.AppTags
 import org.example.kotlineditor.ui.EditorTags
 import org.example.kotlineditor.ui.RemoteTags
@@ -86,6 +87,33 @@ class RemoteDevelopmentChaosE2eTest {
             }
             awaitCondition { project.read("docs/guide.md").startsWith("qGuide") }
             assertFalse(project.read("docs/guide.md").startsWith("qq"), "the edit must be written once")
+        }
+
+    @Test
+    fun `when the daemon of another build dies, the session starts the daemon of its own bundle`() =
+        remoteUiTest {
+            launchApp()
+            RemoteTestEnvironment.withRebuiltBundle { rebuilt ->
+                val ownBuild = RemoteBundles.buildId(rebuilt.toFile())
+                connectRemoteTo(RemoteTestEnvironment, project.path)
+                awaitTag(TreeTags.treeRow("src"), timeout = 60_000)
+                // An updated IDE shares the daemon an IDE of another build started.
+                assertNotEquals(ownBuild, RemoteTestEnvironment.runningBuild())
+
+                RemoteTestEnvironment.killDaemon()
+                awaitReconnecting()
+                awaitNoTag(AppTags.STATUS_CONNECTION, timeout = 60_000)
+                assertEquals(ownBuild, RemoteTestEnvironment.runningBuild(), "restarted from this IDE's bundle")
+
+                openFromTree("docs/guide.md")
+                onNodeWithTag(EditorTags.EDITOR).performClick()
+                onNodeWithTag(EditorTags.EDITOR).performKeyInput {
+                    withKeyDown(Key.CtrlLeft) { pressKey(Key.MoveHome) }
+                    pressKey(Key.Q)
+                    withKeyDown(Key.CtrlLeft) { pressKey(Key.S) }
+                }
+                awaitCondition { project.read("docs/guide.md").startsWith("qGuide") }
+            }
         }
 
     @Test
