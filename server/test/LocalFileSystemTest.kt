@@ -165,7 +165,8 @@ class LocalFileSystemTest {
         }
 
         override fun directory(path: Path) {
-            val parent = if (path == file.parent) "its directory" else path.toString()
+            // The real path of the directory: on Windows, the long name of a temp directory given in its 8.3 form.
+            val parent = if (Files.isSameFile(path, file.parent)) "its directory" else path.toString()
             steps += "$parent synced, the file holds '${file.readText()}'"
             DurableSync.directory(path)
         }
