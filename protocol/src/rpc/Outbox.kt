@@ -3,13 +3,14 @@ package org.example.kotlineditor.rpc
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.selects.onTimeout
 import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -96,6 +97,7 @@ internal class Outbox(private val pending: PendingRequests, private val heartbea
         }
 
         // [writer] is the scope of the preparations: not the scope of a wait, which would wait for them.
+        @OptIn(ExperimentalCoroutinesApi::class) // onTimeout, stable in behavior since 1.7
         private suspend fun step(writer: CoroutineScope) {
             receiveQueued(writer)
             val next = nextWritable()
@@ -106,14 +108,18 @@ internal class Outbox(private val pending: PendingRequests, private val heartbea
             // Nothing to write now: wait for a new frame, the preparation holding the others, or the heartbeat.
             val holding = waiting.firstOrNull { it.prepared?.isCompleted == false }?.prepared
             val idleMs = heartbeatMs - (System.currentTimeMillis() - link.lastSent)
-            val woken =
-                withTimeoutOrNull(idleMs.coerceAtLeast(1)) {
-                    select {
-                        queue.onReceive { add(writer, it) }
-                        if (holding != null) holding.onAwait { }
+            // The timeout is a clause of the select, not a cancellation of it: a cancelled receive can lose the
+            // frame it was taking from the queue, and a request lost that way would wait for the next connection.
+            val idle =
+                select {
+                    queue.onReceive {
+                        add(writer, it)
+                        false
                     }
+                    if (holding != null) holding.onAwait { false }
+                    onTimeout(idleMs.coerceAtLeast(1)) { true }
                 }
-            if (woken == null) link.write(link.prepare(Frame(FrameKind.Ping, 0)))
+            if (idle) link.write(link.prepare(Frame(FrameKind.Ping, 0)))
         }
 
         private fun receiveQueued(writer: CoroutineScope) {
