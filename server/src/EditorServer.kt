@@ -13,6 +13,7 @@ import org.example.kotlineditor.rpc.Frame
 import org.example.kotlineditor.rpc.FrameKind
 import org.example.kotlineditor.rpc.InvalidMessageException
 import org.example.kotlineditor.rpc.Protocol
+import org.example.kotlineditor.rpc.ReadLimits
 import org.example.kotlineditor.rpc.int
 import org.example.kotlineditor.rpc.params
 import org.example.kotlineditor.rpc.rpcError
@@ -44,11 +45,15 @@ class ServerOptions(
      * an automatic restart can find it briefly in use, and the server should come back on the same port.
      */
     val bindRetryMs: Long = 2_000,
+    /** How long a new connection has to present its hello: an unauthenticated peer does not hold a thread longer. */
+    val handshakeTimeoutMs: Long = 10_000,
 )
 
 /**
  * The Kotlin Editor server: all file system, search, Git and shell logic runs here; clients only display.
- * One thread per connection reads messages; requests run concurrently on coroutines and answer in any order.
+ * One thread per connection reads messages and another writes them, small ones first; requests run concurrently on
+ * coroutines (those whose order matters in one queue per terminal, per document and for lsp/use) and answer in any
+ * order.
  */
 class EditorServer(
     private val services: LocalServices = LocalServices(),
@@ -137,7 +142,7 @@ class EditorServer(
             while (session != null && !closed) {
                 val frame =
                     try {
-                        connection.read()
+                        connection.read(REQUEST_LIMITS)
                     } catch (invalid: InvalidMessageException) {
                         val error = rpcError(invalid.code, invalid.message.orEmpty())
                         connection.send(Frame(FrameKind.Error, invalid.id, error))
@@ -153,8 +158,20 @@ class EditorServer(
         }
     }
 
+    // Before the token is checked, the peer is anyone who can reach the port: its hello is read within a deadline,
+    // and only if small and not compressed (a few kilobytes of zstd can announce hundreds of megabytes).
     private fun handshake(connection: ServerConnection): ServerSession? {
-        val hello = connection.read()
+        val deadline =
+            scope.launch {
+                delay(options.handshakeTimeoutMs)
+                connection.close()
+            }
+        val hello =
+            try {
+                connection.read(HELLO_LIMITS)
+            } finally {
+                deadline.cancel()
+            }
         val isHello = hello.kind == FrameKind.Hello
         // Malformed params are rejected like a missing hello, never thrown out of the connection thread.
         val params = if (isHello) runCatching { hello.payload.params() }.getOrNull() else null
@@ -168,7 +185,10 @@ class EditorServer(
                 !MessageDigest.isEqual(presented.encodeToByteArray(), token.encodeToByteArray()) -> "Invalid token"
                 else -> null
             }
-        reason?.let { connection.send(Frame(FrameKind.Reject, Protocol.HELLO_ID, rpcError(Protocol.REJECTED, it))) }
+        reason?.let {
+            connection.send(Frame(FrameKind.Reject, Protocol.HELLO_ID, rpcError(Protocol.REJECTED, it)))
+            connection.awaitSent(REJECT_FLUSH_MS)
+        }
         return if (reason != null) null else join(connection, previous)
     }
 
@@ -211,6 +231,17 @@ class EditorServer(
         private const val TOKEN_BYTES = 24
         private const val MIN_SWEEP_MS = 50L
         private const val MAX_SWEEP_MS = 10_000L
+        private const val REJECT_FLUSH_MS = 1_000L
+
+        // A hello holds a version, a token and a session id: well under a kilobyte.
+        private const val MAX_HELLO = 16 * 1024
+
+        // The largest request is a file written whole: up to 32 MiB of text (TextFiles.DEFAULT_MAX_SIZE), which JSON
+        // escaping can make up to a few times larger.
+        private const val MAX_REQUEST = 128 * 1024 * 1024
+
+        private val HELLO_LIMITS = ReadLimits(maxLength = MAX_HELLO, maxDecompressed = 0, compression = false)
+        private val REQUEST_LIMITS = ReadLimits(maxLength = MAX_REQUEST, maxDecompressed = MAX_REQUEST)
 
         /** A random 192-bit token, hex encoded. */
         fun newToken(): String {

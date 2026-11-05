@@ -59,9 +59,14 @@ class ZstdBodyCodec(
         return if (saves) best else null
     }
 
-    override fun decompress(body: ByteArray): ByteArray {
+    override fun decompress(body: ByteArray): ByteArray = decompress(body, maxSize)
+
+    // The size announced by the frame is checked before the buffer is allocated: a few kilobytes of RLE blocks can
+    // announce hundreds of megabytes.
+    override fun decompress(body: ByteArray, maxSize: Int): ByteArray {
         val size = Zstd.getFrameContentSize(body)
-        if (size < 0 || size > maxSize) throw IOException("Invalid compressed frame size $size")
+        val limit = minOf(maxSize, this.maxSize)
+        if (size < 0 || size > limit) throw IOException("Invalid compressed frame size $size")
         return try {
             decoderMatchingDictionary(body).decompress(body, size.toInt())
         } catch (e: ZstdException) {

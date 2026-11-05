@@ -1,5 +1,6 @@
 package org.example.kotlineditor.state
 
+import org.example.kotlineditor.remote.RemoteServerInUseException
 import org.example.kotlineditor.remote.SshTarget
 
 /** The "Remote Development" dialog: what the user typed and what the connection is doing. */
@@ -21,6 +22,13 @@ data class RemoteDialogState(
     val selectedRow: String = "",
     val connecting: Boolean = false,
     val error: String? = null,
+    /**
+     * Why connecting would end someone's work (the host runs a server of another protocol that still has
+     * sessions), shown with a choice to replace that server or keep it; null otherwise.
+     */
+    val replaceQuestion: String? = null,
+    /** The user agreed to replace that server: the next connection does. */
+    val replaceServer: Boolean = false,
 ) {
     companion object {
         fun from(target: SshTarget?): RemoteDialogState =
@@ -38,6 +46,18 @@ data class RemoteDialogState(
             }
     }
 }
+
+/**
+ * The dialog once connecting to [destination] failed with [failure]: a server in use becomes a question rather than
+ * an error, and an agreement to replace it is not carried over to the next attempt.
+ */
+fun RemoteDialogState.failedWith(failure: Exception, destination: String): RemoteDialogState =
+    if (failure is RemoteServerInUseException) {
+        copy(connecting = false, error = null, replaceQuestion = failure.message, replaceServer = false)
+    } else {
+        val message = failure.message ?: "Cannot connect to $destination"
+        copy(connecting = false, error = message, replaceQuestion = null, replaceServer = false)
+    }
 
 /** The target described by the dialog fields, or a user-facing error. */
 fun RemoteDialogState.toSshTarget(): Result<SshTarget> {

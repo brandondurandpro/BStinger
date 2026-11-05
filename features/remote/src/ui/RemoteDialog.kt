@@ -34,6 +34,7 @@ fun RemoteDialog(app: RemoteHost, dialog: RemoteDialogState) {
                 SelectedHost(app, dialog, connect)
             }
             Progress(app, dialog)
+            dialog.replaceQuestion?.let { ReplaceQuestion(app, dialog, it) }
             DialogButtons(app, dialog, connect, cancel)
         }
     }
@@ -68,6 +69,33 @@ private fun Progress(app: RemoteHost, dialog: RemoteDialogState) {
             fontSize = 12.sp,
             modifier = Modifier.padding(top = 10.dp).testTag(RemoteTags.REMOTE_ERROR),
         )
+    }
+}
+
+// The host runs a server of another protocol that still has sessions: replacing it ends them, so the user decides.
+@Composable
+private fun ReplaceQuestion(app: RemoteHost, dialog: RemoteDialogState, question: String) {
+    Column(Modifier.padding(top = 10.dp)) {
+        Label(
+            question,
+            color = IdeColors.Error,
+            fontSize = 12.sp,
+            modifier = Modifier.testTag(RemoteTags.REMOTE_REPLACE_QUESTION),
+        )
+        Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            IdeButton(
+                "Keep it",
+                { app.updateRemoteDialog(dialog.copy(replaceQuestion = null)) },
+                Modifier.testTag(RemoteTags.REMOTE_REPLACE_KEEP),
+            )
+            IdeButton(
+                "Replace the server",
+                { app.connectRemote(dialog.copy(replaceQuestion = null, replaceServer = true)) },
+                Modifier
+                    .padding(start = 8.dp)
+                    .testTag(RemoteTags.REMOTE_REPLACE_CONFIRM),
+            )
+        }
     }
 }
 

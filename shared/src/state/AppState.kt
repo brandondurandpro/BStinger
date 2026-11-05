@@ -370,7 +370,10 @@ class AppState(
                 try {
                     ClientTelemetry.measureToFrame(Operation.RemoteConnect) {
                         withContext(Dispatchers.IO) {
-                            connected = factory.connect(target) { step -> scope.launch { remoteStatus = step } }
+                            connected =
+                                factory.connect(target, dialog.replaceServer) { step ->
+                                    scope.launch { remoteStatus = step }
+                                }
                         }
                     }
                     switchTo(checkNotNull(connected), target)
@@ -379,7 +382,7 @@ class AppState(
                     throw cancelled
                 } catch (e: Exception) {
                     remoteStatus = null
-                    remoteDialog = dialog.copy(error = e.message ?: "Cannot connect to ${target.destination}")
+                    remoteDialog = dialog.failedWith(e, target.destination)
                 }
             }
     }
