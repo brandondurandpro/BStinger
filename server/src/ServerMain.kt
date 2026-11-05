@@ -4,6 +4,7 @@ import kotlinx.coroutines.runBlocking
 import org.example.kotlineditor.rpc.Protocol
 import org.example.kotlineditor.server.ripgrep.RipgrepSettings
 import java.io.File
+import java.io.IOException
 import java.util.concurrent.CountDownLatch
 import kotlin.concurrent.thread
 import kotlin.system.exitProcess
@@ -11,7 +12,7 @@ import kotlin.system.exitProcess
 /**
  * Standalone server. Direct use:
  * ```
- * ./kotlin run -m serverApp -- --host 0.0.0.0 --port 7777 --token <secret>
+ * ./kotlin run -m serverApp -- --host 0.0.0.0 --port 7777 --token-file <file>
  * ```
  * Remote development uses it as a daemon, with the secret and the resulting port in files instead of arguments:
  * ```
@@ -22,6 +23,8 @@ import kotlin.system.exitProcess
  * `--data-dir` moves recent projects and sessions (useful for tests and for several accounts on one machine).
  * `--session-grace` is how many seconds a disconnected session keeps its shells and pending answers; remote daemons
  * use a long one so a sleeping laptop does not lose its terminals.
+ * `--parent-pid` stops the server when that process ends: the IDE runs its local server as a child process, which
+ * must not outlive it, even when the IDE is killed.
  */
 object ServerMain {
     /** Entry point of the standalone server: parses the options, listens and waits until the process is stopped. */
@@ -46,12 +49,16 @@ object ServerMain {
                 token = token,
                 options = ServerOptions(sessionGraceMs = options.sessionGraceSeconds * 1_000),
             ).start(options.host, options.port)
-        options.stateFile?.let { state -> ServerState.write(state, server, options.host, token, build = options.build) }
+        val tracker =
+            options.stateFile?.let { state -> ServerState.track(state, server, options.host, token, options.build) }
         // Scripts (measure_memory.sh) read the port from this exact line: the version goes on its own line.
         println("Kotlin Editor server ${Protocol.APP_VERSION}")
         println("Kotlin Editor server listening on ${options.host}:${server.port}")
         if (options.stateFile == null) {
-            println("Connect with: --server ${options.host}:${server.port} --token $token")
+            // The IDE takes the token from a file or the environment: a command line is visible to every user.
+            val address = "${options.host}:${server.port}"
+            println("Connect with: --server $address and, in KOTLIN_EDITOR_TOKEN or a --token-file, the token:")
+            println(token)
         }
         // Looks ripgrep up (downloading it if needed) now rather than on the first search.
         thread(name = "ripgrep-lookup", isDaemon = true) {
@@ -62,28 +69,31 @@ object ServerMain {
         }
         Runtime.getRuntime().addShutdownHook(
             Thread {
+                tracker?.close()
                 options.stateFile?.let(ServerState::removeIfOwned)
                 server.close()
             },
         )
+        options.parentPid?.let(::exitWithParent)
         CountDownLatch(1).await()
+    }
+
+    // Exiting runs the shutdown hook: the state file is removed and the shells are closed.
+    private fun exitWithParent(pid: Long) {
+        val parent = ProcessHandle.of(pid)
+        if (parent.isEmpty) exitProcess(0)
+        parent.get().onExit().thenRun { exitProcess(0) }
     }
 
     private fun defaultDataDirectory(): File = File(System.getProperty("user.home"), ".kotlin-editor")
 
-    private fun readToken(file: File): String {
-        val token =
-            runCatching { file.readText().trim() }
-                .getOrElse {
-                    System.err.println("Cannot read the token file $file: ${it.message}")
-                    exitProcess(2)
-                }
-        if (token.isEmpty()) {
-            System.err.println("The token file $file is empty")
+    private fun readToken(file: File): String =
+        try {
+            TokenFile.read(file)
+        } catch (e: IOException) {
+            System.err.println(e.message)
             exitProcess(2)
         }
-        return token
-    }
 
     /** Options of the command line; parsed apart so the daemon script and the tests can rely on them. */
     internal data class LaunchOptions(
@@ -99,6 +109,8 @@ object ServerMain {
         val sessionGraceSeconds: Long,
         /** Id of the remote bundle this daemon runs from, or null for a server started by hand. */
         val build: String? = null,
+        /** Process whose end stops the server (the IDE that started it), or null. */
+        val parentPid: Long? = null,
     ) {
         companion object {
             fun from(args: Array<String>): LaunchOptions {
@@ -115,6 +127,7 @@ object ServerMain {
                     version = args.contains("--version"),
                     sessionGraceSeconds = sessionGrace,
                     build = option("build")?.takeIf { it.isNotBlank() },
+                    parentPid = option("parent-pid")?.toLongOrNull(),
                 )
             }
         }

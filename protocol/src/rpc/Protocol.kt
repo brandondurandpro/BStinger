@@ -66,6 +66,9 @@ object Protocol {
     /** JSON-RPC error code of a rejected handshake. */
     const val REJECTED = -32_001
 
+    /** JSON-RPC error code of a failure the server did not expect (a bug of a handler); the request may be retried. */
+    const val INTERNAL_ERROR = -32_603
+
     /** JSON-RPC error code of an unknown method. */
     const val METHOD_NOT_FOUND = -32_601
 
@@ -82,6 +85,9 @@ object Protocol {
     const val NO_ID = -1L
 
     private const val MAX_HEADER_LINE = 1024
+
+    // A message has one or two headers: more is a corrupted stream, or a peer sending headers forever.
+    private const val MAX_HEADER_LINES = 16
     private const val LENGTH = "content-length"
     private const val ENCODING = "content-encoding"
     private const val ZSTD = "zstd"
@@ -90,22 +96,41 @@ object Protocol {
     fun newCodec(): BodyCodec = ZstdBodyCodec(Dictionaries.generic, maxSize = MAX_FRAME)
 
     /** Writes and flushes [frame]; callers serialize writes to the same stream. */
-    fun write(out: OutputStream, frame: Frame, codec: BodyCodec) {
-        val compressed = codec.compress(frame.body, frame.code)
+    fun write(out: OutputStream, frame: Frame, codec: BodyCodec) = write(out, prepare(frame, codec))
+
+    /**
+     * [frame] as it goes on the wire: encoded, then compressed by [codec] when it is worth it. The costly part of a
+     * write, which can run outside the lock that serializes the writes; a hello is never compressed, because a
+     * server reads it before it knows who sent it.
+     */
+    fun prepare(frame: Frame, codec: BodyCodec): WireFrame {
+        val compressed = if (frame.kind == FrameKind.Hello) null else codec.compress(frame.body, frame.code)
         val body = compressed ?: frame.body
         val encoding = if (compressed != null) "Content-Encoding: $ZSTD\r\n" else ""
-        out.write("Content-Length: ${body.size}\r\n$encoding\r\n".toByteArray(Charsets.US_ASCII))
-        out.write(body)
-        out.flush()
+        val headers = "Content-Length: ${body.size}\r\n$encoding\r\n".toByteArray(Charsets.US_ASCII)
+        return WireFrame(frame, headers, body)
     }
 
-    /** Reads one message, blocking; throws [IOException] on a closed or corrupted stream. */
-    fun read(input: InputStream, codec: BodyCodec): Frame {
+    /** Writes [wire], then flushes [out] unless [flush] is false; callers serialize writes to the same stream. */
+    fun write(out: OutputStream, wire: WireFrame, flush: Boolean = true) {
+        out.write(wire.headers)
+        out.write(wire.body)
+        if (flush) out.flush()
+    }
+
+    /**
+     * Reads one message, blocking; throws [IOException] on a closed or corrupted stream, or on a message beyond
+     * [limits] (checked before the body is read, and before a compressed body is decompressed).
+     */
+    fun read(input: InputStream, codec: BodyCodec, limits: ReadLimits = ReadLimits.Default): Frame {
         var length = -1
         var compressed = false
+        var lines = 0
         while (true) {
             val line = readHeaderLine(input)
             if (line.isEmpty()) break
+            lines++
+            if (lines > MAX_HEADER_LINES) throw IOException("Corrupted message (too many headers)")
             val name = line.substringBefore(':').trim().lowercase()
             val value = line.substringAfter(':', "").trim()
             when (name) {
@@ -113,10 +138,17 @@ object Protocol {
                 ENCODING -> compressed = value.equals(ZSTD, ignoreCase = true)
             }
         }
-        if (length !in 0..MAX_FRAME) throw IOException("Corrupted message (length $length)")
+        checkWithin(limits, length, compressed)
         val raw = input.readNBytes(length)
         if (raw.size < length) throw IOException("Truncated message")
-        return decode(if (compressed) codec.decompress(raw) else raw)
+        val body = if (compressed) codec.decompress(raw, limits.maxDecompressed) else raw
+        return decode(body)
+    }
+
+    // Checked before the body is read: a peer cannot make the reader wait for, or allocate, more than it accepts.
+    private fun checkWithin(limits: ReadLimits, length: Int, compressed: Boolean) {
+        if (length !in 0..limits.maxLength) throw IOException("Corrupted message (length $length)")
+        if (compressed && !limits.compression) throw IOException("Compressed message refused")
     }
 
     /** The JSON-RPC message of [frame], UTF-8 encoded. */
@@ -148,6 +180,35 @@ object Protocol {
             if (line.size() > MAX_HEADER_LINE) throw IOException("Corrupted message (header too long)")
         }
     }
+}
+
+/** What [Protocol.read] accepts of one message. */
+class ReadLimits(
+    /** Largest `Content-Length`: the size of the body as sent. */
+    val maxLength: Int = Protocol.MAX_FRAME,
+    /** Largest body once decompressed, checked against the size a zstd frame announces before it is allocated. */
+    val maxDecompressed: Int = Protocol.MAX_FRAME,
+    /** Whether a compressed body (`Content-Encoding: zstd`) is accepted. */
+    val compression: Boolean = true,
+) {
+    /** The limits of a peer that is trusted with any message of the protocol. */
+    companion object {
+        /** Any message up to [Protocol.MAX_FRAME], compressed or not. */
+        val Default = ReadLimits()
+    }
+}
+
+/** A message ready to be written by [Protocol.write]: its headers, then its body, compressed when it was worth it. */
+class WireFrame(
+    /** The message. */
+    val frame: Frame,
+    /** `Content-Length` and, when compressed, `Content-Encoding`, then the empty line. */
+    val headers: ByteArray,
+    /** The body as sent. */
+    val body: ByteArray,
+) {
+    /** Bytes on the wire. */
+    val size: Int get() = headers.size + body.size
 }
 
 /** What a message is; the mapping to JSON-RPC messages is described by [Protocol]. */
@@ -220,23 +281,26 @@ class Frame(
 enum class Method(
     /** Name of the JSON-RPC method. */
     val rpcName: String,
-    /** Whether executing the method twice would have a different effect than executing it once. */
-    val mutating: Boolean = false,
+    /**
+     * Whether executing the method twice would have a different effect than executing it once. There is no default:
+     * a method that changes something and is not marked runs again when the client replays it after a lost answer.
+     */
+    val mutating: Boolean,
 ) {
     /** Path to directory entry, if it is a directory. */
-    ResolveDirectory("fs/resolveDirectory"),
+    ResolveDirectory("fs/resolveDirectory", mutating = false),
 
     /** Home directory of the user running the server, for the Open Project dialog. */
-    UserHome("fs/userHome"),
+    UserHome("fs/userHome", mutating = false),
 
     /** Children of a directory. */
-    ListDirectory("fs/list"),
+    ListDirectory("fs/list", mutating = false),
 
     /** Content of a file. */
-    Read("fs/read"),
+    Read("fs/read", mutating = false),
 
     /** Path to file entry, if it is a regular file. */
-    FileAt("fs/fileAt"),
+    FileAt("fs/fileAt", mutating = false),
 
     /** Replaces the content of a file. */
     Write("fs/write", mutating = true),
@@ -254,31 +318,31 @@ enum class Method(
     Delete("fs/delete", mutating = true),
 
     /** Changes on disk under a project after a cursor, whoever made them (long poll). */
-    DiskChanges("fs/changes"),
+    DiskChanges("fs/changes", mutating = false),
 
     /** Every file of a project. */
-    WalkFiles("search/walkFiles"),
+    WalkFiles("search/walkFiles", mutating = false),
 
     /** Full-text search in a project. */
-    FindInFiles("search/findInFiles"),
+    FindInFiles("search/findInFiles", mutating = false),
 
     /** Declarations of a project. */
-    Symbols("search/symbols"),
+    Symbols("search/symbols", mutating = false),
 
     /** Git status of the changed files. */
-    GitStatus("git/status"),
+    GitStatus("git/status", mutating = false),
 
     /** Current Git branch. */
-    GitBranch("git/branch"),
+    GitBranch("git/branch", mutating = false),
 
     /** Recently opened projects. */
-    RecentLoad("recentProjects/load"),
+    RecentLoad("recentProjects/load", mutating = false),
 
     /** Saves the recently opened projects. */
     RecentSave("recentProjects/save", mutating = true),
 
     /** Session (open files) of a project. */
-    SessionLoad("projectSession/load"),
+    SessionLoad("projectSession/load", mutating = false),
 
     /** Saves the session of a project. */
     SessionSave("projectSession/save", mutating = true),
@@ -302,37 +366,37 @@ enum class Method(
     TerminalScroll("terminal/scroll", mutating = true),
 
     /** Replays the last screen of a terminal after a reconnection. */
-    TerminalResume("terminal/resume"),
+    TerminalResume("terminal/resume", mutating = false),
 
     /** Stops a terminal. */
     TerminalDestroy("terminal/destroy", mutating = true),
 
     /** Differences of a file between HEAD and the working tree. */
-    GitDiff("git/diff"),
+    GitDiff("git/diff", mutating = false),
 
     /** Author and date of each line of a file. */
-    GitBlame("git/blame"),
+    GitBlame("git/blame", mutating = false),
 
     /** Remote-tracking branches. */
-    GitRemoteBranches("git/remoteBranches"),
+    GitRemoteBranches("git/remoteBranches", mutating = false),
 
     /** A page of the commits of a branch. */
-    GitLog("git/log"),
+    GitLog("git/log", mutating = false),
 
     /** A page of the commits of a branch that match a search. */
-    GitSearchLog("git/searchLog"),
+    GitSearchLog("git/searchLog", mutating = false),
 
     /** Message and changed files of a commit. */
-    GitCommitDetails("git/commitDetails"),
+    GitCommitDetails("git/commitDetails", mutating = false),
 
     /** What a commit changed in one file. */
-    GitCommitDiff("git/commitDiff"),
+    GitCommitDiff("git/commitDiff", mutating = false),
 
     /** Local branches of the repository with their remote synchronization. */
-    GitBranchDetails("git/branchDetails"),
+    GitBranchDetails("git/branchDetails", mutating = false),
 
     /** Local branches of the repository. */
-    GitBranches("git/branches"),
+    GitBranches("git/branches", mutating = false),
 
     /** Checks out a branch. */
     GitCheckout("git/checkout", mutating = true),
@@ -350,7 +414,7 @@ enum class Method(
     GitPush("git/push", mutating = true),
 
     /** Fetches every remote; running it twice is harmless, so a retry needs no deduplication. */
-    GitFetch("git/fetch"),
+    GitFetch("git/fetch", mutating = false),
 
     /** Pushes a local branch, current or not. */
     GitPushBranch("git/pushBranch", mutating = true),
@@ -368,10 +432,13 @@ enum class Method(
     TerminalClear("terminal/clear", mutating = true),
 
     /** Status of the language servers, answered once newer than the version the client has (long poll). */
-    LspStatus("lsp/status"),
+    LspStatus("lsp/status", mutating = false),
 
-    /** Files a session has open in a project, which decide the language servers it needs. */
-    LspUse("lsp/use"),
+    /**
+     * Files a session has open in a project, which decide the language servers it needs. Mutating: a replay of an
+     * older call after a newer one ran would bring back the files of the older one.
+     */
+    LspUse("lsp/use", mutating = true),
 
     /** Restarts a language server if it still runs the given generation. */
     LspRestart("lsp/restart", mutating = true),
@@ -383,10 +450,10 @@ enum class Method(
     LspStart("lsp/start", mutating = true),
 
     /** Last lines of a language server's log. */
-    LspLog("lsp/log"),
+    LspLog("lsp/log", mutating = false),
 
     /** Language servers offered for a language, and the chosen one. */
-    LspChoice("lsp/choice"),
+    LspChoice("lsp/choice", mutating = false),
 
     /** Saves the language server chosen for a language. */
     LspChoose("lsp/choose", mutating = true),
@@ -401,91 +468,91 @@ enum class Method(
     DocClose("doc/close", mutating = true),
 
     /** Completion at a position of an open document. */
-    LspCompletion("lsp/completion"),
+    LspCompletion("lsp/completion", mutating = false),
 
     /** Documentation of an item of a completion answer. */
-    LspResolveCompletion("lsp/resolveCompletion"),
+    LspResolveCompletion("lsp/resolveCompletion", mutating = false),
 
     /** Documentation of the symbol at a position. */
-    LspHover("lsp/hover"),
+    LspHover("lsp/hover", mutating = false),
 
     /** Declaration, type or implementations of the symbol at a position. */
-    LspNavigate("lsp/navigate"),
+    LspNavigate("lsp/navigate", mutating = false),
 
     /** Usages of the symbol at a position. */
-    LspReferences("lsp/references"),
+    LspReferences("lsp/references", mutating = false),
 
     /** Occurrences of the symbol at a position in its document. */
-    LspHighlights("lsp/highlights"),
+    LspHighlights("lsp/highlights", mutating = false),
 
     /** Signatures of the call around a position. */
-    LspSignatureHelp("lsp/signatureHelp"),
+    LspSignatureHelp("lsp/signatureHelp", mutating = false),
 
     /** Usage counts of the declarations of a document. */
-    LspUsageCounts("lsp/usageCounts"),
+    LspUsageCounts("lsp/usageCounts", mutating = false),
 
     /** Declarations of a document, nested. */
-    LspOutline("lsp/outline"),
+    LspOutline("lsp/outline", mutating = false),
 
     /** The root of a call or type hierarchy. */
-    LspPrepareHierarchy("lsp/prepareHierarchy"),
+    LspPrepareHierarchy("lsp/prepareHierarchy", mutating = false),
 
     /** The callers, callees, supertypes or subtypes of a hierarchy item. */
-    LspHierarchyChildren("lsp/hierarchyChildren"),
+    LspHierarchyChildren("lsp/hierarchyChildren", mutating = false),
 
     /** Semantic tokens of a document. */
-    LspSemanticTokens("lsp/semanticTokens"),
+    LspSemanticTokens("lsp/semanticTokens", mutating = false),
 
     /** Characters that format while typed in a document. */
-    LspTypeFormattingTriggers("lsp/typeFormattingTriggers"),
+    LspTypeFormattingTriggers("lsp/typeFormattingTriggers", mutating = false),
 
     /** Edits after a trigger character was typed. */
-    LspFormatOnType("lsp/formatOnType"),
+    LspFormatOnType("lsp/formatOnType", mutating = false),
 
     /** Links of a document. */
-    LspDocumentLinks("lsp/documentLinks"),
+    LspDocumentLinks("lsp/documentLinks", mutating = false),
 
     /** Code lenses of a document. */
-    LspCodeLenses("lsp/codeLenses"),
+    LspCodeLenses("lsp/codeLenses", mutating = false),
 
-    /** Runs the command of a code lens. */
-    LspRunCodeLens("lsp/runCodeLens"),
+    /** Runs the command of a code lens on the language server (it may generate a file, run a test...), once. */
+    LspRunCodeLens("lsp/runCodeLens", mutating = true),
 
     /** Edits adapting the code to files about to be created, renamed or deleted. */
-    LspWillChangeFiles("lsp/willChangeFiles"),
+    LspWillChangeFiles("lsp/willChangeFiles", mutating = false),
 
     /**
      * Client to server: whether the user agreed to share performance measures (`enabled`), and as which
      * installation (`instanceId`). The server measures and exports only after the client said so.
      */
-    TelemetryConfig("telemetry/config"),
+    TelemetryConfig("telemetry/config", mutating = false),
 
     /** Inlay hints of a document. */
-    LspInlayHints("lsp/inlayHints"),
+    LspInlayHints("lsp/inlayHints", mutating = false),
 
     /** Regions of a document that can be folded. */
-    LspFoldingRanges("lsp/foldingRanges"),
+    LspFoldingRanges("lsp/foldingRanges", mutating = false),
 
     /** Ranges to extend the selection to around a position. */
-    LspSelectionRanges("lsp/selectionRanges"),
+    LspSelectionRanges("lsp/selectionRanges", mutating = false),
 
     /** Declarations of the project matching a name. */
-    LspWorkspaceSymbols("lsp/workspaceSymbols"),
+    LspWorkspaceSymbols("lsp/workspaceSymbols", mutating = false),
 
     /** Diagnostics of the session's documents, answered once newer than the client's version (long poll). */
-    LspDiagnostics("lsp/diagnostics"),
+    LspDiagnostics("lsp/diagnostics", mutating = false),
 
     /** What can be renamed at a position. */
-    LspPrepareRename("lsp/prepareRename"),
+    LspPrepareRename("lsp/prepareRename", mutating = false),
 
     /** Edits that rename a symbol. */
-    LspRename("lsp/rename"),
+    LspRename("lsp/rename", mutating = false),
 
     /** Edits that format a document or a range of it. */
-    LspFormat("lsp/format"),
+    LspFormat("lsp/format", mutating = false),
 
     /** Quick fixes and refactorings offered for a range. */
-    LspCodeActions("lsp/codeActions"),
+    LspCodeActions("lsp/codeActions", mutating = false),
 
     /** Edits of one of the code actions offered; runs its command on the language server, once. */
     LspApplyCodeAction("lsp/applyCodeAction", mutating = true),
@@ -500,7 +567,7 @@ enum class Method(
     AgentAnswer("agent/answer", mutating = true),
 
     /** The items of a conversation newer than a version (a long poll). */
-    AgentTranscript("agent/transcript"),
+    AgentTranscript("agent/transcript", mutating = false),
 
     /** Forgets a conversation and ends its session. */
     AgentClose("agent/close", mutating = true),
@@ -509,22 +576,22 @@ enum class Method(
     AgentOpen("agent/open", mutating = true),
 
     /** The sessions an agent keeps for a project. */
-    AgentSessions("agent/sessions"),
+    AgentSessions("agent/sessions", mutating = false),
 
     /** Deletes a session the agent kept. */
     AgentDelete("agent/delete", mutating = true),
 
     /** The agents of the ACP registry the server can install. */
-    AgentRegistry("agent/registry"),
+    AgentRegistry("agent/registry", mutating = false),
 
     /** The settings (model…) a new session of an agent offers. */
-    AgentOptions("agent/options"),
+    AgentOptions("agent/options", mutating = false),
 
     /** Changes a setting (the model…) of the session of a conversation. */
     AgentSetOption("agent/setOption", mutating = true),
 
     /** The slash commands an agent offered in its latest session. */
-    AgentCommands("agent/commands"),
+    AgentCommands("agent/commands", mutating = false),
 }
 
 /** A JSON-RPC error object `{"code": ..., "message": ...}`. */

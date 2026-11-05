@@ -7,6 +7,9 @@ import java.nio.file.StandardCopyOption
 import java.nio.file.attribute.PosixFilePermission
 import java.nio.file.attribute.PosixFilePermissions
 import java.util.Properties
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import kotlin.concurrent.thread
 
 /**
  * The file a daemonized server writes once it listens, so its client finds its port and token without passing
@@ -21,9 +24,16 @@ import java.util.Properties
  * port=42173
  * pid=8842
  * token=...
+ * sessions=1
  * ```
+ *
+ * `sessions` counts the client sessions, connected or waiting for their client to come back (their shells and
+ * agent conversations still live). [track] keeps it current, so that a client about to replace the daemon (with a
+ * server of another protocol) can tell whether that would end someone's work.
  */
 object ServerState {
+    private const val TRACK_INTERVAL_MS = 500L
+
     /** Writes the state of [server] to [file], atomically and readable by its owner only. */
     fun write(
         file: File,
@@ -33,6 +43,7 @@ object ServerState {
         startedAt: Long = System.currentTimeMillis(),
         /** Identity of the installed bundle (its hash), so the client can tell a stale daemon from a current one. */
         build: String? = null,
+        sessions: Int = server.sessionCount,
     ) {
         val properties =
             Properties().apply {
@@ -44,6 +55,7 @@ object ServerState {
                 setProperty("token", token)
                 setProperty("startedAt", startedAt.toString())
                 build?.let { setProperty("build", it) }
+                setProperty("sessions", sessions.toString())
             }
         val directory = file.absoluteFile.parentFile
         directory.mkdirs()
@@ -52,6 +64,39 @@ object ServerState {
         restrictToOwner(temporary)
         moveReplacing(temporary, file)
         restrictToOwner(file)
+    }
+
+    /**
+     * Writes the state of [server] to [file] now, then again whenever its number of sessions changes, until the
+     * returned handle is closed (before [removeIfOwned], so that nothing writes the file back).
+     */
+    fun track(
+        file: File,
+        server: EditorServer,
+        host: String,
+        token: String,
+        build: String? = null,
+        intervalMs: Long = TRACK_INTERVAL_MS,
+    ): AutoCloseable {
+        val startedAt = System.currentTimeMillis()
+        var written = server.sessionCount
+        write(file, server, host, token, startedAt, build, written)
+        val stop = CountDownLatch(1)
+        val tracker =
+            thread(name = "server-state", isDaemon = true) {
+                while (!stop.await(intervalMs, TimeUnit.MILLISECONDS)) {
+                    val sessions = server.sessionCount
+                    if (sessions != written) {
+                        written = sessions
+                        // A failed write (disk full) is retried at the next change; the server keeps serving.
+                        runCatching { write(file, server, host, token, startedAt, build, sessions) }
+                    }
+                }
+            }
+        return AutoCloseable {
+            stop.countDown()
+            tracker.join()
+        }
     }
 
     /** Removes [file] if it still belongs to the current process (a later server must keep its own state file). */

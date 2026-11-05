@@ -27,6 +27,12 @@ The first connection installs the matching server under `~/.kotlin-editor/server
 daemon and opens an SSH tunnel. Later connections reuse the daemon; the SSH link is supervised and restarted when
 the network comes back.
 
+IDEs of different builds share the daemon as long as they speak the same protocol: updating the IDE, or connecting
+from two machines with different builds, keeps the daemon and so its terminals and agent conversations. Each build
+installs its bundle next to the others. Only a daemon of **another protocol** is replaced; while it still has
+sessions (connected, or waiting up to 30 minutes for their client), the dialog says so and asks first: **Keep it**
+leaves it running and does not connect, **Replace the server** stops it and connects.
+
 If no project directory was given, the IDE's **Open Project** dialog opens in the **SSH user's home**: the same
 dialog as for the local server, browsing the host's disk. Click a directory to highlight it, double-click to list
 its subdirectories, use **Up** and **Home**, type an absolute path (or `~`, the SSH home) in the path field, and
@@ -99,18 +105,25 @@ IDE ── RpcClient ── 127.0.0.1:<local port> ── ssh -N -L ── 127.0
 ```
 
 - `RemoteInstaller` detects the host (`uname`) and identifies the local bundle by the start of its SHA-256 (its
-  *build id*), not by `VERSION`: a rebuilt server with the same version number is still installed. When the host's
-  `BUILD` file differs, it uploads the bundle and unpacks it through a staging directory of its own (a cancelled
-  install or another IDE installing at the same time cannot mix files), then starts `start.sh` and reads the
-  daemon's `state.properties`, which reports the daemon's build id and protocol.
+  *build id*), not by `VERSION`: a rebuilt server with the same version number is still installed. Each build has
+  its own directory, `~/.kotlin-editor/server/<version>-<target>-<build>/`, holding its `BUILD` id and its
+  `PROTOCOL`. When this build's directory is missing, it uploads the bundle and unpacks it through a staging
+  directory of its own (a cancelled install or another IDE installing at the same time cannot mix files), then
+  starts that bundle's `start.sh` and reads the daemon's `state.properties`, which reports the daemon's build id,
+  protocol and number of sessions. A daemon of another build but the same protocol is accepted.
 - Every remote command runs in `sh -c '…'`, whatever the user's login shell (bash, zsh, fish, csh): the e2e tests
   install and connect with fish and tcsh as the login shell, and the Linux CI installs both. Cancelling a
   connection kills the running `ssh`, so an abandoned upload does not keep going in the background.
 - `start.sh` is idempotent and holds a lock while it runs (two IDE windows connecting together start one daemon):
-  it reuses a live daemon of the same build, replaces the daemon of another build, checks that the pid of the state
-  file really is the daemon (pids are reused after a reboot), generates the token once and starts the server
-  detached (`setsid`/`nohup`). A JVM that dies while starting is reported at once with the end of `server.log`. The
-  daemon keeps running across IDE restarts.
+  it reuses a live daemon of the same protocol (whatever its build), replaces a daemon of another protocol that has
+  no session, and otherwise prints `in-use sessions=<n> version=<v> protocol=<p>` and exits with 3 (the IDE then
+  asks, and runs `start.sh --replace` once the user agreed; a daemon too old to count its sessions counts as in
+  use). It checks that the pid of the state file really is the daemon (pids are reused after a reboot), generates
+  the token once and starts the server detached (`setsid`/`nohup`). A JVM that dies while starting is reported at
+  once with the end of `server.log`. The daemon keeps running across IDE restarts. Each run touches its bundle's
+  `BUILD` and removes the bundles of other builds nobody used for a week, except the running daemon's.
+- The daemon keeps the `sessions` line of its state file current (`ServerState.track`): its client sessions,
+  connected or waiting for their client to come back.
 - `RemoteTunnel` runs one `ssh -N -L` and restarts it with backoff when it dies. The daemon never stopped, so the
   protocol client reconnects and resumes its sessions and terminal streams. The remote daemon keeps a disconnected
   session (its shells, its pending answers) for 30 minutes, so a sleeping laptop or a long VPN outage does not kill
@@ -143,11 +156,17 @@ IDE ── RpcClient ── 127.0.0.1:<local port> ── ssh -N -L ── 127.0
 `RemoteDevelopmentPerformanceE2eTest` run a real Apache MINA SSH server on the test machine, point its `HOME` at a
 temporary directory and connect the real OpenSSH client to it. They cover install/daemon/tunnel, editing and saving,
 cancellation (which stops `ssh`) and validation, disconnecting, tunnel restarts, a changed or unknown host key, a
-daemon killed and restarted on another port, a rebuilt bundle replacing the running daemon, the Open Project dialog on the
+daemon killed and restarted on another port, a rebuilt bundle installed next to the running daemon and reusing it,
+the Open Project dialog on the
 host (SSH home, `~` and Home, double-click navigation, live path check with debounce, path and file errors,
 opening the chosen directory, a remote directory not remembered for the local dialog), a listing that
 completes after a reconnection,
 1,000 folders, the `~/.ssh/config` catalog (including aliases, includes and search), saved folders surviving a
 restart, the pick view (manual form hidden behind "New host…", recent folders before the hosts) and host tags
 (editing, search by tag, chips after a restart), and a 5,000-line file on a 200-file project.
+`RemoteDaemonSharingE2eTest` covers IDEs of several builds sharing a daemon (a terminal of the first one goes on
+while another build connects), a daemon of another protocol replaced only once the user agreed while it has
+sessions (Keep it, then Replace), without asking when it has none, with asking when it is too old to count them,
+and the removal of bundles unused for a week; the chaos test restarts the daemon from the IDE's own bundle when the
+shared daemon of another build dies.
 `RemoteTransportTest` covers the token surviving a daemon restart and strict host-key checking.

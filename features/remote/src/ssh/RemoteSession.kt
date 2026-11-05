@@ -109,13 +109,15 @@ class RemoteSession(
          * Installs the server if needed, opens the tunnel and waits for the protocol handshake.
          *
          * Runs blocking SSH commands (and so must be called from an IO dispatcher); [onProgress] is called with
-         * short, user-facing steps.
+         * short, user-facing steps. A daemon of another protocol that still has sessions is only replaced with
+         * [replaceServer]; otherwise this throws [RemoteServerInUseException], for the dialog to ask the user.
          */
         @Suppress("TooGenericExceptionCaught", "ThrowsCount") // wraps every transport failure into a user message
         suspend fun connect(
             target: SshTarget,
             onProgress: (String) -> Unit = {},
             options: ClientOptions = ClientOptions(heartbeatMs = 5_000, deadAfterMs = 15_000, maxBackoffMs = 2_000),
+            replaceServer: Boolean = false,
         ): RemoteSession {
             val ssh = SshClient(target)
             val installer = RemoteInstaller(ssh)
@@ -127,9 +129,11 @@ class RemoteSession(
                     // remote.deploy: checking, uploading and starting the server on the remote machine.
                     ClientTelemetry.suspendSpan(
                         Operation.RemoteDeploy,
-                    ) { installer.ensureServer(host.target, onProgress) }
+                    ) { installer.ensureServer(host.target, onProgress, replaceServer) }
                 } catch (cancelled: CancellationException) {
                     throw cancelled
+                } catch (inUse: RemoteServerInUseException) {
+                    throw inUse
                 } catch (e: Exception) {
                     throw RemoteException("Cannot prepare the server on ${target.destination}: ${e.message}", e)
                 }
@@ -167,8 +171,11 @@ class RemoteSession(
 
 /** OpenSSH implementation used by the desktop application and the end-to-end tests. */
 object JvmRemoteFactory : RemoteFactory {
-    override suspend fun connect(target: SshTarget, onProgress: (String) -> Unit): RemoteConnection =
-        RemoteSession.connect(target, onProgress)
+    override suspend fun connect(
+        target: SshTarget,
+        replaceServer: Boolean,
+        onProgress: (String) -> Unit,
+    ): RemoteConnection = RemoteSession.connect(target, onProgress, replaceServer = replaceServer)
 
     override suspend fun sshHosts(): List<SshConfigHost> = SshConfig.load()
 }

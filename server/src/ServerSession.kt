@@ -1,13 +1,18 @@
 package org.example.kotlineditor.server
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.longOrNull
 import org.example.kotlineditor.rpc.Frame
 import org.example.kotlineditor.rpc.FrameKind
 import org.example.kotlineditor.rpc.InvalidParamsException
@@ -28,10 +33,10 @@ import java.util.concurrent.ConcurrentHashMap
 // The outcome of a request answered with an error.
 private const val REMOTE_ERROR = "RemoteError"
 
-// Methods run on the reading thread, in arrival order: they are quick and their order matters.
-private val ORDERED =
+// Methods whose order matters: each runs after the previous request of its key (see [orderingKey]) has finished,
+// on a coroutine, never on the reading thread.
+private val TERMINAL_METHODS =
     setOf(
-        Method.TerminalStart,
         Method.TerminalWrite,
         Method.TerminalKey,
         Method.TerminalPaste,
@@ -40,13 +45,51 @@ private val ORDERED =
         Method.TerminalClear,
         Method.TerminalResume,
         Method.TerminalDestroy,
-        // Each one replaces the files declared by the previous one: they must apply in order.
-        Method.LspUse,
-        // The edits of a document apply in the order they were typed.
-        Method.DocOpen,
-        Method.DocChange,
-        Method.DocClose,
     )
+
+// The edits of a document apply in the order they were typed.
+private val DOCUMENT_METHODS = setOf(Method.DocOpen, Method.DocChange, Method.DocClose)
+
+private const val TERMINAL = "terminal"
+private const val PATH = "path"
+
+// The queue of a terminal's commands; terminal/start names its terminal by its own request id.
+private fun terminalKey(terminal: Long?) = "terminal:$terminal"
+
+private fun documentKey(path: String) = "doc:$path"
+
+// Each lsp/use replaces the files declared by the previous one: they must apply in order.
+private const val LSP_USE_KEY = "lsp/use"
+
+private fun JsonElement.namedOrNull(name: String): JsonPrimitive? {
+    val value = (this as? JsonObject)?.get(name)
+    return value as? JsonPrimitive
+}
+
+// The path of the document a request is about, for the requests that name one.
+private fun documentPathOf(frame: Frame): String? {
+    val path = frame.payload.namedOrNull(PATH)
+    return path?.takeIf { it.isString }?.content
+}
+
+// The sequential queue a method runs in, null for the methods that run concurrently. A request of a malformed key
+// still gets its family's queue, so its order is kept until its handler rejects its params.
+private fun orderingKey(method: Method, frame: Frame): String? =
+    when (method) {
+        Method.TerminalStart -> terminalKey(frame.id)
+        in TERMINAL_METHODS -> terminalKey(frame.payload.namedOrNull(TERMINAL)?.longOrNull)
+        in DOCUMENT_METHODS -> documentKey(documentPathOf(frame).orEmpty())
+        Method.LspUse -> LSP_USE_KEY
+        else -> null
+    }
+
+/** A request being executed: [cancellable] by the client, unless it is one of a sequential queue. */
+private class Running(val job: Job, val cancellable: Boolean)
+
+// Only the entry of the job [self]: a retry dispatched once it was released has its own.
+private fun ConcurrentHashMap<Long, Running>.release(id: Long, self: Job) {
+    computeIfPresent(id) { _, running -> running.takeIf { it.job !== self } }
+}
 
 /** One request being executed: its id, its named params, the session's terminals and the session's id. */
 internal class Request(
@@ -98,7 +141,11 @@ internal class ServerSession(
     var detachedAt = 0L
         private set
 
-    private val inFlight = ConcurrentHashMap<Long, Job>()
+    private val inFlight = ConcurrentHashMap<Long, Running>()
+
+    // The last request of each sequential queue: the next one of the key waits for it.
+    private val queues = ConcurrentHashMap<String, Job>()
+    private val dispatching = Any()
     private val answers =
         object : LinkedHashMap<Long, Frame>() {
             override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Long, Frame>?) =
@@ -122,14 +169,14 @@ internal class ServerSession(
     fun onFrame(from: ServerConnection, frame: Frame) {
         when (frame.kind) {
             FrameKind.Ping -> from.send(Frame(FrameKind.Pong, 0))
-            FrameKind.Cancel -> inFlight.remove(frame.id)?.cancel()
+            FrameKind.Cancel -> cancel(frame.id)
             FrameKind.Request -> onRequest(frame)
             else -> Unit
         }
     }
 
     fun dispose() {
-        inFlight.values.forEach { it.cancel() }
+        inFlight.values.forEach { it.job.cancel() }
         terminals.stopAll()
         connection?.close()
         onDispose(id)
@@ -140,31 +187,58 @@ internal class ServerSession(
         connection?.send(frame)
     }
 
+    // A request of a sequential queue always runs: the requests after it in its queue expect its effect.
+    private fun cancel(id: Long) {
+        val running = inFlight[id]?.takeIf { it.cancellable } ?: return
+        if (inFlight.remove(id, running)) running.job.cancel()
+    }
+
     private fun onRequest(frame: Frame) {
         val cached = synchronized(answers) { answers[frame.id] }
         val method = frame.method
         when {
+            // a retry of an executed request: same answer, no second execution
             cached != null -> send(cached)
 
-            // a retry of an executed request: same answer, no second execution
             method == null -> send(failure(frame.id, "Unknown method", Protocol.METHOD_NOT_FOUND))
 
-            method in ORDERED -> complete(frame.id, method, runBlocking { measured(frame, method) })
-
-            else -> launchRequest(frame, method)
+            else -> dispatch(frame, method)
         }
     }
 
-    private fun launchRequest(frame: Frame, method: Method) {
-        val id = frame.id
-        val job = scope.launch(start = CoroutineStart.LAZY) { complete(id, method, measured(frame, method)) }
-        // Already running (sent again after a reconnection): its answer will be sent when it completes.
-        if (inFlight.putIfAbsent(id, job) == null) job.start() else job.cancel()
+    // Runs the request on a coroutine: the reading thread only dispatches. A request of a sequential queue starts
+    // once the previous one of its key finished; a request that names a document starts once the edits of that
+    // document received before it applied, as when they ran on the reading thread.
+    private fun dispatch(frame: Frame, method: Method) {
+        synchronized(dispatching) {
+            val id = frame.id
+            // Already running (sent again after a reconnection): its answer will be sent when it completes.
+            if (inFlight.containsKey(id)) return
+            val key = orderingKey(method, frame)
+            val documentQueue = documentPathOf(frame)?.let { queues[documentKey(it)] }
+            val previous = key?.let { queues[it] } ?: documentQueue
+            val job =
+                scope.launch(start = CoroutineStart.LAZY) {
+                    val self = coroutineContext.job
+                    try {
+                        previous?.join()
+                        complete(id, method, measured(frame, method), self)
+                    } finally {
+                        inFlight.release(id, self)
+                        key?.let { queues.remove(it, self) }
+                    }
+                }
+            inFlight[id] = Running(job, cancellable = key == null)
+            key?.let { queues[it] = job }
+            job.start()
+        }
     }
 
-    private fun complete(id: Long, method: Method, answer: Frame) {
+    // Cached, then no longer running, then sent: a retry sent as soon as the answer arrived finds it cached, or runs
+    // again, instead of being dropped as still running.
+    private fun complete(id: Long, method: Method, answer: Frame, self: Job) {
         if (method.mutating) synchronized(answers) { answers[id] = answer }
-        inFlight.remove(id)
+        inFlight.release(id, self)
         send(answer)
     }
 
@@ -199,17 +273,32 @@ internal class ServerSession(
             val result = checkNotNull(handlers[method]) { "No handler for $method" }.invoke(request)
             Frame(FrameKind.Response, id, result, code = request.code)
         } catch (e: IOException) {
-            failure(id, e.message ?: e::class.simpleName.orEmpty())
+            failure(id, e.text())
         } catch (e: InvalidParamsException) {
             failure(id, e.message.orEmpty(), Protocol.INVALID_PARAMS)
         } catch (e: IllegalArgumentException) {
-            failure(id, e.message ?: e::class.simpleName.orEmpty())
+            failure(id, e.text())
+        } catch (e: CancellationException) {
+            // Cancelled (by the client, or the session ended): no answer. A timeout inside the handler is a failure.
+            currentCoroutineContext().ensureActive()
+            failure(id, e.text())
         } catch (e: IllegalStateException) {
-            failure(id, e.message ?: e::class.simpleName.orEmpty())
+            failure(id, e.text())
         } catch (e: SecurityException) {
-            failure(id, e.message ?: e::class.simpleName.orEmpty())
+            failure(id, e.text())
+        } catch (@Suppress("TooGenericExceptionCaught") e: Throwable) {
+            // A bug of a handler: answered, so that the client does not wait for its timeout and can retry.
+            unexpected(id, method, e)
         }
-
-    private fun failure(id: Long, message: String, code: Int = Protocol.SERVER_ERROR) =
-        Frame(FrameKind.Error, id, rpcError(code, message))
 }
+
+private fun Throwable.text(): String = message ?: this::class.simpleName.orEmpty()
+
+private fun unexpected(id: Long, method: Method, failure: Throwable): Frame {
+    System.err.println("Request ${method.rpcName} failed unexpectedly: ${failure.stackTraceToString()}")
+    val message = "Internal error in ${method.rpcName}: ${failure.text()}"
+    return failure(id, message, Protocol.INTERNAL_ERROR)
+}
+
+private fun failure(id: Long, message: String, code: Int = Protocol.SERVER_ERROR) =
+    Frame(FrameKind.Error, id, rpcError(code, message))

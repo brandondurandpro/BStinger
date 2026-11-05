@@ -1,8 +1,17 @@
 #!/bin/sh
 # Starts the per-user Kotlin Editor server and waits until it writes its state file.
 # The client runs it over SSH, on every connection and whenever the daemon stops answering: it is idempotent, so
-# reconnecting never starts a second daemon, and it replaces a daemon that runs another bundle (an upgrade).
+# reconnecting never starts a second daemon. A running daemon of the same protocol is reused, whatever bundle it
+# runs from (another build of the IDE): its terminals and agent conversations go on. A daemon of another protocol
+# is replaced, but while it still has sessions only with --replace (the user agreed): otherwise this script prints
+# `in-use sessions=<n> version=<v> protocol=<p>` and exits with 3, and the IDE asks.
+# Bundles are installed side by side, one directory per build; one nobody used for a week is removed.
 set -eu
+
+REPLACE=0
+if [ "${1:-}" = "--replace" ]; then
+    REPLACE=1
+fi
 
 D=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 H=${HOME:?}
@@ -19,6 +28,11 @@ umask 077
 BUILD=""
 if [ -f "$D/BUILD" ]; then
     BUILD=$(cat "$D/BUILD")
+fi
+# Protocol this bundle speaks, written by the installer too (empty for a bundle installed before it was).
+PROTOCOL=""
+if [ -f "$D/PROTOCOL" ]; then
+    PROTOCOL=$(cat "$D/PROTOCOL")
 fi
 
 # One start at a time: two IDE windows connecting together must not start two daemons.
@@ -53,13 +67,46 @@ alive() {
     esac
 }
 
+# The bundles of other builds, unused for a week, except the one the running daemon was started from. Using a
+# bundle touches its BUILD file.
+prune() {
+    touch "$D/BUILD" 2>/dev/null || true
+    RUNNING=$(prop build)
+    for X in "$S"/*/; do
+        X=${X%/}
+        if [ "$X" = "$D" ] || [ ! -f "$X/BUILD" ] || [ "$(cat "$X/BUILD")" = "$RUNNING" ]; then
+            continue
+        fi
+        if [ -n "$(find "$X/BUILD" -mtime +7 2>/dev/null)" ]; then
+            rm -rf "$X"
+        fi
+    done
+}
+
+# Whether the running daemon can serve this IDE: the same protocol (or, for a bundle that does not say which
+# protocol it speaks, the same bundle).
+compatible() {
+    if [ -n "$PROTOCOL" ]; then
+        [ "$(prop protocol)" = "$PROTOCOL" ]
+    else
+        [ "$(prop build)" = "$BUILD" ]
+    fi
+}
+
 if [ -s "$STATE" ]; then
     PID=$(prop pid)
     if [ -n "$PID" ] && alive "$PID"; then
-        if [ "$(prop build)" = "$BUILD" ]; then
+        if compatible; then
+            prune
             exit 0
         fi
-        # The daemon of another bundle: stop it, its clients reconnect to the new one.
+        # A daemon of another protocol. Unknown sessions (a daemon too old to count them) count as live ones.
+        SESSIONS=$(prop sessions)
+        if [ "$REPLACE" != 1 ] && [ "${SESSIONS:-unknown}" != 0 ]; then
+            echo "in-use sessions=${SESSIONS:-unknown} version=$(prop version) protocol=$(prop protocol)"
+            exit 3
+        fi
+        # Nobody uses it, or the user agreed to end its sessions: stop it.
         kill "$PID" 2>/dev/null || true
         j=0
         while alive "$PID" && [ "$j" -lt 100 ]; do
@@ -139,3 +186,4 @@ while [ ! -s "$STATE" ]; do
     fi
     sleep 0.1
 done
+prune

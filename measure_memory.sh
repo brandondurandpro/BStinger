@@ -143,7 +143,8 @@ echo "$CSV_HEADER" > "$DESKTOP_MEM_FILE"
 
 # Lancer le serveur en premier, sur un port libre choisi par l'OS.
 echo "▶ Starting server..."
-setsid ./kotlin run -m serverApp -- --host 127.0.0.1 --port 0 --token "$TOKEN" \
+# Le jeton passe par l'environnement : une ligne de commande est visible de tous les utilisateurs (ps).
+KOTLIN_EDITOR_TOKEN="$TOKEN" setsid ./kotlin run -m serverApp -- --host 127.0.0.1 --port 0 \
     </dev/null >"$SERVER_LOG" 2>&1 &
 SERVER_CLI_PID=$!
 SERVER_PID=$(wait_for_app_pid "$SERVER_CLI_PID" "$SERVER_LOG")
@@ -169,8 +170,8 @@ echo "  Server PID: $SERVER_PID (port $SERVER_PORT)"
 # Lancer l'app desktop connectée à ce serveur : sans --server elle embarquerait
 # son propre serveur, et sa mesure inclurait celle d'un second serveur.
 echo "▶ Starting desktop app..."
-SKIKO_RENDER_API="${SKIKO_RENDER_API:-SOFTWARE}" \
-    setsid ./kotlin run -m desktopApp -- --server "127.0.0.1:$SERVER_PORT" --token "$TOKEN" \
+SKIKO_RENDER_API="${SKIKO_RENDER_API:-SOFTWARE}" KOTLIN_EDITOR_TOKEN="$TOKEN" \
+    setsid ./kotlin run -m desktopApp -- --server "127.0.0.1:$SERVER_PORT" \
     </dev/null >"$DESKTOP_LOG" 2>&1 &
 DESKTOP_CLI_PID=$!
 DESKTOP_PID=$(wait_for_app_pid "$DESKTOP_CLI_PID" "$DESKTOP_LOG")

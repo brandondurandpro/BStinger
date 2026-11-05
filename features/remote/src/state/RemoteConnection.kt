@@ -30,9 +30,15 @@ interface RemoteConnection {
 interface RemoteFactory {
     /**
      * Installs the server on [target] if needed, starts its daemon, opens the tunnel and waits for the protocol
-     * handshake. Blocking work happens on the caller's IO dispatcher.
+     * handshake. Blocking work happens on the caller's IO dispatcher. A running daemon of another protocol that
+     * still has sessions is replaced only with [replaceServer] (the user agreed); otherwise this throws
+     * [org.example.kotlineditor.remote.RemoteServerInUseException].
      */
-    suspend fun connect(target: SshTarget, onProgress: (String) -> Unit = {}): RemoteConnection
+    suspend fun connect(
+        target: SshTarget,
+        replaceServer: Boolean = false,
+        onProgress: (String) -> Unit = {},
+    ): RemoteConnection
 
     /** Hosts of the user's `~/.ssh/config`, for the remote dialog's catalog. */
     suspend fun sshHosts(): List<SshConfigHost> = emptyList()
