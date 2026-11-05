@@ -15,6 +15,8 @@ import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
 import java.util.zip.GZIPInputStream
 import java.util.zip.ZipInputStream
+import kotlin.io.path.ExperimentalPathApi
+import kotlin.io.path.deleteRecursively
 
 // The oldest Node.js the npx agents run on.
 private const val NODE_MINIMUM = "18"
@@ -103,9 +105,13 @@ internal class AgentInstaller(
     }
 }
 
-/** Extracts [archive] (`.zip`, `.tar.gz`, `.tgz`, or the program itself) into [into], emptied first. */
+/**
+ * Extracts [archive] (`.zip`, `.tar.gz`, `.tgz`, or the program itself) into [into], emptied first: the links an
+ * earlier archive left there are deleted, never what they point to.
+ */
+@OptIn(ExperimentalPathApi::class)
 internal fun extract(archive: Path, into: Path, command: String) {
-    into.toFile().deleteRecursively()
+    into.deleteRecursively()
     Files.createDirectories(into)
     val name = archive.fileName.toString().lowercase()
     when {

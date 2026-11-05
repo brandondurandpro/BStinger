@@ -1,5 +1,6 @@
 package org.example.kotlineditor.server
 
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -7,6 +8,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.example.kotlineditor.model.ConnectionStatus
 import org.example.kotlineditor.model.FileContent
+import org.example.kotlineditor.model.OutcomeUnknownException
 import org.example.kotlineditor.model.text
 import org.example.kotlineditor.rpc.ClientOptions
 import org.example.kotlineditor.rpc.RemoteFileSystem
@@ -26,6 +28,7 @@ import kotlin.io.path.writeText
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 private const val CUTS = 20
@@ -108,6 +111,47 @@ class ResilienceTest {
             assertTrue(client.connections.value >= 2)
             assertEquals(1, Files.list(project).use { it.count() }.toInt())
         }
+
+    @Test
+    fun `a mutation whose answer is lost while the server restarts is reported as unknown, not run again`() =
+        runBlocking {
+            val root = fs.resolveDirectory(project.toString())!!
+            client.awaitConnected()
+            // The request reaches the server and runs, its answer is lost; then the server restarts.
+            proxy.dropFromServer = true
+            val created = async { runCatching { fs.createFile(root, "once.txt") } }
+            withTimeout(5_000) { while (!Files.exists(project.resolve("once.txt"))) delay(10) }
+            restartServer()
+            proxy.dropFromServer = false
+            proxy.cutAll()
+
+            val failure = created.await().exceptionOrNull()
+            assertIs<OutcomeUnknownException>(failure, "a new execution would fail with \"already exists\"")
+            assertTrue("fs/createFile" in failure.message.orEmpty())
+            assertEquals(1, Files.list(project).use { it.count() }.toInt())
+        }
+
+    @Test
+    fun `a read whose answer is lost while the server restarts is sent again`() =
+        runBlocking {
+            project.resolve("a.txt").writeText("read twice")
+            val file = fs.fileAt(project.resolve("a.txt").toString())!!
+            client.awaitConnected()
+            proxy.dropFromServer = true
+            val read = async { fs.read(file) }
+            delay(200) // reaches the server, which answers into the void
+            restartServer()
+            proxy.dropFromServer = false
+            proxy.cutAll()
+            assertEquals(listOf("read twice"), (read.await() as FileContent.Text).lines)
+        }
+
+    // Stops the server and starts a new one on the same port and data: its sessions are gone.
+    private fun restartServer() {
+        val port = server.port
+        server.close()
+        server = EditorServer(LocalServices(data.toFile()), token).start(port = port)
+    }
 
     @Test
     fun `a silent dead link is detected by the heartbeat and replaced`() =

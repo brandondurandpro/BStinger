@@ -20,6 +20,15 @@ private val WINDOWS = System.getProperty("os.name").startsWith("Windows", ignore
 private const val LOCKED_DIRECTORY = "unusual/locked"
 
 /**
+ * In [SampleProject.withUnusualFiles], where the disk has symbolic links: a link to a directory outside the project
+ * ([outsideDirectory]), as pnpm's `node_modules` or a monorepo's `vendor -> ../lib` are. Alone in its directory.
+ */
+const val OUTSIDE_LINK = "linked/shared"
+
+/** The files of [outsideDirectory], which nothing the IDE does to the project may change. */
+val OUTSIDE_FILES = listOf("keep.txt", "nested/deep.txt")
+
+/**
  * The text files of [SampleProject.withUnusualFiles], which a save must keep as they are but for their text; each
  * only where the disk can have it (POSIX permissions and links, a group of the user, extended attributes).
  */
@@ -83,7 +92,25 @@ private fun SampleProject.addPosixFiles() {
     file("unusual/back\\slash.txt", "first\n")
     file("$LOCKED_DIRECTORY/inside.txt", "first\n")
     Files.setPosixFilePermissions(root.resolve(LOCKED_DIRECTORY), PosixFilePermissions.fromString("r-xr-xr-x"))
+    val outside = outsideDirectory()
+    for (name in OUTSIDE_FILES) {
+        val target = outside.resolve(name)
+        Files.createDirectories(target.parent)
+        Files.writeString(target, "outside\n")
+    }
+    val link = root.resolve(OUTSIDE_LINK)
+    Files.createDirectories(link.parent)
+    Files.createSymbolicLink(link, outside)
 }
+
+/**
+ * The directory, next to the project and outside it, that [OUTSIDE_LINK] points to; [DiskSnapshot] takes it too and
+ * [SampleProject.delete] deletes it.
+ */
+fun SampleProject.outsideDirectory(): Path = root.resolveSibling("${root.fileName}-outside")
+
+/** Whether the project has [OUTSIDE_LINK] (not on Windows, where making a link needs a privilege). */
+fun SampleProject.hasOutsideLink(): Boolean = Files.isSymbolicLink(root.resolve(OUTSIDE_LINK))
 
 private fun SampleProject.addWindowsFiles() {
     val hidden = file("unusual/hidden.txt", "first\n")

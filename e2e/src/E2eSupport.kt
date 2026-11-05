@@ -50,7 +50,9 @@ import org.example.kotlineditor.ui.TextClipboard
 import org.example.kotlineditor.ui.TreeTags
 import java.nio.file.Files
 import java.nio.file.Path
+import kotlin.io.path.ExperimentalPathApi
 import kotlin.io.path.createDirectories
+import kotlin.io.path.deleteRecursively
 import kotlin.io.path.writeBytes
 import kotlin.io.path.writeText
 
@@ -81,7 +83,15 @@ class SampleProject(val root: Path = Files.createTempDirectory("kotlin-editor-e2
 
     fun read(relative: String): String = Files.readString(root.resolve(relative))
 
-    fun delete() = root.toFile().deleteRecursively()
+    /**
+     * Deletes the project, and the directory outside it that its links may point to ([outsideDirectory]); a link is
+     * deleted, never what it points to. Best effort, like a temp directory: what cannot be deleted stays.
+     */
+    @OptIn(ExperimentalPathApi::class)
+    fun delete() {
+        runCatching { root.deleteRecursively() }
+        runCatching { outsideDirectory().deleteRecursively() }
+    }
 
     companion object {
         val APP_KT =

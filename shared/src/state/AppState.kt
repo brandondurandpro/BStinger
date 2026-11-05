@@ -48,6 +48,9 @@ class AppState(
     // One switch of server at a time: a disconnection waits for the connection being shown.
     private val switching = Mutex()
 
+    /** Closing the IDE: the files it could not save, until the user retries, closes anyway or keeps it open. */
+    val exiting = AppExit(scope, { session.project }, ::finishExit)
+
     /** Whether a dialog of the whole window is open (Open Project, Settings): it keeps the keyboard. */
     val dialogOpen: Boolean get() = session.projectPickerOpen || settings.dialog != null
 
@@ -84,18 +87,23 @@ class AppState(
         session.close()
     }
 
-    /** Saves everything, stops the remote session, then calls [onDone] (used when the window is closed). */
+    /**
+     * Saves everything, stops the remote session, then calls [onDone] (used when the window is closed); the files
+     * that could not be saved are shown first, until the user chooses (see [AppExit]).
+     */
     fun exit(onDone: () -> Unit) {
         session.closeProjectPicker()
-        scope.launch {
-            switching.withLock {
-                val shown = session
-                shown.saveOpenProject()
-                // Read while the project is still shown: its own preferences are saved with the others.
-                preferences.saveNow(::currentPreferences)
-                shown.close()
-            }
-            onDone()
+        exiting.start(onDone)
+    }
+
+    // What closing the IDE does once the files are saved, or the user chose to close without them.
+    private suspend fun finishExit() {
+        switching.withLock {
+            val shown = session
+            shown.project?.dispose()
+            // Read while the project is still shown: its own preferences are saved with the others.
+            preferences.saveNow(::currentPreferences)
+            shown.close()
         }
     }
 

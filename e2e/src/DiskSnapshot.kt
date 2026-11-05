@@ -51,7 +51,11 @@ class DiskSnapshot private constructor(private val files: Map<String, FileState>
     /** Takes snapshots. */
     companion object {
         /** The state of [project] now. */
-        fun take(project: SampleProject): DiskSnapshot = DiskSnapshot(filesOf(project.root), gitStateOf(project))
+        fun take(project: SampleProject): DiskSnapshot {
+            val outside = project.outsideDirectory()
+            val outsideFiles = if (Files.isDirectory(outside)) filesOf(outside, project.root) else emptyMap()
+            return DiskSnapshot(filesOf(project.root, project.root) + outsideFiles, gitStateOf(project))
+        }
     }
 }
 
@@ -70,8 +74,9 @@ private fun difference(path: String, before: FileState?, after: FileState?): Str
     }
 
 // Every file but those of `.git`, which [gitStateOf] reads through Git: Git creates and deletes its lock files there
-// at any time.
-private fun filesOf(root: Path): Map<String, FileState> {
+// at any time. Named by their path from [root] (`../name-outside/keep.txt` in the directory outside the project
+// that a link of it points to); a link is not followed.
+private fun filesOf(directory: Path, root: Path): Map<String, FileState> {
     val files = HashMap<String, FileState>()
     val gitDirectory = root.resolve(".git")
     val visitor =
@@ -84,7 +89,7 @@ private fun filesOf(root: Path): Map<String, FileState> {
                 return FileVisitResult.CONTINUE
             }
         }
-    Files.walkFileTree(root, visitor)
+    Files.walkFileTree(directory, visitor)
     return files
 }
 

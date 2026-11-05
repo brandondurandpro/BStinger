@@ -3,6 +3,7 @@ package org.example.kotlineditor.model
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import org.example.kotlineditor.syntax.Declaration
+import java.io.IOException
 
 /** A file or directory of the opened project. Paths are absolute and platform-specific (on the server). */
 data class FileEntry(
@@ -466,6 +467,15 @@ interface GitClient : WorktreeClient {
         override suspend fun removeWorktree(root: String, path: String) = Unit
     }
 }
+
+/**
+ * A change sent to a server that restarted before answering: it may have been applied or not, and is not sent again
+ * (it could apply twice). The caller reads the state again to know.
+ */
+class OutcomeUnknownException(
+    /** What was asked, the name of the remote method. */
+    val operation: String,
+) : IOException("The server restarted before confirming $operation: whether it was applied is unknown")
 
 /** State of the link with the server, shown in the status bar. */
 enum class ConnectionStatus {
