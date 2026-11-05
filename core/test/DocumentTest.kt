@@ -308,6 +308,20 @@ class DocumentTest {
     }
 
     @Test
+    fun `an edit removing many lines keeps the lines around it, and is undone`() {
+        val original = (0 until 300).joinToString("\n") { "line $it" }
+        val d = doc(original)
+        d.replace(TextPos(10, 2), TextPos(250, 4), "A\nB")
+        val expected = (0 until 10).map { "line $it" } + listOf("liA", "B 250") + (251 until 300).map { "line $it" }
+        assertEquals(expected, d.lines.toList())
+        assertEquals(TextPos(11, 1), d.caret)
+        d.undo()
+        assertEquals(original, d.text())
+        d.redo()
+        assertEquals(expected, d.lines.toList())
+    }
+
+    @Test
     fun `tabs count as four cells`() {
         assertEquals(5, visualColumn("\tx", 2))
         assertEquals(1, columnForVisual("\tx", 4))

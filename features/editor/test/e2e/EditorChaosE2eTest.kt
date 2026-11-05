@@ -130,8 +130,13 @@ class EditorChaosE2eTest {
             save()
             val tab = checkNotNull(app.project.editor.activeTab)
             val document = checkNotNull(tab.document)
-            // Both saves done: each one bumps the stamp when it starts and when it ends.
-            awaitCondition(LARGE_SAVE_TIMEOUT) { document.saveStamp == 4 }
+            // The last save done: none runs (the stamp is odd while one does) and nothing is left to save. The second
+            // save may have been folded into the first, when it was asked before the first one started.
+            awaitCondition(LARGE_SAVE_TIMEOUT) {
+                val stamp = document.saveStamp
+                val saving = stamp % 2 == 1
+                stamp > 0 && !saving && !document.isModified
+            }
             assertEquals("w", project.read("large.txt"))
             awaitNoTag(EditorTags.tabModified("large.txt"))
         }
