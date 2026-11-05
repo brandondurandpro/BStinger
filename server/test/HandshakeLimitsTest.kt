@@ -138,6 +138,26 @@ class HandshakeLimitsTest {
         }
 
     @Test
+    fun `a connection still in its handshake when the server closes is closed unanswered`() {
+        connect().use { waiting ->
+            // Accepted in order: once a later connection is welcomed, the server is reading the first one's hello.
+            connect().use { it.hello() }
+            server.close()
+            // A hello meant for the server that replaces this one on its port: the closed one must neither reject it
+            // (the client would stop trying) nor welcome it.
+            val params =
+                buildJsonObject {
+                    put("version", Protocol.VERSION)
+                    put("token", "the next server's token")
+                }
+            val hello = Frame(FrameKind.Hello, Protocol.HELLO_ID, params)
+            runCatching { Protocol.write(waiting.getOutputStream(), hello, codec) }
+            val first = runCatching { waiting.getInputStream().read() }.getOrDefault(-1)
+            assertEquals(-1, first, "the closed server answered the hello")
+        }
+    }
+
+    @Test
     fun `a connection that never says hello is closed after the handshake timeout`() {
         connect().use { socket -> socket.assertClosed() }
     }
