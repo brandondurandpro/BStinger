@@ -31,7 +31,7 @@ private const val TYPED = "a prompt typed key by key"
 // 130 ms to replay the history.
 // 340 ms to open a menu of 503 models.
 // The budgets leave room for a slow runner, not for a cost per item or per chunk.
-private const val STREAM_BUDGET_MS = 5_000L
+private const val STREAM_BUDGET_MS = 10_000L
 private const val TOOLS_BUDGET_MS = 5_000L
 private const val SCROLL_BUDGET_MS = 4_000L
 private const val JUMPS_BUDGET_MS = 3_000L

@@ -27,6 +27,9 @@ import kotlin.time.measureTime
 private const val COMMANDS = 50
 private const val ORDER_FILE = "order.txt"
 
+// A loopback round trip takes some hundred microseconds; a busy CI runner has reached 2.3 ms.
+private const val ROUND_TRIP_BUDGET_MICROS = 5_000
+
 /** The client and the server talking over a real socket. */
 class RemoteServicesTest {
     private val data = Files.createTempDirectory("server-data")
@@ -107,7 +110,7 @@ class RemoteServicesTest {
             val sequential = measureTime { repeat(2000) { fs.read(small) } }
             val perCall = sequential.inWholeMicroseconds / 2000
             println("Sequential round trip: ${perCall}µs")
-            assertTrue(perCall < 2_000, "round trip took ${perCall}µs")
+            assertTrue(perCall < ROUND_TRIP_BUDGET_MICROS, "round trip took ${perCall}µs")
             val big = fs.fileAt(project.resolve("big.kt").toString())!!
             val transfer = measureTime { assertEquals(200_000, (fs.read(big) as FileContent.Text).lines.size) }
             println("200k lines read through the server: $transfer")
