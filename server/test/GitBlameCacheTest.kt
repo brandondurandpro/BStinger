@@ -80,6 +80,49 @@ class GitBlameCacheTest {
         }
 
     @Test
+    fun `a project opened in a subdirectory of the repository follows HEAD, the content and the index`() =
+        runBlocking {
+            val file = repository.write("module/a.kt", "aaa\n")
+            repository.write("other.kt", "other\n")
+            repository.commitAll()
+            val project = repository.root.resolve("module").toString()
+            val client = CliGitClient()
+
+            fun blamedTo() = runBlocking { client.blame(project, "a.kt").map { it.commit } }
+
+            fun head() = repository.head().take(SHORT_HASH_LENGTH)
+            // Its Git directory and HEAD are found above it.
+            assertEquals(repository.head(), headFromFiles(project))
+            assertEquals(listOf(head()), blamedTo())
+
+            repository.git("commit", "-q", "--amend", "-m", "amended")
+            assertEquals(listOf(head()), blamedTo(), "a new HEAD")
+
+            val modified = Files.getLastModifiedTime(file)
+            repository.write("module/a.kt", "bbb\n")
+            Files.setLastModifiedTime(file, modified)
+            assertEquals(listOf(NOT_COMMITTED), blamedTo(), "the same size and time")
+
+            repository.write("module/a.kt", "aaa\n")
+            assertEquals(listOf(head()), blamedTo())
+            repository.git("rm", "-q", "--cached", "module/a.kt")
+            assertEquals(emptyList(), blamedTo(), "untracked")
+        }
+
+    @Test
+    fun `an unknown index stamp asks every time whether the file is still tracked`() {
+        val cache = BlameCache(capacity = 2)
+        val version = BlameCache.Version("head", "content")
+        val lines = listOf(BlameLine(0, "commit", "Test", "2026-01-01"))
+        cache.put("a", version, null, lines)
+        var asked = 0
+        assertEquals(lines, cache.get("a", version, null) { asked++ < 1 })
+        assertEquals(1, asked)
+        assertNull(cache.get("a", version, null) { asked++ < 1 })
+        assertNull(cache.get("a", version, IndexStamp(1, 1)) { true }, "dropped once untracked")
+    }
+
+    @Test
     fun `the cache forgets the blame asked least recently, not every blame`() {
         val cache = BlameCache(capacity = 2)
         val index = IndexStamp(1, 1)

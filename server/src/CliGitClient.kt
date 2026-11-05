@@ -346,7 +346,7 @@ class CliGitClient :
         root: String,
         path: String,
         version: BlameCache.Version?,
-        index: IndexStamp,
+        index: IndexStamp?,
     ): List<BlameLine> {
         val output = if (isTracked(root, path)) blameOutput(root, path) else null
         val lines = output?.let(::parseBlame) ?: return emptyList()

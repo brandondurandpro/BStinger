@@ -1,6 +1,7 @@
 package org.example.kotlineditor.server
 
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 
 private const val BRANCHES = "refs/heads/"
 private const val SYMBOLIC_PREFIX = "ref: "
@@ -45,7 +46,7 @@ private fun isForbidden(character: Char): Boolean {
  * branch without commits, the reftable format, a ref outside `refs/heads`): ask Git then.
  */
 internal fun headFromFiles(root: String): String? {
-    val gitDirectory = gitDirectory(root)
+    val gitDirectory = workingTreeGitDirectory(root) ?: return null
     val common = commonDirectory(gitDirectory)
     var value = firstLine(File(gitDirectory, "HEAD"))
     // A symbolic ref may point to another one: a few steps at most (Git stops a loop alike).
@@ -76,6 +77,27 @@ private fun packedRef(common: File, name: String): String? {
     val suffix = " $name"
     val line = runCatching { file.useLines { lines -> lines.firstOrNull { it.endsWith(suffix) } } }.getOrNull()
     return line?.substringBefore(' ')
+}
+
+// The Git directories of the roots that are subdirectories of a working tree, asked to Git once per root.
+private val enclosingGitDirectories = ConcurrentHashMap<String, File>()
+
+/**
+ * The Git directory of the working tree holding [root], which may be any of its subdirectories (the IDE opens any
+ * directory): its own `.git`, or else the one Git finds above it, asked once and kept while it exists. `null`
+ * outside a repository.
+ */
+internal fun workingTreeGitDirectory(root: String): File? {
+    if (File(root, ".git").exists()) return gitDirectory(root)
+    val known = enclosingGitDirectories[root]?.takeIf { it.isDirectory }
+    return known ?: enclosingGitDirectory(root)
+}
+
+private fun enclosingGitDirectory(root: String): File? {
+    val path = gitOutput(root, "rev-parse", "--absolute-git-dir")?.firstOrNull()?.trim()
+    val directory = path?.ifEmpty { null }?.let(::File)
+    if (directory != null) enclosingGitDirectories[root] = directory
+    return directory
 }
 
 // A worktree's Git directory names the shared one in its `commondir` file (relative to itself, most often).

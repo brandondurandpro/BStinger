@@ -68,7 +68,7 @@ internal class BlameCache(private val capacity: Int) {
     /** What a blame depends on, besides the index: the commit of HEAD and the digest of the content. */
     data class Version(val head: String?, val content: String)
 
-    private class Entry(val version: Version, val index: IndexStamp, val lines: List<BlameLine>)
+    private class Entry(val version: Version, val index: IndexStamp?, val lines: List<BlameLine>)
 
     private val entries =
         object : LinkedHashMap<String, Entry>(capacity, LOAD_FACTOR, true) {
@@ -79,13 +79,14 @@ internal class BlameCache(private val capacity: Int) {
     val size: Int get() = synchronized(entries) { entries.size }
 
     /**
-     * The blame of [key] at [version], or `null` when it must be computed again. When only the index changed,
-     * [stillTracked] tells whether the file is still tracked: if so the blame stands, else it is dropped.
+     * The blame of [key] at [version], or `null` when it must be computed again. When the index changed, or its
+     * stamp is unknown ([index] null), [stillTracked] tells whether the file is still tracked: if so the blame
+     * stands, else it is dropped.
      */
-    fun get(key: String, version: Version, index: IndexStamp, stillTracked: () -> Boolean): List<BlameLine>? {
+    fun get(key: String, version: Version, index: IndexStamp?, stillTracked: () -> Boolean): List<BlameLine>? {
         val entry = synchronized(entries) { entries[key] }
         val current = entry?.takeIf { it.version == version } ?: return null
-        val indexChanged = current.index != index
+        val indexChanged = index == null || current.index != index
         val tracked = !indexChanged || stillTracked()
         if (indexChanged) {
             synchronized(entries) {
@@ -95,7 +96,7 @@ internal class BlameCache(private val capacity: Int) {
         return current.lines.takeIf { tracked }
     }
 
-    fun put(key: String, version: Version, index: IndexStamp, lines: List<BlameLine>) {
+    fun put(key: String, version: Version, index: IndexStamp?, lines: List<BlameLine>) {
         synchronized(entries) { entries[key] = Entry(version, index, lines) }
     }
 
@@ -107,10 +108,14 @@ internal class BlameCache(private val capacity: Int) {
 /** The size and modification time of the index of a working tree: it changes when a file is added or removed. */
 internal data class IndexStamp(val modified: Long, val size: Long) {
     companion object {
-        /** The stamp of the index of the working tree [root] (no index: a stamp of zeros). */
-        fun read(root: String): IndexStamp {
-            val index = File(gitDirectory(root), "index")
-            return IndexStamp(index.lastModified(), index.length())
+        /**
+         * The stamp of the index of the working tree holding [root] (which may be one of its subdirectories), or
+         * `null` when it cannot be read: unknown, so whether a file is tracked is then asked to Git every time.
+         */
+        fun read(root: String): IndexStamp? {
+            val directory = workingTreeGitDirectory(root)
+            val index = directory?.let { File(it, "index") }?.takeIf { it.isFile }
+            return index?.let { IndexStamp(it.lastModified(), it.length()) }
         }
     }
 }
