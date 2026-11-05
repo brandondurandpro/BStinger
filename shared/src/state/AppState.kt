@@ -133,6 +133,9 @@ class AppState(
     /** Whether the devtools were opened (Ctrl+Alt+Shift+D) since the IDE started: shows their buttons. */
     var devtools by mutableStateOf(false)
 
+    /** Closing the IDE: the files it could not save, until the user retries, closes anyway or keeps it open. */
+    val exiting = AppExit(scope, { (screen as? Screen.Project)?.project }, ::finishExit)
+
     /**
      * Feature flag of agent mode (experimental, off by default): shows the IDE | Agent switch of the toolbar and its
      * shortcuts. Turning it off brings the open project back to the editors.
@@ -559,16 +562,21 @@ class AppState(
         screen = Screen.Welcome
     }
 
-    /** Saves everything, stops the remote session, then calls [onDone] (used when the window is closed). */
+    /**
+     * Saves everything, stops the remote session, then calls [onDone] (used when the window is closed); the files
+     * that could not be saved are shown first, until the user chooses (see [AppExit]).
+     */
     fun exit(onDone: () -> Unit) {
         projectPickerOpen = false
-        scope.launch {
-            (screen as? Screen.Project)?.project?.let { saveAndDispose(it) }
-            runCatching { preferenceStore.save(currentPreferences()) }
-            remoteSession?.close()
-            remoteSession = null
-            onDone()
-        }
+        exiting.start(onDone)
+    }
+
+    // What closing the IDE does once the files are saved, or the user chose to close without them.
+    private suspend fun finishExit() {
+        (screen as? Screen.Project)?.project?.dispose()
+        runCatching { preferenceStore.save(currentPreferences()) }
+        remoteSession?.close()
+        remoteSession = null
     }
 
     private fun savedFontSize(): Float =

@@ -13,6 +13,7 @@ import java.io.IOException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 private const val SETTLE_YIELDS = 50
 
@@ -59,7 +60,7 @@ private class GatedFileSystem : ProjectFileSystem {
     override suspend fun delete(entry: FileEntry) = Unit
 }
 
-/** How the editor saves its tabs: one save of a document at a time. */
+/** How the editor saves its tabs: one save of a document at a time, and each tab whatever happens to the others. */
 class TabFilesTest {
     private val fs = GatedFileSystem()
 
@@ -116,6 +117,50 @@ class TabFilesTest {
             settle()
             fs.release()
             settle()
+            assertEquals(1, fs.mostInFlight)
+            assertEquals("a.txt" to "second", fs.written.lastOrNull())
+        }
+
+    @Test
+    fun `a tab that cannot be saved does not keep the others from being saved`() =
+        runBlocking {
+            val files = files()
+            fs.failing += "a.txt"
+            fs.release()
+            val tabs = listOf(modifiedTab("a.txt"), modifiedTab("b.txt"), modifiedTab("c.txt"))
+            runCatching { files.flush(tabs) }
+            assertEquals(listOf("b.txt", "c.txt"), fs.written.map { it.first }.sorted())
+        }
+
+    @Test
+    fun `flushing tells which files could not be saved and why, and gives up a save without answer`() =
+        runBlocking {
+            val files = files()
+            fs.failing += "a.txt"
+            fs.silent += "b.txt"
+            fs.release()
+            val tabs = listOf(modifiedTab("a.txt"), modifiedTab("b.txt"), modifiedTab("c.txt"))
+            val unsaved = files.flush(tabs, timeoutMillis = 200)
+            assertEquals(listOf("a.txt", "b.txt"), unsaved.map { it.entry.name })
+            assertTrue("unreachable" in unsaved[0].reason)
+            assertTrue("did not answer" in unsaved[1].reason)
+            assertEquals(listOf("c.txt"), fs.written.map { it.first })
+            assertTrue(checkNotNull(tabs[0].document).isModified)
+            assertTrue(checkNotNull(tabs[1].document).isModified)
+            assertFalse(checkNotNull(tabs[2].document).isModified)
+        }
+
+    @Test
+    fun `flushing waits for the save already running, then saves what was typed since`() =
+        runBlocking {
+            val files = files()
+            val tab = modifiedTab("a.txt")
+            files.save(tab)
+            settle()
+            tab.retype("second")
+            fs.release()
+            val unsaved = files.flush(listOf(tab))
+            assertEquals(emptyList(), unsaved)
             assertEquals(1, fs.mostInFlight)
             assertEquals("a.txt" to "second", fs.written.lastOrNull())
         }

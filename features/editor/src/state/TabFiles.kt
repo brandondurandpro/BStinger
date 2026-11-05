@@ -4,11 +4,15 @@ import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.example.kotlineditor.model.BlameLine
 import org.example.kotlineditor.model.DiffLine
 import org.example.kotlineditor.model.FileContent
@@ -31,6 +35,9 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 private const val RECOMPUTE_DELAY_MS = 150L
 private const val MEGABYTE = 1024 * 1024
+
+/** A file whose edits could not be saved, and why (shown to the user, who may try again). */
+data class UnsavedFile(val entry: FileEntry, val relativePath: String, val reason: String)
 
 // The saves of one document, one at a time and in the order they were asked: two writes of a file in flight
 // together may land in any order, leaving the older text on disk while the editor says it is saved.
@@ -203,12 +210,29 @@ internal class TabFiles(
         save(tab)
     }
 
-    /** Saves every modified tab and returns once everything is on disk (closing the project or the IDE). */
-    suspend fun flush(tabs: List<EditorTab>) =
-        tabs.forEach { tab ->
-            val document = tab.document
-            if (document != null) queueOf(document).mutex.withLock { write(tab) }
+    /**
+     * Saves every modified tab of [tabs], each whatever happens to the others, and returns once all are done (closing
+     * the project or the IDE, before a rename or a Git action): the files that could not be saved, with why. A save
+     * that takes longer than [timeoutMillis] (the server is out of reach) is given up, its tab left modified.
+     */
+    suspend fun flush(tabs: List<EditorTab>, timeoutMillis: Long = Long.MAX_VALUE): List<UnsavedFile> =
+        coroutineScope {
+            val modified = tabs.filter { it.document?.savable() == true }.distinctBy { it.document }
+            val saves = modified.map { tab -> async { saveNow(tab, timeoutMillis) } }
+            saves.awaitAll().filterNotNull()
         }
+
+    // Saves [tab] after the save of its document already running, if any; why it could not, or null once saved.
+    private suspend fun saveNow(tab: EditorTab, timeoutMillis: Long): UnsavedFile? {
+        val document = tab.document ?: return null
+        val queue = queueOf(document)
+        return try {
+            val done = withTimeoutOrNull(timeoutMillis) { queue.mutex.withLock { write(tab) } }
+            if (done == null) UnsavedFile(tab.entry, tab.relativePath, "the server did not answer in time") else null
+        } catch (failed: IOException) {
+            UnsavedFile(tab.entry, tab.relativePath, failed.message ?: failed::class.simpleName.orEmpty())
+        }
+    }
 
     private suspend fun write(tab: EditorTab) {
         val document = tab.document
