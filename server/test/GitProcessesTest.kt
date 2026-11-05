@@ -80,12 +80,14 @@ class GitProcessesTest {
 
     // Whether the helper wrote its id and was seen running: its handle is then recorded.
     private fun helperStarted(): Boolean {
-        if (helperHandle != null) return true
-        val pid = helperPid() ?: return false
-        val handle = ProcessHandle.of(pid).orElse(null) ?: return false
-        helperStart = OrphanReaper.startOf(handle)
-        helperHandle = handle
-        return true
+        if (helperHandle == null) {
+            val running = helperPid()?.let { pid -> ProcessHandle.of(pid).orElse(null) }
+            running?.let { handle ->
+                helperStart = OrphanReaper.startOf(handle)
+                helperHandle = handle
+            }
+        }
+        return helperHandle != null
     }
 
     // A handle checks the start time of its process: once the helper exited, another process with its pid is not it.
