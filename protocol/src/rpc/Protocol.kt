@@ -85,6 +85,9 @@ object Protocol {
     const val NO_ID = -1L
 
     private const val MAX_HEADER_LINE = 1024
+
+    // A message has one or two headers: more is a corrupted stream, or a peer sending headers forever.
+    private const val MAX_HEADER_LINES = 16
     private const val LENGTH = "content-length"
     private const val ENCODING = "content-encoding"
     private const val ZSTD = "zstd"
@@ -94,7 +97,8 @@ object Protocol {
 
     /** Writes and flushes [frame]; callers serialize writes to the same stream. */
     fun write(out: OutputStream, frame: Frame, codec: BodyCodec) {
-        val compressed = codec.compress(frame.body, frame.code)
+        // A server reads the hello before it knows who sent it: it is never compressed.
+        val compressed = if (frame.kind == FrameKind.Hello) null else codec.compress(frame.body, frame.code)
         val body = compressed ?: frame.body
         val encoding = if (compressed != null) "Content-Encoding: $ZSTD\r\n" else ""
         out.write("Content-Length: ${body.size}\r\n$encoding\r\n".toByteArray(Charsets.US_ASCII))
@@ -102,13 +106,19 @@ object Protocol {
         out.flush()
     }
 
-    /** Reads one message, blocking; throws [IOException] on a closed or corrupted stream. */
-    fun read(input: InputStream, codec: BodyCodec): Frame {
+    /**
+     * Reads one message, blocking; throws [IOException] on a closed or corrupted stream, or on a message beyond
+     * [limits] (checked before the body is read, and before a compressed body is decompressed).
+     */
+    fun read(input: InputStream, codec: BodyCodec, limits: ReadLimits = ReadLimits.Default): Frame {
         var length = -1
         var compressed = false
+        var lines = 0
         while (true) {
             val line = readHeaderLine(input)
             if (line.isEmpty()) break
+            lines++
+            if (lines > MAX_HEADER_LINES) throw IOException("Corrupted message (too many headers)")
             val name = line.substringBefore(':').trim().lowercase()
             val value = line.substringAfter(':', "").trim()
             when (name) {
@@ -116,10 +126,17 @@ object Protocol {
                 ENCODING -> compressed = value.equals(ZSTD, ignoreCase = true)
             }
         }
-        if (length !in 0..MAX_FRAME) throw IOException("Corrupted message (length $length)")
+        checkWithin(limits, length, compressed)
         val raw = input.readNBytes(length)
         if (raw.size < length) throw IOException("Truncated message")
-        return decode(if (compressed) codec.decompress(raw) else raw)
+        val body = if (compressed) codec.decompress(raw, limits.maxDecompressed) else raw
+        return decode(body)
+    }
+
+    // Checked before the body is read: a peer cannot make the reader wait for, or allocate, more than it accepts.
+    private fun checkWithin(limits: ReadLimits, length: Int, compressed: Boolean) {
+        if (length !in 0..limits.maxLength) throw IOException("Corrupted message (length $length)")
+        if (compressed && !limits.compression) throw IOException("Compressed message refused")
     }
 
     /** The JSON-RPC message of [frame], UTF-8 encoded. */
@@ -150,6 +167,22 @@ object Protocol {
             }
             if (line.size() > MAX_HEADER_LINE) throw IOException("Corrupted message (header too long)")
         }
+    }
+}
+
+/** What [Protocol.read] accepts of one message. */
+class ReadLimits(
+    /** Largest `Content-Length`: the size of the body as sent. */
+    val maxLength: Int = Protocol.MAX_FRAME,
+    /** Largest body once decompressed, checked against the size a zstd frame announces before it is allocated. */
+    val maxDecompressed: Int = Protocol.MAX_FRAME,
+    /** Whether a compressed body (`Content-Encoding: zstd`) is accepted. */
+    val compression: Boolean = true,
+) {
+    /** The limits of a peer that is trusted with any message of the protocol. */
+    companion object {
+        /** Any message up to [Protocol.MAX_FRAME], compressed or not. */
+        val Default = ReadLimits()
     }
 }
 

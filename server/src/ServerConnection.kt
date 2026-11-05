@@ -2,6 +2,7 @@ package org.example.kotlineditor.server
 
 import org.example.kotlineditor.rpc.Frame
 import org.example.kotlineditor.rpc.Protocol
+import org.example.kotlineditor.rpc.ReadLimits
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.Closeable
@@ -21,7 +22,8 @@ internal class ServerConnection(private val socket: Socket) : Closeable {
     @Volatile
     private var closed = false
 
-    fun read(): Frame = closedAsIOException { Protocol.read(input, codec) }
+    fun read(limits: ReadLimits = ReadLimits.Default): Frame =
+        closedAsIOException { Protocol.read(input, codec, limits) }
 
     /** Never throws: an answer for a lost connection is dropped, the client resends the request or resumes. */
     fun send(frame: Frame) {
