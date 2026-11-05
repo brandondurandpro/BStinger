@@ -1,5 +1,7 @@
 package org.example.kotlineditor.compression
 
+import java.io.IOException
+
 /**
  * Compresses and decompresses frame bodies.
  *
@@ -17,6 +19,16 @@ interface BodyCodec : AutoCloseable {
 
     /** Decompresses a body produced by [compress]. */
     fun decompress(body: ByteArray): ByteArray
+
+    /**
+     * Decompresses [body] unless it holds more than [maxSize] bytes: then throws an [IOException], before
+     * allocating them when the codec can tell the size in advance.
+     */
+    fun decompress(body: ByteArray, maxSize: Int): ByteArray {
+        val decompressed = decompress(body)
+        if (decompressed.size > maxSize) throw IOException("Decompressed body too large (${decompressed.size})")
+        return decompressed
+    }
 
     override fun close() = Unit
 }
