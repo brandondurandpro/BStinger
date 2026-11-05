@@ -27,7 +27,8 @@ internal fun searchCommits(root: String, ref: String, query: String, skip: Int, 
     val builder =
         gitProcess(root, listOf("log", SEARCH_FORMAT, ref, "--"))
             .redirectError(ProcessBuilder.Redirect.DISCARD)
-    val process = startGit(builder)
+    val child = startGit(builder)
+    val process = child.process
     val page =
         runCatching {
             process.inputStream.bufferedReader().use { reader ->
@@ -40,7 +41,7 @@ internal fun searchCommits(root: String, ref: String, query: String, skip: Int, 
                     .map { it.commit }
                     .toList()
             }
-        }.onFailure { destroyTree(process) }
+        }.onFailure { child.destroyTree() }
             .getOrThrow()
     // A full page leaves the rest of the history unread: Git is stopped. Otherwise it ran to its end, and its exit
     // code tells whether the ref existed.

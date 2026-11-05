@@ -4,6 +4,9 @@ import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.writeText
 
+/** How long a Git command of a test may run before it is stopped and the test fails. */
+internal const val TEST_GIT_SECONDS = 60L
+
 /** A Git repository in a temporary directory, for the tests of the Git client; [delete] removes it. */
 internal class TestRepository(prefix: String = "git-test") {
     val root: Path = Files.createTempDirectory(prefix)
@@ -11,18 +14,19 @@ internal class TestRepository(prefix: String = "git-test") {
     /** The root as the client takes it. */
     val path: String get() = root.toString()
 
-    /** Runs Git in [directory] (the repository by default) and returns its output; fails the test when Git fails. */
+    /**
+     * Runs Git in [directory] (the repository by default) and returns its output; fails the test when Git fails, or
+     * when it runs longer than [TEST_GIT_SECONDS]: a hung Git fails the test instead of blocking the whole run.
+     */
     fun git(vararg args: String, directory: Path = root): String {
-        val process =
-            ProcessBuilder(listOf("git", "-c", "user.name=Test", "-c", "user.email=test@example.com") + args)
-                .directory(directory.toFile())
-                .redirectErrorStream(true)
-                .start()
-        process.outputStream.close()
-        val output = process.inputStream.bufferedReader().readText()
-        check(process.waitFor() == 0) { "git ${args.joinToString(" ")} failed: $output" }
-        return output
+        val identity = listOf("-c", "user.name=Test", "-c", "user.email=test@example.com")
+        val run = execGit(directory.toString(), identity + args, TEST_GIT_SECONDS)
+        check(run.exitCode == 0) { "git ${args.joinToString(" ")} failed: ${run.errors}${run.text}" }
+        return run.text
     }
+
+    /** Whether Git, run in the repository with [args], succeeds; within [TEST_GIT_SECONDS] like [git]. */
+    fun gitSucceeds(vararg args: String): Boolean = execGit(path, args.toList(), TEST_GIT_SECONDS).exitCode == 0
 
     fun write(name: String, text: String): Path {
         val file = root.resolve(name)

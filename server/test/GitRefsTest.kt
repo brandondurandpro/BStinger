@@ -26,16 +26,7 @@ class GitRefsTest {
     private fun temporaryDirectory(prefix: String): Path = Files.createTempDirectory(prefix).also { extra.add(it) }
 
     // Whether Git itself accepts [name] as a branch name.
-    private fun gitAccepts(name: String): Boolean {
-        val process =
-            ProcessBuilder("git", "check-ref-format", "--branch", name)
-                .directory(repository.root.toFile())
-                .redirectErrorStream(true)
-                .start()
-        process.outputStream.close()
-        process.inputStream.readAllBytes()
-        return process.waitFor() == 0
-    }
+    private fun gitAccepts(name: String): Boolean = repository.gitSucceeds("check-ref-format", "--branch", name)
 
     // Everything Git can see of the repository: its refs, HEAD, the index and the working tree.
     private fun repositoryState(): String =
