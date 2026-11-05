@@ -1,6 +1,8 @@
 package org.example.kotlineditor.server
 
+import kotlinx.coroutines.runBlocking
 import org.example.kotlineditor.rpc.Protocol
+import org.example.kotlineditor.rpc.RpcClient
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.attribute.PosixFilePermissions
@@ -53,6 +55,33 @@ class ServerStateTest {
     }
 
     @Test
+    fun `the state file counts the sessions as clients come and their sessions expire`() {
+        val shortGrace = EditorServer(LocalServices(data.toFile()), "secret", ServerOptions(sessionGraceMs = 200))
+        shortGrace.start()
+        val tracker = ServerState.track(state, shortGrace, "127.0.0.1", "secret", intervalMs = 20)
+        try {
+            assertEquals("0", ServerState.read(state)?.getProperty("sessions"))
+            val client = RpcClient("127.0.0.1", shortGrace.port, "secret")
+            runBlocking { client.awaitConnected() }
+            awaitSessions("1")
+            // A disconnected session still counts while its shells wait for the client to come back.
+            client.close()
+            awaitSessions("0")
+        } finally {
+            tracker.close()
+            shortGrace.close()
+        }
+    }
+
+    private fun awaitSessions(expected: String) {
+        val deadline = System.currentTimeMillis() + 10_000
+        while (ServerState.read(state)?.getProperty("sessions") != expected) {
+            check(System.currentTimeMillis() < deadline) { "sessions never became $expected" }
+            Thread.sleep(10)
+        }
+    }
+
+    @Test
     fun `a shutdown only removes the state file it wrote`() {
         ServerState.write(state, server, "127.0.0.1", "secret")
         ServerState.removeIfOwned(state)
@@ -83,6 +112,7 @@ class ServerStateTest {
                     "--data-dir", "/tmp/data",
                     "--session-grace", "60",
                     "--build", "3f9c0a7d21e84b6c",
+                    "--parent-pid", "42",
                     "--version",
                 ),
             )
@@ -94,6 +124,7 @@ class ServerStateTest {
         assertEquals(File("/tmp/data"), options.dataDirectory)
         assertEquals(60, options.sessionGraceSeconds)
         assertEquals("3f9c0a7d21e84b6c", options.build)
+        assertEquals(42L, options.parentPid)
         assertTrue(options.version)
         assertNull(ServerMain.LaunchOptions.from(arrayOf("--build", "")).build)
     }

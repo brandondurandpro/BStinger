@@ -9,6 +9,7 @@ import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.withKeyDown
+import org.example.kotlineditor.remote.RemoteBundles
 import org.example.kotlineditor.ui.AppTags
 import org.example.kotlineditor.ui.EditorTags
 import org.example.kotlineditor.ui.LanguageServerTags
@@ -19,7 +20,6 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 /** Remote Development through the real UI, the real OpenSSH client and a real SSH server. */
@@ -203,23 +203,28 @@ class RemoteDevelopmentE2eTest {
         }
 
     @Test
-    fun `a rebuilt server with the same version number replaces the running daemon`() =
+    fun `a rebuilt server of the same protocol is installed next to the running daemon, which it reuses`() =
         remoteUiTest {
             val app = launchApp()
             connectRemoteTo(RemoteTestEnvironment, project.path)
             awaitTag(TreeTags.treeRow("src"), timeout = 60_000)
             val firstPid = RemoteTestEnvironment.daemonPid()
-            val firstBuild = RemoteTestEnvironment.installedBuild()
+            val runningBuild = RemoteTestEnvironment.runningBuild()
             disconnectFromTopBar(app)
 
-            RemoteTestEnvironment.withRebuiltBundle {
-                onNodeWithTag(AppTags.WELCOME_REMOTE).performClick()
-                awaitTag(RemoteTags.REMOTE_DIALOG)
-                onNodeWithTag(RemoteTags.REMOTE_CONNECT).performClick()
-                awaitTag(TreeTags.treeRow("src"), timeout = 60_000)
-            }
-            assertNotEquals(firstBuild, RemoteTestEnvironment.installedBuild(), "the new bundle must be installed")
-            assertNotEquals(firstPid, RemoteTestEnvironment.daemonPid(), "the old daemon must be replaced")
+            val rebuiltBuild =
+                RemoteTestEnvironment.withRebuiltBundle { rebuilt ->
+                    onNodeWithTag(AppTags.WELCOME_REMOTE).performClick()
+                    awaitTag(RemoteTags.REMOTE_DIALOG)
+                    onNodeWithTag(RemoteTags.REMOTE_CONNECT).performClick()
+                    awaitTag(TreeTags.treeRow("src"), timeout = 60_000)
+                    RemoteBundles.buildId(rebuilt.toFile())
+                }
+            val installed = RemoteTestEnvironment.installedBuilds()
+            assertTrue(rebuiltBuild in installed, "the new bundle must be installed: $installed")
+            assertTrue(runningBuild in installed, "the bundle of the running daemon must stay: $installed")
+            assertEquals(firstPid, RemoteTestEnvironment.daemonPid(), "the daemon of the same protocol is reused")
+            assertEquals(runningBuild, RemoteTestEnvironment.runningBuild())
             assertTrue(app.state.isRemote)
         }
 
@@ -269,14 +274,16 @@ class RemoteDevelopmentE2eTest {
         RemoteTestEnvironment.withLoginShell(shell) {
             remoteUiTest {
                 val app = launchApp()
-                val previousBuild = RemoteTestEnvironment.installedBuild()
                 // A bundle never installed yet, so the upload and unpacking run in that shell too.
-                RemoteTestEnvironment.withRebuiltBundle {
-                    connectRemoteTo(RemoteTestEnvironment, project.path)
-                    awaitTag(TreeTags.treeRow("src"), timeout = 60_000)
-                }
+                val rebuiltBuild =
+                    RemoteTestEnvironment.withRebuiltBundle { rebuilt ->
+                        connectRemoteTo(RemoteTestEnvironment, project.path)
+                        awaitTag(TreeTags.treeRow("src"), timeout = 60_000)
+                        RemoteBundles.buildId(rebuilt.toFile())
+                    }
                 assertTrue(app.state.isRemote)
-                assertNotEquals(previousBuild, RemoteTestEnvironment.installedBuild(), "installed through $name")
+                val installed = RemoteTestEnvironment.installedBuilds()
+                assertTrue(rebuiltBuild in installed, "installed through $name: $installed")
                 openFromTree("README.md")
                 onNodeWithTag(EditorTags.EDITOR).performClick()
                 onNodeWithTag(EditorTags.EDITOR).performKeyInput {
