@@ -28,6 +28,7 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.time.Duration.Companion.minutes
 
 @OptIn(ExperimentalTestApi::class, InternalComposeUiApi::class)
 class SearchE2eTest {
@@ -127,7 +128,9 @@ class SearchE2eTest {
 
     @Test
     fun `Enter right after typing in Go to File opens the match of the typed name, not of the previous list`() =
-        runComposeUiTest {
+        // Writing 40 000 files and indexing them takes more than the default minute on the Windows CI runner: a test
+        // body that exceeds it fails with UncompletedCoroutinesError, not with what it checked.
+        runComposeUiTest(testTimeout = 3.minutes) {
             // Enough files for the search to take a while: Enter comes before its results (5 000 were not enough).
             repeat(GOTO_FILE_FILLER) { project.file("src/filler/Filler$it.kt", "") }
             val app = launchWithProject(project)

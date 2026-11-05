@@ -1,11 +1,16 @@
 package org.example.kotlineditor.server
 
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
 import org.example.kotlineditor.lsp.DiskChange
 import org.example.kotlineditor.model.DiskChanges
 import org.example.kotlineditor.model.DiskCursor
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.Paths
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.io.path.createDirectories
 import kotlin.io.path.writeText
@@ -20,6 +25,11 @@ private const val HOLD_MS = 5_000L
 private const val SHORT_HOLD_MS = 300L
 private const val CHANGES = 20
 private const val TOLD_POLL_MS = 20L
+private const val NANOS_PER_MILLI = 1_000_000L
+
+// A project large enough for its watch to take a while to register every directory.
+private const val LARGE_BRANCHES = 200
+private const val LARGE_LEAVES = 100
 
 class ProjectWatchesTest {
     private val root: Path = Files.createTempDirectory("project-watches").toRealPath()
@@ -52,6 +62,27 @@ class ProjectWatchesTest {
     }
 
     private fun started(): DiskCursor = poll(DiskCursor.START).cursor
+
+    // A project of [LARGE_BRANCHES] × [LARGE_LEAVES] directories, beside [root].
+    private fun largeProject(): Path {
+        val large = root.resolve("large")
+        repeat(LARGE_BRANCHES) { branch ->
+            repeat(LARGE_LEAVES) { leaf -> large.resolve("b$branch/l$leaf").createDirectories() }
+        }
+        return large
+    }
+
+    // The inotify instances this process has open, one per watch service; null where there is no /proc.
+    private fun inotifyInstances(): Long? {
+        val descriptors = Paths.get("/proc/self/fd")
+        if (!Files.isDirectory(descriptors)) return null
+        return Files.list(descriptors).use { all -> all.filter(::isInotify).count() }
+    }
+
+    private fun isInotify(descriptor: Path): Boolean {
+        val target = runCatching { Files.readSymbolicLink(descriptor) }.getOrNull()
+        return target?.toString() == "anon_inode:inotify"
+    }
 
     private class Seen(val paths: Set<String>, val cursor: DiskCursor)
 
@@ -160,6 +191,54 @@ class ProjectWatchesTest {
         while (latest.version < cursor.version + CHANGES) latest = poll(latest).cursor
         val late = poll(cursor)
         assertFalse(late.complete)
+    }
+
+    @Test
+    fun `the first poll of a project does not wait while another project registers its tree`() {
+        val large = largeProject()
+        val small = root.resolve("small").createDirectories()
+        runBlocking {
+            // Undispatched: the large watch is registering, on another thread, by the time it returns.
+            val largeDone =
+                async(start = CoroutineStart.UNDISPATCHED) {
+                    watches.changes(large.toString(), DiskCursor.START)
+                    System.nanoTime()
+                }
+            val asked = System.nanoTime()
+            watches.changes(small.toString(), DiskCursor.START)
+            val smallDone = System.nanoTime()
+            val largeAnswered = largeDone.await()
+            val smallMs = (smallDone - asked) / NANOS_PER_MILLI
+            val largeMs = (largeAnswered - asked) / NANOS_PER_MILLI
+            println("PERF first poll of a small project: $smallMs ms, while a large one registers for $largeMs ms")
+            assertTrue(smallDone < largeAnswered, "the small project waited $smallMs ms, the large one $largeMs ms")
+        }
+    }
+
+    @Test
+    fun `concurrent first polls of a project share one watch`() {
+        val polls =
+            runBlocking {
+                List(10) { async(Dispatchers.IO) { watches.changes(root.toString(), DiskCursor.START) } }.awaitAll()
+            }
+        assertEquals(1, polls.map { it.cursor.watch }.toSet().size, "$polls")
+    }
+
+    @Test
+    fun `a watch created while the server stops is closed, and its poll fails`() {
+        val large = largeProject()
+        val before = inotifyInstances()
+        val poll =
+            runBlocking {
+                val first =
+                    async(start = CoroutineStart.UNDISPATCHED) {
+                        runCatching { watches.changes(large.toString(), DiskCursor.START) }
+                    }
+                watches.close()
+                first.await()
+            }
+        assertTrue(poll.isFailure, "$poll")
+        assertEquals(before, inotifyInstances(), "a watch was left open")
     }
 
     @Test

@@ -5,10 +5,16 @@ import kotlinx.coroutines.withContext
 import org.example.kotlineditor.model.FileContent
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.ProjectFileSystem
+import java.io.IOException
 import java.nio.file.FileAlreadyExistsException
+import java.nio.file.FileVisitResult
 import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.nio.file.SimpleFileVisitor
+import java.nio.file.attribute.BasicFileAttributes
 import kotlin.io.path.isDirectory
 import kotlin.io.path.name
 
@@ -16,6 +22,7 @@ private val DIRECTORIES_FIRST =
     compareBy<FileEntry> { !it.isDirectory }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
 
 /** [ProjectFileSystem] on the server's disk (NIO, on the IO dispatcher). */
+@Suppress("TooManyFunctions")
 class LocalFileSystem(private val maxFileSize: Long = TextFiles.DEFAULT_MAX_SIZE) : ProjectFileSystem {
     override suspend fun resolveDirectory(path: String): FileEntry? =
         withContext(Dispatchers.IO) {
@@ -50,12 +57,29 @@ class LocalFileSystem(private val maxFileSize: Long = TextFiles.DEFAULT_MAX_SIZE
             if (p != null && Files.isRegularFile(p)) FileEntry(p.toString(), p.name, false) else null
         }
 
+    // One write of a file at a time.
     override suspend fun write(file: FileEntry, text: String) {
         withContext(Dispatchers.IO) {
             val path = Paths.get(file.path)
-            val existing = if (Files.exists(path)) Files.readAllBytes(path) else null
-            writeFile(path, TextFiles.encode(text, existing))
+            withPathLock(path) { writeText(path, text) }
         }
+    }
+
+    /**
+     * [write] asked by [writer] (a client's session) with its request [order] (its ids increase): one write of a file
+     * at a time, and a write sent before another of the same file by the same writer, which reaches the file after
+     * it, is dropped, the file keeping the newer text.
+     */
+    suspend fun write(file: FileEntry, text: String, writer: String, order: Long) {
+        withContext(Dispatchers.IO) {
+            val path = Paths.get(file.path)
+            writeInOrder(path, writer, order) { writeText(path, text) }
+        }
+    }
+
+    private suspend fun writeText(path: Path, text: String) {
+        val existing = if (Files.exists(path)) Files.readAllBytes(path) else null
+        writeFile(path, TextFiles.encode(text, existing))
     }
 
     override suspend fun createFile(directory: FileEntry, name: String): FileEntry =
@@ -85,8 +109,7 @@ class LocalFileSystem(private val maxFileSize: Long = TextFiles.DEFAULT_MAX_SIZE
 
     override suspend fun delete(entry: FileEntry) {
         withContext(Dispatchers.IO) {
-            val path = Paths.get(entry.path)
-            if (Files.isDirectory(path)) path.toFile().deleteRecursively() else Files.deleteIfExists(path)
+            deleteTree(Paths.get(entry.path))
         }
     }
 
@@ -97,5 +120,44 @@ class LocalFileSystem(private val maxFileSize: Long = TextFiles.DEFAULT_MAX_SIZE
         val target = base.resolve(name.trim()).normalize()
         require(name.isNotBlank() && target.startsWith(base) && target != base) { "Invalid name: $name" }
         return target
+    }
+}
+
+/**
+ * Deletes [root] and, when it is a directory, everything in it. A link is deleted itself, never what it points to: a
+ * symbolic link (to a file or a directory, inside the project or not) and, on Windows, a junction or another reparse
+ * point. Nothing happens when [root] is already gone.
+ */
+internal fun deleteTree(root: Path) {
+    val attributes =
+        try {
+            Files.readAttributes(root, BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS)
+        } catch (_: NoSuchFileException) {
+            return
+        }
+    if (attributes.isWalked()) Files.walkFileTree(root, TreeDeletion) else Files.deleteIfExists(root)
+}
+
+// A real directory, whose content is deleted with it; not a link (a symbolic link is not a directory without
+// following it) nor a junction (a directory that is also "other": a reparse point).
+private fun BasicFileAttributes.isWalked(): Boolean = isDirectory && !isOther
+
+// The walk of [deleteTree], which never follows a link: those are given to visitFile, or met as reparse points.
+private object TreeDeletion : SimpleFileVisitor<Path>() {
+    override fun preVisitDirectory(dir: Path, attrs: BasicFileAttributes): FileVisitResult {
+        if (attrs.isWalked()) return FileVisitResult.CONTINUE
+        Files.delete(dir)
+        return FileVisitResult.SKIP_SUBTREE
+    }
+
+    override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
+        Files.delete(file)
+        return FileVisitResult.CONTINUE
+    }
+
+    override fun postVisitDirectory(dir: Path, exc: IOException?): FileVisitResult {
+        if (exc != null) throw exc
+        Files.delete(dir)
+        return FileVisitResult.CONTINUE
     }
 }

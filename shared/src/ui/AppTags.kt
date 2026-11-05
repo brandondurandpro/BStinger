@@ -61,6 +61,11 @@ object AppTags {
     const val FILE_DIALOG_INPUT = "fileDialog.input"
     const val FILE_DIALOG_OK = "fileDialog.ok"
     const val FILE_DIALOG_ERROR = "fileDialog.error"
+    const val UNSAVED_DIALOG = "unsaved"
+    const val UNSAVED_SAVING = "unsaved.saving"
+    const val UNSAVED_RETRY = "unsaved.retry"
+    const val UNSAVED_CLOSE_ANYWAY = "unsaved.closeAnyway"
+    const val UNSAVED_CANCEL = "unsaved.cancel"
     const val EDITOR_EMPTY = "editor.empty"
     const val EDITOR_LOADING = "editor.loading"
     const val STATUS_BAR = "status"
@@ -79,6 +84,9 @@ object AppTags {
     fun dockSplitter(dock: String) = "dock.splitter:$dock"
 
     fun recentProject(path: String) = "recent:$path"
+
+    /** A file listed by the dialog of the files that could not be saved on exit, by its path in the project. */
+    fun unsavedFile(path: String) = "unsaved.file:$path"
 
     fun recentRemove(path: String) = "recent.remove:$path"
 

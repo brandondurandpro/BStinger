@@ -65,6 +65,9 @@ class EditorServer(
 ) : Closeable {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val sessions = ConcurrentHashMap<String, ServerSession>()
+
+    // Every connection open, authenticated or not: closing the server closes them, those still in their handshake too.
+    private val open = ConcurrentHashMap.newKeySet<ServerConnection>()
     private val handlers = requestHandlers(services) + telemetryHandlers(telemetry)
     private var serverSocket: ServerSocket? = null
 
@@ -112,6 +115,9 @@ class EditorServer(
     override fun close() {
         closed = true
         runCatching { serverSocket?.close() }
+        // A connection accepted while the listener was closing is closed unanswered, like a refused one: a closed
+        // server must not reject (or welcome) a client that is meant for the server replacing it on this port.
+        open.forEach { it.close() }
         sessions.values.forEach { it.dispose() }
         sessions.clear()
         scope.cancel()
@@ -136,8 +142,11 @@ class EditorServer(
         socket.keepAlive = true
         socket.soTimeout = options.idleTimeoutMs
         val connection = ServerConnection(socket)
+        open += connection
         var session: ServerSession? = null
         try {
+            // Accepted while closing: [close] may have looked at [open] before this connection was in it.
+            if (closed) return
             session = handshake(connection)
             while (session != null && !closed) {
                 val frame =
@@ -155,6 +164,7 @@ class EditorServer(
         } finally {
             session?.detach(connection)
             connection.close()
+            open -= connection
         }
     }
 
@@ -172,6 +182,8 @@ class EditorServer(
             } finally {
                 deadline.cancel()
             }
+        // Closed while waiting for the hello: no answer, the client tries again (on the next server).
+        if (closed) throw IOException("Server closed")
         val isHello = hello.kind == FrameKind.Hello
         // Malformed params are rejected like a missing hello, never thrown out of the connection thread.
         val params = if (isHello) runCatching { hello.payload.params() }.getOrNull() else null

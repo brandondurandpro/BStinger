@@ -10,7 +10,7 @@ import java.io.IOException
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
-import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.LinkedBlockingQueue
 import kotlin.concurrent.thread
 
@@ -28,7 +28,9 @@ class FakeServer(
     private val resumed: (Int) -> Boolean = { it > 1 },
 ) : Closeable {
     private val server = ServerSocket(0, 0, InetAddress.getLoopbackAddress())
-    private val sockets = CopyOnWriteArrayList<Socket>()
+
+    // The open connections, by number: a connection accepted while [cutAll] runs is not forgotten without being cut.
+    private val sockets = ConcurrentHashMap<Int, Socket>()
 
     /** Requests received, in arrival order. */
     val requests = LinkedBlockingQueue<Received>()
@@ -52,7 +54,7 @@ class FakeServer(
                 }
                 connections++
                 val connection = connections
-                sockets += socket
+                sockets[connection] = socket
                 val accepted = socket
                 thread(isDaemon = true, name = "fake-server-$connection") { serve(accepted, connection) }
                 socket = runCatching { server.accept() }.getOrNull()
@@ -60,21 +62,27 @@ class FakeServer(
         }
     }
 
-    /** Answers the request [id] on the last connection with [result]. */
-    fun answer(id: Long, result: String) {
-        val socket = sockets.lastOrNull() ?: return
+    /** Answers [request] with [result], on the connection it came from; fails when that connection was cut. */
+    fun answer(request: Received, result: String) {
+        val socket = checkNotNull(sockets[request.connection]) { "connection ${request.connection} was cut" }
         Protocol.newCodec().use { codec ->
             synchronized(socket) {
                 val out = BufferedOutputStream(socket.getOutputStream())
-                Protocol.write(out, Frame(FrameKind.Response, id, JsonPrimitive(result)), codec)
+                Protocol.write(out, Frame(FrameKind.Response, request.id, JsonPrimitive(result)), codec)
             }
         }
     }
 
-    /** Breaks every connection, as a network failure would. */
+    /**
+     * Breaks every connection open now, as a network failure would. Only those: the client may reconnect before this
+     * returns (it did on Windows), and its new connection must stay known, or its requests could not be answered.
+     */
     fun cutAll() {
-        sockets.forEach { runCatching { it.close() } }
-        sockets.clear()
+        val open = sockets.toMap()
+        for ((connection, socket) in open) {
+            runCatching { socket.close() }
+            sockets.remove(connection, socket)
+        }
     }
 
     override fun close() {
