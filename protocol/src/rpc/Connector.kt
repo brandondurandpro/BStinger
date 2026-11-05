@@ -4,7 +4,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runInterruptible
@@ -17,14 +17,15 @@ import java.net.InetSocketAddress
 import java.net.Socket
 
 /**
- * Keeps one live connection to the server: connects, authenticates, resends what is pending, resumes streams,
- * watches the link with heartbeats, and starts over (with an increasing delay) whenever the link breaks.
+ * Keeps one live connection to the server: connects, authenticates, has the [outbox] resend what is pending and send
+ * the heartbeats, resumes streams, and starts over (with an increasing delay) whenever the link breaks.
  */
 internal class Connector(
     private val address: InetSocketAddress,
     token: String,
     private val options: ClientOptions,
     private val pending: PendingRequests,
+    private val outbox: Outbox,
     private val streams: StreamRegistry,
     private val status: MutableStateFlow<ConnectionStatus>,
     private val onStatus: (ConnectionStatus) -> Unit,
@@ -33,9 +34,6 @@ internal class Connector(
 ) {
     /** Number of connections opened so far: one more at each reconnection. */
     val connections = MutableStateFlow(0L)
-
-    @Volatile var link: Link? = null
-        private set
 
     @Volatile var rejection: RejectedException? = null
         private set
@@ -46,6 +44,9 @@ internal class Connector(
     @Volatile private var sessionId: String? = null
 
     @Volatile private var closed = false
+
+    // The link being served, closed by [close].
+    @Volatile private var current: Link? = null
 
     // Every change, as it happens: [status] conflates, a collector may miss a reconnection that came back quickly.
     private fun report(now: ConnectionStatus) {
@@ -87,7 +88,7 @@ internal class Connector(
 
     fun close() {
         closed = true
-        link?.close()
+        current?.close()
     }
 
     private suspend fun tryOpen(): Link? =
@@ -103,18 +104,17 @@ internal class Connector(
         }
 
     private suspend fun serve(opened: Link) {
-        link = opened
+        current = opened
+        if (closed) opened.close()
         report(ConnectionStatus.Connected)
-        connections.update { it + 1 }
+        val connection = connections.updateAndGet { it + 1 }
         try {
-            // Unanswered requests, in their original order: the server deduplicates retries.
-            pending.inOrder().forEach(opened::send)
             streams.positions().forEach { (id, lastSeq) -> resume(id, lastSeq) }
-            watch(opened)
+            watch(opened, connection)
         } catch (expected: IOException) {
             // Link lost (closed, reset, or silent for too long): the loop reconnects.
         } finally {
-            link = null
+            current = null
             opened.close()
             if (!closed) report(ConnectionStatus.Reconnecting)
         }
@@ -168,31 +168,33 @@ internal class Connector(
         }
     }
 
-    private suspend fun watch(link: Link) =
+    private suspend fun watch(link: Link, connection: Long) =
         coroutineScope {
-            val heartbeat =
+            // Sends the pending requests again, then what is queued, and the heartbeats.
+            val writer =
                 launch {
-                    while (isActive) {
-                        delay(options.heartbeatMs / 2)
-                        if (System.currentTimeMillis() - link.lastSent >= options.heartbeatMs) {
-                            link.send(Frame(FrameKind.Ping, 0))
-                        }
+                    try {
+                        outbox.drain(link, connection)
+                    } finally {
+                        link.close() // the reader below fails at once and the loop reconnects
                     }
                 }
             try {
                 // Fails with SocketTimeoutException after deadAfterMs of silence: the link is dead.
-                runInterruptible { while (true) dispatch(link, link.read()) }
+                runInterruptible { while (true) dispatch(link.read()) }
             } finally {
-                heartbeat.cancel()
+                // Unblocks a write in progress, then stops the writer.
+                link.close()
+                writer.cancel()
             }
         }
 
-    private fun dispatch(link: Link, frame: Frame) {
+    private fun dispatch(frame: Frame) {
         when (frame.kind) {
             FrameKind.Response, FrameKind.Error -> pending.complete(frame)
             FrameKind.Event -> streams.onEvent(frame.id, frame.payload)
             FrameKind.End -> streams.onEnd(frame.id, frame.payload)
-            FrameKind.Ping -> link.send(Frame(FrameKind.Pong, 0))
+            FrameKind.Ping -> outbox.notify(Frame(FrameKind.Pong, 0))
             else -> Unit // Pong: receiving it was the point
         }
     }
