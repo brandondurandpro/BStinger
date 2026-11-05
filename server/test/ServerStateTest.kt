@@ -112,6 +112,7 @@ class ServerStateTest {
                     "--data-dir", "/tmp/data",
                     "--session-grace", "60",
                     "--build", "3f9c0a7d21e84b6c",
+                    "--parent-pid", "42",
                     "--version",
                 ),
             )
@@ -123,6 +124,7 @@ class ServerStateTest {
         assertEquals(File("/tmp/data"), options.dataDirectory)
         assertEquals(60, options.sessionGraceSeconds)
         assertEquals("3f9c0a7d21e84b6c", options.build)
+        assertEquals(42L, options.parentPid)
         assertTrue(options.version)
         assertNull(ServerMain.LaunchOptions.from(arrayOf("--build", "")).build)
     }

@@ -105,7 +105,11 @@ All the logic on files runs in a **server**; the IDE is a client that only displ
   - `e2e` – the end-to-end test support (`launchApp`, `SampleProject`, fixtures) used by the tests of every module;
   - `shared` – the project and application state (`ProjectState`, `AppState`, agent mode), the screens and tool
     windows assembled from the features, and the end-to-end tests that span several features;
-  - `desktopApp` – the IDE. By default it embeds a server on loopback; use `--server host:port --token-file <file>`
+  - `desktopApp` – the IDE. By default it starts its server as a child process on loopback (`LocalServer`: the same
+    classes, another JVM, so the server's memory spikes and failures do not reach the UI), starts it again on the
+    same port when it dies, and stops it on exit; the child also exits when the IDE is killed. Where no `java`
+    launcher exists (the packaged app image ships its runtime without commands) or the child keeps failing to start,
+    the server runs in the IDE's JVM, with a warning in the log. Use `--server host:port --token-file <file>`
     (or `KOTLIN_EDITOR_SERVER` / `KOTLIN_EDITOR_TOKEN`) for a remote one. The file holds the token alone and should
     be readable by its owner only (`chmod 600`). `--token <secret>` is deprecated and prints a warning: other users
     of the machine can read it with `ps`.

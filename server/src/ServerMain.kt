@@ -23,6 +23,8 @@ import kotlin.system.exitProcess
  * `--data-dir` moves recent projects and sessions (useful for tests and for several accounts on one machine).
  * `--session-grace` is how many seconds a disconnected session keeps its shells and pending answers; remote daemons
  * use a long one so a sleeping laptop does not lose its terminals.
+ * `--parent-pid` stops the server when that process ends: the IDE runs its local server as a child process, which
+ * must not outlive it, even when the IDE is killed.
  */
 object ServerMain {
     /** Entry point of the standalone server: parses the options, listens and waits until the process is stopped. */
@@ -72,7 +74,15 @@ object ServerMain {
                 server.close()
             },
         )
+        options.parentPid?.let(::exitWithParent)
         CountDownLatch(1).await()
+    }
+
+    // Exiting runs the shutdown hook: the state file is removed and the shells are closed.
+    private fun exitWithParent(pid: Long) {
+        val parent = ProcessHandle.of(pid)
+        if (parent.isEmpty) exitProcess(0)
+        parent.get().onExit().thenRun { exitProcess(0) }
     }
 
     private fun defaultDataDirectory(): File = File(System.getProperty("user.home"), ".kotlin-editor")
@@ -99,6 +109,8 @@ object ServerMain {
         val sessionGraceSeconds: Long,
         /** Id of the remote bundle this daemon runs from, or null for a server started by hand. */
         val build: String? = null,
+        /** Process whose end stops the server (the IDE that started it), or null. */
+        val parentPid: Long? = null,
     ) {
         companion object {
             fun from(args: Array<String>): LaunchOptions {
@@ -115,6 +127,7 @@ object ServerMain {
                     version = args.contains("--version"),
                     sessionGraceSeconds = sessionGrace,
                     build = option("build")?.takeIf { it.isNotBlank() },
+                    parentPid = option("parent-pid")?.toLongOrNull(),
                 )
             }
         }
