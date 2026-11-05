@@ -11,6 +11,7 @@ import org.apache.sshd.server.forward.AcceptAllForwardingFilter
 import org.apache.sshd.server.keyprovider.SimpleGeneratorHostKeyProvider
 import org.apache.sshd.server.session.ServerSession
 import org.apache.sshd.sftp.server.SftpSubsystemFactory
+import org.example.kotlineditor.remote.SshTarget
 import org.example.kotlineditor.rpc.Protocol
 import java.io.Closeable
 import java.io.File
@@ -19,6 +20,7 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.attribute.FileTime
 import java.util.Properties
 import java.util.concurrent.TimeUnit
 import java.util.zip.GZIPOutputStream
@@ -36,6 +38,9 @@ object RemoteTestEnvironment {
     val available: Boolean = !System.getProperty("os.name").lowercase().contains("win")
 
     private const val MODE_EXECUTABLE = 0b111_101_101
+    private const val MILLIS_PER_DAY = 86_400_000L
+    private const val OLD_DAEMON_START_MS = 30_000L
+    private const val POLL_MS = 20L
 
     private val isLinux = System.getProperty("os.name").lowercase().contains("linux")
 
@@ -120,33 +125,84 @@ object RemoteTestEnvironment {
         }.getOrNull()
     }
 
-    /** Id of the bundle installed on the remote side (`BUILD` of its install directory), or null. */
-    fun installedBuild(): String? =
+    /** Install directories of the bundles on the remote side (one per build), by the id in their `BUILD`. */
+    fun installedBundles(): Map<String, Path> =
         runCatching {
             Files.list(home.resolve(".kotlin-editor/server")).use { entries ->
                 entries
                     .filter { Files.isDirectory(it) && !it.fileName.toString().endsWith(".tmp") }
-                    .map { it.resolve("BUILD") }
-                    .filter { Files.isRegularFile(it) }
-                    .findFirst()
-                    .map { Files.readString(it).trim() }
-                    .orElse(null)
+                    .filter { Files.isRegularFile(it.resolve("BUILD")) }
+                    .toList()
+                    .associateBy { Files.readString(it.resolve("BUILD")).trim() }
             }
-        }.getOrNull()
+        }.getOrDefault(emptyMap())
+
+    /** Ids of the bundles installed on the remote side. */
+    fun installedBuilds(): Set<String> = installedBundles().keys
+
+    /** Id of the bundle the running daemon was started from, from its state file. */
+    fun runningBuild(): String? = daemonState()?.getProperty("build")
+
+    /** What the daemon wrote in its state file, or null when there is none. */
+    fun daemonState(): Properties? {
+        val state = home.resolve(".kotlin-editor/server/state.properties")
+        return runCatching { Properties().apply { Files.newInputStream(state).use { load(it) } } }.getOrNull()
+    }
+
+    /**
+     * Replaces the daemon with one of an older IDE: a process that speaks protocol [protocol] and reports [sessions]
+     * in its state file (null: a daemon too old to count them). It answers nobody; `start.sh` only sees its state
+     * file and that the process is alive. Returns its pid.
+     */
+    fun startOldDaemon(protocol: Int, sessions: Int?): Long {
+        stopDaemon()
+        val state = home.resolve(".kotlin-editor/server/state.properties")
+        Files.createDirectories(state.parent)
+        Files.deleteIfExists(state)
+        val java = Path.of(System.getProperty("java.home"), "bin", "java").toString()
+        val command =
+            listOf(java, "-cp", System.getProperty("java.class.path"), OldDaemon::class.java.name) +
+                listOf(state.toString(), protocol.toString(), sessions?.toString() ?: "unknown")
+        val process = ProcessBuilder(command).redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD)
+        val started = process.start()
+        val deadline = System.currentTimeMillis() + OLD_DAEMON_START_MS
+        while (daemonPid() != started.pid()) {
+            check(started.isAlive && System.currentTimeMillis() < deadline) { "the old daemon did not start" }
+            Thread.sleep(POLL_MS)
+        }
+        return started.pid()
+    }
+
+    /** Marks the bundle [build] as last used [days] days ago, as an IDE update that nobody started since. */
+    fun ageBundle(build: String, days: Long) {
+        val directory = checkNotNull(installedBundles()[build]) { "bundle $build is not installed" }
+        val past = System.currentTimeMillis() - days * MILLIS_PER_DAY
+        Files.setLastModifiedTime(directory.resolve("BUILD"), FileTime.fromMillis(past))
+    }
 
     /**
      * A bundle with the same [Protocol.APP_VERSION] as [bundle] but other bytes, as a rebuilt server would be;
-     * [use] connects with it, then the regular bundle is the one installed again by [prepare].
+     * [use] connects with it (it gets the archive), then the regular bundle is the one installed again by [prepare].
      */
-    fun <T> withRebuiltBundle(use: () -> T): T {
+    fun <T> withRebuiltBundle(use: (Path) -> T): T {
         val rebuilt = buildBundle(note = "rebuilt ${System.nanoTime()}")
         System.setProperty("kotlin.editor.remote.bundle", rebuilt.toString())
         return try {
-            use()
+            use(rebuilt)
         } finally {
             System.setProperty("kotlin.editor.remote.bundle", bundle.toString())
         }
     }
+
+    /** The test host as a target, for a session opened without the UI (another IDE connecting to the same host). */
+    fun sshTarget(projectPath: String?): SshTarget =
+        SshTarget(
+            host = "127.0.0.1",
+            user = "tester",
+            port = ssh.port,
+            identityFile = ssh.identity.toString(),
+            projectPath = projectPath,
+        )
 
     /** Empties known_hosts, as for a host the user never connected to; [prepare] trusts it again. */
     fun forgetHostKey() {
@@ -508,4 +564,30 @@ fun remoteEnvironment(): RemoteTestEnvironment? =
 private fun inLocale(environment: MutableMap<String, String>, locale: String) {
     environment.keys.removeAll { it == "LANG" || it.startsWith("LC_") }
     environment["LC_ALL"] = locale
+}
+
+/**
+ * The daemon of an older IDE, for [RemoteTestEnvironment.startOldDaemon]: writes a state file with another protocol
+ * (its path is on the command line, as `start.sh` checks) and waits until it is stopped.
+ */
+object OldDaemon {
+    /** Arguments: the state file, the protocol, the number of sessions or `unknown`. */
+    @JvmStatic
+    fun main(args: Array<String>) {
+        val state = Path.of(args[0])
+        val sessions = args[2]
+        val properties =
+            Properties().apply {
+                setProperty("version", "2025.9")
+                setProperty("protocol", args[1])
+                setProperty("build", "0ld0ld0ld0ld0ld0")
+                setProperty("host", "127.0.0.1")
+                setProperty("port", "1")
+                setProperty("pid", ProcessHandle.current().pid().toString())
+                setProperty("token", "old")
+                if (sessions != "unknown") setProperty("sessions", sessions)
+            }
+        Files.newOutputStream(state).use { properties.store(it, "old daemon") }
+        Thread.sleep(Long.MAX_VALUE)
+    }
 }
