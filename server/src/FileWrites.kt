@@ -54,8 +54,9 @@ internal fun writeFileNow(path: Path, bytes: ByteArray) {
 private suspend fun replaceKeepingAll(target: Path, bytes: ByteArray, sync: DiskSync): Boolean {
     val temp = Files.createTempFile(target.parent, ".${target.name}", ".tmp")
     try {
+        val options = setOf(StandardOpenOption.WRITE) + sync.writeOptions
         val copied =
-            FileChannel.open(temp, StandardOpenOption.WRITE).use { channel ->
+            FileChannel.open(temp, options).use { channel ->
                 writeAll(channel, bytes)
                 val attributesCopied = copyAttributes(target, temp)
                 // Its bytes and attributes on the disk before the move: never a renamed file without its content.

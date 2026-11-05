@@ -159,6 +159,8 @@ class LocalFileSystemTest {
     private class RecordingSync(private val file: Path) : DiskSync {
         val steps = ArrayList<String>()
 
+        override val writeOptions = DurableSync.writeOptions
+
         override fun file(channel: FileChannel) {
             steps += "file synced, the file holds '${file.readText()}'"
             DurableSync.file(channel)
