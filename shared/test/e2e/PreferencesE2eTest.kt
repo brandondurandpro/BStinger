@@ -6,11 +6,11 @@ import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.v2.runComposeUiTest
-import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.DEFAULT_EDITOR_FONT_SIZE
 import org.example.kotlineditor.state.Dock
 import org.example.kotlineditor.state.FilePreferenceStore
 import org.example.kotlineditor.state.PreferenceKeys
+import org.example.kotlineditor.state.SettingsController
 import org.example.kotlineditor.state.ToolWindow
 import org.example.kotlineditor.ui.AppTags
 import org.example.kotlineditor.ui.TreeTags
@@ -36,7 +36,7 @@ class PreferencesE2eTest {
     fun `font size, Always Select Opened File and panels are restored in the next session`() {
         runComposeUiTest {
             val app = launchWithProject(project, FilePreferenceStore(file))
-            runOnUiThread { app.state.zoomEditor(2f) }
+            runOnUiThread { app.state.settings.zoomEditor(2f) }
             onNodeWithTag(TreeTags.TREE_AUTO_SELECT).performClick()
             onNodeWithTag(AppTags.TOOL_GIT).performClick()
             runOnUiThread { app.project.toolWindows.move(ToolWindow.Project, Dock.Right, first = true) }
@@ -47,7 +47,7 @@ class PreferencesE2eTest {
 
         runComposeUiTest {
             val app = launchWithProject(project, FilePreferenceStore(file))
-            assertEquals(15f, app.state.editorFontSize)
+            assertEquals(15f, app.state.settings.editorFontSize)
             onNodeWithTag(TreeTags.TREE_AUTO_SELECT).assertIsOff()
             assertEquals(Dock.Right, app.project.toolWindows.dockOf(ToolWindow.Project))
             assertEquals(true, app.project.toolWindows.isVisible(ToolWindow.Git))
@@ -58,7 +58,7 @@ class PreferencesE2eTest {
     fun `the first launch uses the defaults`() =
         runComposeUiTest {
             val app = launchWithProject(project, FilePreferenceStore(file))
-            assertEquals(DEFAULT_EDITOR_FONT_SIZE, app.state.editorFontSize)
+            assertEquals(DEFAULT_EDITOR_FONT_SIZE, app.state.settings.editorFontSize)
             onNodeWithTag(TreeTags.TREE_AUTO_SELECT).assertIsOn()
             assertEquals(Dock.Left, app.project.toolWindows.dockOf(ToolWindow.Project))
         }
@@ -74,7 +74,7 @@ class PreferencesE2eTest {
                 """.trimIndent(),
             )
             val app = launchWithProject(project, FilePreferenceStore(file))
-            assertEquals(DEFAULT_EDITOR_FONT_SIZE, app.state.editorFontSize)
+            assertEquals(DEFAULT_EDITOR_FONT_SIZE, app.state.settings.editorFontSize)
             onNodeWithTag(TreeTags.TREE_AUTO_SELECT).assertIsOn()
             assertEquals(Dock.Left, app.project.toolWindows.dockOf(ToolWindow.Git))
         }
@@ -84,6 +84,6 @@ class PreferencesE2eTest {
         runComposeUiTest {
             file.writeText("editor.fontSize=500\n")
             val app = launchWithProject(project, FilePreferenceStore(file))
-            assertEquals(AppState.MAX_EDITOR_FONT_SIZE, app.state.editorFontSize)
+            assertEquals(SettingsController.MAX_EDITOR_FONT_SIZE, app.state.settings.editorFontSize)
         }
 }

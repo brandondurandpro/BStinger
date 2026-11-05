@@ -66,14 +66,18 @@ private fun bind(
 ) = binding(keys, ctrl, shift, alt, action)
 
 private val TOGGLE_AGENT_MODE =
-    bind(setOf(Key.A), ctrl = true, alt = true) { if (app.agentModeEnabled) project.agentMode = !project.agentMode }
+    bind(
+        setOf(Key.A),
+        ctrl = true,
+        alt = true,
+    ) { if (app.settings.agentModeEnabled) project.agentMode = !project.agentMode }
 
 // Ctrl+Alt+K, as in the IDE plugins of Claude Code: the lines selected in the editor shown (the file when nothing is
 // selected) join the prompt of the agent, in agent mode.
 private val SEND_TO_AGENT = bind(setOf(Key.K), ctrl = true, alt = true) { sendToAgent() }
 
 private fun IdeContext.sendToAgent() {
-    if (!app.agentModeEnabled) return
+    if (!app.settings.agentModeEnabled) return
     val agent = project.agent
     val conversation = agent.current?.takeIf { !it.showsChat }
     val conversationFile = conversation?.workspace?.editor
@@ -153,11 +157,11 @@ private val IDE_SHORTCUTS =
         bind(setOf(Key.G), ctrl = true) { project.showPopup(PopupKind.GotoLine) },
         bind(setOf(Key.E), ctrl = true) { project.showPopup(PopupKind.RecentFiles) },
         bind(setOf(Key.F12), ctrl = true) { project.showPopup(PopupKind.FileStructure) },
-        bind(setOf(Key.Period), shift = true, alt = true) { app.zoomEditor(1f) },
-        bind(setOf(Key.Comma), shift = true, alt = true) { app.zoomEditor(-1f) },
-        bind(setOf(Key.Zero, Key.NumPad0), shift = true, alt = true) { app.resetEditorZoom() },
+        bind(setOf(Key.Period), shift = true, alt = true) { app.settings.zoomEditor(1f) },
+        bind(setOf(Key.Comma), shift = true, alt = true) { app.settings.zoomEditor(-1f) },
+        bind(setOf(Key.Zero, Key.NumPad0), shift = true, alt = true) { app.settings.resetEditorZoom() },
         bind(setOf(Key.F1), alt = true) { revealActiveFile() },
-        bind(setOf(Key.S), ctrl = true, alt = true) { app.openSettings() },
+        bind(setOf(Key.S), ctrl = true, alt = true) { app.settings.open() },
         bind(setOf(Key.S), ctrl = true) { editor.saveAll() },
         bind(setOf(Key.F4), ctrl = true) { editor.activeTab?.let(editor::close) },
         // Jump to Source: from a diff tab, the file itself.

@@ -56,7 +56,7 @@ class WelcomeScreenE2eTest {
             openProjectPickerFromWelcome()
             onNodeWithTag(RemoteTags.OPEN_PROJECT_CANCEL).performClick()
             awaitNoTag(RemoteTags.OPEN_PROJECT)
-            assertIs<Screen.Welcome>(app.state.screen)
+            assertIs<Screen.Welcome>(app.state.session.screen)
         }
 
     @Test
@@ -99,7 +99,7 @@ class WelcomeScreenE2eTest {
             val app = launchApp(recent = listOf("/definitely/missing/project"))
             onNodeWithTag(AppTags.recentProject("/definitely/missing/project")).performClick()
             awaitTag(AppTags.WELCOME_ERROR).assertIsDisplayed()
-            assertIs<Screen.Welcome>(app.state.screen)
+            assertIs<Screen.Welcome>(app.state.session.screen)
         }
 
     @Test
@@ -109,7 +109,7 @@ class WelcomeScreenE2eTest {
             onNodeWithTag(AppTags.PROJECT_WIDGET).performClick()
             awaitTag(AppTags.PROJECT_CLOSE).performClick()
             awaitTag(AppTags.WELCOME)
-            assertIs<Screen.Welcome>(app.state.screen)
+            assertIs<Screen.Welcome>(app.state.session.screen)
             onNodeWithTag(AppTags.recentProject(project.path)).assertIsDisplayed()
         }
 }

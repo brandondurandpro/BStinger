@@ -54,7 +54,7 @@ class SessionAndGitE2eTest {
                     .moveTo(TextPos(1, 6))
             }
             onNodeWithTag(EditorTags.tab("README.md")).performClick()
-            runOnUiThread { app.state.closeProject() }
+            runOnUiThread { app.state.session.closeProject() }
             awaitTag(AppTags.WELCOME)
             onNodeWithTag(AppTags.recentProject(project.path)).performClick()
             awaitTag(EditorTags.tab("docs/guide.md"))

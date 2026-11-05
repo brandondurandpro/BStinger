@@ -89,7 +89,7 @@ class RemoteDaemonSharingE2eTest {
                 .assertTextContains("protocol ${Protocol.VERSION - 1}", substring = true)
             onNodeWithTag(RemoteTags.REMOTE_REPLACE_KEEP).performClick()
             awaitNoTag(RemoteTags.REMOTE_REPLACE_QUESTION)
-            assertFalse(app.state.isRemote, "keeping the server must not connect")
+            assertFalse(app.state.session.isRemote, "keeping the server must not connect")
             assertTrue(isAlive(oldPid), "the old daemon must keep running")
             assertEquals(oldPid, RemoteTestEnvironment.daemonPid())
             awaitTag(RemoteTags.REMOTE_DIALOG)
@@ -98,7 +98,7 @@ class RemoteDaemonSharingE2eTest {
             onNodeWithTag(RemoteTags.REMOTE_CONNECT).performClick()
             awaitTag(RemoteTags.REMOTE_REPLACE_CONFIRM, timeout = 60_000).performClick()
             awaitTag(TreeTags.treeRow("src"), timeout = 60_000)
-            assertTrue(app.state.isRemote)
+            assertTrue(app.state.session.isRemote)
             assertFalse(isAlive(oldPid), "the old daemon must be stopped")
             assertEquals("${Protocol.VERSION}", RemoteTestEnvironment.daemonState()?.getProperty("protocol"))
         }
@@ -170,7 +170,7 @@ class RemoteDaemonSharingE2eTest {
         onNodeWithTag(AppTags.TOP_REMOTE).performClick()
         awaitTag(AppTags.REMOTE_DISCONNECT).performClick()
         awaitTag(AppTags.WELCOME)
-        awaitCondition { !app.state.isRemote }
+        awaitCondition { !app.state.session.isRemote }
     }
 
     private fun screenLines(app: E2eApp): List<String> =

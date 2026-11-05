@@ -73,7 +73,10 @@ class TelemetryPerformanceE2eTest {
             // Warms the JIT and the server's caches, so that both runs below find them warm.
             work()
             val off = measure("Large project, telemetry off", RUN_BUDGET_MS) { work() }
-            runOnUiThread { app.state.telemetry.choose(true) }
+            runOnUiThread {
+                app.state.settings.telemetry
+                    .choose(true)
+            }
             awaitCondition { app.server.telemetry.telemetry.isEnabled }
             val on = measure("Large project, telemetry on", RUN_BUDGET_MS) { work() }
             report("Telemetry gap (on - off)", on - off, GAP_BUDGET_MS, GAP_BUDGET_MB)
