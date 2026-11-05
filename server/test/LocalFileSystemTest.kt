@@ -2,6 +2,7 @@ package org.example.kotlineditor.server
 
 import kotlinx.coroutines.runBlocking
 import org.example.kotlineditor.model.FileEntry
+import java.nio.channels.FileChannel
 import java.nio.file.FileSystemException
 import java.nio.file.Files
 import java.nio.file.LinkOption
@@ -103,5 +104,53 @@ class LocalFileSystemTest {
             fs.delete(FileEntry(project.resolve("gone").toString(), "gone", true))
             fs.delete(FileEntry(project.resolve("gone.txt").toString(), "gone.txt", false))
             assertTrue(Files.isDirectory(project))
+        }
+
+    // Records when each step of a save makes it durable, with what the file holds at that moment.
+    private class RecordingSync(private val file: Path) : DiskSync {
+        val steps = ArrayList<String>()
+
+        override fun file(channel: FileChannel) {
+            steps += "file synced, the file holds '${file.readText()}'"
+            DurableSync.file(channel)
+        }
+
+        override fun directory(path: Path) {
+            val parent = if (path == file.parent) "its directory" else path.toString()
+            steps += "$parent synced, the file holds '${file.readText()}'"
+            DurableSync.directory(path)
+        }
+    }
+
+    @Test
+    fun `a save is on the disk before it replaces the file, and the move is synced after it`() =
+        runBlocking {
+            val file = project.resolve("durable.txt")
+            file.writeText("old")
+            val sync = RecordingSync(file)
+            writeFile(file, "new".toByteArray(), sync)
+            assertEquals("new", file.readText())
+            val expected =
+                listOf("file synced, the file holds 'old'", "its directory synced, the file holds 'new'")
+            assertEquals(expected, sync.steps)
+        }
+
+    @Test
+    fun `a file written in place or created is synced too`() =
+        runBlocking {
+            val created = project.resolve("created.txt")
+            val createdSync = RecordingSync(created)
+            writeFile(created, "first".toByteArray(), createdSync)
+            val expected =
+                listOf("file synced, the file holds 'first'", "its directory synced, the file holds 'first'")
+            assertEquals(expected, createdSync.steps)
+            // A second hard link is kept by writing in place (where the disk has them).
+            if ("unix" in project.fileSystem.supportedFileAttributeViews()) {
+                Files.createLink(project.resolve("twin.txt"), created)
+                val inPlaceSync = RecordingSync(created)
+                writeFile(created, "second".toByteArray(), inPlaceSync)
+                assertEquals("second", project.resolve("twin.txt").readText())
+                assertEquals(listOf("file synced, the file holds 'second'"), inPlaceSync.steps)
+            }
         }
 }

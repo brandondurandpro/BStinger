@@ -3,6 +3,7 @@ package org.example.kotlineditor.server
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import java.nio.ByteBuffer
+import java.nio.channels.FileChannel
 import java.nio.file.AccessDeniedException
 import java.nio.file.Files
 import java.nio.file.LinkOption
@@ -29,15 +30,16 @@ private val WINDOWS = System.getProperty("os.name").startsWith("Windows", ignore
  * The bytes go to a temp file moved over the file, so that a crash never leaves it half written, when that move keeps
  * everything; otherwise (other hard links, another owner, a directory the server cannot write, a group it cannot
  * give) they are written in place, as the move would lose what makes the file what it is. A read-only file is not
- * written.
+ * written. The bytes are on the disk itself before the move (and the move too, where the directory can be synced),
+ * so that a power loss or a kernel panic leaves the old file or the new one, never an empty or truncated one.
  */
-internal suspend fun writeFile(path: Path, bytes: ByteArray) {
+internal suspend fun writeFile(path: Path, bytes: ByteArray, sync: DiskSync = DurableSync) {
     val exists = Files.exists(path)
     val target = if (exists) path.toRealPath() else path
     val readOnly = exists && !Files.isWritable(target)
     if (readOnly) throw AccessDeniedException(target.toString(), null, "The file is read-only")
-    val replaced = exists && movable(target) && replaceKeepingAll(target, bytes)
-    if (!replaced) Files.write(target, bytes, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)
+    val replaced = exists && movable(target) && replaceKeepingAll(target, bytes, sync)
+    if (!replaced) writeInPlace(target, bytes, created = !exists, sync)
 }
 
 /** [writeFile] for the callers that are not coroutines (the agents' requests), creating the missing directories. */
@@ -47,12 +49,21 @@ internal fun writeFileNow(path: Path, bytes: ByteArray) {
 }
 
 // Writes through a temp file moved over [target], if the temp file can have all of [target]; false when it cannot.
-private suspend fun replaceKeepingAll(target: Path, bytes: ByteArray): Boolean {
+private suspend fun replaceKeepingAll(target: Path, bytes: ByteArray, sync: DiskSync): Boolean {
     val temp = Files.createTempFile(target.parent, ".${target.name}", ".tmp")
     try {
-        Files.write(temp, bytes)
-        val copied = copyAttributes(target, temp)
-        if (copied) replace(temp, target)
+        val copied =
+            FileChannel.open(temp, StandardOpenOption.WRITE).use { channel ->
+                writeAll(channel, bytes)
+                val attributesCopied = copyAttributes(target, temp)
+                // Its bytes and attributes on the disk before the move: never a renamed file without its content.
+                if (attributesCopied) sync.file(channel)
+                attributesCopied
+            }
+        if (copied) {
+            replace(temp, target)
+            sync.directory(target.parent)
+        }
         return copied
     } finally {
         Files.deleteIfExists(temp)
