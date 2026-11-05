@@ -3,11 +3,11 @@ package org.example.kotlineditor.rpc
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.selects.onTimeout
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -43,7 +43,7 @@ private sealed interface Outgoing {
 /**
  * The frames the client sends, and the writer that sends them on each connection, off the caller's thread: a call
  * only queues its request, the writer encodes, compresses and writes it on [Dispatchers.IO]. The writer also sends the
- * heartbeat, a ping when nothing was sent for [heartbeatMs].
+ * heartbeat, a ping queued when nothing was sent for [heartbeatMs].
  *
  * Frames go in the order they were queued, except that a large one ([LARGE_FRAME_CHARS]) is prepared apart and may be
  * overtaken meanwhile by smaller ones; the frames of the methods the server runs in arrival order ([keepsOrder]) never
@@ -88,6 +88,7 @@ internal class Outbox(private val pending: PendingRequests, private val heartbea
                 coroutineScope {
                     // Unanswered requests first, in their original order: the server deduplicates the retries.
                     pending.inOrder().forEach { add(this, Outgoing.Request(it)) }
+                    launch { heartbeat() }
                     while (true) step(this)
                 }
             } finally {
@@ -96,8 +97,24 @@ internal class Outbox(private val pending: PendingRequests, private val heartbea
             }
         }
 
+        // Queues a ping whenever nothing was sent for [heartbeatMs]. Apart from the writer, so that waiting for the
+        // next frame does not arm (and cancel) a timer per frame: on a busy link that cost a wakeup of the timer thread
+        // per request, and doubled the round trip on a slow machine.
+        private suspend fun heartbeat() {
+            while (true) {
+                val idleMs = System.currentTimeMillis() - link.lastSent
+                val untilDue = heartbeatMs - idleMs
+                if (untilDue > 0) {
+                    delay(untilDue)
+                } else {
+                    notify(Frame(FrameKind.Ping, 0))
+                    // Not before the ping is written: a writer busy with a large frame would get a ping per check.
+                    delay(heartbeatMs)
+                }
+            }
+        }
+
         // [writer] is the scope of the preparations: not the scope of a wait, which would wait for them.
-        @OptIn(ExperimentalCoroutinesApi::class) // onTimeout, stable in behavior since 1.7
         private suspend fun step(writer: CoroutineScope) {
             receiveQueued(writer)
             val next = nextWritable()
@@ -105,21 +122,17 @@ internal class Outbox(private val pending: PendingRequests, private val heartbea
                 write(next)
                 return
             }
-            // Nothing to write now: wait for a new frame, the preparation holding the others, or the heartbeat.
+            // Nothing to write now: wait for a new frame, or for the preparation holding the others.
             val holding = waiting.firstOrNull { it.prepared?.isCompleted == false }?.prepared
-            val idleMs = heartbeatMs - (System.currentTimeMillis() - link.lastSent)
-            // The timeout is a clause of the select, not a cancellation of it: a cancelled receive can lose the
-            // frame it was taking from the queue, and a request lost that way would wait for the next connection.
-            val idle =
-                select {
-                    queue.onReceive {
-                        add(writer, it)
-                        false
-                    }
-                    if (holding != null) holding.onAwait { false }
-                    onTimeout(idleMs.coerceAtLeast(1)) { true }
-                }
-            if (idle) link.write(link.prepare(Frame(FrameKind.Ping, 0)))
+            if (holding == null) {
+                add(writer, queue.receive())
+                return
+            }
+            // A select that takes a frame from the queue keeps it: it is not cancelled by a timeout.
+            select {
+                queue.onReceive { add(writer, it) }
+                holding.onAwait { }
+            }
         }
 
         private fun receiveQueued(writer: CoroutineScope) {
