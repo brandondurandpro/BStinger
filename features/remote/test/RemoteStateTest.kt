@@ -1,11 +1,15 @@
 package org.example.kotlineditor.unit
 
+import org.example.kotlineditor.remote.RemoteServerInUseException
 import org.example.kotlineditor.remote.SshTarget
 import org.example.kotlineditor.state.RemoteDialogState
 import org.example.kotlineditor.state.RemotePreferenceKeys
+import org.example.kotlineditor.state.failedWith
 import org.example.kotlineditor.state.toSshTarget
+import java.io.IOException
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -71,5 +75,35 @@ class RemoteStateTest {
             )
         assertEquals(SshTarget(host = "host", port = 22), withoutOptionalFields)
         assertNull(RemotePreferenceKeys.read(emptyMap()))
+    }
+
+    @Test
+    fun `the in-use line of start sh is read into the question`() {
+        val inUse = RemoteServerInUseException.fromOutput("noise\nin-use sessions=3 version=2025.9 protocol=10\n")
+        assertEquals(3, inUse.sessions)
+        assertEquals("2025.9", inUse.version)
+        assertEquals(10, inUse.protocol)
+        assertTrue("still has 3 sessions" in inUse.message.orEmpty(), inUse.message)
+
+        val unknown = RemoteServerInUseException.fromOutput("in-use sessions=unknown version= protocol=10")
+        assertNull(unknown.sessions)
+        assertTrue("may still have sessions" in unknown.message.orEmpty(), unknown.message)
+    }
+
+    @Test
+    fun `a server in use is a question, and an agreement is not kept after a failure`() {
+        val dialog = RemoteDialogState(host = "h", connecting = true, replaceServer = true)
+        val inUse = RemoteServerInUseException(1, "2025.9", 10)
+
+        val asked = dialog.failedWith(inUse, "h")
+        assertEquals(inUse.message, asked.replaceQuestion)
+        assertNull(asked.error)
+        assertFalse(asked.replaceServer)
+        assertFalse(asked.connecting)
+
+        val failed = dialog.failedWith(IOException("refused"), "h")
+        assertEquals("refused", failed.error)
+        assertNull(failed.replaceQuestion)
+        assertFalse(failed.replaceServer)
     }
 }

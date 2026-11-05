@@ -47,7 +47,8 @@ object ServerMain {
                 token = token,
                 options = ServerOptions(sessionGraceMs = options.sessionGraceSeconds * 1_000),
             ).start(options.host, options.port)
-        options.stateFile?.let { state -> ServerState.write(state, server, options.host, token, build = options.build) }
+        val tracker =
+            options.stateFile?.let { state -> ServerState.track(state, server, options.host, token, options.build) }
         // Scripts (measure_memory.sh) read the port from this exact line: the version goes on its own line.
         println("Kotlin Editor server ${Protocol.APP_VERSION}")
         println("Kotlin Editor server listening on ${options.host}:${server.port}")
@@ -66,6 +67,7 @@ object ServerMain {
         }
         Runtime.getRuntime().addShutdownHook(
             Thread {
+                tracker?.close()
                 options.stateFile?.let(ServerState::removeIfOwned)
                 server.close()
             },

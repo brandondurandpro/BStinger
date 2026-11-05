@@ -6,7 +6,7 @@ import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 
 /** A failure of the remote flow worth showing to the user as is. */
-class RemoteException(message: String, cause: Throwable? = null) : IOException(message, cause)
+open class RemoteException(message: String, cause: Throwable? = null) : IOException(message, cause)
 
 /**
  * Where the IDE finds the self-contained server archive for a remote target.
