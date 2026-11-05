@@ -66,6 +66,9 @@ object Protocol {
     /** JSON-RPC error code of a rejected handshake. */
     const val REJECTED = -32_001
 
+    /** JSON-RPC error code of a failure the server did not expect (a bug of a handler); the request may be retried. */
+    const val INTERNAL_ERROR = -32_603
+
     /** JSON-RPC error code of an unknown method. */
     const val METHOD_NOT_FOUND = -32_601
 
