@@ -495,7 +495,15 @@ internal class ManagedServer(
         capabilities = offered ?: JsonObject(emptyMap())
         hooks.onRestarted(id)
         runCatching { link.notify("initialized", JsonObject(emptyMap())) }
-        openDocuments(DocumentOutbox(link, scope, syncKindOf(initialized)))
+        val box =
+            DocumentOutbox(
+                link,
+                scope,
+                syncKindOf(initialized),
+                maxUnreadBytes = timings.maxUnreadBytes,
+                onStuck = { unreadBytes -> stuck(launched, unreadBytes) },
+            )
+        openDocuments(box)
         // A key per process: the old one may still be untracked after a new one started.
         samplerKey = "$id#${launched.pid()}".also { history = sampler?.track(it, launched.toHandle()) }
         indexingMayBeginUntil = System.nanoTime() + timings.indexingStartMs * NANOS_PER_MILLI
@@ -514,6 +522,13 @@ internal class ManagedServer(
                 indexing.first { !it }
             }
         return done != null
+    }
+
+    // Called under the documents' lock: only queues the restart, as a crash, whose stop kills the process.
+    private fun stuck(launched: Process, unreadBytes: Long) {
+        val reason = "Stopped reading its input, ${unreadBytes / BYTES_PER_MEGABYTE} MB left unread"
+        log.add(reason)
+        send(Command.Failed(launched, reason))
     }
 
     // Under the documents' lock: an edit arriving meanwhile is either replayed here or sent after.
@@ -766,6 +781,7 @@ internal class ManagedServer(
     private companion object {
         const val MILLIS = 1_000L
         const val FULL_SYNC = 1
+        const val BYTES_PER_MEGABYTE = 1024L * 1024
 
         // Enough for a stack trace and the error block above it.
         const val STDERR_TAIL = 200

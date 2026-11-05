@@ -9,6 +9,7 @@ import org.example.kotlineditor.lsp.provision.LanguageServerCandidate
 import org.example.kotlineditor.lsp.provision.RuntimeDetector
 import org.example.kotlineditor.lsp.supervisor.SupervisorTimings
 import org.example.kotlineditor.model.CompletionResult
+import org.example.kotlineditor.model.LanguageServerInfo
 import org.example.kotlineditor.model.LanguageServerState
 import org.example.kotlineditor.model.TextChange
 import org.example.kotlineditor.testkit.lsp.FakeLanguageServerCommand
@@ -29,6 +30,7 @@ class DocumentSyncTest {
     private val data = createTempDirectory("lsp-data")
     private val file = project.resolve("index.php").toString()
     private var options = arrayOf<String>()
+    private var maxUnreadBytes = SupervisorTimings().maxUnreadBytes
     private val service by lazy {
         val fake =
             LanguageServerCandidate(
@@ -54,7 +56,13 @@ class DocumentSyncTest {
                 dataDirectory = data,
                 toolsDirectory = data.resolve("tools"),
                 candidates = CandidateRegistry(nothing, listOf(fake)),
-                timings = SupervisorTimings(idleStopMs = 500, initializeTimeoutMs = 20_000, firstBackoffMs = 100),
+                timings =
+                SupervisorTimings(
+                    idleStopMs = 500,
+                    initializeTimeoutMs = 20_000,
+                    firstBackoffMs = 100,
+                    maxUnreadBytes = maxUnreadBytes,
+                ),
                 completionTimeoutMs = 5_000,
             ),
         )
@@ -77,6 +85,8 @@ class DocumentSyncTest {
             Thread.sleep(20)
         }
     }
+
+    private fun server(): LanguageServerInfo = runBlocking { service.status(-1) }.servers.single()
 
     // A server just started may not have the documents yet: completion is retried until it is ready.
     private fun complete(version: Int, line: Int, column: Int): CompletionResult =
@@ -130,6 +140,38 @@ class DocumentSyncTest {
         assertEquals(listOf("before"), complete(2, 3, 2).items.map { it.label })
         service.changeDocument("s1", file, 3, listOf(TextChange(3, 0, 3, 2, "af")))
         assertEquals(listOf("after"), complete(3, 3, 2).items.map { it.label })
+    }
+
+    @Test
+    fun `a server that stops reading its input is restarted, with the documents opened again`() {
+        options = arrayOf("--stop-reading-on-change", "HANG")
+        maxUnreadBytes = 512L * 1024
+        service.use("s1", project.toString(), listOf(file))
+        service.openDocument("s1", project.toString(), file, 1, "<?php\nfunction before() {}\n")
+        awaitRunning()
+        val hung = server()
+        service.changeDocument("s1", file, 2, listOf(TextChange(2, 0, 2, 0, "// HANG\n")))
+        // Typed on a server that no longer reads: the pipe fills, then the changes wait, more than it may leave unread.
+        val comment = "/* ${"x".repeat(64 * 1024)} */\n"
+        val typed = 3..22
+        typed.forEach { version ->
+            service.changeDocument(
+                "s1",
+                file,
+                version,
+                listOf(TextChange(3, 0, 3, 0, comment)),
+            )
+        }
+        val deadline = System.currentTimeMillis() + WAIT_MS
+        while (server().generation == hung.generation || !running()) {
+            check(System.currentTimeMillis() < deadline) { "Not restarted: ${server()}" }
+            Thread.sleep(20)
+        }
+        assertTrue(server().pid != hung.pid, "the hung process was replaced")
+
+        // The new process got the text as it is now, and the changes that follow.
+        service.changeDocument("s1", file, 23, listOf(TextChange(0, 5, 0, 5, "\nfunction after() {}\naf")))
+        assertEquals(listOf("after"), complete(23, 2, 2).items.map { it.label })
     }
 
     @Test

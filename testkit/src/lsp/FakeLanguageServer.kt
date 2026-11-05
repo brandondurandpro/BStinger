@@ -39,7 +39,8 @@ import kotlin.system.exitProcess
  *   `--spike-then-plateau <spikeMb>:<plateauMb>:<spikeS>`, `--child-mb <n>` (a child process holding n MB);
  * - lifecycle: `--crash-on-start`, `--crash-after <n requests>` (exit code 3), `--hang-on-initialize`,
  *   `--ignore-shutdown`, `--crash-like-symfony` (crashes at start like phpactor: an error block, then the usage of
- *   its command);
+ *   its command), `--stop-reading-on-change <text>` (hangs, alive but no longer reading its stdin, once a
+ *   `didChange` inserts that text);
  * - output: `--garbage-stdout`, `--huge-message <mb>` (the hover answer), `--stderr-flood`;
  * - timing and questions: `--latency-ms <n>`, `--progress-on-references <ms>` (each search of references takes
  *   that long, within a "Finding references" progress, like phpactor), `--ask-configuration` (asks `workspace/configuration` after
@@ -141,6 +142,8 @@ object FakeLanguageServer {
         val blindUntilIndexed: Boolean = false,
         // With blindUntilIndexed: how long after initialized the indexing begins.
         val indexingStartMs: Long = INDEXING_START_MS,
+        // Hangs without reading stdin any more once a didChange carries this text.
+        val stopReadingOnChange: String? = null,
     ) {
         val allocates get() = leakMbPerSecond > 0 || sawtooth != null || spikeThenPlateau != null
 
@@ -183,6 +186,7 @@ object FakeLanguageServer {
                     index = "index" in values,
                     blindUntilIndexed = "blind-until-indexed" in values,
                     indexingStartMs = values["indexing-starts-after"]?.toLong() ?: INDEXING_START_MS,
+                    stopReadingOnChange = values["stop-reading-on-change"],
                 )
             }
 
@@ -201,6 +205,7 @@ object FakeLanguageServer {
                     "completion-items",
                     "without",
                     "indexing-starts-after",
+                    "stop-reading-on-change",
                 )
         }
     }
@@ -326,6 +331,8 @@ object FakeLanguageServer {
                     if (options.diagnostics) publishDiagnostics(message["params"]) else publishProblems()
                 }
                 "textDocument/didChange" -> {
+                    val marker = options.stopReadingOnChange
+                    if (marker != null && marker in message["params"].toString()) stopReading()
                     changed(message["params"])
                     if (!options.diagnostics) publishProblems()
                 }
@@ -379,6 +386,13 @@ object FakeLanguageServer {
                     }
                 else -> if (id != null) error(id, METHOD_NOT_FOUND, "Unknown method $method")
             }
+        }
+
+        // Alive, but reads nothing more: what the IDE writes fills the pipe, then its writes block.
+        private fun stopReading(): Nothing {
+            log.println("stopped reading")
+            log.flush()
+            while (true) Thread.sleep(Long.MAX_VALUE)
         }
 
         private fun shutdown() {
