@@ -19,6 +19,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.example.kotlineditor.model.ConnectionStatus
 import org.example.kotlineditor.model.NetworkInspector
+import org.example.kotlineditor.model.OutcomeUnknownException
 import org.example.kotlineditor.model.TerminalSnapshot
 import org.example.kotlineditor.telemetry.Attribute
 import org.example.kotlineditor.telemetry.Attributes
@@ -65,7 +66,8 @@ private const val REMOTE_ERROR = "RemoteException"
  * - A call never writes on its caller's thread: its request is queued, and a writer on [Dispatchers.IO] encodes,
  *   compresses and writes it (see [Outbox]).
  * - Requests are registered before being sent and stay registered until answered: when the link breaks they
- *   are simply sent again on the next connection, with the same id (the server deduplicates).
+ *   are simply sent again on the next connection, with the same id (the server deduplicates). When the server
+ *   restarted meanwhile it cannot: a mutation already sent then fails with [OutcomeUnknownException] instead.
  * - Streams (shell output) carry sequence numbers; out-of-order events are buffered, duplicates dropped, and
  *   after a reconnection the client asks the server to replay what it missed.
  */

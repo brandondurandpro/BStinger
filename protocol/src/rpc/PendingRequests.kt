@@ -1,6 +1,7 @@
 package org.example.kotlineditor.rpc
 
 import kotlinx.coroutines.CompletableDeferred
+import org.example.kotlineditor.model.OutcomeUnknownException
 import java.util.concurrent.ConcurrentHashMap
 
 // The connection number of a request not sent yet: connections are numbered from 1.
@@ -48,6 +49,14 @@ internal class PendingRequests {
             abandoned = true
             return sends > 0
         }
+
+        /** Like [abandon], but only when the request was written already; returns whether it was. */
+        @Synchronized
+        fun abandonIfSent(): Boolean {
+            val sent = sends > 0
+            if (sent) abandoned = true
+            return sent
+        }
     }
 
     fun register(frame: Frame): Pending = Pending(frame).also { requests[frame.id] = it }
@@ -66,6 +75,19 @@ internal class PendingRequests {
             .sortedBy { it.key }
             .map { it.value }
             .filterNot { it.result.isCompleted }
+
+    /**
+     * Fails the mutating requests already sent, with [OutcomeUnknownException]: the server that may have run them
+     * restarted, and the new one has no answer to give for them, while running them again could apply them twice.
+     */
+    fun failSentMutations() {
+        for (call in requests.values) {
+            val method = call.frame.method ?: continue
+            if (method.mutating && call.abandonIfSent()) {
+                call.result.completeExceptionally(OutcomeUnknownException(method.rpcName))
+            }
+        }
+    }
 
     fun failAll(cause: Throwable) = requests.values.forEach { it.result.completeExceptionally(cause) }
 }

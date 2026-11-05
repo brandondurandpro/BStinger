@@ -11,12 +11,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.put
+import org.example.kotlineditor.model.OutcomeUnknownException
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import kotlin.random.Random
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 private const val LARGE_TEXT = 32 * 1024 * 1024
@@ -153,5 +155,49 @@ class RpcClientTest {
                 assertEquals(sent.distinct(), sent, "no request is sent twice on connection $connection")
             }
             calls.forEach { it.cancel() }
+        }
+
+    @Test
+    fun `a sent mutation fails as unknown when the server restarted, a read is sent again`() =
+        runBlocking {
+            // The second connection reaches a new server: its session is not resumed.
+            val server = FakeServer(resumed = { false }).closedAfter()
+            val client = clientOf(server)
+            client.awaitConnected()
+            val created =
+                async(Dispatchers.IO) { runCatching { client.call(Method.CreateFile) { put("name", "once.txt") } } }
+            val read = async(Dispatchers.IO) { client.call(Method.Read) }
+            val sent = setOf(server.next().method, server.next().method)
+            assertEquals(setOf(Method.CreateFile, Method.Read), sent)
+            server.cutAll()
+
+            val failure = assertFailsWith<OutcomeUnknownException> { created.await().getOrThrow() }
+            assertTrue("fs/createFile" in failure.message.orEmpty(), failure.message)
+            val replayed = server.next()
+            assertEquals(2, replayed.connection)
+            assertEquals(Method.Read, replayed.method)
+            server.answer(replayed.id, "content")
+            assertEquals("\"content\"", read.await().toString())
+            delay(100)
+            assertTrue(server.requests.none { it.method == Method.CreateFile }, "the mutation is not run again")
+        }
+
+    @Test
+    fun `a mutation queued while the server was down is sent to the restarted server`() =
+        runBlocking<Unit> {
+            val server = FakeServer(resumed = { false }).closedAfter()
+            val client = clientOf(server)
+            client.awaitConnected()
+            val connected = client.connections.value
+            server.cutAll()
+            val created =
+                async(Dispatchers.IO, CoroutineStart.UNDISPATCHED) {
+                    client.call(Method.CreateFile) { put("name", "later.txt") }
+                }
+            withTimeout(WAIT_MS) { client.connections.first { it > connected } }
+            val request = server.next()
+            assertEquals(Method.CreateFile, request.method)
+            server.answer(request.id, "created")
+            assertEquals("\"created\"", created.await().toString())
         }
 }

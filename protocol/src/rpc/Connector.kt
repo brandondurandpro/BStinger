@@ -18,7 +18,8 @@ import java.net.Socket
 
 /**
  * Keeps one live connection to the server: connects, authenticates, has the [outbox] resend what is pending and send
- * the heartbeats, resumes streams, and starts over (with an increasing delay) whenever the link breaks.
+ * the heartbeats, resumes streams, and starts over (with an increasing delay) whenever the link breaks. When the server
+ * lost the session (it restarted), the mutations already sent fail instead of being sent again.
  */
 internal class Connector(
     private val address: InetSocketAddress,
@@ -154,7 +155,11 @@ internal class Connector(
                 val welcome = answer.payload.jsonObject
                 val id = welcome.string("session")
                 val resumed = welcome.bool("resumed")
-                if (!resumed && sessionId != null) streams.loseAll()
+                if (!resumed && sessionId != null) {
+                    // A new session: the server restarted or forgot this client, and with it what it ran for it.
+                    streams.loseAll()
+                    pending.failSentMutations()
+                }
                 sessionId = id
             }
 
