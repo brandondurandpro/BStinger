@@ -125,15 +125,6 @@ internal class RipgrepRunner(
             add(root.toString())
         }
 
-    // The directory ripgrep searches: the root, or the scope inside it (normalized as well).
-    private fun searchDirectory(query: RipgrepQuery): Path {
-        val scope = query.scope ?: return query.root
-        return query.root
-            .resolve(scope)
-            .toAbsolutePath()
-            .normalize()
-    }
-
     /**
      * Matching lines, as ripgrep finds them (several threads: files come in no particular order). The process is
      * killed with its children as soon as the collection stops early: limit reached (`take`), timeout, cancellation.
