@@ -3,6 +3,8 @@ package org.example.kotlineditor.server
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -27,10 +29,27 @@ internal class SearchRegistry(
 ) {
     private val searches = ConcurrentHashMap<Long, ServerSearch>()
 
-    /** Starts the search as the stream [id]; the one this id had before (never in practice) is stopped. */
-    fun start(id: Long, search: RipgrepSearch, root: FileEntry, options: FindOptions, limit: Int) {
+    /** Starts the search of [search] as the stream [id]; the one this id had before (never in practice) stops. */
+    fun start(
+        id: Long,
+        search: RipgrepSearch,
+        root: FileEntry,
+        options: FindOptions,
+        limit: Int,
+    ) {
+        start(id, root, options, limit) { search.searchBatches(root, options, limit) }
+    }
+
+    /** Starts [batches] as the stream [id]: the source of the batches, for the tests. */
+    fun start(
+        id: Long,
+        root: FileEntry,
+        options: FindOptions,
+        limit: Int,
+        batches: () -> Flow<SearchBatch>,
+    ) {
         stop(id)
-        searches[id] = ServerSearch(id, scope, push, search, root, options, limit)
+        searches[id] = ServerSearch(id, scope, push, root, options, limit, batches)
     }
 
     fun stop(id: Long) {
@@ -56,10 +75,10 @@ private class ServerSearch(
     private val id: Long,
     scope: CoroutineScope,
     private val push: (Frame) -> Unit,
-    search: RipgrepSearch,
     root: FileEntry,
     options: FindOptions,
     limit: Int,
+    batches: () -> Flow<SearchBatch>,
 ) {
     private val lock = Any()
     private val events = HashMap<Long, Frame>()
@@ -72,7 +91,7 @@ private class ServerSearch(
         job =
             scope.launch {
                 try {
-                    search.searchBatches(root, options, limit).collect { batch -> publish(batch) }
+                    batches().collect { batch -> publish(batch) }
                 } catch (expected: CancellationException) {
                     throw expected
                 } catch (@Suppress("TooGenericExceptionCaught") failure: Throwable) {

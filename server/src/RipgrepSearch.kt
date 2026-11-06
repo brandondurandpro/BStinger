@@ -102,10 +102,12 @@ class RipgrepSearch internal constructor(
         var delivered = 0
         val succeeded =
             try {
-                ripgrepBatches(executable, root, options, limit).onEach { batch ->
-                    sequence = batch.seq
-                    delivered = batch.total
-                }.collect()
+                val counting =
+                    ripgrepBatches(executable, root, options, limit).onEach { batch ->
+                        sequence = batch.seq
+                        delivered = batch.total
+                    }
+                counting.collect { emit(it) }
                 true
             } catch (expected: IOException) {
                 false
