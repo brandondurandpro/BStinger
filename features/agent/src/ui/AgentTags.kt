@@ -18,6 +18,9 @@ object AgentTags {
     const val AGENT_STOP = "agent.stop"
     const val AGENT_THINKING = "agent.thinking"
     const val AGENT_NAME = "agent.name"
+    const val AGENT_AGENT = "agent.agent"
+    const val AGENT_AGENT_DEFAULT = "agent.agent.default"
+    const val AGENT_REGISTRY = "agent.registry"
     const val AGENT_MODEL = "agent.model"
     const val AGENT_PERMISSIONS = "agent.permissions"
     const val AGENT_EFFORT = "agent.effort"
@@ -44,6 +47,9 @@ object AgentTags {
     fun agentView(id: Int) = "agent.view.$id"
 
     fun agentMessage(index: Int) = "agent.message.$index"
+
+    /** An entry of the menu of the agent of the conversation, by its registry id (`fake-agent`). */
+    fun agentAgent(id: String) = "agent.agent:$id"
 
     /** A model of the menu of the model of the session, by its value (`fake-smart`). */
     fun agentModel(value: String) = "agent.model:$value"

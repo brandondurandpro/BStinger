@@ -650,8 +650,17 @@ data class FakeAgentOptions(
 
 /** Command lines that start a [FakeAgent] in a new JVM, with the classpath of the running tests. */
 object FakeAgentCommand {
+    // One argument file per options line, built once: a command built twice (the IDE rebuilds the agent of a
+    // conversation for every request it sends) is the same command line twice, and compares equal.
+    private val built = ConcurrentHashMap<String, List<String>>()
+
     /** `java @argfile FakeAgent <options>`; the classpath goes through an argument file, too long for Windows. */
     fun command(vararg options: String): List<String> {
+        val key = options.joinToString("\u0000")
+        return built.computeIfAbsent(key) { lineOf(*options) }
+    }
+
+    private fun lineOf(vararg options: String): List<String> {
         val java =
             ProcessHandle
                 .current()
