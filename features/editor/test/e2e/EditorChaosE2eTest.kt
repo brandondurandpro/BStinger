@@ -113,6 +113,9 @@ class EditorChaosE2eTest {
             app.network.dropFromServer = false
             app.network.cutAll()
             awaitNoTag(EditorTags.tabModified("README.md"))
+            // The write replayed once, with the version it checked: the server found the same bytes on its
+            // disk and answered, so the IDE knows the file as written, and no conflict was seen for this one.
+            awaitNoTag(EditorTags.DISK_CONFLICT)
             val tab = app.project.editor.activeTab
             val document = tab?.document
             assertNull(document?.saveError)
@@ -151,12 +154,9 @@ class EditorChaosE2eTest {
             save()
             val tab = checkNotNull(app.project.editor.activeTab)
             val document = checkNotNull(tab.document)
-            // The last save done: none runs (the stamp is odd while one does) and nothing is left to save. The second
-            // save may have been folded into the first, when it was asked before the first one started.
+            // The last save ran: nothing is left to save, and the version of the disk was recorded by the save.
             awaitCondition(LARGE_SAVE_TIMEOUT) {
-                val stamp = document.saveStamp
-                val saving = stamp % 2 == 1
-                stamp > 0 && !saving && !document.isModified
+                !document.isModified && document.diskVersion != null && !document.diskConflict
             }
             assertEquals("w", project.read("large.txt"))
             awaitNoTag(EditorTags.tabModified("large.txt"))
@@ -182,5 +182,54 @@ class EditorChaosE2eTest {
             app.network.dropFromServer = false
             awaitNoTag(EditorTags.tabModified("README.md"))
             assertEquals("qw$readme", project.read("README.md"))
+        }
+
+    @Test
+    fun `a save arriving after another program wrote the file is refused, and the user still chooses`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, chaos = true)
+            app.network.latencyMs = SLOW_LINK_MS
+            openFromTree("README.md")
+            typeAtStart(Key.Q)
+            save()
+            // While the save travels, another program writes the file: the server checks the version the save
+            // carries, refuses it, and wrote nothing — the file keeps what the other program wrote.
+            project.file("README.md", "written by another program\n")
+            awaitTag(EditorTags.DISK_CONFLICT)
+            awaitCondition { project.read("README.md") == "written by another program\n" }
+            val tab = app.project.editor.activeTab
+            val document = tab?.document
+            assertTrue(checkNotNull(document).isModified, "The refused save did not leave the document to save")
+            // Nothing is written for its own sake while the user thinks: a further change is seen by the tree.
+            project.file("Witness.txt", "class Witness\n")
+            awaitTag(TreeTags.treeRow("Witness.txt"))
+            assertEquals("written by another program\n", project.read("README.md"))
+            // The user chooses these edits: they are written over what the other program left, and the tab is
+            // then saved.
+            onNodeWithTag(EditorTags.DISK_KEEP).performClick()
+            awaitCondition { project.read("README.md") == "q$readme" }
+            awaitNoTag(EditorTags.DISK_CONFLICT)
+            awaitCondition { !checkNotNull(document).isModified }
+        }
+
+    @Test
+    fun `a save refused for a conflict still offers the disk to the user`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, chaos = true)
+            app.network.latencyMs = SLOW_LINK_MS
+            openFromTree("README.md")
+            typeAtStart(Key.Q)
+            save()
+            project.file("README.md", "written by another program\n")
+            awaitTag(EditorTags.DISK_CONFLICT)
+            // The user chooses the disk: the file is read again, its content shown, and nothing of the refused
+            // save is anywhere in the way.
+            onNodeWithTag(EditorTags.DISK_RELOAD).performClick()
+            val tab = app.project.editor.activeTab
+            val loaded = tab?.document
+            awaitCondition { loaded?.lines?.firstOrNull() == "written by another program" }
+            awaitNoTag(EditorTags.DISK_CONFLICT)
+            awaitNoTag(EditorTags.SAVE_ERROR)
+            awaitCondition { !checkNotNull(loaded).isModified }
         }
 }

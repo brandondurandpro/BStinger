@@ -14,10 +14,14 @@ import androidx.compose.ui.test.withKeyDown
 import org.example.kotlineditor.ui.EditorTags
 import org.example.kotlineditor.ui.GitTags
 import org.example.kotlineditor.ui.TreeTags
+import java.nio.file.Files
+import java.nio.file.attribute.FileTime
+import java.security.MessageDigest
 import kotlin.io.path.deleteExisting
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /**
  * Other programs change the disk while the window keeps the focus (a terminal, a build, an AI agent, `git` in a
@@ -49,6 +53,18 @@ class DiskChangesE2eTest {
         onNodeWithTag(TreeTags.TREE).performClick()
         onNodeWithTag(TreeTags.TREE).performKeyInput { withKeyDown(Key.AltLeft) { pressKey(Key.Nine) } }
         awaitTag(GitTags.GIT_PANEL)
+    }
+
+    private fun sha256Of(relative: String): String {
+        val bytes = Files.readAllBytes(project.root.resolve(relative))
+        val digest = MessageDigest.getInstance("SHA-256").digest(bytes)
+        return digest.joinToString(separator = "") { byte -> "%02x".format(byte) }
+    }
+
+    private fun touch(relative: String) {
+        val path = project.root.resolve(relative)
+        val later = Files.getLastModifiedTime(path).toMillis() + 2_000L
+        Files.setLastModifiedTime(path, FileTime.fromMillis(later))
     }
 
     @Test
@@ -229,5 +245,76 @@ class DiskChangesE2eTest {
                 project.file("docs/back\\slash.md", "Notes\n")
                 awaitTag(TreeTags.treeRow("docs/back\\slash.md"))
             }
+        }
+
+    @Test
+    fun `a change of the line endings alone of an open file is followed, its document holding the version read`() =
+        runComposeUiTest {
+            val app = launchWithProject(project)
+            openFromTree("README.md")
+            val readme = project.read("README.md")
+            // Another program changes only the terminators of the lines: the bytes then differ, the text does not.
+            project.file("README.md", readme.replace("\n", "\r\n"))
+            awaitCondition {
+                val tab = app.project.editor.activeTab
+                val document = tab?.document
+                val known = document?.diskVersion
+                known?.sha256 == sha256Of("README.md")
+            }
+            awaitNoTag(EditorTags.DISK_CONFLICT)
+        }
+
+    @Test
+    fun `a change of the line endings alone of a file with unsaved edits is a conflict`() =
+        runComposeUiTest {
+            launchWithProject(project)
+            openFromTree("README.md")
+            onNodeWithTag(EditorTags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.MoveHome) } }
+            typeCode("z")
+            // The same lines, terminated as Windows does: the bytes are no more the ones the document was read
+            // from, while the file on the disk keeps the lines the user typed away from.
+            project.file("README.md", project.read("README.md").replace("\n", "\r\n"))
+            awaitTag(EditorTags.DISK_CONFLICT)
+            // The user's choice is not due yet: the file is not written over by itself.
+            onNodeWithTag(EditorTags.EDITOR).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.S) } }
+            project.file("Witness.kt", "class Witness\n")
+            awaitTag(TreeTags.treeRow("Witness.kt"))
+            assertTrue(
+                project.read("README.md").startsWith("# Demo\r\n"),
+                project.read("README.md"),
+            )
+        }
+
+    @Test
+    fun `a mere touch of an open file with unsaved edits is not a conflict, and its save still works`() =
+        runComposeUiTest {
+            val app = launchWithProject(project)
+            openFromTree("README.md")
+            onNodeWithTag(EditorTags.EDITOR).performClick()
+            onNodeWithTag(EditorTags.EDITOR).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.MoveHome) } }
+            typeCode("z")
+            val document =
+                checkNotNull(
+                    app.project.editor.activeTab
+                        ?.document,
+                )
+            val versionBefore = document.diskVersion
+            val readme = project.read("README.md")
+            val edited = "z$readme"
+            // Another program touches the file: only its time changes, its bytes are the ones already read.
+            touch("README.md")
+            // The IDE synchronizes with the disk, as when its window is back in front.
+            runOnUiThread { app.project.synchronize() }
+            // The IDE saw the file: its version is now the one of the bytes the file holds, decided on the
+            // content, and nothing is said of a touch.
+            awaitCondition { document.diskVersion != null && document.diskVersion != versionBefore }
+            awaitNoTag(EditorTags.DISK_CONFLICT)
+            assertTrue(document.isModified)
+            assertEquals("z$readme", document.lines.joinToString("\n"))
+            // Saving then works: the bytes are still what the version was read from, and the server answers.
+            onNodeWithTag(EditorTags.EDITOR).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.S) } }
+            awaitCondition { project.read("README.md") == edited && !document.isModified }
+            awaitNoTag(EditorTags.DISK_CONFLICT)
         }
 }
