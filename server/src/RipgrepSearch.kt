@@ -4,6 +4,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -112,5 +113,14 @@ class RipgrepSearch internal constructor(
     private companion object {
         /** Same preview length as the built-in search. */
         const val MAX_LINE_PREVIEW = 500
+
+        /** Hits that fill one batch of the streamed Find in Files. */
+        const val BATCH_HITS = 32
+
+        /** Longest a batch waits to fill up: whichever comes first between [BATCH_HITS] and [BATCH_INTERVAL]. */
+        const val BATCH_INTERVAL_NANOS = 50L * 1_000_000
+
+        /** ripgrep matches buffered between the pump and the batching, a few batches' worth. */
+        const val INBOX = 64
     }
 }
