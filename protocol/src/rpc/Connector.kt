@@ -31,7 +31,7 @@ internal class Connector(
     private val status: MutableStateFlow<ConnectionStatus>,
     private val onStatus: (ConnectionStatus) -> Unit,
     private val tap: NetworkTap,
-    private val resume: (streamId: Long, lastSeq: Long) -> Unit,
+    private val resume: (StreamRegistry.Resume) -> Unit,
 ) {
     /** Number of connections opened so far: one more at each reconnection. */
     val connections = MutableStateFlow(0L)
@@ -110,7 +110,7 @@ internal class Connector(
         report(ConnectionStatus.Connected)
         val connection = connections.updateAndGet { it + 1 }
         try {
-            streams.positions().forEach { (id, lastSeq) -> resume(id, lastSeq) }
+            streams.resumes().forEach { resume(it) }
             watch(opened, connection)
         } catch (expected: IOException) {
             // Link lost (closed, reset, or silent for too long): the loop reconnects.

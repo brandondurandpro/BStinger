@@ -39,8 +39,9 @@ import java.io.OutputStream
  * - [FrameKind.Hello] is the request `connection/hello` with id [HELLO_ID]; its answer is [FrameKind.Welcome] (a
  *   result) or [FrameKind.Reject] (an error, then the connection is closed).
  * - [FrameKind.Request], [FrameKind.Response] and [FrameKind.Error] are requests and their answers.
- * - [FrameKind.Event] and [FrameKind.End] are the notifications `terminal/snapshot` and `terminal/end`, whose
- *   `stream` parameter is the frame id.
+ * - [FrameKind.Event] and [FrameKind.End] are the server-pushed notifications of a stream: a terminal's screen
+ *   (`terminal/snapshot` and `terminal/end`) or the batches of a Find in Files (`search/findInFilesStream`),
+ *   whose `stream` parameter is the frame id.
  * - [FrameKind.Ping], [FrameKind.Pong] and [FrameKind.Cancel] are the notifications `$/ping`, `$/pong` and
  *   `$/cancelRequest` (as in LSP, its `id` parameter is the request to cancel).
  */
@@ -325,6 +326,16 @@ enum class Method(
 
     /** Full-text search in a project. */
     FindInFiles("search/findInFiles", mutating = false),
+
+    /**
+     * Full-text search in a project, streamed as the server finds matches. The request id becomes the id of
+     * its [SearchBatch] stream, like the one of [TerminalStart]: a retry that lost its answer gets the cached
+     * one instead of (silently) restarting the search under the same id.
+     */
+    FindInFilesStream("search/findInFilesStream", mutating = true),
+
+    /** Replays the batches of a Find in Files stream after its last sequence number (a reconnection). */
+    FindInFilesResume("search/findInFilesResume", mutating = false),
 
     /** Declarations of a project. */
     Symbols("search/symbols", mutating = false),
