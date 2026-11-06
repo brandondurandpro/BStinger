@@ -11,8 +11,8 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
-import androidx.compose.ui.test.printToString
 import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.test.printToString
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.test.withKeyDown
 import org.example.kotlineditor.server.ripgrep.RipgrepSettings
@@ -85,15 +85,17 @@ class SearchOptionsE2eTest {
             countIs { onNodeWithTag(TreeTags.FIND_IN_FILES_COUNT).assertTextContains("2 matches in 1 file") }
             awaitTag(TreeTags.FIND_IN_FILES_WHOLE_WORD).performClick()
             countIs { onNodeWithTag(TreeTags.FIND_IN_FILES_COUNT).assertTextContains("1 match in 1 file") }
-            awaitCondition { runCatching {
-                onNodeWithTag(TreeTags.FIND_IN_FILES_ENGINE).assertTextContains("by ripgrep")
-            }.isSuccess }
+            awaitCondition {
+                runCatching {
+                    onNodeWithTag(TreeTags.FIND_IN_FILES_ENGINE).assertTextContains("by ripgrep")
+                }.isSuccess
+            }
         }
 
     @Test
     fun `a regular expression matches what the literal text does not`() =
         runComposeUiTest {
-            write("src/Chips.txt", "bit\nbot\nbut\n")
+            write("src/Chips.txt", "bit", "bot", "but")
             launchWithProject(project)
             openFindInFiles()
             type("b.t")
@@ -106,7 +108,7 @@ class SearchOptionsE2eTest {
     @Test
     fun `a broken regular expression shows its error, and the search recovers`() =
         runComposeUiTest {
-            write("src/Chips.txt", "bit\nbot\nneedle\n")
+            write("src/Chips.txt", "bit", "bot", "needle")
             launchWithProject(project)
             openFindInFiles()
             awaitTag(TreeTags.FIND_IN_FILES_REGEX).performClick()
@@ -180,8 +182,10 @@ class SearchOptionsE2eTest {
             openFindInFiles()
             type("Hello")
             countIs { onNodeWithTag(TreeTags.FIND_IN_FILES_COUNT).assertTextContains("2 matches in 2 files") }
-            awaitCondition { runCatching {
-                onNodeWithTag(TreeTags.FIND_IN_FILES_ENGINE).assertTextContains("by the built-in engine")
-            }.isSuccess }
+            awaitCondition {
+                runCatching {
+                    onNodeWithTag(TreeTags.FIND_IN_FILES_ENGINE).assertTextContains("by the built-in engine")
+                }.isSuccess
+            }
         }
 }

@@ -96,7 +96,10 @@ class SearchChaosE2eTest {
             app.network.latencyMs = 60
             openFindInFiles()
             onNodeWithTag(TreeTags.FIND_IN_FILES_INPUT).performTextInput("needle")
-            awaitCondition { app.project.findInFiles.results.isNotEmpty() }
+            awaitCondition {
+                app.project.findInFiles.results
+                    .isNotEmpty()
+            }
             // The stream is still running: the connection breaks after the server ran its last request but before
             // the answers and the batches arrived, and the connection itself cuts with them.
             app.network.dropFromServer = true
@@ -106,7 +109,7 @@ class SearchChaosE2eTest {
             assertComplete(app, expected)
             awaitCondition {
                 runCatching {
-                    onNodeWithTag(TreeTags.FIND_IN_FILES_COUNT).assertTextContains("$expected matches")
+                    onNodeWithTag(TreeTags.FIND_IN_FILES_COUNT).assertTextEquals("$expected matches in 10 files")
                 }.isSuccess
             }
         }
@@ -119,11 +122,17 @@ class SearchChaosE2eTest {
             app.network.latencyMs = 150
             openFindInFiles()
             onNodeWithTag(TreeTags.FIND_IN_FILES_INPUT).performTextInput("needle")
-            awaitCondition { app.project.findInFiles.results.isNotEmpty() }
+            awaitCondition {
+                app.project.findInFiles.results
+                    .isNotEmpty()
+            }
             app.process.restart()
             awaitCondition { app.project.findInFiles.finished }
             assertComplete(app, expected)
-            assertTrue(app.project.findInFiles.error == null, "a restart is not a failure: ${app.project.findInFiles.error}")
+            assertTrue(
+                app.project.findInFiles.error == null,
+                "a restart is not a failure: ${app.project.findInFiles.error}",
+            )
         }
 
     @Test
@@ -134,7 +143,11 @@ class SearchChaosE2eTest {
             app.network.latencyMs = 40
             openFindInFiles()
             onNodeWithTag(TreeTags.FIND_IN_FILES_INPUT).performTextInput("needle")
-            awaitCondition { app.project.findInFiles.results.isNotEmpty() && !app.project.findInFiles.finished }
+            awaitCondition {
+                app.project.findInFiles.results
+                    .isNotEmpty() &&
+                    !app.project.findInFiles.finished
+            }
             app.network.goDown()
             awaitReconnecting()
             app.network.comeBack()

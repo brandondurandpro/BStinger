@@ -99,7 +99,10 @@ internal class RipgrepRunner(
     // The directory ripgrep searches: the root, or the scope inside it (normalized as well).
     private fun searchDirectory(query: RipgrepQuery): Path {
         val scope = query.scope ?: return query.root
-        return query.root.resolve(scope).toAbsolutePath().normalize()
+        return query.root
+            .resolve(scope)
+            .toAbsolutePath()
+            .normalize()
     }
 
     /**

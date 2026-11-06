@@ -4,7 +4,6 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
@@ -24,7 +23,7 @@ import org.example.kotlineditor.telemetry.endAtFrame
 import org.example.kotlineditor.telemetry.sizeOf
 import java.io.IOException
 
-/** A server's stream that failed is started again, once; beyond it the blocking search keeps working. */
+// A server's stream that failed is started again, once; beyond it the blocking search keeps working.
 private const val RESTARTS = 1
 
 private val RESULTS_FIRST = compareBy<SearchHit> { it.entry.path }.thenBy { it.line }
@@ -75,46 +74,47 @@ class FindInFilesSearch(
         job = scope.launch { run(options, token) }
     }
 
-    /**
-     * One search, from typing to its last batch: streamed, with the server's replay, the restart and the
-     * blocking search as the fallbacks. An empty text ends at once with no match, like the plain search did.
-     */
+    // One search, from typing to its last batch: streamed, with the server's replay, the restart and the
+    // blocking search as the fallbacks. An empty text ends at once with no match, like the plain search did.
     private suspend fun run(options: FindOptions, token: Int, restarts: Int = RESTARTS) {
         begin()
         if (options.text.isEmpty()) return
         span = ClientTelemetry.start(Operation.SearchFindInFiles)
+        streamOf(options, token, restarts)
+    }
+
+    // The search's source of results, and the fallbacks when it cannot run or does not end: the blocking search
+    // takes a search over, once the stream (the server restarted, its streams with it) ended without its done
+    // batch, and with a newer search running it does not run at all.
+    private suspend fun streamOf(options: FindOptions, token: Int, restarts: Int) {
         val stream = search.findInFilesStream(root, options, DEFAULT_TEXT_HITS)
         if (stream == null) {
             blocking(options, token)
-            return
-        }
-        streamSearch(stream.batches, token)
-        if (generation != token || finished) return
-        // The stream ended before its done batch: its search is gone (the server restarted, its streams with
-        // it), and it runs again once; beyond that, or with a newer search running, the blocking one takes it.
-        if (restarts > 0) {
-            run(options, token, restarts = restarts - 1)
         } else {
-            blocking(options, token)
+            streamSearch(stream.batches, token)
+            if (generation == token && !finished) {
+                if (restarts > 0) {
+                    run(options, token, restarts = restarts - 1)
+                } else {
+                    blocking(options, token)
+                }
+            }
         }
     }
 
     // The collect of one stream: over when its done batch arrives; over without one when the server lost it.
     private suspend fun streamSearch(batches: Flow<SearchBatch>, token: Int) {
-        try {
-            batches.collect { batch -> absorb(batch, token) }
-        } catch (expected: CancellationException) {
-            throw expected
-        }
+        batches.collect { batch -> absorb(batch, token) }
     }
 
-    /** One more batch: more hits below the popup, then the end of the search with its engine and error. */
+    // One more batch: more hits below the popup, then the end of the search with its engine and error.
     private fun absorb(batch: SearchBatch, token: Int) {
         if (token != generation) return
         if (batch.hits.isNotEmpty()) {
-            val more = batch.hits.map { hit ->
-                SearchHit(hit.entry, fileIndex.relativePath(hit.entry), hit.line, hit.column, hit.lineText)
-            }
+            val more =
+                batch.hits.map { hit ->
+                    SearchHit(hit.entry, fileIndex.relativePath(hit.entry), hit.line, hit.column, hit.lineText)
+                }
             results = results + more
         }
         if (batch.error != null) error = batch.error

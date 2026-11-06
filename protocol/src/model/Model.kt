@@ -78,7 +78,10 @@ data class FindOptions(
 
 /** Which engine ran a Find in Files: the built-in one takes over whenever ripgrep cannot. */
 enum class SearchEngine {
+    /** The native ripgrep binary, downloaded on demand, that honours the ignores of the repository. */
     Ripgrep,
+
+    /** The built-in engine of the server, the fallback whenever ripgrep cannot run at all. */
     BuiltIn,
 }
 

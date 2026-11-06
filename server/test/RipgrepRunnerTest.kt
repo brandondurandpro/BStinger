@@ -70,7 +70,8 @@ class RipgrepRunnerTest {
         val plainGlobAt = indexOfGlob(arguments, "*.kt")
         val ignoredGlobs = IGNORED_DIRECTORIES.map { indexOfGlob(arguments, "!$it/") }
         assertTrue(ignoredGlobs.all { it >= 0 }, "expected every ignored directory to be excluded in $arguments")
-        assertTrue(plainGlobAt > (ignoredGlobs.maxOrNull() ?: 0), "expected '*.kt' after them in $arguments")
+        val highestIgnored = ignoredGlobs.maxOrNull() ?: 0
+        assertTrue(plainGlobAt > highestIgnored, "expected '*.kt' after them in $arguments")
     }
 
     @Test

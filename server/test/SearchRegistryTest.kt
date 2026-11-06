@@ -8,11 +8,10 @@ import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
-import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.serialization.json.jsonObject
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.FindOptions
 import org.example.kotlineditor.model.SearchBatch
@@ -22,7 +21,6 @@ import org.example.kotlineditor.rpc.Frame
 import org.example.kotlineditor.rpc.FrameKind
 import org.example.kotlineditor.rpc.long
 import org.example.kotlineditor.rpc.searchBatch
-import kotlinx.serialization.json.jsonObject
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -36,22 +34,24 @@ private const val TIMEOUT = 5_000L
 
 private fun hit(line: Int) = TextMatch(FileEntry("/p/a.txt", "a.txt", false), line, 0, "needle here")
 
-/** A search of the registry: [count] batches of [perBatch] hits (one per line), then the batch that closes it. */
-private fun searchOf(count: Int, perBatch: Int, pauseMillis: Long = 0): Flow<SearchBatch> = flow {
-    for (seq in 1..count) {
-        if (pauseMillis > 0) delay(pauseMillis)
-        val hits = (0 until perBatch).map(::hit)
-        emit(SearchBatch(seq.toLong(), hits, done = false, total = seq * perBatch, engine = null))
+// A search of the registry: [count] batches of [perBatch] hits (one per line), then the batch that closes it.
+private fun searchOf(count: Int, perBatch: Int, pauseMillis: Long = 0): Flow<SearchBatch> =
+    flow {
+        for (seq in 1..count) {
+            if (pauseMillis > 0) delay(pauseMillis)
+            val hits = (0 until perBatch).map(::hit)
+            emit(SearchBatch(seq.toLong(), hits, done = false, total = seq * perBatch, engine = null))
+        }
+        val done =
+            SearchBatch(
+                (count + 1).toLong(),
+                emptyList(),
+                done = true,
+                total = count * perBatch,
+                engine = SearchEngine.BuiltIn,
+            )
+        emit(done)
     }
-    val done = SearchBatch(
-        (count + 1).toLong(),
-        emptyList(),
-        done = true,
-        total = count * perBatch,
-        engine = SearchEngine.BuiltIn,
-    )
-    emit(done)
-}
 
 /** What the registry pushed, in order; each Event frame's batch and each End frame's seq at hand. */
 private class Recorder {
@@ -64,8 +64,13 @@ private class Recorder {
     fun batches(): List<SearchBatch> =
         frames
             .filter { it.kind == FrameKind.Event }
-            .map { it.payload.jsonObject.get("batch")?.searchBatch() }
-            .filterNotNull()
+            .mapNotNull(::batchOf)
+
+    // The batch behind an event frame, null for the frames that carry something else than a batch.
+    private fun batchOf(frame: Frame): SearchBatch? {
+        val batch = frame.payload.jsonObject.get("batch") ?: return null
+        return batch.searchBatch()
+    }
 
     fun endSeqs(): List<Long> =
         frames
@@ -87,7 +92,7 @@ class SearchRegistryTest {
         scope.cancel()
     }
 
-    /** Waits, up to a sane delay, until [condition] holds: the pushes of the search arrive on a coroutine. */
+    // Waits, up to a sane delay, until [condition] holds: the pushes of the search arrive on a coroutine.
     private suspend fun awaitUntil(condition: () -> Boolean) {
         withTimeout(TIMEOUT) {
             while (!condition()) {

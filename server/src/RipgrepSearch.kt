@@ -2,7 +2,9 @@ package org.example.kotlineditor.server
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.ProducerScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flow
@@ -88,31 +90,41 @@ class RipgrepSearch internal constructor(
      * When ripgrep stopped after having found matches, the search closes with what it found and an error:
      * replaying the built-in search would duplicate the hits that were sent.
      */
-    fun searchBatches(root: FileEntry, options: FindOptions, limit: Int): Flow<SearchBatch> = flow {
-        if (options.text.isEmpty() || limit <= 0) {
-            emit(SearchBatch(1, emptyList(), done = true, total = 0, engine = SearchEngine.BuiltIn))
-            return@flow
+    fun searchBatches(root: FileEntry, options: FindOptions, limit: Int): Flow<SearchBatch> =
+        flow {
+            val plain = options.text.isEmpty() || limit <= 0
+            val executable = if (plain) null else ripgrep()
+            when {
+                plain -> emit(SearchBatch(1, emptyList(), done = true, total = 0, engine = SearchEngine.BuiltIn))
+                executable == null -> fromLocal(root, options, limit).collect { emit(it) }
+                else -> streamFrom(executable, root, options, limit)
+            }
         }
-        val executable = ripgrep()
-        if (executable == null) {
-            fromLocal(root, options, limit).collect { emit(it) }
-            return@flow
-        }
+
+    // One ripgrep search, streamed: when its process died (an IOException) with nothing found, the built-in
+    // engine runs the same search through [fromLocal], in the same batches; when it died after matches, the
+    // search closes with what it found and an error: replaying there would duplicate the hits already sent.
+    private suspend fun FlowCollector<SearchBatch>.streamFrom(
+        executable: RipgrepBinary,
+        root: FileEntry,
+        options: FindOptions,
+        limit: Int,
+    ) {
         var sequence = 0L
         var delivered = 0
         val succeeded =
             try {
-                val counting =
+                val counted =
                     ripgrepBatches(executable, root, options, limit).onEach { batch ->
                         sequence = batch.seq
                         delivered = batch.total
                     }
-                counting.collect { emit(it) }
+                counted.collect { emit(it) }
                 true
             } catch (expected: IOException) {
                 false
             }
-        if (succeeded) return@flow
+        if (succeeded) return
         if (delivered == 0) {
             fromLocal(root, options, limit).collect { emit(it) }
         } else {
@@ -124,24 +136,30 @@ class RipgrepSearch internal constructor(
 
     // The built-in engine, in the same batches as the streamed one: the sequence numbers, the engine of the batch
     // that closes the search, and an error batch for a query it cannot run (an invalid regular expression).
-    private fun fromLocal(root: FileEntry, options: FindOptions, limit: Int): Flow<SearchBatch> = flow {
-        var sequence = 0L
-        var total = 0
-        try {
-            fallback.matchBatches(root, options, limit).collect { matches ->
-                sequence++
-                total += matches.size
-                emit(SearchBatch(sequence, matches, done = false, total = total, engine = null))
-            }
-        } catch (failure: IllegalArgumentException) {
-            val error = failure.message ?: failure::class.simpleName.orEmpty()
+    private fun fromLocal(root: FileEntry, options: FindOptions, limit: Int): Flow<SearchBatch> =
+        flow {
+            var sequence = 0L
+            var total = 0
+            val failure =
+                try {
+                    fallback.matchBatches(root, options, limit).collect { matches ->
+                        sequence++
+                        total += matches.size
+                        emit(SearchBatch(sequence, matches, done = false, total = total, engine = null))
+                    }
+                    null
+                } catch (failure: IllegalArgumentException) {
+                    failure.message ?: failure::class.simpleName.orEmpty()
+                }
             sequence++
-            emit(SearchBatch(sequence, emptyList(), done = true, total = total, engine = null, error = error))
-            return@flow
+            val closing =
+                if (failure == null) {
+                    SearchBatch(sequence, emptyList(), done = true, total = total, engine = SearchEngine.BuiltIn)
+                } else {
+                    SearchBatch(sequence, emptyList(), done = true, total = total, engine = null, error = failure)
+                }
+            emit(closing)
         }
-        sequence++
-        emit(SearchBatch(sequence, emptyList(), done = true, total = total, engine = SearchEngine.BuiltIn))
-    }
 
     // ripgrep's matches, in batches of [BATCH_HITS] hits or every [BATCH_INTERVAL] (whichever comes first), then
     // the batch that closes the search with its total. Fails with the error of a query ripgrep refuses to run.
@@ -150,9 +168,9 @@ class RipgrepSearch internal constructor(
         root: FileEntry,
         options: FindOptions,
         limit: Int,
-    ): Flow<SearchBatch> = channelFlow {
-        val inbox = Channel<RipgrepMatch>(INBOX)
-        val pump =
+    ): Flow<SearchBatch> =
+        channelFlow {
+            val inbox = Channel<RipgrepMatch>(INBOX)
             launch {
                 val runner = RipgrepRunner(executable.path, maxFileSize, onStart = onStart)
                 try {
@@ -163,47 +181,60 @@ class RipgrepSearch internal constructor(
                     inbox.close(expected)
                 }
             }
-        val pending = ArrayList<TextMatch>()
+            batchesOf(inbox)
+        }
+
+    // Sends the matches of one ripgrep run as they come: a batch closes on [BATCH_HITS] hits or when
+    // [BATCH_INTERVAL] passed since the previous one, whichever first, and the batch that closes the search
+    // closes the flow. The failure of ripgrep fails the search with it.
+    private suspend fun ProducerScope<SearchBatch>.batchesOf(inbox: Channel<RipgrepMatch>) {
+        val waiting = ArrayList<TextMatch>()
         var sequence = 0L
         var total = 0
         var nextBatch = System.nanoTime() + BATCH_INTERVAL_NANOS
 
-        // Flushes the pending hits (the batch is full, or its delay expired) and arms the next delay.
-        suspend fun flushPending() {
-            sequence++
-            send(SearchBatch(sequence, pending.toList(), done = false, total = total, engine = null))
-            pending.clear()
+        // A batch of the moment closes: what ripgrep found and waits is sent, and the delay of the next one armed.
+        suspend fun closeBatch() {
+            if (waiting.isNotEmpty()) {
+                sequence++
+                send(SearchBatch(sequence, waiting.toList(), done = false, total = total, engine = null))
+                waiting.clear()
+            }
             nextBatch = System.nanoTime() + BATCH_INTERVAL_NANOS
         }
 
-        while (true) {
+        var running = true
+        var failure: Throwable? = null
+        while (running) {
             val dueIn = nextBatch - System.nanoTime()
             val reception =
                 if (dueIn > 0) {
                     withTimeoutOrNull(dueIn) { inbox.receiveCatching() }
                 } else {
-                    null
+                    inbox.receiveCatching()
                 }
             val match = reception?.getOrNull()
-            if (match != null) {
-                pending += match.toTextMatch()
-                total++
-                if (pending.size >= BATCH_HITS) flushPending()
-                continue
-            }
             when {
-                reception == null -> if (pending.isNotEmpty()) flushPending()
-
-                reception.isClosed -> {
-                    if (pending.isNotEmpty()) flushPending()
-                    val cause = reception.exceptionOrNull()
-                    if (cause != null) throw cause
-                    break
+                match != null -> {
+                    waiting += match.toTextMatch()
+                    total++
+                    if (waiting.size >= BATCH_HITS) closeBatch()
                 }
 
-                else -> Unit
+                reception?.isClosed == true -> {
+                    failure = reception.exceptionOrNull()
+                    running = false
+                }
+
+                waiting.isNotEmpty() -> {
+                    closeBatch() // the delay of the batch expired: what waits is sent now
+                }
             }
         }
+        closeBatch()
+        // What ripgrep found is sent before its failure or the end: found matches are kept even when the run
+        // failed, and what closes the search closes the flow with the engine that ran it.
+        failure?.let { throw it }
         send(SearchBatch(sequence + 1, emptyList(), done = true, total = total, engine = SearchEngine.Ripgrep))
     }
 

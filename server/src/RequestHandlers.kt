@@ -101,7 +101,12 @@ private fun searchHandlers(services: LocalServices): Map<Method, Handler> {
     val search = services.search
     return mapOf(
         Method.WalkFiles to { search.walkFiles(entry(ROOT), params.int(LIMIT)).toJson() },
-        Method.FindInFiles to { search.findInFiles(entry(ROOT), params.findOptions(), params.int(LIMIT)).matchesJson() },
+        Method.FindInFiles to {
+            val root = entry(ROOT)
+            search
+                .findInFiles(root, params.findOptions(), params.int(LIMIT))
+                .matchesJson()
+        },
         Method.FindInFilesStream to {
             val root = entry(ROOT)
             val options = params.findOptions()

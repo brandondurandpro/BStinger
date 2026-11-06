@@ -24,31 +24,16 @@ import java.util.concurrent.ConcurrentHashMap
  * sequence number it got, and the end of the stream when the search already ended. A stream that is gone (the
  * server restarted, its sessions with it) answers nothing, and the client runs its search again.
  */
-internal class SearchRegistry(
-    private val scope: CoroutineScope,
-    private val push: (Frame) -> Unit,
-) {
+internal class SearchRegistry(private val scope: CoroutineScope, private val push: (Frame) -> Unit) {
     private val searches = ConcurrentHashMap<Long, ServerSearch>()
 
     /** Starts the search of [search] as the stream [id]; the one this id had before (never in practice) stops. */
-    fun start(
-        id: Long,
-        search: RipgrepSearch,
-        root: FileEntry,
-        options: FindOptions,
-        limit: Int,
-    ) {
+    fun start(id: Long, search: RipgrepSearch, root: FileEntry, options: FindOptions, limit: Int) {
         start(id, root, options, limit) { search.searchBatches(root, options, limit) }
     }
 
     /** Starts [batches] as the stream [id]: the source of the batches, for the tests. */
-    fun start(
-        id: Long,
-        root: FileEntry,
-        options: FindOptions,
-        limit: Int,
-        batches: () -> Flow<SearchBatch>,
-    ) {
+    fun start(id: Long, root: FileEntry, options: FindOptions, limit: Int, batches: () -> Flow<SearchBatch>) {
         stop(id)
         searches[id] = ServerSearch(id, scope, push, root, options, limit, batches)
     }

@@ -72,6 +72,7 @@ private const val REMOTE_ERROR = "RemoteException"
  * - Streams (shell output) carry sequence numbers; out-of-order events are buffered, duplicates dropped, and
  *   after a reconnection the client asks the server to replay what it missed.
  */
+@Suppress("TooManyFunctions") // one stream of each kind on top of the plumbing of the connection
 class RpcClient(
     host: String,
     port: Int,

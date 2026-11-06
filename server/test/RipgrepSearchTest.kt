@@ -8,7 +8,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.FindOptions
-import org.example.kotlineditor.model.SearchBatch
 import org.example.kotlineditor.model.SearchEngine
 import org.example.kotlineditor.model.TextMatch
 import org.example.kotlineditor.server.ripgrep.RipgrepBinary
@@ -25,9 +24,9 @@ import kotlin.io.path.writeText
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
-import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -227,7 +226,10 @@ class RipgrepSearchTest {
             val search = search(rg)
 
             val wholeWords = FindOptions(text = "needle", ignoreCase = false, wholeWord = true)
-            assertEquals(listOf("docs/Two.md:0:0", "src/One.kt:0:0"), search.findInFiles(project, wholeWords, 100).relative())
+            assertEquals(
+                listOf("docs/Two.md:0:0", "src/One.kt:0:0"),
+                search.findInFiles(project, wholeWords, 100).relative(),
+            )
 
             val kotlinOnly = wholeWords.copy(filePattern = "*.kt")
             assertEquals(listOf("src/One.kt:0:0"), search.findInFiles(project, kotlinOnly, 100).relative())

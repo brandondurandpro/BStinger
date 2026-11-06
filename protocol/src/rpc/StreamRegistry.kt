@@ -70,8 +70,7 @@ internal class StreamRegistry {
     }
 
     /** What each open stream still has to receive, to ask the server for what was missed. */
-    fun resumes(): List<Resume> =
-        streams.map { (id, stream) -> Resume(id, stream is SearchStream, stream.lastSeq) }
+    fun resumes(): List<Resume> = streams.map { (id, stream) -> Resume(id, stream is SearchStream, stream.lastSeq) }
 
     /** The server restarted: its streams are gone for good. */
     fun loseAll() = closeAll()

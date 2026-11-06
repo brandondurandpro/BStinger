@@ -10,9 +10,6 @@ interface TreeHost : ProjectHost {
     val fileIndex: FileIndex
     val editor: EditorState
 
-    /** The streamed Find in Files of the project: its results, engine, end and failure. */
-    val findInFiles: FindInFilesSearch
-
     /** Dialog opened from the tree context menu, if any. */
     var fileDialog: FileDialog?
 
