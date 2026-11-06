@@ -12,6 +12,7 @@ import org.example.kotlineditor.rpc.commitsJson
 import org.example.kotlineditor.rpc.diffJson
 import org.example.kotlineditor.rpc.diskCursor
 import org.example.kotlineditor.rpc.entry
+import org.example.kotlineditor.rpc.findOptions
 import org.example.kotlineditor.rpc.int
 import org.example.kotlineditor.rpc.keyEvent
 import org.example.kotlineditor.rpc.long
@@ -35,6 +36,7 @@ private const val ROOT = "root"
 private const val BRANCH = "branch"
 private const val LIMIT = "limit"
 private const val TERMINAL = "terminal"
+private const val STREAM = "stream"
 
 /** Implementation of each [Method]: read the named params, call the local services, return the JSON result. */
 internal fun requestHandlers(services: LocalServices): Map<Method, Handler> =
@@ -99,11 +101,14 @@ private fun searchHandlers(services: LocalServices): Map<Method, Handler> {
     val search = services.search
     return mapOf(
         Method.WalkFiles to { search.walkFiles(entry(ROOT), params.int(LIMIT)).toJson() },
-        Method.FindInFiles to {
-            search
-                .findInFiles(entry(ROOT), params.string("query"), params.bool("ignoreCase"), params.int(LIMIT))
-                .matchesJson()
+        Method.FindInFiles to { search.findInFiles(entry(ROOT), params.findOptions(), params.int(LIMIT)).matchesJson() },
+        Method.FindInFilesStream to {
+            val root = entry(ROOT)
+            val options = params.findOptions()
+            val limit = params.int(LIMIT)
+            nothing { streams.start(id, search, root, options, limit) }
         },
+        Method.FindInFilesResume to { nothing { streams.resume(params.long(STREAM), params.long("lastSeq")) } },
         Method.Symbols to { search.symbols(entry(ROOT)).symbolsJson() },
     )
 }

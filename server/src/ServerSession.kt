@@ -91,11 +91,12 @@ private fun ConcurrentHashMap<Long, Running>.release(id: Long, self: Job) {
     computeIfPresent(id) { _, running -> running.takeIf { it.job !== self } }
 }
 
-/** One request being executed: its id, its named params, the session's terminals and the session's id. */
+/** One request being executed: its id, its named params, the session's terminals and searches, and the session's id. */
 internal class Request(
     val id: Long,
     val params: JsonObject,
     val terminals: TerminalRegistry,
+    val streams: SearchRegistry,
     val session: String = "",
 ) {
     /** Set by a handler whose answer is source code, so the codec may use the code dictionary. */
@@ -152,6 +153,7 @@ internal class ServerSession(
                 size > options.responseCacheSize
         }
     private val terminals = TerminalRegistry(::send)
+    private val streams = SearchRegistry(scope, ::send)
 
     fun attach(new: ServerConnection) {
         val old = connection
@@ -178,6 +180,7 @@ internal class ServerSession(
     fun dispose() {
         inFlight.values.forEach { it.job.cancel() }
         terminals.stopAll()
+        streams.stopAll()
         connection?.close()
         onDispose(id)
     }
@@ -269,7 +272,7 @@ internal class ServerSession(
 
     private suspend fun execute(id: Long, method: Method, params: JsonElement): Frame =
         try {
-            val request = Request(id, params.params(), terminals, this.id)
+            val request = Request(id, params.params(), terminals, streams, this.id)
             val result = checkNotNull(handlers[method]) { "No handler for $method" }.invoke(request)
             Frame(FrameKind.Response, id, result, code = request.code)
         } catch (e: IOException) {

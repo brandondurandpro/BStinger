@@ -20,16 +20,26 @@ import java.nio.file.Paths
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * What to search for. The Find in Files options still to come (whole word, regular expression, file mask, scope,
- * ignored files included) become fields here, translated into flags by [RipgrepRunner.arguments].
+ * What to search for. Every Find in Files option becomes a field here, translated into flags by
+ * [RipgrepRunner.arguments].
  */
 internal data class RipgrepQuery(
-    /** Directory searched (the project root); results outside it are dropped. */
+    /** Project root searched; results outside it are dropped. */
     val root: Path,
-    /** Text searched, literally. */
+    /** Text searched: literally, unless [regex]. */
     val text: String,
     /** Whether letter case is ignored. */
     val ignoreCase: Boolean,
+    /** Whether only matches of whole words (letters, digits, `_`) count. */
+    val wholeWord: Boolean = false,
+    /** Whether [text] is a regular expression instead of literal text. */
+    val regex: Boolean = false,
+    /** Only files whose name matches this glob (`*.kt`), or null for all of them. */
+    val filePattern: String? = null,
+    /** Directory searched, relative to [root] (`src`), or null for its whole root. */
+    val scope: String? = null,
+    /** Whether ignored files (Git-ignored, `.git`, build output) are searched too. */
+    val includeIgnored: Boolean = false,
 )
 
 /** ripgrep could not run the search: the caller falls back to the built-in search. */
@@ -53,27 +63,44 @@ internal class RipgrepRunner(
      * Command line for [query]. `--max-columns` is not used: it has no effect with `--json`, so long lines are
      * bounded when reading ([maxLineBytes]). The query is not on the command line but read from standard input
      * (`--file -`, see [matches]): it can never be taken for an option, and Windows' argument quoting (which Java
-     * does not escape: `"` would be mangled) never applies to it.
+     * does not escape: `"` would be mangled) never applies to it. Unless [RipgrepQuery.regex], the query is
+     * searched literally (`--fixed-strings`), which holds with stdin patterns as with any other.
      */
     fun arguments(query: RipgrepQuery): List<String> =
         buildList {
             add(executable.toString())
             add("--json")
             add("--no-config")
-            add("--fixed-strings")
+            if (!query.regex) add("--fixed-strings")
             add(if (query.ignoreCase) "--ignore-case" else "--case-sensitive")
+            if (query.wholeWord) add("--word-regexp")
             add("--hidden")
-            for (directory in IGNORED_DIRECTORIES) {
+            if (!query.includeIgnored) {
+                for (directory in IGNORED_DIRECTORIES) {
+                    add("--glob")
+                    add("!$directory/")
+                }
+            } else {
+                add("--no-ignore")
+            }
+            // The file glob comes last, after the ignored directories', so that it decides when they disagree.
+            if (query.filePattern != null) {
                 add("--glob")
-                add("!$directory/")
+                add(checkNotNull(query.filePattern))
             }
             add("--max-filesize")
             add(maxFileSize.toString())
             add("--file")
             add("-")
             add("--")
-            add(query.root.toString())
+            add(searchDirectory(query).toString())
         }
+
+    // The directory ripgrep searches: the root, or the scope inside it (normalized as well).
+    private fun searchDirectory(query: RipgrepQuery): Path {
+        val scope = query.scope ?: return query.root
+        return query.root.resolve(scope).toAbsolutePath().normalize()
+    }
 
     /**
      * Matching lines, as ripgrep finds them (several threads: files come in no particular order). The process is
