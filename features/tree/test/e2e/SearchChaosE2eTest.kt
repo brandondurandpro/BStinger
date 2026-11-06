@@ -37,11 +37,12 @@ class SearchChaosE2eTest {
         awaitTag(TreeTags.FIND_IN_FILES_INPUT)
     }
 
-    // The project of the chaos searches: `needle` on enough lines for the stream to need several batches; every
+    // The project of the chaos searches: `needle` on enough lines, in enough files, for the stream to need several
+    // batches whatever the engine (ripgrep closes a batch every few hits, the fallback every few dozen files); every
     // hit has its own line, since the engines count matching lines.
     private fun prepareMatches(): Int {
-        val count = 10 * HITS_PER_FILE
-        repeat(10) { file ->
+        val count = FILES * HITS_PER_FILE
+        repeat(FILES) { file ->
             val lines = (0 until HITS_PER_FILE).joinToString("\n") { "needle $it in file $file" }
             project.file("src/hits/file$file.txt", lines + "\n")
         }
@@ -109,7 +110,7 @@ class SearchChaosE2eTest {
             assertComplete(app, expected)
             awaitCondition {
                 runCatching {
-                    onNodeWithTag(TreeTags.FIND_IN_FILES_COUNT).assertTextEquals("$expected matches in 10 files")
+                    onNodeWithTag(TreeTags.FIND_IN_FILES_COUNT).assertTextEquals("$expected matches in $FILES files")
                 }.isSuccess
             }
         }
@@ -156,6 +157,7 @@ class SearchChaosE2eTest {
         }
 
     private companion object {
-        const val HITS_PER_FILE = 60
+        const val FILES = 200
+        const val HITS_PER_FILE = 3
     }
 }
