@@ -66,6 +66,7 @@ class ProjectState(
             grammars = grammars,
         )
     override val fileIndex = FileIndex(root, services.search, scope)
+    val findInFiles = FindInFilesSearch(root, services.search, fileIndex, scope)
     val find = FindState()
 
     /** Code completion in the editors, from the language servers. */

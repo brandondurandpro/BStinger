@@ -132,9 +132,9 @@ fun Modifier.resultRow(selected: Boolean): Modifier =
     background(if (selected) IdeColors.Selection else Color.Transparent, RoundedCornerShape(4.dp))
 
 @Composable
-fun ToggleChip(text: String, on: Boolean, onToggle: () -> Unit) {
+fun ToggleChip(text: String, on: Boolean, modifier: Modifier = Modifier, onToggle: () -> Unit) {
     Box(
-        Modifier
+        modifier
             .background(if (on) IdeColors.Accent.copy(alpha = 0.35f) else Color.Transparent, RoundedCornerShape(3.dp))
             .clickable(onClick = onToggle)
             .padding(horizontal = 4.dp, vertical = 1.dp),

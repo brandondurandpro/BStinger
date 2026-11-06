@@ -156,7 +156,7 @@ internal fun ProjectPopups(project: ProjectState, onClose: () -> Unit) {
         }
 
         PopupKind.FindInFiles -> {
-            FindInFilesPopup(project, onClose = onClose)
+            FindInFilesPopup(project, project.findInFiles, onClose = onClose)
         }
 
         PopupKind.GotoLine -> {

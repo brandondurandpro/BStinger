@@ -32,6 +32,7 @@ import org.example.kotlineditor.rpc.appServices
 import org.example.kotlineditor.server.EditorServer
 import org.example.kotlineditor.server.LocalServices
 import org.example.kotlineditor.server.ServerTelemetry
+import org.example.kotlineditor.server.ripgrep.RipgrepSettings
 import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.InMemoryPreferenceStore
 import org.example.kotlineditor.state.PreferenceStore
@@ -139,6 +140,8 @@ class ServerProcess(
     private val telemetryHook: TelemetryHook = InMemoryHook(),
     // The agents: by default, a registry nobody answers at, never the real one.
     private val agents: AgentSettings? = null,
+    // Where Find in Files gets its ripgrep executable: null is the default lookup (a configured path or a download).
+    private val ripgrep: RipgrepSettings? = null,
 ) : AutoCloseable {
     var server: EditorServer = EditorServer(services(), telemetry = telemetry()).start()
         private set
@@ -152,6 +155,7 @@ class ServerProcess(
             data,
             languageServerSettings = languageServers ?: LanguageServerSettings(data.toPath()),
             agentSettings = agents ?: offlineAgents(data),
+            ripgrep = ripgrep ?: RipgrepSettings(),
         )
 
     /** Kills the server: connections drop and new ones are refused until [start]. */
@@ -215,10 +219,11 @@ fun ComposeUiTest.launchApp(
     languageServers: LanguageServerSettings? = null,
     telemetry: TelemetryCapture? = null,
     agents: AgentSettings? = null,
+    ripgrep: RipgrepSettings? = null,
 ): E2eApp {
     TextClipboard.useSystem = false
     val data = Files.createTempDirectory("kotlin-editor-server").toFile()
-    val process = ServerProcess(data, languageServers, telemetry?.serverHook ?: InMemoryHook(), agents)
+    val process = ServerProcess(data, languageServers, telemetry?.serverHook ?: InMemoryHook(), agents, ripgrep)
     val token = process.server.token
     // Chaos tests go through a proxy that breaks the network, and notice a dead link within a second.
     val proxy = if (chaos) ChaosProxy(process.port) else null
@@ -354,6 +359,7 @@ fun ComposeUiTest.launchWithProject(
     languageServers: LanguageServerSettings? = null,
     telemetry: TelemetryCapture? = null,
     agents: AgentSettings? = null,
+    ripgrep: RipgrepSettings? = null,
 ): E2eApp {
     val app =
         launchApp(
@@ -363,6 +369,7 @@ fun ComposeUiTest.launchWithProject(
             languageServers = languageServers,
             telemetry = telemetry,
             agents = agents,
+            ripgrep = ripgrep,
         )
     openProjectDirectoryFromWelcome(project.path)
     awaitTag(TreeTags.treeRow("src"))

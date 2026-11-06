@@ -20,6 +20,7 @@ import kotlinx.serialization.json.put
 import org.example.kotlineditor.model.ConnectionStatus
 import org.example.kotlineditor.model.NetworkInspector
 import org.example.kotlineditor.model.OutcomeUnknownException
+import org.example.kotlineditor.model.SearchBatch
 import org.example.kotlineditor.model.TerminalSnapshot
 import org.example.kotlineditor.telemetry.Attribute
 import org.example.kotlineditor.telemetry.Attributes
@@ -71,6 +72,7 @@ private const val REMOTE_ERROR = "RemoteException"
  * - Streams (shell output) carry sequence numbers; out-of-order events are buffered, duplicates dropped, and
  *   after a reconnection the client asks the server to replay what it missed.
  */
+@Suppress("TooManyFunctions") // one stream of each kind on top of the plumbing of the connection
 class RpcClient(
     host: String,
     port: Int,
@@ -100,12 +102,19 @@ class RpcClient(
             mutableStatus,
             ::measureReconnections,
             NetworkTap(network),
-        ) { id, lastSeq ->
+        ) { toResume ->
             scope.launch {
                 runCatching {
-                    call(Method.TerminalResume) {
-                        put("terminal", id)
-                        put("lastSeq", lastSeq)
+                    if (toResume.search) {
+                        call(Method.FindInFilesResume) {
+                            put("stream", toResume.id)
+                            put("lastSeq", toResume.lastSeq)
+                        }
+                    } else {
+                        call(Method.TerminalResume) {
+                            put("terminal", toResume.id)
+                            put("lastSeq", toResume.lastSeq)
+                        }
                     }
                 }
             }
@@ -170,6 +179,9 @@ class RpcClient(
 
     /** Registers the stream fed by the server under [id] (before the request creating it is sent). */
     fun openStream(id: Long): Channel<TerminalSnapshot> = streams.open(id)
+
+    /** Registers the stream of Find in Files batches of [id], like [openStream]. */
+    fun openSearchStream(id: Long): Channel<SearchBatch> = streams.openSearch(id)
 
     /** Stops listening to the stream [id]. */
     fun closeStream(id: Long) = streams.close(id)
