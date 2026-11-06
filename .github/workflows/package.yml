@@ -94,6 +94,10 @@ jobs:
           fi
           # 1.2.3-rc1 -> 1.2.3
           numeric="$(printf '%s' "$label" | sed -E 's/^([0-9]+(\.[0-9]+){0,2}).*/\1/')"
+          # macOS refuses a first number of 0 (0.1.0 -> 1.1.0 in the app's metadata; the file names keep the label).
+          if [ "$RUNNER_OS" = macOS ]; then
+            numeric="$(printf '%s' "$numeric" | sed -E 's/^0(\.|$)/1\1/')"
+          fi
           echo "APP_VERSION=$numeric" >> "$GITHUB_ENV"
           echo "APP_VERSION_LABEL=$label" >> "$GITHUB_ENV"
 
