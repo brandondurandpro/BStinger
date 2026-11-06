@@ -402,7 +402,15 @@ fun ComposeUiTest.awaitCondition(timeout: Long = TIMEOUT, condition: () -> Boole
 @OptIn(ExperimentalTestApi::class)
 fun SemanticsNodeInteraction.performDoubleClick(): SemanticsNodeInteraction = performMouseInput { doubleClick() }
 
-/** Expands directories then double-clicks [relativePath] in the project tree, and waits for its editor. */
+// How long a double-click in the tree is given to open its tab before it is done again, and how many times.
+private const val OPEN_ATTEMPT_MS = 3_000L
+private const val OPEN_ATTEMPTS = 3
+
+/**
+ * Expands directories then double-clicks [relativePath] in the project tree, and waits for its editor. A directory
+ * listed again between the two clicks (the watch reporting a save just made) recreates its rows and loses the
+ * double-click: like a user, the test double-clicks again when no tab opened.
+ */
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.openFromTree(relativePath: String) {
     val parts = relativePath.split('/')
@@ -414,8 +422,15 @@ fun ComposeUiTest.openFromTree(relativePath: String) {
             awaitTag(TreeTags.treeRow(child))
         }
     }
-    onNodeWithTag(TreeTags.treeRow(relativePath)).performDoubleClick()
-    awaitTag(EditorTags.tab(relativePath))
+    val row = TreeTags.treeRow(relativePath)
+    val tab = EditorTags.tab(relativePath)
+    var attempts = 0
+    do {
+        awaitTag(row).performDoubleClick()
+        attempts++
+        val opened = runCatching { awaitTag(tab, timeout = OPEN_ATTEMPT_MS) }.isSuccess
+    } while (!opened && attempts < OPEN_ATTEMPTS)
+    awaitTag(tab)
     awaitEditorReady()
 }
 
