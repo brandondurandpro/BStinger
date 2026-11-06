@@ -26,13 +26,14 @@ import java.io.IOException
 // A server's stream that failed is started again, once; beyond it the blocking search keeps working.
 private const val RESTARTS = 1
 
-private val RESULTS_FIRST = compareBy<SearchHit> { it.entry.path }.thenBy { it.line }
-
 /**
  * Find in Files of a project, streamed by the server and shown as its results arrive. A batch lost after a
  * reconnection is replayed by the server on its own; a search lost when the server restarted runs again, once;
  * a stream that does not run falls back to the blocking search, so the feature keeps working. Which engine ran
  * ([engine]) and the end ([finished]) end up in the popup, along why a search cannot run ([error]).
+ *
+ * The documents modified in memory (the [documents] the editor holds) are searched as they are ([unsaved]),
+ * and their hits replace the ones of the disk for the same files, in both paths of a search.
  */
 @Stable
 class FindInFilesSearch(
@@ -40,6 +41,8 @@ class FindInFilesSearch(
     private val search: ProjectSearch,
     private val fileIndex: FileIndex,
     private val scope: CoroutineScope,
+    private val unsaved: UnsavedDocumentsSearch,
+    private val documents: () -> List<UnsavedDocument>,
 ) {
     /** The hits found so far: the batches of the streamed search build one result below the popup. */
     var results: List<SearchHit> by mutableStateOf(emptyList())
@@ -57,6 +60,8 @@ class FindInFilesSearch(
     var error: String? by mutableStateOf(null)
         private set
 
+    // The options of the running search: the in-memory hits are searched with them.
+    private var options = FindOptions(text = "")
     private var job: Job? = null
 
     // The span of the running search, ended once its results reached the screen (like a terminal's start one).
@@ -78,6 +83,7 @@ class FindInFilesSearch(
     // blocking search as the fallbacks. An empty text ends at once with no match, like the plain search did.
     private suspend fun run(options: FindOptions, token: Int, restarts: Int = RESTARTS) {
         begin()
+        this.options = options
         if (options.text.isEmpty()) return
         span = ClientTelemetry.start(Operation.SearchFindInFiles)
         streamOf(options, token, restarts)
@@ -121,7 +127,7 @@ class FindInFilesSearch(
         if (!batch.done) return
         finished = true
         engine = batch.engine
-        results = results.sortedWith(RESULTS_FIRST)
+        results = unsaved.over(results, options, documents())
         endAtShown()
     }
 
@@ -129,20 +135,21 @@ class FindInFilesSearch(
     // server at all (an unreachable one), or after losing one stream after another.
     private suspend fun blocking(options: FindOptions, token: Int) {
         if (token != generation || finished) return
+        this.options = options
         try {
             results = fileIndex.findInFiles(options, DEFAULT_TEXT_HITS)
             engine = null
-            finished = true
         } catch (expected: IllegalArgumentException) {
             // From the built-in engine only: a query it cannot compile (an invalid regular expression).
             error = expected.message ?: expected::class.simpleName.orEmpty()
             results = emptyList()
-            finished = true
         } catch (expected: IOException) {
             // The server is unreachable: no results until it is back (the next search runs when typing does).
+            // The documents modified in memory are searched all the same: the popup answers what the editor holds.
             results = emptyList()
-            finished = true
         }
+        finished = true
+        results = unsaved.over(results, options, documents())
         endAtShown()
     }
 
