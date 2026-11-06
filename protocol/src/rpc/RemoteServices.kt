@@ -150,11 +150,12 @@ class RemoteFileSystem(private val client: RpcClient) : ProjectFileSystem {
 
 /** [DiskWatch] of the server. */
 class RemoteDiskWatch(private val client: RpcClient) : DiskWatch {
-    override suspend fun changes(root: String, since: DiskCursor): DiskChanges {
+    override suspend fun changes(root: String, since: DiskCursor, open: List<String>): DiskChanges {
         val result =
             client.call(Method.DiskChanges) {
                 put(ROOT, root)
                 put("since", since.toJson())
+                if (open.isNotEmpty()) put("open", open.toJson())
             }
         return result.diskChanges()
     }

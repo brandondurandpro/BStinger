@@ -7,6 +7,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import org.example.kotlineditor.model.DiskChanges
 import org.example.kotlineditor.model.DiskCursor
+import org.example.kotlineditor.model.FileVersion
 
 // JSON of the changes on disk (`fs/changes`), shared by client and server.
 
@@ -29,10 +30,27 @@ fun DiskChanges.toJson(): JsonObject =
         put("cursor", cursor.toJson())
         put("paths", paths.toJson())
         put("complete", complete)
+        if (versions.isNotEmpty()) put("versions", versions.toJson())
     }
 
 /** Reads changes written by [DiskChanges.toJson]. */
 fun JsonElement.diskChanges(): DiskChanges {
     val fields = jsonObject
-    return DiskChanges(fields.field("cursor").diskCursor(), fields.field("paths").strings(), fields.bool("complete"))
+    val versions = fields.get("versions")?.versions() ?: emptyMap()
+    return DiskChanges(
+        fields.field("cursor").diskCursor(),
+        fields.field("paths").strings(),
+        fields.bool("complete"),
+        versions,
+    )
 }
+
+/** The versions of a changes answer, by path (an old answer carries none). */
+fun JsonElement.versions(): Map<String, FileVersion> =
+    jsonObject.entries.associate { (path, version) -> path to version.fileVersion() }
+
+/** The versions of a changes answer, by path. */
+fun Map<String, FileVersion>.toJson(): JsonElement =
+    buildJsonObject {
+        for ((path, version) in this@toJson) put(path, version.toJson())
+    }
