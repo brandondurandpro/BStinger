@@ -19,6 +19,7 @@ private const val TEXT = "text"
 private const val BINARY = "binary"
 private const val TOO_LARGE = "tooLarge"
 private const val ERROR = "error"
+private const val VERSION = "version"
 
 /** An entry: only the path and the kind travel, the name is derived from the path. */
 fun FileEntry.toJson(): JsonObject =
@@ -47,16 +48,18 @@ fun List<FileEntry>.toJson(): JsonElement = JsonArray(map { it.toJson() })
 fun JsonElement.entries(): List<FileEntry> = jsonArray.map { it.entry() }
 
 /** A file content; text is sent as lines, already split by the server. */
-fun FileContent.toJson(): JsonObject =
-    buildJsonObject {
-        when (val content = this@toJson) {
+fun FileContent.toJson(): JsonObject {
+    val content = this
+    val version = content.version
+    return buildJsonObject {
+        when (content) {
             is FileContent.Text -> {
                 put("type", TEXT)
                 put("lineSeparator", content.lineSeparator)
                 put("lines", content.lines.toJson())
             }
 
-            FileContent.Binary -> {
+            is FileContent.Binary -> {
                 put("type", BINARY)
             }
 
@@ -70,14 +73,17 @@ fun FileContent.toJson(): JsonObject =
                 put("message", content.message)
             }
         }
+        version?.let { put(VERSION, it.toJson()) }
     }
+}
 
 /** Reads a file content. */
 fun JsonElement.content(): FileContent {
     val fields = jsonObject
+    val version = fields.get(VERSION)?.versionOrNull()
     return when (fields.string("type")) {
-        TEXT -> FileContent.Text(fields.field("lines").strings(), fields.string("lineSeparator"))
-        BINARY -> FileContent.Binary
+        TEXT -> FileContent.Text(fields.field("lines").strings(), fields.string("lineSeparator"), version)
+        BINARY -> FileContent.Binary(version)
         TOO_LARGE -> FileContent.TooLarge(fields.long("size"))
         else -> FileContent.Error(fields.string("message"))
     }

@@ -7,6 +7,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import org.example.kotlineditor.model.FileContent
 import org.example.kotlineditor.model.FileEntry
+import org.example.kotlineditor.model.FileVersion
 import org.example.kotlineditor.model.ProjectFileSystem
 import org.example.kotlineditor.state.FileTreeState
 import kotlin.test.AfterTest
@@ -128,7 +129,7 @@ private class ManualFileSystem : ProjectFileSystem {
 
     override suspend fun fileAt(path: String): FileEntry? = unused()
 
-    override suspend fun write(file: FileEntry, text: String): Unit = unused()
+    override suspend fun write(file: FileEntry, text: String, expected: FileVersion?): FileVersion? = unused()
 
     override suspend fun createFile(directory: FileEntry, name: String): FileEntry = unused()
 

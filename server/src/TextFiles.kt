@@ -27,6 +27,20 @@ object TextFiles {
             FileContent.Error(e.message ?: e::class.simpleName.orEmpty())
         }
 
+    /** [read], with the version of the file next to the content: its bytes are hashed for it. */
+    fun readWithVersion(path: Path, maxSize: Long): FileContent =
+        try {
+            val size = Files.size(path)
+            if (size > maxSize) {
+                FileContent.TooLarge(size)
+            } else {
+                val bytes = Files.readAllBytes(path)
+                decode(bytes).withVersion(path, bytes)
+            }
+        } catch (e: IOException) {
+            FileContent.Error(e.message ?: e::class.simpleName.orEmpty())
+        }
+
     /** A file is binary when its first bytes contain a NUL, like Git decides. */
     fun isBinary(bytes: ByteArray): Boolean = (0 until minOf(bytes.size, BINARY_PROBE)).any { bytes[it] == 0.toByte() }
 
@@ -47,8 +61,11 @@ object TextFiles {
         return FileContent.Text(lines, if (crlf) "\r\n" else "\n")
     }
 
-    private fun decode(bytes: ByteArray): FileContent =
-        if (isBinary(bytes)) FileContent.Binary else splitLines(utf8OrNull(bytes) ?: String(bytes, Charsets.ISO_8859_1))
+    private fun decode(bytes: ByteArray): FileContent {
+        if (isBinary(bytes)) return FileContent.Binary(null)
+        val text = utf8OrNull(bytes) ?: String(bytes, Charsets.ISO_8859_1)
+        return splitLines(text)
+    }
 
     // The text of [bytes] if they are valid UTF-8.
     private fun utf8OrNull(bytes: ByteArray): CharSequence? {

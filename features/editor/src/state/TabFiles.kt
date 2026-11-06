@@ -149,7 +149,7 @@ internal class TabFiles(
                     TabStatus.Ready(open(tab, content))
                 }
 
-                FileContent.Binary -> {
+                is FileContent.Binary -> {
                     TabStatus.Unsupported("Binary file: content is not displayed")
                 }
 

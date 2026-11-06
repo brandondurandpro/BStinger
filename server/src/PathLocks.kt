@@ -37,19 +37,22 @@ internal suspend fun <T> withPathLock(path: Path, block: suspend () -> T): T = w
  * Runs [write], which writes [path] for [writer], under the lock of [withPathLock], unless [writer] already wrote
  * [path] with a request it sent after this one ([order], its request ids, which increase): two saves sent in a row
  * then leave the second one's text, even when the first one reaches the lock last (it is larger, its thread was
- * slower to start). Returns whether [write] ran.
+ * slower to start). Returns what [write] returned, `null` when it was dropped (it did not run, and so checked
+ * against the disk neither).
  */
-internal suspend fun writeInOrder(path: Path, writer: String, order: Long, write: suspend () -> Unit): Boolean {
+internal suspend fun <T> writeInOrder(path: Path, writer: String, order: Long, write: suspend () -> T): T? {
     val key = lockKeyOf(path)
     val writerKey = "$writer\u0000$key"
     return withLockOf(key) {
         val latest = synchronized(latestWrites) { latestWrites[writerKey] }
         val newerWritten = latest != null && latest > order
         if (!newerWritten) {
-            write()
+            val written = write()
             synchronized(latestWrites) { latestWrites[writerKey] = order }
+            written
+        } else {
+            null
         }
-        !newerWritten
     }
 }
 

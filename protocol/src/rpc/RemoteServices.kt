@@ -17,6 +17,7 @@ import org.example.kotlineditor.model.DiskWatch
 import org.example.kotlineditor.model.FileContent
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.FileSymbol
+import org.example.kotlineditor.model.FileVersion
 import org.example.kotlineditor.model.FindOptions
 import org.example.kotlineditor.model.GitBranchInfo
 import org.example.kotlineditor.model.GitClient
@@ -49,6 +50,7 @@ private const val PATH = "path"
 private const val NAME = "name"
 private const val TERMINAL = "terminal"
 private const val STREAM = "stream"
+private const val VERSION = "version"
 
 /** Every IDE service, backed by a server. */
 fun RpcClient.appServices(): AppServices =
@@ -97,11 +99,14 @@ class RemoteFileSystem(private val client: RpcClient) : ProjectFileSystem {
 
     override suspend fun fileAt(path: String): FileEntry? = client.call(Method.FileAt) { put(PATH, path) }.entryOrNull()
 
-    override suspend fun write(file: FileEntry, text: String) {
-        client.call(Method.Write) {
-            put(FILE, file.toJson())
-            put("text", text)
-        }
+    override suspend fun write(file: FileEntry, text: String, expected: FileVersion?): FileVersion? {
+        val result =
+            client.call(Method.Write) {
+                put(FILE, file.toJson())
+                put("text", text)
+                if (expected != null) put(VERSION, expected.toJson())
+            }
+        return result.versionOrNull()
     }
 
     override suspend fun createFile(directory: FileEntry, name: String): FileEntry {

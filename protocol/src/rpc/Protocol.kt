@@ -47,7 +47,7 @@ import java.io.OutputStream
  */
 object Protocol {
     /** Version announced in the handshake; client and server must speak the same one. */
-    const val VERSION = 11
+    const val VERSION = 12
 
     /** Version of the application, shown in the welcome screen and used to identify remote server bundles. */
     const val APP_VERSION = "2026.1"
