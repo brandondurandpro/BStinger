@@ -135,6 +135,11 @@ dependency directories, binary files and files over the size limit are not. ripg
 (inside a Git repository), `.ignore` and `.rgignore`. The search matches the text literally, with or without
 letter case (the popup's `Cc` toggle); a search stops after 30 seconds and returns the lines found by then.
 
+The file lists behind Go to File (`walkFiles`) also go through ripgrep (`rg --files`), with the same fallback to
+the built-in walk (which does not apply the ignore files): so when ripgrep runs, a file ignored by `.gitignore`
+is left out of the index too, while Go to Symbol still outlines the files the built-in walk lists. The list is
+sorted by path locally, ripgrep's own order being unspecified.
+
 **Protocol.** JSON-RPC 2.0 over TCP (`TCP_NODELAY`), framed like LSP (`Content-Length` header, then the JSON body):
 named params, methods such as `fs/read`, `git/status` or `terminal/start`, standard error codes, answers in any order,
 server-pushed notifications for terminal screens (lines sent as style runs), bodies compressed with zstd-3 when it pays

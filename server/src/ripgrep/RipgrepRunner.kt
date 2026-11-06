@@ -76,6 +76,25 @@ internal class RipgrepRunner(
         }
 
     /**
+     * Command line for [files]: the same filters as the search ([IGNORED_DIRECTORIES] are excluded explicitly,
+     * hidden files are listed, ignore files apply by themselves), without the search-only ones: no size limit,
+     * no readability rules on a file that is only listed.
+     */
+    fun filesArguments(root: Path): List<String> =
+        buildList {
+            add(executable.toString())
+            add("--files")
+            add("--no-config")
+            add("--hidden")
+            for (directory in IGNORED_DIRECTORIES) {
+                add("--glob")
+                add("!$directory/")
+            }
+            add("--")
+            add(root.toString())
+        }
+
+    /**
      * Matching lines, as ripgrep finds them (several threads: files come in no particular order). The process is
      * killed with its children as soon as the collection stops early: limit reached (`take`), timeout, cancellation.
      * Fails with [RipgrepException] or [IOException] when ripgrep cannot start or ends with an error.
@@ -119,6 +138,59 @@ internal class RipgrepRunner(
             if (isActive) throw e
         }
     }
+
+    /**
+     * Files listed by `rg --files` under [root]: every regular file ripgrep sees (its ignore files applied by
+     * themselves), as plain paths on stdout, in no particular order. The filters are the search's: hidden files
+     * are listed, the ignored directories are not. No size filter: a listed file is not read. Fails with
+     * [RipgrepException] or [IOException] when ripgrep cannot start or ends with an error.
+     */
+    fun files(root: Path): Flow<String> =
+        channelFlow {
+            val rootDirectory = root.toAbsolutePath().normalize()
+            // Started without suspending (on the IO dispatcher, see flowOn): a cancellation cannot come between
+            // the start and the `try` that guarantees the kill.
+            val process = ProcessBuilder(filesArguments(rootDirectory)).start()
+            try {
+                onStart(process.toHandle())
+                val errors = async(Dispatchers.IO) { head(process.errorStream) }
+                val listed = async(Dispatchers.IO) { forwardFiles(process.inputStream, rootDirectory) }
+                val code = runInterruptible(Dispatchers.IO) { process.waitFor() }
+                if (!filesSucceeded(code, listed.await())) {
+                    throw RipgrepException("ripgrep exited with $code: ${errors.await().trim()}")
+                }
+            } finally {
+                destroyTree(process)
+            }
+        }.flowOn(Dispatchers.IO)
+
+    /** The paths ripgrep listed (under [root], possibly after ripgrep could not look everywhere), and their count. */
+    private suspend fun ProducerScope<String>.forwardFiles(output: InputStream, root: Path): Int {
+        val lines = JsonLineReader(output, maxLineBytes)
+        var listed = 0
+        try {
+            while (true) {
+                val line = lines.readLine() ?: break
+                if (line.isNotEmpty() && isUnder(root, line)) {
+                    listed++
+                    send(line)
+                }
+            }
+        } catch (e: IOException) {
+            // The stream may close under us when the process is killed after the walk was cancelled.
+            if (isActive) throw e
+        }
+        return listed
+    }
+
+    /** Whether ripgrep listed what it looked for: an error is tolerated when some files were already listed.
+     *  Errors with nothing to show leave the whole query to the built-in walk, which handles unreadable entries. */
+    private fun filesSucceeded(code: Int, listed: Int): Boolean =
+        when (code) {
+            EXIT_MATCHES, EXIT_NO_MATCH -> true
+            EXIT_ERROR -> listed > 0
+            else -> false
+        }
 
     internal companion object {
         /** Longest `rg --json` message read (4 MiB): a matching line longer than that is skipped. */

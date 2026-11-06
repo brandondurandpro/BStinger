@@ -60,6 +60,9 @@ class RipgrepSearchTest {
     private fun List<TextMatch>.relative() =
         map { "${root.relativize(Path.of(it.entry.path)).toString().replace('\\', '/')}:${it.line}:${it.column}" }
 
+    private fun List<FileEntry>.relativePaths() =
+        map { root.relativize(Path.of(it.path)).toString().replace('\\', '/') }
+
     // Every ripgrep started by the test has exited (it was killed or it finished).
     private fun assertAllEnded() {
         assertTrue(started.isNotEmpty(), "ripgrep was not started")
@@ -205,6 +208,85 @@ class RipgrepSearchTest {
             assertEquals(fake, search.ripgrep()?.path)
             val hits = search.findInFiles(project, "needle", false, 10)
             assertEquals(listOf("src/a.txt:0:2"), hits.relative())
+        }
+        assertAllEnded()
+    }
+
+    @Test
+    fun `file lists come from ripgrep, sorted and honouring gitignore`() =
+        runBlocking {
+            val rg = TestRipgrep.require()
+            // A `.git` directory: ripgrep only applies `.gitignore` inside a Git repository.
+            root.resolve(".git").createDirectories()
+            write(".gitignore", "generated/\n*.log\n")
+            write("a.txt", "")
+            write("docs/c.md", "")
+            write("src/deep/b.txt", "")
+            write("app.log", "")
+            write("generated/secret.txt", "")
+            write("build/out.txt", "")
+            write("node_modules/x/index.js", "")
+
+            val byRipgrep = search(rg).walkFiles(project).relativePaths()
+            val byBuiltIn = LocalSearch(LocalFileSystem()).walkFiles(project).relativePaths()
+            // ripgrep's order is unspecified: the list is sorted by path, so the walk is stable (the limit cuts
+            // it after the sort). The built-in walk truncates its own order.
+            assertEquals(byRipgrep, byRipgrep.sorted())
+            // The ignore files skim the built-in list on top of ripgrep's other filters: a `.gitignore`d file
+            // (and a file of an ignored directory) no longer appears while ripgrep runs.
+            assertEquals(
+                (byBuiltIn - "app.log" - "generated/secret.txt").sorted(),
+                byRipgrep,
+            )
+            assertAllEnded()
+        }
+
+    @Test
+    fun `file lists are bounded by the limit after sorting`() =
+        runBlocking {
+            val rg = TestRipgrep.require()
+            for (name in listOf("e0.txt", "a2.txt", "c1.txt", "b4.txt", "d3.txt")) write(name, "")
+
+            val hits = search(rg).walkFiles(project, limit = 3)
+            // The first files of the sorted list, not of whatever order ripgrep listed them in.
+            assertEquals(listOf("a2.txt", "b4.txt", "c1.txt"), hits.relativePaths())
+            assertAllEnded()
+        }
+
+    @Test
+    fun `file lists fall back to the built-in walk when the configured ripgrep does not exist`() =
+        runBlocking {
+            write("a.txt", "")
+            write("generated/secret.txt", "")
+            val search = search(root.resolve("missing/rg").toString())
+            assertNull(search.ripgrep())
+            // The built-in walk answers: the `.gitignore`d file is listed again (and the ignored directories
+            // are still not, the list below is from the fallback alone).
+            val builtIn = LocalSearch(LocalFileSystem()).walkFiles(project)
+            assertEquals(builtIn, search.walkFiles(project, limit = 10))
+            assertTrue(started.isEmpty())
+        }
+
+    @Test
+    fun `file lists fall back to the built-in walk when ripgrep fails`() {
+        if (isWindows) return
+        // Passes for ripgrep (`--version`) but fails every search, like a broken or incompatible build.
+        val fake = root.resolve("tools/rg")
+        fake.parent.createDirectories()
+        fake.writeText(
+            """
+            #!/bin/sh
+            if [ "$1" = --version ]; then echo 'ripgrep 0.0.0'; exit 0; fi
+            exit 2
+            """.trimIndent(),
+        )
+        fake.toFile().setExecutable(true)
+        write("src/a.txt", "")
+        runBlocking {
+            val search = search(fake.toString())
+            assertEquals(fake, search.ripgrep()?.path)
+            val builtIn = LocalSearch(LocalFileSystem()).walkFiles(project)
+            assertEquals(builtIn, search.walkFiles(project, limit = 10))
         }
         assertAllEnded()
     }

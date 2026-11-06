@@ -21,7 +21,8 @@ import kotlin.time.Duration
 
 /**
  * [ProjectSearch] whose Find in Files runs ripgrep, like VS Code: native, parallel, no index, and it honours
- * `.gitignore`. The other queries, and Find in Files whenever ripgrep is missing or fails, use [fallback].
+ * `.gitignore`. The file lists too (`rg --files`, for Go to File). The other queries, and every query whenever
+ * ripgrep is missing or fails, use [fallback].
  */
 class RipgrepSearch internal constructor(
     private val fallback: LocalSearch,
@@ -60,6 +61,25 @@ class RipgrepSearch internal constructor(
             ?: fallback.findInFiles(root, query, ignoreCase, limit)
     }
 
+    override suspend fun walkFiles(root: FileEntry, limit: Int): List<FileEntry> {
+        val executable = if (limit <= 0) null else ripgrep()
+        return (executable?.let { fileEntries(it, root, limit) } ?: fallback.walkFiles(root, limit))
+    }
+
+    // Null when ripgrep failed: the built-in walk takes over.
+    private suspend fun fileEntries(executable: RipgrepBinary, root: FileEntry, limit: Int): List<FileEntry>? =
+        try {
+            val runner = RipgrepRunner(executable.path, maxFileSize, onStart = onStart)
+            val paths = ArrayList<String>()
+            // On timeout, the files listed so far are the answer.
+            withTimeoutOrNull(timeout) { runner.files(Paths.get(root.path)).collect(paths::add) }
+            // ripgrep lists files in no particular order: sorting keeps the list stable from one walk to the next,
+            // and the limit then cuts the same list every time (the built-in walk truncates its own order).
+            paths.sorted().take(limit).map { entry(it) }
+        } catch (_: IOException) {
+            null
+        }
+
     // Null when ripgrep failed: the built-in search takes over.
     private suspend fun search(
         executable: RipgrepBinary,
@@ -80,10 +100,14 @@ class RipgrepSearch internal constructor(
             null
         }
 
-    private fun RipgrepMatch.toTextMatch(): TextMatch {
+    private fun RipgrepMatch.toTextMatch(): TextMatch =
+        TextMatch(entry(path), line, ranges.firstOrNull()?.first ?: 0, text.take(MAX_LINE_PREVIEW))
+
+    /** A [FileEntry] of a file ripgrep named (it is under the searched root, absolute like it). */
+    private fun entry(path: String): FileEntry {
         val file = Paths.get(path)
-        val entry = FileEntry(file.toString(), file.fileName?.toString() ?: path, false)
-        return TextMatch(entry, line, ranges.firstOrNull()?.first ?: 0, text.take(MAX_LINE_PREVIEW))
+        val name = file.fileName?.toString() ?: path
+        return FileEntry(file.toString(), name, false)
     }
 
     private companion object {
