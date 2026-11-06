@@ -161,7 +161,7 @@ jobs:
             /root/.m2/repository
           key: linux-${{ matrix.ubuntu }}-${{ hashFiles('kotlin', 'libs.versions.toml', 'project.yaml', '**/module.yaml') }}
       # ripgrep, downloaded and verified on first use by the server (and its tests).
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: /root/.kotlin-editor/tools
           key: ripgrep-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('server/src/ripgrep/RipgrepRelease.kt') }}
@@ -259,7 +259,7 @@ jobs:
             ~/.m2/repository
           key: windows-${{ hashFiles('kotlin.bat', 'libs.versions.toml', 'project.yaml', '**/module.yaml') }}
       # ripgrep, downloaded and verified on first use by the server (and its tests).
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/.kotlin-editor/tools
           key: ripgrep-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('server/src/ripgrep/RipgrepRelease.kt') }}
@@ -297,7 +297,7 @@ jobs:
             "===== $($_.Name)"
             Get-Content $_.FullName
           }
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure() || cancelled()
         with:
           name: hang-windows-${{ matrix.module }}
