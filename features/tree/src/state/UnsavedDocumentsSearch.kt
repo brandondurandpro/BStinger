@@ -35,11 +35,11 @@ fun EditorState.unsavedDocuments(): List<UnsavedDocument> {
     }
 }
 
-/** The hits of the whole displayed list, sorted by path then line. */
+// The hits of the whole displayed list, sorted by path then line.
 private val BY_PATH_THEN_LINE =
     compareBy<SearchHit> { it.relativePath }.thenBy { it.line }.thenBy { it.column }
 
-/** How long a found line is kept for the display, as the built-in search bounds its preview. */
+// How long a found line is kept for the display, as the built-in search bounds its preview.
 private const val MAX_LINE_PREVIEW = 500
 
 /**
@@ -70,7 +70,7 @@ class UnsavedDocumentsSearch(private val relativePath: (FileEntry) -> String) {
     fun merge(disk: List<SearchHit>, unsaved: List<SearchHit>): List<SearchHit> =
         (disk + unsaved).sortedWith(BY_PATH_THEN_LINE)
 
-    /** Hits in every line of [document], one per line at most. */
+    // Hits in every line of [document], one per line at most.
     private fun hitsOf(document: UnsavedDocument, matcher: Matcher): List<SearchHit> {
         val entry = document.entry
         val path = relativePath(entry)
@@ -79,22 +79,16 @@ class UnsavedDocumentsSearch(private val relativePath: (FileEntry) -> String) {
             .mapNotNull { (line, text) -> hit(entry, path, line, text, matcher) }
     }
 
-    private fun hit(
-        entry: FileEntry,
-        path: String,
-        line: Int,
-        text: String,
-        matcher: Matcher,
-    ): SearchHit? {
+    private fun hit(entry: FileEntry, path: String, line: Int, text: String, matcher: Matcher): SearchHit? {
         val column = matcher.columnOf(text) ?: return null
         return SearchHit(entry, path, line, column, text.take(MAX_LINE_PREVIEW))
     }
 }
 
-/** Whether a character can be part of the words Whole Word matches (like the editor's own word motions). */
+// Whether a character can be part of the words Whole Word matches (like the editor's own word motions).
 private fun Char.isWordChar(): Boolean = isLetterOrDigit() || this == '_'
 
-/** [query] as a regular expression pattern: word-bounded when Whole Word is on. */
+// [query] as a regular expression pattern: word-bounded when Whole Word is on.
 private fun asPattern(query: String, wholeWord: Boolean): String =
     if (wholeWord) {
         "\\b(?:$query)\\b"
@@ -106,6 +100,7 @@ private fun asPattern(query: String, wholeWord: Boolean): String =
 private class Matcher(query: String, options: SearchOptions) {
     private val ignoreCase = options.ignoreCase
     private val wholeWord = options.wholeWord
+
     // A literal query only, null for a regular expression one (then `regex` matches instead).
     private val literal: String? =
         if (options.regex) {
@@ -113,18 +108,19 @@ private class Matcher(query: String, options: SearchOptions) {
         } else {
             query
         }
+
+    // null only for a literal query; a broken regular expression matches nothing (the popup shows it its own way).
     private val regex =
-        when {
-            !options.regex -> null
-            // A broken regular expression matches nothing until then (the popup shows it its own way).
-            else ->
-                runCatching {
-                    val flags = if (options.ignoreCase) setOf(RegexOption.IGNORE_CASE) else emptySet()
-                    Regex(asPattern(query, options.wholeWord), flags)
-                }.getOrNull()
+        if (!options.regex) {
+            null
+        } else {
+            runCatching {
+                val flags = if (options.ignoreCase) setOf(RegexOption.IGNORE_CASE) else emptySet()
+                Regex(asPattern(query, options.wholeWord), flags)
+            }.getOrNull()
         }
 
-    /** Zero-based column of the first match in [line], or null when the line does not match. */
+    // Zero-based column of the first match in [line], or null when the line does not match.
     fun columnOf(line: String): Int? {
         val text = literal
         return if (text != null) {
@@ -134,17 +130,31 @@ private class Matcher(query: String, options: SearchOptions) {
         }
     }
 
-    /** Any occurrence must be bounded for a whole-word match; later occurrences are tried when one is not. */
-    private fun columnOfLiteral(text: String, line: String): Int? {
+    private fun columnOfLiteral(text: String, line: String): Int? =
+        if (!wholeWord) {
+            firstColumnOf(text, line)
+            // Any occurrence must be bounded for a whole word; later occurrences are tried when one is not.
+        } else {
+            firstWholeWordColumnOf(text, line)
+        }
+
+    // The first occurrence, whichever characters surround it.
+    private fun firstColumnOf(text: String, line: String): Int? {
+        val column = line.indexOf(text, ignoreCase = ignoreCase)
+        return column.takeIf { it >= 0 }
+    }
+
+    private fun firstWholeWordColumnOf(text: String, line: String): Int? {
+        val columns = ArrayList<Int>()
         var from = 0
         while (from <= line.length) {
             val column = line.indexOf(text, from, ignoreCase = ignoreCase)
-            if (column < 0) return null
-            val bounded = line.isWordBounded(column, text)
-            if (!wholeWord || bounded) return column
+            if (column < 0) break
+            columns += column
             from = column + 1
         }
-        return null
+        // The first occurrence that is between characters no word is made of.
+        return columns.firstOrNull { column -> line.isWordBounded(column, text) }
     }
 
     private fun String.isWordBounded(column: Int, match: String): Boolean {

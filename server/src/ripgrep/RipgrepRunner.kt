@@ -154,7 +154,7 @@ internal class RipgrepRunner(
             try {
                 onStart(process.toHandle())
                 val errors = async(Dispatchers.IO) { head(process.errorStream) }
-                val listed = async(Dispatchers.IO) { forwardFiles(process.inputStream, rootDirectory) }
+                val listed = async(Dispatchers.IO) { forwardListedPaths(process.inputStream, rootDirectory) }
                 val code = runInterruptible(Dispatchers.IO) { process.waitFor() }
                 if (!filesSucceeded(code, listed.await())) {
                     throw RipgrepException("ripgrep exited with $code: ${errors.await().trim()}")
@@ -164,8 +164,8 @@ internal class RipgrepRunner(
             }
         }.flowOn(Dispatchers.IO)
 
-    /** The paths ripgrep listed (under [root], possibly after ripgrep could not look everywhere), and their count. */
-    private suspend fun ProducerScope<String>.forwardFiles(output: InputStream, root: Path): Int {
+    // The paths ripgrep listed (under [root], possibly after ripgrep could not look everywhere), and their count.
+    private suspend fun ProducerScope<String>.forwardListedPaths(output: InputStream, root: Path): Int {
         val lines = JsonLineReader(output, maxLineBytes)
         var listed = 0
         try {
@@ -183,8 +183,8 @@ internal class RipgrepRunner(
         return listed
     }
 
-    /** Whether ripgrep listed what it looked for: an error is tolerated when some files were already listed.
-     *  Errors with nothing to show leave the whole query to the built-in walk, which handles unreadable entries. */
+    // Whether ripgrep listed what it looked for: an error is tolerated when some files were already listed.
+    // Errors with nothing to show leave the whole query to the built-in walk, which handles unreadable entries.
     private fun filesSucceeded(code: Int, listed: Int): Boolean =
         when (code) {
             EXIT_MATCHES, EXIT_NO_MATCH -> true

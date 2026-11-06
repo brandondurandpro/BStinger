@@ -63,7 +63,7 @@ class RipgrepSearch internal constructor(
 
     override suspend fun walkFiles(root: FileEntry, limit: Int): List<FileEntry> {
         val executable = if (limit <= 0) null else ripgrep()
-        return (executable?.let { fileEntries(it, root, limit) } ?: fallback.walkFiles(root, limit))
+        return executable?.let { fileEntries(it, root, limit) } ?: fallback.walkFiles(root, limit)
     }
 
     // Null when ripgrep failed: the built-in walk takes over.
@@ -75,7 +75,7 @@ class RipgrepSearch internal constructor(
             withTimeoutOrNull(timeout) { runner.files(Paths.get(root.path)).collect(paths::add) }
             // ripgrep lists files in no particular order: sorting keeps the list stable from one walk to the next,
             // and the limit then cuts the same list every time (the built-in walk truncates its own order).
-            paths.sorted().take(limit).map { entry(it) }
+            paths.sorted().take(limit).map { fileEntryOfRipgrep(it) }
         } catch (_: IOException) {
             null
         }
@@ -101,10 +101,10 @@ class RipgrepSearch internal constructor(
         }
 
     private fun RipgrepMatch.toTextMatch(): TextMatch =
-        TextMatch(entry(path), line, ranges.firstOrNull()?.first ?: 0, text.take(MAX_LINE_PREVIEW))
+        TextMatch(fileEntryOfRipgrep(path), line, ranges.firstOrNull()?.first ?: 0, text.take(MAX_LINE_PREVIEW))
 
-    /** A [FileEntry] of a file ripgrep named (it is under the searched root, absolute like it). */
-    private fun entry(path: String): FileEntry {
+    // A [FileEntry] of a file ripgrep named (it is under the searched root, absolute like it).
+    private fun fileEntryOfRipgrep(path: String): FileEntry {
         val file = Paths.get(path)
         val name = file.fileName?.toString() ?: path
         return FileEntry(file.toString(), name, false)

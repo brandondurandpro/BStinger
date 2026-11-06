@@ -17,7 +17,6 @@ import org.example.kotlineditor.state.TextPos
 import org.example.kotlineditor.state.UnsavedDocumentsSearch
 import org.example.kotlineditor.state.delete
 import org.example.kotlineditor.state.unsavedDocuments
-import org.example.kotlineditor.ui.EditorTags
 import org.example.kotlineditor.ui.TreeTags
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -53,7 +52,9 @@ class SearchUnsavedPerformanceE2eTest {
             project.file("huge/big.txt", lines)
             val app = launchWithProject(project)
             openFromTree("huge/big.txt")
-            val document = app.project.editor.activeTab!!.document!!
+            val document =
+                app.project.editor.activeTab!!
+                    .document!!
             // One edit marks the buffer modified: an extra first line the disk does not have yet.
             runOnUiThread { document.replace(TextPos(0, 0), TextPos(0, 0), "$MARKER\n") }
             waitForIdle()
@@ -73,7 +74,11 @@ class SearchUnsavedPerformanceE2eTest {
             // The user's step: the query typed in the popup, over a matching file on disk and the modified
             // buffer (its hits replace the disk ones of the same file), listing thousands of results.
             openFindInFiles()
-            measure("list the $LINES matches of a document being edited", budgetMillis = 15_000, budgetMegabytes = 800) {
+            measure(
+                "list the $LINES matches of a document being edited",
+                budgetMillis = 15_000,
+                budgetMegabytes = 800,
+            ) {
                 onNodeWithTag(TreeTags.FIND_IN_FILES_INPUT).performTextInput(QUERY)
                 val count = onNodeWithTag(TreeTags.FIND_IN_FILES_COUNT)
                 awaitCondition { runCatching { count.assertTextEquals("$LINES matches in 1 file") }.isSuccess }

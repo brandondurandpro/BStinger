@@ -1,8 +1,8 @@
 package org.example.kotlineditor.unit
 
 import org.example.kotlineditor.model.FileEntry
-import org.example.kotlineditor.state.SearchOptions
 import org.example.kotlineditor.state.SearchHit
+import org.example.kotlineditor.state.SearchOptions
 import org.example.kotlineditor.state.UnsavedDocument
 import org.example.kotlineditor.state.UnsavedDocumentsSearch
 import kotlin.test.Test
@@ -12,14 +12,9 @@ import kotlin.test.assertTrue
 private val FILE = FileEntry("/project/a.txt", "a.txt", false)
 private val OTHER = FileEntry("/project/sub/b.md", "b.md", false)
 
-/** A fake hit of the disk search, as its caller could have built it (its [path] only matters here). */
-private fun hit(
-    path: String,
-    line: Int,
-    column: Int = 0,
-    lineText: String = "",
-    entry: FileEntry = FILE,
-) = SearchHit(entry, path, line, column, lineText)
+// A fake hit of the disk search, as its caller could have built it (its [path] only matters here).
+private fun hit(path: String, line: Int, column: Int = 0, lineText: String = "", entry: FileEntry = FILE) =
+    SearchHit(entry, path, line, column, lineText)
 
 /** The hits of the documents modified in memory, and their replacement of the disk hits of the same files. */
 class UnsavedDocumentsSearchTest {

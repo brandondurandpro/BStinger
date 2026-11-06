@@ -12,12 +12,10 @@ import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.test.withKeyDown
 import org.example.kotlineditor.state.delete
-import org.example.kotlineditor.state.unsavedDocuments
 import org.example.kotlineditor.ui.EditorTags
 import org.example.kotlineditor.ui.TreeTags
 import kotlin.test.AfterTest
 import kotlin.test.Test
-import kotlin.test.assertEquals
 
 /**
  * Find in Files about the open documents modified in memory: their hits replace the disk ones of the same
@@ -49,7 +47,9 @@ class SearchUnsavedE2eTest {
         for (char in text) {
             onNodeWithTag(EditorTags.EDITOR).performKeyInput { pressKey(keyOf(char)) }
         }
-        val document = app.project.editor.activeTab!!.document!!
+        val document =
+            app.project.editor.activeTab!!
+                .document!!
         awaitCondition { document.isModified }
         waitForIdle()
     }
@@ -75,7 +75,11 @@ class SearchUnsavedE2eTest {
             onNodeWithTag(TreeTags.FIND_IN_FILES_INPUT).performKeyInput { pressKey(Key.Escape) }
             awaitNoTag(TreeTags.FIND_IN_FILES)
             saveFromEditor()
-            awaitCondition { !app.project.editor.activeTab!!.document!!.isModified }
+            awaitCondition {
+                !app.project.editor.activeTab!!
+                    .document!!
+                    .isModified
+            }
             awaitCondition { project.read("docs/guide.md").contains("zzfreshzz") }
 
             openFindInFiles()

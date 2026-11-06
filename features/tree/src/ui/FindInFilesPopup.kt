@@ -24,15 +24,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
-import org.example.kotlineditor.state.SearchOptions
 import org.example.kotlineditor.state.SearchHit
+import org.example.kotlineditor.state.SearchOptions
 import org.example.kotlineditor.state.TextPos
 import org.example.kotlineditor.state.TreeHost
 import org.example.kotlineditor.state.UnsavedDocument
 import org.example.kotlineditor.state.UnsavedDocumentsSearch
 import org.example.kotlineditor.state.relativePath
-import org.example.kotlineditor.state.unsavedDocuments
 import org.example.kotlineditor.state.selectedText
+import org.example.kotlineditor.state.unsavedDocuments
 import org.example.kotlineditor.telemetry.Attribute
 import org.example.kotlineditor.telemetry.Attributes
 import org.example.kotlineditor.telemetry.ClientTelemetry
@@ -115,13 +115,13 @@ private suspend fun search(project: TreeHost, query: String, matchCase: Boolean)
             project.fileIndex.findInFiles(query, ignoreCase = !matchCase)
         } catch (expected: IOException) {
             emptyList() // server unreachable: the unsaved documents are searched all the same
-        }.filterNot { hit -> hit.entry.path in modifiedPaths(documents) }
+        }.filterNot { hit -> hit.entry.path in modifiedDocumentsPaths(documents) }
     val inMemory = unsaved.hits(query, documents, SearchOptions(ignoreCase = !matchCase))
     return unsaved.merge(onDisk, inMemory)
 }
 
-/** Absolute paths of [documents]: their disk hits are dropped in favour of the unsaved ones. */
-private fun modifiedPaths(documents: List<UnsavedDocument>) = documents.map { it.entry.path }.toSet()
+// Absolute paths of [documents]: their disk hits are dropped in favour of the unsaved ones.
+private fun modifiedDocumentsPaths(documents: List<UnsavedDocument>) = documents.map { it.entry.path }.toSet()
 
 // From the query to the frame that shows its results.
 private suspend fun measuredSearch(project: TreeHost, query: String, matchCase: Boolean): List<SearchHit> =
