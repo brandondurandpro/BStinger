@@ -16,6 +16,13 @@ class DiskChanges(
      * changes): anything may have changed.
      */
     val complete: Boolean,
+    /**
+     * The versions of the open files among [paths] (the client said which documents it holds), each computed from
+     * the bytes the disk holds now; [paths] with none here (beyond the cap of an answer, or a file the disk
+     * refuses) are read and decided one by one, as when no version travels at all. Empty when the client named no
+     * open file, or the answer is not [complete].
+     */
+    val versions: Map<String, FileVersion> = emptyMap(),
 )
 
 /**
@@ -35,11 +42,15 @@ interface DiskWatch {
     /**
      * The changes under [root] after [since], once there are some, or none after a while (a long poll). A cursor of
      * another watch (the server restarted, [DiskCursor.START]) is answered at once, as not [DiskChanges.complete].
+     *
+     * [open] names the documents the client holds (their absolute paths): the answer carries the versions of those
+     * among the changes, so the client decides without reading them again.
      */
-    suspend fun changes(root: String, since: DiskCursor): DiskChanges
+    suspend fun changes(root: String, since: DiskCursor, open: List<String> = emptyList()): DiskChanges
 
     /** Nothing watches the disk. */
     object None : DiskWatch {
-        override suspend fun changes(root: String, since: DiskCursor): DiskChanges = awaitCancellation()
+        override suspend fun changes(root: String, since: DiskCursor, open: List<String>): DiskChanges =
+            awaitCancellation()
     }
 }

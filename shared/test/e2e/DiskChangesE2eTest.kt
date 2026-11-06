@@ -16,12 +16,15 @@ import org.example.kotlineditor.ui.GitTags
 import org.example.kotlineditor.ui.TreeTags
 import java.nio.file.Files
 import java.nio.file.attribute.FileTime
-import java.security.MessageDigest
 import kotlin.io.path.deleteExisting
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+
+// How many files a burst writes around the file it also changes, for the watch to answer them together.
+private const val TELLTALE_FILES = 10
 
 /**
  * Other programs change the disk while the window keeps the focus (a terminal, a build, an AI agent, `git` in a
@@ -53,12 +56,6 @@ class DiskChangesE2eTest {
         onNodeWithTag(TreeTags.TREE).performClick()
         onNodeWithTag(TreeTags.TREE).performKeyInput { withKeyDown(Key.AltLeft) { pressKey(Key.Nine) } }
         awaitTag(GitTags.GIT_PANEL)
-    }
-
-    private fun sha256Of(relative: String): String {
-        val bytes = Files.readAllBytes(project.root.resolve(relative))
-        val digest = MessageDigest.getInstance("SHA-256").digest(bytes)
-        return digest.joinToString(separator = "") { byte -> "%02x".format(byte) }
     }
 
     private fun touch(relative: String) {
@@ -236,6 +233,52 @@ class DiskChangesE2eTest {
         }
 
     @Test
+    fun `ten files written around an open file reload it, and change only what the program wrote`() =
+        runComposeUiTest {
+            val app = launchWithProject(project)
+            openFromTree("docs/guide.md")
+            val around = List(TELLTALE_FILES) { i -> "docs/around$i.md" }
+            val snapshot = DiskSnapshot.take(project)
+            // Another program writes ten files of the same burst, and the open file between them.
+            for (name in around) project.file(name, "Around\n")
+            project.file("docs/guide.md", "Rewritten between ten others\n")
+            awaitLine(0, "Rewritten between ten others")
+            awaitNoTag(EditorTags.DISK_CONFLICT)
+            val document =
+                checkNotNull(
+                    app.project.editor.activeTab
+                        ?.document,
+                )
+            // The document holds the version of the disk now, without being changed itself further.
+            awaitCondition { document.diskVersion?.sha256 == project.sha256Of("docs/guide.md") }
+            // What reaches the disk is what the program wrote, and nothing else.
+            snapshot.assertUnchanged(project, except = (around + "docs/guide.md").toSet())
+        }
+
+    @Test
+    fun `a touch the watch saw records the version of an open file, and says nothing`() =
+        runComposeUiTest {
+            val app = launchWithProject(project)
+            openFromTree("README.md")
+            val document =
+                checkNotNull(
+                    app.project.editor.activeTab
+                        ?.document,
+                )
+            val before = checkNotNull(document.diskVersion)
+            // A witness of the same burst, whatever the touch of the open file reports to the watch.
+            project.file("Witness.kt", "class Witness\n")
+            touch("README.md")
+            // The version of the touched file reached the document through the watch: its hash is the one the
+            // document knows (the bytes were always the same), and it is recorded without a word.
+            awaitCondition { document.diskVersion?.mtimeMs ?: -1L > before.mtimeMs }
+            assertEquals(before.sha256, document.diskVersion?.sha256)
+            awaitNoTag(EditorTags.DISK_CONFLICT)
+            assertFalse(document.isModified)
+            assertEquals(before.sha256, project.sha256Of("README.md"))
+        }
+
+    @Test
     fun `a file with a backslash in its name created by another program shows in the tree`() =
         runComposeUiTest {
             // A backslash is a character of a name on Linux and macOS, a separator on Windows.
@@ -259,7 +302,7 @@ class DiskChangesE2eTest {
                 val tab = app.project.editor.activeTab
                 val document = tab?.document
                 val known = document?.diskVersion
-                known?.sha256 == sha256Of("README.md")
+                known?.sha256 == project.sha256Of("README.md")
             }
             awaitNoTag(EditorTags.DISK_CONFLICT)
         }

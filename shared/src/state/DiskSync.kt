@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.example.kotlineditor.model.DiskChanges
 import org.example.kotlineditor.model.DiskCursor
+import org.example.kotlineditor.model.FileVersion
 
 // Wait before polling again a server that failed to answer (unreachable, or the project is gone).
 private const val RETRY_MS = 1_000L
@@ -23,7 +24,7 @@ internal suspend fun ProjectState.followDisk() {
     while (true) {
         val answer =
             try {
-                services.disk.changes(root.path, cursor)
+                services.disk.changes(root.path, cursor, openPaths())
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
@@ -41,6 +42,13 @@ internal suspend fun ProjectState.followDisk() {
     }
 }
 
+// The documents the tabs hold (absolute paths, each once; the diffs of Git are not documents of their own): they
+// are what the watch gives a version for, so their changes are decided on it, and the others are read one by one.
+private fun ProjectState.openPaths(): List<String> {
+    val documents = editor.allTabs.filterNot { it.isDiff }
+    return documents.map { it.entry.path }.distinct()
+}
+
 private suspend fun ProjectState.applyDiskChanges(changes: DiskChanges) {
     if (!changes.complete) {
         synchronize()
@@ -49,7 +57,7 @@ private suspend fun ProjectState.applyDiskChanges(changes: DiskChanges) {
     val separator = root.path.separator()
     val gitPrefix = root.path + separator + GIT_DIRECTORY
     val (inGit, files) = changes.paths.partition { it == gitPrefix || it.startsWith(gitPrefix + separator) }
-    if (files.isNotEmpty()) filesChanged(files, separator)
+    if (files.isNotEmpty()) filesChanged(files, changes.versions, separator)
     // A long poll that waited for nothing.
     if (changes.paths.isEmpty()) return
     // A checkout, a commit or a stage: the branch, the status and every editor's diff may have moved.
@@ -57,7 +65,7 @@ private suspend fun ProjectState.applyDiskChanges(changes: DiskChanges) {
 }
 
 // [separator] is the one of the disk of the server: on Linux and macOS a backslash is a character of a name.
-private fun ProjectState.filesChanged(paths: List<String>, separator: Char) {
+private fun ProjectState.filesChanged(paths: List<String>, versions: Map<String, FileVersion>, separator: Char) {
     paths
         .map { it.substring(0, it.lastIndexOf(separator).coerceAtLeast(0)) }
         .distinct()
@@ -67,8 +75,16 @@ private fun ProjectState.filesChanged(paths: List<String>, separator: Char) {
     val tabs = editor.allTabs.filter { !it.isDiff && it.entry.path in changed }
     for (tab in tabs.distinctBy { it.entry.path }) {
         val document = tab.document ?: continue
+        val version = versions[tab.entry.path]
         scope.launch {
-            if (reloadIfChanged(tab.entry, document)) editor.reloadGitOf(tab.entry)
+            // The version travels when the file is open: decided on it, or read as today when there is none.
+            val followed =
+                if (version != null) {
+                    followVersionChange(tab.entry, document, version)
+                } else {
+                    reloadIfChanged(tab.entry, document)
+                }
+            if (followed) editor.reloadGitOf(tab.entry)
         }
     }
 }

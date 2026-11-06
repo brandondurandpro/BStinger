@@ -29,7 +29,8 @@ fun versionOf(path: Path, bytes: ByteArray?): FileVersion? {
     )
 }
 
-private fun statOf(target: Path): BasicFileAttributes? =
+// The stat of the file (its target, already found by [realTargetOf]), shared with the watch's version cache.
+internal fun statOf(target: Path): BasicFileAttributes? =
     try {
         Files.readAttributes(target, BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS)
     } catch (_: IOException) {
@@ -37,7 +38,7 @@ private fun statOf(target: Path): BasicFileAttributes? =
     }
 
 // The file at [path], links followed, `null` when there is none (a link whose target is missing included).
-private fun realTargetOf(path: Path): Path? =
+internal fun realTargetOf(path: Path): Path? =
     try {
         path.toRealPath()
     } catch (_: IOException) {

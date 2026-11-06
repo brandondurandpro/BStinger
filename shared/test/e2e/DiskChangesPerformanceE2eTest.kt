@@ -4,6 +4,7 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.v2.runComposeUiTest
+import org.example.kotlineditor.ui.EditorTags
 import org.example.kotlineditor.ui.TreeTags
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -76,5 +77,36 @@ class DiskChangesPerformanceE2eTest {
                 awaitTag(TreeTags.treeRow("src/Witness.kt"))
                 renderFrame()
             }
+        }
+
+    @Test
+    fun `a build writing thousands of files around one open file reconciles fast`() =
+        runComposeUiTest {
+            project.file(name(0), "")
+            val app = launchWithProject(project)
+            openFromTree(name(0))
+            val document =
+                checkNotNull(
+                    app.project.editor.allTabs
+                        .firstOrNull { !it.isDiff }
+                        ?.document,
+                )
+            // A build writes its thousands of outputs, and one drew in the same burst the open file: the watch
+            // answers the burst with the version of the open file alone, the tab follows it, nothing else read.
+            measure(
+                "$FILES build outputs with one open file reconciled",
+                budgetMillis = 15_000,
+                budgetMegabytes = 1_000,
+            ) {
+                repeat(FILES) { project.file("build/classes/c${it % 50}/C$it.class", "") }
+                project.file(name(0), "class Reconciled from a burst\n")
+                awaitCondition(timeout = 30_000) {
+                    // Reloaded: the document holds the version the burst left on the disk, its first line is it.
+                    document.diskVersion?.sha256 == project.sha256Of(name(0)) &&
+                        document.lines.firstOrNull() == "class Reconciled from a burst"
+                }
+                renderFrame()
+            }
+            awaitNoTag(EditorTags.DISK_CONFLICT)
         }
 }
