@@ -220,7 +220,7 @@ private fun engineLabel(search: FindInFilesSearch) {
 // An option of the options row: a ToggleChip, tagged like the tests click it.
 @Composable
 private fun chip(tag: String, text: String, on: Boolean, onToggle: () -> Unit) {
-    Box(Modifier.testTag(tag)) { ToggleChip(text, on, onToggle) }
+    ToggleChip(text, on, Modifier.testTag(tag), onToggle)
 }
 
 // The scope chip: what is searched now (`.` for the whole root), opening the dropdown of the directory choices.

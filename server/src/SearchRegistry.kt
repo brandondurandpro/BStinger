@@ -14,6 +14,7 @@ import org.example.kotlineditor.model.SearchBatch
 import org.example.kotlineditor.rpc.Frame
 import org.example.kotlineditor.rpc.FrameKind
 import org.example.kotlineditor.rpc.toJson
+import java.util.TreeMap
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -81,7 +82,10 @@ private class ServerSearch(
     batches: () -> Flow<SearchBatch>,
 ) {
     private val lock = Any()
-    private val events = HashMap<Long, Frame>()
+
+    // The batches buffered, in the order of their seq: a resume replays older before newer, since the client
+    // drops everything up to its last known sequence number.
+    private val events = TreeMap<Long, Frame>()
     private var endFrame: Frame? = null
 
     // Cancelled by [cancel] (the session is over); the search flow stops ripgrep or the local search with it.
@@ -107,8 +111,12 @@ private class ServerSearch(
 
     /** Replays the batches after [lastSeq], then the end frame; the client asks this after a reconnection. */
     fun resume(lastSeq: Long) {
-        val frames = synchronized(lock) { events.filterKeys { it > lastSeq }.values.toList() }
-        frames.forEach(push)
+        val replay =
+            synchronized(lock) {
+                val afterLast = events.tailMap(lastSeq).entries.toList()
+                if (afterLast.firstOrNull()?.key == lastSeq) afterLast.drop(1) else afterLast
+            }
+        replay.forEach { push(it.value) }
         synchronized(lock) { endFrame }?.let(push)
     }
 
