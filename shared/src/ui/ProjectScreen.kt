@@ -285,6 +285,7 @@ private fun ReadyEditor(
         document,
         onReload = { project.editor.reloadFromDisk(tab) },
         onKeep = { project.editor.keepEdits(tab) },
+        onCompare = { project.editor.compareWithDisk(tab) },
     )
     CodeEditor(
         tab,

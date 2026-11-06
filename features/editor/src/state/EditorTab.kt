@@ -54,14 +54,16 @@ class HorizontalScroll {
 }
 
 /**
- * Identity of a tab showing [entry] as text, as its uncommitted diff, or as the diff of [commit]. The path is taken
- * with `/` separators: on Windows the tree lists `C:\p\a.kt` while a path rebuilt from Git (a diff, a commit) is
- * `C:\p/a.kt`, and both must open the same tab.
+ * Identity of a tab showing [entry] as text, as its uncommitted diff, as the diff of [commit], or as the Compare of
+ * a conflict (its editor content against what the disk holds). The path is taken with `/` separators: on Windows
+ * the tree lists `C:\p\a.kt` while a path rebuilt from Git (a diff, a commit) is `C:\p/a.kt`, and both must open
+ * the same tab.
  */
-fun tabKey(entry: FileEntry, isDiff: Boolean, commit: CommitDiffTarget?): String {
+fun tabKey(entry: FileEntry, isDiff: Boolean, commit: CommitDiffTarget?, isCompare: Boolean = false): String {
     val path = slashed(entry.path)
     return when {
         commit != null -> "diff@${commit.hash}:$path"
+        isCompare -> "compare:$path"
         isDiff -> "diff:$path"
         else -> path
     }
@@ -86,14 +88,17 @@ class EditorTab(
     val isDiff: Boolean = false,
     /** For a diff tab, the commit whose change it shows; null for the uncommitted changes. */
     val commit: CommitDiffTarget? = null,
+    /** A compare tab: the conflict banner's diff between the editor's content and what the disk holds. */
+    val isCompare: Boolean = false,
 ) {
-    /** Identity of the tab: a file can be open as text, as its uncommitted diff, and as the diff of each commit. */
-    val key: String get() = tabKey(entry, isDiff, commit)
+    /** Identity of the tab: a file open as text, as its diff, as the diff of a commit, or compared. */
+    val key: String get() = tabKey(entry, isDiff, commit, isCompare)
 
     val title: String
         get() =
             when {
                 commit != null -> "${entry.name} @ ${commit.shortHash}"
+                isCompare -> "Compare: ${entry.name}"
                 isDiff -> "Diff: ${entry.name}"
                 else -> entry.name
             }

@@ -118,6 +118,10 @@ private fun tagsOf(tab: EditorTab): TabTags {
             )
         }
 
+        tab.isCompare -> {
+            TabTags(EditorTags.compareTab(tab.relativePath), EditorTags.compareTabClose(tab.relativePath))
+        }
+
         tab.isDiff -> {
             TabTags(EditorTags.diffTab(tab.relativePath), EditorTags.diffTabClose(tab.relativePath))
         }

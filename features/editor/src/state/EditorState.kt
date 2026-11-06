@@ -62,8 +62,8 @@ class EditorState(
     fun openCommitDiff(entry: FileEntry, commit: CommitDiffTarget): EditorTab =
         openIn(activePane, entry, diff = true, commit = commit)
 
-    /** Recomputes every open diff tab (the Git status changed). */
-    fun reloadDiffs() = allTabs.filter { it.isDiff && it.commit == null }.forEach(files::loadDiff)
+    /** Recomputes every open diff tab (the Git status changed); a compare tab holds its own lines, not Git's. */
+    fun reloadDiffs() = allTabs.filter { it.isDiff && !it.isCompare && it.commit == null }.forEach(files::loadDiff)
 
     /** Recomputes the gutter change marks of the open text files (after a save, a commit, a branch switch). */
     fun reloadChanges() = allTabs.filterNot { it.isDiff }.distinctBy { it.entry.path }.forEach(files::loadChanges)
@@ -74,8 +74,8 @@ class EditorState(
     /** Recomputes the diff tabs, gutter marks and blame of [entry] alone (saved, the other files are unchanged). */
     fun reloadGitOf(entry: FileEntry) {
         val tabs = allTabs.filter { it.entry.path == entry.path }
-        // A commit's diff never changes: only the uncommitted one is recomputed.
-        tabs.filter { it.isDiff && it.commit == null }.forEach(files::loadDiff)
+        // A commit's diff never changes: only the uncommitted one is recomputed (a compare holds its own lines).
+        tabs.filter { it.isDiff && !it.isCompare && it.commit == null }.forEach(files::loadDiff)
         tabs.firstOrNull { !it.isDiff }?.let(files::loadChanges)
         tabs.firstOrNull { it.blameVisible }?.let(files::loadBlame)
     }
@@ -92,10 +92,17 @@ class EditorState(
         entry: FileEntry,
         diff: Boolean = false,
         commit: CommitDiffTarget? = null,
+        compare: Boolean = false,
     ): EditorTab {
-        val key = tabKey(entry, diff, commit)
+        val key = tabKey(entry, diff, commit, compare)
         val tab =
-            pane.tabs.firstOrNull { it.key == key } ?: EditorTab(entry, relativePath(entry), diff, commit).also { tab ->
+            pane.tabs.firstOrNull { it.key == key } ?: EditorTab(
+                entry,
+                relativePath(entry),
+                diff,
+                commit,
+                compare,
+            ).also { tab ->
                 val insertAt = pane.activeTab?.let { pane.tabs.indexOf(it) + 1 } ?: pane.tabs.size
                 pane.tabs.add(insertAt, tab)
                 // Same file already open in the other pane: share its content instead of reading it again.
@@ -186,6 +193,16 @@ class EditorState(
 
     /** A conflict resolved for the edits of [tab]: they are saved over what another program wrote. */
     fun keepEdits(tab: EditorTab) = files.keepEdits(tab)
+
+    /** Opens (or recomputes) the compare of [tab]'s file: the editor's lines against what the disk holds. */
+    fun compareWithDisk(tab: EditorTab) {
+        val entry = tab.entry
+        val pane = paneOf(tab) ?: activePane
+        val compareTab = openIn(pane, entry, diff = true, compare = true)
+        scope.launch {
+            compareTab.status = files.compare(tab)
+        }
+    }
 
     /**
      * Saves every modified tab and returns once everything is on disk (before a rename or a Git action); once every

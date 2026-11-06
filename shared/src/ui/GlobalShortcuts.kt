@@ -218,10 +218,28 @@ internal class GlobalShortcuts(private val context: IdeContext, private val ideO
                 true
             }
 
+            context.escapeClosesCompare(event) -> {
+                context.closeCompare()
+                true
+            }
+
             else -> {
                 IDE_SHORTCUTS.dispatch(event, context)
             }
         }
+    }
+
+    // Escape above a compare tab closes it, back to the editor the conflict banner still offers its choices on.
+    private fun IdeContext.escapeClosesCompare(event: KeyEvent): Boolean {
+        val escape = event.key == Key.Escape && event.type == KeyEventType.KeyDown
+        val findings = project.popup == null && !project.find.visible
+        val onCompare = editor.activeTab?.isCompare == true
+        return escape && findings && onCompare
+    }
+
+    // Closes the compare tab (the most recently activated tab comes back).
+    private fun IdeContext.closeCompare() {
+        editor.activeTab?.let(editor::close)
     }
 }
 
