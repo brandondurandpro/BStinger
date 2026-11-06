@@ -3,9 +3,12 @@ package org.example.kotlineditor.server
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.example.kotlineditor.model.FileEntry
+import org.example.kotlineditor.model.FindOptions
+import org.example.kotlineditor.model.SearchEngine
 import org.example.kotlineditor.model.TextMatch
 import org.example.kotlineditor.server.ripgrep.RipgrepBinary
 import org.example.kotlineditor.server.ripgrep.RipgrepProvisioner
@@ -21,6 +24,7 @@ import kotlin.io.path.writeText
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -242,6 +246,35 @@ class RipgrepSearchTest {
         }
 
     @Test
+    fun `the options change what ripgrep finds - whole words, file pattern, scope and ignored files`() =
+        runBlocking {
+            val rg = TestRipgrep.require()
+            root.resolve(".git").createDirectories() // .gitignore applies inside a Git repository, like ripgrep's
+            write("src/One.kt", "needle pinned needling\n")
+            write("docs/Two.md", "needle here\n")
+            write("src/build/out.txt", "needle in build\n")
+            write("lib/generated.txt", "needle in gitignored\n")
+            write(".gitignore", "lib/generated.txt\n")
+            val search = search(rg)
+
+            val wholeWords = FindOptions(text = "needle", ignoreCase = false, wholeWord = true)
+            assertEquals(
+                listOf("docs/Two.md:0:0", "src/One.kt:0:0"),
+                search.findInFiles(project, wholeWords, 100).relative(),
+            )
+
+            val kotlinOnly = wholeWords.copy(filePattern = "*.kt")
+            assertEquals(listOf("src/One.kt:0:0"), search.findInFiles(project, kotlinOnly, 100).relative())
+
+            val inSource = wholeWords.copy(scope = "src")
+            assertEquals(listOf("src/One.kt:0:0"), search.findInFiles(project, inSource, 100).relative())
+
+            val everything = wholeWords.copy(includeIgnored = true)
+            assertEquals(4, search.findInFiles(project, everything, 100).size)
+            assertAllEnded()
+        }
+
+    @Test
     fun `file lists are bounded by the limit after sorting`() =
         runBlocking {
             val rg = TestRipgrep.require()
@@ -251,6 +284,58 @@ class RipgrepSearchTest {
             // The first files of the sorted list, not of whatever order ripgrep listed them in.
             assertEquals(listOf("a2.txt", "b4.txt", "c1.txt"), hits.relativePaths())
             assertAllEnded()
+        }
+
+    @Test
+    fun `an invalid regular expression fails every engine with its message`() =
+        runBlocking {
+            val rg = TestRipgrep.require()
+            write("a.txt", "needle\n")
+            val search = search(rg)
+            val brokenRegex = FindOptions(text = "needle(", ignoreCase = false, regex = true)
+            val failure =
+                assertFailsWith<IllegalArgumentException> { search.findInFiles(project, brokenRegex, 10) }
+            assertTrue(!failure.message.isNullOrEmpty(), "expected the reason the query cannot run")
+            assertAllEnded()
+        }
+
+    @Test
+    fun `the streamed search runs in numbered batches and its last one carries the total and the engine`() =
+        runBlocking {
+            val rg = TestRipgrep.require()
+            // 80 matches: more than one batch of 32, whatever the order of the files.
+            write("a.txt", "needle line\n".repeat(40))
+            write("b.txt", "needle line\n".repeat(40))
+            val search = search(rg)
+            val batches = search.searchBatches(project, FindOptions(text = "needle"), 500).toList()
+            val last = batches.last()
+            assertEquals((1L..batches.size).toList(), batches.map { it.seq }, "the batches number from 1")
+            val opened = batches.dropLast(1)
+            assertTrue(opened.all { it.hits.size in 1..BATCH_HITS }, "batch sizes: $batches")
+            assertTrue(opened.none { it.done }, "only the last batch closes the search")
+            assertTrue(last.done, "the last batch closes the search")
+            assertEquals(SearchEngine.Ripgrep, last.engine)
+            assertEquals(80, last.total)
+            assertEquals(80, batches.sumOf { it.hits.size })
+            assertAllEnded()
+        }
+
+    @Test
+    fun `the streamed search falls back to the built-in engine when ripgrep is unavailable`() =
+        runBlocking {
+            write("a.txt", "x needle\n")
+            val search = search(root.resolve("missing/rg").toString())
+            assertNull(search.ripgrep())
+            val batches = search.searchBatches(project, FindOptions(text = "needle"), 10).toList()
+            val last = batches.last()
+            val hits = batches.flatMap { it.hits }
+            assertTrue(last.done, "the search ends even when ripgrep is not there")
+            assertEquals(SearchEngine.BuiltIn, last.engine)
+            assertEquals(1, last.total)
+            // The batches build one result: the last one closes it, the ones before hold the hits.
+            assertEquals(listOf("a.txt:0:2"), hits.relative())
+            // Nothing was ever started: ripgrep is not there, the built-in walk never launched a process.
+            assertTrue(started.isEmpty(), "no ripgrep was started when it is missing")
         }
 
     @Test
@@ -270,7 +355,6 @@ class RipgrepSearchTest {
     @Test
     fun `file lists fall back to the built-in walk when ripgrep fails`() {
         if (isWindows) return
-        // Passes for ripgrep (`--version`) but fails every search, like a broken or incompatible build.
         val fake = root.resolve("tools/rg")
         fake.parent.createDirectories()
         fake.writeText(
@@ -291,7 +375,63 @@ class RipgrepSearchTest {
         assertAllEnded()
     }
 
+    @Test
+    fun `the streamed search falls back to the built-in engine when ripgrep fails`() {
+        if (isWindows) return
+        val fake = root.resolve("tools/rg")
+        fake.parent.createDirectories()
+        fake.writeText(
+            """
+            #!/bin/sh
+            if [ "$1" = --version ]; then echo 'ripgrep 0.0.0'; exit 0; fi
+            exit 2
+            """.trimIndent(),
+        )
+        fake.toFile().setExecutable(true)
+        write("src/a.txt", "x needle\n")
+        runBlocking {
+            val search = search(fake.toString())
+            val batches = search.searchBatches(project, FindOptions(text = "needle"), 10).toList()
+            assertEquals(SearchEngine.BuiltIn, batches.last().engine)
+            assertEquals(listOf("src/a.txt:0:2"), batches.flatMap { it.hits }.relative())
+        }
+        assertAllEnded()
+    }
+
+    @Test
+    fun `the streamed search says why a query cannot run instead of pretending it found nothing`() =
+        runBlocking {
+            val rg = TestRipgrep.require()
+            write("a.txt", "needle\n")
+            val search = search(rg)
+            val brokenRegex = FindOptions(text = "needle(", ignoreCase = false, regex = true)
+            val batches = search.searchBatches(project, brokenRegex, 10).toList()
+            val last = batches.single()
+            assertTrue(last.done, "the failed search still ends its stream")
+            assertTrue(!last.error.isNullOrEmpty(), "expected the reason the query cannot run")
+            assertTrue(last.hits.isEmpty(), "a search that cannot run found nothing")
+            assertEquals(0, last.total)
+            assertAllEnded()
+        }
+
+    @Test
+    fun `the streamed search stops at its limit`() =
+        runBlocking {
+            val rg = TestRipgrep.require()
+            write("a.txt", "needle line\n".repeat(50))
+            val search = search(rg)
+            val batches = search.searchBatches(project, FindOptions(text = "needle"), 20).toList()
+            val last = batches.last()
+            assertEquals(20, last.total)
+            assertEquals(SearchEngine.Ripgrep, last.engine)
+            assertEquals(20, batches.sumOf { it.hits.size })
+            assertAllEnded()
+        }
+
     private companion object {
         val isWindows = System.getProperty("os.name").startsWith("Windows")
+
+        /** Same batch size as [org.example.kotlineditor.server.RipgrepSearch]'s streaming. */
+        const val BATCH_HITS = 32
     }
 }

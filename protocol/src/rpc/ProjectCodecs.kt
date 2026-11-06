@@ -11,35 +11,14 @@ import kotlinx.serialization.json.put
 import org.example.kotlineditor.model.FileSymbol
 import org.example.kotlineditor.model.ProjectSession
 import org.example.kotlineditor.model.SessionFile
-import org.example.kotlineditor.model.TextMatch
 import org.example.kotlineditor.syntax.Declaration
 import org.example.kotlineditor.syntax.DeclarationKind
 
-// JSON of project-wide data (search results, symbols, sessions).
+// JSON of the data of the project tree: the declarations (outline, go to symbol), and the session of a project.
 
 private const val FILE = "file"
 private const val LINE = "line"
 private const val COLUMN = "column"
-
-/** Find in Files results. */
-fun List<TextMatch>.matchesJson(): JsonArray =
-    JsonArray(
-        map {
-            buildJsonObject {
-                put(FILE, it.entry.toJson())
-                put(LINE, it.line)
-                put(COLUMN, it.column)
-                put("text", it.lineText)
-            }
-        },
-    )
-
-/** Reads Find in Files results. */
-fun JsonElement.matches(): List<TextMatch> =
-    jsonArray.map {
-        val match = it.jsonObject
-        TextMatch(match.field(FILE).entry(), match.int(LINE), match.int(COLUMN), match.string("text"))
-    }
 
 /** One declaration. */
 fun Declaration.toJson(): JsonObject =

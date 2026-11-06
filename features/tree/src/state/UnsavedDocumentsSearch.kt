@@ -2,6 +2,7 @@ package org.example.kotlineditor.state
 
 import androidx.compose.runtime.Immutable
 import org.example.kotlineditor.model.FileEntry
+import org.example.kotlineditor.model.FindOptions
 
 /**
  * The options of a text search (Find in Files). Only case-insensitivity is shown in the popups so far; the other
@@ -16,6 +17,9 @@ data class SearchOptions(
     /** Whether [findInFiles]' query is a regular expression rather than a text to find literally. */
     val regex: Boolean = false,
 )
+
+// The in-memory documents are searched with the same meanings as the engine of the server used.
+private fun FindOptions.toSearchOptions() = SearchOptions(ignoreCase = ignoreCase, wholeWord = wholeWord, regex = regex)
 
 /**
  * A document modified in memory, with its text at the moment of the search (never a stale copy): Find in Files
@@ -69,6 +73,18 @@ class UnsavedDocumentsSearch(private val relativePath: (FileEntry) -> String) {
      */
     fun merge(disk: List<SearchHit>, unsaved: List<SearchHit>): List<SearchHit> =
         (disk + unsaved).sortedWith(BY_PATH_THEN_LINE)
+
+    /**
+     * The list displayed for one search ([disk]'s hits and the options they were found with): the unsaved
+     * documents hit in memory, and their file no longer shows the disk hits.
+     */
+    fun over(disk: List<SearchHit>, options: FindOptions, documents: List<UnsavedDocument>): List<SearchHit> {
+        if (documents.isEmpty()) return merge(disk, emptyList())
+        val paths = documents.map { it.entry.path }.toSet()
+        val replaced = disk.filterNot { it.entry.path in paths }
+        val inMemory = hits(options.text, documents, options.toSearchOptions())
+        return merge(replaced, inMemory)
+    }
 
     // Hits in every line of [document], one per line at most.
     private fun hitsOf(document: UnsavedDocument, matcher: Matcher): List<SearchHit> {

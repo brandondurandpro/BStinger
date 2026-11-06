@@ -17,6 +17,7 @@ import org.example.kotlineditor.model.DiskWatch
 import org.example.kotlineditor.model.FileContent
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.FileSymbol
+import org.example.kotlineditor.model.FindOptions
 import org.example.kotlineditor.model.GitBranchInfo
 import org.example.kotlineditor.model.GitClient
 import org.example.kotlineditor.model.GitCommit
@@ -26,6 +27,7 @@ import org.example.kotlineditor.model.ProjectFileSystem
 import org.example.kotlineditor.model.ProjectSearch
 import org.example.kotlineditor.model.ProjectSession
 import org.example.kotlineditor.model.RecentProjectsStore
+import org.example.kotlineditor.model.SearchStream
 import org.example.kotlineditor.model.ServerPlaces
 import org.example.kotlineditor.model.SessionStore
 import org.example.kotlineditor.model.TelemetrySettings
@@ -46,6 +48,7 @@ private const val FILE = "file"
 private const val PATH = "path"
 private const val NAME = "name"
 private const val TERMINAL = "terminal"
+private const val STREAM = "stream"
 
 /** Every IDE service, backed by a server. */
 fun RpcClient.appServices(): AppServices =
@@ -156,15 +159,46 @@ class RemoteSearch(private val client: RpcClient) : ProjectSearch {
         return result.entries()
     }
 
-    override suspend fun findInFiles(root: FileEntry, query: String, ignoreCase: Boolean, limit: Int): List<TextMatch> {
+    override suspend fun findInFiles(root: FileEntry, query: String, ignoreCase: Boolean, limit: Int): List<TextMatch> =
+        findInFiles(root, FindOptions(query, ignoreCase), limit)
+
+    override suspend fun findInFiles(root: FileEntry, options: FindOptions, limit: Int): List<TextMatch> {
         val result =
             client.call(Method.FindInFiles) {
                 put(ROOT, root.toJson())
-                put("query", query)
-                put("ignoreCase", ignoreCase)
-                put(LIMIT, limit)
+                putParams(options, limit)
             }
         return result.matches()
+    }
+
+    /**
+     * Find in Files running as a stream of batches on the server. The request id of a FindInFilesStream is the
+     * id of its batch stream, registered before the request is sent so no batch can arrive unlistened; the
+     * stream resumes by itself after a reconnection, without a new call from the caller.
+     */
+    override fun findInFilesStream(root: FileEntry, options: FindOptions, limit: Int): SearchStream {
+        val id = client.newId()
+        val batches = client.openSearchStream(id)
+        client.scope.launch {
+            try {
+                client.call(Method.FindInFilesStream, id = id) {
+                    put(ROOT, root.toJson())
+                    putParams(options, limit)
+                }
+            } catch (_: IOException) {
+                // The client closed, or the server (restart? no session any more): end the stream cleanly.
+                client.closeStream(id)
+            }
+        }
+        return SearchStream(id, flow { for (batch in batches) emit(batch) })
+    }
+
+    /** Asks the server for the batches of the stream [streamId] received after [lastSeq], after a reconnection. */
+    suspend fun resumeSearch(streamId: Long, lastSeq: Long) {
+        client.call(Method.FindInFilesResume) {
+            put(STREAM, streamId)
+            put("lastSeq", lastSeq)
+        }
     }
 
     override suspend fun symbols(root: FileEntry): List<FileSymbol> =
