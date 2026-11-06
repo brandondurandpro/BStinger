@@ -241,6 +241,7 @@ internal fun decorations(
                 visualColumn(line, line.length, inlays) + 1
             }
         } ?: -1
+    val extraSelections = document.extraCarets.extraSelectionsOn(index, line, inlays)
     val word = hints.identifier.takeUnless { serverHighlights }
     val bracketColumns =
         hints.brackets
@@ -267,6 +268,7 @@ internal fun decorations(
         change = change,
         deleted = deleted,
         blame = blame,
+        extraSelections = extraSelections,
     )
 }
 

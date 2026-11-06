@@ -54,9 +54,9 @@ fun codeInsightProject(): SampleProject =
 // A PHP file declaring an empty type.
 private fun phpFile(declaration: String): String = listOf("<?php", "", declaration, "{", "}", "").joinToString("\n")
 
-// Where the character at [column] of the editor line [line] is, in the line text node's coordinates.
+/** Where the character at [column] of the editor line [line] is, in the line text node's coordinates. */
 @OptIn(ExperimentalTestApi::class)
-private fun ComposeUiTest.cellOffset(line: Int, column: Int): Offset {
+fun ComposeUiTest.cellOffset(line: Int, column: Int): Offset {
     val node = onNodeWithTag(EditorTags.lineText(line), useUnmergedTree = true).fetchSemanticsNode()
     val text = node.config[androidx.compose.ui.semantics.SemanticsProperties.Text].joinToString("") { it.text }
     val charWidth = node.size.width.toFloat() / text.length.coerceAtLeast(1)
