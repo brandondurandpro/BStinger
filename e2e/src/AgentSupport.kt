@@ -175,6 +175,12 @@ fun ComposeUiTest.awaitAgent(name: String) = awaitOption(AgentTags.AGENT_AGENT, 
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.chooseAgent(id: String) = chooseOption(AgentTags.AGENT_AGENT, AgentTags.agentAgent(id))
 
+/** Types [text] in the field that filters the agents of the conversation's menu. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.typeFilter(text: String) {
+    awaitTag(AgentTags.AGENT_AGENT_FILTER).performTextInput(text)
+}
+
 /** Waits until the effort button shows [name]. */
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.awaitEffort(name: String) = awaitOption(AgentTags.AGENT_EFFORT, name)

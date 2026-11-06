@@ -131,6 +131,24 @@ class AgentPickerE2eTest {
         }
 
     @Test
+    fun `a filter typed in the menu narrows the agents of the registry`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, agentPreferences(), agents = agents())
+            val conversation = startConversation(app)
+            awaitAgent("Settings")
+            awaitTag(AgentTags.AGENT_AGENT).performClick()
+            awaitTag(AgentTags.agentAgent("unsigned-agent"), timeout = AGENT_TIMEOUT)
+            typeFilter("fake")
+            // Only the row that the filter names; clicking it chooses the usual way.
+            awaitNoTag(AgentTags.agentAgent("unsigned-agent"))
+            awaitTag(AgentTags.agentAgent("fake-agent")).performClick()
+            awaitNoTag(AgentTags.agentAgent("fake-agent"))
+            sendPrompt("count")
+            awaitShown(conversation, "Prompt 1 of")
+            awaitIdle(conversation)
+        }
+
+    @Test
     fun `an agent the server cannot run is shown why and stays unchosen`() =
         runComposeUiTest {
             val app = launchWithProject(project, agentPreferences(), agents = agents())

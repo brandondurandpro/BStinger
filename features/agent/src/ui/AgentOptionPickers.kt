@@ -6,9 +6,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.Composable
@@ -33,6 +36,9 @@ import org.example.kotlineditor.state.AgentState
 import org.example.kotlineditor.state.Conversation
 
 private val MENU_WIDTH = 320.dp
+
+// A menu shows a few values at once, the rest comes scrolling in place.
+private val MENU_HEIGHT = 300.dp
 
 /** The model of the session of [conversation]. */
 @Composable
@@ -88,10 +94,13 @@ private fun OptionPicker(
                 closes
             }
         DropdownMenu(open, onDismissRequest = { open = false }, Modifier.widthIn(max = MENU_WIDTH).then(escape)) {
-            for (value in option.values) {
-                OptionItem(option, value, valueTag(value.value)) {
-                    open = false
-                    agent.options.choose(conversation, option.id, value.value)
+            // The values may be longer than a menu shows: capped at a few rows, scrolled in place.
+            Column(Modifier.heightIn(max = MENU_HEIGHT).verticalScroll(rememberScrollState())) {
+                for (value in option.values) {
+                    OptionItem(option, value, valueTag(value.value)) {
+                        open = false
+                        agent.options.choose(conversation, option.id, value.value)
+                    }
                 }
             }
         }

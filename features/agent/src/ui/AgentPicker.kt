@@ -4,6 +4,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.TooltipArea
 import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -22,6 +23,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.HorizontalDivider
@@ -33,13 +35,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -147,18 +153,28 @@ private fun AgentPickerMenu(
     failure: String?,
     choose: (String?) -> Unit,
 ) {
+    // What the field above the list shows: the agents it names, the one the settings choose always standing.
+    var filter by remember { mutableStateOf("") }
+    val wanted = wantedAgents(entries, filter)
+    AgentFilterField(filter) { filter = it }
     if (conversation.agent != null) {
         AgentOfSettingsRow(agent, choose)
         HorizontalDivider(color = IdeColors.Separator, thickness = 1.dp)
     }
     // The registry may be longer than the menu shows: a window of fixed height on it, scrolled, with its scrollbar.
-    val rows = entries?.size ?: 1
+    val rows = when {
+        wanted == null -> 1
+        else -> maxOf(wanted.size, 1)
+    }
     val listHeight = min(MENU_HEIGHT.value, MENU_ROW_HEIGHT.value * rows).dp
     val scroll = rememberScrollState()
     Row(Modifier.width(MENU_WIDTH).height(listHeight)) {
         Column(Modifier.weight(1f).verticalScroll(scroll)) {
-            for (entry in entries.orEmpty()) {
+            for (entry in wanted.orEmpty()) {
                 AgentChoiceRow(conversation, entry, choose)
+            }
+            if (wanted?.isEmpty() == true) {
+                RegistryStatusRow("""No agent named "$filter".""", canClose = false, choose = choose)
             }
             if (entries == null) {
                 val status =
@@ -169,6 +185,46 @@ private fun AgentPickerMenu(
         VerticalScrollbar(
             rememberScrollbarAdapter(scroll),
             Modifier.fillMaxHeight().padding(end = 2.dp),
+        )
+    }
+}
+
+// The agents of the registry that [filter] names — its name or its id has it, case ignored; all of them while it
+// stands empty, and not read yet, the registry's turn.
+private fun wantedAgents(entries: List<AgentRegistryEntry>?, filter: String): List<AgentRegistryEntry>? {
+    val listed = entries ?: return null
+    if (filter.isBlank()) return listed
+    return listed.filter { entry -> matchesFilter(entry, filter) }
+}
+
+// The name or the id of [entry] has [filter] in it, case ignored.
+private fun matchesFilter(entry: AgentRegistryEntry, filter: String): Boolean =
+    entry.name.contains(filter, ignoreCase = true) || entry.id.contains(filter, ignoreCase = true)
+
+// The field that [onChange] filters the list of agents with, focused as the menu opens: the agents of the registry
+// are typed, and the field is shown when it stands empty.
+@Composable
+private fun AgentFilterField(filter: String, onChange: (String) -> Unit) {
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .background(IdeColors.Input, RoundedCornerShape(4.dp))
+            .border(1.dp, IdeColors.InputBorder, RoundedCornerShape(4.dp))
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+    ) {
+        if (filter.isEmpty()) Label("Filter the agents…", color = IdeColors.TextSecondary, fontSize = 12.sp)
+        BasicTextField(
+            filter,
+            onChange,
+            Modifier
+                .fillMaxWidth()
+                .focusRequester(focus)
+                .testTag(AgentTags.AGENT_AGENT_FILTER),
+            textStyle = TextStyle(color = IdeColors.Text, fontSize = 12.sp),
+            singleLine = true,
+            cursorBrush = SolidColor(IdeColors.Caret),
         )
     }
 }
