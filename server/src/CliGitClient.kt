@@ -8,7 +8,6 @@ import org.example.kotlineditor.model.GitBranchInfo
 import org.example.kotlineditor.model.GitClient
 import org.example.kotlineditor.model.GitCommit
 import org.example.kotlineditor.model.GitCommitDetails
-import org.example.kotlineditor.model.GitCommitFile
 import org.example.kotlineditor.model.GitFileStatus
 import org.example.kotlineditor.model.WorktreeClient
 import java.io.File
@@ -209,8 +208,7 @@ class CliGitClient :
                 .sorted()
         }
 
-    // One record per commit, its fields separated by NUL and the records by RS (0x1e): subjects can hold anything
-    // but those. `--` keeps a ref named like a file from being read as a path.
+    // One record per commit (see parseCommit). `--` keeps a ref named like a file from being read as a path.
     override suspend fun log(root: String, ref: String, skip: Int, limit: Int): List<GitCommit> =
         runInterruptible(Dispatchers.IO) {
             require(limit in 1..MAX_LOG_PAGE) { "A page holds 1 to $MAX_LOG_PAGE commits" }
@@ -219,13 +217,13 @@ class CliGitClient :
                 runGit(
                     root,
                     "log",
-                    "--format=%H%x00%P%x00%an%x00%at%x00%D%x00%s%x1e",
+                    "--format=$COMMIT_FORMAT",
                     "--skip=${skip.coerceAtLeast(0)}",
                     "--max-count=$limit",
                     ref,
                     "--",
                 )
-            output.split(RECORD_SEPARATOR).mapNotNull(::parseCommit)
+            parseCommits(output)
         }
 
     override suspend fun searchLog(root: String, ref: String, query: String, skip: Int, limit: Int): List<GitCommit> =
@@ -258,52 +256,6 @@ class CliGitClient :
             val options = listOf("-p", "-M", "--no-commit-id", NO_COLOR, "-U3")
             val args = listOf("diff-tree") + options + range + "--" + paths
             UnifiedDiff().parse(runGit(root, *args.toTypedArray()).lines())
-        }
-
-    private fun parseCommit(record: String): GitCommit? {
-        val fields = record.trimStart('\n').split('\u0000')
-        if (fields.size < COMMIT_FIELD_COUNT || fields[0].isBlank()) return null
-        val refs =
-            fields[COMMIT_REFS_FIELD]
-                .split(", ")
-                .map { it.removePrefix("HEAD -> ") }
-                .filter { it.isNotBlank() && it != "HEAD" }
-        return GitCommit(
-            hash = fields[0],
-            parents = fields[1].split(' ').filter(String::isNotBlank),
-            author = fields[2],
-            time = fields[COMMIT_TIME_FIELD].toLongOrNull() ?: 0,
-            subject = fields.drop(COMMIT_SUBJECT_FIELD).joinToString("\u0000"),
-            refs = refs,
-        )
-    }
-
-    // `-z --name-status`: a status, then its path; a rename or copy (R100, C75) has the old path, then the new one.
-    private fun parseNameStatus(raw: String): List<GitCommitFile> {
-        val parts = raw.split('\u0000').filter { it.isNotEmpty() }
-        val files = ArrayList<GitCommitFile>()
-        var index = 0
-        while (index < parts.size) {
-            val code = parts[index]
-            val renamed = code.startsWith("R") || code.startsWith("C")
-            if (renamed && index + 2 <= parts.lastIndex) {
-                files += GitCommitFile(parts[index + 2], GitFileStatus.Renamed, oldPath = parts[index + 1])
-                index += RENAME_PARTS
-            } else if (index + 1 <= parts.lastIndex) {
-                files += GitCommitFile(parts[index + 1], commitFileStatus(code))
-                index += 2
-            } else {
-                break
-            }
-        }
-        return files
-    }
-
-    private fun commitFileStatus(code: String): GitFileStatus =
-        when (code.first()) {
-            'A' -> GitFileStatus.Added
-            'D' -> GitFileStatus.Deleted
-            else -> GitFileStatus.Modified
         }
 
     private fun requireLocalBranch(root: String, branch: String) {
@@ -373,74 +325,15 @@ class CliGitClient :
         return BlameCache.Version(head, content)
     }
 
-    // One `for-each-ref` line: name, HEAD marker, upstream and its track, separated by NULs.
-    private fun parseBranch(line: String): GitBranchInfo? {
-        val fields = line.split('\u0000')
-        val name = fields[0].trim()
-        val parsed = fields.size >= BRANCH_FIELD_COUNT && name.isNotEmpty()
-        return if (parsed) {
-            val track = fields[3].trim()
-            GitBranchInfo(
-                name = name,
-                current = fields[1].trim() == HEAD_MARKER,
-                upstream = fields[2].trim().ifEmpty { null },
-                ahead = trackCount(track, AHEAD_TRACK),
-                behind = trackCount(track, BEHIND_TRACK),
-                upstreamGone = track == GONE_TRACK,
-            )
-        } else {
-            null
-        }
-    }
-
-    private fun trackCount(track: String, pattern: Regex): Int {
-        val match = pattern.find(track)
-        return match?.groupValues?.get(TRACK_COUNT_GROUP)?.toIntOrNull() ?: 0
-    }
-
-    // One change of `git status --porcelain -z`: its two status letters, its path, and the old path of a rename.
-    private class StatusEntry(val code: String, val path: String, val oldPath: String?)
-
-    // `-z`: paths are given as they are (no quotes nor escapes for accents, spaces or line breaks), each record ends
-    // with a NUL, and a rename or copy is followed by the record of its old path.
     private fun statusEntries(root: String): List<StatusEntry> {
         val output = gitOutput(root, "status", "--porcelain", "-z", "-uall") ?: return emptyList()
-        val records = output.joinToString("\n").split('\u0000').filter { it.length > PATH_START }
-        val entries = ArrayList<StatusEntry>()
-        var index = 0
-        while (index < records.size) {
-            val record = records[index]
-            val code = record.take(2)
-            val moved = 'R' in code || 'C' in code
-            val old = if (moved) records.getOrNull(index + 1) else null
-            entries += StatusEntry(code, record.substring(PATH_START), old)
-            index += if (moved) 2 else 1
-        }
-        return entries
-    }
-
-    private fun statusOf(entry: StatusEntry): Pair<String, GitFileStatus>? {
-        val code = entry.code
-        val status =
-            when {
-                code == "??" -> GitFileStatus.Untracked
-                'R' in code -> GitFileStatus.Renamed
-                'A' in code -> GitFileStatus.Added
-                'D' in code -> GitFileStatus.Deleted
-                'M' in code -> GitFileStatus.Modified
-                else -> null
-            }
-        return status?.let { entry.path to it }
+        return parseStatusEntries(output)
     }
 
     private companion object {
         const val BRANCH_REF = "ref: refs/heads/"
-        const val PATH_START = 3
         const val NETWORK_TIMEOUT_SECONDS = 180L
         const val MAX_CACHED_BLAMES = 32
-        const val HEAD_MARKER = "*"
-        const val GONE_TRACK = "[gone]"
-        const val BRANCH_FIELD_COUNT = 4
         const val DELETE_CHUNK_SIZE = 50
         const val COMMIT_CHUNK_SIZE = 500
         const val DEFAULT_REMOTE = "origin"
@@ -449,16 +342,6 @@ class CliGitClient :
         const val QUIET = "--quiet"
         const val FOR_EACH_REF = "for-each-ref"
         const val MAX_LOG_PAGE = 1000
-        const val RECORD_SEPARATOR = '\u001e'
-        const val COMMIT_FIELD_COUNT = 6
-        const val COMMIT_TIME_FIELD = 3
-        const val COMMIT_REFS_FIELD = 4
-        const val COMMIT_SUBJECT_FIELD = 5
-        const val RENAME_PARTS = 3
         val HASH = Regex("[0-9a-f]{7,64}")
-        const val TRACK_COUNT_GROUP = 1
-        const val BRANCH_FORMAT = "%(refname:short)%00%(HEAD)%00%(upstream:short)%00%(upstream:track)"
-        val AHEAD_TRACK = Regex("""ahead (\d+)""")
-        val BEHIND_TRACK = Regex("""behind (\d+)""")
     }
 }

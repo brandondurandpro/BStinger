@@ -14,27 +14,16 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.add
 import kotlinx.serialization.json.booleanOrNull
-import kotlinx.serialization.json.buildJsonArray
-import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.intOrNull
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.put
-import kotlinx.serialization.json.putJsonArray
-import kotlinx.serialization.json.putJsonObject
 import org.example.kotlineditor.lsp.documents.DocumentOutbox
 import org.example.kotlineditor.lsp.documents.MirroredDocument
 import org.example.kotlineditor.lsp.documents.OpenDocuments
-import org.example.kotlineditor.lsp.documents.SyncKind
 import org.example.kotlineditor.lsp.jsonrpc.LspConnection
-import org.example.kotlineditor.lsp.jsonrpc.LspResponseException
 import org.example.kotlineditor.lsp.leak.LeakReport
 import org.example.kotlineditor.lsp.leak.Verdict
 import org.example.kotlineditor.lsp.memory.MemoryHistory
@@ -50,15 +39,9 @@ import org.example.kotlineditor.telemetry.Attributes
 import org.example.kotlineditor.telemetry.Operation
 import org.example.kotlineditor.telemetry.Outcome
 import org.example.kotlineditor.telemetry.Span
-import java.io.File
-import java.io.IOException
-import java.io.InputStream
-import java.nio.file.Paths
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
-private const val CAPABILITIES = "capabilities"
 private const val NANOS_PER_MILLI = 1_000_000L
 
 /** What a [ManagedServer] is asked to do; its coroutine handles them one at a time, in order. */
@@ -97,11 +80,6 @@ internal sealed interface Command {
     class Close(val done: CompletableDeferred<Unit>) : Command
 }
 
-private class Progress(val title: String?, val percent: Int?)
-
-/** A server that cannot run here, and why. */
-private class Unavailable(override val message: String, cause: Throwable) : Exception(message, cause)
-
 /** One language server across its restarts, driven by one coroutine. */
 @Suppress("LongParameterList", "TooManyFunctions")
 internal class ManagedServer(
@@ -129,13 +107,18 @@ internal class ManagedServer(
 
     val log = LogRing()
 
-    // The stderr of the current process only, read when it crashes to tell why.
-    @Volatile private var stderr = LogRing(STDERR_TAIL)
+    // The stderr of the current process, read when it crashes to tell why.
+    private val stderr = StderrTail(id, log)
 
-    @Volatile private var drainer: Thread? = null
+    private val launcher = ProcessLauncher(target)
+
+    private val protocol = ClientProtocol(id, target, hooks)
+
+    // The documents are sent to the process once it answered initialize.
+    private val mirror = DocumentMirror(documents, target.spec.language, target.root)
 
     private val commands = Channel<Command>(Channel.UNLIMITED)
-    private val progress = ConcurrentHashMap<String, Progress>()
+    private val progress = ServerProgress()
     private val crashes = ArrayDeque<Long>()
     private val stateLock = Any()
 
@@ -151,9 +134,6 @@ internal class ManagedServer(
     @Volatile private var processStart = 0L
 
     @Volatile private var connection: LspConnection? = null
-
-    // The documents are sent through it once the process answered initialize; null otherwise.
-    @Volatile private var outbox: DocumentOutbox? = null
 
     @Volatile private var leak: LeakReport? = null
 
@@ -196,7 +176,7 @@ internal class ManagedServer(
         val running = process != null && state != LanguageServerState.Starting
         val samples = history?.takeIf { running }
         val latest = samples?.latest
-        val current = progress.values.firstOrNull()
+        val current = progress.current()
         val report = leak
         return LanguageServerInfo(
             id = id,
@@ -234,44 +214,36 @@ internal class ManagedServer(
     }
 
     /** Sends [document] to the process, if it is ready; called under the lock of [OpenDocuments]. */
-    fun didOpen(document: MirroredDocument) {
-        outbox?.didOpen(document)
-    }
+    fun didOpen(document: MirroredDocument) = mirror.didOpen(document)
 
     /** Sends [changes] of [document], if the process is ready; called under the lock of [OpenDocuments]. */
-    fun didChange(document: MirroredDocument, changes: List<TextChange>) {
-        outbox?.didChange(document, changes)
-    }
+    fun didChange(document: MirroredDocument, changes: List<TextChange>) = mirror.didChange(document, changes)
 
     /** Closes [document] in the process, if it is ready; called under the lock of [OpenDocuments]. */
-    fun didClose(document: MirroredDocument) {
-        outbox?.didClose(document)
-    }
+    fun didClose(document: MirroredDocument) = mirror.didClose(document)
 
     /** Tells the process [document] was saved, if it asked to know (`textDocumentSync.save`). */
     fun didSave(document: MirroredDocument) {
         val sync = capability("textDocumentSync") as? JsonObject
         val save = sync?.get("save")?.takeIf { it != JsonNull }
         val refused = (save as? JsonPrimitive)?.booleanOrNull == false
-        if (save != null && !refused) outbox?.didSave(document)
+        if (save != null && !refused) mirror.didSave(document)
     }
 
     /** Tells the process files changed on disk: their URI and FileChangeType (1 created, 2 changed, 3 deleted). */
     fun filesChanged(changes: List<Pair<String, Int>>) {
-        if (changes.isNotEmpty()) outbox?.filesChanged(changes)
+        if (changes.isNotEmpty()) mirror.filesChanged(changes)
     }
 
     /** Tells the process files were created, renamed or deleted through the IDE. */
-    fun filesOperated(operation: FileOperation, params: JsonObject) {
-        outbox?.filesOperated(operation, params)
-    }
+    fun filesOperated(operation: FileOperation, params: JsonObject) = mirror.filesOperated(operation, params)
 
     /**
      * Sends [method] once the document notifications queued before were written, and returns its answer; null
      * when no process is ready. Fails like [LspConnection.request] when the process stops meanwhile.
      */
     suspend fun request(method: String, params: JsonElement): JsonElement? {
-        val box = outbox
+        val box = mirror.outbox
         val link = connection
         if (box == null || link == null) return null
         box.flush()
@@ -383,7 +355,7 @@ internal class ManagedServer(
                 while (crashes.isNotEmpty() && now - crashes.first() > timings.crashWindowMs) crashes.removeFirst()
                 crashes.size
             }
-        val lastLine = explanation()?.let { ": $it" }.orEmpty()
+        val lastLine = stderr.explanation()?.let { ": $it" }.orEmpty()
         if (count >= timings.maxCrashes) {
             setState(LanguageServerState.Crashed, "Crashed $count times in a few minutes. $reason$lastLine")
             return
@@ -411,34 +383,18 @@ internal class ManagedServer(
     // Runs in its own job, so that a stop or a restart can interrupt a slow download or a hung initialize.
     private suspend fun startProcess(started: Long) {
         try {
-            val launched = spawn(resolveCommand())
+            val launched = spawn(launcher.resolveCommand())
             handshake(launched, connect(launched))
         } catch (unavailable: Unavailable) {
             if (started == generation) setState(LanguageServerState.Unavailable, unavailable.message)
         }
     }
 
-    @Suppress("TooGenericExceptionCaught")
-    private suspend fun resolveCommand(): List<String> =
-        try {
-            withContext(Dispatchers.IO) { target.spec.command() }
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (failure: Exception) {
-            // Any failure of the provisioning (missing runtime, failed download...) is shown, never thrown.
-            throw Unavailable(failure.message ?: failure.toString(), failure)
-        }
-
     // Not cancellable: a stop arriving while the process starts must find it in [process] to kill it, else it would
     // run on unseen (withContext drops the result of a block whose caller was cancelled meanwhile).
     private suspend fun spawn(command: List<String>): Process =
         withContext(Dispatchers.IO + NonCancellable) {
-            val launched =
-                try {
-                    ProcessBuilder(command).directory(File(target.root)).start()
-                } catch (failure: IOException) {
-                    throw Unavailable("Cannot run ${command.first()}: ${failure.message}", failure)
-                }
+            val launched = launcher.start(command)
             processStart = OrphanReaper.startOf(launched.toHandle())
             process = launched
             watch(launched)
@@ -451,7 +407,7 @@ internal class ManagedServer(
         indexingEndedAt = null
         progress.clear()
         reaper?.record(launched.toHandle())
-        drain(launched.errorStream)
+        stderr.drain(launched.errorStream)
         launched.onExit().thenAccept { send(Command.Exited(it, it.exitValue())) }
     }
 
@@ -460,7 +416,7 @@ internal class ManagedServer(
             launched.inputStream,
             launched.outputStream,
             scope,
-            onRequest = ::answer,
+            onRequest = protocol::answer,
             onNotification = ::notified,
             onClose = { failure -> failure?.let { log.add("Connection to the server broken: ${it.message}") } },
         ).start().also { connection = it }
@@ -468,7 +424,12 @@ internal class ManagedServer(
     // A process that exits or breaks the protocol during initialize is reported by Exited.
     private suspend fun handshake(launched: Process, link: LspConnection) {
         val timeout = timings.initializeTimeoutMs
-        val answered = runCatching { withTimeoutOrNull(timeout) { link.request("initialize", initializeParams()) } }
+        val answered =
+            runCatching {
+                withTimeoutOrNull(
+                    timeout,
+                ) { link.request("initialize", protocol.initializeParams()) }
+            }
         val failure = answered.exceptionOrNull()
         when {
             failure is CancellationException -> {
@@ -490,9 +451,7 @@ internal class ManagedServer(
     }
 
     private fun ready(launched: Process, link: LspConnection, initialized: JsonElement?) {
-        val answer = initialized as? JsonObject
-        val offered = answer?.get(CAPABILITIES) as? JsonObject
-        capabilities = offered ?: JsonObject(emptyMap())
+        capabilities = capabilitiesOf(initialized)
         hooks.onRestarted(id)
         runCatching { link.notify("initialized", JsonObject(emptyMap())) }
         val box =
@@ -503,11 +462,11 @@ internal class ManagedServer(
                 maxUnreadBytes = timings.maxUnreadBytes,
                 onStuck = { unreadBytes -> stuck(launched, unreadBytes) },
             )
-        openDocuments(box)
+        mirror.open(box)
         // A key per process: the old one may still be untracked after a new one started.
         samplerKey = "$id#${launched.pid()}".also { history = sampler?.track(it, launched.toHandle()) }
         indexingMayBeginUntil = System.nanoTime() + timings.indexingStartMs * NANOS_PER_MILLI
-        setState(if (progress.isEmpty()) LanguageServerState.Running else LanguageServerState.Indexing, null)
+        setState(if (progress.isEmpty) LanguageServerState.Running else LanguageServerState.Indexing, null)
     }
 
     /**
@@ -531,22 +490,9 @@ internal class ManagedServer(
         send(Command.Failed(launched, reason))
     }
 
-    // Under the documents' lock: an edit arriving meanwhile is either replayed here or sent after.
-    private fun openDocuments(box: DocumentOutbox) {
-        val open = { mirrored: List<MirroredDocument> ->
-            outbox = box
-            mirrored.forEach(box::didOpen)
-        }
-        documents?.withDocuments(language, target.root, open) ?: open(emptyList())
-    }
-
     private fun closeOutbox() {
         capabilities = null
-        val close = {
-            outbox?.close()
-            outbox = null
-        }
-        documents?.locked(close) ?: close()
+        mirror.close()
     }
 
     private suspend fun stopProcess(graceful: Boolean) {
@@ -623,13 +569,13 @@ internal class ManagedServer(
         val changed =
             synchronized(stateLock) {
                 when {
-                    state == LanguageServerState.Running && progress.isNotEmpty() -> {
+                    state == LanguageServerState.Running && !progress.isEmpty -> {
                         state = LanguageServerState.Indexing
                         indexing.value = true
                         true
                     }
 
-                    state == LanguageServerState.Indexing && progress.isEmpty() -> {
+                    state == LanguageServerState.Indexing && progress.isEmpty -> {
                         state = LanguageServerState.Running
                         indexing.value = false
                         indexingEndedAt = clock()
@@ -644,41 +590,6 @@ internal class ManagedServer(
         if (changed) onChange()
     }
 
-    // The requests a language server sends to its client: answered with what we have, never left waiting.
-    private fun answer(method: String, params: JsonElement?): JsonElement =
-        when (method) {
-            "workspace/configuration" -> {
-                val items = (params as? JsonObject)?.get("items")?.jsonArray?.size ?: 0
-                JsonArray(List(items) { JsonNull })
-            }
-
-            "workspace/workspaceFolders" -> {
-                buildJsonArray { add(folder()) }
-            }
-
-            "workspace/diagnostic/refresh" -> {
-                hooks.onDiagnosticsRefresh(id)
-                JsonNull
-            }
-
-            "workspace/applyEdit" -> {
-                val edit = params as? JsonObject
-                val applied = edit != null && hooks.onApplyEdit(id, edit)
-                buildJsonObject { put("applied", applied) }
-            }
-
-            "window/workDoneProgress/create", "client/registerCapability", "client/unregisterCapability",
-            "window/showMessageRequest", "workspace/semanticTokens/refresh", "workspace/inlayHint/refresh",
-            "workspace/codeLens/refresh",
-            -> {
-                JsonNull
-            }
-
-            else -> {
-                throw LspResponseException(LspConnection.METHOD_NOT_FOUND, "Unhandled method $method")
-            }
-        }
-
     private fun notified(method: String, params: JsonElement?) {
         val fields = params as? JsonObject
         when {
@@ -687,7 +598,7 @@ internal class ManagedServer(
             }
 
             method == "\$/progress" -> {
-                onProgress(fields)
+                if (progress.update(fields)) progressChanged()
             }
 
             method == "textDocument/publishDiagnostics" -> {
@@ -700,110 +611,12 @@ internal class ManagedServer(
         }
     }
 
-    private fun onProgress(fields: JsonObject) {
-        val token = (fields["token"] as? JsonPrimitive)?.contentOrNull
-        val value = fields["value"] as? JsonObject
-        if (token == null || value == null) return
-        val percent = (value["percentage"] as? JsonPrimitive)?.intOrNull
-        when ((value["kind"] as? JsonPrimitive)?.contentOrNull) {
-            "begin" -> progress[token] = Progress((value["title"] as? JsonPrimitive)?.contentOrNull, percent)
-            "report" -> progress[token]?.let { progress[token] = Progress(it.title, percent ?: it.percent) }
-            "end" -> progress.remove(token)
-        }
-        progressChanged()
-    }
-
-    // What the process wrote last on stderr, once read to its end: the exit may be reported before the last lines.
-    private suspend fun explanation(): String? {
-        withContext(Dispatchers.IO) { drainer?.join(DRAIN_WAIT_MS) }
-        return CrashReason.explain(stderr.lines())
-    }
-
-    // Always read: a server whose stderr pipe is full blocks.
-    private fun drain(input: InputStream) {
-        val tail = LogRing(STDERR_TAIL)
-        stderr = tail
-        drainer =
-            thread(name = "lsp-stderr-$id", isDaemon = true) { readLines(input, tail) }
-    }
-
-    private fun readLines(stream: InputStream, tail: LogRing) {
-        val lines =
-            LogLines { line ->
-                log.add(line)
-                tail.add(line)
-            }
-        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-        try {
-            stream.use { input ->
-                var read = input.read(buffer)
-                while (read >= 0) {
-                    lines.feed(buffer, read)
-                    read = input.read(buffer)
-                }
-            }
-        } catch (_: IOException) {
-            // The process is gone.
-        }
-        lines.flush()
-    }
-
-    private fun folder() =
-        buildJsonObject {
-            put("uri", rootUri())
-            put("name", Paths.get(target.root).fileName?.toString() ?: target.root)
-        }
-
-    private fun rootUri() = Paths.get(target.root).toUri().toString()
-
-    private fun initializeParams(): JsonObject =
-        buildJsonObject {
-            put("processId", ProcessHandle.current().pid())
-            putJsonObject("clientInfo") { put("name", "Kotlin Editor") }
-            put("rootUri", rootUri())
-            put("rootPath", target.root)
-            putJsonArray("workspaceFolders") { add(folder()) }
-            putJsonObject(CAPABILITIES) {
-                putJsonObject("window") { put("workDoneProgress", true) }
-                put("workspace", WORKSPACE_CAPABILITIES)
-                put("textDocument", TEXT_DOCUMENT_CAPABILITIES)
-            }
-            target.spec.initializationOptions?.let { put("initializationOptions", it) }
-        }
-
-    // textDocumentSync is a number or an object whose change is one; Full is 1, Incremental 2, None 0.
-    private fun syncKindOf(initialized: JsonElement?): SyncKind {
-        val initializeResult = initialized as? JsonObject
-        val capabilities = initializeResult?.get(CAPABILITIES) as? JsonObject
-        val syncElement = capabilities?.get("textDocumentSync")
-
-        val syncAsPrimitive = syncElement as? JsonPrimitive
-        val syncAsObject = syncElement as? JsonObject
-        val changeElement = syncAsObject?.get("change") as? JsonPrimitive
-
-        val kindFromPrimitive = syncAsPrimitive?.intOrNull
-        val kindFromChangeObject = changeElement?.intOrNull
-        val finalKind = kindFromPrimitive ?: kindFromChangeObject
-
-        return if (finalKind == FULL_SYNC) {
-            SyncKind.Full
-        } else {
-            SyncKind.Incremental
-        }
-    }
-
     private fun seconds(millis: Long) = if (millis % MILLIS == 0L) "${millis / MILLIS} s" else "$millis ms"
 
     private companion object {
         const val MILLIS = 1_000L
-        const val FULL_SYNC = 1
+
         const val BYTES_PER_MEGABYTE = 1024L * 1024
-
-        // Enough for a stack trace and the error block above it.
-        const val STDERR_TAIL = 200
-
-        // How long a crash waits for the last lines of stderr; a child keeping the pipe open must not delay it.
-        const val DRAIN_WAIT_MS = 500L
 
         // How long writing exit may take after shutdown went unanswered; within the supervisor's margin to close.
         const val EXIT_WRITE_MS = 500L
