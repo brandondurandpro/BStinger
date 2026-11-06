@@ -41,6 +41,26 @@ class AgentE2eTest {
     }
 
     @Test
+    fun `a prompt typed while the agent answers is queued and sent once it is done`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, agentPreferences())
+            val conversation = startConversation(app)
+            sendPrompt("slow")
+            awaitShown(conversation, "tick") // the agent answers forever, a chunk every 50 ms
+            sendPrompt("echo while it answers") // typed while the agent answers: queued, never lost
+            assertEquals(
+                listOf("slow", "echo while it answers"),
+                conversation.itemsOf<AgentItem.UserText>().map { it.text },
+            )
+            onNodeWithTag(AgentTags.AGENT_STOP).performClick() // ends the answer the agent streamed
+            awaitIdle(conversation) // the queued prompt goes once the agent is done
+            awaitCondition(AGENT_TIMEOUT) {
+                conversation.itemsOf<AgentItem.AgentText>().any { "while it answers" in it.text }
+            }
+            awaitIdle(conversation)
+        }
+
+    @Test
     fun `an answer streams into the conversation, under the name of the agent`() =
         runComposeUiTest {
             val app = launchWithProject(project, agentPreferences())

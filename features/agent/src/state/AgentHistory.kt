@@ -28,7 +28,10 @@ internal fun AgentState.followHistory(project: AgentHost, agent: () -> AgentComm
 private fun AgentState.addHistory(sessions: List<AgentSession>, root: String) {
     val shown = conversations.mapNotNull { it.session }.toSet()
     for (session in sessions.filter { it.id !in shown }) {
-        conversations.add(conversationOf(session, nextId++, root))
+        val conversation = conversationOf(session, nextId++, root)
+        // The state delivers the prompts queued while the agent answered (the transcript only says the turn is over).
+        conversation.onTurnIdle = { deliverQueued(conversation) }
+        conversations.add(conversation)
     }
 }
 

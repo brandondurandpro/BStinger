@@ -138,6 +138,12 @@ class Conversation(val id: Int, title: String, val branch: String) {
     internal var serverOptions: List<AgentOption> = emptyList()
     internal val optionsLock = Mutex()
 
+    /** The prompts queued while the agent answered: each goes in turn once it is done. */
+    internal val queued = ArrayDeque<OutgoingPrompt>()
+
+    // Called by the transcript when the turn of the agent is over: a queued prompt goes.
+    internal var onTurnIdle: (() -> Unit)? = null
+
     /** True while the agent moves to a worktree: the tool windows still show where it worked before. */
     var preparingWorktree by mutableStateOf(false)
         internal set
@@ -272,6 +278,9 @@ class AgentState(
     fun newConversation(): Conversation {
         val id = nextId++
         val conversation = Conversation(id, "New conversation", "agent/conversation-$id")
+        // The state delivers the prompts queued while the agent answered: only it has the command, the scope
+        // and the transcript machinery held together (the transcript only says the turn is over).
+        conversation.onTurnIdle = { deliverQueued(conversation) }
         conversations.add(0, conversation)
         open(conversation)
         return conversation
@@ -332,7 +341,7 @@ class AgentState(
      */
     fun send(conversation: Conversation) {
         val text = conversation.draft.trim()
-        if (text.isEmpty() || conversation.busy) return
+        if (text.isEmpty()) return
         conversation.draft = ""
         if (!conversation.started) conversation.title = titleOf(text)
         val itemId = "prompt-${UUID.randomUUID()}"
@@ -341,9 +350,26 @@ class AgentState(
         conversation.upsert(AgentItem.UserText(itemId, 0, text, attachments.map { it.label }))
         conversations.remove(conversation)
         conversations.add(0, conversation)
-        conversation.sending = true
         val prompt = OutgoingPrompt(itemId, text, attachments)
+        if (conversation.busy) {
+            // The agent answers another prompt: this one waits, and goes once it is done (nothing lost, nothing
+            // sent) — a keystroke against an answer in flight must not wipe the text the user typed.
+            conversation.queued.addLast(prompt)
+            return
+        }
+        launchDelivery(conversation, prompt)
+    }
+
+    /** One prompt in flight; a queued one goes once the turn of the agent is over (see [onTurnIdle]). */
+    private fun launchDelivery(conversation: Conversation, prompt: OutgoingPrompt) {
+        conversation.sending = true
         conversation.job = project.scope.launch { deliver(conversation, prompt) }
+    }
+
+    /** The next prompt queued while the agent answered goes once its turn is done. */
+    internal fun deliverQueued(conversation: Conversation) {
+        if (conversation.queued.isEmpty()) return
+        launchDelivery(conversation, conversation.queued.removeFirst())
     }
 
     private suspend fun deliver(conversation: Conversation, prompt: OutgoingPrompt) {
