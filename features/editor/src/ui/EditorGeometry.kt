@@ -8,6 +8,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.AwaitPointerEventScope
 import androidx.compose.ui.input.pointer.PointerInputChange
+import androidx.compose.ui.input.pointer.isAltPressed
 import androidx.compose.ui.input.pointer.isCtrlPressed
 import androidx.compose.ui.input.pointer.isMetaPressed
 import androidx.compose.ui.input.pointer.isShiftPressed
@@ -24,8 +25,10 @@ import org.example.kotlineditor.state.HorizontalScroll
 import org.example.kotlineditor.state.TextPos
 import org.example.kotlineditor.state.VerticalScroll
 import org.example.kotlineditor.state.columnOfVisual
+import org.example.kotlineditor.state.selectColumns
 import org.example.kotlineditor.state.selectWordAt
 import org.example.kotlineditor.state.toggle
+import org.example.kotlineditor.state.toggleCaretAt
 import kotlin.math.floor
 import kotlin.math.roundToInt
 
@@ -75,11 +78,13 @@ internal class EditorMetrics(
         val folding = document.folding
         val rowOffset = floor((position.y + viewport.rowOffsetPx) / lineHeightPx).toInt()
         val line = folding.lineAt((viewport.firstRow + rowOffset).coerceIn(0, folding.rowCount() - 1))
-        val visual =
-            ((position.x - gutterPx - paddingPx + horizontal.offset) / charWidth)
-                .roundToInt()
-                .coerceAtLeast(0)
-        return TextPos(line, document.columnOfVisual(line, visual))
+        return TextPos(line, document.columnOfVisual(line, visualAt(position, horizontal)))
+    }
+
+    /** The screen cell boundary nearest to [position], past the end of the line too (column selection). */
+    fun visualAt(position: Offset, horizontal: HorizontalScroll): Int {
+        val cells = (position.x - gutterPx - paddingPx + horizontal.offset) / charWidth
+        return cells.roundToInt().coerceAtLeast(0)
     }
 
     /**
@@ -182,6 +187,14 @@ internal suspend fun AwaitPointerEventScope.editorGesture(target: GestureTarget)
             target.onCtrlClick(pos)
         }
 
+        modifiers.isAltPressed && modifiers.isShiftPressed -> {
+            columnSelection(target, down.position, pos)
+        }
+
+        modifiers.isAltPressed -> {
+            target.document.toggleCaretAt(pos)
+        }
+
         target.onHintClick(pos, down.position) -> {
             // the click listed the usages of the declaration
         }
@@ -215,6 +228,31 @@ private suspend fun AwaitPointerEventScope.click(
     }
 }
 
+// Alt+Shift+drag: one caret per line between the press and the mouse, selecting the same screen columns.
+private suspend fun AwaitPointerEventScope.columnSelection(target: GestureTarget, start: Offset, startPos: TextPos) {
+    val horizontal = target.tab.horizontalScroll
+    val fromVisual = target.metrics.visualAt(start, horizontal)
+    target.document.selectColumns(startPos.line, fromVisual, startPos.line, fromVisual)
+    var change = awaitPointerEvent().changes.firstOrNull()
+    while (change != null && change.pressed) {
+        val p = change.position
+        val line = target.metrics.hit(p, target.viewport, horizontal, target.document).line
+        target.document.selectColumns(startPos.line, fromVisual, line, target.metrics.visualAt(p, horizontal))
+        autoScrollAt(target, p)
+        change.consume()
+        change = awaitPointerEvent().changes.firstOrNull()
+    }
+}
+
+// Scrolls when the mouse is dragged above or below the editor.
+private fun AwaitPointerEventScope.autoScrollAt(target: GestureTarget, p: Offset) {
+    when {
+        p.y < 0 -> target.autoScroll(-target.metrics.lineHeightPx)
+        p.y > size.height -> target.autoScroll(target.metrics.lineHeightPx)
+        else -> Unit
+    }
+}
+
 // Extends the selection while the button is held, scrolling when the mouse leaves the editor vertically.
 private suspend fun AwaitPointerEventScope.drag(target: GestureTarget) {
     var change = awaitPointerEvent().changes.firstOrNull()
@@ -222,11 +260,7 @@ private suspend fun AwaitPointerEventScope.drag(target: GestureTarget) {
         val p = change.position
         val pos = target.metrics.hit(p, target.viewport, target.tab.horizontalScroll, target.document)
         target.document.moveTo(pos, extendSelection = true)
-        when {
-            p.y < 0 -> target.autoScroll(-target.metrics.lineHeightPx)
-            p.y > size.height -> target.autoScroll(target.metrics.lineHeightPx)
-            else -> Unit
-        }
+        autoScrollAt(target, p)
         change.consume()
         change = awaitPointerEvent().changes.firstOrNull()
     }

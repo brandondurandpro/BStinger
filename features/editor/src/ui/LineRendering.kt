@@ -37,6 +37,8 @@ class LineDecorations(
     val change: GitChangeKind? = null,
     val deleted: Boolean = false,
     val blame: String? = null,
+    /** Start and end screen cells of the selections of the other carets on the line, by pairs; none when null. */
+    val extraSelections: IntArray? = null,
 ) {
     val isCaretLine: Boolean get() = caretColumn >= 0
     val hasSelection: Boolean get() = selectionStart in 0 until selectionEnd
@@ -165,13 +167,14 @@ internal fun DrawScope.drawDecorations(
     }
     drawColumns(decorations.brackets, 1, origin, charWidth, height) { IdeColors.BracketMatch }
     if (decorations.hasSelection) {
-        val start = decorations.selectionStart
-        drawRect(
-            IdeColors.TextSelection,
-            Offset(origin + start * charWidth, 0f),
-            Size((decorations.selectionEnd - start) * charWidth, height),
-        )
+        drawSelection(decorations.selectionStart, decorations.selectionEnd, origin, charWidth, height)
     }
+    val extra = decorations.extraSelections ?: return
+    for (i in extra.indices step 2) drawSelection(extra[i], extra[i + 1], origin, charWidth, height)
+}
+
+private fun DrawScope.drawSelection(start: Int, end: Int, origin: Float, charWidth: Float, height: Float) {
+    drawRect(IdeColors.TextSelection, Offset(origin + start * charWidth, 0f), Size((end - start) * charWidth, height))
 }
 
 private inline fun DrawScope.drawColumns(

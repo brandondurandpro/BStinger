@@ -19,6 +19,7 @@ import org.example.kotlineditor.syntax.treesitter.SyntaxSource
  * editing and search actions are extensions, see `DocumentNavigation.kt`, `DocumentEditing.kt`, ...
  */
 @Stable
+@Suppress("TooManyFunctions")
 class Document(initialLines: List<String>, val language: Language, val lineSeparator: String = "\n") : SyntaxSource {
     val lines = mutableStateListOf<String>().apply { addAll(initialLines.ifEmpty { listOf("") }) }
 
@@ -28,6 +29,20 @@ class Document(initialLines: List<String>, val language: Language, val lineSepar
     /** Other end of the selection, `null` when nothing is selected. */
     var anchor by mutableStateOf<TextPos?>(null)
         private set
+
+    /**
+     * The other carets (Alt+click, Alt+J, column selection), most recently added first; the [caret] above is the
+     * primary one. They follow every edit of the text, and a caret move that is not done for every caret
+     * ([forEachCaret]) removes them.
+     */
+    var extraCarets by mutableStateOf<List<Caret>>(emptyList())
+        private set
+
+    /** Told of every change of the text while carets are moved for each of them, see [forEachCaret]. */
+    internal var caretTracker: ((TextChange) -> Unit)? = null
+
+    /** The word Alt+J selected at the caret: its next occurrences are whole words only, like IntelliJ. */
+    internal var occurrenceWord: String? = null
 
     /** Incremented on every edit; lets observers (save state, highlighting) react cheaply. */
     override var version by mutableIntStateOf(0)
@@ -86,8 +101,28 @@ class Document(initialLines: List<String>, val language: Language, val lineSepar
 
     // Column the caret tries to keep when moving vertically.
     private var preferredVisualColumn = 0
-    private val undoStack = ArrayDeque<Edit>()
-    private val redoStack = ArrayDeque<Edit>()
+    private val undoStack = ArrayDeque<UndoStep>()
+    private val redoStack = ArrayDeque<UndoStep>()
+
+    // The edits of one action run at every caret, while it runs; null otherwise.
+    private var group: MutableList<Edit>? = null
+    private var groupBefore: List<Caret> = emptyList()
+
+    private sealed interface UndoStep
+
+    // An action run at several carets: undone and redone at once, restoring every caret.
+    private class EditGroup(val edits: List<Edit>, val before: List<Caret>, val after: List<Caret>) : UndoStep {
+        // Typing at several carets is one undo step too, when each caret typed after its own previous edit.
+        fun absorbs(next: EditGroup): Boolean {
+            val sameCarets = next.edits.size == edits.size
+            return sameCarets && edits.indices.all { edits[it].absorbs(next.edits[it]) }
+        }
+
+        fun merge(next: EditGroup): EditGroup {
+            val merged = edits.indices.map { edits[it].merge(next.edits[it]) }
+            return EditGroup(merged, before, next.after)
+        }
+    }
 
     private class Edit(
         val start: TextPos,
@@ -96,7 +131,7 @@ class Document(initialLines: List<String>, val language: Language, val lineSepar
         val caretBefore: TextPos,
         val anchorBefore: TextPos?,
         val caretAfter: TextPos,
-    ) {
+    ) : UndoStep {
         // Consecutive typing of the same kind of characters is one undo step, like IntelliJ.
         fun absorbs(at: TextPos, removedNow: String, typed: String): Boolean {
             val oneChar = removedNow.isEmpty() && typed.length == 1 && typed != "\n"
@@ -104,6 +139,52 @@ class Document(initialLines: List<String>, val language: Language, val lineSepar
             val sameKind = inserted.lastOrNull()?.isWordChar() == typed.firstOrNull()?.isWordChar()
             val continues = sameKind && endOf(start, inserted) == at
             return oneChar && wasTyping && continues
+        }
+
+        fun absorbs(next: Edit): Boolean = absorbs(next.start, next.removed, next.inserted)
+
+        fun merge(next: Edit): Edit =
+            Edit(start, "", inserted + next.inserted, caretBefore, anchorBefore, next.caretAfter)
+    }
+
+    /** Every caret, the primary one first. */
+    fun carets(): List<Caret> = listOf(Caret(caret, anchor, preferredVisualColumn)) + extraCarets
+
+    /**
+     * Sets every caret, [all] holding the primary one first; carets at the same place or whose selections overlap
+     * become one.
+     */
+    fun setCarets(all: List<Caret>) {
+        val merged = mergeCarets(all.map { it.clamped(this) })
+        val primary = merged.firstOrNull() ?: return
+        anchor = primary.anchor
+        caret = primary.pos
+        preferredVisualColumn = primary.preferredColumn.takeIf { it >= 0 } ?: visualColumnOf(caret.line, caret.column)
+        extraCarets = merged.drop(1)
+    }
+
+    /** Groups the edits made by [block] into one undo step, restoring every caret when undone (see [forEachCaret]). */
+    internal fun editGroup(block: () -> Unit) {
+        val outer = group
+        if (outer != null) return block()
+        val edits = mutableListOf<Edit>()
+        group = edits
+        groupBefore = carets()
+        try {
+            block()
+        } finally {
+            group = null
+        }
+        if (edits.isNotEmpty()) pushGroup(EditGroup(edits, groupBefore, carets()))
+    }
+
+    private fun pushGroup(step: EditGroup) {
+        val last = undoStack.lastOrNull()
+        if (last is EditGroup && last.absorbs(step)) {
+            undoStack[undoStack.lastIndex] = last.merge(step)
+        } else {
+            undoStack.addLast(step)
+            if (undoStack.size > MAX_UNDO) undoStack.removeFirst()
         }
     }
 
@@ -131,6 +212,7 @@ class Document(initialLines: List<String>, val language: Language, val lineSepar
 
     fun moveTo(pos: TextPos, extendSelection: Boolean = false) {
         val target = clamp(pos)
+        extraCarets = emptyList()
         anchor = if (extendSelection) anchor ?: caret else null
         caret = target
         preferredVisualColumn = visualColumnOf(target.line, target.column)
@@ -159,47 +241,77 @@ class Document(initialLines: List<String>, val language: Language, val lineSepar
         redoStack.clear()
         folding.onEdit()
         selectionHistory.clear()
+        val edit = Edit(s, removed, text, caretBefore, anchorBefore, after)
+        val grouped = group
         val last = undoStack.lastOrNull()
-        if (last != null && last.absorbs(s, removed, text)) {
-            undoStack[undoStack.lastIndex] =
-                Edit(last.start, "", last.inserted + text, last.caretBefore, last.anchorBefore, after)
+        if (grouped != null) {
+            grouped += edit
+        } else if (last is Edit && last.absorbs(edit)) {
+            undoStack[undoStack.lastIndex] = last.merge(edit)
         } else {
-            undoStack.addLast(Edit(s, removed, text, caretBefore, anchorBefore, after))
+            undoStack.addLast(edit)
             if (undoStack.size > MAX_UNDO) undoStack.removeFirst()
         }
         version++
     }
 
     fun undo(): Boolean {
-        val edit = undoStack.removeLastOrNull()
-        if (edit != null) {
-            applyRaw(edit.start, endOf(edit.start, edit.inserted), edit.removed)
-            redoStack.addLast(edit)
-            folding.onEdit()
-            anchor = edit.anchorBefore
-            caret = edit.caretBefore
-            version++
+        val step = undoStack.removeLastOrNull()
+        when (step) {
+            is Edit -> {
+                applyRaw(step.start, endOf(step.start, step.inserted), step.removed)
+                anchor = step.anchorBefore
+                caret = step.caretBefore
+            }
+
+            is EditGroup -> {
+                // Every caret is restored after: none follows the edits meanwhile.
+                extraCarets = emptyList()
+                step.edits.asReversed().forEach { applyRaw(it.start, endOf(it.start, it.inserted), it.removed) }
+                setCarets(step.before)
+            }
+
+            null -> {
+                return false
+            }
         }
-        return edit != null
+        redoStack.addLast(step)
+        folding.onEdit()
+        version++
+        return true
     }
 
     fun redo(): Boolean {
-        val edit = redoStack.removeLastOrNull()
-        if (edit != null) {
-            applyRaw(edit.start, endOf(edit.start, edit.removed), edit.inserted)
-            undoStack.addLast(edit)
-            folding.onEdit()
-            anchor = null
-            caret = edit.caretAfter
-            version++
+        val step = redoStack.removeLastOrNull()
+        when (step) {
+            is Edit -> {
+                applyRaw(step.start, endOf(step.start, step.removed), step.inserted)
+                anchor = null
+                caret = step.caretAfter
+            }
+
+            is EditGroup -> {
+                extraCarets = emptyList()
+                step.edits.forEach { applyRaw(it.start, endOf(it.start, it.removed), it.inserted) }
+                setCarets(step.after)
+            }
+
+            null -> {
+                return false
+            }
         }
-        return edit != null
+        undoStack.addLast(step)
+        folding.onEdit()
+        version++
+        return true
     }
 
     private fun applyRaw(start: TextPos, end: TextPos, text: String): TextPos {
         val change = TextChange(start.line, start.column, end.line, end.column, text)
         editListener?.invoke(change)
         markerListener?.invoke(change)
+        caretTracker?.invoke(change)
+        if (extraCarets.isNotEmpty()) extraCarets = extraCarets.map { it.mappedThrough(change) }
         val prefix = lines[start.line].substring(0, start.column)
         val suffix = lines[end.line].substring(end.column)
         val parts = text.split('\n')
@@ -245,7 +357,7 @@ private fun SnapshotStateList<String>.rebuild(firstLine: Int, lastLine: Int, rep
 }
 
 // Position right after `text` inserted at `start`.
-private fun endOf(start: TextPos, text: String): TextPos {
+internal fun endOf(start: TextPos, text: String): TextPos {
     val newlines = text.count { it == '\n' }
     return if (newlines == 0) {
         TextPos(start.line, start.column + text.length)

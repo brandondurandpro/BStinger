@@ -20,6 +20,15 @@ private const val USING_FILES = 500
 // Uses of the class in the open file: each edited in the editor.
 private const val OPEN_USES = 2_000
 
+private val WINDOWS = System.getProperty("os.name").startsWith("Windows", ignoreCase = true)
+
+// What the rename allocates: 158 MB on every Linux runner, but 243 to 694 MB on the Windows one, growing with the
+// time it takes there (the slower the disk, the more the UI and the server allocate while they wait). 600 MB, and
+// 1,500 MB on Windows, still fail a change that copies the open file or the project per use.
+private const val LINUX_BUDGET_MB = 600L
+private const val WINDOWS_BUDGET_MB = 1_500L
+private val BUDGET_MB = if (WINDOWS) WINDOWS_BUDGET_MB else LINUX_BUDGET_MB
+
 /** Renaming a class file whose class is used in 500 closed files and 2,000 times in the open one. */
 @OptIn(ExperimentalTestApi::class)
 class PhpFileOperationsPerformanceE2eTest {
@@ -65,7 +74,7 @@ class PhpFileOperationsPerformanceE2eTest {
                 // 9.2 s when its disk was slow (run 42096833220). 15 s still fails a change that scans or rewrites
                 // files per use instead of per file.
                 budgetMillis = 15_000,
-                budgetMegabytes = 600,
+                budgetMegabytes = BUDGET_MB,
             ) {
                 onNodeWithTag(AppTags.FILE_DIALOG_OK).performClick()
                 awaitTag(TreeTags.treeRow("src/Gadget.php"), timeout = SERVER_START_MS)

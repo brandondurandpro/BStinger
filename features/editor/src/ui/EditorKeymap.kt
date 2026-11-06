@@ -13,14 +13,13 @@ import androidx.compose.ui.input.key.utf16CodePoint
 import org.example.kotlineditor.state.CompletionState
 import org.example.kotlineditor.state.Document
 import org.example.kotlineditor.state.backspace
-import org.example.kotlineditor.state.clearSelection
 import org.example.kotlineditor.state.delete
 import org.example.kotlineditor.state.deleteLines
 import org.example.kotlineditor.state.duplicate
 import org.example.kotlineditor.state.extendSelection
 import org.example.kotlineditor.state.foldAt
+import org.example.kotlineditor.state.forEachCaret
 import org.example.kotlineditor.state.indent
-import org.example.kotlineditor.state.insert
 import org.example.kotlineditor.state.moveEnd
 import org.example.kotlineditor.state.moveHome
 import org.example.kotlineditor.state.moveLeft
@@ -29,12 +28,15 @@ import org.example.kotlineditor.state.moveRight
 import org.example.kotlineditor.state.moveToDocumentEnd
 import org.example.kotlineditor.state.moveToDocumentStart
 import org.example.kotlineditor.state.newLine
+import org.example.kotlineditor.state.paste
 import org.example.kotlineditor.state.selectAll
-import org.example.kotlineditor.state.selectedText
+import org.example.kotlineditor.state.selectAllOccurrences
+import org.example.kotlineditor.state.selectNextOccurrence
 import org.example.kotlineditor.state.shrinkSelection
 import org.example.kotlineditor.state.toggleLineComment
 import org.example.kotlineditor.state.typeChar
 import org.example.kotlineditor.state.unfoldAt
+import org.example.kotlineditor.state.unselectOccurrence
 
 private const val DELETE_CHAR = 0x7f
 private const val CHAR_UNDEFINED = 0xFFFF
@@ -51,6 +53,15 @@ private fun bind(
     action: EditorKeys.(Modifiers) -> Unit,
 ) = binding(keys, ctrl, shift, alt, action)
 
+// An action of every caret (see [forEachCaret]).
+private fun eachCaret(
+    keys: Set<Key>,
+    ctrl: Boolean? = false,
+    shift: Boolean? = null,
+    alt: Boolean? = false,
+    action: Document.(Modifiers) -> Unit,
+) = binding<EditorKeys>(keys, ctrl, shift, alt) { modifiers -> document.forEachCaret { action(modifiers) } }
+
 // The editor keymap (IntelliJ defaults), first match wins.
 private val BINDINGS =
     listOf(
@@ -60,10 +71,13 @@ private val BINDINGS =
         bind(
             setOf(Key.V),
             ctrl = true,
-        ) { TextClipboard.get()?.let { text -> document.insert(text.replace("\r\n", "\n")) } },
+        ) { TextClipboard.get()?.let { text -> document.paste(text.replace("\r\n", "\n")) } },
         bind(setOf(Key.Z), ctrl = true, shift = true) { document.redo() },
         bind(setOf(Key.Z), ctrl = true, shift = false) { document.undo() },
-        bind(setOf(Key.D), ctrl = true) { document.duplicate() },
+        eachCaret(setOf(Key.D), ctrl = true) { duplicate() },
+        bind(setOf(Key.J), ctrl = true, shift = true, alt = true) { document.selectAllOccurrences() },
+        bind(setOf(Key.J), shift = true, alt = true) { document.unselectOccurrence() },
+        bind(setOf(Key.J), shift = false, alt = true) { document.selectNextOccurrence() },
         bind(setOf(Key.W), ctrl = true, shift = true) { document.shrinkSelection() },
         bind(setOf(Key.W), ctrl = true, shift = false) { document.extendSelection() },
         bind(setOf(Key.Y), ctrl = true) { document.deleteLines() },
@@ -82,21 +96,21 @@ private val BINDINGS =
             ctrl = true,
             shift = false,
         ) { document.folding.unfoldAt(document.caret.line) },
-        bind(setOf(Key.MoveHome), ctrl = true) { document.moveToDocumentStart(it.shift) },
-        bind(setOf(Key.MoveEnd), ctrl = true) { document.moveToDocumentEnd(it.shift) },
-        bind(setOf(Key.MoveHome)) { document.moveHome(it.shift) },
-        bind(setOf(Key.MoveEnd)) { document.moveEnd(it.shift) },
-        bind(setOf(Key.Enter, Key.NumPadEnter)) { document.newLine() },
-        bind(setOf(Key.Backspace), ctrl = null) { document.backspace(word = it.ctrl) },
-        bind(setOf(Key.Delete), ctrl = null) { document.delete(word = it.ctrl) },
-        bind(setOf(Key.Tab)) { document.indent(outdent = it.shift) },
-        bind(setOf(Key.DirectionLeft), ctrl = null, alt = null) { document.moveLeft(it.shift, word = it.ctrl) },
-        bind(setOf(Key.DirectionRight), ctrl = null, alt = null) { document.moveRight(it.shift, word = it.ctrl) },
-        bind(setOf(Key.DirectionUp)) { document.moveByRows(-1, it.shift) },
-        bind(setOf(Key.DirectionDown)) { document.moveByRows(1, it.shift) },
-        bind(setOf(Key.PageUp)) { document.moveByRows(-page, it.shift) },
-        bind(setOf(Key.PageDown)) { document.moveByRows(page, it.shift) },
-        bind(setOf(Key.Escape)) { document.clearSelection() },
+        eachCaret(setOf(Key.MoveHome), ctrl = true) { moveToDocumentStart(it.shift) },
+        eachCaret(setOf(Key.MoveEnd), ctrl = true) { moveToDocumentEnd(it.shift) },
+        eachCaret(setOf(Key.MoveHome)) { moveHome(it.shift) },
+        eachCaret(setOf(Key.MoveEnd)) { moveEnd(it.shift) },
+        eachCaret(setOf(Key.Enter, Key.NumPadEnter)) { newLine() },
+        eachCaret(setOf(Key.Backspace), ctrl = null) { backspace(word = it.ctrl) },
+        eachCaret(setOf(Key.Delete), ctrl = null) { delete(word = it.ctrl) },
+        eachCaret(setOf(Key.Tab)) { indent(outdent = it.shift) },
+        eachCaret(setOf(Key.DirectionLeft), ctrl = null, alt = null) { moveLeft(it.shift, word = it.ctrl) },
+        eachCaret(setOf(Key.DirectionRight), ctrl = null, alt = null) { moveRight(it.shift, word = it.ctrl) },
+        bind(setOf(Key.DirectionUp)) { document.forEachCaret { _ -> moveByRows(-1, it.shift) } },
+        bind(setOf(Key.DirectionDown)) { document.forEachCaret { _ -> moveByRows(1, it.shift) } },
+        bind(setOf(Key.PageUp)) { document.forEachCaret { _ -> moveByRows(-page, it.shift) } },
+        bind(setOf(Key.PageDown)) { document.forEachCaret { _ -> moveByRows(page, it.shift) } },
+        bind(setOf(Key.Escape)) { escape(document) },
     )
 
 /** Handles a key event of the editor; returns whether it was used. [page] is the number of visible rows. */
@@ -114,7 +128,7 @@ private fun shortcut(event: KeyEvent, document: Document, page: Int): Boolean =
 // (Shift, Ctrl, function keys, …) report CHAR_UNDEFINED and must never be inserted in the document.
 private fun typeEvent(event: KeyEvent, document: Document): Boolean {
     val typed = typedChar(event)
-    if (typed != null) document.typeChar(typed)
+    if (typed != null) document.forEachCaret { typeChar(typed) }
     return typed != null
 }
 
@@ -233,15 +247,4 @@ private fun popupKey(key: Key, completion: CompletionState): (() -> Unit)? =
 private fun Document.moveByRows(delta: Int, extend: Boolean) {
     val rows = folding.rowCount()
     moveVerticallyTo(folding.lineAt((folding.rowOf(caret.line) + delta).coerceIn(0, rows - 1)), extend)
-}
-
-// IntelliJ: copy and cut without a selection act on the whole line.
-private fun copy(document: Document, cut: Boolean) {
-    val whole = !document.hasSelection
-    TextClipboard.set(if (whole) document.lines[document.caret.line] + "\n" else document.selectedText())
-    when {
-        !cut -> Unit
-        whole -> document.deleteLines()
-        else -> document.insert("")
-    }
 }

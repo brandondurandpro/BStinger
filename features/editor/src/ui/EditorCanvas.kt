@@ -22,11 +22,15 @@ import androidx.compose.ui.unit.dp
 import org.example.kotlineditor.model.BlameLine
 import org.example.kotlineditor.model.GitChangeKind
 import org.example.kotlineditor.model.GitLineChange
+import org.example.kotlineditor.state.Caret
 import org.example.kotlineditor.state.Document
 import org.example.kotlineditor.state.EditorTab
+import org.example.kotlineditor.state.LineInlays
 import org.example.kotlineditor.state.ScreenLine
+import org.example.kotlineditor.state.TextPos
 import org.example.kotlineditor.state.placeholder
 import org.example.kotlineditor.state.screenLine
+import org.example.kotlineditor.state.visualColumn
 import org.example.kotlineditor.state.visualColumnOf
 import kotlin.math.ceil
 import kotlin.math.roundToInt
@@ -214,7 +218,11 @@ private fun DrawScope.drawBlameAnnotation(layout: TextLayoutResult, metrics: Edi
 }
 
 private fun DrawScope.drawCaret(tab: EditorTab, document: Document, metrics: EditorMetrics) {
-    val caret = document.caret
+    drawCaretAt(tab, document, metrics, document.caret)
+    document.extraCarets.forEach { drawCaretAt(tab, document, metrics, it.pos) }
+}
+
+private fun DrawScope.drawCaretAt(tab: EditorTab, document: Document, metrics: EditorMetrics, caret: TextPos) {
     val folding = document.folding
     if (caret.line !in document.lines.indices || folding.isHidden(caret.line)) return
     val scroll = tab.verticalScroll
@@ -230,4 +238,21 @@ private fun DrawScope.drawCaret(tab: EditorTab, document: Document, metrics: Edi
 
 private fun DrawScope.drawUsageHint(layout: TextLayoutResult, x: Float, lineHeight: Float) {
     drawText(layout, topLeft = Offset(x, (lineHeight - layout.size.height) / 2))
+}
+
+// The selections of the other carets on line [index], as pairs of screen cells; null when there are none.
+internal fun List<Caret>.extraSelectionsOn(index: Int, line: String, inlays: LineInlays?): IntArray? {
+    if (isEmpty()) return null
+    val cells = ArrayList<Int>()
+    for (caret in this) {
+        val start = caret.start
+        val end = caret.end
+        val crosses = caret.hasSelection && index in start.line..end.line
+        if (crosses) {
+            cells += if (index == start.line) visualColumn(line, start.column, inlays) else 0
+            val lineEnd = visualColumn(line, line.length, inlays) + 1
+            cells += if (index == end.line) visualColumn(line, end.column, inlays) else lineEnd
+        }
+    }
+    return cells.takeIf { it.isNotEmpty() }?.toIntArray()
 }
