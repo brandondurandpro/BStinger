@@ -8,6 +8,7 @@ package org.example.kotlineditor.ui
 object EditorTags {
     const val DIFF = "diff"
     const val DIFF_TOOLBAR = "diff.toolbar"
+    const val DIFF_SIDES = "diff.sides"
     const val DIFF_COMMIT = "diff.commit"
     const val DIFF_COMMIT_HASH = "diff.commit.hash"
     const val DIFF_COMMIT_AUTHOR = "diff.commit.author"
@@ -25,6 +26,7 @@ object EditorTags {
     const val EDITOR_VERTICAL_SCROLLBAR = "editor.vscroll"
     const val EDITOR_MESSAGE = "editor.message"
     const val DISK_CONFLICT = "editor.diskConflict"
+    const val DISK_COMPARE = "editor.diskCompare"
     const val DISK_RELOAD = "editor.diskReload"
     const val DISK_KEEP = "editor.diskKeep"
     const val SAVE_ERROR = "editor.saveError"
@@ -77,6 +79,11 @@ object EditorTags {
     fun diffTab(relativePath: String) = "tab.diff:$relativePath"
 
     fun diffTabClose(relativePath: String) = "tab.diff.close:$relativePath"
+
+    /** The compare of a conflict: the editor's content against what the disk holds. */
+    fun compareTab(relativePath: String) = "tab.compare:$relativePath"
+
+    fun compareTabClose(relativePath: String) = "tab.compare.close:$relativePath"
 
     fun commitDiffTab(hash: String, relativePath: String) = "tab.commitDiff:$hash:$relativePath"
 

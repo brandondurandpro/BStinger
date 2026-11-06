@@ -219,14 +219,18 @@ class AgentChaosE2eTest {
             val conversation = startConversation(app)
             app.network.latencyMs = 300
             sendPrompt("stream 50")
-            // Typing while the answer streams is not blocked by the link.
+            // Typing while the answer streams is not blocked by the link: it queues, and goes once it is done.
             sendPrompt("typed meanwhile")
             awaitShown(conversation, "chunk 49")
             awaitIdle(conversation)
             app.network.latencyMs = 0
-            val answer = conversation.itemsOf<AgentItem.AgentText>().single().text
+            // The FIRST answer only: the chunks of the queued prompt arrive in theirs.
+            val answer = conversation.itemsOf<AgentItem.AgentText>().first().text
             val chunks = Regex("chunk (\\d+)").findAll(answer).map { it.groupValues[1].toInt() }.toList()
             assertEquals((0 until 50).toList(), chunks)
-            assertEquals("typed meanwhile", conversation.draft)
+            // The queued prompt ran: the draft is empty, and the agent answered it.
+            assertEquals("", conversation.draft)
+            awaitShown(conversation, "typed meanwhile")
+            awaitIdle(conversation)
         }
 }

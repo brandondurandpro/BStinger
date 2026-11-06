@@ -66,7 +66,14 @@ internal class TabFiles(
     private val saveQueues = WeakHashMap<Document, SaveQueue>()
 
     fun load(tab: EditorTab) {
-        if (tab.isDiff) loadDiff(tab) else loadText(tab)
+        when {
+            // A compare tab carries its lines: [EditorState.compareWithDisk] computed and put them there.
+            tab.isCompare -> Unit
+
+            tab.isDiff -> loadDiff(tab)
+
+            else -> loadText(tab)
+        }
     }
 
     /** Recomputes a diff tab (after a save, a commit, a change on disk). */
@@ -139,32 +146,64 @@ internal class TabFiles(
     }
 
     private suspend fun CoroutineScope.loadTextNow(tab: EditorTab) {
-        val content =
-            try {
-                fileSystem.read(tab.entry)
-            } catch (e: IOException) {
-                FileContent.Error("the server is unreachable (${e.message})")
-            }
-        tab.status =
-            when (content) {
-                is FileContent.Text -> {
-                    TabStatus.Ready(open(tab, content))
-                }
-
-                is FileContent.Binary -> {
-                    TabStatus.Unsupported("Binary file: content is not displayed")
-                }
-
-                is FileContent.TooLarge -> {
-                    TabStatus.Unsupported("File is too large to open (${content.size / MEGABYTE} MB)")
-                }
-
-                is FileContent.Error -> {
-                    TabStatus.Unsupported("Cannot read file: ${content.message}")
-                }
-            }
+        val content = readDisk(tab)
+        val unsupported = notText(content)
+        if (content is FileContent.Text) {
+            tab.status = TabStatus.Ready(open(tab, content))
+        } else {
+            tab.status = checkNotNull(unsupported)
+        }
         if (tab.status is TabStatus.Ready) loadChanges(tab)
     }
+
+    /** The status of the conflict banner's Compare: the document's lines against what the disk holds now. */
+    suspend fun compare(tab: EditorTab): TabStatus {
+        val content = readDisk(tab)
+        val editorLines = tab.document?.lines?.toList()
+        val compared = diffAgainstDisk(content, editorLines)
+        return when {
+            compared != null -> compared
+            editorLines == null -> TabStatus.Unsupported("The file is not open")
+            else -> checkNotNull(notText(content))
+        }
+    }
+
+    // The diff view of the disk's content against the editor's lines, when both were there as text; the diff runs
+    // off the UI thread, once per open of the compare.
+    private suspend fun diffAgainstDisk(content: FileContent, editorLines: List<String>?): TabStatus? =
+        if (content is FileContent.Text && editorLines != null) {
+            withContext(Dispatchers.Default) { TabStatus.Diff(CompareLines.diff(content.lines, editorLines)) }
+        } else {
+            null
+        }
+
+    // What a tab shows when a read result is not openable as text, `null` when the file may open.
+    private fun notText(content: FileContent): TabStatus? =
+        when (content) {
+            is FileContent.Binary -> {
+                TabStatus.Unsupported("Binary file: content is not displayed")
+            }
+
+            is FileContent.TooLarge -> {
+                TabStatus.Unsupported("File is too large to open (${content.size / MEGABYTE} MB)")
+            }
+
+            is FileContent.Error -> {
+                TabStatus.Unsupported("Cannot read file: ${content.message}")
+            }
+
+            is FileContent.Text -> {
+                null
+            }
+        }
+
+    // Reads the tab's file; a server out of reach is a read error the tab shows like any other.
+    private suspend fun readDisk(tab: EditorTab): FileContent =
+        try {
+            fileSystem.read(tab.entry)
+        } catch (e: IOException) {
+            FileContent.Error("the server is unreachable (${e.message})")
+        }
 
     /**
      * Saves [tab] in the background; if the server is unreachable it stays modified and is saved again later. A save

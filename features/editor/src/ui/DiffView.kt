@@ -56,6 +56,7 @@ fun DiffView(
     val style = LocalCodeStyle.current
     Column(modifier.fillMaxSize().background(IdeColors.Editor).testTag(EditorTags.DIFF)) {
         DiffToolbar(sideBySide, onToggleSideBySide, onOpenFile)
+        if (tab.isCompare) SideLabels()
         tab.commit?.let { commit -> commit.header?.let { CommitHeaderView(commit, it) } }
         Box(Modifier.weight(1f).fillMaxWidth()) {
             if (sideBySide) {

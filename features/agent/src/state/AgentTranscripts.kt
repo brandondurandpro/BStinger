@@ -65,16 +65,19 @@ private fun apply(conversation: Conversation, transcript: AgentTranscript) {
     }
     conversation.state = transcript.state
     transcript.agentName?.let { conversation.agentName = it }
+    // The turn is over the way the server said it: a prompt queued while it answered goes now.
+    if (transcript.state == AgentTurnState.Idle) conversation.onTurnIdle?.invoke()
     val turnEnded = wasBusy && transcript.state == AgentTurnState.Idle
     // The tree, the Git panel and the open editors pick the changes of the agent up.
     if (wrote || turnEnded) conversation.workspace?.synchronize()
 }
 
 // The server does not know the conversation: it restarted. The next prompt reopens the session of the agent, which
-// keeps it; a conversation without one is lost.
+// keeps it; a conversation without one is lost. A prompt queued meanwhile goes once the server is back.
 private fun forgotten(conversation: Conversation, restarted: Boolean) {
     val wasBusy = conversation.state != AgentTurnState.Idle
     conversation.state = AgentTurnState.Idle
+    conversation.onTurnIdle?.invoke()
     val shownByServer = conversation.items.any { it.version > 0 }
     val lost = shownByServer && conversation.session == null
     if (restarted && lost) {

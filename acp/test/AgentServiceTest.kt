@@ -1,6 +1,7 @@
 package org.example.kotlineditor.acp
 
 import kotlinx.coroutines.runBlocking
+import org.example.kotlineditor.model.AGENT_BUSY_MESSAGE
 import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.model.AgentItem
 import org.example.kotlineditor.model.AgentToolKind
@@ -62,6 +63,43 @@ class AgentServiceTest {
         service.prompt("c1", agent, directory.toString(), "same", "echo once")
         val items = turn { list -> list.any { it is AgentItem.AgentText } }
         assertEquals(1, items.count { it is AgentItem.UserText })
+    }
+
+    @Test
+    fun `a prompt arriving while the agent answers is queued and answered once it is done`() {
+        val file = directory.resolve("queued-writes.txt")
+        send("write $file first by the agent")
+        val asked = waitFor { list -> list.any { it is AgentItem.Permission } }
+        // The agent answers (it waits for the permission): the second prompt joins its queue, and the server takes it.
+        send("count")
+        val permission = asked.filterIsInstance<AgentItem.Permission>().first()
+        service.answer("c1", permission.id, "allow")
+        val followed = turn { list -> list.answers().any { it.startsWith("Prompt 2 of") } }
+        assertEquals(2, followed.count { it is AgentItem.UserText })
+        val answers = followed.answers()
+        assertContains(answers.firstOrNull().orEmpty(), "Wrote")
+        assertContains(answers.last(), "Prompt 2 of")
+        assertTrue(followed.filterIsInstance<AgentItem.Notice>().isEmpty(), followed.toString())
+    }
+
+    @Test
+    fun `a conversation keeps a queue of prompts while the agent answers, and refuses beyond it`() {
+        send("stubborn")
+        waitFor { list -> list.any { it is AgentItem.AgentText } }
+        repeat(4) { send("count") } // the queue is now exactly [QUEUED_PROMPTS]
+        // One more arrives with nobody running it yet: refused, and the client sends it again once a turn is over.
+        val refused = runCatching { send("count") }.exceptionOrNull()
+        assertIs<IllegalStateException>(refused)
+        assertContains(refused.message.orEmpty(), AGENT_BUSY_MESSAGE)
+        service.cancel("c1") // the agent stops; the queued prompts run in turn, the oldest first
+        val followed = turn { list -> list.count { it is AgentItem.UserText } == 5 }
+        assertContains(followed.filterIsInstance<AgentItem.Notice>().joinToString { it.text }, "Stopped.")
+        // The four queued prompts were answered, after the cancelled one, and in their order.
+        val text = followed.answers().joinToString(" ")
+        for (turnNumber in 2..5) {
+            assertEquals(1, Regex("Prompt $turnNumber of").findAll(text).count(), text)
+        }
+        assertTrue("Prompt 6" !in text, "the refused prompt was never run: $text")
     }
 
     @Test
