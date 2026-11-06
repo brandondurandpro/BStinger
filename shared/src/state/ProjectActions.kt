@@ -10,6 +10,7 @@ import org.example.kotlineditor.model.DiffLine
 import org.example.kotlineditor.model.FileContent
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.FileOperation
+import org.example.kotlineditor.model.FileVersion
 import org.example.kotlineditor.model.OperatedFile
 import org.example.kotlineditor.model.OutcomeUnknownException
 import org.example.kotlineditor.model.pathName
@@ -279,6 +280,37 @@ internal suspend fun ProjectState.reloadIfChanged(entry: FileEntry, document: Do
         } catch (expected: IOException) {
             null // server unreachable: synchronized at the next focus
         }
+    return decidedOn(document, content)
+}
+
+/**
+ * Follows a version the watch reported for the file of [document], which costs no read: the same decision
+ * [reloadIfChanged] gives, first on the version alone. A version the document knows already is nothing new; a
+ * touch (its hash is the one the document knows: nothing was written, only the time of the file moved) is
+ * recorded silently; other content is decided by its bytes, which the watch carries none of: it then asks for
+ * [reloadIfChanged], which reads and decides them. True when it was reloaded.
+ */
+internal suspend fun ProjectState.followVersionChange(
+    entry: FileEntry,
+    document: Document,
+    version: FileVersion,
+): Boolean {
+    if (version == document.diskVersion) return false // already known: the burst had it long ago, nothing was written
+    val knownSha = document.diskVersion?.sha256
+    val touched = knownSha != null && knownSha == version.sha256
+    return if (touched) {
+        // The same bytes, another time: the version recorded moves, nothing of the content was changed outside.
+        document.diskVersion = version
+        false
+    } else {
+        // Other bytes, of which the watch carries none: the content decides them, from the disk.
+        reloadIfChanged(entry, document)
+    }
+}
+
+// The decision a read gives: the steps each answer at once whether it was reloaded.
+@Suppress("ReturnCount") // the steps of a look at the disk each answer at once whether it was reloaded
+private fun ProjectState.decidedOn(document: Document, content: FileContent?): Boolean {
     if (content !is FileContent.Text) return false
     val readVersion = content.version
     if (readVersion == null) return false // the disk told the bytes but not their version: decisions stay put
