@@ -98,12 +98,12 @@ class AgentService(
         attachments: List<AgentAttachment> = emptyList(),
     ) {
         val prompt = UserPrompt(itemId, text, attachments)
-        conversation(conversation).prompt(prompt, directory, session) { processes.processFor(agent) }
+        conversation(conversation).prompt(prompt, agent, directory, session) { processes.processFor(agent) }
     }
 
     /** Opens the agent's [session] as [conversation]: the agent replays its history into the transcript. */
     fun open(conversation: String, agent: AgentCommand, directory: String, session: String) {
-        conversation(conversation).open(session, directory) { processes.processFor(agent) }
+        conversation(conversation).open(agent, session, directory) { processes.processFor(agent) }
     }
 
     /**

@@ -109,6 +109,13 @@ class Conversation(val id: Int, title: String, val branch: String) {
     var workspace: AgentWorkspace? by mutableStateOf(null)
         internal set
 
+    /**
+     * The coding agent of the conversation when the user chose one in it (one of the server's registry): null when it
+     * runs the agent of the settings.
+     */
+    var agent: AgentCommand? by mutableStateOf(null)
+        internal set
+
     /** Why the worktree could not be created (not a Git repository, branch checked out elsewhere…). */
     var workspaceError: String? by mutableStateOf(null)
         internal set
@@ -235,15 +242,24 @@ class AgentState(
     /** Conversation of the active tab: the tool windows and the toolbar show its worktree and its branch. */
     val current: Conversation? get() = tabs.active
 
-    /** The agent, as shown under the prompt before it introduced itself: its program. */
-    val agentLabel: String
-        get() {
-            val agent = agentCommand()
-            return "Agent: ${agent.registry ?: agent.command.joinToString(" ")}"
-        }
+    /** The agent of [conversation], as shown under the prompt before it introduced itself. */
+    fun agentOf(conversation: Conversation): AgentCommand = conversation.agent ?: agentCommand()
+
+    /** The agent of [conversation], named: its registry id, or its command line. */
+    fun agentLabelOf(conversation: Conversation): String = labelOf(agentOf(conversation))
+
+    /** The agent of the settings, named in the same way (menu of the agents of a conversation). */
+    val settingsAgentLabel: String
+        get() = labelOf(agentCommand())
+
+    /** The id of the agent of the settings in the registry, when it comes from it. */
+    val settingsAgentId: String?
+        get() = agentCommand().registry
+
+    private fun labelOf(agent: AgentCommand): String = agent.registry ?: agent.command.joinToString(" ")
 
     /** The settings of the sessions (the model…), chosen in the conversations. */
-    val options = ConversationOptions(project, agentCommand)
+    val options = ConversationOptions(project, ::agentOf)
 
     /** Whether the conversation list is shown on the left. */
     var conversationsVisible by mutableStateOf(true)
@@ -258,7 +274,7 @@ class AgentState(
     fun open(conversation: Conversation) {
         tabs.open(conversation)
         conversation.prepareIn(project)
-        project.restore(conversation, agentCommand())
+        project.restore(conversation, agentOf(conversation))
         options.offer(conversation)
     }
 
@@ -295,7 +311,7 @@ class AgentState(
         conversations.remove(conversation)
         val started = conversation.started
         val session = conversation.session
-        val agent = agentCommand()
+        val agent = agentOf(conversation)
         project.scope.launch {
             if (started) runCatching { agents.close(conversation.key) }
             // The agent keeps the history: deleted there, or the conversation comes back with it.
@@ -334,6 +350,27 @@ class AgentState(
                     }
                 conversation.preparingWorktree = false
             }
+    }
+
+    /**
+     * Chooses the agent of [conversation] from the server's registry, or again the agent of the settings when [entry]
+     * is null. It applies to its next prompt: a conversation already started keeps its transcript but loses the
+     * settings of its previous agent — the prompt runs in a new session of the new agent, which does not remember
+     * what the previous one was told (as the transcript says in a notice).
+     */
+    fun chooseAgent(conversation: Conversation, entry: String?) {
+        if (conversation.busy || conversation.settingOptions > 0) return
+        val chosen = entry?.let { AgentCommand(emptyList(), registry = it) }
+        if (conversation.agent == chosen) return
+        conversation.offering?.cancel()
+        conversation.agent = chosen
+        conversation.session = null
+        conversation.agentName = null
+        conversation.commands = emptyList()
+        conversation.options = emptyList()
+        conversation.choices.clear()
+        conversation.serverOptions = emptyList()
+        options.offer(conversation)
     }
 
     /**
@@ -388,7 +425,7 @@ class AgentState(
             project.followTranscript(conversation)
             val directory = workspace.root.path
             val (itemId, text, attachments) = prompt
-            agents.prompt(conversation.key, agentCommand(), directory, itemId, text, conversation.session, attachments)
+            agents.prompt(conversation.key, agentOf(conversation), directory, itemId, text, conversation.session, attachments)
         } catch (refused: IOException) {
             if (refused.message == AGENT_BUSY_MESSAGE) {
                 // A server that arrived first (or filled its queue) says the agent answers: the prompt goes again

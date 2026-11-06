@@ -19,12 +19,13 @@ private const val COMMAND_RETRY_MS = 400L
 /**
  * The settings of the sessions of the conversations (the model…): the agent offers them, the user chooses one in the
  * conversation, the server sets it in the session (as soon as it starts, for a conversation without one yet). The
- * IDE keeps none of them: they are the session's, as the agent says.
+ * IDE keeps none of them: they are the session's, as the agent says. Each conversation runs its own agent — what
+ * [agentCommand] says for it — so its settings are those this agent offers its session.
  */
 @Stable
 class ConversationOptions internal constructor(
     private val project: AgentHost,
-    private val agentCommand: () -> AgentCommand,
+    private val agentCommand: (Conversation) -> AgentCommand,
 ) {
     private val agents get() = project.services.agents
 
@@ -36,11 +37,11 @@ class ConversationOptions internal constructor(
      * Asks the server again for the commands of the agent while it knows none: an agent lists them a while after its
      * session started (Claude asks its SDK first), so a `/` typed early may come before them.
      */
-    internal suspend fun refreshCommands() {
+    internal suspend fun refreshCommands(conversation: Conversation) {
         repeat(COMMAND_TRIES) { attempt ->
             if (commands.isNotEmpty()) return
             if (attempt > 0) delay(COMMAND_RETRY_MS)
-            commands = knownCommands()
+            commands = knownCommands(conversation)
         }
     }
 
@@ -50,12 +51,12 @@ class ConversationOptions internal constructor(
         if (conversation.options.isNotEmpty() || asking) return
         conversation.offering =
             project.scope.launch {
-                val offered = offeredTo(project.root.path)
+                val offered = offeredTo(conversation, project.root.path)
                 if (conversation.options.isEmpty()) conversation.options = offered
                 // Known once a session of the agent started: the one that read its settings, at the latest. The
                 // agent lists them a while after, and a `/` typed while it was starting gave up asking before.
-                commands = knownCommands().ifEmpty { commands }
-                refreshCommands()
+                commands = knownCommands(conversation).ifEmpty { commands }
+                refreshCommands(conversation)
             }
     }
 
@@ -73,7 +74,7 @@ class ConversationOptions internal constructor(
         project.scope.launch {
             conversation.optionsLock.withLock {
                 try {
-                    agents.setOption(conversation.key, agentCommand(), option, value)
+                    agents.setOption(conversation.key, agentCommand(conversation), option, value)
                     project.followTranscript(conversation)
                 } catch (failure: IOException) {
                     conversation.options = before
@@ -96,7 +97,7 @@ class ConversationOptions internal constructor(
             val started = conversation.session != null
             val resent = if (started) emptyList() else conversation.choices.toList()
             for ((option, value) in resent) {
-                agents.setOption(conversation.key, agentCommand(), option, value)
+                agents.setOption(conversation.key, agentCommand(conversation), option, value)
             }
         }
     }
@@ -108,19 +109,19 @@ class ConversationOptions internal constructor(
     }
 
     // The commands the agent offered in its latest session; none when the server cannot say.
-    private suspend fun knownCommands(): List<AgentSlashCommand> =
+    private suspend fun knownCommands(conversation: Conversation): List<AgentSlashCommand> =
         try {
-            agents.commands(agentCommand())
+            agents.commands(agentCommand(conversation))
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: IOException) {
             emptyList()
         }
 
-    // The settings a session of the agent in [directory] offers; none when the server cannot say.
-    private suspend fun offeredTo(directory: String): List<AgentOption> =
+    // The settings a session of the agent of [conversation] in [directory] offers; none when the server cannot say.
+    private suspend fun offeredTo(conversation: Conversation, directory: String): List<AgentOption> =
         try {
-            agents.options(agentCommand(), directory)
+            agents.options(agentCommand(conversation), directory)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: IOException) {

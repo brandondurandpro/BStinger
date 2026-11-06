@@ -167,6 +167,20 @@ fun ComposeUiTest.awaitModel(name: String) = awaitOption(AgentTags.AGENT_MODEL, 
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.chooseModel(value: String) = chooseOption(AgentTags.AGENT_MODEL, AgentTags.agentModel(value))
 
+/** Waits until the agent button of the conversation shows [name] (`Fake Agent`). */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.awaitAgent(name: String) = awaitOption(AgentTags.AGENT_AGENT, name)
+
+/** Chooses the agent [id] (`fake-agent`) in the menu of the agent of the conversation. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.chooseAgent(id: String) = chooseOption(AgentTags.AGENT_AGENT, AgentTags.agentAgent(id))
+
+/** Types [text] in the field that filters the agents of the conversation's menu. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.typeFilter(text: String) {
+    awaitTag(AgentTags.AGENT_AGENT_FILTER).performTextInput(text)
+}
+
 /** Waits until the effort button shows [name]. */
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.awaitEffort(name: String) = awaitOption(AgentTags.AGENT_EFFORT, name)
