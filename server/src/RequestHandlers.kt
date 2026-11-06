@@ -12,6 +12,7 @@ import org.example.kotlineditor.rpc.commitsJson
 import org.example.kotlineditor.rpc.diffJson
 import org.example.kotlineditor.rpc.diskCursor
 import org.example.kotlineditor.rpc.entry
+import org.example.kotlineditor.rpc.fileVersion
 import org.example.kotlineditor.rpc.findOptions
 import org.example.kotlineditor.rpc.int
 import org.example.kotlineditor.rpc.keyEvent
@@ -37,6 +38,7 @@ private const val BRANCH = "branch"
 private const val LIMIT = "limit"
 private const val TERMINAL = "terminal"
 private const val STREAM = "stream"
+private const val VERSION = "version"
 
 /** Implementation of each [Method]: read the named params, call the local services, return the JSON result. */
 internal fun requestHandlers(services: LocalServices): Map<Method, Handler> =
@@ -61,11 +63,17 @@ private fun fileHandlers(services: LocalServices): Map<Method, Handler> {
         Method.FileAt to { fs.fileAt(params.string(PATH)).toJsonOrNull() },
         Method.Write to {
             val file = entry("file")
-            nothing {
-                // In the order the client sent its saves of the file, whatever order they reach it in.
-                fs.write(file, params.string("text"), writer = session, order = id)
-                disk.written(file)
-            }
+            val expected =
+                if (VERSION in params) {
+                    params.read(VERSION) { it.fileVersion() }
+                } else {
+                    null
+                }
+            // The version of the file once the write landed, or nothing when it was dropped (a newer save of the
+            // same file already ran): the client replays its older request and is answered from the cache.
+            val version = fs.write(file, params.string("text"), writer = session, order = id, expected = expected)
+            disk.written(file)
+            version?.toJson() ?: JsonNull
         },
         Method.CreateFile to { fs.createFile(entry(DIRECTORY), params.string(NAME)).also(disk::created).toJson() },
         Method.CreateDirectory to {

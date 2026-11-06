@@ -16,18 +16,47 @@ data class FileEntry(
     val isDirectory: Boolean,
 )
 
+/**
+ * The version of a file on the server's disk: what every read and write carries, and what a save checks.
+ *
+ * [mtimeMs] and [size] come from a stat of the file really written (behind a symbolic link, of its target),
+ * [fileKey] is what the disk identifies it with (its inode, when the system reveals it, `null` otherwise: on
+ * Windows, most mounts), and [sha256] is the hash of its bytes, so a change of line endings or encoding alone is
+ * still seen while a mere touch is not. Two versions of the same file are of the same content when they are
+ * equal ([equals]).
+ */
+data class FileVersion(
+    /** Last modification time in milliseconds since the epoch, only used to spare the hash (never trusted alone). */
+    val mtimeMs: Long,
+    /** Size of the file in bytes. */
+    val size: Long,
+    /** Key of the file on the disk (the Unix inode), `null` where the system does not reveal one. */
+    val fileKey: String? = null,
+    /** The SHA-256 of the bytes of the file, lower-case hex. */
+    val sha256: String,
+)
+
 /** Result of reading a file from disk. */
 sealed interface FileContent {
+    /** The version of the file on the disk when it could be read, `null` otherwise (too large, error). */
+    val version: FileVersion?
+        get() = null
+
     /** A text file, split into [lines] without terminators; [lineSeparator] is restored on save. */
-    class Text(
+    data class Text(
         /** Lines of the file. */
         val lines: List<String>,
         /** Line separator used by the file. */
         val lineSeparator: String = "\n",
+        /** Version of the file the lines were read from. */
+        override val version: FileVersion? = null,
     ) : FileContent
 
     /** A file that is not text (contains NUL bytes). */
-    data object Binary : FileContent
+    data class Binary(
+        /** Version of the file that was only checked, never decoded. */
+        override val version: FileVersion? = null,
+    ) : FileContent
 
     /** A file too large to be opened, of [size] bytes. */
     data class TooLarge(
@@ -137,8 +166,12 @@ interface ProjectFileSystem {
     /** The regular file at [path], or `null` if there is none (used to restore sessions). */
     suspend fun fileAt(path: String): FileEntry?
 
-    /** Replaces the content of [file] with [text]. */
-    suspend fun write(file: FileEntry, text: String)
+    /**
+     * Replaces the content of [file] with [text]; when [expected] (the version the caller read) is not `null`, the
+     * write fails instead of silently overwriting the file if it changed on the disk since. Returns the version of
+     * the file once written, `null` when the write was superseded (a newer save of the same file already ran).
+     */
+    suspend fun write(file: FileEntry, text: String, expected: FileVersion? = null): FileVersion?
 
     /** Creates an empty file; [name] may contain `/` to create intermediate directories, like IntelliJ. */
     suspend fun createFile(directory: FileEntry, name: String): FileEntry

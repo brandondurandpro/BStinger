@@ -4,6 +4,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.example.kotlineditor.model.FileContent
 import org.example.kotlineditor.model.FileEntry
+import org.example.kotlineditor.model.FileVersion
 import org.example.kotlineditor.model.ProjectFileSystem
 import java.io.IOException
 import java.nio.file.FileAlreadyExistsException
@@ -46,7 +47,7 @@ class LocalFileSystem(private val maxFileSize: Long = TextFiles.DEFAULT_MAX_SIZE
         }
 
     override suspend fun read(file: FileEntry): FileContent =
-        withContext(Dispatchers.IO) { TextFiles.read(Paths.get(file.path), maxFileSize) }
+        withContext(Dispatchers.IO) { TextFiles.readWithVersion(Paths.get(file.path), maxFileSize) }
 
     /** Synchronous read, for searches already running on IO threads. */
     fun readNow(file: FileEntry): FileContent = TextFiles.read(Paths.get(file.path), maxFileSize)
@@ -58,28 +59,44 @@ class LocalFileSystem(private val maxFileSize: Long = TextFiles.DEFAULT_MAX_SIZE
         }
 
     // One write of a file at a time.
-    override suspend fun write(file: FileEntry, text: String) {
+    override suspend fun write(file: FileEntry, text: String, expected: FileVersion?): FileVersion? =
         withContext(Dispatchers.IO) {
             val path = Paths.get(file.path)
-            withPathLock(path) { writeText(path, text) }
+            withPathLock(path) { writeText(path, text, expected) }
         }
-    }
 
     /**
      * [write] asked by [writer] (a client's session) with its request [order] (its ids increase): one write of a file
      * at a time, and a write sent before another of the same file by the same writer, which reaches the file after
-     * it, is dropped, the file keeping the newer text.
+     * it, is dropped, the file keeping the newer text. A dropped write checks nothing and returns no version
+     * (`null`): it did not run; an executed one checks against [expected] and returns the version written.
      */
-    suspend fun write(file: FileEntry, text: String, writer: String, order: Long) {
+    suspend fun write(
+        file: FileEntry,
+        text: String,
+        writer: String,
+        order: Long,
+        expected: FileVersion? = null,
+    ): FileVersion? =
         withContext(Dispatchers.IO) {
             val path = Paths.get(file.path)
-            writeInOrder(path, writer, order) { writeText(path, text) }
+            writeInOrder(path, writer, order) { writeText(path, text, expected) }
         }
-    }
 
-    private suspend fun writeText(path: Path, text: String) {
+    // Reads what the file holds, encodes [text] with the charset those bytes show, checks [expected] against the
+    // version the disk holds (skipped when there is nothing to check: no file yet, or no stat), writes through
+    // [writeFile], then returns the version of what it wrote.
+    private suspend fun writeText(path: Path, text: String, expected: FileVersion?): FileVersion? {
         val existing = if (Files.exists(path)) Files.readAllBytes(path) else null
-        writeFile(path, TextFiles.encode(text, existing))
+        val encoded = TextFiles.encode(text, existing)
+        if (expected != null) {
+            val current = versionOf(path, existing)
+            if (current != null && isStale(current, expected, existing, encoded)) {
+                throw IOException(FILE_CHANGED_MESSAGE)
+            }
+        }
+        writeFile(path, encoded)
+        return versionOf(path, encoded)
     }
 
     override suspend fun createFile(directory: FileEntry, name: String): FileEntry =
@@ -120,6 +137,18 @@ class LocalFileSystem(private val maxFileSize: Long = TextFiles.DEFAULT_MAX_SIZE
         val target = base.resolve(name.trim()).normalize()
         require(name.isNotBlank() && target.startsWith(base) && target != base) { "Invalid name: $name" }
         return target
+    }
+
+    // Whether the save is stale: the version the disk holds ([current]) is not the one [expected] was read from,
+    // and the bytes to write are not the ones the disk holds (which would be a replayed save, that may pass).
+    private fun isStale(
+        current: FileVersion,
+        expected: FileVersion,
+        existing: ByteArray?,
+        encoded: ByteArray,
+    ): Boolean {
+        val alreadyWritten = existing != null && encoded.contentEquals(existing)
+        return current != expected && !alreadyWritten
     }
 }
 

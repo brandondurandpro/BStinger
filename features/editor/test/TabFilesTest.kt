@@ -7,6 +7,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.yield
 import org.example.kotlineditor.model.FileContent
 import org.example.kotlineditor.model.FileEntry
+import org.example.kotlineditor.model.FileVersion
 import org.example.kotlineditor.model.ProjectFileSystem
 import org.example.kotlineditor.syntax.Language
 import java.io.IOException
@@ -30,7 +31,7 @@ private class GatedFileSystem : ProjectFileSystem {
         gate.complete(Unit)
     }
 
-    override suspend fun write(file: FileEntry, text: String) {
+    override suspend fun write(file: FileEntry, text: String, expected: FileVersion?): FileVersion? {
         inFlight++
         mostInFlight = maxOf(mostInFlight, inFlight)
         try {
@@ -41,6 +42,7 @@ private class GatedFileSystem : ProjectFileSystem {
         } finally {
             inFlight--
         }
+        return null
     }
 
     override suspend fun resolveDirectory(path: String): FileEntry? = null
