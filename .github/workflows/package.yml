@@ -14,12 +14,15 @@ name: Package
 # runner rather than cross-built from Linux. A remote server is a Linux machine:
 # the server alone is only packaged for Linux.
 #
-# Only run by hand (Actions > Package > Run workflow). Run from a branch, it keeps
-# the files as workflow artifacts. Run from a tag v1.2.3 ("Use workflow from"), it
-# also attaches them, with SHA256SUMS.txt, to a draft GitHub release, to review
-# before publishing it.
+# Run on a pushed tag v1.2.3, or by hand (Actions > Package > Run workflow). Either way
+# the files, with SHA256SUMS.txt, are attached to a GitHub release (Releases page), marked
+# as a pre-release for now, and also kept as workflow artifacts:
+#   - tag v1.2.3 (pushed, or chosen in "Use workflow from"): release v1.2.3;
+#   - a branch: release dev-<run number>, tagged on the commit that was built.
 
 on:
+  push:
+    tags: ["v*"]
   workflow_dispatch:
 
 permissions:
@@ -170,8 +173,7 @@ jobs:
           retention-days: 14
 
   release:
-    name: Draft the GitHub release
-    if: github.ref_type == 'tag'
+    name: Publish the GitHub release
     needs: package
     runs-on: ubuntu-24.04
     permissions:
@@ -185,10 +187,18 @@ jobs:
       - name: Checksums
         working-directory: dist
         run: sha256sum * > SHA256SUMS.txt
-      - name: Create the draft release
+      - name: Create the pre-release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          RUN_NUMBER: ${{ github.run_number }}
         run: |
-          gh release create "$TAG" dist/* \
-            --repo "$GITHUB_REPOSITORY" --draft --generate-notes --title "$TAG"
+          if [ "$REF_TYPE" = tag ]; then
+            tag="$REF_NAME"
+          else
+            tag="dev-$RUN_NUMBER"
+          fi
+          gh release create "$tag" dist/* \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --prerelease --generate-notes --title "$tag"
