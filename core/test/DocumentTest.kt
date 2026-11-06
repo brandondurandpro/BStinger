@@ -1,5 +1,6 @@
 package org.example.kotlineditor.unit
 
+import org.example.kotlineditor.model.FileVersion
 import org.example.kotlineditor.state.Document
 import org.example.kotlineditor.state.TextPos
 import org.example.kotlineditor.state.backspace
@@ -256,6 +257,21 @@ class DocumentTest {
         assertFalse(d.isModified)
         d.undo()
         assertEquals("one\ntwo", d.text())
+    }
+
+    @Test
+    fun `reloading from disk adopts the version the disk answered, when it told one`() {
+        val d = doc("one\ntwo")
+        d.diskVersion = FileVersion(0L, 0L, null, "gone")
+        d.diskConflict = true
+        d.reload(listOf("uno", "dos"), FileVersion(1L, 4L, null, "read"))
+        assertEquals("read", d.diskVersion?.sha256)
+        assertFalse(d.diskConflict)
+
+        // A read that told nothing leaves the version that was there: harmless unknown, not a stale known one.
+        d.reload(listOf("tres", "quatro"))
+        assertEquals("read", d.diskVersion?.sha256)
+        assertFalse(d.diskConflict)
     }
 
     @Test

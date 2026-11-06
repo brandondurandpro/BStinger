@@ -1,5 +1,7 @@
 package org.example.kotlineditor.state
 
+import org.example.kotlineditor.model.FileVersion
+
 // Typing and editing actions (IntelliJ keymap).
 
 private val PAIRS = mapOf('(' to ')', '[' to ']', '{' to '}', '"' to '"', '\'' to '\'')
@@ -116,12 +118,16 @@ fun Document.deleteLines() {
     moveTo(TextPos(minOf(first, lines.lastIndex), 0))
 }
 
-/** Replaces the whole content (file changed on disk) as one undoable edit, keeping the caret in place. */
-fun Document.reload(newLines: List<String>) {
+/**
+ * Replaces the whole content (file changed on disk) as one undoable edit, keeping the caret in place; [diskVersion]
+ * is what the disk answered when the new content was read ([FileVersion]), `null` when it told nothing: the
+ * version is only updated when it is known, so a save is not checked against a version that went stale.
+ */
+fun Document.reload(newLines: List<String>, diskVersion: FileVersion? = null) {
     val keep = caret
     replace(TextPos(0, 0), TextPos(lines.lastIndex, lines.last().length), newLines.joinToString("\n"))
     moveTo(keep)
     markSaved()
-    diskLinesHash = newLines.hashCode()
+    if (diskVersion != null) this.diskVersion = diskVersion
     diskConflict = false
 }

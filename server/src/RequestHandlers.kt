@@ -93,7 +93,8 @@ private fun fileHandlers(services: LocalServices): Map<Method, Handler> {
             }
         },
         Method.DiskChanges to {
-            services.disk.changes(params.string(ROOT), params.read("since") { it.diskCursor() }).toJson()
+            val open = open()
+            services.disk.changes(params.string(ROOT), params.read("since") { it.diskCursor() }, open).toJson()
         },
         Method.RecentLoad to { services.recentProjects.load().toJson() },
         Method.RecentSave to { nothing { services.recentProjects.save(params.read("paths") { it.strings() }) } },
@@ -208,6 +209,9 @@ private inline fun nothing(block: () -> Unit): JsonElement {
 }
 
 private fun Request.entry(name: String) = params.read(name) { it.entry() }
+
+// `fs/changes`: the open documents the client holds (an old client names none, and answers as today).
+private fun Request.open() = params.get("open")?.let { fields -> fields.strings() } ?: emptyList()
 
 private fun Request.root() = params.string(ROOT)
 

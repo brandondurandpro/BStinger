@@ -16,11 +16,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.example.kotlineditor.lsp.DiskChange
 import org.example.kotlineditor.model.DiskChanges
 import org.example.kotlineditor.model.DiskCursor
 import org.example.kotlineditor.model.DiskWatch
+import org.example.kotlineditor.model.FileVersion
 import org.example.kotlineditor.model.IGNORED_DIRECTORIES
 import org.slf4j.helpers.NOPLogger
 import java.io.Closeable
@@ -38,6 +40,18 @@ import java.util.concurrent.atomic.AtomicLong
 
 private const val GIT = ".git"
 private const val REFS = "refs"
+
+/**
+ * The open files of one answer given a version: beyond them the paths travel without one, and the client reads
+ * and decides them one by one, as when no version travels at all. Internal so the tests name this very cap.
+ */
+internal const val MAX_VERSIONED_OPEN_FILES = 32
+
+/** A version computed less than this long ago is found again without hashing the file (see [VersionCache]). */
+internal const val VERSION_CACHE_TTL_MS = 2_000L
+
+// Most versions the cache keeps: the open files of the projects, and no more.
+private const val VERSION_CACHE_CAPACITY = 256
 
 // The files of `.git` that say the branch, the index or the commits changed; its other files are Git's own business.
 private val GIT_FILES = setOf("HEAD", "index", "packed-refs")
@@ -91,7 +105,14 @@ class ProjectWatches(
 
     @Volatile private var closed = false
 
-    override suspend fun changes(root: String, since: DiskCursor): DiskChanges = watchOf(root).changesAfter(since)
+    override suspend fun changes(root: String, since: DiskCursor, open: List<String>): DiskChanges =
+        watchOf(root).changesAfter(since, open)
+
+    /**
+     * How many files the recent answers hashed (the cache of [VersionCache] spared the repeats): the tests watch
+     * it, so that a burst hashes only what is open.
+     */
+    fun computedVersions(): Long = synchronized(watches) { watches.values.sumOf { it.hashes } }
 
     // Registering a large tree holds up the polls of that project only: the lock covers the lookup, not the creation.
     private suspend fun watchOf(root: String): RootWatch {
@@ -174,6 +195,72 @@ class ProjectWatches(
 // polls a restarted server with its old cursor gets told it missed everything.
 private val nextWatchId = AtomicLong(System.currentTimeMillis() * 1_000)
 
+/**
+ * The versions the recent answers computed, by path; they carry the (mtime, size) they describe and when they were
+ * hashed. A path asked again whose (mtime, size) is theirs, within the window [VERSION_CACHE_TTL_MS], is found
+ * again without reading or hashing it: a burst may repeat a path across answers, and its bytes did not move
+ * (nothing between two answers but the events themselves).
+ *
+ * The window bounds what it can answer wrong: a file rewritten in place to its own size, with its time restored
+ * (`touch -r`), keeps the (mtime, size) of the version cached while holding other bytes. Rare, and bounded: the
+ * next real change of the file moves its (mtime, size), and a save checked on the server stats it again.
+ */
+private class VersionCache {
+    private val computedCount = AtomicInteger()
+
+    // Insertion-ordered: past the capacity, the eldest entry goes.
+    private val entries = LinkedHashMap<String, Cached>()
+
+    /** Files hashed so far (the cache hits are not here). */
+    val computed: Long get() = computedCount.get().toLong()
+
+    /** The version [path] holds now; `null` when there is no file (deleted, a directory) or the disk refuses it. */
+    @Suppress("ReturnCount") // every step of a version answers at once that there is none to give
+    fun recent(path: Path): FileVersion? {
+        // The stat decides on the cache before any byte is read: a hit hashes nothing.
+        val attributes = attributesOf(path) ?: return null
+        val mtime = attributes.lastModifiedTime().toMillis()
+        val size = attributes.size()
+        val hit = cached(path.toString(), mtime, size)
+        if (hit != null) return hit
+        val bytes =
+            try {
+                Files.readAllBytes(path)
+            } catch (_: IOException) {
+                return null
+            }
+        val version = versionOf(path, bytes) ?: return null
+        computedCount.incrementAndGet()
+        return store(path.toString(), Cached(version.mtimeMs, version.size, version))
+    }
+
+    // Found again when [path] holds the (mtime, size) of a version computed within the window, as it does when
+    // nothing between two answers wrote it.
+    @Synchronized private fun cached(path: String, mtime: Long, size: Long): FileVersion? {
+        val cached = entries[path] ?: return null
+        val fresh = System.currentTimeMillis() - cached.hashedAt <= VERSION_CACHE_TTL_MS
+        val sameBytes = cached.mtimeMs == mtime && cached.size == size
+        return if (fresh && sameBytes) cached.version else null
+    }
+
+    // Stored with the (mtime, size) of the version returned, [path]'s own: another write within the window moves
+    // its stat to another entry, and nothing of a reported version is trusted once the window is past.
+    @Synchronized private fun store(path: String, cached: Cached): FileVersion {
+        entries[path] = cached
+        while (entries.size > VERSION_CACHE_CAPACITY) {
+            val eldest = entries.keys.firstOrNull() ?: break
+            entries.remove(eldest)
+        }
+        return cached.version
+    }
+
+    private class Cached(val mtimeMs: Long, val size: Long, val version: FileVersion) {
+        val hashedAt = System.currentTimeMillis()
+    }
+
+    private fun attributesOf(path: Path) = realTargetOf(path)?.let { statOf(it) }
+}
+
 private class Change(val version: Long, val path: String)
 
 /** One project root: its watcher, and the last changes, numbered. */
@@ -194,6 +281,9 @@ private class RootWatch(
     // Versions up to this one were dropped (too many changes, or the watch service overflowed).
     private var floor = 0L
     private val version = MutableStateFlow(0L)
+
+    // The versions of the open files computed recently, so that a burst that repeats a path does not hash it twice.
+    private val versions = VersionCache()
 
     // Language server notifications of a burst, sent once the watcher has nothing more to read.
     private val unsent = ArrayList<Pair<String, DiskChange>>()
@@ -223,22 +313,52 @@ private class RootWatch(
 
     val isOpen: Boolean get() = !watcher.isClosed
 
+    /** Files the version cache hashed (the repeats found again were not): the tests watch it. */
+    val hashes: Long get() = versions.computed
+
     fun isIdle(): Boolean = polls.get() == 0 && System.currentTimeMillis() - lastPoll > settings.idleMs
 
     fun close() {
         runCatching { watcher.close() }
     }
 
-    suspend fun changesAfter(since: DiskCursor): DiskChanges {
+    suspend fun changesAfter(since: DiskCursor, open: List<String>): DiskChanges {
         polls.incrementAndGet()
         try {
             val sameWatch = since.watch == id
             if (sameWatch && since.version == version.value) awaitChange(since.version)
-            return changesSince(since.version, sameWatch)
+            val answer = changesSince(since.version, sameWatch)
+            return withVersions(answer, open)
         } finally {
             lastPoll = System.currentTimeMillis()
             polls.decrementAndGet()
         }
+    }
+
+    // The parts of an answer that a version travels with: the paths of it to hash, `null` when none of it is
+    // known or no open file is named among them.
+    private fun versionPaths(answer: DiskChanges, open: List<String>): List<String>? {
+        val openInAnswer = if (!answer.complete) emptyList() else answer.paths.filter { it in open.toHashSet() }
+        if (openInAnswer.isEmpty()) return null
+        return openInAnswer.take(MAX_VERSIONED_OPEN_FILES)
+    }
+
+    // The versioned answer: named open files hashed off the watch on the IO dispatcher, so that a burst whose
+    // open files are few answers in a bounded time whatever it wrote (the rest travels without a version).
+    private suspend fun withVersions(answer: DiskChanges, open: List<String>): DiskChanges {
+        val planned = versionPaths(answer, open) ?: return answer
+        val answerVersions = withContext(Dispatchers.IO) { versionsOf(planned) }
+        return DiskChanges(answer.cursor, answer.paths, answer.complete, answerVersions)
+    }
+
+    // Reads [paths] off the watch's lock; a path the disk cannot stat (deleted while written, a directory) is
+    // answered without a version, as when the client read it instead.
+    private fun versionsOf(paths: List<String>): Map<String, FileVersion> {
+        val versioned =
+            paths.mapNotNull { path ->
+                versions.recent(Paths.get(path))?.let { version -> path to version }
+            }
+        return versioned.toMap()
     }
 
     private suspend fun awaitChange(since: Long) {

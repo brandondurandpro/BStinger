@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
+import org.example.kotlineditor.model.FileVersion
 import org.example.kotlineditor.model.TextChange
 import org.example.kotlineditor.syntax.Language
 import org.example.kotlineditor.syntax.treesitter.SyntaxSession
@@ -51,16 +52,11 @@ class Document(initialLines: List<String>, val language: Language, val lineSepar
         private set
 
     /**
-     * Hash of the lines last read from or written to the disk ([List.hashCode]): when the disk has other lines, another
-     * program changed the file.
+     * The version of the file on the disk as the IDE last read or wrote it ([FileVersion]), `null` when that is
+     * not known (the file was created by the IDE, or the disk could not be stat'ed): a save sends it, and the
+     * server refuses to write when the file changed since; reads of the disk compare theirs with it.
      */
-    var diskLinesHash: Int = initialLines.hashCode()
-
-    /**
-     * Bumped when a save of this document starts and when it ends (odd while one runs): a read of the disk that
-     * overlapped a save may have seen the file before or after it, and is not compared with [diskLinesHash].
-     */
-    var saveStamp: Int = 0
+    var diskVersion: FileVersion? = null
 
     /** Another program changed the file while it had unsaved edits: it is not saved until the user chooses. */
     var diskConflict by mutableStateOf(false)

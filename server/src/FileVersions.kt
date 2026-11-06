@@ -10,12 +10,6 @@ import java.nio.file.attribute.BasicFileAttributes
 import java.security.MessageDigest
 
 /**
- * The error a save asked with an expected [FileVersion] fails with when the file changed on the disk since it
- * was read: the client shows it like any other failure of a save, never overwriting the change.
- */
-const val FILE_CHANGED_MESSAGE = "The file changed on disk since it was read: reload or keep your changes"
-
-/**
  * The version the file [path] holds (through a symbolic link, of its target) when [bytes] are its whole content,
  * `null` when it cannot be taken (no file, or the disk refuses the stat: the caller then skips the check).
  *
@@ -35,7 +29,8 @@ fun versionOf(path: Path, bytes: ByteArray?): FileVersion? {
     )
 }
 
-private fun statOf(target: Path): BasicFileAttributes? =
+// The stat of the file (its target, already found by [realTargetOf]), shared with the watch's version cache.
+internal fun statOf(target: Path): BasicFileAttributes? =
     try {
         Files.readAttributes(target, BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS)
     } catch (_: IOException) {
@@ -43,7 +38,7 @@ private fun statOf(target: Path): BasicFileAttributes? =
     }
 
 // The file at [path], links followed, `null` when there is none (a link whose target is missing included).
-private fun realTargetOf(path: Path): Path? =
+internal fun realTargetOf(path: Path): Path? =
     try {
         path.toRealPath()
     } catch (_: IOException) {

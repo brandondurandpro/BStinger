@@ -10,6 +10,7 @@ import org.example.kotlineditor.model.DiffLine
 import org.example.kotlineditor.model.FileContent
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.FileOperation
+import org.example.kotlineditor.model.FileVersion
 import org.example.kotlineditor.model.OperatedFile
 import org.example.kotlineditor.model.OutcomeUnknownException
 import org.example.kotlineditor.model.pathName
@@ -264,25 +265,77 @@ internal fun ProjectState.synchronizeFiles() {
 /**
  * Follows the disk in [document] when another program changed its file: reloaded when it has no edit of its own,
  * in conflict otherwise (the user chooses, see `DiskBanner`). True when it was reloaded.
+ *
+ * The version [FileVersion] of the read decides that a look is needed; its bytes decide what it was. A read whose
+ * hash is the one of the version already known is a touch: nothing was written, only the time moved, and the
+ * version is recorded without a word. Other bytes reload a document that has no edit of its own (even when the
+ * lines are the ones it had, their terminators or encoding may have changed), and raise the banner for one that
+ * has: writing it would replace what the other program left.
  */
+@Suppress("ReturnCount") // the steps of a look at the disk each answer at once whether it was reloaded
 internal suspend fun ProjectState.reloadIfChanged(entry: FileEntry, document: Document): Boolean {
-    val stamp = document.saveStamp
     val content =
         try {
             services.fileSystem.read(entry)
         } catch (expected: IOException) {
             null // server unreachable: synchronized at the next focus
         }
-    // A save of the IDE ran meanwhile: the disk holds what it wrote, which the read may or may not have seen.
-    val overlappedSave = stamp % 2 == 1 || document.saveStamp != stamp
-    val lines = (content as? FileContent.Text)?.lines
-    if (lines == null || overlappedSave) return false
-    val changedOutside = lines.hashCode() != document.diskLinesHash
-    val stale = !document.isModified && lines != document.lines.toList()
-    when {
-        stale -> document.reload(lines)
-        changedOutside && document.isModified -> document.diskConflict = true
-        else -> Unit
+    return decidedOn(document, content)
+}
+
+/**
+ * Follows a version the watch reported for the file of [document], which costs no read: the same decision
+ * [reloadIfChanged] gives, first on the version alone. A version the document knows already is nothing new; a
+ * touch (its hash is the one the document knows: nothing was written, only the time of the file moved) is
+ * recorded silently; other content is decided by its bytes, which the watch carries none of: it then asks for
+ * [reloadIfChanged], which reads and decides them. True when it was reloaded.
+ */
+internal suspend fun ProjectState.followVersionChange(
+    entry: FileEntry,
+    document: Document,
+    version: FileVersion,
+): Boolean {
+    if (version == document.diskVersion) return false // already known: the burst had it long ago, nothing was written
+    val knownSha = document.diskVersion?.sha256
+    val touched = knownSha != null && knownSha == version.sha256
+    return if (touched) {
+        // The same bytes, another time: the version recorded moves, nothing of the content was changed outside.
+        document.diskVersion = version
+        false
+    } else {
+        // Other bytes, of which the watch carries none: the content decides them, from the disk.
+        reloadIfChanged(entry, document)
     }
-    return stale
+}
+
+// The decision a read gives: the steps each answer at once whether it was reloaded.
+@Suppress("ReturnCount") // the steps of a look at the disk each answer at once whether it was reloaded
+private fun ProjectState.decidedOn(document: Document, content: FileContent?): Boolean {
+    if (content !is FileContent.Text) return false
+    val readVersion = content.version
+    if (readVersion == null) return false // the disk told the bytes but not their version: decisions stay put
+    if (readVersion == document.diskVersion) return false
+    val knownSha = document.diskVersion?.sha256
+    val touched = knownSha != null && knownSha == readVersion.sha256
+    return when {
+        touched -> {
+            // Same bytes, another time: the version recorded moves, nothing of the content was changed outside.
+            document.diskVersion = readVersion
+            false
+        }
+
+        !document.isModified -> {
+            // The disk holds a content of its own: the document that has no edit follows it in one go, as one
+            // undoable edit, even when the lines of text are the ones the document already showed.
+            document.reload(content.lines, readVersion)
+            true
+        }
+
+        else -> {
+            // Unsaved edits on a file another program rewrote: the user chooses between the two (Load from Disk,
+            // Keep My Changes); the choice of the disk reads the file again, that of the edits saves their text.
+            document.diskConflict = true
+            false
+        }
+    }
 }

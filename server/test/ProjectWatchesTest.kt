@@ -8,11 +8,14 @@ import kotlinx.coroutines.runBlocking
 import org.example.kotlineditor.lsp.DiskChange
 import org.example.kotlineditor.model.DiskChanges
 import org.example.kotlineditor.model.DiskCursor
+import org.example.kotlineditor.model.FileVersion
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.nio.file.attribute.FileTime
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.io.path.createDirectories
+import kotlin.io.path.setLastModifiedTime
 import kotlin.io.path.writeText
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -51,7 +54,8 @@ class ProjectWatchesTest {
         return path
     }
 
-    private fun poll(since: DiskCursor): DiskChanges = runBlocking { watches.changes(root.toString(), since) }
+    private fun poll(since: DiskCursor, open: List<String> = emptyList()): DiskChanges =
+        runBlocking { watches.changes(root.toString(), since, open) }
 
     // The cursor of a watch that runs, every directory registered.
     // The language servers are told once the watcher is idle, which may come after a poll already answered.
@@ -84,21 +88,35 @@ class ProjectWatchesTest {
         return target?.toString() == "anon_inode:inotify"
     }
 
-    private class Seen(val paths: Set<String>, val cursor: DiskCursor)
+    private class Seen(
+        val paths: Set<String>,
+        val cursor: DiskCursor,
+        val versions: Map<String, FileVersion>,
+        val answers: List<DiskChanges>,
+    )
 
-    // Polls until [path] is reported (a burst may come in several answers): every path seen, and the last cursor.
-    private fun pollUntil(since: DiskCursor, path: Path): Seen {
+    // Polls until [paths] are all reported (a burst may come in several answers): every path and version seen,
+    // and the last cursor.
+    private fun pollForAll(since: DiskCursor, wait: Collection<String>, open: List<String>): Seen {
         val seen = HashSet<String>()
+        val versions = HashMap<String, FileVersion>()
+        val answers = ArrayList<DiskChanges>()
         var cursor = since
         repeat(10) {
-            val answer = poll(cursor)
+            val answer = poll(cursor, open)
             assertTrue(answer.complete)
             seen += answer.paths
+            versions += answer.versions
+            answers += answer
             cursor = answer.cursor
-            if (path.toString() in seen) return Seen(seen, cursor)
+            if (seen.containsAll(wait)) return Seen(seen, cursor, versions, answers)
         }
-        error("$path was never reported, only $seen")
+        error("${wait.subtract(seen)} was never reported, only $seen")
     }
+
+    // Polls until [path] is reported: everything seen, every version seen, and the last cursor.
+    private fun pollUntil(since: DiskCursor, path: Path, open: List<String> = emptyList()): Seen =
+        pollForAll(since, listOf(path.toString()), open)
 
     @Test
     fun `the first poll gives the position without changes`() {
@@ -256,5 +274,88 @@ class ProjectWatchesTest {
         assertTrue(poll().isFailure)
         Thread.sleep(600)
         assertTrue(poll().isSuccess)
+    }
+
+    @Test
+    fun `a changed open file is answered with the version of its bytes`() {
+        val changed = file("src/Open.kt", "class Before\n")
+        val cursor = started()
+        val open = listOf(changed.toString())
+        file("src/Open.kt", "class Rewritten outside\n")
+        file("src/Other.kt", "class Other\n")
+        val seen = pollUntil(cursor, changed, open)
+        assertEquals(versionOf(changed, Files.readAllBytes(changed)), seen.versions[changed.toString()])
+        assertTrue(changed.toString() in seen.versions, "${seen.versions}")
+    }
+
+    @Test
+    fun `a version of unchanged metadata within the window is found again without hashing`() {
+        watches.close()
+        watches = watchesOf(WatchSettings(holdMs = SHORT_HOLD_MS, settleMs = 50))
+        val changed = file("Open.kt", "class Before\n")
+        val cursor = started()
+        val open = listOf(changed.toString())
+        file("Open.kt", "class Rewritten outside\n")
+        val seen = pollUntil(cursor, changed, open)
+        val version = checkNotNull(seen.versions[changed.toString()])
+        assertEquals(1, watches.computedVersions())
+        // The file is written again (other bytes, this size), with the time of the version computed: its (mtime,
+        // size) did not move twice, and the answer is found again without hashing, within the window only.
+        val sameSize = "class Another rewritten\n"
+        file("Open.kt", sameSize)
+        changed.setLastModifiedTime(FileTime.fromMillis(version.mtimeMs))
+        val again = pollUntil(seen.cursor, changed, open)
+        assertEquals(seen.versions, again.versions, "the version of the same (mtime, size) is the same")
+        assertEquals(1, watches.computedVersions(), "the file was not hashed twice within the window")
+        // Once the window is past, the file is hashed again: caches do not make answers stale for long.
+        Thread.sleep(VERSION_CACHE_TTL_MS + 500L)
+        file("Open.kt", "class After the window\n")
+        val later = pollUntil(again.cursor, changed, open)
+        assertEquals(2, watches.computedVersions(), "the window past, the file was hashed once more")
+        assertEquals(versionOf(changed, Files.readAllBytes(changed)), later.versions[changed.toString()])
+    }
+
+    @Test
+    fun `only the first open files of an answer are given a version`() {
+        val cursor = started()
+        val open = List(MAX_VERSIONED_OPEN_FILES + 8) { i -> root.resolve("Many$i.kt") }
+        val written = open.map { it.toString() }
+        open.forEach { it.parent.createDirectories() }
+        open.forEach { it.writeText("class Many\n") }
+        open.forEach { it.writeText("class Many changed\n") }
+        val seen = pollForAll(cursor, written, written)
+        assertTrue(seen.paths.containsAll(written), "${seen.paths}")
+        // One answer hashes at most the cap; the burst may be answered in several, which cap each their own.
+        assertTrue(
+            seen.answers.all { it.versions.size <= MAX_VERSIONED_OPEN_FILES },
+            seen.answers.joinToString { "${it.paths.size} paths, ${it.versions.size} versions" },
+        )
+        assertTrue(
+            seen.answers.any { it.versions.size == MAX_VERSIONED_OPEN_FILES },
+            seen.answers.joinToString { "${it.paths.size} paths, ${it.versions.size} versions" },
+        )
+        assertTrue(seen.versions.keys.all { it in written }, "${seen.versions.keys}")
+    }
+
+    @Test
+    fun `a change of an open file without one named is answered without a version`() {
+        val changed = file("Quiet.kt", "class Quiet\n")
+        val cursor = started()
+        file("Quiet.kt", "class Rewritten outside\n")
+        val seen = pollUntil(cursor, changed)
+        assertTrue(changed.toString() in seen.paths)
+        assertTrue(seen.versions.isEmpty())
+        assertEquals(0, watches.computedVersions())
+    }
+
+    @Test
+    fun `a deleted open file is answered without a version`() {
+        val toDelete = file("Gone.kt")
+        val cursor = started()
+        val open = listOf(toDelete.toString())
+        Files.delete(toDelete)
+        val seen = pollUntil(cursor, toDelete, open)
+        assertTrue(toDelete.toString() in seen.paths)
+        assertFalse(toDelete.toString() in seen.versions, "${seen.versions}")
     }
 }

@@ -14,6 +14,8 @@ import org.example.kotlineditor.model.DiffLine
 import org.example.kotlineditor.model.DiskChanges
 import org.example.kotlineditor.model.DiskCursor
 import org.example.kotlineditor.model.DiskWatch
+import org.example.kotlineditor.model.FILE_CHANGED_MESSAGE
+import org.example.kotlineditor.model.FileChangedException
 import org.example.kotlineditor.model.FileContent
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.FileSymbol
@@ -99,15 +101,20 @@ class RemoteFileSystem(private val client: RpcClient) : ProjectFileSystem {
 
     override suspend fun fileAt(path: String): FileEntry? = client.call(Method.FileAt) { put(PATH, path) }.entryOrNull()
 
-    override suspend fun write(file: FileEntry, text: String, expected: FileVersion?): FileVersion? {
-        val result =
-            client.call(Method.Write) {
-                put(FILE, file.toJson())
-                put("text", text)
-                if (expected != null) put(VERSION, expected.toJson())
-            }
-        return result.versionOrNull()
-    }
+    override suspend fun write(file: FileEntry, text: String, expected: FileVersion?): FileVersion? =
+        try {
+            val result =
+                client.call(Method.Write) {
+                    put(FILE, file.toJson())
+                    put("text", text)
+                    if (expected != null) put(VERSION, expected.toJson())
+                }
+            result.versionOrNull()
+        } catch (failure: RemoteException) {
+            // The server's answer of a refused save names a known failure: the client sees it as what it is.
+            val message = failure.message
+            throw if (message == FILE_CHANGED_MESSAGE) FileChangedException(message) else failure
+        }
 
     override suspend fun createFile(directory: FileEntry, name: String): FileEntry {
         val result =
@@ -143,11 +150,12 @@ class RemoteFileSystem(private val client: RpcClient) : ProjectFileSystem {
 
 /** [DiskWatch] of the server. */
 class RemoteDiskWatch(private val client: RpcClient) : DiskWatch {
-    override suspend fun changes(root: String, since: DiskCursor): DiskChanges {
+    override suspend fun changes(root: String, since: DiskCursor, open: List<String>): DiskChanges {
         val result =
             client.call(Method.DiskChanges) {
                 put(ROOT, root)
                 put("since", since.toJson())
+                if (open.isNotEmpty()) put("open", open.toJson())
             }
         return result.diskChanges()
     }

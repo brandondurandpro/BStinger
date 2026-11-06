@@ -15,8 +15,10 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.example.kotlineditor.model.BlameLine
 import org.example.kotlineditor.model.DiffLine
+import org.example.kotlineditor.model.FileChangedException
 import org.example.kotlineditor.model.FileContent
 import org.example.kotlineditor.model.FileEntry
+import org.example.kotlineditor.model.FileVersion
 import org.example.kotlineditor.model.OutcomeUnknownException
 import org.example.kotlineditor.model.ProjectFileSystem
 import org.example.kotlineditor.syntax.Language
@@ -201,13 +203,16 @@ internal class TabFiles(
     suspend fun reloadFromDisk(tab: EditorTab) {
         val document = tab.document ?: return
         val content = fileSystem.read(tab.entry)
-        if (content is FileContent.Text) document.reload(content.lines)
+        if (content is FileContent.Text) document.reload(content.lines, content.version)
     }
 
     /** Saves the edits of [tab] over what another program wrote (the user chose them in a conflict). */
     fun keepEdits(tab: EditorTab) {
         val document = tab.document ?: return
         document.diskConflict = false
+        // The user chose these edits: the save is not checked against the version the document knew, the file
+        // changed since, and the user wants the disk to hold them. The write records the version it leaves.
+        document.diskVersion = null
         save(tab)
     }
 
@@ -240,48 +245,64 @@ internal class TabFiles(
         if (document != null && document.savable()) {
             val size = Attributes.of(Attribute.Size to sizeBucket(document.lineCount.toLong()))
             ClientTelemetry.measureToFrame(Operation.EditorSave, languageOf(tab) + size) {
-                val version = document.version
-                val lines = document.snapshotLines()
-                document.saveStamp++
+                val editVersion = document.version
                 try {
-                    writtenOnce(tab.entry, document.text(), lines)
-                    // What the disk now has, even when the user typed meanwhile: the watch reports this write too.
-                    document.diskLinesHash = lines.hashCode()
+                    val writtenVersion = writtenOnce(tab.entry, document.text(), document.diskVersion)
+                    // The version the disk now holds, even when the user typed meanwhile: the watch reports this
+                    // write too, and the next comparison sees it as this save's work, not as another program's.
+                    if (writtenVersion != null) document.diskVersion = writtenVersion
+                } catch (refused: FileChangedException) {
+                    // The server wrote nothing: another program changed the file since it was read, and both it
+                    // and these edits are someone's content. The user chooses between them (see `DiskBanner`).
+                    document.diskConflict = true
+                    throw refused
                 } catch (failed: IOException) {
                     document.saveError = failed.message ?: failed::class.simpleName.orEmpty()
                     throw failed
-                } finally {
-                    document.saveStamp++
                 }
                 document.saveError = null
-                if (document.version == version) document.markSaved()
+                // The disk now holds exactly these bytes, and both its version and these edits are answered: a
+                // conflict seen while this save was on its way is over — the user's content is the disk's now.
+                document.diskConflict = false
+                if (document.version == editVersion) document.markSaved()
                 onSaved(tab.entry)
             }
         }
     }
 
-    // Writes [text] (made of [lines]). A server that restarted before answering may or may not have written it: it is
-    // not asked again, the disk says whether it was; it was when it holds [lines], and the save then ends as answered.
-    private suspend fun writtenOnce(entry: FileEntry, text: String, lines: List<String>) {
+    // Writes [text], checked against the [expected] version of the file: refused when another program changed the
+    // file since ([FileChangedException], nothing written), idempotent when it replayed a write that landed. A
+    // server that restarted before answering may or may not have written it: it is asked once again instead of
+    // being read back — with the same [expected] version, the write already on the disk succeeds (the bytes are
+    // exactly the ones it holds), and one not there runs as a normal save.
+    private suspend fun writtenOnce(entry: FileEntry, text: String, expected: FileVersion?): FileVersion? =
         try {
-            fileSystem.write(entry, text)
+            fileSystem.write(entry, text, expected)
         } catch (unknown: OutcomeUnknownException) {
-            val disk =
-                try {
-                    fileSystem.read(entry)
-                } catch (unreachable: IOException) {
-                    unknown.addSuppressed(unreachable)
-                    throw unknown
-                }
-            if ((disk as? FileContent.Text)?.lines != lines) throw unknown
+            replay(entry, text, expected, unknown)
         }
-    }
+
+    // [writtenOnce]'s second attempt, carrying [first] along if it also fails (the server is still out of reach).
+    private suspend fun replay(
+        entry: FileEntry,
+        text: String,
+        expected: FileVersion?,
+        first: OutcomeUnknownException,
+    ): FileVersion? =
+        try {
+            fileSystem.write(entry, text, expected)
+        } catch (failed: IOException) {
+            first.addSuppressed(failed)
+            throw first
+        }
 
     private suspend fun CoroutineScope.open(tab: EditorTab, content: FileContent.Text): Document {
         val language = Language.fromFileName(tab.entry.name)
         val document =
             withContext(Dispatchers.Default) {
                 Document(content.lines, language, content.lineSeparator).also {
+                    // What the disk held when these lines were read: a save carried it, a change on disk answers it.
+                    it.diskVersion = content.version
                     it.commentStates = SyntaxHighlighter.blockCommentStates(content.lines, language)
                     it.folding.regions = FoldingModel.computeRegions(content.lines, language)
                 }

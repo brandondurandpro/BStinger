@@ -51,6 +51,7 @@ import org.example.kotlineditor.ui.TextClipboard
 import org.example.kotlineditor.ui.TreeTags
 import java.nio.file.Files
 import java.nio.file.Path
+import java.security.MessageDigest
 import kotlin.io.path.ExperimentalPathApi
 import kotlin.io.path.createDirectories
 import kotlin.io.path.deleteRecursively
@@ -430,6 +431,13 @@ fun ComposeUiTest.awaitEditorReady() {
 
 /** Lines joined with `\n`, to write multi-line file contents without escapes. */
 fun textOf(vararg lines: String): String = lines.joinToString("\n")
+
+/** The SHA-256 of the bytes of [relative] in [project], lower-case hex, as a version of the file carries. */
+fun SampleProject.sha256Of(relative: String): String {
+    val bytes = Files.readAllBytes(root.resolve(relative))
+    val digest = MessageDigest.getInstance("SHA-256").digest(bytes)
+    return digest.joinToString(separator = "") { byte -> "%02x".format(byte) }
+}
 
 /** Matches the nodes whose test tag starts with [prefix]. */
 fun hasTestTagPrefix(prefix: String) =
