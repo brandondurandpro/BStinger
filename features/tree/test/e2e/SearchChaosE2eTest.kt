@@ -16,8 +16,10 @@ import org.example.kotlineditor.state.delete
 import org.example.kotlineditor.ui.TreeTags
 import kotlin.test.AfterTest
 import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
-/** Project-wide searches, which run on the server, while the network fails. */
+/** Project-wide searches, which run on the server, while the network fails and the server restarts. */
 @OptIn(ExperimentalTestApi::class)
 class SearchChaosE2eTest {
     private val project = SampleProject.standard()
@@ -33,6 +35,25 @@ class SearchChaosE2eTest {
             withKeyDown(Key.CtrlLeft) { withKeyDown(Key.ShiftLeft) { pressKey(Key.F) } }
         }
         awaitTag(TreeTags.FIND_IN_FILES_INPUT)
+    }
+
+    // The project of the chaos searches: `needle` on enough lines for the stream to need several batches; every
+    // hit has its own line, since the engines count matching lines.
+    private fun prepareMatches(): Int {
+        val count = 10 * HITS_PER_FILE
+        repeat(10) { file ->
+            val lines = (0 until HITS_PER_FILE).joinToString("\n") { "needle $it in file $file" }
+            project.file("src/hits/file$file.txt", lines + "\n")
+        }
+        return count
+    }
+
+    // A complete search of [app]: the final hits are exact (no batch was lost or reordered out) and all different
+    // (no batch reached the client twice).
+    private fun assertComplete(app: E2eApp, expected: Int) {
+        val results = app.project.findInFiles.results
+        assertEquals(expected, results.size, "every hit found")
+        assertEquals(expected, results.distinctBy { it.entry.path to it.line }.size, "every hit is different")
     }
 
     @Test
@@ -66,4 +87,62 @@ class SearchChaosE2eTest {
             }
             awaitNoTag(TreeTags.findInFilesItem("src/main/kotlin/App.kt", 7))
         }
+
+    @Test
+    fun `a search cut mid-flight is replayed by the server, with neither a gap nor a duplicate`() =
+        runComposeUiTest {
+            val expected = prepareMatches()
+            val app = launchWithProject(project, chaos = true)
+            app.network.latencyMs = 60
+            openFindInFiles()
+            onNodeWithTag(TreeTags.FIND_IN_FILES_INPUT).performTextInput("needle")
+            awaitCondition { app.project.findInFiles.results.isNotEmpty() }
+            // The stream is still running: the connection breaks after the server ran its last request but before
+            // the answers and the batches arrived, and the connection itself cuts with them.
+            app.network.dropFromServer = true
+            app.network.cutAll()
+            app.network.dropFromServer = false
+            awaitCondition { app.project.findInFiles.finished }
+            assertComplete(app, expected)
+            awaitCondition {
+                runCatching {
+                    onNodeWithTag(TreeTags.FIND_IN_FILES_COUNT).assertTextContains("$expected matches")
+                }.isSuccess
+            }
+        }
+
+    @Test
+    fun `a search cut by a server restart runs again once, and completes`() =
+        runComposeUiTest {
+            val expected = prepareMatches()
+            val app = launchWithProject(project, chaos = true)
+            app.network.latencyMs = 150
+            openFindInFiles()
+            onNodeWithTag(TreeTags.FIND_IN_FILES_INPUT).performTextInput("needle")
+            awaitCondition { app.project.findInFiles.results.isNotEmpty() }
+            app.process.restart()
+            awaitCondition { app.project.findInFiles.finished }
+            assertComplete(app, expected)
+            assertTrue(app.project.findInFiles.error == null, "a restart is not a failure: ${app.project.findInFiles.error}")
+        }
+
+    @Test
+    fun `a search whose server goes down mid-flight completes when it comes back`() =
+        runComposeUiTest {
+            val expected = prepareMatches()
+            val app = launchWithProject(project, chaos = true)
+            app.network.latencyMs = 40
+            openFindInFiles()
+            onNodeWithTag(TreeTags.FIND_IN_FILES_INPUT).performTextInput("needle")
+            awaitCondition { app.project.findInFiles.results.isNotEmpty() && !app.project.findInFiles.finished }
+            app.network.goDown()
+            awaitReconnecting()
+            app.network.comeBack()
+            awaitCondition { app.project.findInFiles.finished }
+            assertComplete(app, expected)
+        }
+
+    private companion object {
+        const val HITS_PER_FILE = 60
+    }
 }
