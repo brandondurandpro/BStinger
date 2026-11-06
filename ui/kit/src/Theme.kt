@@ -53,6 +53,12 @@ object IdeColors {
     val Caret = Color(0xFFCED0D6)
     val TextSelection = Color(0xFF214283)
     val BracketMatch = Color(0xFF3B514D)
+
+    /** Colors of brackets by nesting depth, in turn (VS Code's bracket pair colorization). */
+    val BracketDepths = listOf(Color(0xFFFFD700), Color(0xFFDA70D6), Color(0xFF179FFF))
+
+    /** A closing bracket that nothing opened. */
+    val BracketUnmatched = Color(0xFFF75464)
     val IdentifierUsage = Color(0xFF373B39)
     val IdentifierWrite = Color(0xFF472C47)
     val ProblemError = Color(0xFFF75464)

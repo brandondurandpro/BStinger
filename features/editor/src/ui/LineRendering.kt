@@ -60,6 +60,8 @@ class LineSource(
     val inlays: LineInlays? = null,
     /** The styles of the language server's semantic tokens, over the others; none when null. */
     val semantic: LineSemantic? = null,
+    /** Brackets open where the line starts, which colors its brackets by depth; `-1`: brackets not colored. */
+    val bracketDepth: Int = -1,
 )
 
 internal val DELETION_MARKER_SIZE = 7.dp
@@ -84,14 +86,15 @@ internal fun changeColor(kind: GitChangeKind): Color =
     }
 
 internal fun highlighted(source: LineSource): AnnotatedString {
-    val spans = source.spans
+    val text = displayText(source.text)
+    val treeSitterSpans = source.spans
+    // The lexer colors the displayed text; tree-sitter counts the characters of the line, which tabs widen.
+    val columns = if (treeSitterSpans != null && '\t' in source.text) displayColumns(source.text) else null
+    val spans = treeSitterSpans ?: SyntaxHighlighter.highlight(text, source.language, source.startsInComment)
     val highlighted =
-        if (spans == null) {
-            val text = displayText(source.text)
-            styled(text, SyntaxHighlighter.highlight(text, source.language, source.startsInComment), columns = null)
-        } else {
-            colored(source.text, spans)
-        }.let { withSemantic(it, source.text, source.semantic) }
+        styled(text, spans, columns)
+            .let { withSemantic(it, source.text, source.semantic) }
+            .let { withBracketColors(it, spans, columns, source.bracketDepth) }
             .let { withInlays(it, source.text, source.inlays) }
     val placeholder = source.placeholder ?: return highlighted
     return buildAnnotatedString {
@@ -119,12 +122,6 @@ private fun withInlays(text: AnnotatedString, line: String, inlays: LineInlays?)
 }
 
 private val INLAY_STYLE = SpanStyle(color = IdeColors.InlayHint, background = IdeColors.InlayHintBackground)
-
-// The line as displayed (tabs expanded) with the colors of [spans], which count the characters of [line].
-private fun colored(line: String, spans: LineSpans): AnnotatedString {
-    val columns = if ('\t' in line) displayColumns(line) else null
-    return styled(displayText(line), spans, columns)
-}
 
 // [text] with the colors of [spans]; [columns] maps their offsets to the columns of [text] (`null`: the same).
 private fun styled(text: String, spans: LineSpans, columns: IntArray?): AnnotatedString {
