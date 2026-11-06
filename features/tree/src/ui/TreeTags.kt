@@ -21,6 +21,16 @@ object TreeTags {
     const val FIND_IN_FILES = "findInFiles"
     const val FIND_IN_FILES_INPUT = "findInFiles.input"
     const val FIND_IN_FILES_COUNT = "findInFiles.count"
+    const val FIND_IN_FILES_ENGINE = "findInFiles.engine"
+    const val FIND_IN_FILES_CASE = "findInFiles.case"
+    const val FIND_IN_FILES_WHOLE_WORD = "findInFiles.wholeWord"
+    const val FIND_IN_FILES_REGEX = "findInFiles.regex"
+    const val FIND_IN_FILES_GLOB_BUTTON = "findInFiles.glob"
+    const val FIND_IN_FILES_GLOB_INPUT = "findInFiles.globInput"
+    const val FIND_IN_FILES_INCLUDE_IGNORED = "findInFiles.includeIgnored"
+    const val FIND_IN_FILES_SCOPE_BUTTON = "findInFiles.scope"
+    const val FIND_IN_FILES_SCOPE_MENU = "findInFiles.scopeMenu"
+    const val FIND_IN_FILES_ERROR = "findInFiles.error"
     const val GOTO_SYMBOL = "gotoSymbol"
     const val GOTO_SYMBOL_INPUT = "gotoSymbol.input"
     const val STRUCTURE = "structure"
@@ -39,6 +49,9 @@ object TreeTags {
     fun gotoFileItem(relativePath: String) = "gotoFile.item:$relativePath"
 
     fun findInFilesItem(relativePath: String, line: Int) = "findInFiles.item:$relativePath:$line"
+
+    /** A row of the scope dropdown of Find in Files: its choice (`.` for the whole project root). */
+    fun findInFilesScopeRow(scope: String) = "findInFiles.scope:$scope"
 
     fun gotoSymbolItem(name: String, relativePath: String) = "gotoSymbol.item:$name:$relativePath"
 

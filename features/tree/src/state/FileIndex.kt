@@ -11,6 +11,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.example.kotlineditor.model.FileEntry
+import org.example.kotlineditor.model.FindOptions
 import org.example.kotlineditor.model.ProjectSearch
 import org.example.kotlineditor.model.relativeToRoot
 import org.example.kotlineditor.syntax.Declaration
@@ -42,7 +43,7 @@ data class SearchHit(
 )
 
 private const val DEFAULT_RESULTS = 50
-private const val DEFAULT_TEXT_HITS = 1000
+internal const val DEFAULT_TEXT_HITS = 1000
 private val BEST_FILE_FIRST =
     compareByDescending<FileMatch> {
         it.score
@@ -138,11 +139,14 @@ class FileIndex(private val root: FileEntry, private val search: ProjectSearch, 
         query: String,
         ignoreCase: Boolean = true,
         limit: Int = DEFAULT_TEXT_HITS,
-    ): List<SearchHit> =
-        if (query.isEmpty()) {
+    ): List<SearchHit> = findInFiles(FindOptions(text = query, ignoreCase = ignoreCase), limit)
+
+    /** Full-text search with the Find in Files options, run by the server next to the files. */
+    suspend fun findInFiles(options: FindOptions, limit: Int = DEFAULT_TEXT_HITS): List<SearchHit> =
+        if (options.text.isEmpty()) {
             emptyList()
         } else {
-            search.findInFiles(root, query, ignoreCase, limit).map { hit ->
+            search.findInFiles(root, options, limit).map { hit ->
                 SearchHit(hit.entry, relativePath(hit.entry), hit.line, hit.column, hit.lineText)
             }
         }
