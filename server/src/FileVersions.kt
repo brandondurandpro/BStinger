@@ -10,12 +10,6 @@ import java.nio.file.attribute.BasicFileAttributes
 import java.security.MessageDigest
 
 /**
- * The error a save asked with an expected [FileVersion] fails with when the file changed on the disk since it
- * was read: the client shows it like any other failure of a save, never overwriting the change.
- */
-const val FILE_CHANGED_MESSAGE = "The file changed on disk since it was read: reload or keep your changes"
-
-/**
  * The version the file [path] holds (through a symbolic link, of its target) when [bytes] are its whole content,
  * `null` when it cannot be taken (no file, or the disk refuses the stat: the caller then skips the check).
  *

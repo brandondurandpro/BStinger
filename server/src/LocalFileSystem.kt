@@ -2,6 +2,7 @@ package org.example.kotlineditor.server
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.example.kotlineditor.model.FileChangedException
 import org.example.kotlineditor.model.FileContent
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.FileVersion
@@ -92,7 +93,7 @@ class LocalFileSystem(private val maxFileSize: Long = TextFiles.DEFAULT_MAX_SIZE
         if (expected != null) {
             val current = versionOf(path, existing)
             if (current != null && isStale(current, expected, existing, encoded)) {
-                throw IOException(FILE_CHANGED_MESSAGE)
+                throw FileChangedException()
             }
         }
         writeFile(path, encoded)

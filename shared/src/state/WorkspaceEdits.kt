@@ -69,5 +69,7 @@ private suspend fun ProjectState.createIfMissing(path: String): FileEntry {
 private suspend fun ProjectState.rewrite(entry: FileEntry, change: FileChange) {
     val content = services.fileSystem.read(entry) as? FileContent.Text ?: throw IOException("not a text file")
     val lines = applyEdits(content.lines, change.edits)
-    services.fileSystem.write(entry, lines.joinToString(content.lineSeparator))
+    // The write is checked against the version the read answered, like every save: a file another program wrote
+    // since the read is left to them, the failure shown instead of their edit being overwritten.
+    services.fileSystem.write(entry, lines.joinToString(content.lineSeparator), expected = content.version)
 }
