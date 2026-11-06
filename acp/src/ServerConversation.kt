@@ -9,6 +9,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
 import org.example.kotlineditor.lsp.jsonrpc.LspResponseException
+import org.example.kotlineditor.model.AGENT_BUSY_MESSAGE
 import org.example.kotlineditor.model.AgentAttachment
 import org.example.kotlineditor.model.AgentItem
 import org.example.kotlineditor.model.AgentPermissionOption
@@ -17,10 +18,15 @@ import org.example.kotlineditor.model.AgentTurnState
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 
+// How many prompts a conversation keeps while its agent answers; beyond it the server refuses, and the IDE sends
+// the prompt again once the turn is over.
+private const val QUEUED_PROMPTS = 4
+
 /**
  * One conversation on the server: its [journal], the session of its agent, the prompt running and the permission
  * requests waiting for the user. The updates of the agent become items of the journal as they arrive.
  */
+@Suppress("TooManyFunctions") // the whole agent conversation in one lifecycle: prompt, resume, cancel, answer…
 internal class ServerConversation(
     val journal: Journal,
     private val scope: CoroutineScope,
@@ -42,6 +48,10 @@ internal class ServerConversation(
 
     @Volatile
     private var stopping = false
+
+    // The prompts that arrived while the agent answered: run in turn, each once the one before it ended. Bounded
+    // by [QUEUED_PROMPTS]: beyond it the caller is refused, and the IDE sends its prompt again once the turn is over.
+    private val queued = ArrayDeque<Queued>()
     private val permissions = Permissions(journal, writer)
 
     /**
@@ -51,13 +61,16 @@ internal class ServerConversation(
     fun prompt(prompt: UserPrompt, directory: String, session: String?, process: () -> AgentProcess) {
         val itemId = prompt.itemId
         synchronized(lock) {
-            if (!prompted.add(itemId)) return
-            check(!busy) { "The agent is still answering" }
-            session?.let { keeper.resume(it, replay = false) }
-            stopping = false
-            busy = true
-            journal.setState(AgentTurnState.Starting)
-            job = scope.launch { run(prompt, directory, process) }
+            // A prompt sent again (the same item) is ignored, whether it runs, waits or has run.
+            if (itemId in prompted) return
+            if (busy || queued.isNotEmpty()) {
+                if (queued.size >= QUEUED_PROMPTS) check(false) { AGENT_BUSY_MESSAGE }
+                prompted.add(itemId)
+                queued.addLast(Queued(prompt, session, directory, process))
+                return
+            }
+            prompted.add(itemId)
+            start(prompt, directory, session, process)
         }
     }
 
@@ -100,7 +113,7 @@ internal class ServerConversation(
 
     /** Stops the prompt and ends the session; the agent keeps its history. */
     suspend fun close() {
-        job?.cancel()
+        synchronized(lock) { job?.cancel() }
         permissions.cancelAll()
         keeper.close()
     }
@@ -147,10 +160,37 @@ internal class ServerConversation(
             stopReason == "max_turn_requests" -> writer.notice("The agent stopped: too many steps in one turn.", true)
             stopReason == "refusal" -> writer.notice("The agent refused to go on.", error = true)
         }
-        busy = false
-        journal.setState(AgentTurnState.Idle)
+        synchronized(lock) {
+            busy = false
+            journal.setState(AgentTurnState.Idle)
+            startQueued()
+        }
+    }
+
+    // Lock held. Makes [prompt] the turn running: the agent starts (or continues in [session]) and answers it.
+    private fun start(prompt: UserPrompt, directory: String, session: String?, process: () -> AgentProcess) {
+        session?.let { keeper.resume(it, replay = false) }
+        stopping = false
+        busy = true
+        journal.setState(AgentTurnState.Starting)
+        job = scope.launch { run(prompt, directory, process) }
+    }
+
+    // Lock held. Once the turn is over, the first prompt queued meanwhile goes.
+    private fun startQueued() {
+        val next = queued.firstOrNull() ?: return
+        queued.removeFirst()
+        start(next.prompt, next.directory, next.session, next.process)
     }
 }
+
+/** A prompt the server keeps while the agent answers, with where and how it runs once its turn comes. */
+private class Queued(
+    val prompt: UserPrompt,
+    val session: String?,
+    val directory: String,
+    val process: () -> AgentProcess,
+)
 
 /** A prompt of the user: [text], shown as item [itemId], and what the user joined to it. */
 internal class UserPrompt(val itemId: String, val text: String, val attachments: List<AgentAttachment> = emptyList())

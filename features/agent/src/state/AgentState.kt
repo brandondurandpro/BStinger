@@ -17,6 +17,7 @@ import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.model.AgentItem
 import org.example.kotlineditor.model.AgentOption
 import org.example.kotlineditor.model.AgentSlashCommand
+import org.example.kotlineditor.model.AGENT_BUSY_MESSAGE
 import org.example.kotlineditor.model.AgentTurnState
 import org.example.kotlineditor.model.FileContent
 import java.io.IOException
@@ -388,8 +389,14 @@ class AgentState(
             val directory = workspace.root.path
             val (itemId, text, attachments) = prompt
             agents.prompt(conversation.key, agentCommand(), directory, itemId, text, conversation.session, attachments)
-        } catch (failure: IOException) {
-            conversation.note("The prompt could not be sent: ${failure.message}")
+        } catch (refused: IOException) {
+            if (refused.message == AGENT_BUSY_MESSAGE) {
+                // A server that arrived first (or filled its queue) says the agent answers: the prompt goes again
+                // once its turn is over, instead of ending the conversation with a notice.
+                conversation.queued.addLast(prompt)
+            } else {
+                conversation.note("The prompt could not be sent: ${refused.message}")
+            }
         } finally {
             conversation.sending = false
         }

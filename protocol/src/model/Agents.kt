@@ -42,6 +42,12 @@ enum class AgentTurnState {
     Running,
 }
 
+/**
+ * What the server answers when a prompt arrives while the agent answers and its queue of prompts is already full:
+ * the IDE sends the prompt again once the turn is over, instead of losing it.
+ */
+const val AGENT_BUSY_MESSAGE = "The agent is still answering"
+
 /** What a tool call does, from the agent: it picks the icon and how the call is shown. */
 enum class AgentToolKind {
     /** Reads files. */
