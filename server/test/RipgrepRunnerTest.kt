@@ -77,7 +77,10 @@ class RipgrepRunnerTest {
     @Test
     fun `a scope searches the directory inside the root, normalized like the root is`() {
         val arguments = runner.arguments(query(scope = "src/../docs"))
-        assertEquals(ROOT.resolve("docs").toString(), arguments.last())
+        // What the search takes: the scope resolved under the root, made absolute and normalized (a Windows
+        // absolute path carries its drive: the expectation is computed with the same calls).
+        val searched = ROOT.resolve("src/../docs").toAbsolutePath().normalize()
+        assertEquals(searched.toString(), arguments.last())
     }
 
     @Test
