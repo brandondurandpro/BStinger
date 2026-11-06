@@ -1,13 +1,14 @@
 package org.example.kotlineditor.server
 
 import kotlinx.coroutines.runBlocking
+import org.example.kotlineditor.model.FILE_CHANGED_MESSAGE
+import org.example.kotlineditor.model.FileChangedException
 import org.example.kotlineditor.model.FileContent
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.FileVersion
 import org.example.kotlineditor.rpc.RemoteException
 import org.example.kotlineditor.rpc.RemoteFileSystem
 import org.example.kotlineditor.rpc.RpcClient
-import java.io.IOException
 import java.nio.file.FileSystemException
 import java.nio.file.Files
 import java.nio.file.Path
@@ -111,8 +112,7 @@ class FileVersionTest {
             file.writeText("read\n")
             val read = textVersionOf(file)
             file.writeText("changed outside\n")
-            val failure =
-                assertFailsWith<IOException> { fs.write(entryOf(file), "written\n", expected = read) }
+            val failure = assertFailsWith<FileChangedException> { fs.write(entryOf(file), "written\n", expected = read) }
             assertEquals(FILE_CHANGED_MESSAGE, failure.message)
             assertEquals("changed outside\n", file.readText())
         }

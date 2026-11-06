@@ -36,6 +36,19 @@ data class FileVersion(
     val sha256: String,
 )
 
+/**
+ * The message answering a save asked with a [FileVersion] the disk no longer holds: nothing was written, the
+ * bytes on it belong to another program's edit. Server and client share it, so both name the same failure.
+ */
+const val FILE_CHANGED_MESSAGE = "The file changed on disk since it was read: reload or keep your changes"
+
+/**
+ * A save refused because the file changed on the disk since the version the client read: [FILE_CHANGED_MESSAGE],
+ * as an exception, so the client tells it from every other save failure (it shows the conflict banner, not an
+ * error).
+ */
+class FileChangedException(message: String = FILE_CHANGED_MESSAGE) : IOException(message)
+
 /** Result of reading a file from disk. */
 sealed interface FileContent {
     /** The version of the file on the disk when it could be read, `null` otherwise (too large, error). */
