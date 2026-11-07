@@ -149,7 +149,7 @@ class AgentPickerE2eTest {
         }
 
     @Test
-    fun `an agent the server cannot run is shown why and stays unchosen`() =
+    fun `an agent the server cannot run comes last and is shown why`() =
         runComposeUiTest {
             val app = launchWithProject(project, agentPreferences(), agents = agents())
             startConversation(app)
@@ -157,6 +157,30 @@ class AgentPickerE2eTest {
             awaitTag(AgentTags.AGENT_AGENT).performClick()
             awaitCondition(AGENT_TIMEOUT) { textOf(AgentTags.agentAgent("unsigned-agent")).contains("no checksum") }
             assertNull(app.project.agent.current?.agent)
+        }
+
+    @Test
+    fun `an agent chosen becomes the agent of the next conversations on demand`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, agentPreferences(), agents = agents())
+            val conversation = startConversation(app)
+            chooseAgent("fake-agent")
+            awaitTag(AgentTags.AGENT_AGENT).performClick()
+            awaitTag(AgentTags.AGENT_AGENT_MAKE_DEFAULT, timeout = AGENT_TIMEOUT).performClick()
+            awaitCondition(AGENT_TIMEOUT) { app.state.settings.agentRegistry == "fake-agent" }
+            awaitCondition(AGENT_TIMEOUT) { app.state.settings.agentCommand.isEmpty() }
+            // The next conversation runs it, as the settings say now: no choice of its own, the picker says it,
+            // and none of its menu offers to make an agent the default one.
+            awaitTag(AgentTags.AGENT_NEW).performClick()
+            val next = checkNotNull(app.project.agent.current)
+            assertNull(next.agent)
+            awaitAgent("Fake Agent")
+            sendPrompt("count")
+            awaitShown(next, "Prompt 1 of")
+            awaitIdle(next)
+            awaitTag(AgentTags.AGENT_AGENT).performClick()
+            awaitCondition(AGENT_TIMEOUT) { isShown(AgentTags.agentAgent("fake-agent")) }
+            awaitNoTag(AgentTags.AGENT_AGENT_MAKE_DEFAULT)
         }
 
     @Test

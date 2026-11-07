@@ -373,6 +373,9 @@ class AgentState(
         options.offer(conversation)
     }
 
+    /** Chooses the agent [entry] of the registry the new conversations of agent mode will run. */
+    fun makeDefaultAgent(entry: String) = project.makeDefaultAgent(entry)
+
     /**
      * Sends the draft of [conversation]: the modified files are saved first, so the agent reads what the user sees,
      * then the server runs the agent and the transcript shows its answer as it streams.

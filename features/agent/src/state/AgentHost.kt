@@ -37,6 +37,9 @@ interface AgentHost : AgentWorkspace {
     /** The worktree of [branch], created by the server on first use, returned once it is loaded. */
     suspend fun openWorktree(branch: String): AgentWorkspace
 
+    /** Chooses the agent [entry] of the ACP registry the next conversations of agent mode will run. */
+    fun makeDefaultAgent(entry: String)
+
     /** The id of the agent of the ACP registry the past [session] ran with, remembered; null: it is unknown, or it
      * was the agent of the settings. */
     fun rememberedAgent(session: String): String?

@@ -41,6 +41,8 @@ class ProjectState(
     override val languageServers: LanguageServersState? = null,
     /** The command line of the agent of agent mode, as set in the settings. */
     private val agentCommand: () -> AgentCommand = { agentCommandOf("") },
+    /** Chooses the agent [registry] of the registry the next conversations of agent mode will run. */
+    private val defaultAgent: (String) -> Unit = {},
     /** The agents of the registry each conversation ran with, remembered in the preferences. */
     private val agentMemory: AgentMemory = AgentMemory(),
 ) : GitHost,
@@ -260,6 +262,8 @@ class ProjectState(
     override fun rememberedAgent(session: String): String? = agentMemory.agentOf(session)
 
     override fun rememberAgentOf(session: String, entry: String?) = agentMemory.remember(session, entry)
+
+    override fun makeDefaultAgent(entry: String) = defaultAgent(entry)
 
     override fun synchronize() = synchronizeFiles()
 

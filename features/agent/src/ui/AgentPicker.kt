@@ -101,7 +101,7 @@ fun AgentPicker(agent: AgentState, conversation: Conversation) {
             agent.chooseAgent(conversation, entry)
         }
         DropdownMenu(open, onDismissRequest = { open = false }, Modifier.widthIn(max = MENU_WIDTH).then(escape)) {
-            AgentPickerMenu(agent, conversation, entries, failure, choose)
+            AgentPickerMenu(agent, conversation, entries, failure, choose, closeMenu = { open = false })
         }
     }
 }
@@ -129,20 +129,19 @@ private fun registryAgentName(id: String?, entries: List<AgentRegistryEntry>?): 
     return found?.name
 }
 
-// The label of the agent of [conversation]: the agent chosen there (its name in the registry), else the agent the
-// settings choose — its id in the registry, `Settings` when it comes from a command line (what it runs shows next
-// to the prompt).
+// The label of the agent of [conversation]: the agent it runs — the one chosen there, else the agent the settings
+// choose — by its name in the registry, by its id; `Settings` when the settings choose a command line and nothing
+// was chosen (what the command runs shows next to the prompt).
 private fun buttonLabel(
     agent: AgentState,
     conversation: Conversation,
     entries: List<AgentRegistryEntry>?,
 ): String {
-    val chosen = conversation.agent
-    if (chosen != null) {
-        val named = registryAgentName(chosen.registry, entries)
-        return named ?: chosen.registry ?: "Settings"
+    val registryId = conversation.agent?.registry ?: agent.settingsAgentId
+    if (registryId != null) {
+        return registryAgentName(registryId, entries) ?: registryId
     }
-    return agent.settingsAgentId ?: "Settings"
+    return "Settings"
 }
 
 @Composable
@@ -152,34 +151,44 @@ private fun AgentPickerMenu(
     entries: List<AgentRegistryEntry>?,
     failure: String?,
     choose: (String?) -> Unit,
+    closeMenu: () -> Unit,
 ) {
     // What the field above the list shows: the agents it names, the one the settings choose always standing.
     var filter by remember { mutableStateOf("") }
-    val wanted = wantedAgents(entries, filter)
+    val listed = listedAgents(entries, filter)
+    val defaultOf = conversation.agent?.registry
+    val listedCount = when {
+        listed != null -> listed.size
+        else -> 1
+    }
+    val extraRows = if (defaultOf == null) 0 else 1
     AgentFilterField(filter) { filter = it }
     if (conversation.agent != null) {
         AgentOfSettingsRow(agent, choose)
         HorizontalDivider(color = IdeColors.Separator, thickness = 1.dp)
     }
     // The registry may be longer than the menu shows: a window of fixed height on it, scrolled, with its scrollbar.
-    val rows = when {
-        wanted == null -> 1
-        else -> maxOf(wanted.size, 1)
-    }
+    val rows = maxOf(listedCount, 1) + extraRows
     val listHeight = min(MENU_HEIGHT.value, MENU_ROW_HEIGHT.value * rows).dp
     val scroll = rememberScrollState()
     Row(Modifier.width(MENU_WIDTH).height(listHeight)) {
         Column(Modifier.weight(1f).verticalScroll(scroll)) {
-            for (entry in wanted.orEmpty()) {
+            for (entry in listed.orEmpty()) {
                 AgentChoiceRow(conversation, entry, choose)
             }
-            if (wanted?.isEmpty() == true) {
+            if (listed?.isEmpty() == true) {
                 RegistryStatusRow("""No agent named "$filter".""", canClose = false, choose = choose)
             }
-            if (entries == null) {
+            if (listed == null) {
                 val status =
                     if (failure != null) "The registry could not be read: $failure" else "Reading the registry…"
                 RegistryStatusRow(status, canClose = failure != null, choose = choose)
+            }
+            if (defaultOf != null) {
+                MakeDefaultRow(agent, defaultOf, onClick = {
+                    agent.makeDefaultAgent(defaultOf)
+                    closeMenu()
+                })
             }
         }
         VerticalScrollbar(
@@ -190,11 +199,13 @@ private fun AgentPickerMenu(
 }
 
 // The agents of the registry that [filter] names — its name or its id has it, case ignored; all of them while it
-// stands empty, and not read yet, the registry's turn.
-private fun wantedAgents(entries: List<AgentRegistryEntry>?, filter: String): List<AgentRegistryEntry>? {
+// stands empty. The ones the server cannot run come last (a choice of a runnable one is the useful one), and in
+// their group the registry's order stands.
+private fun listedAgents(entries: List<AgentRegistryEntry>?, filter: String): List<AgentRegistryEntry>? {
     val listed = entries ?: return null
-    if (filter.isBlank()) return listed
-    return listed.filter { entry -> matchesFilter(entry, filter) }
+    val matching =
+        if (filter.isBlank()) listed else listed.filter { entry -> matchesFilter(entry, filter) }
+    return matching.sortedBy { entry -> if (entry.unavailable == null) 0 else 1 }
 }
 
 // The name or the id of [entry] has [filter] in it, case ignored.
@@ -278,6 +289,18 @@ private fun RegistryStatusRow(text: String, canClose: Boolean, choose: (String?)
         Column(Modifier.weight(1f)) {
             Label(text, color = IdeColors.TextSecondary, fontSize = 11.sp)
         }
+    }
+}
+
+@Composable
+private fun MakeDefaultRow(agent: AgentState, registry: String, onClick: () -> Unit) {
+    MenuRow(
+        tag = AgentTags.AGENT_AGENT_MAKE_DEFAULT,
+        chosen = false,
+        enabled = true,
+        onClick = onClick,
+    ) {
+        Label("The agent of the new conversations", color = IdeColors.TextSecondary, fontSize = 11.sp)
     }
 }
 

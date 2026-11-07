@@ -76,6 +76,13 @@ class SettingsController(
     /** The agent of agent mode, as set: its command line, else the agent of the registry. */
     fun agentCommandLine(): AgentCommand = agentCommandOf(agentCommand, agentRegistry)
 
+    /** Chooses the agent [registry] of the ACP registry as the agent of agent mode: a command line unascribed,
+     * which would win over it, is dropped. */
+    fun makeDefaultAgent(registry: String) {
+        agentRegistry = registry
+        agentCommand = ""
+    }
+
     fun zoomEditor(delta: Float) {
         editorFontSize = (editorFontSize + delta).coerceIn(MIN_EDITOR_FONT_SIZE, MAX_EDITOR_FONT_SIZE)
     }

@@ -140,6 +140,7 @@ class AppState(
             preferences,
             grammars,
             agentCommand = settings::agentCommandLine,
+            defaultAgent = settings::makeDefaultAgent,
             consent = { settings.telemetry.shared },
             onRemoteProjectOpened = remote::recordWorkspace,
         )

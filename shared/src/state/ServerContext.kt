@@ -45,6 +45,8 @@ class ServerContext(
     private val grammars: GrammarStore?,
     /** The agent of agent mode, as set in the settings. */
     private val agentCommand: () -> AgentCommand,
+    /** Chooses the agent of the registry the next conversations will run. */
+    private val defaultAgent: (String) -> Unit = {},
     /** What the server is told about the telemetry. */
     private val consent: () -> SharedConsent,
     /** A project was opened on this remote server (never called for a local one). */
@@ -177,6 +179,7 @@ class ServerContext(
                 languageServers = languageServers,
                 agentCommand = agentCommand,
                 agentMemory = AgentMemory(preferences::get) { key, value -> preferences.put(key, value) },
+                defaultAgent = defaultAgent,
             )
         // "Opening…" stays shown meanwhile: the project then appears with its tabs and tree as they were left.
         opened.restoreSession(RESTORE_WAIT_MILLIS)

@@ -21,6 +21,7 @@ object AgentTags {
     const val AGENT_AGENT = "agent.agent"
     const val AGENT_AGENT_DEFAULT = "agent.agent.default"
     const val AGENT_AGENT_FILTER = "agent.agent.filter"
+    const val AGENT_AGENT_MAKE_DEFAULT = "agent.agent.makeDefault"
     const val AGENT_REGISTRY = "agent.registry"
     const val AGENT_MODEL = "agent.model"
     const val AGENT_PERMISSIONS = "agent.permissions"
