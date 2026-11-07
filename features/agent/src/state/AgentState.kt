@@ -352,6 +352,13 @@ class AgentState(
             }
     }
 
+    /** Names [conversation] again, as the user typed: blank, or the name it has, changes nothing. */
+    fun rename(conversation: Conversation, title: String) {
+        val name = title.trim()
+        if (name.isEmpty() || name == conversation.title) return
+        conversation.title = name
+    }
+
     /**
      * Chooses the agent of [conversation] from the server's registry, or again the agent of the settings when [entry]
      * is null. It applies to its next prompt: a conversation already started keeps its transcript but loses the

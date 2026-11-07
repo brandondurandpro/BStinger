@@ -3,7 +3,11 @@ package org.example.kotlineditor.ui
 import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -25,9 +29,12 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
@@ -48,6 +55,8 @@ import org.example.kotlineditor.model.AgentTurnState
 import org.example.kotlineditor.state.AgentState
 import org.example.kotlineditor.state.Completing
 import org.example.kotlineditor.state.Conversation
+import org.example.kotlineditor.state.markdownOf
+import org.example.kotlineditor.ui.TextClipboard
 
 private val CONTENT_WIDTH = 760.dp
 
@@ -106,19 +115,82 @@ private fun Transcript(agent: AgentState, conversation: Conversation) {
         contentPadding = PaddingValues(vertical = 16.dp),
     ) {
         itemsIndexed(items, key = { _, item -> item.id }) { index, item ->
-            Box(
-                Modifier
-                    .widthIn(max = CONTENT_WIDTH)
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 6.dp)
-                    .testTag(AgentTags.agentMessage(index)),
-            ) {
-                ItemView(agent, conversation, item)
-            }
+            MessageRow(agent, conversation, item, index)
         }
         if (thinking(conversation)) {
             item(key = "thinking") { ThinkingLabel(conversation) }
         }
+    }
+}
+
+// One message of the transcript, and, shown on hover, what a user does with it: it copies, and a prompt of its own
+// goes back to the field, ready to be changed and sent again. The actions keep their width, shown or not, so the
+// message the pointer points at does not shift.
+@Composable
+private fun MessageRow(agent: AgentState, conversation: Conversation, item: AgentItem, index: Int) {
+    val interaction = remember { MutableInteractionSource() }
+    val hovered by interaction.collectIsHoveredAsState()
+    Box(
+        Modifier
+            .widthIn(max = CONTENT_WIDTH + MESSAGE_ACTIONS_WIDTH.dp)
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 6.dp)
+            .hoverable(interaction)
+            .testTag(AgentTags.agentMessage(index)),
+    ) {
+        Row(verticalAlignment = Alignment.Top) {
+            Box(Modifier.weight(1f)) {
+                ItemView(agent, conversation, item)
+            }
+            MessageActions(agent, conversation, item, index, shown = hovered)
+        }
+    }
+}
+
+// How wide the actions of a message take.
+private const val MESSAGE_ACTIONS_WIDTH = 26
+
+// The copy of a message, and, for the prompt of the user, its going back to the field to be sent again.
+@Composable
+private fun MessageActions(agent: AgentState, conversation: Conversation, item: AgentItem, index: Int, shown: Boolean) {
+    Column(Modifier.width(MESSAGE_ACTIONS_WIDTH.dp)) {
+        CopyMessageButton(item, index, shown = shown)
+        if (item is AgentItem.UserText) {
+            ResendButton(conversation, item, index, shown = shown)
+        }
+    }
+}
+
+// One button of a message: its icon, shown while the pointer points at the message (and only then clickable).
+@Composable
+private fun MessageButton(tag: String, shown: Boolean, onClick: () -> Unit, icon: @Composable () -> Unit) {
+    Box(
+        Modifier
+            .size(MESSAGE_ACTIONS_WIDTH.dp)
+            .alpha(if (shown) 1f else 0f)
+            .clickable(enabled = shown, onClick = onClick)
+            .testTag(tag),
+        contentAlignment = Alignment.Center,
+    ) {
+        icon()
+    }
+}
+
+@Composable
+private fun CopyMessageButton(item: AgentItem, index: Int, shown: Boolean) {
+    MessageButton(AgentTags.agentCopy(index), shown, onClick = { TextClipboard.set(markdownOf(listOf(item)).trim()) }) {
+        CopyIcon()
+    }
+}
+
+@Composable
+private fun ResendButton(conversation: Conversation, item: AgentItem.UserText, index: Int, shown: Boolean) {
+    MessageButton(
+        AgentTags.agentResend(index),
+        shown,
+        onClick = { conversation.draft = item.text },
+    ) {
+        ResendIcon()
     }
 }
 

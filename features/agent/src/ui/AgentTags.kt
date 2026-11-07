@@ -9,6 +9,8 @@ object AgentTags {
     const val AGENT = "agent"
     const val AGENT_LIST = "agent.list"
     const val AGENT_NEW = "agent.new"
+    const val AGENT_RENAME = "agent.rename"
+    const val AGENT_RENAME_FIELD = "agent.rename.field"
     const val AGENT_FILTER = "agent.filter"
     const val AGENT_DELETE = "agent.delete"
     const val AGENT_TABS = "agent.tabs"
@@ -67,6 +69,15 @@ object AgentTags {
 
     /** Something joined to the prompt, by its label (`Main.kt`, `Main.kt:3-7`, `image-1.png`). */
     fun agentAttachment(label: String) = "agent.attachment:$label"
+
+    /** A message of the transcript these actions copy, by its index. */
+    fun agentCopy(index: Int) = "agent.copy:$index"
+
+    /** A prompt of the transcript that goes back to the field, by its index. */
+    fun agentResend(index: Int) = "agent.resend:$index"
+
+    /** The copy of the whole transcript of the conversation. */
+    const val AGENT_TRANSCRIPT = "agent.transcript"
 
     /** The button that removes something joined to the prompt, by its label. */
     fun agentAttachmentRemove(label: String) = "agent.attachment.remove:$label"

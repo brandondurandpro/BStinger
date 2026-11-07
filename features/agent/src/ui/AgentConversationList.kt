@@ -32,6 +32,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerButton
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
@@ -44,6 +49,7 @@ import androidx.compose.ui.unit.sp
 import org.example.kotlineditor.state.AgentState
 import org.example.kotlineditor.state.Conversation
 import org.example.kotlineditor.state.delete
+import org.example.kotlineditor.state.markdownOf
 import org.example.kotlineditor.state.placeholder
 
 // Left panel of agent mode: the conversations of the project, filtered by title.
@@ -51,6 +57,7 @@ import org.example.kotlineditor.state.placeholder
 @Composable
 fun ConversationList(agent: AgentState, modifier: Modifier) {
     var filter by remember { mutableStateOf("") }
+    val renaming = remember { mutableStateOf<Int?>(null) }
     Column(modifier.background(IdeColors.Panel).testTag(AgentTags.AGENT_LIST)) {
         Row(
             Modifier.fillMaxWidth().height(34.dp).padding(start = 12.dp, end = 6.dp),
@@ -77,7 +84,14 @@ fun ConversationList(agent: AgentState, modifier: Modifier) {
         }
         LazyColumn(Modifier.fillMaxSize()) {
             items(shown, key = { it.id }) { conversation ->
-                ConversationRow(agent, conversation, selected = conversation == agent.current)
+                ConversationRow(
+                    agent,
+                    conversation,
+                    selected = conversation == agent.current,
+                    renaming = renaming.value == conversation.id,
+                    startRenaming = { renaming.value = conversation.id },
+                    stopRenaming = { renaming.value = null },
+                )
             }
         }
     }
@@ -85,7 +99,14 @@ fun ConversationList(agent: AgentState, modifier: Modifier) {
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-private fun ConversationRow(agent: AgentState, conversation: Conversation, selected: Boolean) {
+private fun ConversationRow(
+    agent: AgentState,
+    conversation: Conversation,
+    selected: Boolean,
+    renaming: Boolean,
+    startRenaming: () -> Unit,
+    stopRenaming: () -> Unit,
+) {
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
     var menu by remember { mutableStateOf<DpOffset?>(null) }
@@ -117,14 +138,35 @@ private fun ConversationRow(agent: AgentState, conversation: Conversation, selec
                 .padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(Modifier.weight(1f)) {
-                Label(conversation.title, fontWeight = FontWeight.Medium)
-                Label(conversation.preview, color = IdeColors.TextSecondary, fontSize = 12.sp)
+            if (renaming) {
+                RenameField(agent, conversation) { stopRenaming() }
+            } else {
+                Column(Modifier.weight(1f)) {
+                    Label(conversation.title, fontWeight = FontWeight.Medium)
+                    Label(conversation.preview, color = IdeColors.TextSecondary, fontSize = 12.sp)
+                }
+                if (conversation.busy) RunningDot(Modifier.padding(start = 6.dp))
             }
-            if (conversation.busy) RunningDot(Modifier.padding(start = 6.dp))
         }
         menu?.let { offset ->
             DropdownMenu(true, onDismissRequest = { menu = null }, offset = offset) {
+                // Renaming first (harmless), deletion last (it loses the conversation).
+                DropdownMenuItem(
+                    text = { Text("Rename", fontSize = 13.sp) },
+                    onClick = {
+                        menu = null
+                        startRenaming()
+                    },
+                    modifier = Modifier.testTag(AgentTags.AGENT_RENAME),
+                )
+                DropdownMenuItem(
+                    text = { Text("Copy the conversation", fontSize = 13.sp) },
+                    onClick = {
+                        TextClipboard.set(markdownOf(conversation.items))
+                        menu = null
+                    },
+                    modifier = Modifier.testTag(AgentTags.AGENT_TRANSCRIPT),
+                )
                 DropdownMenuItem(
                     text = { Text("Delete", fontSize = 13.sp) },
                     onClick = {
@@ -136,6 +178,28 @@ private fun ConversationRow(agent: AgentState, conversation: Conversation, selec
             }
         }
     }
+}
+
+// The field the conversation is renamed with: Enter names it (blank or unchanged changes nothing), Escape cancels.
+@Composable
+private fun RenameField(agent: AgentState, conversation: Conversation, stop: () -> Unit) {
+    var title by remember { mutableStateOf(conversation.title) }
+    IdeTextField(
+        title,
+        { title = it },
+        Modifier
+            .fillMaxWidth()
+            .onPreviewKeyEvent { event ->
+                val cancels = event.key == Key.Escape && event.type == KeyEventType.KeyDown
+                if (cancels) stop()
+                cancels
+            }
+            .testTag(AgentTags.AGENT_RENAME_FIELD),
+        onSubmit = {
+            agent.rename(conversation, title)
+            stop()
+        },
+    )
 }
 
 @Composable
