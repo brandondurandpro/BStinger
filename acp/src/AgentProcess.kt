@@ -10,6 +10,7 @@ import kotlinx.serialization.json.put
 import org.example.kotlineditor.lsp.jsonrpc.LineFraming
 import org.example.kotlineditor.lsp.jsonrpc.LspConnection
 import org.example.kotlineditor.lsp.supervisor.LogRing
+import org.example.kotlineditor.lsp.supervisor.OrphanReaper
 import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.model.AgentOption
 import org.example.kotlineditor.model.AgentSlashCommand
@@ -75,6 +76,9 @@ internal class AgentProcess(val command: AgentCommand, scope: CoroutineScope, fi
             throw IOException("Cannot start the agent $line: ${failure.message}", failure)
         }
 
+    // Read while it runs: once it exited, the JDK cannot tell which processes were its own.
+    private val processStart = OrphanReaper.startOf(process.toHandle())
+
     private val connection =
         LspConnection(
             process.inputStream,
@@ -137,7 +141,8 @@ internal class AgentProcess(val command: AgentCommand, scope: CoroutineScope, fi
     fun destroy() {
         connection.close()
         terminals.close()
-        process.descendants().forEach { it.destroy() }
+        val children = OrphanReaper.ownDescendants(process.toHandle(), processStart)
+        children.forEach { it.destroy() }
         process.destroy()
     }
 
