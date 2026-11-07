@@ -183,7 +183,7 @@ private fun Prompt(agent: AgentState, conversation: Conversation) {
         val completion = remember(conversation) { PromptCompletion(conversation, commands, files::of) }
         // A `/` typed before the agent listed its commands asks for them again.
         val wantsCommands = completion.completing is Completing.Command && commands().isEmpty()
-        LaunchedEffect(wantsCommands) { if (wantsCommands) agent.options.refreshCommands() }
+        LaunchedEffect(wantsCommands) { if (wantsCommands) agent.options.refreshCommands(conversation) }
         val index = (conversation.workspace ?: agent.project).fileIndex
         SearchesFiles(files, completion.completing as? Completing.File, index, context)
         CompletionList(completion, width.padding(bottom = 6.dp))
@@ -229,12 +229,13 @@ private fun sendsOnEnter(event: KeyEvent, send: () -> Unit): Boolean {
 @Composable
 private fun PromptActions(agent: AgentState, conversation: Conversation) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        // The model first: the name of the agent (its command line, before it introduced itself) may be long.
+        // The agent first (an id, not a whole command line), then the settings of its session.
+        AgentPicker(agent, conversation)
         ModelPicker(agent, conversation)
         EffortPicker(agent, conversation)
         PermissionsPicker(agent, conversation)
         Spacer(Modifier.width(8.dp))
-        val name = conversation.agentName ?: agent.agentLabel
+        val name = conversation.agentName ?: "Agent: " + agent.agentLabelOf(conversation)
         Label(
             name,
             Modifier.weight(1f).testTag(AgentTags.AGENT_NAME),
