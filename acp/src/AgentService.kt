@@ -143,6 +143,7 @@ class AgentService(
             state = header.state,
             items = snapshot.items,
             agentName = header.agentName,
+            agent = header.agent,
             session = header.session,
             title = header.title,
             replayed = header.replayed,

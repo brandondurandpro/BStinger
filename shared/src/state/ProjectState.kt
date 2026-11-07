@@ -41,6 +41,8 @@ class ProjectState(
     override val languageServers: LanguageServersState? = null,
     /** The command line of the agent of agent mode, as set in the settings. */
     private val agentCommand: () -> AgentCommand = { agentCommandOf("") },
+    /** The agents of the registry each conversation ran with, remembered in the preferences. */
+    private val agentMemory: AgentMemory = AgentMemory(),
 ) : GitHost,
     TreeHost,
     LanguageServersHost,
@@ -114,6 +116,10 @@ class ProjectState(
     /** True when the window shows agent mode instead of the editors (toolbar switch, Ctrl+Alt+A). */
     override var agentMode by mutableStateOf(false)
     override val checkedOutBranch: String? get() = git.currentBranch
+
+    /** The ids of the agents of the registry the conversations ran with, remembered in the preferences. */
+    override val rememberedAgents: List<String> get() = agentMemory.registries
+
     var popup: PopupKind? by mutableStateOf(null)
     override var fileDialog: FileDialog? by mutableStateOf(null)
 
@@ -250,6 +256,10 @@ class ProjectState(
     }
 
     override suspend fun openWorktree(branch: String): AgentWorkspace = openWorktreeProject(branch)
+
+    override fun rememberedAgent(session: String): String? = agentMemory.agentOf(session)
+
+    override fun rememberAgentOf(session: String, entry: String?) = agentMemory.remember(session, entry)
 
     override fun synchronize() = synchronizeFiles()
 

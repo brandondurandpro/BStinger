@@ -13,22 +13,43 @@ import java.io.IOException
 // Characters of an ISO 8601 date: `2026-11-03`.
 private const val DATE = 10
 
-/** Lists the sessions of the agent each time agent mode shows: those of the project and of its worktrees. */
+// These agents of the registry the history lists at most, those of the conversations that ran them: each starts its
+// own process to list its sessions.
+private const val MAX_REMEMBERED_AGENTS = 3
+
+/** Lists the sessions of the agents each time agent mode shows: the one of the settings, and the agents of the
+ * registry the IDE remembers (its conversations ran them). Each agent's sessions in one list. */
 internal fun AgentState.followHistory(project: AgentHost, agent: () -> AgentCommand) {
     project.scope.launch {
         snapshotFlow { project.agentMode }.filter { it }.collect {
             val agents = project.services.agents
-            val listed = runCatching { agents.sessions(agent(), project.root.path) }.getOrNull()
-            if (listed != null && listed.supported) addHistory(listed.sessions, project.root.path)
+            for (command in agentsOfHistory(project, agent)) {
+                val listed = runCatching { agents.sessions(command, project.root.path) }.getOrNull()
+                if (listed != null && listed.supported) addHistory(listed.sessions, project.root.path)
+            }
         }
     }
+}
+
+// The agents whose sessions the history shows: the one of the settings, then the agents of the registry the
+// conversations ran with (the recent ones first, a few of them — each starts its own process to list them).
+internal fun agentsOfHistory(project: AgentHost, agent: () -> AgentCommand): List<AgentCommand> {
+    val settings = listOf(agent())
+    val remembered = project.rememberedAgents.take(MAX_REMEMBERED_AGENTS).map { AgentCommand(emptyList(), registry = it) }
+    return distinctAgentsOf(settings + remembered)
+}
+
+// Several agents may be one and the same (the settings' one is also remembered, or two conversations switched).
+private fun distinctAgentsOf(agent: List<AgentCommand>): List<AgentCommand> {
+    val seen = HashSet<AgentCommand>()
+    return agent.filter { seen.add(it) }
 }
 
 // The sessions no conversation shows yet, after the conversations, newest first.
 private fun AgentState.addHistory(sessions: List<AgentSession>, root: String) {
     val shown = conversations.mapNotNull { it.session }.toSet()
     for (session in sessions.filter { it.id !in shown }) {
-        val conversation = conversationOf(session, nextId++, root)
+        val conversation = conversationOf(session, nextId++, root, project.rememberedAgent(session.id))
         // The state delivers the prompts queued while the agent answered (the transcript only says the turn is over).
         conversation.onTurnIdle = { deliverQueued(conversation) }
         conversations.add(conversation)
@@ -36,10 +57,11 @@ private fun AgentState.addHistory(sessions: List<AgentSession>, root: String) {
 }
 
 /** A conversation of the history: the session [session] of the agent, in the project at [root] or a worktree. */
-internal fun conversationOf(session: AgentSession, id: Int, root: String): Conversation {
+internal fun conversationOf(session: AgentSession, id: Int, root: String, agent: String? = null): Conversation {
     val branch = session.branch
     val title = session.title?.takeIf { it.isNotBlank() } ?: "Conversation of ${session.updatedAt.orEmpty().take(DATE)}"
     val conversation = Conversation(id, titleOf(title), branch ?: "agent/conversation-$id")
+    conversation.agent = agent?.let { AgentCommand(emptyList(), registry = it) }
     conversation.session = session.id
     conversation.sessionDirectory = session.directory
     conversation.mode = if (branch == null || session.directory == root) WorkMode.Direct else WorkMode.Worktree

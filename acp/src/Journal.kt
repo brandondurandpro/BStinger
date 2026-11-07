@@ -2,6 +2,7 @@ package org.example.kotlineditor.acp
 
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.model.AgentItem
 import org.example.kotlineditor.model.AgentOption
 import org.example.kotlineditor.model.AgentSlashCommand
@@ -90,6 +91,8 @@ internal class Journal(private val epoch: String) {
         val state: AgentTurnState = AgentTurnState.Idle,
         /** Name and version of the agent, once it introduced itself. */
         val agentName: String? = null,
+        /** The agent the session runs, as the server started it. */
+        val agent: AgentCommand? = null,
         /** Id of the session of the agent. */
         val session: String? = null,
         /** Title of the session, from the agent. */

@@ -36,4 +36,14 @@ interface AgentHost : AgentWorkspace {
 
     /** The worktree of [branch], created by the server on first use, returned once it is loaded. */
     suspend fun openWorktree(branch: String): AgentWorkspace
+
+    /** The id of the agent of the ACP registry the past [session] ran with, remembered; null: it is unknown, or it
+     * was the agent of the settings. */
+    fun rememberedAgent(session: String): String?
+
+    /** Remembers that [session] ran with the agent [entry] of the registry; null forgets it (the settings' one). */
+    fun rememberAgentOf(session: String, entry: String?)
+
+    /** The ids of the agents of the registry remembered, the recent ones first. */
+    val rememberedAgents: List<String>
 }

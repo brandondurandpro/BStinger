@@ -195,7 +195,7 @@ internal class SessionKeeper(
         served = agent
         hadSession = true
         current = session
-        journal.describe { it.copy(session = session.id) }
+        journal.describe { it.copy(session = session.id, agent = agent) }
         return session
     }
 

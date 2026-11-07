@@ -176,6 +176,7 @@ class ServerContext(
                 grammars = grammars,
                 languageServers = languageServers,
                 agentCommand = agentCommand,
+                agentMemory = AgentMemory(preferences::get) { key, value -> preferences.put(key, value) },
             )
         // "Opening…" stays shown meanwhile: the project then appears with its tabs and tree as they were left.
         opened.restoreSession(RESTORE_WAIT_MILLIS)

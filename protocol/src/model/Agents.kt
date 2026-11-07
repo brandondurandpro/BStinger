@@ -333,6 +333,8 @@ data class AgentTranscript(
     val items: List<AgentItem>,
     /** Name of the agent and its version, as it introduced itself; null before it started. */
     val agentName: String? = null,
+    /** The agent of the session, as the server started it; null while no session runs. */
+    val agent: AgentCommand? = null,
     /** Id of the session of the agent, kept by the agent itself: a conversation reopens it after a restart. */
     val session: String? = null,
     /** Title of the session, when the agent gave one. */

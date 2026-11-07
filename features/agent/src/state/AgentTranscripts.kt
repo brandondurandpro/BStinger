@@ -37,7 +37,7 @@ private suspend fun AgentHost.poll(conversation: Conversation) {
     }
 }
 
-private fun apply(conversation: Conversation, transcript: AgentTranscript) {
+private fun AgentHost.apply(conversation: Conversation, transcript: AgentTranscript) {
     val restarted = conversation.epoch.isNotEmpty() && conversation.epoch != transcript.epoch
     conversation.epoch = transcript.epoch
     conversation.since = transcript.version
@@ -47,6 +47,10 @@ private fun apply(conversation: Conversation, transcript: AgentTranscript) {
     }
     val wasBusy = conversation.state != AgentTurnState.Idle
     transcript.session?.let { conversation.session = it }
+    transcript.agent?.registry?.let { registry ->
+        val session = transcript.session
+        if (session != null) rememberAgentOf(session, registry)
+    }
     transcript.title?.let { conversation.title = titleOf(it) }
     if (transcript.commands.isNotEmpty()) conversation.commands = transcript.commands
     // A choice on its way shows until the server has it.

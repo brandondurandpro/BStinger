@@ -29,6 +29,10 @@ private const val KNOWN = "known"
 private const val STATE = "state"
 private const val ITEMS = "items"
 private const val AGENT_NAME = "agentName"
+private const val AGENT_OF = "agentOf"
+private const val COMMAND = "command"
+private const val ENVIRONMENT = "environment"
+private const val REGISTRY = "registry"
 private const val SESSION = "session"
 private const val TITLE = "title"
 private const val REPLAYED = "replayed"
@@ -39,16 +43,16 @@ private const val CONTEXT = "context"
 /** An agent command line. */
 fun AgentCommand.toJson(): JsonObject =
     buildJsonObject {
-        put("command", command.toJson())
-        put("environment", JsonObject(environment.mapValues { JsonPrimitive(it.value) }))
-        put("registry", registry.orNull())
+        put(COMMAND, command.toJson())
+        put(ENVIRONMENT, JsonObject(environment.mapValues { JsonPrimitive(it.value) }))
+        put(REGISTRY, registry.orNull())
     }
 
 /** Reads an agent command line. */
 fun JsonElement.agentCommand(): AgentCommand {
     val json = jsonObject
-    val environment = json["environment"]?.jsonObject.orEmpty().mapValues { it.value.string() }
-    return AgentCommand(json.field("command").strings(), environment, json.stringOrNull("registry"))
+    val environment = json[ENVIRONMENT]?.jsonObject.orEmpty().mapValues { it.value.string() }
+    return AgentCommand(json.field(COMMAND).strings(), environment, json.stringOrNull(REGISTRY))
 }
 
 /** A transcript. */
@@ -60,6 +64,7 @@ fun AgentTranscript.toJson(): JsonObject =
         put(STATE, state.name)
         put(ITEMS, JsonArray(items.map { it.toJson() }))
         put(AGENT_NAME, agentName.orNull())
+        put(AGENT_OF, agent?.toJson() ?: JsonNull)
         put(SESSION, session.orNull())
         put(TITLE, title.orNull())
         put(REPLAYED, replayed)
@@ -80,6 +85,7 @@ fun JsonElement.agentTranscript(): AgentTranscript {
         state = AgentTurnState.valueOf(json.string(STATE)),
         items = json.field(ITEMS).jsonArray.map { it.agentItem() },
         agentName = json.stringOrNull(AGENT_NAME),
+        agent = json[AGENT_OF]?.takeIf { it != JsonNull }?.agentCommand(),
         session = json.stringOrNull(SESSION),
         title = json.stringOrNull(TITLE),
         replayed = json[REPLAYED]?.let { json.bool(REPLAYED) } ?: false,

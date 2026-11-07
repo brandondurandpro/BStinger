@@ -15,12 +15,12 @@ import java.util.zip.ZipOutputStream
  * (`fake-agent` on Linux and macOS, `fake-agent.cmd` on Windows) published for [platform] with its SHA-256; the
  * agent `unsigned-agent`, the same without a checksum; `npx-agent`, an npm package; and `elsewhere-agent`, built
  * for another platform only; then [extraAgents] more npm packages, for a large registry. [downloads] counts the
- * downloads of the archive.
+ * downloads of the archive. The agents run with [agentOptions] (a store, so their sessions survive their process).
  */
-class FakeRegistry(private val platform: String, private val extraAgents: Int = 0) : AutoCloseable {
+class FakeRegistry(private val platform: String, private val extraAgents: Int = 0, agentOptions: List<String> = emptyList()) : AutoCloseable {
     private val windows = platform.startsWith("windows")
     private val program = if (windows) "fake-agent.cmd" else "fake-agent"
-    private val archive = zipOf(program, launcher())
+    private val archive = zipOf(program, launcher(agentOptions))
     private val server = HttpServer.create(InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0)
 
     /** How many times the archive was downloaded. */
@@ -84,8 +84,8 @@ class FakeRegistry(private val platform: String, private val extraAgents: Int = 
     }
 
     // A script that starts the fake agent with the classpath of the tests, its arguments passed on.
-    private fun launcher(): String {
-        val command = FakeAgentCommand.command()
+    private fun launcher(options: List<String>): String {
+        val command = FakeAgentCommand.command(*options.toTypedArray())
         val quoted = command.joinToString(" ") { "\"$it\"" }
         return if (windows) "@echo off\r\n$quoted %*\r\n" else "#!/bin/sh\nexec $quoted \"$@\"\n"
     }
