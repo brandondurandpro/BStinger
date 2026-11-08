@@ -67,6 +67,9 @@ class FakeAgent(
     private val out: PrintStream = PrintStream(System.out, true, Charsets.UTF_8),
 ) {
     private val loginRequired = options.loginRequired
+
+    // True once the user logged in (`authenticate`): a session starts then.
+    @Volatile private var loggedIn = false
     private val store = FakeSessions(options.store)
     private val turns = ConcurrentHashMap<String, FakeTurn>()
     private val config = FakeConfig(options.extraModels)
@@ -100,6 +103,7 @@ class FakeAgent(
             when (method) {
                 "initialize" -> success(id, initialized())
                 "session/new" -> newSession(id, params)
+                "authenticate" -> authenticated(id, params)
                 "session/prompt" -> success(id, prompt(params))
                 "session/load" -> reopen(id, params, replay = true)
                 "session/resume" -> reopen(id, params, replay = false)
@@ -162,8 +166,14 @@ class FakeAgent(
             }
         }
 
+    private fun authenticated(id: JsonElement, params: JsonObject): JsonObject {
+        if (params.text("methodId") != "login") return failure(id, INVALID_PARAMS, "Unknown login method")
+        loggedIn = true
+        return success(id, JsonObject(emptyMap()))
+    }
+
     private fun newSession(id: JsonElement, params: JsonObject): JsonObject {
-        if (loginRequired) return failure(id, AUTH_REQUIRED, "Authentication required")
+        if (loginRequired && !loggedIn) return failure(id, AUTH_REQUIRED, "Authentication required")
         val session = store.create(params.text("cwd").orEmpty())
         return success(id, sessionAnswer(session, buildJsonObject { put("sessionId", session.id) }))
     }
