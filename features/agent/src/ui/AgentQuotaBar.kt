@@ -56,14 +56,15 @@ private const val FULL = 100f
 internal fun QuotaBar(agent: AgentState, conversation: Conversation, modifier: Modifier) {
     val commands = conversation.commands.ifEmpty { agent.options.commands }
     Row(modifier.testTag(AgentTags.AGENT_QUOTA), verticalAlignment = Alignment.CenterVertically) {
+        CommandsButton(agent, conversation, commands)
+        // The limits sit on the right, the commands button on the left.
         FlowRow(
             Modifier.weight(1f),
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.End),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             conversation.quota.forEachIndexed { index, limit -> QuotaChip(limit, Modifier.testTag(AgentTags.agentQuotaLimit(index))) }
         }
-        CommandsButton(agent, conversation, commands)
     }
 }
 
