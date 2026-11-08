@@ -19,6 +19,8 @@ object AgentTags {
     const val AGENT_REVIEW_FILTER = "agent.review.filter"
     const val AGENT_ARCHIVED = "agent.archived"
     const val AGENT_USAGE = "agent.usage"
+    const val AGENT_QUOTA = "agent.quota"
+    const val AGENT_QUOTA_REFRESH = "agent.quota.refresh"
     const val AGENT_LOGIN_RUNNING = "agent.login.running"
     const val AGENT_CHANGES_TOGGLE = "agent.changes.toggle"
     const val AGENT_CHANGES_REFRESH = "agent.changes.refresh"

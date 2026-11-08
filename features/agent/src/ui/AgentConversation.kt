@@ -3,6 +3,7 @@ package org.example.kotlineditor.ui
 import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -50,6 +51,7 @@ import org.example.kotlineditor.model.AgentTurnState
 import org.example.kotlineditor.state.AgentState
 import org.example.kotlineditor.state.Completing
 import org.example.kotlineditor.state.Conversation
+import org.example.kotlineditor.state.QUOTA_COMMANDS
 import org.example.kotlineditor.state.drop
 import org.example.kotlineditor.state.isLoginNotice
 import org.example.kotlineditor.state.recallPrompt
@@ -216,6 +218,7 @@ private fun Prompt(agent: AgentState, conversation: Conversation) {
                 fontSize = 12.sp,
             )
         }
+        QuotaRow(agent, conversation, width.padding(horizontal = 4.dp, vertical = 2.dp))
         val workspaceRoot = (conversation.workspace ?: agent.project).root.path
         Column(
             width
@@ -292,6 +295,34 @@ private fun PromptActions(agent: AgentState, conversation: Conversation) {
                 Modifier.testTag(AgentTags.AGENT_SEND),
                 primary = true,
                 enabled = conversation.draft.isNotBlank(),
+            )
+        }
+    }
+}
+
+// The remaining quota the agent said (`Weekly limit: 100% left`), and a button asking for it again when the agent has
+// a `/usage` or `/status` command: its answer comes in the conversation, and the lines are read from it.
+@Composable
+private fun QuotaRow(agent: AgentState, conversation: Conversation, modifier: Modifier) {
+    val commands = conversation.commands.ifEmpty { agent.options.commands }
+    val asking = QUOTA_COMMANDS.firstOrNull { name -> commands.any { it.name == name } }
+    val canAsk = asking != null && !conversation.busy
+    if (conversation.quota.isEmpty() && !canAsk) return
+    Row(modifier.testTag(AgentTags.AGENT_QUOTA), verticalAlignment = Alignment.CenterVertically) {
+        val text = conversation.quota.joinToString("  ·  ").ifEmpty { "Quota unknown" }
+        Label(text, Modifier.weight(1f), color = IdeColors.TextSecondary, fontSize = 12.sp)
+        if (canAsk) {
+            Label(
+                "↻ Quota",
+                Modifier
+                    .clickable {
+                        conversation.draft = "/$asking"
+                        agent.send(conversation)
+                    }
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                    .testTag(AgentTags.AGENT_QUOTA_REFRESH),
+                color = IdeColors.TextSecondary,
+                fontSize = 12.sp,
             )
         }
     }

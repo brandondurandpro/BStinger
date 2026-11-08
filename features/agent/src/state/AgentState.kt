@@ -89,6 +89,9 @@ class Conversation(val id: Int, title: String, val branch: String) {
 
     /** The context the session uses and what it cost, as the agent last said; null before it did. */
     var usage: AgentUsage? by mutableStateOf(null)
+
+    /** The remaining quota of the plan of the agent, as its latest answer to a command said (`/status`); empty before. */
+    var quota: List<String> by mutableStateOf(emptyList())
         internal set
 
     /** What the agent is doing, as the server last said. */
