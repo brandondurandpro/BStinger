@@ -31,7 +31,11 @@ internal object DesktopNotifications {
     private fun sendWithNotifySend(command: String, title: String, text: String, error: Boolean) {
         val urgency = if (error) "critical" else "normal"
         val arguments = listOf(command, "--app-name=$APP_NAME", "--urgency=$urgency", "--", title, text)
-        runCatching { ProcessBuilder(arguments).redirectErrorStream(true).start() }
+        val builder = ProcessBuilder(arguments).redirectErrorStream(true)
+        // The libraries of a packaged IDE (an AppImage…) must not replace those `notify-send` was built with.
+        builder.environment().remove("LD_LIBRARY_PATH")
+        builder.environment().remove("LD_PRELOAD")
+        runCatching { builder.start() }
     }
 
     private fun onPath(program: String): String? {
