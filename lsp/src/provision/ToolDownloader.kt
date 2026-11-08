@@ -28,6 +28,8 @@ class ToolDownloader(
     /** Root of the tools downloaded on first use, shared with ripgrep. */
     val toolsDirectory: Path = Paths.get(System.getProperty("user.home"), ".kotlin-editor", "tools"),
     private val fetch: (String) -> InputStream = ::httpGet,
+    /** The most bytes a download may have; a language server is small, a coding agent can be several hundred MB. */
+    private val maxBytes: Long = MAX_DOWNLOAD_SIZE,
 ) {
     private val locks = ConcurrentHashMap<String, Any>()
 
@@ -95,7 +97,9 @@ class ToolDownloader(
         try {
             val computed =
                 fetch(tool.url).use { input ->
-                    Files.newOutputStream(part).use { output -> copyHashing(input, output, tool.digest.algorithm) }
+                    Files.newOutputStream(part).use { output ->
+                        copyHashing(input, output, tool.digest.algorithm, maxBytes)
+                    }
                 }
             if (!tool.digest.matches(computed)) {
                 throw IOException("Checksum mismatch for ${tool.fileName} ${tool.version}: not the pinned release")
@@ -118,7 +122,9 @@ class ToolDownloader(
     private fun isVerified(path: Path, digest: Digest): Boolean {
         val computed =
             runCatching {
-                Files.newInputStream(path).use { copyHashing(it, OutputStream.nullOutputStream(), digest.algorithm) }
+                Files.newInputStream(path).use { stream ->
+                    copyHashing(stream, OutputStream.nullOutputStream(), digest.algorithm, maxBytes)
+                }
             }
         return Files.isRegularFile(path) && computed.getOrNull()?.let(digest::matches) == true
     }
@@ -128,11 +134,12 @@ class ToolDownloader(
         const val INSTALLED_MARKER = ".installed"
         const val MAX_DOWNLOAD_SIZE = 256L * 1024 * 1024
         const val HTTP_OK = 200
+        const val MEGABYTE = 1024L * 1024
         val CONNECT_TIMEOUT: Duration = Duration.ofSeconds(15)
         val DOWNLOAD_TIMEOUT: Duration = Duration.ofMinutes(5)
 
-        // Copies at most MAX_DOWNLOAD_SIZE bytes (more is an error) and returns their checksum.
-        fun copyHashing(input: InputStream, output: OutputStream, algorithm: String): ByteArray {
+        // Copies at most [limit] bytes (more is an error) and returns their checksum.
+        fun copyHashing(input: InputStream, output: OutputStream, algorithm: String, limit: Long): ByteArray {
             val digest = MessageDigest.getInstance(algorithm)
             val hashing = DigestInputStream(input, digest)
             val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
@@ -141,7 +148,7 @@ class ToolDownloader(
                 val read = hashing.read(buffer)
                 if (read < 0) break
                 total += read
-                if (total > MAX_DOWNLOAD_SIZE) throw IOException("Unexpectedly large download")
+                if (total > limit) throw IOException("Unexpectedly large download (more than ${limit / MEGABYTE} MB)")
                 output.write(buffer, 0, read)
             }
             return digest.digest()
