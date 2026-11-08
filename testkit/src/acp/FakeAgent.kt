@@ -110,6 +110,7 @@ class FakeAgent(
                 "session/list" -> success(id, listed(params))
                 "session/close" -> success(id, JsonObject(emptyMap()))
                 "session/delete" -> deleted(id, params)
+                "session/fork" -> forked(id, params)
                 "session/set_config_option" -> configured(id, params)
                 else -> failure(id, METHOD_NOT_FOUND, "Unknown method $method")
             }
@@ -145,6 +146,7 @@ class FakeAgent(
                         putJsonObject("resume") {}
                         putJsonObject("close") {}
                         putJsonObject("delete") {}
+                        putJsonObject("fork") {}
                     }
                 }
             }
@@ -256,6 +258,17 @@ class FakeAgent(
         return END_TURN
     }
 
+    // `session/fork`: a new session with the history of the one asked for.
+    private fun forked(id: JsonElement, params: JsonObject): JsonObject {
+        val from = params.text("sessionId")?.let(store::get)
+            ?: return failure(id, RESOURCE_NOT_FOUND, "Unknown session")
+        val copy = store.create(from.cwd)
+        copy.title = from.title
+        copy.turns.addAll(from.turns)
+        store.save(copy)
+        return success(id, sessionAnswer(copy, buildJsonObject { put("sessionId", copy.id) }))
+    }
+
     private fun deleted(id: JsonElement, params: JsonObject): JsonObject {
         val session = params.text("sessionId").orEmpty()
         if (!store.delete(session)) return failure(id, RESOURCE_NOT_FOUND, "Unknown session $session")
@@ -276,10 +289,24 @@ class FakeAgent(
         val count = kept?.turns?.size ?: 1
         if (kept != null && kept.title == null) titled(kept, prompt)
         try {
-            return buildJsonObject { put("stopReason", answer(session, prompt, count)) }
+            val stopReason = answer(session, prompt, count)
+            usage(session, count)
+            return buildJsonObject { put("stopReason", stopReason) }
         } finally {
             turns.remove(session)
             kept?.let(store::save)
+        }
+    }
+
+    // The context used grows with each turn, and the cost with it.
+    private fun usage(session: String, turns: Int) {
+        update(session, "usage_update") {
+            put("used", turns * USAGE_PER_TURN)
+            put("size", USAGE_WINDOW)
+            putJsonObject("cost") {
+                put("amount", turns * COST_PER_TURN)
+                put("currency", "USD")
+            }
         }
     }
 
@@ -537,6 +564,9 @@ class FakeAgent(
         const val END_TURN = "end_turn"
         const val CANCELLED = "cancelled"
         const val METHOD_NOT_FOUND = -32_601
+        const val USAGE_PER_TURN = 1_000
+        const val USAGE_WINDOW = 200_000
+        const val COST_PER_TURN = 0.01
         const val INVALID_PARAMS = -32_602
         const val AUTH_REQUIRED = -32_000
         const val RESOURCE_NOT_FOUND = -32_002
