@@ -87,7 +87,8 @@ fun ConversationList(agent: AgentState, modifier: Modifier) {
             leading = { SearchIcon() },
         )
         Spacer(Modifier.height(6.dp))
-        val matching = agent.conversations.filter { it.matches(filter) }
+        val searching = filter.isNotBlank()
+        val matching = agent.conversations.filter { it.matches(filter) && (searching || !it.archived) }
         val shown = matching.sortedByDescending { it.pinned }
         if (shown.isEmpty()) {
             Label(
@@ -146,7 +147,7 @@ private fun ConversationRow(agent: AgentState, conversation: Conversation, selec
                         title?.let { agent.rename(conversation, it) }
                     })
                 } else {
-                    val mark = if (conversation.pinned) "★ " else ""
+                    val mark = if (conversation.pinned) "★ " else if (conversation.archived) "▫ " else ""
                     Label(mark + conversation.title, fontWeight = FontWeight.Medium)
                 }
                 Label(
@@ -171,6 +172,14 @@ private fun ConversationRow(agent: AgentState, conversation: Conversation, selec
                             agent.togglePin(conversation)
                         },
                         modifier = Modifier.testTag(AgentTags.AGENT_PIN),
+                    )
+                    DropdownMenuItem(
+                        text = { Text(if (conversation.archived) "Unarchive" else "Archive", fontSize = 13.sp) },
+                        onClick = {
+                            menu = null
+                            agent.toggleArchive(conversation)
+                        },
+                        modifier = Modifier.testTag(AgentTags.AGENT_ARCHIVE),
                     )
                     DropdownMenuItem(
                         text = { Text("Rename", fontSize = 13.sp) },

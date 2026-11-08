@@ -46,6 +46,9 @@ object PreferenceKeys {
     /** Per project: the sessions of the conversations the user pinned to the top of the list, one per line. */
     const val AGENT_PINNED_PREFIX = "agent.pinned."
 
+    /** Per project: the sessions of the conversations the user archived (hidden from the list), one per line. */
+    const val AGENT_ARCHIVED_PREFIX = "agent.archived."
+
     const val AGENT_COMMAND = "agent.command"
     const val AGENT_REGISTRY = "agent.registry"
     const val INLAY_HINTS = "editor.inlayHints"

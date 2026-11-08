@@ -52,6 +52,10 @@ class Conversation(val id: Int, title: String, val branch: String) {
     /** The uncommitted changes where the agent works, to review. */
     val changes = ChangesState()
 
+    /** True while the conversation is archived: out of the list, found again by the search. */
+    var archived by mutableStateOf(false)
+        internal set
+
     /** True while the conversation is pinned to the top of the list. */
     var pinned by mutableStateOf(false)
         internal set
@@ -378,6 +382,11 @@ class AgentState(
     /** Pins [conversation] to the top of the list, or unpins it. */
     fun togglePin(conversation: Conversation) {
         conversation.pinned = !conversation.pinned
+    }
+
+    /** Archives [conversation], or brings it back; the search of the list still finds an archived one. */
+    fun toggleArchive(conversation: Conversation) {
+        conversation.archived = !conversation.archived
     }
 
     /** Deletes [conversation], its session and its worktree, if it has one (Git keeps it when it has changes). */

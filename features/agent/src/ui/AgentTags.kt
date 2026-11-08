@@ -14,6 +14,7 @@ object AgentTags {
     const val AGENT_REVIEW = "agent.review"
     const val AGENT_LOGIN = "agent.login"
     const val AGENT_PIN = "agent.pin"
+    const val AGENT_ARCHIVE = "agent.archive"
     const val AGENT_USAGE = "agent.usage"
     const val AGENT_LOGIN_RUNNING = "agent.login.running"
     const val AGENT_CHANGES_TOGGLE = "agent.changes.toggle"
