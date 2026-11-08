@@ -62,6 +62,7 @@ import org.example.kotlineditor.state.AgentOutcome
 import org.example.kotlineditor.state.AgentState
 import org.example.kotlineditor.state.Conversation
 import org.example.kotlineditor.state.delete
+import org.example.kotlineditor.state.matches
 import org.example.kotlineditor.state.outcome
 import org.example.kotlineditor.state.placeholder
 
@@ -82,11 +83,11 @@ fun ConversationList(agent: AgentState, modifier: Modifier) {
             filter,
             { filter = it },
             Modifier.fillMaxWidth().padding(horizontal = 8.dp).testTag(AgentTags.AGENT_FILTER),
-            placeholder = "Search conversations",
+            placeholder = "Search conversations and messages",
             leading = { SearchIcon() },
         )
         Spacer(Modifier.height(6.dp))
-        val matching = agent.conversations.filter { it.title.contains(filter.trim(), ignoreCase = true) }
+        val matching = agent.conversations.filter { it.matches(filter) }
         val shown = matching.sortedByDescending { it.pinned }
         if (shown.isEmpty()) {
             Label(
