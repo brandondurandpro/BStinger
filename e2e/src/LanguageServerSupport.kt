@@ -53,6 +53,18 @@ class FakePhpServers(vararg options: String, idleStopMs: Long = 1_000, alternati
 
     private val other = fake.copy(id = OTHER, displayName = "otherphp")
 
+    // The only server of TypeScript and JavaScript, as typescript-language-server is: no choice to make.
+    private val typescript =
+        fake.copy(
+            id = FAKE_TYPESCRIPT,
+            displayName = "fakets",
+            language = "typescript",
+            strengths = listOf("Starts in a second"),
+            drawbacks = listOf("Knows nothing about TypeScript"),
+            initializationOptions = null,
+            withoutInlayHints = null,
+        )
+
     // No PHP nor Node.js: the fake server needs neither, and the other candidate is unavailable.
     private val nothingInstalled =
         RuntimeDetector(pathEnvironment = "", extraDirectories = { emptyList() }, probe = { _, _ -> null })
@@ -73,7 +85,7 @@ class FakePhpServers(vararg options: String, idleStopMs: Long = 1_000, alternati
             candidates =
             CandidateRegistry(
                 nothingInstalled,
-                listOfNotNull(fake, needsNode, other.takeIf { alternative }),
+                listOfNotNull(fake, needsNode, other.takeIf { alternative }, typescript),
             ),
             timings = timings,
             statusHoldMs = 5_000,
@@ -95,9 +107,21 @@ class FakePhpServers(vararg options: String, idleStopMs: Long = 1_000, alternati
         const val FAKE = "fake"
         const val NEEDS_NODE = "needs-node"
         const val OTHER = "other"
+        const val FAKE_TYPESCRIPT = "fake-ts"
 
         /** Why the fake server gives no inlay hints, when started `--without inlayHint`. */
         const val WITHOUT_INLAY_HINTS = "fakephp gives inlay hints only with a licence."
+
+        /** A web project: `package.json` and `tsconfig.json` at its root, TypeScript, React and JavaScript files. */
+        fun webProject(): SampleProject =
+            SampleProject().apply {
+                file("package.json", "{}\n")
+                file("tsconfig.json", "{}\n")
+                file("src/app.ts", "export const answer: number = 42\n")
+                file("src/view.tsx", "export const View = () => <p>hello</p>\n")
+                file("src/legacy.js", "module.exports = 1\n")
+                file("README.md", "# Shop\n")
+            }
 
         /** A PHP project: a `composer.json` at its root and two PHP files. */
         fun project(): SampleProject =

@@ -114,6 +114,8 @@ object AppTags {
     fun settingsInlayHints(mode: String) = "settings.inlayHints:$mode"
 
     /** A language server offered in the Settings dialog, by its id (`phpactor`). */
+    fun settingsServerLanguage(language: String) = "settings.server.language:$language"
+
     fun settingsServer(id: String) = "settings.server:$id"
 
     /** The button that switches to a language server, by its id. */

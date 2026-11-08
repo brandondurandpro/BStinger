@@ -47,7 +47,9 @@ internal class LanguageServerTargets(private val settings: LanguageServerSetting
     /** The servers offered for [language], their requirements checked now, and the chosen one. Blocking. */
     fun choice(language: String, project: String): LanguageServerChoice {
         val offered = settings.candidates.candidates(language).map(::infoOf)
-        return LanguageServerChoice(language, Languages.nameOf(language), offered, choices.choice(language, project))
+        val only = settings.candidates.offered(language).singleOrNull()
+        val chosen = choices.choice(language, project) ?: only?.id
+        return LanguageServerChoice(language, Languages.nameOf(language), offered, chosen)
     }
 
     /** Saves [candidate] for [language], for every project. */

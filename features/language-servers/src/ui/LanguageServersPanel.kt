@@ -142,7 +142,7 @@ private fun ColumnScope.LanguageServersContent(project: LanguageServersHost, sta
         IdeServerRow(state.status.server)
         if (servers.isEmpty()) {
             Label(
-                "No language server is running. Opening a PHP file starts one.",
+                "No language server is running. Opening a PHP, TypeScript or JavaScript file starts one.",
                 Modifier.padding(12.dp).testTag(LanguageServerTags.LANGUAGE_SERVERS_EMPTY),
                 color = IdeColors.TextSecondary,
                 fontSize = 12.sp,
