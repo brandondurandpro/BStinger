@@ -30,7 +30,12 @@ internal class AgentInfo(
     val sessions: SessionCapabilities = SessionCapabilities(),
     /** What a prompt may hold besides text and links. */
     val prompt: PromptCapabilities = PromptCapabilities(),
+    /** The kinds of MCP servers it connects to besides `stdio`. */
+    val mcp: McpCapabilities = McpCapabilities(),
 )
+
+/** The MCP transports an agent supports besides `stdio`, which every agent does. */
+internal data class McpCapabilities(val http: Boolean = false, val sse: Boolean = false)
 
 /** What a prompt may hold besides text and links to files, which every agent takes. */
 internal data class PromptCapabilities(
@@ -88,7 +93,9 @@ internal fun agentInfo(answer: JsonObject?): AgentInfo {
             id?.let { AgentAuthMethod(it, method.text("name") ?: it, method.text("description")) }
         }
     val capabilities = answer["agentCapabilities"].obj()
-    return AgentInfo(name, methods, sessionCapabilities(capabilities), promptCapabilities(capabilities))
+    val mcp = capabilities?.get("mcpCapabilities").obj()
+    val mcpKinds = McpCapabilities(mcp.flag("http"), mcp.flag("sse"))
+    return AgentInfo(name, methods, sessionCapabilities(capabilities), promptCapabilities(capabilities), mcpKinds)
 }
 
 private fun promptCapabilities(capabilities: JsonObject?): PromptCapabilities {
@@ -113,19 +120,19 @@ private fun sessionCapabilities(capabilities: JsonObject?): SessionCapabilities 
 
 private fun JsonObject?.has(name: String): Boolean = this?.get(name).obj() != null
 
-/** `session/new` in [directory], without MCP servers. */
-internal fun newSessionParams(directory: String): JsonObject =
+/** `session/new` in [directory], with the MCP servers the user configured ([McpServers]). */
+internal fun newSessionParams(directory: String, mcp: McpCapabilities): JsonObject =
     buildJsonObject {
         put("cwd", directory)
-        put("mcpServers", JsonArray(emptyList()))
+        put("mcpServers", McpServers.forAgent(mcp))
     }
 
-/** `session/load` and `session/resume`: reopens [session] in [directory], without MCP servers. */
-internal fun reopenParams(session: String, directory: String): JsonObject =
+/** `session/load` and `session/resume`: reopens [session] in [directory], with the same MCP servers. */
+internal fun reopenParams(session: String, directory: String, mcp: McpCapabilities): JsonObject =
     buildJsonObject {
         put(SESSION_ID, session)
         put("cwd", directory)
-        put("mcpServers", JsonArray(emptyList()))
+        put("mcpServers", McpServers.forAgent(mcp))
     }
 
 /** `session/list` of the sessions working in [directory], from [cursor] on. */

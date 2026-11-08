@@ -23,7 +23,7 @@ internal class StartedSession(val id: String, val options: List<AgentOption>?)
  * those of the next sessions of the agent.
  */
 internal suspend fun AgentProcess.newSession(directory: String, listener: SessionListener): StartedSession {
-    val answer = request("session/new", newSessionParams(directory))
+    val answer = request("session/new", newSessionParams(directory, ready().mcp))
     val id = answer?.text(SESSION_ID) ?: throw IOException("The agent started a session without an id")
     listen(id, listener)
     val options = answer.configOptions()
@@ -61,7 +61,7 @@ internal suspend fun AgentProcess.reopenSession(
     // A replay comes before the answer: the listener must hear it.
     listen(session, listener)
     try {
-        return request(method, reopenParams(session, directory)).configOptions()
+        return request(method, reopenParams(session, directory, ready().mcp)).configOptions()
     } catch (failure: LspResponseException) {
         release(session)
         throw failure
