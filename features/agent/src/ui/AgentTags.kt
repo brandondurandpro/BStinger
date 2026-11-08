@@ -26,6 +26,7 @@ object AgentTags {
     const val AGENT_QUOTA_CARD = "agent.quota.card"
     const val AGENT_CARD_CONTEXT = "agent.quota.card.context"
     const val AGENT_CARD_COST = "agent.quota.card.cost"
+    const val AGENT_IMAGE_VIEWER = "agent.image.viewer"
     const val AGENT_STATS = "agent.stats"
     const val AGENT_STATS_DIALOG = "agent.stats.dialog"
     const val AGENT_STATS_TIME = "agent.stats.time"
@@ -47,6 +48,8 @@ object AgentTags {
     fun agentCommand(name: String) = "agent.command.$name"
 
     fun agentTemplateVariable(name: String) = "agent.template.variable.$name"
+
+    fun agentImagePreview(name: String) = "agent.image.preview.$name"
 
     fun agentTemplate(name: String) = "agent.template.$name"
 

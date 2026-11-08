@@ -93,6 +93,21 @@ class AgentContextE2eTest {
         }
 
     @Test
+    fun `an image pasted shows a preview, which opens large and closes on a click`() =
+        runComposeUiTest {
+            val launched = launchWithProject(project, agentPreferences())
+            startConversation(launched)
+            TextClipboard.setImage(ONE_PIXEL_PNG)
+            typePrompt("look")
+            pasteInPrompt()
+            awaitTag(AgentTags.agentImagePreview("image-1.png")).performClick()
+            awaitTag(AgentTags.AGENT_IMAGE_VIEWER).performClick()
+            awaitNoTag(AgentTags.AGENT_IMAGE_VIEWER)
+            awaitTag(AgentTags.agentAttachmentRemove("image-1.png")).performClick()
+            awaitNoTag(AgentTags.agentAttachment("image-1.png"))
+        }
+
+    @Test
     fun `an agent without images says the image pasted was left out, and answers the rest`() =
         runComposeUiTest {
             val launched = launchWithProject(project, agentPreferences("--no-images"))
