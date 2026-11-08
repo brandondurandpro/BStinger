@@ -112,6 +112,7 @@ private fun AgentTabsArea(app: AppState, agent: AgentState, findFocus: FocusRequ
         } else {
             AgentTabStrip(agent)
             Box(Modifier.fillMaxWidth().height(1.dp).background(IdeColors.Separator))
+            AgentDetailStrip(agent)
             val workspace = conversation.workspaceProject
             key(conversation.id) {
                 if (workspace == null || conversation.showsChat) {

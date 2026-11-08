@@ -40,6 +40,7 @@ import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -86,11 +87,28 @@ private fun StripButton(
     }
 }
 
+/** The conversations open, one tab each. */
 @Composable
 fun AgentTabStrip(agent: AgentState) {
+    TabRow(agent, chatItems(agent), AgentTags.AGENT_TABS, height = 36.dp)
+}
+
+/**
+ * Under the conversations: what belongs to the conversation shown, its files and diffs, each a tab, with a tab that
+ * goes back to the conversation itself. Nothing is shown while no file or diff is open.
+ */
+@Composable
+fun AgentDetailStrip(agent: AgentState) {
+    val items = detailItems(agent)
+    if (items.isEmpty()) return
+    TabRow(agent, items, AgentTags.AGENT_DETAIL_TABS, height = 32.dp)
+    Box(Modifier.fillMaxWidth().height(1.dp).background(IdeColors.Separator))
+}
+
+@Composable
+private fun TabRow(agent: AgentState, items: List<StripItem>, tag: String, height: Dp) {
     val listState = rememberLazyListState()
     val active = agent.tabs.active
-    val items = stripItems(agent)
     val shown = items.indexOfFirst { it.isShown(active) }
     LaunchedEffect(shown) {
         if (shown >= 0 && !isFullyVisible(listState, shown)) listState.animateScrollToItem(shown)
@@ -100,10 +118,10 @@ fun AgentTabStrip(agent: AgentState) {
     LazyRow(
         Modifier
             .fillMaxWidth()
-            .height(36.dp)
+            .height(height)
             .background(IdeColors.Panel)
             .wheelScrollsHorizontally(listState)
-            .testTag(AgentTags.AGENT_TABS),
+            .testTag(tag),
         state = listState,
     ) {
         items(items, key = { it.key }) { item ->
@@ -122,6 +140,7 @@ fun AgentTabStrip(agent: AgentState) {
             when (item) {
                 is StripItem.Chat -> AgentTabView(agent, item.conversation, item.isShown(active), openMenu, menu)
                 is StripItem.File -> FileTabView(item, openMenu, menu)
+                is StripItem.Back -> BackTabView(item)
             }
         }
     }
@@ -159,6 +178,15 @@ private sealed interface StripItem {
         }
     }
 
+    // The tab of the second row that shows the conversation itself.
+    class Back(val conversation: Conversation) : StripItem {
+        override fun close() = Unit
+
+        override val key = "back:${conversation.id}"
+
+        override fun isShown(active: Conversation?): Boolean = conversation == active && conversation.showsChat
+    }
+
     class File(val conversation: Conversation, val editor: EditorState, val tab: EditorTab) : StripItem {
         override fun close() {
             editor.close(tab)
@@ -172,13 +200,31 @@ private sealed interface StripItem {
     }
 }
 
-private fun stripItems(agent: AgentState): List<StripItem> {
-    val active = agent.tabs.active
-    return agent.tabs.open.flatMap { conversation ->
-        val chat = StripItem.Chat(agent, conversation)
-        val editor = conversation.workspace?.editor
-        val files = if (conversation == active && editor != null) editor.allTabs else emptyList()
-        listOf<StripItem>(chat) + files.map { StripItem.File(conversation, editor!!, it) }
+private fun chatItems(agent: AgentState): List<StripItem> = agent.tabs.open.map { StripItem.Chat(agent, it) }
+
+// The conversation shown, then the files and diffs open in its worktree; none when nothing is open there.
+private fun detailItems(agent: AgentState): List<StripItem> {
+    val conversation = agent.tabs.active ?: return emptyList()
+    val editor = conversation.workspace?.editor ?: return emptyList()
+    if (editor.allTabs.isEmpty()) return emptyList()
+    return listOf<StripItem>(StripItem.Back(conversation)) + editor.allTabs.map { StripItem.File(conversation, editor, it) }
+}
+
+@Composable
+private fun BackTabView(item: StripItem.Back) {
+    val conversation = item.conversation
+    val shown = item.isShown(conversation)
+    Row(
+        Modifier
+            .fillMaxHeight()
+            .activeUnderline(shown)
+            .clickable { conversation.showsChat = true }
+            .padding(horizontal = 10.dp)
+            .testTag(AgentTags.agentDetailChat(conversation.id)),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SpeechBubbleIcon(IdeColors.TextSecondary)
+        Label("Conversation", Modifier.padding(start = 6.dp))
     }
 }
 
