@@ -1,7 +1,7 @@
 package org.example.kotlineditor.state
 
-/** A prompt the user saved to send again: [name] says what it is for, [text] goes into the prompt. */
-data class PromptTemplate(val name: String, val text: String)
+/** A prompt the user saved to send again: [name] says what it is for, [text] goes into the prompt; [global]: in every project, else in this one. */
+data class PromptTemplate(val name: String, val text: String, val global: Boolean = true)
 
 private const val ESCAPE = '\\'
 
@@ -36,9 +36,9 @@ internal fun encodeTemplates(templates: List<PromptTemplate>): String =
     templates.joinToString("\n") { "${escaped(it.name)}\t${escaped(it.text)}" }
 
 /** The templates saved by [encodeTemplates]; a damaged line is ignored. */
-internal fun decodeTemplates(saved: String?): List<PromptTemplate> =
+internal fun decodeTemplates(saved: String?, global: Boolean = true): List<PromptTemplate> =
     saved.orEmpty().lines().mapNotNull { line ->
         val name = unescaped(line.substringBefore('\t'))
         val text = unescaped(line.substringAfter('\t', ""))
-        PromptTemplate(name, text).takeIf { name.isNotBlank() && text.isNotBlank() }
+        PromptTemplate(name, text, global).takeIf { name.isNotBlank() && text.isNotBlank() }
     }

@@ -15,6 +15,11 @@ class PromptTemplatesTest {
     }
 
     @Test
+    fun `the templates of a project are decoded as its own`() {
+        assertEquals(listOf(PromptTemplate("A", "b", global = false)), decodeTemplates("A\tb", global = false))
+    }
+
+    @Test
     fun `a damaged line is ignored`() {
         assertEquals(listOf(PromptTemplate("A", "b")), decodeTemplates("A\tb\nnonsense\n\t\n"))
     }

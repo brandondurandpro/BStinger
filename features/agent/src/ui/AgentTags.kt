@@ -23,7 +23,15 @@ object AgentTags {
     const val AGENT_COMMANDS = "agent.commands"
     const val AGENT_COMMANDS_FILTER = "agent.commands.filter"
     const val AGENT_COST = "agent.cost"
+    const val AGENT_TEMPLATES = "agent.templates"
+    const val AGENT_TEMPLATE_NEW = "agent.template.new"
+    const val AGENT_TEMPLATE_NAME = "agent.template.name"
+    const val AGENT_TEMPLATE_TEXT = "agent.template.text"
     const val AGENT_TEMPLATE_SAVE = "agent.template.save"
+    const val AGENT_TEMPLATE_DELETE = "agent.template.delete"
+    const val AGENT_TEMPLATE_USE = "agent.template.use"
+    const val AGENT_TEMPLATE_GLOBAL = "agent.template.global"
+    const val AGENT_TEMPLATE_PROJECT = "agent.template.project"
 
     fun agentQuotaLimit(index: Int) = "agent.quota.$index"
 
@@ -31,7 +39,6 @@ object AgentTags {
 
     fun agentTemplate(name: String) = "agent.template.$name"
 
-    fun agentTemplateRemove(name: String) = "agent.template.remove.$name"
     const val AGENT_LOGIN_RUNNING = "agent.login.running"
     const val AGENT_CHANGES_TOGGLE = "agent.changes.toggle"
     const val AGENT_CHANGES_REFRESH = "agent.changes.refresh"

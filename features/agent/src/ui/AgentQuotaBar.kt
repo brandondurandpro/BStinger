@@ -56,7 +56,8 @@ private const val FULL = 100f
 internal fun QuotaBar(agent: AgentState, conversation: Conversation, modifier: Modifier) {
     val commands = conversation.commands.ifEmpty { agent.options.commands }
     Row(modifier.testTag(AgentTags.AGENT_QUOTA), verticalAlignment = Alignment.CenterVertically) {
-        CommandsButton(agent, conversation, commands)
+        CommandsButton(conversation, commands)
+        TemplatesButton(agent, conversation)
         // The limits sit on the right, the commands button on the left.
         FlowRow(
             Modifier.weight(1f),
@@ -99,7 +100,7 @@ private fun colorOf(used: Int): Color =
 
 // "/ ▾": the commands of the agent, each with what it does; one chosen is put in the prompt, to complete and send.
 @Composable
-private fun CommandsButton(agent: AgentState, conversation: Conversation, commands: List<AgentSlashCommand>) {
+private fun CommandsButton(conversation: Conversation, commands: List<AgentSlashCommand>) {
     var open by remember { mutableStateOf(false) }
     Box {
         Label(
@@ -116,11 +117,10 @@ private fun CommandsButton(agent: AgentState, conversation: Conversation, comman
             var filter by remember { mutableStateOf("") }
             AgentFilterField(filter, AgentTags.AGENT_COMMANDS_FILTER, "Search commands…") { filter = it }
             val shown = commands.filter { it.matches(filter) }
-            if (shown.isEmpty() && agent.templates.isEmpty()) {
+            if (shown.isEmpty()) {
                 Label("""No command "$filter".""", Modifier.padding(12.dp), color = IdeColors.TextSecondary, fontSize = 12.sp)
             }
             Column(Modifier.heightIn(max = MENU_HEIGHT).verticalScroll(rememberScrollState())) {
-                TemplateItems(agent, conversation, filter) { open = false }
                 for (command in shown) {
                     CommandItem(command) {
                         open = false

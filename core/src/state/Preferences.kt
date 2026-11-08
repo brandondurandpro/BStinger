@@ -40,6 +40,9 @@ object PreferenceKeys {
     /** The prompt templates of the user: one per line, `name`, a tab, the text with `\\`, newlines and tabs escaped. */
     const val AGENT_TEMPLATES = "agent.templates"
 
+    /** Per project (the key ends with its path): its prompt templates, in the format of [AGENT_TEMPLATES]. */
+    const val AGENT_TEMPLATES_PREFIX = "agent.templates."
+
     /** Per project (the key ends with its path): the sessions open in tabs of agent mode, one per line, in order. */
     const val AGENT_OPEN_PREFIX = "agent.open."
 

@@ -333,15 +333,25 @@ class AgentState(
         private set
 
     /** The prompts the user saved to send again, listed in the `/` menu of the conversations. */
-    val templates = mutableStateListOf<PromptTemplate>().apply { addAll(decodeTemplates(saved[PreferenceKeys.AGENT_TEMPLATES])) }
+    val templates =
+        mutableStateListOf<PromptTemplate>().apply {
+            addAll(decodeTemplates(saved[PreferenceKeys.AGENT_TEMPLATES]))
+            addAll(decodeTemplates(saved[PreferenceKeys.AGENT_TEMPLATES_PREFIX + project.root.path], global = false))
+        }
 
-    /** Saves [text] as a template named [name] (by its first line when blank); the same name is replaced. */
-    fun saveTemplate(name: String, text: String) {
+    /**
+     * Saves the template [name] with [text], for every project or only this one ([global]); [previous] is the name it had when edited, so a rename replaces it.
+     * Another template of the same name is replaced. Returns false when the name or the text is blank.
+     */
+    fun saveTemplate(previous: String?, name: String, text: String, global: Boolean = true): Boolean {
         val body = text.trim()
-        if (body.isEmpty()) return
-        val label = name.trim().ifEmpty { titleOf(body) }
-        templates.removeAll { it.name == label }
-        templates.add(PromptTemplate(label, body))
+        val label = name.trim()
+        if (body.isEmpty() || label.isEmpty()) return false
+        val index = templates.indexOfFirst { it.name == previous }
+        templates.removeAll { it.name == label || it.name == previous }
+        val template = PromptTemplate(label, body, global)
+        if (index in 0..templates.size) templates.add(index, template) else templates.add(template)
+        return true
     }
 
     /** Forgets the template [name]. */
