@@ -36,4 +36,17 @@ class AgentStatsE2eTest {
             awaitTag(AgentTags.AGENT_STATS_CLOSE).performClick()
             awaitNoTag(AgentTags.AGENT_STATS_DIALOG)
         }
+
+    @Test
+    fun `the statistics link is in the card beside a wide conversation`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, agentPreferences())
+            val conversation = startConversation(app)
+            app.project.agent.conversationsVisible = false
+            sendPrompt("echo hello")
+            awaitShown(conversation, "hello")
+            awaitTag(AgentTags.AGENT_QUOTA_CARD)
+            awaitTag(AgentTags.AGENT_STATS).performClick()
+            awaitTag(AgentTags.AGENT_STATS_DIALOG)
+        }
 }

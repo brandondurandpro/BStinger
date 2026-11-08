@@ -40,7 +40,7 @@ internal fun StatsLink(conversation: Conversation, modifier: Modifier = Modifier
     var open by remember { mutableStateOf(false) }
     Label(
         "Statistics",
-        modifier.clickable { open = true }.padding(horizontal = 4.dp).testTag(AgentTags.AGENT_STATS),
+        modifier.clickable { open = true }.testTag(AgentTags.AGENT_STATS),
         color = IdeColors.Accent,
         fontSize = 12.sp,
     )

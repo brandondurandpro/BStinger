@@ -42,7 +42,7 @@ private val CARD_BAR_HEIGHT = 6.dp
 @Composable
 internal fun QuotaCard(conversation: Conversation, modifier: Modifier) {
     val usage = conversation.usage
-    if (conversation.quota.isEmpty() && usage == null) return
+    if (conversation.quota.isEmpty() && usage == null && !conversation.started) return
     Column(
         modifier
             .width(QUOTA_CARD_WIDTH)
@@ -66,6 +66,7 @@ internal fun QuotaCard(conversation: Conversation, modifier: Modifier) {
                 }
             }
         }
+        StatsLink(conversation)
     }
 }
 
