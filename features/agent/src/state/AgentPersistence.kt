@@ -34,6 +34,12 @@ internal fun AgentState.restoreSaved(root: String) {
     conversations.filter { it.session in pinned }.forEach { it.pinned = true }
     val archived = linesOf(preferences[PreferenceKeys.AGENT_ARCHIVED_PREFIX + root]).toSet()
     conversations.filter { it.session in archived }.forEach { it.archived = true }
+    for (line in linesOf(preferences[PreferenceKeys.AGENT_STATS_PREFIX + root])) {
+        val fields = line.split('\t')
+        val kept = conversations.firstOrNull { it.session == fields.firstOrNull() }
+        kept?.workedMillis = fields.getOrNull(1)?.toLongOrNull() ?: 0L
+        kept?.savedCost = fields.getOrNull(2)?.toDoubleOrNull()
+    }
     val active = preferences[PreferenceKeys.AGENT_ACTIVE_PREFIX + root].orEmpty()
     for (session in linesOf(preferences[PreferenceKeys.AGENT_OPEN_PREFIX + root])) {
         val reopened = conversations.firstOrNull { it.session == session }
@@ -61,7 +67,13 @@ fun AgentState.toPreferences(): Map<String, String> {
             .joinToString("\n")
     val pinned = conversations.filter { it.pinned }.mapNotNull { it.session }.joinToString("\n")
     val archived = conversations.filter { it.archived }.mapNotNull { it.session }.joinToString("\n")
+    val stats =
+        conversations
+            .filter { it.workedMillis > 0 || it.costKnown != null }
+            .mapNotNull { c -> c.session?.let { "$it\t${c.workedMillis}\t${c.costKnown ?: ""}" } }
+            .joinToString("\n")
     return mapOf(
+        PreferenceKeys.AGENT_STATS_PREFIX + root to stats,
         width,
         last,
         saved,

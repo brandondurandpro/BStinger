@@ -6,6 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -25,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -43,6 +45,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.example.kotlineditor.model.AgentItem
@@ -65,9 +68,21 @@ private const val TO_THE_END = 100_000f
 
 @Composable
 fun ConversationView(agent: AgentState, conversation: Conversation) {
+    FollowTheEnd(conversation)
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        // The card of the quota is at the right of the transcript, which makes room for it when the window is narrow.
+        val showsCard = maxWidth >= QUOTA_CARD_MIN_WIDTH && conversation.quota.isNotEmpty()
+        val reserve = if (showsCard) (QUOTA_CARD_ROOM * 2 - (maxWidth - CONTENT_WIDTH)).coerceAtLeast(0.dp) else 0.dp
+        CompositionLocalProvider(LocalQuotaCard provides showsCard) {
+            ConversationColumn(agent, conversation, showsCard, reserve)
+        }
+    }
+}
+
+@Composable
+private fun ConversationColumn(agent: AgentState, conversation: Conversation, showsCard: Boolean, reserve: Dp) {
     val listState = conversation.listState
     val items = conversation.items
-    FollowTheEnd(conversation)
     Column(Modifier.fillMaxSize().testTag(AgentTags.agentView(conversation.id))) {
         Box(Modifier.weight(1f).fillMaxWidth()) {
             if (items.isEmpty()) {
@@ -77,7 +92,10 @@ fun ConversationView(agent: AgentState, conversation: Conversation) {
                     color = IdeColors.TextSecondary,
                 )
             }
-            SelectionContainer { Transcript(agent, conversation) }
+            Box(Modifier.fillMaxSize().padding(end = reserve)) {
+                SelectionContainer { Transcript(agent, conversation) }
+            }
+            if (showsCard) QuotaCard(conversation, Modifier.align(Alignment.TopEnd).padding(top = 12.dp, end = 20.dp))
             VerticalScrollbar(
                 rememberScrollbarAdapter(listState),
                 Modifier.align(Alignment.CenterEnd).fillMaxHeight(),
@@ -209,13 +227,11 @@ private fun Prompt(agent: AgentState, conversation: Conversation) {
         CompletionList(completion, width.padding(bottom = 6.dp))
         WorkspaceStatus(agent, conversation, width.padding(horizontal = 4.dp, vertical = 6.dp))
         // Above the input, not in its row of buttons: a narrow window must never push Stop and Send out of sight.
-        conversation.usage?.let { usage ->
-            Label(
-                usageText(usage),
-                width.padding(horizontal = 4.dp, vertical = 2.dp).testTag(AgentTags.AGENT_USAGE),
-                color = IdeColors.TextSecondary,
-                fontSize = 12.sp,
-            )
+        Row(width.padding(horizontal = 4.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+            val usage = conversation.usage
+            val shown = usage?.let(::usageText).orEmpty()
+            Label(shown, Modifier.weight(1f).testTag(AgentTags.AGENT_USAGE), color = IdeColors.TextSecondary, fontSize = 12.sp)
+            if (conversation.started) StatsLink(conversation)
         }
         QuotaBar(agent, conversation, width.padding(horizontal = 4.dp, vertical = 2.dp))
         val workspaceRoot = (conversation.workspace ?: agent.project).root.path

@@ -123,8 +123,40 @@ class Conversation(val id: Int, title: String, val branch: String) {
 
     /** Starts the clock of the turn when the agent became busy, stops it when it is idle. */
     internal fun syncWorkingClock() {
-        workingSince = if (busy) workingSince ?: System.currentTimeMillis() else null
+        val since = workingSince
+        val now = System.currentTimeMillis()
+        if (busy) {
+            workingSince = since ?: now
+            return
+        }
+        // The turn is over: its time goes to the total (the silent question about the quota is not work).
+        if (since != null && probeFrom == null) {
+            val turn = now - since
+            workedMillis += turn
+            longestTurnMillis = maxOf(longestTurnMillis, turn)
+            timedTurns++
+        }
+        workingSince = null
     }
+
+    /** Time the agent worked on the turns that ended, in milliseconds; kept between runs of the IDE. */
+    var workedMillis: Long by mutableStateOf(0L)
+        internal set
+
+    /** The longest of the turns timed in this run, in milliseconds. */
+    var longestTurnMillis: Long by mutableStateOf(0L)
+        internal set
+
+    /** How many turns were timed in this run. */
+    var timedTurns: Int by mutableStateOf(0)
+        internal set
+
+    /** What the conversation cost: the agent's figure, else the one saved by the last run. */
+    val costKnown: Double? get() = usage?.cost ?: savedCost
+
+    /** What the conversation cost, as saved by the last run; the agent's own figure replaces it once it says. */
+    var savedCost: Double? by mutableStateOf(null)
+        internal set
 
     /** Name and version of the agent, once it introduced itself. */
     var agentName: String? by mutableStateOf(null)

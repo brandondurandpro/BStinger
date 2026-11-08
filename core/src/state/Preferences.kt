@@ -52,6 +52,9 @@ object PreferenceKeys {
     /** Per project: the titles the user gave to conversations, one `session<TAB>title` per line. */
     const val AGENT_TITLES_PREFIX = "agent.titles."
 
+    /** Per project: `session`, the milliseconds the agent worked and what it cost, one session per line. */
+    const val AGENT_STATS_PREFIX = "agent.stats."
+
     /** Per project: the sessions of the conversations the user pinned to the top of the list, one per line. */
     const val AGENT_PINNED_PREFIX = "agent.pinned."
 

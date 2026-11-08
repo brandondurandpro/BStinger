@@ -22,6 +22,8 @@ class AgentQuotaRefreshE2eTest {
         runComposeUiTest {
             val app = launchWithProject(project, agentPreferences())
             val conversation = startConversation(app)
+            // The list folded, the conversation is wide enough for the card of the quota.
+            app.project.agent.conversationsVisible = false
             awaitTag(AgentTags.AGENT_COMMANDS, timeout = AGENT_TIMEOUT)
             sendPrompt("usage")
             awaitCondition(AGENT_TIMEOUT) { conversation.quota.isNotEmpty() }
@@ -33,6 +35,8 @@ class AgentQuotaRefreshE2eTest {
             awaitCondition(AGENT_TIMEOUT) { (conversation.quota.firstOrNull()?.percent ?: 0) >= THIRD_TURN_PERCENT }
             assertTrue(textOf(AgentTags.agentQuotaLimit(0)).isNotBlank())
             awaitIdle(conversation)
+            // The limits are in the card beside the conversation, with what the agent said.
+            awaitTag(AgentTags.AGENT_QUOTA_CARD)
             val probes = conversation.items.filter { it.id.startsWith("probe-") }
             assertTrue(probes.isEmpty(), "the silent question stays out of the conversation")
         }

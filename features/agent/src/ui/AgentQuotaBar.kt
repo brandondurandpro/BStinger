@@ -23,6 +23,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,6 +38,9 @@ import org.example.kotlineditor.model.AgentSlashCommand
 import org.example.kotlineditor.state.AgentState
 import org.example.kotlineditor.state.Conversation
 import org.example.kotlineditor.state.QuotaLimit
+
+/** True while the quota is shown in the card beside the conversation: the bar under it keeps only the buttons. */
+internal val LocalQuotaCard = compositionLocalOf { false }
 
 private val BAR_WIDTH = 90.dp
 private val BAR_HEIGHT = 6.dp
@@ -59,12 +63,16 @@ internal fun QuotaBar(agent: AgentState, conversation: Conversation, modifier: M
         CommandsButton(conversation, commands)
         TemplatesButton(agent, conversation)
         // The limits sit on the right, the commands button on the left.
+        // In a window wide enough the limits are in the card beside the conversation, not here.
+        val inCard = LocalQuotaCard.current
         FlowRow(
             Modifier.weight(1f),
             horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.End),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            conversation.quota.forEachIndexed { index, limit -> QuotaChip(limit, Modifier.testTag(AgentTags.agentQuotaLimit(index))) }
+            if (!inCard) {
+                conversation.quota.forEachIndexed { index, limit -> QuotaChip(limit, Modifier.testTag(AgentTags.agentQuotaLimit(index))) }
+            }
         }
     }
 }
