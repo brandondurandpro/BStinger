@@ -30,7 +30,11 @@ internal class LanguageServerTargets(private val settings: LanguageServerSetting
         val unchosen = LinkedHashSet<String>()
         // No runtime detection here (it runs programs): it happens when the server starts.
         val handled = files.mapNotNull { file -> Languages.languageOf(file)?.let { file to it } }
-        for ((file, language) in handled.filter { settings.candidates.offered(it.second).isNotEmpty() }) {
+        for ((file, language) in handled) {
+            if (settings.candidates.offered(language).isEmpty()) {
+                addCompanions(targets, file, project)
+                continue
+            }
             val offered = settings.candidates.offered(language)
             val chosenId = choices.choice(language, project)
             // A language with one server needs no choice: that server is the one.
@@ -42,11 +46,15 @@ internal class LanguageServerTargets(private val settings: LanguageServerSetting
                 val target = ServerTarget(spec, rootOf(language, file, project))
                 targets[target.id] = target
             }
-            for (companion in Languages.companionsOf(file)) {
-                companionTarget(companion, file, project)?.let { targets[it.id] = it }
-            }
+            addCompanions(targets, file, project)
         }
         return targets.values.toList() to unchosen.toList()
+    }
+
+    private fun addCompanions(targets: MutableMap<String, ServerTarget>, file: String, project: String) {
+        for (companion in Languages.companionsOf(file)) {
+            companionTarget(companion, file, project)?.let { targets[it.id] = it }
+        }
     }
 
     // The server of a [companion] language for [file]: only where the project uses it, and never asks for a choice.

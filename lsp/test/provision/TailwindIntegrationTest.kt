@@ -72,13 +72,45 @@ class TailwindIntegrationTest {
     }
 
     @Test
-    fun `a class name typed in a tsx is completed by the Tailwind server`() {
+    fun `a class name typed in an html file is completed by the Tailwind server alone`() {
         if (!nodeAvailable()) return
         val modules = tailwindInstalled() ?: return
+        prepare(modules)
+        val page = project.resolve("index.html")
+        val text = """<div class="fl">x</div>""" + "\n"
+        Files.writeString(page, text)
+        service.use(SESSION, project.toString(), listOf(page.toString()))
+        service.openDocument(SESSION, project.toString(), page.toString(), 1, text)
+        val labels = awaitLabels(page.toString(), 13)
+        val servers = runBlocking { service.status(-1) }.servers.map { it.serverName }
+        assertTrue(labels.any { it.startsWith("flex") }, "completion: ${labels.take(10)}")
+        assertTrue(servers == listOf("tailwindcss-language-server"), "servers: $servers")
+    }
+
+    private fun prepare(modules: Path) {
         Files.createSymbolicLink(project.resolve("node_modules"), modules)
         Files.writeString(project.resolve("package.json"), """{"devDependencies": {"tailwindcss": "3"}}""")
         Files.writeString(project.resolve("tailwind.config.js"), TAILWIND_CONFIG)
         Files.writeString(project.resolve("tsconfig.json"), """{"compilerOptions": {"jsx": "preserve"}}""")
+    }
+
+    private fun awaitLabels(file: String, column: Int): List<String> =
+        runBlocking {
+            withTimeout(ANSWER_MS) {
+                var answer = service.complete(SESSION, file, 1, 0, column)
+                while (answer.items.isEmpty()) {
+                    delay(500)
+                    answer = service.complete(SESSION, file, 1, 0, column)
+                }
+                answer.items.map { it.label }
+            }
+        }
+
+    @Test
+    fun `a class name typed in a tsx is completed by the Tailwind server`() {
+        if (!nodeAvailable()) return
+        val modules = tailwindInstalled() ?: return
+        prepare(modules)
         val view = project.resolve("view.tsx")
         Files.writeString(view, VIEW)
         service.use(SESSION, project.toString(), listOf(view.toString()))
@@ -87,7 +119,7 @@ class TailwindIntegrationTest {
             runBlocking {
                 withTimeout(ANSWER_MS) {
                     var answer = service.complete(SESSION, view.toString(), 1, 0, AFTER_FL)
-                    while (answer !is CompletionResult || answer.items.isEmpty()) {
+                    while (answer.items.isEmpty()) {
                         delay(500)
                         answer = service.complete(SESSION, view.toString(), 1, 0, AFTER_FL)
                     }

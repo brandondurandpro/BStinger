@@ -238,6 +238,8 @@ object Languages {
     private const val JAVASCRIPT = "javascript"
     private const val JAVASCRIPT_REACT = "javascriptreact"
     private const val VUE = "vue"
+    private const val HTML = "html"
+    private const val CSS = "css"
 
     /** The language of the Vue server, which serves `.vue` files beside the TypeScript server. */
     const val VUE_SERVER = "vue"
@@ -258,6 +260,9 @@ object Languages {
             "cjs" to JAVASCRIPT,
             "jsx" to JAVASCRIPT_REACT,
             "vue" to VUE,
+            "html" to HTML,
+            "htm" to HTML,
+            "css" to CSS,
         )
 
     // The identifiers one server serves under another name; the others are their own language.
@@ -269,7 +274,14 @@ object Languages {
             VUE to TYPESCRIPT,
         )
     private val names =
-        mapOf(PHP to "PHP", TYPESCRIPT to "TypeScript and JavaScript", VUE_SERVER to "Vue", TAILWIND to "Tailwind CSS")
+        mapOf(
+            HTML to "HTML",
+            CSS to "CSS",
+            PHP to "PHP",
+            TYPESCRIPT to "TypeScript and JavaScript",
+            VUE_SERVER to "Vue",
+            TAILWIND to "Tailwind CSS",
+        )
     private val rootMarkers = mapOf(PHP to "composer.json")
 
     /** Language identifier of [path] (`typescriptreact`), null when no language server handles it. */
@@ -287,9 +299,18 @@ object Languages {
         val isVue = identifierOf(path) == VUE
         return when {
             isVue -> listOf(VUE_SERVER, TAILWIND)
-            language == TYPESCRIPT -> listOf(TAILWIND)
+            language == TYPESCRIPT || language == HTML || language == CSS -> listOf(TAILWIND)
             else -> emptyList()
         }
+    }
+
+    /**
+     * Whether the IDE follows [path] with the code insight of a language server (usage counts, hints, problems): not
+     * the files only a companion server knows, such as `.html` and `.css`, which only get completion and hover.
+     */
+    fun hasInsight(path: String): Boolean {
+        val language = languageOf(path)
+        return language != null && language != HTML && language != CSS
     }
 
     /** Name of [language] for people. */

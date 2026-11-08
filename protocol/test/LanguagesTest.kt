@@ -36,4 +36,14 @@ class LanguagesTest {
         assertEquals(emptyList(), Languages.companionsOf("/p/a.kt"))
         assertEquals("Tailwind CSS", Languages.nameOf("tailwind"))
     }
+
+    @Test
+    fun `html and css files are served by the companions only, without code insight`() {
+        assertEquals("css", Languages.languageOf("/p/app.css"))
+        assertEquals(listOf("tailwind"), Languages.companionsOf("/p/app.css"))
+        assertEquals(listOf("tailwind"), Languages.companionsOf("/p/index.html"))
+        assertEquals(false, Languages.hasInsight("/p/app.css"))
+        assertEquals(true, Languages.hasInsight("/p/a.ts"))
+        assertEquals(true, Languages.hasInsight("/p/a.php"))
+    }
 }

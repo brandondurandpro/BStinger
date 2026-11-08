@@ -73,6 +73,11 @@ import java.util.concurrent.atomic.AtomicLong
 private const val URI = "uri"
 private const val TEXT_DOCUMENT = "textDocument"
 private const val RANGE = "range"
+private const val HOVER_SEPARATOR = """
+
+---
+
+"""
 private const val COMMAND = "command"
 private const val RENAME_PROVIDER = "renameProvider"
 private const val POSITION = "position"
@@ -150,22 +155,26 @@ class CodeIntelligenceService internal constructor(
     private val commandLocks = ConcurrentHashMap<String, Mutex>()
 
     /** Documentation at [at]. */
-    suspend fun hover(session: String, at: DocumentPosition): HoverResult =
-        requests.ask(
-            session,
-            at.path,
-            at.version,
-            "hoverProvider",
-            HoverResult.NotReady,
-            HoverResult(FeatureStatus.Unsupported, null),
-        ) {
-                document,
-                request,
-            ->
-            val answer = request("textDocument/hover", positionParams(document, at))
-            val range = (answer as? JsonObject)?.get(RANGE).textRange()
-            HoverResult(FeatureStatus.Ready, hoverMarkdown(answer), range)
+    suspend fun hover(session: String, at: DocumentPosition): HoverResult {
+        val answers =
+            requests.askEach(session, at.path, at.version, "hoverProvider") { document, request ->
+                val answer = request("textDocument/hover", positionParams(document, at))
+                val range = (answer as? JsonObject)?.get(RANGE).textRange()
+                HoverResult(FeatureStatus.Ready, hoverMarkdown(answer), range)
+            }
+        return when {
+            answers == null -> HoverResult.NotReady
+            answers.isEmpty() -> HoverResult(FeatureStatus.Unsupported, null)
+            else -> mergedHover(answers)
         }
+    }
+
+    // The texts of every server that knows something here (TypeScript's type, Tailwind's CSS), the first range.
+    private fun mergedHover(answers: List<HoverResult>): HoverResult {
+        val known = answers.filter { !it.markdown.isNullOrBlank() }
+        val markdown = known.joinToString(HOVER_SEPARATOR) { it.markdown.orEmpty() }.ifEmpty { null }
+        return HoverResult(FeatureStatus.Ready, markdown, known.firstOrNull()?.range)
+    }
 
     /** Declaration, type or implementations of the symbol at [at]. */
     suspend fun navigate(session: String, at: DocumentPosition, kind: NavigationKind): LocationsResult {
