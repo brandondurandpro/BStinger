@@ -39,6 +39,8 @@ object GitTags {
     const val GIT_HIDE = "git.hide"
     const val GIT_BLAME = "git.blame"
     const val GIT_SELECT_ALL = "git.selectAll"
+    const val GIT_REVERT_CHECKED = "git.revertChecked"
+    const val GIT_REVERT_PICKED = "git.revertPicked"
     const val GIT_COMMIT_MESSAGE = "git.commitMessage"
     const val GIT_COMMIT = "git.commit"
     const val GIT_BRANCH_BUTTON = "git.branchButton"
@@ -63,6 +65,8 @@ object GitTags {
     const val HISTORY_DETAILS_SPLITTER = "history.detailsSplitter"
 
     fun gitChange(relativePath: String) = "git.change:$relativePath"
+
+    fun gitChangeRevert(relativePath: String) = "git.change.revert:$relativePath"
 
     fun gitChangeCheck(relativePath: String) = "git.change.check:$relativePath"
 

@@ -488,6 +488,13 @@ interface GitClient : WorktreeClient {
      */
     suspend fun commit(root: String, message: String, paths: List<String>)
 
+    /**
+     * Discards the uncommitted changes of [paths] (relative to [root]): a tracked file goes back to what HEAD holds (a
+     * renamed one by both its paths), a new file is deleted. A path without change is left alone, so that repeating
+     * the call after a lost answer is safe. Changes nothing else: not HEAD, not the other files.
+     */
+    suspend fun revert(root: String, paths: List<String>)
+
     /** Pulls the current branch; returns what Git printed. */
     suspend fun pull(root: String): String
 
@@ -554,6 +561,8 @@ interface GitClient : WorktreeClient {
         override suspend fun deleteBranches(root: String, branches: List<String>) = Unit
 
         override suspend fun commit(root: String, message: String, paths: List<String>) = Unit
+
+        override suspend fun revert(root: String, paths: List<String>) = Unit
 
         override suspend fun pull(root: String): String = ""
 

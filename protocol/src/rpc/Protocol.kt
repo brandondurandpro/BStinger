@@ -415,6 +415,9 @@ enum class Method(
     /** Deletes local branches, even when they are not merged. */
     GitDeleteBranches("git/deleteBranches", mutating = true),
 
+    /** Discards the uncommitted changes of some files. */
+    GitRevert("git/revert", mutating = true),
+
     /** Stages every change and commits it. */
     GitCommit("git/commit", mutating = true),
 

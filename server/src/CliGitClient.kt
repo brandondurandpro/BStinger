@@ -75,7 +75,7 @@ class CliGitClient :
     // before Git 2.44, checkout takes it for a branch name).
     override suspend fun checkout(root: String, branch: String) {
         requireBranchName(branch)
-        runInterruptible(Dispatchers.IO) { runGitOnIndex(root, "checkout", branch) }
+        runInterruptible(Dispatchers.IO) { runGitOnIndex(root, CHECKOUT, branch) }
     }
 
     /**
@@ -142,6 +142,30 @@ class CliGitClient :
                 runGitOnIndex(root, "commit", "-m", message, "--", *selectedPaths(root, paths).toTypedArray())
             }
         }
+    }
+
+    /**
+     * Puts [paths] back as HEAD has them: a new file (untracked, or staged as new) is deleted, a tracked one is checked
+     * out from HEAD in the index and the working tree, a rename by its new path (deleted) and its old one (restored).
+     */
+    override suspend fun revert(root: String, paths: List<String>) {
+        require(paths.isNotEmpty()) { "No file to revert" }
+        runInterruptible(Dispatchers.IO) {
+            val entries = statusEntries(root).associateBy { it.path }
+            for (path in paths.distinct()) entries[path]?.let { revertEntry(root, it) }
+        }
+    }
+
+    private fun revertEntry(root: String, entry: StatusEntry) {
+        val isNew = entry.code == UNTRACKED_CODE
+        val staged = entry.code.startsWith("A") || entry.code.startsWith("R") || entry.code.startsWith("C")
+        when {
+            isNew -> runGitOnIndex(root, "clean", "-f", QUIET, "--", entry.path)
+            staged -> runGitOnIndex(root, "rm", "-f", QUIET, "--", entry.path)
+            else -> runGitOnIndex(root, CHECKOUT, "HEAD", "--", entry.path)
+        }
+        val old = entry.oldPath
+        if (staged && old != null) runGitOnIndex(root, CHECKOUT, "HEAD", "--", old)
     }
 
     // The paths to give to Git: the user selects a rename by its new path, and its old path goes with it, or Git
@@ -332,6 +356,8 @@ class CliGitClient :
 
     private companion object {
         const val BRANCH_REF = "ref: refs/heads/"
+        const val UNTRACKED_CODE = "??"
+        const val CHECKOUT = "checkout"
         const val NETWORK_TIMEOUT_SECONDS = 180L
         const val MAX_CACHED_BLAMES = 32
         const val DELETE_CHUNK_SIZE = 50
