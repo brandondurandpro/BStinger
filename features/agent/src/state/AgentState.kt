@@ -332,6 +332,23 @@ class AgentState(
     var lastAgent: String? by mutableStateOf(saved[PreferenceKeys.AGENT_LAST_CHOSEN]?.takeIf { it.isNotBlank() })
         private set
 
+    /** The prompts the user saved to send again, listed in the `/` menu of the conversations. */
+    val templates = mutableStateListOf<PromptTemplate>().apply { addAll(decodeTemplates(saved[PreferenceKeys.AGENT_TEMPLATES])) }
+
+    /** Saves [text] as a template named [name] (by its first line when blank); the same name is replaced. */
+    fun saveTemplate(name: String, text: String) {
+        val body = text.trim()
+        if (body.isEmpty()) return
+        val label = name.trim().ifEmpty { titleOf(body) }
+        templates.removeAll { it.name == label }
+        templates.add(PromptTemplate(label, body))
+    }
+
+    /** Forgets the template [name]. */
+    fun removeTemplate(name: String) {
+        templates.removeAll { it.name == name }
+    }
+
     internal var nextId = 1
 
     // Whether the tabs and titles of the last run were put back: until then, nothing of them is saved.

@@ -22,10 +22,15 @@ object AgentTags {
     const val AGENT_QUOTA = "agent.quota"
     const val AGENT_COMMANDS = "agent.commands"
     const val AGENT_COMMANDS_FILTER = "agent.commands.filter"
+    const val AGENT_TEMPLATE_SAVE = "agent.template.save"
 
     fun agentQuotaLimit(index: Int) = "agent.quota.$index"
 
     fun agentCommand(name: String) = "agent.command.$name"
+
+    fun agentTemplate(name: String) = "agent.template.$name"
+
+    fun agentTemplateRemove(name: String) = "agent.template.remove.$name"
     const val AGENT_LOGIN_RUNNING = "agent.login.running"
     const val AGENT_CHANGES_TOGGLE = "agent.changes.toggle"
     const val AGENT_CHANGES_REFRESH = "agent.changes.refresh"

@@ -34,6 +34,9 @@ object PreferenceKeys {
     /** The agent of the registry last chosen in a conversation; blank for the agent of the settings. */
     const val AGENT_LAST_CHOSEN = "agent.lastChosen"
 
+    /** The prompt templates of the user: one per line, `name`, a tab, the text with `\\`, newlines and tabs escaped. */
+    const val AGENT_TEMPLATES = "agent.templates"
+
     /** Per project (the key ends with its path): the sessions open in tabs of agent mode, one per line, in order. */
     const val AGENT_OPEN_PREFIX = "agent.open."
 

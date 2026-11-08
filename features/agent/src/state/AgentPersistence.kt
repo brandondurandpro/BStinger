@@ -46,8 +46,9 @@ internal fun AgentState.restoreSaved(root: String) {
 fun AgentState.toPreferences(): Map<String, String> {
     val width = PreferenceKeys.AGENT_CONVERSATIONS_WIDTH to conversationsWidth.toString()
     val last = PreferenceKeys.AGENT_LAST_CHOSEN to lastAgent.orEmpty()
+    val saved = PreferenceKeys.AGENT_TEMPLATES to encodeTemplates(templates)
     // Nothing of the tabs is saved before the last ones were put back: it would erase them.
-    if (!restored) return mapOf(width, last)
+    if (!restored) return mapOf(width, last, saved)
     val root = project.root.path
     val open = tabs.open.mapNotNull { it.session }.joinToString("\n")
     val active = tabs.active?.session.orEmpty()
@@ -61,6 +62,7 @@ fun AgentState.toPreferences(): Map<String, String> {
     return mapOf(
         width,
         last,
+        saved,
         PreferenceKeys.AGENT_ARCHIVED_PREFIX + root to archived,
         PreferenceKeys.AGENT_PINNED_PREFIX + root to pinned,
         PreferenceKeys.AGENT_OPEN_PREFIX + root to open,

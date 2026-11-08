@@ -33,7 +33,7 @@ class AgentSlashCommandsE2eTest {
             awaitModel("Fast")
             typePrompt("/")
             awaitTag(AgentTags.agentCompletion("/count"), timeout = AGENT_TIMEOUT)
-            assertEquals(listOf("/echo", "/count", "/model", "/plan"), suggestions())
+            assertEquals(listOf("/echo", "/count", "/model", "/plan", "/usage"), suggestions())
             assertTrue("Counts the prompts of the session" in textOf(AgentTags.AGENT_COMPLETION))
             typePrompt("co")
             awaitNoTag(AgentTags.agentCompletion("/echo"))

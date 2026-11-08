@@ -55,7 +55,6 @@ private const val FULL = 100f
 @Composable
 internal fun QuotaBar(agent: AgentState, conversation: Conversation, modifier: Modifier) {
     val commands = conversation.commands.ifEmpty { agent.options.commands }
-    if (conversation.quota.isEmpty() && commands.isEmpty()) return
     Row(modifier.testTag(AgentTags.AGENT_QUOTA), verticalAlignment = Alignment.CenterVertically) {
         FlowRow(
             Modifier.weight(1f),
@@ -64,7 +63,7 @@ internal fun QuotaBar(agent: AgentState, conversation: Conversation, modifier: M
         ) {
             conversation.quota.forEachIndexed { index, limit -> QuotaChip(limit, Modifier.testTag(AgentTags.agentQuotaLimit(index))) }
         }
-        if (commands.isNotEmpty()) CommandsButton(conversation, commands)
+        CommandsButton(agent, conversation, commands)
     }
 }
 
@@ -99,7 +98,7 @@ private fun colorOf(used: Int): Color =
 
 // "/ ▾": the commands of the agent, each with what it does; one chosen is put in the prompt, to complete and send.
 @Composable
-private fun CommandsButton(conversation: Conversation, commands: List<AgentSlashCommand>) {
+private fun CommandsButton(agent: AgentState, conversation: Conversation, commands: List<AgentSlashCommand>) {
     var open by remember { mutableStateOf(false) }
     Box {
         Label(
@@ -116,10 +115,11 @@ private fun CommandsButton(conversation: Conversation, commands: List<AgentSlash
             var filter by remember { mutableStateOf("") }
             AgentFilterField(filter, AgentTags.AGENT_COMMANDS_FILTER, "Search commands…") { filter = it }
             val shown = commands.filter { it.matches(filter) }
-            if (shown.isEmpty()) {
+            if (shown.isEmpty() && agent.templates.isEmpty()) {
                 Label("""No command "$filter".""", Modifier.padding(12.dp), color = IdeColors.TextSecondary, fontSize = 12.sp)
             }
             Column(Modifier.heightIn(max = MENU_HEIGHT).verticalScroll(rememberScrollState())) {
+                TemplateItems(agent, conversation, filter) { open = false }
                 for (command in shown) {
                     CommandItem(command) {
                         open = false
