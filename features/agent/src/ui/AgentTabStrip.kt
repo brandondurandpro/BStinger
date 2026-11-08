@@ -40,6 +40,8 @@ import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
@@ -172,10 +174,8 @@ private sealed interface StripItem {
 
         override val key = "chat:${conversation.id}"
 
-        override fun isShown(active: Conversation?): Boolean {
-            val workspace = conversation.workspace
-            return conversation == active && (workspace == null || conversation.showsChat)
-        }
+        // The conversation of the file or diff shown stays marked: the second row says which one it is.
+        override fun isShown(active: Conversation?): Boolean = conversation == active
     }
 
     // The tab of the second row that shows the conversation itself.
@@ -269,6 +269,7 @@ private fun AgentTabView(
                 .hoverable(interaction)
                 .then(press)
                 .testTag(AgentTags.agentTab(conversation.id))
+                .semantics { selected = active }
                 .padding(start = 10.dp, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {

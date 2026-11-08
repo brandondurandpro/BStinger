@@ -1,6 +1,7 @@
 package org.example.kotlineditor.e2e
 
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.ui.AgentTags
@@ -35,6 +36,8 @@ class AgentDetailTabsE2eTest {
             awaitTag(TreeTags.treeRow(app)).performDoubleClick()
             awaitCondition { !conversation.showsChat }
             awaitTag(AgentTags.AGENT_DETAIL_TABS)
+            // The conversation keeps its mark in the first row while one of its files is shown.
+            awaitTag(AgentTags.agentTab(conversation.id)).assertIsSelected()
             awaitTag(AgentTags.agentDetailChat(conversation.id)).performClick()
             awaitCondition { conversation.showsChat }
             assertEquals(conversation, launched.project.agent.current)
