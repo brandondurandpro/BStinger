@@ -171,8 +171,13 @@ class LanguageServerService(
     suspend fun resolveCompletion(session: String, token: String, index: Int): String? =
         completions.resolve(session, token, index)
 
-    private fun serversOf(document: MirroredDocument): List<ManagedServer> =
-        supervisor.serving(document.language, document.root)
+    // Its own language's servers first (they answer by default), then those of the companion languages that hold it.
+    private fun serversOf(document: MirroredDocument): List<ManagedServer> {
+        val own = supervisor.serving(document.language, document.root)
+        val companions = Languages.companionsOf(document.path)
+        val beside = supervisor.servingPath(document.path).filter { it.language in companions }
+        return own + beside
+    }
 
     /**
      * Files changed on disk through the IDE ([DiskChange] by absolute path): the servers whose root holds them are

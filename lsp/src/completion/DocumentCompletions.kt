@@ -2,6 +2,9 @@ package org.example.kotlineditor.lsp.completion
 
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
@@ -48,6 +51,26 @@ internal class DocumentCompletions(
     /** [session] ended: its answers are forgotten. */
     fun release(session: String) = offered.release(session)
 
+    // The first server that proposes something, else the first that answered: the servers of the companion languages
+    // (Tailwind CSS in a class attribute) only speak where their own language's server has nothing to say.
+    private suspend fun firstProposing(
+        servers: List<ManagedServer>,
+        params: JsonObject,
+    ): Pair<ManagedServer, JsonElement>? {
+        var empty: Pair<ManagedServer, JsonElement>? = null
+        for (server in servers) {
+            val answer = server.request("textDocument/completion", params) ?: continue
+            if (hasProposals(answer)) return server to answer
+            if (empty == null) empty = server to answer
+        }
+        return empty
+    }
+
+    private fun hasProposals(answer: JsonElement): Boolean {
+        val items = (answer as? JsonObject)?.get("items") ?: answer
+        return (items as? JsonArray)?.isNotEmpty() == true
+    }
+
     private suspend fun ask(session: String, document: MirroredDocument, line: Int, column: Int): CompletionResult {
         val text = documents.locked { document.line(line) }
         val params =
@@ -62,9 +85,7 @@ internal class DocumentCompletions(
             // While another server takes over the language, the old one, stopping, is not ready any more.
             val answered =
                 withTimeoutOrNull(timeoutMs) {
-                    serversOf(document).firstNotNullOfOrNull { server ->
-                        server.request("textDocument/completion", params)?.let { server to it }
-                    }
+                    firstProposing(serversOf(document), params)
                 }
             answered?.let { (server, answer) ->
                 val (result, items) = CompletionAnswers.translateWithItems(answer, text, column)

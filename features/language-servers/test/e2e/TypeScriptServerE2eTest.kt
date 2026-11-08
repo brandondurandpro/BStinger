@@ -89,4 +89,33 @@ class TypeScriptServerE2eTest {
                 crashing.delete()
             }
         }
+
+    @Test
+    fun `a project that uses Tailwind CSS gets its server beside the TypeScript one, the others do not`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, languageServers = servers.settings)
+            openFromTree("src/view.tsx")
+            awaitServer(app) { it.isRunning() }
+            Thread.sleep(1_000)
+            waitForIdle()
+            assertEquals(listOf(FAKE_TYPESCRIPT), app.languageServers.map { it.serverName })
+        }
+
+    @Test
+    fun `the Tailwind CSS server runs beside the TypeScript one on the files of a Tailwind project`() =
+        runComposeUiTest {
+            val tailwind = FakePhpServers.tailwindProject()
+            try {
+                val app = launchWithProject(tailwind, languageServers = servers.settings)
+                openFromTree("src/view.tsx")
+                awaitServer(app) { it.isRunning() && it.serverName == FakePhpServers.FAKE_TAILWIND }
+                awaitServer(app) { it.isRunning() && it.serverName == FAKE_TYPESCRIPT }
+                awaitNoTag(LanguageServerTags.LSP_CHOICE)
+                val names = app.languageServers.map { it.languageName }.sorted()
+                assertEquals(listOf("Tailwind CSS", "TypeScript and JavaScript"), names)
+                assertEquals("", servers.saved(), "no choice was made")
+            } finally {
+                tailwind.delete()
+            }
+        }
 }

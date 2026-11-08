@@ -204,7 +204,16 @@ class OpenDocuments {
 
     /** Runs [block] under the lock with the documents of [language] under [root]. */
     fun <T> withDocuments(language: String, root: String, block: (List<MirroredDocument>) -> T): T =
-        synchronized(lock) { block(documents.values.filter { it.language == language && it.root == root }) }
+        synchronized(lock) { block(documents.values.filter { isServedBy(it, language, root) }) }
+
+    // Of the language and under the root of the server, or of a language it serves beside the one of its own server.
+    private fun isServedBy(document: MirroredDocument, language: String, root: String): Boolean {
+        if (document.language == language) return document.root == root
+        val prefix = root.trimEnd('/', '\\')
+        val path = document.path
+        val inside = path == prefix || path.startsWith("$prefix/") || path.startsWith("$prefix\\")
+        return inside && language in Languages.companionsOf(document.path)
+    }
 
     /** Runs [block] under the lock: reads of a document's lines that must not see half an edit. */
     fun <T> locked(block: () -> T): T = synchronized(lock, block)

@@ -49,4 +49,24 @@ class TypeScriptServerChaosE2eTest {
             val after = awaitServer(app) { it.isRunning() && it.generation > before.generation }
             assertEquals(1, after.recentCrashes)
         }
+
+    @Test
+    fun `when the IDE server restarts both servers of a Tailwind project start again`() =
+        runComposeUiTest {
+            val tailwind = FakePhpServers.tailwindProject()
+            try {
+                val app = launchWithProject(tailwind, chaos = true, languageServers = servers.settings)
+                openFromTree("src/view.tsx")
+                awaitCondition(SERVER_START_MS) { app.languageServers.count { it.isRunning() } == 2 }
+                val before = app.languageServers.mapNotNull { it.pid }
+                app.process.restart()
+                before.forEach { pid -> awaitCondition { !isAlive(pid) } }
+                awaitCondition(SERVER_START_MS) {
+                    app.languageServers.count { it.isRunning() && it.pid !in before } == 2
+                }
+                assertEquals(2, app.languageServers.size)
+            } finally {
+                tailwind.delete()
+            }
+        }
 }

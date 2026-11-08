@@ -40,8 +40,22 @@ internal class LanguageServerTargets(private val settings: LanguageServerSetting
                 val target = ServerTarget(spec, rootOf(language, file, project))
                 targets[target.id] = target
             }
+            for (companion in Languages.companionsOf(file)) {
+                companionTarget(companion, file, project)?.let { targets[it.id] = it }
+            }
         }
         return targets.values.toList() to unchosen.toList()
+    }
+
+    // The server of a [companion] language for [file]: only where the project uses it, and never asks for a choice.
+    private fun companionTarget(companion: String, file: String, project: String): ServerTarget? {
+        val candidate = settings.candidates.offered(companion).singleOrNull()
+        val root = TailwindProjects.rootOf(file, project).takeIf { companion == Languages.TAILWIND }
+        return if (candidate == null || root == null) {
+            null
+        } else {
+            ServerTarget(specs.getOrPut(candidate.id) { specOf(companion, candidate.id) }, root)
+        }
     }
 
     /** The servers offered for [language], their requirements checked now, and the chosen one. Blocking. */

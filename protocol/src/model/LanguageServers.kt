@@ -236,6 +236,9 @@ object Languages {
     private const val JAVASCRIPT = "javascript"
     private const val JAVASCRIPT_REACT = "javascriptreact"
 
+    /** The language of the Tailwind CSS server, which serves the files of other languages beside their own server. */
+    const val TAILWIND = "tailwind"
+
     private val identifiers =
         mapOf(
             "php" to PHP,
@@ -257,7 +260,7 @@ object Languages {
             JAVASCRIPT to TYPESCRIPT,
             JAVASCRIPT_REACT to TYPESCRIPT,
         )
-    private val names = mapOf(PHP to "PHP", TYPESCRIPT to "TypeScript and JavaScript")
+    private val names = mapOf(PHP to "PHP", TYPESCRIPT to "TypeScript and JavaScript", TAILWIND to "Tailwind CSS")
     private val rootMarkers = mapOf(PHP to "composer.json")
 
     /** Language identifier of [path] (`typescriptreact`), null when no language server handles it. */
@@ -265,6 +268,15 @@ object Languages {
 
     /** Language of [path] (`typescript` for a `.tsx`, `.js`…), null when no language server handles it. */
     fun languageOf(path: String): String? = identifierOf(path)?.let { groups[it] ?: it }
+
+    /**
+     * The languages whose servers serve [path] beside the one of its own language: Tailwind CSS knows the class names
+     * of the files of the web, whatever their language.
+     */
+    fun companionsOf(path: String): List<String> {
+        val language = languageOf(path)
+        return if (language == TYPESCRIPT) listOf(TAILWIND) else emptyList()
+    }
 
     /** Name of [language] for people. */
     fun nameOf(language: String): String = names[language] ?: language

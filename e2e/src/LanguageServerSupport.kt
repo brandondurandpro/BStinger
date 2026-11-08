@@ -65,6 +65,10 @@ class FakePhpServers(vararg options: String, idleStopMs: Long = 1_000, alternati
             withoutInlayHints = null,
         )
 
+    // Tailwind CSS beside it, for the projects that have a tailwind.config.js.
+    private val tailwind =
+        typescript.copy(id = FAKE_TAILWIND, displayName = "faketailwind", language = "tailwind")
+
     // No PHP nor Node.js: the fake server needs neither, and the other candidate is unavailable.
     private val nothingInstalled =
         RuntimeDetector(pathEnvironment = "", extraDirectories = { emptyList() }, probe = { _, _ -> null })
@@ -85,7 +89,7 @@ class FakePhpServers(vararg options: String, idleStopMs: Long = 1_000, alternati
             candidates =
             CandidateRegistry(
                 nothingInstalled,
-                listOfNotNull(fake, needsNode, other.takeIf { alternative }, typescript),
+                listOfNotNull(fake, needsNode, other.takeIf { alternative }, typescript, tailwind),
             ),
             timings = timings,
             statusHoldMs = 5_000,
@@ -108,6 +112,7 @@ class FakePhpServers(vararg options: String, idleStopMs: Long = 1_000, alternati
         const val NEEDS_NODE = "needs-node"
         const val OTHER = "other"
         const val FAKE_TYPESCRIPT = "fake-ts"
+        const val FAKE_TAILWIND = "fake-tailwind"
 
         /** Why the fake server gives no inlay hints, when started `--without inlayHint`. */
         const val WITHOUT_INLAY_HINTS = "fakephp gives inlay hints only with a licence."
@@ -122,6 +127,10 @@ class FakePhpServers(vararg options: String, idleStopMs: Long = 1_000, alternati
                 file("src/legacy.js", "module.exports = 1\n")
                 file("README.md", "# Shop\n")
             }
+
+        /** A web project that uses Tailwind CSS: [webProject] with a `tailwind.config.js`. */
+        fun tailwindProject(): SampleProject =
+            webProject().apply { file("tailwind.config.js", "module.exports = { content: ['./src/**/*.tsx'] }\n") }
 
         /** A PHP project: a `composer.json` at its root and two PHP files. */
         fun project(): SampleProject =

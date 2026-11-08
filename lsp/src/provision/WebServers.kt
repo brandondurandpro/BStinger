@@ -1,5 +1,7 @@
 package org.example.kotlineditor.lsp.provision
 
+import org.example.kotlineditor.model.Languages
+
 /**
  * The language servers of the web: TypeScript and JavaScript (with React's `.tsx` and `.jsx`). Updating a pin:
  * `npm view <package>@<version> dist.integrity dist.tarball` gives the tarball and its SHA-512 (base64); the Node.js
@@ -21,6 +23,13 @@ object WebServers {
     private const val TYPESCRIPT_VERSION = "5.9.3"
     private const val TYPESCRIPT_SHA_512 =
         "jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="
+
+    private const val TAILWIND_SERVER = "tailwindcss-language-server"
+    private const val TAILWIND_PACKAGE = "@tailwindcss/language-server"
+    private const val TAILWIND_VERSION = "0.16.0"
+    private const val TAILWIND_NODE_MINIMUM = "18"
+    private const val TAILWIND_SHA_512 =
+        "ko2xr4nlFIkqwJFnnw7hfdpjbsnK0DOk+QEEI51tvKOCF97OG0RU59iGfadoaOoY6I9xkSMbTW+AAwgnGnLH3w=="
 
     private val STRENGTHS =
         listOf(
@@ -64,8 +73,44 @@ object WebServers {
             },
         )
 
+    /**
+     * Tailwind CSS IntelliSense: the class names of the project's own configuration, in the files of the web. A single
+     * bundled file with no dependency; it loads the `tailwindcss` of the project, so it works once `npm install` ran.
+     */
+    val tailwindLanguageServer =
+        LanguageServerCandidate(
+            id = TAILWIND_SERVER,
+            displayName = TAILWIND_SERVER,
+            language = Languages.TAILWIND,
+            licence = "MIT (free and open source)",
+            strengths =
+            listOf(
+                "Completes the class names of the project's own tailwind configuration",
+                "Reports conflicting classes and unknown ones",
+            ),
+            drawbacks =
+            listOf(
+                "Needs Node.js on the server machine",
+                "Needs tailwindcss installed in the project (npm install)",
+            ),
+            requirements = listOf(Requirement(RuntimeKind.Node, TAILWIND_NODE_MINIMUM)),
+            tool = null,
+            bundle =
+            PinnedBundle(
+                name = TAILWIND_SERVER,
+                version = TAILWIND_VERSION,
+                packages = listOf(npm(TAILWIND_PACKAGE, TAILWIND_VERSION, TAILWIND_SHA_512)),
+            ),
+            command = { runtimes, installed ->
+                val modules = checkNotNull(installed).resolve("node_modules")
+                val entry = modules.resolve(TAILWIND_PACKAGE).resolve("bin").resolve("tailwindcss-language-server")
+                val node = runtimes.getValue(RuntimeKind.Node)
+                listOf(node.toString(), entry.toString(), "--stdio")
+            },
+        )
+
     /** All of them, in the order the choice panel shows them. */
-    val all: List<LanguageServerCandidate> = listOf(typescriptLanguageServer)
+    val all: List<LanguageServerCandidate> = listOf(typescriptLanguageServer, tailwindLanguageServer)
 
     private fun npm(name: String, version: String, integrity: String): PinnedPackage {
         val file = name.substringAfterLast('/')
