@@ -1,11 +1,15 @@
 package org.example.kotlineditor.ui
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.TooltipArea
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -32,6 +36,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import org.example.kotlineditor.state.AgentState
+import org.example.kotlineditor.state.TEMPLATE_VARIABLES
+import org.example.kotlineditor.state.expandTemplate
 import org.example.kotlineditor.state.Conversation
 import org.example.kotlineditor.state.PromptTemplate
 
@@ -82,6 +88,7 @@ private fun TemplatesDialog(agent: AgentState, conversation: Conversation, close
             TemplateList(agent.templates, editing) { edit(it) }
             IdeTextField(name, { name = it }, Modifier.fillMaxWidth().testTag(AgentTags.AGENT_TEMPLATE_NAME), placeholder = "Name")
             TemplateTextField(text, { text = it }, Modifier.testTag(AgentTags.AGENT_TEMPLATE_TEXT))
+            VariableChips { variable -> text += "{$variable}" }
             ScopeChoice(global) { global = it }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                 IdeButton("New", { edit(null) }, Modifier.testTag(AgentTags.AGENT_TEMPLATE_NEW))
@@ -104,7 +111,7 @@ private fun TemplatesDialog(agent: AgentState, conversation: Conversation, close
                 IdeButton(
                     "Use",
                     {
-                        conversation.draft = text.trim()
+                        conversation.draft = agent.expandTemplate(text.trim(), conversation)
                         close()
                         conversation.context.focus()
                     },
@@ -185,4 +192,26 @@ private fun ScopeButton(text: String, selected: Boolean, tag: String, choose: ()
             .testTag(tag),
         fontSize = 12.sp,
     )
+}
+
+// The variables a template may hold: a click adds one at the end of the prompt; the tooltip says what it stands for.
+@OptIn(ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
+@Composable
+private fun VariableChips(add: (String) -> Unit) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        for ((variable, description) in TEMPLATE_VARIABLES) {
+            TooltipArea(tooltip = { Tooltip(description) }) {
+                Label(
+                    "{$variable}",
+                    Modifier
+                        .border(1.dp, IdeColors.InputBorder, RoundedCornerShape(10.dp))
+                        .clickable { add(variable) }
+                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                        .testTag(AgentTags.agentTemplateVariable(variable)),
+                    color = IdeColors.TextSecondary,
+                    fontSize = 11.sp,
+                )
+            }
+        }
+    }
 }

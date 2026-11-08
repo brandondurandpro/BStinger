@@ -37,6 +37,8 @@ object AgentTags {
 
     fun agentCommand(name: String) = "agent.command.$name"
 
+    fun agentTemplateVariable(name: String) = "agent.template.variable.$name"
+
     fun agentTemplate(name: String) = "agent.template.$name"
 
     const val AGENT_LOGIN_RUNNING = "agent.login.running"

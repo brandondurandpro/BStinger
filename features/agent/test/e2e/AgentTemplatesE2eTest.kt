@@ -44,4 +44,18 @@ class AgentTemplatesE2eTest {
             awaitTag(AgentTags.AGENT_TEMPLATE_DELETE).performClick()
             awaitCondition { agent.templates.isEmpty() }
         }
+
+    @Test
+    fun `the variables of a template are replaced when it is used`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, agentPreferences())
+            val conversation = startConversation(app)
+            awaitTag(AgentTags.AGENT_TEMPLATES, timeout = AGENT_TIMEOUT).performClick()
+            awaitTag(AgentTags.AGENT_TEMPLATE_TEXT).performTextInput("on {unknown} ")
+            awaitTag(AgentTags.agentTemplateVariable("project")).performClick()
+            awaitTag(AgentTags.AGENT_TEMPLATE_USE).performClick()
+            awaitCondition { conversation.draft.isNotEmpty() }
+            val folder = app.project.root.name
+            assertEquals("on {unknown} $folder", conversation.draft)
+        }
 }
