@@ -34,6 +34,19 @@ class AgentUsageAndForkE2eTest {
         }
 
     @Test
+    fun `the context and the cost are in the card beside a wide conversation`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, agentPreferences())
+            val conversation = startConversation(app)
+            app.project.agent.conversationsVisible = false
+            sendPrompt("echo hello")
+            awaitShown(conversation, "hello")
+            awaitCondition { conversation.usage != null }
+            assertContains(textOf(AgentTags.AGENT_CARD_CONTEXT), "1k/200k")
+            assertContains(textOf(AgentTags.AGENT_CARD_COST), "\$0.01")
+        }
+
+    @Test
     fun `a duplicated conversation opens with the history of the first`() =
         runComposeUiTest {
             val app = launchWithProject(project, agentPreferences())

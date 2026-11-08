@@ -24,6 +24,8 @@ object AgentTags {
     const val AGENT_COMMANDS_FILTER = "agent.commands.filter"
     const val AGENT_COST = "agent.cost"
     const val AGENT_QUOTA_CARD = "agent.quota.card"
+    const val AGENT_CARD_CONTEXT = "agent.quota.card.context"
+    const val AGENT_CARD_COST = "agent.quota.card.cost"
     const val AGENT_STATS = "agent.stats"
     const val AGENT_STATS_DIALOG = "agent.stats.dialog"
     const val AGENT_STATS_TIME = "agent.stats.time"

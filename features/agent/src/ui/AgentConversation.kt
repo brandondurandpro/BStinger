@@ -71,7 +71,8 @@ fun ConversationView(agent: AgentState, conversation: Conversation) {
     FollowTheEnd(conversation)
     BoxWithConstraints(Modifier.fillMaxSize()) {
         // The card of the quota is at the right of the transcript, which makes room for it when the window is narrow.
-        val showsCard = maxWidth >= QUOTA_CARD_MIN_WIDTH && conversation.quota.isNotEmpty()
+        val hasFigures = conversation.quota.isNotEmpty() || conversation.usage != null
+        val showsCard = maxWidth >= QUOTA_CARD_MIN_WIDTH && hasFigures
         val reserve = if (showsCard) (QUOTA_CARD_ROOM * 2 - (maxWidth - CONTENT_WIDTH)).coerceAtLeast(0.dp) else 0.dp
         CompositionLocalProvider(LocalQuotaCard provides showsCard) {
             ConversationColumn(agent, conversation, showsCard, reserve)
@@ -229,7 +230,8 @@ private fun Prompt(agent: AgentState, conversation: Conversation) {
         // Above the input, not in its row of buttons: a narrow window must never push Stop and Send out of sight.
         Row(width.padding(horizontal = 4.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
             val usage = conversation.usage
-            val shown = usage?.let(::usageText).orEmpty()
+            // In the card, the context and the cost are not said twice.
+            val shown = if (LocalQuotaCard.current) "" else usage?.let(::usageText).orEmpty()
             Label(shown, Modifier.weight(1f).testTag(AgentTags.AGENT_USAGE), color = IdeColors.TextSecondary, fontSize = 12.sp)
             if (conversation.started) StatsLink(conversation)
         }
