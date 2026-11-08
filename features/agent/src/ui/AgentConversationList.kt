@@ -58,9 +58,11 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import org.example.kotlineditor.state.AgentOutcome
 import org.example.kotlineditor.state.AgentState
 import org.example.kotlineditor.state.Conversation
 import org.example.kotlineditor.state.delete
+import org.example.kotlineditor.state.outcome
 import org.example.kotlineditor.state.placeholder
 
 // Left panel of agent mode: the conversations of the project, filtered by title.
@@ -182,28 +184,32 @@ private fun ConversationRow(agent: AgentState, conversation: Conversation, selec
 }
 
 /**
- * The agent at work (a spinner and for how long), done and not looked at yet (a green check), or done and seen (a
- * grey check); nothing before its first prompt.
+ * The agent at work (a spinner and for how long), waiting for an answer (a yellow ?), failed (a red !), done and not
+ * looked at yet (a green check), or done and seen (a grey check); nothing before its first prompt.
  */
 @Composable
 internal fun AgentStatus(conversation: Conversation, modifier: Modifier = Modifier) {
     val since = conversation.workingSince
-    when {
-        conversation.busy -> {
-            Row(modifier.testTag(AgentTags.agentWorking(conversation.id)), verticalAlignment = Alignment.CenterVertically) {
+    val id = conversation.id
+    when (conversation.outcome) {
+        AgentOutcome.Working -> {
+            Row(modifier.testTag(AgentTags.agentWorking(id)), verticalAlignment = Alignment.CenterVertically) {
                 CircularProgressIndicator(Modifier.size(14.dp), color = IdeColors.Accent, strokeWidth = 2.dp)
                 if (since != null) WorkingTime(since, Modifier.padding(start = 5.dp))
             }
         }
 
-        conversation.finished && conversation.seen -> {
-            CheckIcon(modifier.testTag(AgentTags.agentSeen(conversation.id)), IdeColors.TextSecondary)
-        }
-
-        conversation.finished -> {
-            CheckIcon(modifier.testTag(AgentTags.agentDone(conversation.id)), IdeColors.GitAdded)
-        }
+        AgentOutcome.Asking -> StatusMark("?", IdeColors.ProblemWarning, modifier.testTag(AgentTags.agentAsking(id)))
+        AgentOutcome.Failed -> StatusMark("!", IdeColors.Error, modifier.testTag(AgentTags.agentFailed(id)))
+        AgentOutcome.Seen -> CheckIcon(modifier.testTag(AgentTags.agentSeen(id)), IdeColors.TextSecondary)
+        AgentOutcome.Done -> CheckIcon(modifier.testTag(AgentTags.agentDone(id)), IdeColors.GitAdded)
+        AgentOutcome.Quiet -> Unit
     }
+}
+
+@Composable
+private fun StatusMark(text: String, color: Color, modifier: Modifier) {
+    Label(text, modifier.padding(horizontal = 4.dp), color = color, fontSize = 13.sp, fontWeight = FontWeight.Bold)
 }
 
 // How long ago the last message was: `now`, `5m`, `3h`, `10d`…, refreshed every half minute.

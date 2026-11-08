@@ -71,6 +71,10 @@ object AgentTags {
 
     fun agentDone(id: Int) = "agent.done.$id"
 
+    fun agentAsking(id: Int) = "agent.asking.$id"
+
+    fun agentFailed(id: Int) = "agent.failed.$id"
+
     fun agentSeen(id: Int) = "agent.seen.$id"
 
     fun agentTabDetails(id: Int) = "agent.tab.$id.details"

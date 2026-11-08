@@ -44,7 +44,9 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.example.kotlineditor.state.AgentState
+import org.example.kotlineditor.state.AgentOutcome
 import org.example.kotlineditor.state.Conversation
+import org.example.kotlineditor.state.outcome
 import org.example.kotlineditor.state.EditorState
 import org.example.kotlineditor.state.EditorTab
 import org.example.kotlineditor.state.toggle
@@ -245,7 +247,11 @@ private fun AgentTabView(
 
 @Composable
 private fun ChatTabIcon(conversation: Conversation) {
-    if (conversation.busy || conversation.finished) AgentStatus(conversation) else SpeechBubbleIcon(IdeColors.TextSecondary)
+    if (conversation.outcome == AgentOutcome.Quiet) {
+        SpeechBubbleIcon(IdeColors.TextSecondary)
+    } else {
+        AgentStatus(conversation)
+    }
 }
 
 @Composable
