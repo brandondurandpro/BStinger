@@ -52,6 +52,10 @@ class Conversation(val id: Int, title: String, val branch: String) {
     /** The uncommitted changes where the agent works, to review. */
     val changes = ChangesState()
 
+    /** True while the conversation is pinned to the top of the list. */
+    var pinned by mutableStateOf(false)
+        internal set
+
     /** True once the user gave the conversation its title: the one the agent proposes no longer replaces it. */
     var renamed by mutableStateOf(false)
         internal set
@@ -369,6 +373,11 @@ class AgentState(
         if (trimmed.isEmpty()) return
         conversation.title = trimmed
         conversation.renamed = true
+    }
+
+    /** Pins [conversation] to the top of the list, or unpins it. */
+    fun togglePin(conversation: Conversation) {
+        conversation.pinned = !conversation.pinned
     }
 
     /** Deletes [conversation], its session and its worktree, if it has one (Git keeps it when it has changes). */

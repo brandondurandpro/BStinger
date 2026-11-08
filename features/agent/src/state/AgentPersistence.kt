@@ -30,6 +30,8 @@ internal fun AgentState.restoreSaved(root: String) {
             titled.renamed = true
         }
     }
+    val pinned = linesOf(preferences[PreferenceKeys.AGENT_PINNED_PREFIX + root]).toSet()
+    conversations.filter { it.session in pinned }.forEach { it.pinned = true }
     val active = preferences[PreferenceKeys.AGENT_ACTIVE_PREFIX + root].orEmpty()
     for (session in linesOf(preferences[PreferenceKeys.AGENT_OPEN_PREFIX + root])) {
         val reopened = conversations.firstOrNull { it.session == session }
@@ -52,9 +54,11 @@ fun AgentState.toPreferences(): Map<String, String> {
             .filter { it.renamed }
             .mapNotNull { conversation -> conversation.session?.let { "$it\t${oneLine(conversation.title)}" } }
             .joinToString("\n")
+    val pinned = conversations.filter { it.pinned }.mapNotNull { it.session }.joinToString("\n")
     return mapOf(
         width,
         last,
+        PreferenceKeys.AGENT_PINNED_PREFIX + root to pinned,
         PreferenceKeys.AGENT_OPEN_PREFIX + root to open,
         PreferenceKeys.AGENT_ACTIVE_PREFIX + root to active,
         PreferenceKeys.AGENT_TITLES_PREFIX + root to titles,

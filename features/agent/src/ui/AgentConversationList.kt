@@ -86,7 +86,8 @@ fun ConversationList(agent: AgentState, modifier: Modifier) {
             leading = { SearchIcon() },
         )
         Spacer(Modifier.height(6.dp))
-        val shown = agent.conversations.filter { it.title.contains(filter.trim(), ignoreCase = true) }
+        val matching = agent.conversations.filter { it.title.contains(filter.trim(), ignoreCase = true) }
+        val shown = matching.sortedByDescending { it.pinned }
         if (shown.isEmpty()) {
             Label(
                 if (agent.conversations.isEmpty()) "No conversations" else "No match",
@@ -144,7 +145,8 @@ private fun ConversationRow(agent: AgentState, conversation: Conversation, selec
                         title?.let { agent.rename(conversation, it) }
                     })
                 } else {
-                    Label(conversation.title, fontWeight = FontWeight.Medium)
+                    val mark = if (conversation.pinned) "★ " else ""
+                    Label(mark + conversation.title, fontWeight = FontWeight.Medium)
                 }
                 Label(
                     agent.agentLabelOf(conversation),
@@ -161,6 +163,14 @@ private fun ConversationRow(agent: AgentState, conversation: Conversation, selec
             // The menu opens under its anchor: a point-sized one at the click puts it right there.
             Box(Modifier.offset(offset.x, offset.y).size(0.dp)) {
                 DropdownMenu(true, onDismissRequest = { menu = null }) {
+                    DropdownMenuItem(
+                        text = { Text(if (conversation.pinned) "Unpin" else "Pin to the top", fontSize = 13.sp) },
+                        onClick = {
+                            menu = null
+                            agent.togglePin(conversation)
+                        },
+                        modifier = Modifier.testTag(AgentTags.AGENT_PIN),
+                    )
                     DropdownMenuItem(
                         text = { Text("Rename", fontSize = 13.sp) },
                         onClick = {
