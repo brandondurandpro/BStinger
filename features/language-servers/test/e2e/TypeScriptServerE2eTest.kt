@@ -54,9 +54,10 @@ class TypeScriptServerE2eTest {
             openFromTree("src/view.tsx")
             openFromTree("src/legacy.js")
             openFromTree("src/App.vue")
-            val running = awaitServer(app) { it.state == LanguageServerState.Running }
+            val running = awaitServer(app) { it.state == LanguageServerState.Running && it.language == "typescript" }
             awaitNoTag(LanguageServerTags.LSP_CHOICE)
-            assertEquals(1, app.languageServers.size)
+            // One TypeScript process for all of them (the .vue file adds the Vue server, beside it).
+            assertEquals(1, app.languageServers.count { it.language == "typescript" })
             assertEquals(1, running.users)
         }
 
@@ -118,5 +119,22 @@ class TypeScriptServerE2eTest {
             } finally {
                 tailwind.delete()
             }
+        }
+
+    @Test
+    fun `a Vue file starts the Vue server beside the TypeScript one, and a TypeScript file does not`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, languageServers = servers.settings)
+            openFromTree("src/app.ts")
+            awaitServer(app) { it.isRunning() && it.serverName == FAKE_TYPESCRIPT }
+            Thread.sleep(1_000)
+            waitForIdle()
+            assertEquals(listOf(FAKE_TYPESCRIPT), app.languageServers.map { it.serverName })
+
+            openFromTree("src/App.vue")
+            awaitServer(app) { it.isRunning() && it.serverName == FakePhpServers.FAKE_VUE }
+            awaitNoTag(LanguageServerTags.LSP_CHOICE)
+            val names = app.languageServers.map { it.languageName }.sorted()
+            assertEquals(listOf("TypeScript and JavaScript", "Vue"), names)
         }
 }

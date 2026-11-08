@@ -5,6 +5,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.intOrNull
 import org.example.kotlineditor.lsp.intelligence.contentsMarkdown
 import org.example.kotlineditor.lsp.jsonrpc.LspConnectionClosedException
 import org.example.kotlineditor.lsp.jsonrpc.LspResponseException
@@ -13,7 +14,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
 /** The last completion answer of a session, with the server's items, to resolve them. */
-private class Offered(val token: String, val server: ManagedServer, val items: List<JsonObject>)
+private class Offered(val token: String, val servers: List<ManagedServer>, val items: List<JsonObject>)
 
 /**
  * The completion answers whose items can be resolved (`completionItem/resolve`): the last one of each session,
@@ -23,24 +24,29 @@ internal class OfferedCompletions(private val timeoutMs: Long) {
     private val bySession = ConcurrentHashMap<String, Offered>()
     private val tokens = AtomicLong()
 
-    /** Keeps the [items] [server] answered to [session]; the token names them, empty when it cannot resolve. */
-    fun offer(session: String, server: ManagedServer, items: List<JsonObject>): String {
-        if (!resolves(server)) {
+    /**
+     * Keeps the [items] [servers] answered to [session], each marked with the position of its server ([SERVER]); the
+     * token names them, empty when none of the servers can resolve.
+     */
+    fun offer(session: String, servers: List<ManagedServer>, items: List<JsonObject>): String {
+        if (servers.none(::resolves)) {
             bySession.remove(session)
             return ""
         }
         val token = "completion-${tokens.incrementAndGet()}"
-        bySession[session] = Offered(token, server, items)
+        bySession[session] = Offered(token, servers, items)
         return token
     }
 
     /** The documentation of item [index] of answer [token]; null when it has none, or the answer was replaced. */
     suspend fun resolve(session: String, token: String, index: Int): String? {
         val offered = bySession[session]?.takeIf { it.token == token }
-        val item = offered?.items?.getOrNull(index) ?: return null
+        val marked = offered?.items?.getOrNull(index) ?: return null
+        val server = offered.servers.getOrNull((marked[SERVER] as? JsonPrimitive)?.intOrNull ?: 0)
+        val item = JsonObject(marked - SERVER)
         val answer =
             try {
-                withTimeoutOrNull(timeoutMs) { offered.server.request("completionItem/resolve", item) }
+                withTimeoutOrNull(timeoutMs) { server?.takeIf(::resolves)?.request("completionItem/resolve", item) }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: LspConnectionClosedException) {
@@ -61,5 +67,10 @@ internal class OfferedCompletions(private val timeoutMs: Long) {
         val provider = server.capability("completionProvider") as? JsonObject
         val resolve = provider?.get("resolveProvider") as? JsonPrimitive
         return resolve?.booleanOrNull == true
+    }
+
+    companion object {
+        /** The field marking an item with the position of the server that proposed it; never sent to a server. */
+        const val SERVER = "x-kotlin-editor-server"
     }
 }

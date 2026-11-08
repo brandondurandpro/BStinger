@@ -230,12 +230,17 @@ interface LanguageServers : CodeIntelligence {
  * TypeScript, JavaScript and their React forms are all `typescript`).
  */
 object Languages {
+    /** The language of `.ts`, `.tsx`, `.js`, `.jsx` and `.vue` files: one server serves them all. */
+    const val TYPESCRIPT = "typescript"
+
     private const val PHP = "php"
-    private const val TYPESCRIPT = "typescript"
     private const val TYPESCRIPT_REACT = "typescriptreact"
     private const val JAVASCRIPT = "javascript"
     private const val JAVASCRIPT_REACT = "javascriptreact"
     private const val VUE = "vue"
+
+    /** The language of the Vue server, which serves `.vue` files beside the TypeScript server. */
+    const val VUE_SERVER = "vue"
 
     /** The language of the Tailwind CSS server, which serves the files of other languages beside their own server. */
     const val TAILWIND = "tailwind"
@@ -263,7 +268,8 @@ object Languages {
             JAVASCRIPT_REACT to TYPESCRIPT,
             VUE to TYPESCRIPT,
         )
-    private val names = mapOf(PHP to "PHP", TYPESCRIPT to "TypeScript and JavaScript", TAILWIND to "Tailwind CSS")
+    private val names =
+        mapOf(PHP to "PHP", TYPESCRIPT to "TypeScript and JavaScript", VUE_SERVER to "Vue", TAILWIND to "Tailwind CSS")
     private val rootMarkers = mapOf(PHP to "composer.json")
 
     /** Language identifier of [path] (`typescriptreact`), null when no language server handles it. */
@@ -278,7 +284,12 @@ object Languages {
      */
     fun companionsOf(path: String): List<String> {
         val language = languageOf(path)
-        return if (language == TYPESCRIPT) listOf(TAILWIND) else emptyList()
+        val isVue = identifierOf(path) == VUE
+        return when {
+            isVue -> listOf(VUE_SERVER, TAILWIND)
+            language == TYPESCRIPT -> listOf(TAILWIND)
+            else -> emptyList()
+        }
     }
 
     /** Name of [language] for people. */

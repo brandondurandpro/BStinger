@@ -15,6 +15,7 @@ import org.example.kotlineditor.lsp.leak.LeakSettings
 import org.example.kotlineditor.lsp.leak.MemoryPoint
 import org.example.kotlineditor.lsp.memory.ProcessMemorySampler
 import org.example.kotlineditor.model.LanguageServerInfo
+import org.example.kotlineditor.model.Languages
 import java.io.Closeable
 
 /** A language server wanted for a root directory. */
@@ -58,6 +59,7 @@ class LanguageServerSupervisor(
 ) : Closeable {
     private val lock = Any()
     private val managed = LinkedHashMap<String, ManagedServer>()
+    private val tsserverRelay = TsserverRelay(scope, ::typescriptServersAround)
     private val uses = HashMap<String, Set<String>>()
 
     init {
@@ -117,6 +119,14 @@ class LanguageServerSupervisor(
     internal fun serving(language: String, root: String): List<ManagedServer> =
         synchronized(lock) { managed.values.filter { it.language == language && it.root == root } }
 
+    // The TypeScript servers of the project around [root], where a Vue server asks them its questions.
+    private fun typescriptServersAround(root: String): List<ManagedServer> =
+        synchronized(lock) {
+            managed.values.filter {
+                it.language == Languages.TYPESCRIPT && (isWithin(root, it.root) || isWithin(it.root, root))
+            }
+        }
+
     /** The servers whose root is [project] or inside it. */
     internal fun servingInside(project: String): List<ManagedServer> =
         synchronized(lock) { managed.values.filter { isWithin(it.root, project) } }
@@ -163,7 +173,19 @@ class LanguageServerSupervisor(
     }
 
     private fun newServer(target: ServerTarget) =
-        ManagedServer(target, scope, sampler, reaper, timings, clock, ::forget, onChange, documents, hooks)
+        ManagedServer(
+            target,
+            scope,
+            sampler,
+            reaper,
+            timings,
+            clock,
+            ::forget,
+            onChange,
+            documents,
+            hooks,
+            tsserverRelay::relay,
+        )
 
     private fun forget(server: ManagedServer): Boolean {
         val removed =

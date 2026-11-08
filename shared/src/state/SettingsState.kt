@@ -15,7 +15,7 @@ import org.example.kotlineditor.model.LanguageServerChoice
 import java.io.IOException
 
 /** The languages whose server the Settings dialog chooses, in the order it lists them. */
-val SERVER_LANGUAGES = listOf("php", "typescript", "tailwind")
+val SERVER_LANGUAGES = listOf("php", "typescript", "vue", "tailwind")
 
 /** The categories of the Settings dialog, in the order of its list. */
 enum class SettingsCategory(val title: String) {

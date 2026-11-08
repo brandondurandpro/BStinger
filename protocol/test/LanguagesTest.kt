@@ -31,6 +31,7 @@ class LanguagesTest {
     fun `tailwind serves the files of the web beside their own server`() {
         assertEquals(listOf("tailwind"), Languages.companionsOf("/p/view.tsx"))
         assertEquals(listOf("tailwind"), Languages.companionsOf("/p/a.js"))
+        assertEquals(listOf("vue", "tailwind"), Languages.companionsOf("/p/App.vue"))
         assertEquals(emptyList(), Languages.companionsOf("/p/a.php"))
         assertEquals(emptyList(), Languages.companionsOf("/p/a.kt"))
         assertEquals("Tailwind CSS", Languages.nameOf("tailwind"))

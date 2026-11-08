@@ -5,6 +5,7 @@ import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
+import kotlinx.serialization.json.putJsonObject
 import org.example.kotlineditor.model.Languages
 import java.nio.file.Path
 
@@ -15,9 +16,8 @@ import java.nio.file.Path
  * (the checks of the pull request that added it show how).
  */
 object WebServers {
-    /** Language of `.ts`, `.tsx`, `.js` and `.jsx` files: one server serves them all. */
-    const val TYPESCRIPT = "typescript"
-
+    private const val LICENCE = "MIT (free and open source)"
+    private const val NEEDS_NODE = "Needs Node.js on the server machine"
     private const val SERVER = "typescript-language-server"
     private const val SERVER_VERSION = "5.1.3"
     private const val VUE_PLUGIN = "@vue/typescript-plugin"
@@ -40,6 +40,10 @@ object WebServers {
     private const val TAILWIND_SHA_512 =
         "ko2xr4nlFIkqwJFnnw7hfdpjbsnK0DOk+QEEI51tvKOCF97OG0RU59iGfadoaOoY6I9xkSMbTW+AAwgnGnLH3w=="
 
+    private const val VUE_SERVER = "vue-language-server"
+    private const val VUE_SERVER_PACKAGE = "@vue/language-server"
+    private const val VUE_SERVER_LOCK = "/pins/vue-language-server.lock"
+
     private val STRENGTHS =
         listOf(
             "The TypeScript compiler's own analysis: the types are exactly those of tsc",
@@ -49,7 +53,7 @@ object WebServers {
 
     private val DRAWBACKS =
         listOf(
-            "Needs Node.js on the server machine",
+            NEEDS_NODE,
             "Memory grows with the size of the project (tsserver keeps its program in memory)",
         )
 
@@ -58,8 +62,8 @@ object WebServers {
         LanguageServerCandidate(
             id = SERVER,
             displayName = SERVER,
-            language = TYPESCRIPT,
-            licence = "MIT (free and open source)",
+            language = Languages.TYPESCRIPT,
+            licence = LICENCE,
             strengths = STRENGTHS,
             drawbacks = DRAWBACKS,
             requirements = listOf(Requirement(RuntimeKind.Node, SERVER_NODE_MINIMUM)),
@@ -72,12 +76,7 @@ object WebServers {
             ),
             // tsserver loads the Vue plugin from the bundle, and understands .vue files through it.
             optionsIn = { bundle -> vuePluginOptions(bundle) },
-            command = { runtimes, installed ->
-                val modules = checkNotNull(installed).resolve("node_modules")
-                val entry = modules.resolve(SERVER).resolve("lib").resolve("cli.mjs")
-                val node = runtimes.getValue(RuntimeKind.Node)
-                listOf(node.toString(), entry.toString(), "--stdio")
-            },
+            command = { runtimes, installed -> nodeCommand(runtimes, installed, SERVER, "lib", "cli.mjs") },
         )
 
     /**
@@ -89,7 +88,7 @@ object WebServers {
             id = TAILWIND_SERVER,
             displayName = TAILWIND_SERVER,
             language = Languages.TAILWIND,
-            licence = "MIT (free and open source)",
+            licence = LICENCE,
             strengths =
             listOf(
                 "Completes the class names of the project's own tailwind configuration",
@@ -97,7 +96,7 @@ object WebServers {
             ),
             drawbacks =
             listOf(
-                "Needs Node.js on the server machine",
+                NEEDS_NODE,
                 "Needs tailwindcss installed in the project (npm install)",
             ),
             requirements = listOf(Requirement(RuntimeKind.Node, TAILWIND_NODE_MINIMUM)),
@@ -109,15 +108,48 @@ object WebServers {
                 packages = listOf(npm(TAILWIND_PACKAGE, TAILWIND_VERSION, TAILWIND_SHA_512)),
             ),
             command = { runtimes, installed ->
-                val modules = checkNotNull(installed).resolve("node_modules")
-                val entry = modules.resolve(TAILWIND_PACKAGE).resolve("bin").resolve("tailwindcss-language-server")
-                val node = runtimes.getValue(RuntimeKind.Node)
-                listOf(node.toString(), entry.toString(), "--stdio")
+                nodeCommand(runtimes, installed, TAILWIND_PACKAGE, "bin", "tailwindcss-language-server")
             },
         )
 
+    /**
+     * Vue Language Tools in hybrid mode: the template, style and component features of `.vue` files, beside the
+     * TypeScript server, which it asks for the types through the client (see `TsserverRelay`). It carries its own
+     * copy of `typescript`, whose `lib` it is told to use.
+     */
+    val vueLanguageServer =
+        LanguageServerCandidate(
+            id = VUE_SERVER,
+            displayName = VUE_SERVER,
+            language = Languages.VUE_SERVER,
+            licence = LICENCE,
+            strengths =
+            listOf(
+                "Completes the HTML elements, components, directives and styles of a .vue template",
+                "Reports the errors of templates and styles, with the types from the TypeScript server",
+            ),
+            drawbacks =
+            listOf(
+                NEEDS_NODE,
+                "Works with the TypeScript server: both run on a Vue project",
+            ),
+            requirements = listOf(Requirement(RuntimeKind.Node, SERVER_NODE_MINIMUM)),
+            tool = null,
+            bundle =
+            PinnedBundle(
+                name = VUE_SERVER,
+                version = "$VUE_PLUGIN_VERSION+ts$TYPESCRIPT_VERSION",
+                packages = vueServerPackages(),
+            ),
+            command = { runtimes, installed ->
+                nodeCommand(runtimes, installed, VUE_SERVER_PACKAGE, "bin", "vue-language-server.js")
+            },
+            optionsIn = { bundle -> vueServerOptions(bundle) },
+        )
+
     /** All of them, in the order the choice panel shows them. */
-    val all: List<LanguageServerCandidate> = listOf(typescriptLanguageServer, tailwindLanguageServer)
+    val all: List<LanguageServerCandidate> =
+        listOf(typescriptLanguageServer, vueLanguageServer, tailwindLanguageServer)
 
     private fun npm(name: String, version: String, integrity: String): PinnedPackage {
         val file = name.substringAfterLast('/')
@@ -125,10 +157,35 @@ object WebServers {
         return PinnedPackage(name, url, Digest(Digest.SHA_512, integrity))
     }
 
+    // `node <installed>/node_modules/<package>/<path…> --stdio`
+    private fun nodeCommand(
+        runtimes: Map<RuntimeKind, Path>,
+        installed: Path?,
+        packageName: String,
+        vararg path: String,
+    ): List<String> {
+        val modules = checkNotNull(installed).resolve("node_modules")
+        val entry = path.fold(modules.resolve(packageName)) { directory, part -> directory.resolve(part) }
+        val node = runtimes.getValue(RuntimeKind.Node)
+        return listOf(node.toString(), entry.toString(), "--stdio")
+    }
+
     private fun serverPackages(): List<PinnedPackage> {
         val server = npm(SERVER, SERVER_VERSION, SERVER_SHA_512)
         val compiler = npm(TYPESCRIPT_PACKAGE, TYPESCRIPT_VERSION, TYPESCRIPT_SHA_512)
         return listOf(server, compiler) + lockedPackages(VUE_PLUGIN_LOCK)
+    }
+
+    private fun vueServerPackages(): List<PinnedPackage> {
+        val compiler = npm(TYPESCRIPT_PACKAGE, TYPESCRIPT_VERSION, TYPESCRIPT_SHA_512)
+        return listOf(compiler) + lockedPackages(VUE_SERVER_LOCK)
+    }
+
+    private fun vueServerOptions(bundle: Path): JsonElement {
+        val library = bundle.resolve("node_modules").resolve(TYPESCRIPT_PACKAGE).resolve("lib")
+        return buildJsonObject {
+            putJsonObject("typescript") { put("tsdk", library.toString()) }
+        }
     }
 
     private fun vuePluginOptions(bundle: Path): JsonElement =

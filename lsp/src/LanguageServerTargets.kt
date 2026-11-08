@@ -52,7 +52,7 @@ internal class LanguageServerTargets(private val settings: LanguageServerSetting
     // The server of a [companion] language for [file]: only where the project uses it, and never asks for a choice.
     private fun companionTarget(companion: String, file: String, project: String): ServerTarget? {
         val candidate = settings.candidates.offered(companion).singleOrNull()
-        val root = TailwindProjects.rootOf(file, project).takeIf { companion == Languages.TAILWIND }
+        val root = if (companion == Languages.TAILWIND) TailwindProjects.rootOf(file, project) else project
         return if (candidate == null || root == null) {
             null
         } else {

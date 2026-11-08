@@ -96,6 +96,8 @@ internal class ManagedServer(
     private val documents: OpenDocuments? = null,
     // What the server says besides answers: diagnostics, edits it asks for.
     private val hooks: LanguageServerHooks = LanguageServerHooks(),
+    // A `tsserver/request` of the server (the Vue server asking the TypeScript one): the supervisor relays it.
+    private val relay: (from: ManagedServer, request: JsonElement) -> Unit = { _, _ -> },
 ) {
     val id = target.id
     val language get() = target.spec.language
@@ -248,6 +250,11 @@ internal class ManagedServer(
         if (box == null || link == null) return null
         box.flush()
         return link.request(method, params)
+    }
+
+    /** Sends the notification [method] to the ready process; dropped when none is ready. */
+    fun notify(method: String, params: JsonElement) {
+        connection?.notify(method, params)
     }
 
     /**
@@ -593,6 +600,10 @@ internal class ManagedServer(
     private fun notified(method: String, params: JsonElement?) {
         val fields = params as? JsonObject
         when {
+            method == TSSERVER_REQUEST && params != null -> {
+                relay(this, params)
+            }
+
             fields == null -> {
                 // a notification without parameters: none the IDE follows
             }
@@ -615,6 +626,8 @@ internal class ManagedServer(
 
     private companion object {
         const val MILLIS = 1_000L
+
+        const val TSSERVER_REQUEST = "tsserver/request"
 
         const val BYTES_PER_MEGABYTE = 1024L * 1024
 
