@@ -18,7 +18,8 @@ private val VARIABLE = Regex("""\{([a-z_]+)}""")
 
 /**
  * [text] with its variables (`{changed_files}`, `{open_file}`…) replaced by their value for [conversation] now. A
- * variable that does not exist stays as typed; one without value (no file open, no selection) becomes empty.
+ * variable that does not exist stays as typed; one without value (no file open, no selection) becomes empty. A value
+ * comes with its label: `Files changed:` and the list, `Branch: main`.
  */
 fun AgentState.expandTemplate(text: String, conversation: Conversation): String =
     VARIABLE.replace(text) { found ->
@@ -26,17 +27,26 @@ fun AgentState.expandTemplate(text: String, conversation: Conversation): String 
         variableValue(name, conversation) ?: found.value
     }
 
+// A value is introduced by its label (`Files changed:`), so the agent reads what it is; no value, no label.
+private fun labelled(label: String, value: String, block: Boolean): String {
+    if (value.isBlank()) return ""
+    return if (block) "$label:\n$value" else "$label: $value"
+}
+
 private fun AgentState.variableValue(name: String, conversation: Conversation): String? {
     val workspace = conversation.workspace ?: project
     val editor = workspace.editor
     return when (name) {
-        "changed_files" -> conversation.changes.files.joinToString("\n") { it.path }
-        "open_file" -> editor.activeTab?.relativePath.orEmpty()
-        "open_files" -> editor.allTabs.filter { !it.isDiff && !it.isCompare }.joinToString("\n") { it.relativePath }
-        "selection" -> editor.activeTab?.document?.selectedText().orEmpty()
-        "branch" -> workspace.checkedOutBranch ?: conversation.branch
-        "project" -> project.root.name
-        "date" -> LocalDate.now().toString()
+        "changed_files" -> labelled("Files changed", conversation.changes.files.joinToString("\n") { it.path }, block = true)
+        "open_file" -> labelled("Open file", editor.activeTab?.relativePath.orEmpty(), block = false)
+        "open_files" -> {
+            val paths = editor.allTabs.filter { !it.isDiff && !it.isCompare }.joinToString("\n") { it.relativePath }
+            labelled("Open files", paths, block = true)
+        }
+        "selection" -> labelled("Selection", editor.activeTab?.document?.selectedText().orEmpty(), block = true)
+        "branch" -> labelled("Branch", workspace.checkedOutBranch ?: conversation.branch, block = false)
+        "project" -> labelled("Project", project.root.name, block = false)
+        "date" -> labelled("Date", LocalDate.now().toString(), block = false)
         else -> null
     }
 }

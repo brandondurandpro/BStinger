@@ -56,6 +56,6 @@ class AgentTemplatesE2eTest {
             awaitTag(AgentTags.AGENT_TEMPLATE_USE).performClick()
             awaitCondition { conversation.draft.isNotEmpty() }
             val folder = app.project.root.name
-            assertEquals("on {unknown} $folder", conversation.draft)
+            assertEquals("on {unknown} Project: $folder", conversation.draft)
         }
 }

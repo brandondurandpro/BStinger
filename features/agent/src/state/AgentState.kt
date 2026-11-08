@@ -200,7 +200,13 @@ class Conversation(val id: Int, title: String, val branch: String) {
     internal var probeFrom: Int? = null
 
     /** True when a turn ended since the quota was read: it is read again once the agent is free. */
-    internal var quotaStale = false
+    internal var quotaStale by mutableStateOf(false)
+
+    /** Ids of the items of the silent questions about the quota: never shown. */
+    internal val hidden = HashSet<String>()
+
+    /** True once the quota was asked for: an agent that answers nothing readable is not asked again. */
+    internal var quotaProbed = false
 
     // Called by the transcript when the turn of the agent is over: a queued prompt goes.
     internal var onTurnIdle: (() -> Unit)? = null
@@ -374,6 +380,7 @@ class AgentState(
         followEditors()
         followSeen()
         followChanges()
+        followQuota()
         followHistory(project, agentCommand)
     }
 
@@ -538,14 +545,18 @@ class AgentState(
 
     /**
      * Asks the agent for its quota the way the user would (`/usage`, `/status`), without showing the question or the
-     * answer: the bars stay current. Only for a conversation whose quota is already known, once per finished turn.
+     * answer: the bars stay current. Once per finished turn, and once when a started conversation is shown whose
+     * quota is not known yet; only when the agent lists such a command.
      */
-    private fun refreshQuota(conversation: Conversation) {
-        val known = conversation.quota.isNotEmpty()
-        if (!known || !conversation.quotaStale || conversation.busy || conversation.probeFrom != null) return
+    internal fun refreshQuota(conversation: Conversation) {
+        val unknown = conversation.quota.isEmpty() && conversation.started && readsQuotaAlone(agentOf(conversation))
+        val outdated = conversation.quotaStale && conversation.quota.isNotEmpty()
+        if (!(outdated || unknown) || conversation.busy || conversation.probeFrom != null) return
+        if (conversation.quotaProbed && conversation.quota.isEmpty()) return
         val offered = conversation.commands.map { it.name }
         val command = QUOTA_COMMANDS.firstOrNull { it in offered } ?: return
         conversation.quotaStale = false
+        conversation.quotaProbed = true
         conversation.probeFrom = conversation.items.size
         val itemId = "probe-${UUID.randomUUID()}"
         launchDelivery(conversation, OutgoingPrompt(itemId, "/$command", emptyList()))
