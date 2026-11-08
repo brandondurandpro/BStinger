@@ -349,6 +349,10 @@ class AgentState(
         templates.removeAll { it.name == name }
     }
 
+    /** The agents of the registry the user worked with: the history lists the sessions of each, not only the settings'. */
+    internal val usedAgents =
+        saved[PreferenceKeys.AGENT_USED].orEmpty().lines().filter { it.isNotBlank() }.toMutableList()
+
     internal var nextId = 1
 
     // Whether the tabs and titles of the last run were put back: until then, nothing of them is saved.
@@ -483,6 +487,7 @@ class AgentState(
     fun chooseAgent(conversation: Conversation, entry: String?, remember: Boolean = true) {
         if (conversation.busy || conversation.settingOptions > 0) return
         if (remember) lastAgent = entry
+        if (entry != null && entry !in usedAgents) usedAgents.add(entry)
         val chosen = entry?.let { AgentCommand(emptyList(), registry = it) }
         if (conversation.agent == chosen) return
         conversation.offering?.cancel()

@@ -31,6 +31,9 @@ object PreferenceKeys {
     /** Width of the conversation list of agent mode, in dp. */
     const val AGENT_CONVERSATIONS_WIDTH = "agent.conversationsWidth"
 
+    /** The agents of the registry the user chose, one per line: the history lists the sessions of each. */
+    const val AGENT_USED = "agent.used"
+
     /** The agent of the registry last chosen in a conversation; blank for the agent of the settings. */
     const val AGENT_LAST_CHOSEN = "agent.lastChosen"
 
