@@ -172,10 +172,13 @@ private fun ItemView(agent: AgentState, conversation: Conversation, item: AgentI
 // A notice, with the ways to log in when the agent asked for it and nothing came after.
 @Composable
 private fun NoticeWithLogin(agent: AgentState, conversation: Conversation, notice: AgentItem.Notice) {
-    NoticeView(notice)
-    val after = conversation.items.dropWhile { it.id != notice.id }.drop(1)
-    val onlyNotices = after.all { it is AgentItem.Notice && !isLoginNotice(it) }
-    if (isLoginNotice(notice) && onlyNotices) LoginBar(agent, conversation)
+    // In a column: an item of the list stacks what it composes, the buttons would cover the text.
+    Column(Modifier.fillMaxWidth()) {
+        NoticeView(notice)
+        val after = conversation.items.dropWhile { it.id != notice.id }.drop(1)
+        val onlyNotices = after.all { it is AgentItem.Notice && !isLoginNotice(it) }
+        if (isLoginNotice(notice) && onlyNotices) LoginBar(agent, conversation)
+    }
 }
 
 @Composable
