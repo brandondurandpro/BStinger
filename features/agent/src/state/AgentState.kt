@@ -345,6 +345,12 @@ class AgentState(
         options.offer(conversation)
     }
 
+    /** Opens [conversation] and shows its conversation, even when a file or a diff of its tab strip was shown. */
+    fun openChat(conversation: Conversation) {
+        open(conversation)
+        conversation.showsChat = true
+    }
+
     /** Ctrl+F4: closes the file or diff shown, or the conversation when it is the one shown. */
     fun closeActive() {
         val conversation = tabs.active ?: return

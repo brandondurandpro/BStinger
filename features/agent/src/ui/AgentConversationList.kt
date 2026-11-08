@@ -1,8 +1,9 @@
 package org.example.kotlineditor.ui
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
@@ -106,7 +107,7 @@ fun ConversationList(agent: AgentState, modifier: Modifier) {
     }
 }
 
-@OptIn(ExperimentalComposeUiApi::class)
+@OptIn(ExperimentalComposeUiApi::class, ExperimentalFoundationApi::class)
 @Composable
 private fun ConversationRow(agent: AgentState, conversation: Conversation, selected: Boolean) {
     val interaction = remember { MutableInteractionSource() }
@@ -135,7 +136,12 @@ private fun ConversationRow(agent: AgentState, conversation: Conversation, selec
                 .padding(horizontal = 6.dp, vertical = 1.dp)
                 .background(background, RoundedCornerShape(6.dp))
                 .hoverable(interaction)
-                .clickable(interaction, indication = null) { agent.open(conversation) }
+                .combinedClickable(
+                    interactionSource = interaction,
+                    indication = null,
+                    onDoubleClick = { agent.openChat(conversation) },
+                    onClick = { agent.open(conversation) },
+                )
                 .then(press)
                 .testTag(AgentTags.agentConversation(conversation.id))
                 .padding(horizontal = 8.dp, vertical = 6.dp),
