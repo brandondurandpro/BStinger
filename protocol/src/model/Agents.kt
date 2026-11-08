@@ -270,6 +270,17 @@ sealed interface AgentAttachment {
             }
     }
 
+    /** A sound joined to the prompt, [data] being its bytes in Base64; only an agent that takes audio gets it. */
+    data class Audio(
+        /** What the prompt calls it (`voice.wav`). */
+        val name: String,
+        /** Its type (`audio/wav`). */
+        val mimeType: String,
+        val data: String,
+    ) : AgentAttachment {
+        override val label: String get() = name
+    }
+
     /** An image pasted in the prompt, [data] being its bytes in Base64. */
     data class Image(
         /** What the prompt calls it (`image-1.png`). */

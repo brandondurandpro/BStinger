@@ -84,6 +84,8 @@ fun AgentState.attachToPrompt(attachment: AgentAttachment) {
 private val DROPPED_IMAGES =
     mapOf("png" to "image/png", "jpg" to "image/jpeg", "jpeg" to "image/jpeg", "gif" to "image/gif", "webp" to "image/webp")
 
+private val DROPPED_SOUNDS = mapOf("wav" to "audio/wav", "mp3" to "audio/mpeg", "ogg" to "audio/ogg", "m4a" to "audio/mp4")
+
 /**
  * Joins a file dropped on the prompt: a file of the directory [root] the agent works in as such, an image from
  * elsewhere as an image; anything else cannot be read by the agent, and false is returned.
@@ -93,9 +95,16 @@ fun PromptContext.drop(file: java.io.File, root: String): Boolean {
     val dropped = file.canonicalFile
     val inside = dropped.startsWith(base) && dropped.isFile
     val mime = DROPPED_IMAGES[dropped.extension.lowercase()]
+    val sound = DROPPED_SOUNDS[dropped.extension.lowercase()]
     return when {
         inside -> {
             attach(AgentAttachment.File(dropped.relativeTo(base).path.replace('\\', '/')))
+            true
+        }
+
+        sound != null && dropped.isFile -> {
+            val data = java.util.Base64.getEncoder().encodeToString(dropped.readBytes())
+            attach(AgentAttachment.Audio(dropped.name, sound, data))
             true
         }
 

@@ -43,6 +43,8 @@ internal data class PromptCapabilities(
     val image: Boolean = false,
     /** Files and lines sent with their text (embedded resources). */
     val embedded: Boolean = false,
+    /** Sounds (`audio`). */
+    val audio: Boolean = false,
 )
 
 /** What an agent can do with the sessions it keeps, from its capabilities. */
@@ -102,7 +104,7 @@ internal fun agentInfo(answer: JsonObject?): AgentInfo {
 
 private fun promptCapabilities(capabilities: JsonObject?): PromptCapabilities {
     val prompt = capabilities?.get("promptCapabilities").obj()
-    return PromptCapabilities(prompt.flag("image"), prompt.flag("embeddedContext"))
+    return PromptCapabilities(prompt.flag("image"), prompt.flag("embeddedContext"), prompt.flag("audio"))
 }
 
 private fun JsonObject?.flag(name: String): Boolean = this?.get(name)?.jsonPrimitive?.booleanOrNull ?: false
