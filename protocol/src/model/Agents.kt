@@ -48,6 +48,22 @@ enum class AgentTurnState {
  */
 const val AGENT_BUSY_MESSAGE = "The agent is still answering"
 
+/**
+ * What the server answers, as the start of its message, when the agent needs the user to log in before it starts a
+ * session: the IDE then offers the ways to log in ([AgentChoices.authMethods]).
+ */
+const val AGENT_LOGIN_MESSAGE = "Log in to the agent first"
+
+/** A way to log in to an agent, as it lists them when it starts (the `authMethods` of ACP). */
+data class AgentAuthMethod(
+    /** Its id, to log in with it. */
+    val id: String,
+    /** What the user reads (`Log in with Claude`). */
+    val name: String,
+    /** What it does, when the agent says. */
+    val description: String? = null,
+)
+
 /** What a tool call does, from the agent: it picks the icon and how the call is shown. */
 enum class AgentToolKind {
     /** Reads files. */
@@ -386,6 +402,15 @@ interface AgentChoices {
 
     /** The commands [agent] offered in its latest session, without starting it; empty before it said. */
     suspend fun commands(agent: AgentCommand): List<AgentSlashCommand>
+
+    /** The ways to log in to [agent]; empty when it asks for none. The agent starts for it when needed. */
+    suspend fun authMethods(agent: AgentCommand): List<AgentAuthMethod>
+
+    /**
+     * Logs in to [agent] with the method [method] (one of [authMethods]): the agent does what its method needs, such
+     * as opening the browser, and the call returns once it is done. Fails with the agent's reason.
+     */
+    suspend fun authenticate(agent: AgentCommand, method: String)
 }
 
 /** Conversations with agents, run by the server. Every call returns at once except [transcript], a long poll. */
@@ -472,4 +497,8 @@ private object NoChoices : AgentChoices {
         throw java.io.IOException(NO_SERVER)
 
     override suspend fun commands(agent: AgentCommand): List<AgentSlashCommand> = emptyList()
+
+    override suspend fun authMethods(agent: AgentCommand): List<AgentAuthMethod> = emptyList()
+
+    override suspend fun authenticate(agent: AgentCommand, method: String): Unit = throw java.io.IOException(NO_SERVER)
 }

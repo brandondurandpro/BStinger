@@ -1,6 +1,7 @@
 package org.example.kotlineditor.rpc
 
 import kotlinx.serialization.json.put
+import org.example.kotlineditor.model.AgentAuthMethod
 import org.example.kotlineditor.model.AgentChoices
 import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.model.AgentOption
@@ -30,6 +31,16 @@ internal class RemoteAgentChoices(private val client: RpcClient) : AgentChoices 
             put(AGENT, agent.toJson())
             put("option", option)
             put("value", value)
+        }
+    }
+
+    override suspend fun authMethods(agent: AgentCommand): List<AgentAuthMethod> =
+        client.call(Method.AgentAuthMethods) { put(AGENT, agent.toJson()) }.agentAuthMethods()
+
+    override suspend fun authenticate(agent: AgentCommand, method: String) {
+        client.call(Method.AgentAuthenticate) {
+            put(AGENT, agent.toJson())
+            put("method", method)
         }
     }
 

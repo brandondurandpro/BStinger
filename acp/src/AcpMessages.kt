@@ -8,6 +8,7 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
+import org.example.kotlineditor.model.AgentAuthMethod
 import org.example.kotlineditor.rpc.Protocol
 import java.io.IOException
 
@@ -23,8 +24,8 @@ internal const val SESSION_ID = "sessionId"
 internal class AgentInfo(
     /** Its name and version, for people (`Claude Code 1.2`); null when it did not say. */
     val name: String?,
-    /** How the user can log in to it, one line each. */
-    val authMethods: List<String>,
+    /** How the user can log in to it. */
+    val authMethods: List<AgentAuthMethod>,
     /** What it can do with the sessions it keeps. */
     val sessions: SessionCapabilities = SessionCapabilities(),
     /** What a prompt may hold besides text and links. */
@@ -82,8 +83,9 @@ internal fun agentInfo(answer: JsonObject?): AgentInfo {
     val agentVersion = agent?.text("version")
     val name = title?.let { listOfNotNull(it, agentVersion).joinToString(" ") }
     val methods =
-        answer["authMethods"].array().mapNotNull { it.obj() }.map { method ->
-            listOfNotNull(method.text("name"), method.text("description")).joinToString(": ")
+        answer["authMethods"].array().mapNotNull { it.obj() }.mapNotNull { method ->
+            val id = method.text("id")
+            id?.let { AgentAuthMethod(it, method.text("name") ?: it, method.text("description")) }
         }
     val capabilities = answer["agentCapabilities"].obj()
     return AgentInfo(name, methods, sessionCapabilities(capabilities), promptCapabilities(capabilities))

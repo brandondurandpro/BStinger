@@ -3,6 +3,7 @@ package org.example.kotlineditor.acp
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.example.kotlineditor.lsp.jsonrpc.LspResponseException
+import org.example.kotlineditor.model.AGENT_LOGIN_MESSAGE
 import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.model.AgentOption
 import java.io.IOException
@@ -231,9 +232,9 @@ internal class SessionKeeper(
 }
 
 private fun loginRequired(refused: LspResponseException, info: AgentInfo): IOException {
-    val methods = info.authMethods.joinToString("\n") { "- $it" }
-    val how = if (methods.isEmpty()) "" else "\n$methods"
-    return LoginRequiredException("Log in to the agent first (${refused.message}).$how")
+    val lines = info.authMethods.map { listOfNotNull(it.name, it.description).joinToString(": ") }
+    val how = lines.joinToString("") { "\n- $it" }
+    return LoginRequiredException("$AGENT_LOGIN_MESSAGE (${refused.message}).$how")
 }
 
 /** What comes of a previous session when another agent takes the conversation over. */

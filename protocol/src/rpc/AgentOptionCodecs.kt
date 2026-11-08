@@ -6,6 +6,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
+import org.example.kotlineditor.model.AgentAuthMethod
 import org.example.kotlineditor.model.AgentOption
 import org.example.kotlineditor.model.AgentOptionValue
 import org.example.kotlineditor.model.AgentSlashCommand
@@ -72,4 +73,23 @@ fun JsonElement.agentSlashCommands(): List<AgentSlashCommand> =
     jsonArray.map { element ->
         val json = element.jsonObject
         AgentSlashCommand(json.string(NAME), json.string(DESCRIPTION), json.stringOrNull("hint"))
+    }
+
+/** The ways to log in to an agent. */
+fun List<AgentAuthMethod>.authMethodsToJson(): JsonArray =
+    JsonArray(
+        map { method ->
+            buildJsonObject {
+                put("id", method.id)
+                put(NAME, method.name)
+                put(DESCRIPTION, method.description.orNull())
+            }
+        },
+    )
+
+/** Reads the ways to log in to an agent. */
+fun JsonElement.agentAuthMethods(): List<AgentAuthMethod> =
+    jsonArray.map { element ->
+        val json = element.jsonObject
+        AgentAuthMethod(json.string("id"), json.string(NAME), json.stringOrNull(DESCRIPTION))
     }

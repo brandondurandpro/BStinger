@@ -606,6 +606,12 @@ enum class Method(
 
     /** The slash commands an agent offered in its latest session. */
     AgentCommands("agent/commands", mutating = false),
+
+    /** The ways to log in to an agent. */
+    AgentAuthMethods("agent/authMethods", mutating = false),
+
+    /** Logs in to an agent with one of its methods. */
+    AgentAuthenticate("agent/authenticate", mutating = true),
 }
 
 /** A JSON-RPC error object `{"code": ..., "message": ...}`. */

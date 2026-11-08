@@ -48,6 +48,7 @@ import org.example.kotlineditor.model.AgentTurnState
 import org.example.kotlineditor.state.AgentState
 import org.example.kotlineditor.state.Completing
 import org.example.kotlineditor.state.Conversation
+import org.example.kotlineditor.state.isLoginNotice
 
 private val CONTENT_WIDTH = 760.dp
 
@@ -159,8 +160,17 @@ private fun ItemView(agent: AgentState, conversation: Conversation, item: AgentI
         is AgentItem.ToolCall -> ToolCallCard(item)
         is AgentItem.Plan -> PlanView(item)
         is AgentItem.Permission -> PermissionCard(item) { option -> agent.answer(conversation, item, option) }
-        is AgentItem.Notice -> NoticeView(item)
+        is AgentItem.Notice -> NoticeWithLogin(agent, conversation, item)
     }
+}
+
+// A notice, with the ways to log in when the agent asked for it and nothing came after.
+@Composable
+private fun NoticeWithLogin(agent: AgentState, conversation: Conversation, notice: AgentItem.Notice) {
+    NoticeView(notice)
+    val after = conversation.items.dropWhile { it.id != notice.id }.drop(1)
+    val onlyNotices = after.all { it is AgentItem.Notice && !isLoginNotice(it) }
+    if (isLoginNotice(notice) && onlyNotices) LoginBar(agent, conversation)
 }
 
 @Composable

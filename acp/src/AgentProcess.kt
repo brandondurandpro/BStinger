@@ -119,6 +119,11 @@ internal class AgentProcess(val command: AgentCommand, scope: CoroutineScope, fi
         }
 
     /** Sends the request [method] to the agent and returns its answer, an object (null for anything else). */
+    suspend fun authenticate(method: String) {
+        ready()
+        connection.request("authenticate", buildJsonObject { put("methodId", method) })
+    }
+
     suspend fun request(method: String, params: JsonObject): JsonObject? = connection.request(method, params).obj()
 
     /** Sends the updates and the permission requests of [session] to [listener] from now on. */
