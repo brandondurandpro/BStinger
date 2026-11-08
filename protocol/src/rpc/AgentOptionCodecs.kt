@@ -2,14 +2,20 @@ package org.example.kotlineditor.rpc
 
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.example.kotlineditor.model.AgentAuthMethod
 import org.example.kotlineditor.model.AgentOption
 import org.example.kotlineditor.model.AgentOptionValue
 import org.example.kotlineditor.model.AgentSlashCommand
+import org.example.kotlineditor.model.AgentUsage
 
 // JSON of the settings of a session of an agent (its model…), and of the commands it offers.
 
@@ -93,3 +99,19 @@ fun JsonElement.agentAuthMethods(): List<AgentAuthMethod> =
         val json = element.jsonObject
         AgentAuthMethod(json.string("id"), json.string(NAME), json.stringOrNull(DESCRIPTION))
     }
+
+/** The context used by a session and its cost. */
+fun AgentUsage.toJson(): JsonObject =
+    buildJsonObject {
+        put("used", used)
+        put("size", size)
+        put("cost", cost?.let(::JsonPrimitive) ?: JsonNull)
+        put("currency", currency.orNull())
+    }
+
+/** Reads the usage of a session. */
+fun JsonElement.agentUsage(): AgentUsage {
+    val json = jsonObject
+    val cost = json["cost"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.doubleOrNull
+    return AgentUsage(json.long("used"), json.long("size"), cost, json.stringOrNull("currency"))
+}

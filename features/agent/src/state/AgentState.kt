@@ -18,6 +18,7 @@ import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.model.AgentItem
 import org.example.kotlineditor.model.AgentOption
 import org.example.kotlineditor.model.AgentSlashCommand
+import org.example.kotlineditor.model.AgentUsage
 import org.example.kotlineditor.model.AGENT_BUSY_MESSAGE
 import org.example.kotlineditor.model.AgentTurnState
 import org.example.kotlineditor.model.FileContent
@@ -77,6 +78,9 @@ class Conversation(val id: Int, title: String, val branch: String) {
 
     /** The commands the agent offers in its session (`/compact`…); empty before it said. */
     var commands: List<AgentSlashCommand> by mutableStateOf(emptyList())
+
+    /** The context the session uses and what it cost, as the agent last said; null before it did. */
+    var usage: AgentUsage? by mutableStateOf(null)
         internal set
 
     /** What the agent is doing, as the server last said. */

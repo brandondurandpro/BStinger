@@ -52,6 +52,7 @@ import org.example.kotlineditor.state.Completing
 import org.example.kotlineditor.state.Conversation
 import org.example.kotlineditor.state.isLoginNotice
 import org.example.kotlineditor.state.recallPrompt
+import org.example.kotlineditor.state.usageText
 
 private val CONTENT_WIDTH = 760.dp
 
@@ -266,6 +267,14 @@ private fun PromptActions(agent: AgentState, conversation: Conversation) {
             color = IdeColors.TextSecondary,
             fontSize = 12.sp,
         )
+        conversation.usage?.let { usage ->
+            Label(
+                usageText(usage),
+                Modifier.padding(end = 8.dp).testTag(AgentTags.AGENT_USAGE),
+                color = IdeColors.TextSecondary,
+                fontSize = 12.sp,
+            )
+        }
         Spacer(Modifier.width(8.dp))
         if (conversation.busy) {
             IdeButton("Stop", { agent.stop(conversation) }, Modifier.testTag(AgentTags.AGENT_STOP))

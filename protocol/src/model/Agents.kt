@@ -359,6 +359,20 @@ data class AgentTranscript(
     val options: List<AgentOption> = emptyList(),
     /** The commands the agent offers in this session; empty before it said. */
     val commands: List<AgentSlashCommand> = emptyList(),
+    /** How much of the context window the session uses, and what it cost; null before the agent said. */
+    val usage: AgentUsage? = null,
+)
+
+/** The context window of a session and what it cost so far, as the agent says (`usage_update`). */
+data class AgentUsage(
+    /** Tokens in the context now. */
+    val used: Long,
+    /** Size of the context window, in tokens. */
+    val size: Long,
+    /** What the session cost so far, in [currency]; null when the agent does not say. */
+    val cost: Double? = null,
+    /** ISO 4217 code of [cost] (`USD`). */
+    val currency: String? = null,
 )
 
 /** A session an agent keeps, as the agent lists it: the history of a conversation. */

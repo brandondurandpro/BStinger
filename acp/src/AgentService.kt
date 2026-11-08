@@ -148,6 +148,7 @@ class AgentService(
             replayed = header.replayed,
             options = header.options,
             commands = header.commands,
+            usage = header.usage,
         )
     }
 

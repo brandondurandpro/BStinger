@@ -6,6 +6,7 @@ import org.example.kotlineditor.model.AgentItem
 import org.example.kotlineditor.model.AgentOption
 import org.example.kotlineditor.model.AgentSlashCommand
 import org.example.kotlineditor.model.AgentTurnState
+import org.example.kotlineditor.model.AgentUsage
 
 /**
  * The transcript of one conversation, as the server keeps it: items in the order they started, each one stamped with
@@ -100,6 +101,8 @@ internal class Journal(private val epoch: String) {
         val options: List<AgentOption> = emptyList(),
         /** The commands the agent offers in the session. */
         val commands: List<AgentSlashCommand> = emptyList(),
+        /** The context used and the cost, as the agent last said. */
+        val usage: AgentUsage? = null,
     )
 }
 
