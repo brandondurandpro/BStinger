@@ -15,6 +15,13 @@ fun tokensText(tokens: Long): String =
         else -> tokens.toString()
     }
 
+/** `$0.42` for the conversations that said what they cost (in dollars), null when none did: the total of a project. */
+fun costSummary(usages: List<AgentUsage?>): String? {
+    val costs = usages.filterNotNull().filter { it.currency == null || it.currency == "USD" }.mapNotNull { it.cost }
+    if (costs.isEmpty()) return null
+    return String.format(Locale.ROOT, "$%.2f", costs.sum())
+}
+
 /** `12% · 24k/200k · $0.12`: how full the context window is and what the session cost. */
 fun usageText(usage: AgentUsage): String {
     val percent = if (usage.size > 0) usage.used * PERCENT / usage.size else 0

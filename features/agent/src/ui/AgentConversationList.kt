@@ -63,6 +63,7 @@ import kotlinx.coroutines.delay
 import org.example.kotlineditor.state.AgentOutcome
 import org.example.kotlineditor.state.AgentState
 import org.example.kotlineditor.state.Conversation
+import org.example.kotlineditor.state.costSummary
 import org.example.kotlineditor.state.delete
 import org.example.kotlineditor.state.duplicate
 import org.example.kotlineditor.state.matches
@@ -80,6 +81,10 @@ fun ConversationList(agent: AgentState, modifier: Modifier) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Label("Conversations", Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
+            val cost = costSummary(agent.conversations.map { it.usage })
+            if (cost != null) {
+                Label(cost, Modifier.testTag(AgentTags.AGENT_COST), color = IdeColors.TextSecondary, fontSize = 12.sp)
+            }
             IconButton({ agent.newConversation() }, Modifier.testTag(AgentTags.AGENT_NEW)) { PlusIcon() }
         }
         IdeTextField(

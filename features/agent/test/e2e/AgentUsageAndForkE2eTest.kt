@@ -29,6 +29,8 @@ class AgentUsageAndForkE2eTest {
             awaitIdle(conversation)
             awaitCondition { conversation.usage != null }
             assertContains(textOf(AgentTags.AGENT_USAGE), "0% · 1k/200k · \$0.01")
+            // The list adds up what the conversations cost.
+            assertContains(textOf(AgentTags.AGENT_COST), "\$0.01")
         }
 
     @Test
