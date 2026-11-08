@@ -30,7 +30,7 @@ import org.example.kotlineditor.state.AgentState
 import org.example.kotlineditor.state.Conversation
 import org.example.kotlineditor.state.reviewWith
 
-private val MENU_WIDTH = 300.dp
+private val MENU_WIDTH = 320.dp
 
 /**
  * "Review ▾" under the prompt: a click lists the agents the server can run, and the one chosen reviews the work of
@@ -41,14 +41,15 @@ private val MENU_WIDTH = 300.dp
 fun ReviewButton(agent: AgentState, conversation: Conversation) {
     var open by remember { mutableStateOf(false) }
     var entries by remember { mutableStateOf<List<AgentRegistryEntry>?>(null) }
+    var failure by remember { mutableStateOf<String?>(null) }
     val agents = agent.project.services.agents
     LaunchedEffect(agents) {
         try {
             entries = agents.registry()
         } catch (cancelled: CancellationException) {
             throw cancelled
-        } catch (_: IOException) {
-            entries = emptyList()
+        } catch (refused: IOException) {
+            failure = refused.message ?: "unknown error"
         }
     }
     val enabled = conversation.started && !conversation.busy
@@ -65,38 +66,15 @@ fun ReviewButton(agent: AgentState, conversation: Conversation) {
                 fontSize = 12.sp,
             )
         }
-        DropdownMenu(open, onDismissRequest = { open = false }, Modifier.widthIn(max = MENU_WIDTH)) {
-            ReviewerRows(agent, conversation, entries) { open = false }
+        val choose: (String?) -> Unit = { entry ->
+            open = false
+            agent.reviewWith(conversation, entry)
+        }
+        DropdownMenu(open, onDismissRequest = { open = false }, Modifier.widthIn(max = MENU_WIDTH).closesOnEscape { open = false }) {
+            val tags = RegistryTags(AgentTags.AGENT_REVIEW_DEFAULT, AgentTags.AGENT_REVIEW_FILTER, AgentTags::agentReviewer)
+            val menu = RegistryMenu(agent.settingsAgentLabel, chosenId = null, tags = tags)
+            AgentRegistryMenu(menu, entries, failure, choose)
         }
     }
 }
 
-@Composable
-private fun ReviewerRows(agent: AgentState, conversation: Conversation, entries: List<AgentRegistryEntry>?, close: () -> Unit) {
-    val review = { entry: String? ->
-        close()
-        agent.reviewWith(conversation, entry)
-    }
-    ReviewerRow("Agent of the settings", agent.settingsAgentLabel, true, AgentTags.AGENT_REVIEW_DEFAULT) { review(null) }
-    if (entries == null) Label("Reading the registry…", Modifier.padding(12.dp), color = IdeColors.TextSecondary, fontSize = 11.sp)
-    for (entry in entries.orEmpty()) {
-        val description = entry.unavailable ?: entry.description
-        ReviewerRow(entry.name, description, entry.unavailable == null, AgentTags.agentReviewer(entry.id)) { review(entry.id) }
-    }
-}
-
-@Composable
-private fun ReviewerRow(title: String, subtitle: String, enabled: Boolean, tag: String, onClick: () -> Unit) {
-    Row(
-        Modifier
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 6.dp)
-            .testTag(tag),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column {
-            Label(title, color = if (enabled) IdeColors.Text else IdeColors.TextSecondary)
-            Label(subtitle, color = IdeColors.TextSecondary, fontSize = 11.sp, maxLines = 1)
-        }
-    }
-}
