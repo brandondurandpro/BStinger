@@ -37,7 +37,7 @@ private suspend fun AgentHost.poll(conversation: Conversation) {
     }
 }
 
-private fun apply(conversation: Conversation, transcript: AgentTranscript) {
+private fun AgentHost.apply(conversation: Conversation, transcript: AgentTranscript) {
     val restarted = conversation.epoch.isNotEmpty() && conversation.epoch != transcript.epoch
     conversation.epoch = transcript.epoch
     conversation.since = transcript.version
@@ -74,6 +74,7 @@ private fun apply(conversation: Conversation, transcript: AgentTranscript) {
     if (turnEnded) {
         conversation.finished = true
         conversation.seen = false
+        agentFinished(conversation.title, conversation.outcome == AgentOutcome.Failed)
     }
     // The tree, the Git panel and the open editors pick the changes of the agent up.
     if (wrote || turnEnded) conversation.workspace?.synchronize()

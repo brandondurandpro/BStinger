@@ -36,4 +36,7 @@ interface AgentHost : AgentWorkspace {
 
     /** The worktree of [branch], created by the server on first use, returned once it is loaded. */
     suspend fun openWorktree(branch: String): AgentWorkspace
+
+    /** An agent finished its turn in the conversation [title]; [failed] when it ended with an error. */
+    fun agentFinished(title: String, failed: Boolean) = Unit
 }

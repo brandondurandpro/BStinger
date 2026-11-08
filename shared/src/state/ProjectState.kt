@@ -86,6 +86,9 @@ class ProjectState(
             resolve = { token, index -> languageServers?.resolveCompletion(token, index) },
         ) { path, document -> languageServers?.complete(path, document) ?: CompletionResult.NotReady }
 
+    /** Told when an agent finishes a turn (the window shows it as a notification when it is in the background). */
+    var finishedListener: ((String, Boolean) -> Unit)? = null
+
     /** Opens a web address in the browser of the machine of the IDE; tests replace it. */
     var openUrl: (String) -> Unit = ::openInBrowser
 
@@ -259,6 +262,10 @@ class ProjectState(
     }
 
     override suspend fun openWorktree(branch: String): AgentWorkspace = openWorktreeProject(branch)
+
+    override fun agentFinished(title: String, failed: Boolean) {
+        finishedListener?.invoke(title, failed)
+    }
 
     override fun synchronize() = synchronizeFiles()
 

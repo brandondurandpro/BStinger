@@ -10,15 +10,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import org.example.kotlineditor.state.AgentState
@@ -43,6 +46,7 @@ internal fun AgentWorkspace(app: AppState, project: ProjectState) {
     // The project itself is already saved and synchronized by its screen; a worktree is synchronized here.
     workspace?.takeIf { it !== project }?.let { SyncOnWindowFocus(it) }
     // The IDE shortcuts (Ctrl+S, Ctrl+Shift+N, Alt+1…) act where the agent works; agent mode handles its own first.
+    NotifyWhenFinished(project)
     val keys = Modifier.onPreviewKeyEvent { event -> shortcuts?.handle(event) == true }
     Box(
         Modifier
@@ -117,5 +121,19 @@ private fun AgentTabsArea(app: AppState, agent: AgentState, findFocus: FocusRequ
                 }
             }
         }
+    }
+}
+
+// A desktop notification when an agent finishes while the window is in the background.
+@Composable
+private fun NotifyWhenFinished(project: ProjectState) {
+    val focused = LocalWindowInfo.current.isWindowFocused
+    val inBackground by rememberUpdatedState(!focused)
+    DisposableEffect(project) {
+        project.finishedListener = { title, failed ->
+            val text = if (failed) "The agent failed." else "The agent finished its work."
+            if (inBackground) DesktopNotifications.show(title, text, failed)
+        }
+        onDispose { project.finishedListener = null }
     }
 }
