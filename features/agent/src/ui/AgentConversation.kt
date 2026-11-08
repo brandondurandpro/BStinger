@@ -50,6 +50,7 @@ import org.example.kotlineditor.model.AgentTurnState
 import org.example.kotlineditor.state.AgentState
 import org.example.kotlineditor.state.Completing
 import org.example.kotlineditor.state.Conversation
+import org.example.kotlineditor.state.drop
 import org.example.kotlineditor.state.isLoginNotice
 import org.example.kotlineditor.state.recallPrompt
 import org.example.kotlineditor.state.usageText
@@ -203,8 +204,10 @@ private fun Prompt(agent: AgentState, conversation: Conversation) {
         SearchesFiles(files, completion.completing as? Completing.File, index, context)
         CompletionList(completion, width.padding(bottom = 6.dp))
         WorkspaceStatus(agent, conversation, width.padding(horizontal = 4.dp, vertical = 6.dp))
+        val workspaceRoot = (conversation.workspace ?: agent.project).root.path
         Column(
             width
+                .droppableFiles { files -> files.forEach { context.drop(it, workspaceRoot) } }
                 .background(IdeColors.Input, RoundedCornerShape(8.dp))
                 .border(1.dp, IdeColors.InputBorder, RoundedCornerShape(8.dp))
                 .padding(10.dp),

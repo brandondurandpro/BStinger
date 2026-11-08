@@ -80,3 +80,31 @@ fun AgentState.attachToPrompt(attachment: AgentAttachment) {
     conversation.showsChat = true
     conversation.context.focus()
 }
+
+private val DROPPED_IMAGES =
+    mapOf("png" to "image/png", "jpg" to "image/jpeg", "jpeg" to "image/jpeg", "gif" to "image/gif", "webp" to "image/webp")
+
+/**
+ * Joins a file dropped on the prompt: a file of the directory [root] the agent works in as such, an image from
+ * elsewhere as an image; anything else cannot be read by the agent, and false is returned.
+ */
+fun PromptContext.drop(file: java.io.File, root: String): Boolean {
+    val base = java.io.File(root).canonicalFile
+    val dropped = file.canonicalFile
+    val inside = dropped.startsWith(base) && dropped.isFile
+    val mime = DROPPED_IMAGES[dropped.extension.lowercase()]
+    return when {
+        inside -> {
+            attach(AgentAttachment.File(dropped.relativeTo(base).path.replace('\\', '/')))
+            true
+        }
+
+        mime != null && dropped.isFile -> {
+            val data = java.util.Base64.getEncoder().encodeToString(dropped.readBytes())
+            attach(AgentAttachment.Image(dropped.name, mime, data))
+            true
+        }
+
+        else -> false
+    }
+}
