@@ -47,12 +47,13 @@ class TypeScriptServerE2eTest {
         }
 
     @Test
-    fun `TypeScript, React and JavaScript files share one server process`() =
+    fun `TypeScript, React, Vue and JavaScript files share one server process`() =
         runComposeUiTest {
             val app = launchWithProject(project, languageServers = servers.settings)
             openFromTree("src/app.ts")
             openFromTree("src/view.tsx")
             openFromTree("src/legacy.js")
+            openFromTree("src/App.vue")
             val running = awaitServer(app) { it.state == LanguageServerState.Running }
             awaitNoTag(LanguageServerTags.LSP_CHOICE)
             assertEquals(1, app.languageServers.size)

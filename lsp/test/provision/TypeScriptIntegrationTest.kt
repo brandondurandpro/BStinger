@@ -21,6 +21,18 @@ private const val SESSION = "s1"
 
 private const val TSCONFIG = """{"compilerOptions": {"jsx": "preserve", "strict": true}}"""
 
+private val APP_VUE =
+    listOf(
+        "<script setup lang=\"ts\">",
+        "const greeting: string = 'hello'",
+        "</script>",
+        "",
+        "<template>",
+        "  <p>{{ greeting }}</p>",
+        "</template>",
+        "",
+    ).joinToString("\n")
+
 private val GREETER =
     listOf(
         "export function greet(name: string): string {",
@@ -93,6 +105,26 @@ class TypeScriptIntegrationTest {
         assertTrue(typed.contains("View") && typed.contains("=>"), "hover: $hover\n${log()}")
         val server = runBlocking { service.status(-1) }.servers.firstOrNull()
         assertTrue(server?.state in UP, "server: $server\n${log()}")
+    }
+
+    @Test
+    fun `a single-file component is understood through the Vue plugin, its template too`() {
+        if (!nodeAvailable()) return
+        Files.writeString(project.resolve("tsconfig.json"), TSCONFIG)
+        val app = project.resolve("App.vue")
+        Files.writeString(app, APP_VUE)
+        service.use(SESSION, project.toString(), listOf(app.toString()))
+        service.openDocument(SESSION, project.toString(), app.toString(), 1, APP_VUE)
+        // `greeting` in the template: only the plugin makes tsserver see the script it comes from.
+        val hover =
+            try {
+                awaitHover(DocumentPosition(app.toString(), 1, 5, 10))
+            } catch (timeout: kotlinx.coroutines.TimeoutCancellationException) {
+                error("No hover in the template: ${timeout.message}\n${log()}")
+            }
+        val typed = hover.markdown.orEmpty()
+        // The template's own view of `greeting`, a property of the component (its type needs `vue` in the project).
+        assertTrue(typed.contains("(property) greeting"), "hover: $hover\n${log()}")
     }
 
     private fun awaitHover(position: DocumentPosition) =

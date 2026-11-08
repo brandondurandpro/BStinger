@@ -40,6 +40,11 @@ data class LanguageServerCandidate(
     val command: (runtimes: Map<RuntimeKind, Path>, installed: Path?) -> List<String>,
     /** `initializationOptions` of its `initialize` request: what it leaves off unless asked (phpactor's hints). */
     val initializationOptions: JsonElement? = null,
+    /**
+     * `initializationOptions` that depend on where its [bundle] installs (the plugins tsserver loads from it); used
+     * when [initializationOptions] is null. Gets the directory holding the bundle's `node_modules`.
+     */
+    val optionsIn: ((bundle: Path) -> JsonElement)? = null,
     /** Why it may give no inlay hints, shown in the Language Servers window when it gives none. */
     val withoutInlayHints: String? = null,
 )

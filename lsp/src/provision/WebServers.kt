@@ -1,6 +1,12 @@
 package org.example.kotlineditor.lsp.provision
 
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.add
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
 import org.example.kotlineditor.model.Languages
+import java.nio.file.Path
 
 /**
  * The language servers of the web: TypeScript and JavaScript (with React's `.tsx` and `.jsx`). Updating a pin:
@@ -14,6 +20,9 @@ object WebServers {
 
     private const val SERVER = "typescript-language-server"
     private const val SERVER_VERSION = "5.1.3"
+    private const val VUE_PLUGIN = "@vue/typescript-plugin"
+    private const val VUE_PLUGIN_VERSION = "3.3.14"
+    private const val VUE_PLUGIN_LOCK = "/pins/vue-typescript-plugin.lock"
     private const val SERVER_SHA_512 =
         "r+pAcYtWdN8tKlYZPwiiHNA2QPjXnI02NrW5Sf2cVM3TRtuQ3V9EKKwOxqwaQ0krsaEXk/CbN90I5erBuf84Vg=="
     private const val SERVER_NODE_MINIMUM = "20"
@@ -58,13 +67,11 @@ object WebServers {
             bundle =
             PinnedBundle(
                 name = SERVER,
-                version = "$SERVER_VERSION+ts$TYPESCRIPT_VERSION",
-                packages =
-                listOf(
-                    npm(SERVER, SERVER_VERSION, SERVER_SHA_512),
-                    npm(TYPESCRIPT_PACKAGE, TYPESCRIPT_VERSION, TYPESCRIPT_SHA_512),
-                ),
+                version = "$SERVER_VERSION+ts$TYPESCRIPT_VERSION+vue$VUE_PLUGIN_VERSION",
+                packages = serverPackages(),
             ),
+            // tsserver loads the Vue plugin from the bundle, and understands .vue files through it.
+            optionsIn = { bundle -> vuePluginOptions(bundle) },
             command = { runtimes, installed ->
                 val modules = checkNotNull(installed).resolve("node_modules")
                 val entry = modules.resolve(SERVER).resolve("lib").resolve("cli.mjs")
@@ -116,5 +123,38 @@ object WebServers {
         val file = name.substringAfterLast('/')
         val url = "https://registry.npmjs.org/$name/-/$file-$version.tgz"
         return PinnedPackage(name, url, Digest(Digest.SHA_512, integrity))
+    }
+
+    private fun serverPackages(): List<PinnedPackage> {
+        val server = npm(SERVER, SERVER_VERSION, SERVER_SHA_512)
+        val compiler = npm(TYPESCRIPT_PACKAGE, TYPESCRIPT_VERSION, TYPESCRIPT_SHA_512)
+        return listOf(server, compiler) + lockedPackages(VUE_PLUGIN_LOCK)
+    }
+
+    private fun vuePluginOptions(bundle: Path): JsonElement =
+        buildJsonObject {
+            putJsonArray("plugins") {
+                add(
+                    buildJsonObject {
+                        put("name", VUE_PLUGIN)
+                        put("location", bundle.toString())
+                        putJsonArray("languages") { add("vue") }
+                    },
+                )
+            }
+        }
+
+    // The packages of a lock in the resources (see tools/pin-npm-bundle): location, version and SHA-512 per line.
+    private fun lockedPackages(resource: String): List<PinnedPackage> {
+        val stream = checkNotNull(WebServers::class.java.getResourceAsStream(resource)) { "Missing $resource" }
+        return stream.bufferedReader().useLines { lines ->
+            lines.filter { it.isNotBlank() }.map(::lockedPackage).toList()
+        }
+    }
+
+    private fun lockedPackage(line: String): PinnedPackage {
+        val (location, version, integrity) = line.split('\t')
+        val name = location.substringAfterLast("node_modules/")
+        return npm(name, version, integrity).copy(location = location)
     }
 }

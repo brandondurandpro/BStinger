@@ -1,6 +1,8 @@
 package org.example.kotlineditor.lsp
 
+import kotlinx.serialization.json.JsonElement
 import org.example.kotlineditor.lsp.provision.CandidateStatus
+import org.example.kotlineditor.lsp.provision.LanguageServerCandidate
 import org.example.kotlineditor.lsp.provision.LanguageServerChoiceStore
 import org.example.kotlineditor.lsp.provision.ToolDownloader
 import org.example.kotlineditor.lsp.supervisor.LanguageServerSpec
@@ -58,6 +60,12 @@ internal class LanguageServerTargets(private val settings: LanguageServerSetting
         }
     }
 
+    private fun bundleOptionsOf(candidate: LanguageServerCandidate): JsonElement? {
+        val bundle = candidate.bundle
+        val optionsIn = candidate.optionsIn
+        return if (bundle == null || optionsIn == null) null else optionsIn(downloader.bundleDirectory(bundle))
+    }
+
     /** The servers offered for [language], their requirements checked now, and the chosen one. Blocking. */
     fun choice(language: String, project: String): LanguageServerChoice {
         val offered = settings.candidates.candidates(language).map(::infoOf)
@@ -89,7 +97,7 @@ internal class LanguageServerTargets(private val settings: LanguageServerSetting
     // The requirements are checked again at each start: PHP may have been installed since.
     private fun specOf(language: String, id: String): LanguageServerSpec {
         val candidate = settings.candidates.offered(language).firstOrNull { it.id == id }
-        val options = candidate?.initializationOptions
+        val options = candidate?.initializationOptions ?: candidate?.let(::bundleOptionsOf)
         return LanguageServerSpec(id, language, options, candidate?.withoutInlayHints) {
             val status = settings.candidates.candidates(language).first { it.candidate.id == id }
             settings.candidates.commandFor(status, downloader)

@@ -15,6 +15,8 @@ class LanguagesTest {
         assertEquals("javascriptreact", Languages.identifierOf("/p/a.jsx"))
         assertEquals("javascript", Languages.identifierOf("/p/a.cjs"))
         assertEquals("typescript", Languages.identifierOf("/p/a.mts"))
+        assertEquals("typescript", Languages.languageOf("/p/App.vue"))
+        assertEquals("vue", Languages.identifierOf("/p/App.vue"))
     }
 
     @Test

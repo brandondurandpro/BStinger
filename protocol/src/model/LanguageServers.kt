@@ -235,6 +235,7 @@ object Languages {
     private const val TYPESCRIPT_REACT = "typescriptreact"
     private const val JAVASCRIPT = "javascript"
     private const val JAVASCRIPT_REACT = "javascriptreact"
+    private const val VUE = "vue"
 
     /** The language of the Tailwind CSS server, which serves the files of other languages beside their own server. */
     const val TAILWIND = "tailwind"
@@ -251,6 +252,7 @@ object Languages {
             "mjs" to JAVASCRIPT,
             "cjs" to JAVASCRIPT,
             "jsx" to JAVASCRIPT_REACT,
+            "vue" to VUE,
         )
 
     // The identifiers one server serves under another name; the others are their own language.
@@ -259,6 +261,7 @@ object Languages {
             TYPESCRIPT_REACT to TYPESCRIPT,
             JAVASCRIPT to TYPESCRIPT,
             JAVASCRIPT_REACT to TYPESCRIPT,
+            VUE to TYPESCRIPT,
         )
     private val names = mapOf(PHP to "PHP", TYPESCRIPT to "TypeScript and JavaScript", TAILWIND to "Tailwind CSS")
     private val rootMarkers = mapOf(PHP to "composer.json")

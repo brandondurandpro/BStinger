@@ -1,0 +1,45 @@
+#!/usr/bin/env python3
+"""Prints the pins of an npm package and everything it needs, to paste in lsp/resources/pins/<name>.lock.
+
+    tools/pin-npm-bundle @vue/typescript-plugin@3.3.14 --exclude typescript > lsp/resources/pins/vue-typescript-plugin.lock
+
+npm resolves the dependencies in a scratch directory (no script runs); each line is `location version integrity`,
+tab-separated: where the package installs under node_modules, its version, and its SHA-512 (base64, as npm's
+dist.integrity). The tarball address is derived from the name and the version. Review the diff of a lock like any
+dependency update, and run the tests of the server that uses it (`./kotlin test -m lsp`).
+"""
+import argparse
+import json
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("package", help="name@version")
+    parser.add_argument("--exclude", action="append", default=[], help="a package the bundle gets elsewhere")
+    arguments = parser.parse_args()
+    with tempfile.TemporaryDirectory() as scratch:
+        Path(scratch, "package.json").write_text("{}")
+        subprocess.run(
+            ["npm", "install", "--ignore-scripts", "--package-lock-only", "--silent", arguments.package],
+            cwd=scratch,
+            check=True,
+        )
+        lock = json.loads(Path(scratch, "package-lock.json").read_text())
+    for path, entry in sorted(lock["packages"].items()):
+        if not path:
+            continue
+        location = path[len("node_modules/"):]
+        name = entry.get("name") or location.split("node_modules/")[-1]
+        if name in arguments.exclude:
+            continue
+        integrity = entry["integrity"]
+        if not integrity.startswith("sha512-"):
+            sys.exit(f"{name}: no SHA-512 integrity ({integrity})")
+        print(f"{location}\t{entry['version']}\t{integrity[len('sha512-'):]}")
+
+
+main()

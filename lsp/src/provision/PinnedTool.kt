@@ -34,12 +34,17 @@ enum class Unpack {
 
 /** One npm package of a [PinnedBundle]: its [name] (`typescript`, `@vue/language-server`), tarball and checksum. */
 data class PinnedPackage(
-    /** Name of the package, which is the directory it installs into under `node_modules`. */
+    /** Name of the package. */
     val name: String,
     /** Address of its `.tgz`, exactly the one verified in the pin's source. */
     val url: String,
     /** Its `dist.integrity` (SHA-512) or another checksum the tarball must have. */
     val digest: Digest,
+    /**
+     * Where it installs under `node_modules`: its [name], or a path inside another package's own `node_modules` when
+     * two versions of it are needed (`@vue/language-plugin-pug/node_modules/@volar/source-map`).
+     */
+    val location: String = name,
 )
 
 /**
@@ -52,6 +57,6 @@ data class PinnedBundle(
     val name: String,
     /** Version of the bundle (that of its main package), also the directory it installs into. */
     val version: String,
-    /** The packages, installed under `node_modules/<package name>/`. */
+    /** The packages, installed under `node_modules/<package location>/`. */
     val packages: List<PinnedPackage>,
 )

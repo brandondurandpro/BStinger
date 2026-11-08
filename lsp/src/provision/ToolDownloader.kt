@@ -57,22 +57,23 @@ class ToolDownloader(
      * @throws IOException when a download fails or does not match its pinned checksum; the bundle is not used then.
      */
     fun obtainBundle(bundle: PinnedBundle): Path {
-        val directory = toolsDirectory.resolve(bundle.name).resolve(bundle.version)
+        val directory = bundleDirectory(bundle)
         return synchronized(locks.computeIfAbsent("${bundle.name}/${bundle.version}") { Any() }) {
             val marker = directory.resolve(INSTALLED_MARKER)
-            val wanted = bundle.packages.joinToString("\n") { "${it.name} ${it.digest.value}" }
+            val wanted = bundle.packages.joinToString("\n") { "${it.location} ${it.digest.value}" }
             val recorded = runCatching { Files.readString(marker) }.getOrNull()
-            val complete = bundle.packages.all { Files.isDirectory(modulePath(directory, it.name)) }
+            val complete = bundle.packages.all { Files.isDirectory(modulePath(directory, it.location)) }
             if (!complete || recorded != wanted) {
                 Files.deleteIfExists(marker)
-                bundle.packages.forEach { install(directory, it) }
+                bundle.packages.sortedBy { it.location.length }.forEach { install(directory, it) }
                 Files.writeString(marker, wanted)
             }
             directory
         }
     }
 
-    private fun modulePath(directory: Path, name: String): Path = directory.resolve(NODE_MODULES).resolve(name)
+    /** Where [bundle] installs (or is installed): the directory holding its `node_modules`. */
+    fun bundleDirectory(bundle: PinnedBundle): Path = toolsDirectory.resolve(bundle.name).resolve(bundle.version)
 
     // The tarball is extracted next to its place, then renamed: a half-extracted package is never used.
     private fun install(directory: Path, pkg: PinnedPackage) {
@@ -82,7 +83,7 @@ class ToolDownloader(
             Files.newInputStream(archive).use { TarArchive.extract(GZIPInputStream(it), staging) }
             val extracted = staging.resolve(PACKAGE)
             if (!Files.isDirectory(extracted)) throw IOException("${pkg.name} has no $PACKAGE/ directory")
-            val target = modulePath(directory, pkg.name)
+            val target = modulePath(directory, pkg.location)
             deleteTree(target)
             Files.createDirectories(target.parent)
             Files.move(extracted, target)
@@ -170,7 +171,6 @@ class ToolDownloader(
 
     private companion object {
         const val PACKAGE = "package"
-        const val NODE_MODULES = "node_modules"
         const val INSTALLED_MARKER = ".installed"
         const val MAX_DOWNLOAD_SIZE = 256L * 1024 * 1024
         const val HTTP_OK = 200
@@ -226,3 +226,5 @@ class ToolDownloader(
         }
     }
 }
+
+private fun modulePath(directory: Path, location: String): Path = directory.resolve("node_modules").resolve(location)
