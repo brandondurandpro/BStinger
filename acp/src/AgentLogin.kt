@@ -11,6 +11,15 @@ suspend fun AgentProcesses.authMethods(agent: AgentCommand): List<AgentAuthMetho
     return process.ready().authMethods
 }
 
+/**
+ * Forks [session] of [agent] working in [directory] (`session/fork`); returns the id of the copy. Fails when the agent
+ * does not announce it.
+ */
+suspend fun AgentProcesses.fork(agent: AgentCommand, session: String, directory: String): String {
+    val process = withContext(Dispatchers.IO) { processFor(agent) }
+    return process.forkSession(session, directory)
+}
+
 /** Logs in to [agent] with [method], one of [authMethods]; returns once the agent is done. */
 suspend fun AgentProcesses.authenticate(agent: AgentCommand, method: String) {
     val process = withContext(Dispatchers.IO) { processFor(agent) }

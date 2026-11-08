@@ -6,6 +6,7 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import org.example.kotlineditor.acp.authMethods
 import org.example.kotlineditor.acp.authenticate
+import org.example.kotlineditor.acp.fork
 import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.model.AgentSessions
 import org.example.kotlineditor.rpc.Method
@@ -101,6 +102,11 @@ private fun optionHandlers(services: LocalServices): Map<Method, Handler> =
             val agent = params.read(AGENT) { it.agentCommand() }
             val methods = services.agents.processes.authMethods(agent)
             methods.authMethodsToJson()
+        },
+        Method.AgentFork to {
+            val agent = params.read(AGENT) { it.agentCommand() }
+            val forked = services.agents.processes.fork(agent, params.string("session"), params.string(DIRECTORY))
+            JsonPrimitive(forked)
         },
         Method.AgentAuthenticate to {
             val agent = params.read(AGENT) { it.agentCommand() }

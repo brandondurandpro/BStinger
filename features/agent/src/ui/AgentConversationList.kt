@@ -62,6 +62,7 @@ import org.example.kotlineditor.state.AgentOutcome
 import org.example.kotlineditor.state.AgentState
 import org.example.kotlineditor.state.Conversation
 import org.example.kotlineditor.state.delete
+import org.example.kotlineditor.state.duplicate
 import org.example.kotlineditor.state.matches
 import org.example.kotlineditor.state.outcome
 import org.example.kotlineditor.state.placeholder
@@ -172,6 +173,14 @@ private fun ConversationRow(agent: AgentState, conversation: Conversation, selec
                             agent.togglePin(conversation)
                         },
                         modifier = Modifier.testTag(AgentTags.AGENT_PIN),
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Duplicate", fontSize = 13.sp) },
+                        onClick = {
+                            menu = null
+                            agent.duplicate(conversation)
+                        },
+                        modifier = Modifier.testTag(AgentTags.AGENT_DUPLICATE),
                     )
                     DropdownMenuItem(
                         text = { Text(if (conversation.archived) "Unarchive" else "Archive", fontSize = 13.sp) },

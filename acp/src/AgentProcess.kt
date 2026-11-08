@@ -118,6 +118,14 @@ internal class AgentProcess(val command: AgentCommand, scope: CoroutineScope, fi
             info ?: agentInfo(connection.request("initialize", initializeParams()).obj()).also { info = it }
         }
 
+    /** `session/fork`: a copy of [session] under a new session, whose id is returned. */
+    suspend fun forkSession(session: String, directory: String): String {
+        val agent = ready()
+        if (!agent.sessions.fork) throw IOException("The agent cannot fork a conversation")
+        val forked = request("session/fork", reopenParams(session, directory, agent.mcp))
+        return forked?.text(SESSION_ID) ?: throw IOException("The agent forked a session without an id")
+    }
+
     /** Logs in with the method [method] the agent listed (`authenticate`); returns once the agent is done. */
     suspend fun authenticate(method: String) {
         ready()

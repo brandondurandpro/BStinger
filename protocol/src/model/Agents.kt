@@ -425,6 +425,12 @@ interface AgentChoices {
      * as opening the browser, and the call returns once it is done. Fails with the agent's reason.
      */
     suspend fun authenticate(agent: AgentCommand, method: String)
+
+    /**
+     * Forks the [session] of [agent] working in [directory]: the agent keeps a copy of its history under a new session,
+     * whose id is returned. Fails when the agent cannot fork.
+     */
+    suspend fun fork(agent: AgentCommand, session: String, directory: String): String
 }
 
 /** Conversations with agents, run by the server. Every call returns at once except [transcript], a long poll. */
@@ -515,4 +521,7 @@ private object NoChoices : AgentChoices {
     override suspend fun authMethods(agent: AgentCommand): List<AgentAuthMethod> = emptyList()
 
     override suspend fun authenticate(agent: AgentCommand, method: String): Unit = throw java.io.IOException(NO_SERVER)
+
+    override suspend fun fork(agent: AgentCommand, session: String, directory: String): String =
+        throw java.io.IOException(NO_SERVER)
 }

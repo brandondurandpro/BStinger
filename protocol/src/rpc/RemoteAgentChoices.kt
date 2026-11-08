@@ -1,5 +1,6 @@
 package org.example.kotlineditor.rpc
 
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.example.kotlineditor.model.AgentAuthMethod
 import org.example.kotlineditor.model.AgentChoices
@@ -36,6 +37,16 @@ internal class RemoteAgentChoices(private val client: RpcClient) : AgentChoices 
 
     override suspend fun authMethods(agent: AgentCommand): List<AgentAuthMethod> =
         client.call(Method.AgentAuthMethods) { put(AGENT, agent.toJson()) }.agentAuthMethods()
+
+    override suspend fun fork(agent: AgentCommand, session: String, directory: String): String {
+        val answer =
+            client.call(Method.AgentFork) {
+                put(AGENT, agent.toJson())
+                put("session", session)
+                put(DIRECTORY, directory)
+            }
+        return answer.jsonPrimitive.content
+    }
 
     override suspend fun authenticate(agent: AgentCommand, method: String) {
         client.call(Method.AgentAuthenticate) {

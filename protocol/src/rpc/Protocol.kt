@@ -610,6 +610,9 @@ enum class Method(
     /** The ways to log in to an agent. */
     AgentAuthMethods("agent/authMethods", mutating = false),
 
+    /** Forks a session of an agent: a copy of its history under a new session. */
+    AgentFork("agent/fork", mutating = true),
+
     /** Logs in to an agent with one of its methods. */
     AgentAuthenticate("agent/authenticate", mutating = true),
 }

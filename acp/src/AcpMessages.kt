@@ -57,6 +57,8 @@ internal data class SessionCapabilities(
     val close: Boolean = false,
     /** `session/delete`: deletes a session and its history. */
     val delete: Boolean = false,
+    /** `session/fork`: copies a session under a new one. */
+    val fork: Boolean = false,
 )
 
 /** `initialize`: the version and the capabilities of this client, which serves file reads and writes. */
@@ -115,6 +117,7 @@ private fun sessionCapabilities(capabilities: JsonObject?): SessionCapabilities 
         resume = sessions.has("resume"),
         close = sessions.has("close"),
         delete = sessions.has("delete"),
+        fork = sessions.has("fork"),
     )
 }
 
