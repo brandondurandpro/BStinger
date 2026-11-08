@@ -25,6 +25,8 @@ fun AgentState.duplicate(conversation: Conversation) {
             val copy = AgentSession(forked, directory, "${conversation.title} (copy)", Instant.now().toString())
             val shown = conversationOf(copy.copy(branch = conversation.branch.takeIf { worktree }), nextId++, project.root.path)
             shown.agent = conversation.agent
+            // The agent forwards the title of the original: the copy keeps its own.
+            shown.renamed = true
             shown.onTurnIdle = { deliverQueued(shown) }
             conversations.add(0, shown)
             open(shown)
