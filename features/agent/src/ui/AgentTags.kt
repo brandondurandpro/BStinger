@@ -20,6 +20,7 @@ object AgentTags {
     const val AGENT_DUPLICATE = "agent.duplicate"
     const val AGENT_ARCHIVE = "agent.archive"
     const val AGENT_REVIEW_FILTER = "agent.review.filter"
+    const val AGENT_PROJECT_GROUP = "agent.group.project"
     const val AGENT_ARCHIVED = "agent.archived"
     const val AGENT_USAGE = "agent.usage"
     const val AGENT_QUOTA = "agent.quota"
@@ -55,6 +56,8 @@ object AgentTags {
     fun agentTemplateVariable(name: String) = "agent.template.variable.$name"
 
     fun agentImagePreview(name: String) = "agent.image.preview.$name"
+
+    fun agentFolderGroup(label: String) = "agent.group.folder.$label"
 
     fun agentDetailChat(id: Int) = "agent.detail.chat.$id"
 

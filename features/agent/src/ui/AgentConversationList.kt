@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -29,6 +30,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -65,9 +67,11 @@ import org.example.kotlineditor.state.Conversation
 import org.example.kotlineditor.state.costSummary
 import org.example.kotlineditor.state.delete
 import org.example.kotlineditor.state.duplicate
+import org.example.kotlineditor.state.groupByFolder
 import org.example.kotlineditor.state.matches
 import org.example.kotlineditor.state.outcome
 import org.example.kotlineditor.state.placeholder
+import org.example.kotlineditor.state.projectName
 
 // Left panel of agent mode: the conversations of the project, filtered by title.
 
@@ -100,6 +104,8 @@ fun ConversationList(agent: AgentState, modifier: Modifier) {
         // The archived ones have a zone of their own under the list, folded; the search finds them as well.
         val archived = if (searching) emptyList() else agent.conversations.filter { it.archived }
         var archivedOpen by remember { mutableStateOf(false) }
+        // The groups folded by the user: the project, and each folder under it.
+        val collapsed = remember { mutableStateListOf<String>() }
         if (shown.isEmpty() && archived.isEmpty()) {
             Label(
                 if (agent.conversations.isEmpty()) "No conversations" else "No match",
@@ -108,9 +114,7 @@ fun ConversationList(agent: AgentState, modifier: Modifier) {
             )
         }
         LazyColumn(Modifier.fillMaxSize()) {
-            items(shown, key = { it.id }) { conversation ->
-                ConversationRow(agent, conversation, selected = conversation == agent.current)
-            }
+            groupedConversations(agent, shown, searching, collapsed)
             if (archived.isNotEmpty()) {
                 item(key = "archived-header") {
                     ArchivedHeader(archived.size, archivedOpen) { archivedOpen = !archivedOpen }
@@ -409,5 +413,59 @@ private fun TitleField(title: String, onDone: (String?) -> Unit) {
                     .padding(horizontal = 6.dp, vertical = 3.dp),
             ) { field() }
         },
+    )
+}
+
+// The conversations in two levels: the project, then the folder each one works in (the project itself, a worktree).
+private fun LazyListScope.groupedConversations(
+    agent: AgentState,
+    shown: List<Conversation>,
+    searching: Boolean,
+    collapsed: MutableList<String>,
+) {
+    if (shown.isEmpty()) return
+    val projectKey = "project"
+    val projectOpen = searching || projectKey !in collapsed
+    item(key = "group-$projectKey") {
+        GroupHeader(agent.projectName, shown.size, projectOpen, 0, AgentTags.AGENT_PROJECT_GROUP) { toggled(collapsed, projectKey) }
+    }
+    if (!projectOpen) return
+    for (group in agent.groupByFolder(shown)) {
+        val folderKey = "folder:${group.folder}"
+        val open = searching || folderKey !in collapsed
+        item(key = "group-$folderKey") {
+            GroupHeader(group.label, group.conversations.size, open, 1, AgentTags.agentFolderGroup(group.label)) {
+                toggled(collapsed, folderKey)
+            }
+        }
+        if (open) {
+            items(group.conversations, key = { it.id }) { conversation ->
+                Box(Modifier.padding(start = 18.dp)) {
+                    ConversationRow(agent, conversation, selected = conversation == agent.current)
+                }
+            }
+        }
+    }
+}
+
+private fun toggled(collapsed: MutableList<String>, key: String) {
+    if (!collapsed.remove(key)) collapsed.add(key)
+}
+
+// "▾ project (3)": a click folds or unfolds the group; [level] indents the folders under the project.
+@Composable
+private fun GroupHeader(label: String, count: Int, open: Boolean, level: Int, tag: String, toggle: () -> Unit) {
+    val arrow = if (open) "▾" else "▸"
+    Label(
+        "$arrow $label ($count)",
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = toggle)
+            .padding(start = (14 + level * 10).dp, end = 8.dp, top = 6.dp, bottom = 4.dp)
+            .testTag(tag),
+        color = if (level == 0) IdeColors.Text else IdeColors.TextSecondary,
+        fontSize = 12.sp,
+        fontWeight = if (level == 0) FontWeight.SemiBold else FontWeight.Normal,
+        maxLines = 1,
     )
 }
