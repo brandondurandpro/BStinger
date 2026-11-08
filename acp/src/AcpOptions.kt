@@ -14,8 +14,32 @@ import org.example.kotlineditor.model.AgentOptionValue
 
 /** The settings in [message] (`configOptions`); null when it does not list them. */
 internal fun JsonObject?.configOptions(): List<AgentOption>? {
-    val options = this?.get("configOptions") as? JsonArray ?: return null
+    val options = this?.get("configOptions") as? JsonArray ?: return legacyModes()
     return options.mapNotNull { it.obj()?.configOption() }
+}
+
+/** The id of the setting made of the modes of an agent that lists `modes` rather than config options. */
+internal const val MODE_OPTION = "legacy:mode"
+
+// The modes of an agent that predates config options (`modes`: the current one and the available ones), as one
+// setting; set with `session/set_mode`.
+private fun JsonObject?.legacyModes(): List<AgentOption>? {
+    val modes = this?.get("modes").obj()
+    val current = modes?.text("currentModeId")
+    if (modes == null || current == null) return null
+    val values =
+        modes.get("availableModes").array().mapNotNull { mode ->
+            val json = mode.obj()
+            val id = json?.text("id")
+            id?.let { AgentOptionValue(it, json.text("name") ?: it, json.text("description")) }
+        }
+    return listOf(AgentOption(MODE_OPTION, "Mode", "mode", current, values))
+}
+
+/** [options] once the agent changed its mode by itself (`current_mode_update`), or [options] when it did not. */
+internal fun modeChanged(options: List<AgentOption>, update: JsonObject): List<AgentOption> {
+    val mode = update.text("currentModeId") ?: return options
+    return chosen(options, MODE_OPTION, mode)
 }
 
 private fun JsonObject.configOption(): AgentOption? {
@@ -47,6 +71,15 @@ internal fun chosen(options: List<AgentOption>, option: String, value: String): 
 
 /** Sets [option] of [session] to [value]; returns the settings as the agent then says they are. */
 internal suspend fun AgentProcess.setOption(session: String, option: String, value: String): List<AgentOption>? {
+    if (option == MODE_OPTION) {
+        val mode =
+            buildJsonObject {
+                put(SESSION_ID, session)
+                put("modeId", value)
+            }
+        request("session/set_mode", mode)
+        return null
+    }
     val params =
         buildJsonObject {
             put(SESSION_ID, session)
