@@ -334,6 +334,7 @@ class FakeAgent(
             "tools" -> tools(session, words.getOrNull(1)?.toIntOrNull() ?: 1)
             "crash" -> crash()
             "count" -> chunks(session, listOf("Prompt $count of $session."))
+            "usage" -> chunks(session, listOf("5-hour limit — ${count * QUOTA_STEP}% · Resets 11pm"))
             "run" -> run(session, words.drop(1))
             "markdown" -> chunks(session, MARKDOWN.chunked(MARKDOWN_PIECE))
             "model" -> chunks(session, listOf("Model: ${store[session]?.model}."))
@@ -572,6 +573,7 @@ class FakeAgent(
         const val RESOURCE_NOT_FOUND = -32_002
         const val TITLE_LENGTH = 30
         const val MARKDOWN_PIECE = 7
+        const val QUOTA_STEP = 10
         val OPENING = setOf("session/new", "session/load", "session/resume")
 
         // Its commands: name, description, hint of what to type after it.
@@ -581,6 +583,7 @@ class FakeAgent(
                 Triple("count", "Counts the prompts of the session", null),
                 Triple("model", "Says the model of the session", null),
                 Triple("plan", "Makes a plan of two steps", null),
+                Triple("usage", "Says the quota used, as Claude does", null),
             )
         val MARKDOWN =
             listOf(

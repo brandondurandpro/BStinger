@@ -196,6 +196,12 @@ class Conversation(val id: Int, title: String, val branch: String) {
     /** The prompts queued while the agent answered: each goes in turn once it is done. */
     internal val queued = ArrayDeque<OutgoingPrompt>()
 
+    /** Where the items of the silent question about the quota start, null when none is in flight. */
+    internal var probeFrom: Int? = null
+
+    /** True when a turn ended since the quota was read: it is read again once the agent is free. */
+    internal var quotaStale = false
+
     // Called by the transcript when the turn of the agent is over: a queued prompt goes.
     internal var onTurnIdle: (() -> Unit)? = null
 
@@ -498,6 +504,21 @@ class AgentState(
         launchDelivery(conversation, prompt)
     }
 
+    /**
+     * Asks the agent for its quota the way the user would (`/usage`, `/status`), without showing the question or the
+     * answer: the bars stay current. Only for a conversation whose quota is already known, once per finished turn.
+     */
+    private fun refreshQuota(conversation: Conversation) {
+        val known = conversation.quota.isNotEmpty()
+        if (!known || !conversation.quotaStale || conversation.busy || conversation.probeFrom != null) return
+        val offered = conversation.commands.map { it.name }
+        val command = QUOTA_COMMANDS.firstOrNull { it in offered } ?: return
+        conversation.quotaStale = false
+        conversation.probeFrom = conversation.items.size
+        val itemId = "probe-${UUID.randomUUID()}"
+        launchDelivery(conversation, OutgoingPrompt(itemId, "/$command", emptyList()))
+    }
+
     /** One prompt in flight; a queued one goes once the turn of the agent is over (see [onTurnIdle]). */
     private fun launchDelivery(conversation: Conversation, prompt: OutgoingPrompt) {
         conversation.sending = true
@@ -509,7 +530,10 @@ class AgentState(
 
     /** The next prompt queued while the agent answered goes once its turn is done. */
     internal fun deliverQueued(conversation: Conversation) {
-        if (conversation.queued.isEmpty()) return
+        if (conversation.queued.isEmpty()) {
+            refreshQuota(conversation)
+            return
+        }
         launchDelivery(conversation, conversation.queued.removeFirst())
     }
 

@@ -75,7 +75,14 @@ private fun AgentHost.apply(conversation: Conversation, transcript: AgentTranscr
     // The turn is over the way the server said it: a prompt queued while it answered goes now.
     if (transcript.state == AgentTurnState.Idle) conversation.onTurnIdle?.invoke()
     val turnEnded = wasBusy && transcript.state == AgentTurnState.Idle
-    if (turnEnded) {
+    val probeFrom = conversation.probeFrom
+    if (turnEnded && probeFrom != null) {
+        // The silent question about the quota is answered: the bars read it, the conversation forgets it.
+        conversation.probeFrom = null
+        conversation.finished = true
+        while (conversation.items.size > probeFrom) conversation.items.removeAt(conversation.items.lastIndex)
+    } else if (turnEnded) {
+        conversation.quotaStale = true
         conversation.finished = true
         conversation.seen = false
         agentFinished(conversation.title, conversation.outcome == AgentOutcome.Failed)
