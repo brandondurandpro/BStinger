@@ -39,4 +39,7 @@ interface AgentHost : AgentWorkspace {
 
     /** An agent finished its turn in the conversation [title]; [failed] when it ended with an error. */
     fun agentFinished(title: String, failed: Boolean) = Unit
+
+    /** An agent asks the user for a permission in the conversation [title]: [question] says what it wants to do. */
+    fun agentAsking(title: String, question: String) = Unit
 }

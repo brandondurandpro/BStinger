@@ -89,6 +89,9 @@ class ProjectState(
     /** Told when an agent finishes a turn (the window shows it as a notification when it is in the background). */
     var finishedListener: ((String, Boolean) -> Unit)? = null
 
+    /** Told when an agent asks for a permission (a notification when the window is in the background). */
+    var askingListener: ((String, String) -> Unit)? = null
+
     /** Opens a web address in the browser of the machine of the IDE; tests replace it. */
     var openUrl: (String) -> Unit = ::openInBrowser
 
@@ -262,6 +265,10 @@ class ProjectState(
     }
 
     override suspend fun openWorktree(branch: String): AgentWorkspace = openWorktreeProject(branch)
+
+    override fun agentAsking(title: String, question: String) {
+        askingListener?.invoke(title, question)
+    }
 
     override fun agentFinished(title: String, failed: Boolean) {
         finishedListener?.invoke(title, failed)

@@ -61,11 +61,14 @@ private fun AgentHost.apply(conversation: Conversation, transcript: AgentTranscr
     }
     if (transcript.items.isNotEmpty() && !transcript.replayed) conversation.lastMessageAt = System.currentTimeMillis()
     var wrote = false
+    var asked: String? = null
     for (item in transcript.items) {
+        asked = asked ?: newQuestion(conversation, item)
         wrote = wrote || finishedWriting(conversation, item)
         if (item is AgentItem.AgentText) quotaLimitsOf(item.text).takeIf { it.isNotEmpty() }?.let { conversation.quota = it }
         conversation.upsert(item)
     }
+    asked?.let { question -> agentAsking(conversation.title, question) }
     conversation.state = transcript.state
     conversation.syncWorkingClock()
     transcript.agentName?.let { conversation.agentName = it }
@@ -102,4 +105,11 @@ private fun finishedWriting(conversation: Conversation, item: AgentItem): Boolea
     val done = item.status == AgentToolStatus.Completed || item.status == AgentToolStatus.Failed
     val before = conversation.items.firstOrNull { it.id == item.id } as? AgentItem.ToolCall
     return done && before?.status != item.status
+}
+
+// What a permission request that just appeared asks, null for any other item or a request already shown.
+private fun newQuestion(conversation: Conversation, item: AgentItem): String? {
+    if (item !is AgentItem.Permission || !item.pending) return null
+    val before = conversation.items.firstOrNull { it.id == item.id } as? AgentItem.Permission
+    return item.title.takeIf { before?.pending != true }
 }

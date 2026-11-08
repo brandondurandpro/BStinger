@@ -134,6 +134,12 @@ private fun NotifyWhenFinished(project: ProjectState) {
             val text = if (failed) "The agent failed." else "The agent finished its work."
             if (inBackground) DesktopNotifications.show(title, text, failed)
         }
-        onDispose { project.finishedListener = null }
+        project.askingListener = { title, question ->
+            if (inBackground) DesktopNotifications.show(title, "The agent asks: $question", error = false)
+        }
+        onDispose {
+            project.finishedListener = null
+            project.askingListener = null
+        }
     }
 }
