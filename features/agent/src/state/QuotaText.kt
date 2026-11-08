@@ -25,7 +25,11 @@ data class QuotaLimit(val label: String, val percent: Int, val remaining: Boolea
 }
 
 /** The limits [text] gives, one per line such as `Weekly limit: 100% left (resets 13:01)`; none for any other text. */
-fun quotaLimitsOf(text: String): List<QuotaLimit> = text.lineSequence().mapNotNull { quotaLimitOf(it) }.toList()
+fun quotaLimitsOf(text: String): List<QuotaLimit> =
+    text.lineSequence().mapNotNull { quotaLimitOf(plain(it)) }.toList()
+
+// A line without its markdown: bullets, emphasis and code marks around the words.
+private fun plain(line: String): String = line.replace(Regex("""[*_`]"""), "").trimStart(' ', '-', '•', '>', '\t')
 
 private fun quotaLimitOf(line: String): QuotaLimit? {
     val left = LEFT_LINE.matchEntire(line)

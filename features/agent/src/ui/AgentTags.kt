@@ -21,6 +21,7 @@ object AgentTags {
     const val AGENT_USAGE = "agent.usage"
     const val AGENT_QUOTA = "agent.quota"
     const val AGENT_COMMANDS = "agent.commands"
+    const val AGENT_COMMANDS_FILTER = "agent.commands.filter"
 
     fun agentQuotaLimit(index: Int) = "agent.quota.$index"
 

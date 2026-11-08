@@ -38,4 +38,10 @@ class QuotaTextTest {
     fun `a text without a quota gives nothing`() {
         assertEquals(emptyList(), quotaLimitsOf("Hello, here is the code you asked for."))
     }
+
+    @Test
+    fun `markdown around the lines of Claude does not hide them`() {
+        val text = "- **5-hour limit** — 28% · Resets Nov 8, 2:09 PM GMT+1\n* `Weekly · all models` — 12% · Resets Nov 14"
+        assertEquals(listOf(28, 12), quotaLimitsOf(text).map { it.used })
+    }
 }

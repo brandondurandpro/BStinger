@@ -113,8 +113,14 @@ private fun CommandsButton(conversation: Conversation, commands: List<AgentSlash
             fontSize = 13.sp,
         )
         DropdownMenu(open, onDismissRequest = { open = false }, Modifier.widthIn(max = MENU_WIDTH).closesOnEscape { open = false }) {
+            var filter by remember { mutableStateOf("") }
+            AgentFilterField(filter, AgentTags.AGENT_COMMANDS_FILTER, "Search commands…") { filter = it }
+            val shown = commands.filter { it.matches(filter) }
+            if (shown.isEmpty()) {
+                Label("""No command "$filter".""", Modifier.padding(12.dp), color = IdeColors.TextSecondary, fontSize = 12.sp)
+            }
             Column(Modifier.heightIn(max = MENU_HEIGHT).verticalScroll(rememberScrollState())) {
-                for (command in commands) {
+                for (command in shown) {
                     CommandItem(command) {
                         open = false
                         conversation.draft = "/${command.name} "
@@ -124,6 +130,13 @@ private fun CommandsButton(conversation: Conversation, commands: List<AgentSlash
             }
         }
     }
+}
+
+// The name or the description has [filter] in it, case ignored; every command matches an empty filter.
+private fun AgentSlashCommand.matches(filter: String): Boolean {
+    val wanted = filter.trim().removePrefix("/")
+    if (wanted.isEmpty()) return true
+    return name.contains(wanted, ignoreCase = true) || description.contains(wanted, ignoreCase = true)
 }
 
 @Composable
