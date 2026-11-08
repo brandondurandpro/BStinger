@@ -18,6 +18,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import org.example.kotlineditor.state.AgentState
@@ -25,8 +26,6 @@ import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.Dock
 import org.example.kotlineditor.state.ProjectState
 import org.example.kotlineditor.state.workspaceProject
-
-private val PANEL_WIDTH = 260.dp
 
 /**
  * Agent mode: the strip of buttons on the far left (Conversations, then the tool windows), the conversation list,
@@ -56,8 +55,12 @@ internal fun AgentWorkspace(app: AppState, project: ProjectState) {
             ToolStrip(workspace, app.devtools) { ConversationsButton(agent) }
             VerticalDivider(Modifier.fillMaxHeight())
             if (agent.conversationsVisible) {
-                ConversationList(agent, Modifier.width(PANEL_WIDTH).fillMaxHeight())
-                VerticalDivider(Modifier.fillMaxHeight())
+                ConversationList(agent, Modifier.width(agent.conversationsWidth.dp).fillMaxHeight())
+                // Dragging to the right widens the list, on the left of the splitter.
+                val density = LocalDensity.current
+                SplitterBox(horizontalBar = false, tag = AgentTags.AGENT_LIST_SPLITTER) { delta ->
+                    agent.resizeConversations(with(density) { delta.toDp().value })
+                }
             }
             // Keyed by worktree: the tree, terminal and Git panel of one branch never show in another.
             key(workspace) { AgentBody(app, agent, workspace, drag, findFocus, Modifier.weight(1f)) }
@@ -105,15 +108,12 @@ private fun AgentTabsArea(app: AppState, agent: AgentState, findFocus: FocusRequ
         } else {
             AgentTabStrip(agent)
             Box(Modifier.fillMaxWidth().height(1.dp).background(IdeColors.Separator))
-            // The files and diffs of the worktree stay under their conversation, in its own row of sub-tabs.
-            DetailStrip(conversation)
-            Box(Modifier.fillMaxWidth().height(1.dp).background(IdeColors.Separator))
             val workspace = conversation.workspaceProject
             key(conversation.id) {
                 if (workspace == null || conversation.showsChat) {
                     ConversationView(agent, conversation)
                 } else {
-                    EditorArea(app, workspace, findFocus, Modifier.fillMaxSize())
+                    EditorArea(app, workspace, findFocus, Modifier.fillMaxSize(), showTabs = false)
                 }
             }
         }

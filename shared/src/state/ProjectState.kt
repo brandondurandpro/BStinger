@@ -41,6 +41,8 @@ class ProjectState(
     override val languageServers: LanguageServersState? = null,
     /** The command line of the agent of agent mode, as set in the settings. */
     private val agentCommand: () -> AgentCommand = { agentCommandOf("") },
+    /** The layout of the diffs, saved; a worktree of agent mode shares the one of its project. */
+    internal val diffLayout: DiffLayout = DiffLayout(preferences),
 ) : GitHost,
     TreeHost,
     LanguageServersHost,
@@ -104,7 +106,7 @@ class ProjectState(
     val network = NetworkView(services.network)
 
     // Created on first use: the worktrees of the conversations are projects too, without agent mode of their own.
-    private val agentState = lazy { AgentState(this, agentCommand) }
+    private val agentState = lazy { AgentState(this, agentCommand, preferences) }
 
     /** Conversations of agent mode, in memory, each on the current branch or in a worktree of its own. */
     val agent by agentState
@@ -135,7 +137,11 @@ class ProjectState(
         internal set
 
     /** Diff viewer layout: old and new files side by side (two panes) instead of the unified view. */
-    var diffSideBySide by mutableStateOf(false)
+    var diffSideBySide: Boolean
+        get() = diffLayout.sideBySide
+        set(value) {
+            diffLayout.sideBySide = value
+        }
 
     /** Positions left by navigation actions, for Ctrl+Alt+Left (Back). */
     internal val backStack = ArrayDeque<Pair<FileEntry, TextPos>>()
@@ -146,6 +152,9 @@ class ProjectState(
         followActiveFile()
         followInsight()
     }
+
+    /** What to save of agent mode; nothing while it was never used in this project (the saved values stay). */
+    fun agentPreferences(): Map<String, String> = if (agentState.isInitialized()) agent.toPreferences() else emptyMap()
 
     /** Shows or hides a tool window (Alt+1, Alt+9, Alt+F12, Ctrl+Alt+Shift+D or its button in the left strip). */
     fun toggleToolWindow(window: ToolWindow) {

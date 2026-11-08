@@ -6,6 +6,7 @@ import kotlinx.coroutines.launch
 import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.model.AgentSession
 import java.io.IOException
+import java.time.Instant
 
 // The history of agent mode: the sessions the agent keeps, listed and opened through the server. The IDE stores none
 // of it, so it never shows a history the agent no longer has.
@@ -19,7 +20,10 @@ internal fun AgentState.followHistory(project: AgentHost, agent: () -> AgentComm
         snapshotFlow { project.agentMode }.filter { it }.collect {
             val agents = project.services.agents
             val listed = runCatching { agents.sessions(agent(), project.root.path) }.getOrNull()
-            if (listed != null && listed.supported) addHistory(listed.sessions, project.root.path)
+            if (listed != null && listed.supported) {
+                addHistory(listed.sessions, project.root.path)
+                restoreSaved(project.root.path)
+            }
         }
     }
 }
@@ -41,6 +45,8 @@ internal fun conversationOf(session: AgentSession, id: Int, root: String): Conve
     val title = session.title?.takeIf { it.isNotBlank() } ?: "Conversation of ${session.updatedAt.orEmpty().take(DATE)}"
     val conversation = Conversation(id, titleOf(title), branch ?: "agent/conversation-$id")
     conversation.session = session.id
+    val updated = runCatching { Instant.parse(session.updatedAt.orEmpty()).toEpochMilli() }
+    conversation.lastMessageAt = updated.getOrNull()
     conversation.sessionDirectory = session.directory
     conversation.mode = if (branch == null || session.directory == root) WorkMode.Direct else WorkMode.Worktree
     return conversation

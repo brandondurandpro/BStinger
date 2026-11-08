@@ -26,9 +26,27 @@ object PreferenceKeys {
     const val EDITOR_FONT_SIZE = "editor.fontSize"
     const val AUTO_SELECT_OPENED_FILE = "project.autoSelectOpenedFile"
     const val AGENT_MODE = "experimental.agentMode"
+    const val AGENT_MODE_BY_DEFAULT = "experimental.agentModeByDefault"
+
+    /** Width of the conversation list of agent mode, in dp. */
+    const val AGENT_CONVERSATIONS_WIDTH = "agent.conversationsWidth"
+
+    /** The agent of the registry last chosen in a conversation; blank for the agent of the settings. */
+    const val AGENT_LAST_CHOSEN = "agent.lastChosen"
+
+    /** Per project (the key ends with its path): the sessions open in tabs of agent mode, one per line, in order. */
+    const val AGENT_OPEN_PREFIX = "agent.open."
+
+    /** Per project: the session of the tab that was active. */
+    const val AGENT_ACTIVE_PREFIX = "agent.active."
+
+    /** Per project: the titles the user gave to conversations, one `session<TAB>title` per line. */
+    const val AGENT_TITLES_PREFIX = "agent.titles."
+
     const val AGENT_COMMAND = "agent.command"
     const val AGENT_REGISTRY = "agent.registry"
     const val INLAY_HINTS = "editor.inlayHints"
+    const val DIFF_SIDE_BY_SIDE = "editor.diffSideBySide"
     const val LAYOUT_PREFIX = "layout."
 
     /** Branches pinned in the toolbar, per project: the key ends with the project's path (`GitState`). */

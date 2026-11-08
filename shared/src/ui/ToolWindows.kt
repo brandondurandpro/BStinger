@@ -2,6 +2,7 @@ package org.example.kotlineditor.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -30,6 +31,8 @@ import org.example.kotlineditor.state.Dock
 import org.example.kotlineditor.state.ProjectState
 import org.example.kotlineditor.state.ToolWindow
 
+private val BUTTON_GAP = 4.dp
+
 /**
  * Fixed left strip: one button per tool window, wherever the panel itself is docked; [top] adds buttons above them
  * (the conversation list of agent mode).
@@ -38,6 +41,8 @@ import org.example.kotlineditor.state.ToolWindow
 internal fun ToolStrip(project: ProjectState?, devtools: Boolean, top: @Composable ColumnScope.() -> Unit = {}) {
     Column(
         Modifier.width(STRIP_WIDTH).fillMaxHeight().padding(vertical = 6.dp),
+        // Apart, so that the backgrounds of several windows open at once never touch.
+        verticalArrangement = Arrangement.spacedBy(BUTTON_GAP),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         top()
@@ -48,8 +53,8 @@ internal fun ToolStrip(project: ProjectState?, devtools: Boolean, top: @Composab
 @Composable
 private fun ColumnScope.ToolButtons(project: ProjectState, devtools: Boolean) {
     ToolButton(project, ToolWindow.Project, AppTags.TOOL_PROJECT) { FolderIcon(Modifier.size(18.dp)) }
-    ToolButton(project, ToolWindow.Git, AppTags.TOOL_GIT) { BranchIcon(color = IdeColors.Text) }
-    ToolButton(project, ToolWindow.Branches, AppTags.TOOL_BRANCHES) { HistoryIcon(color = IdeColors.Text) }
+    ToolButton(project, ToolWindow.Git, AppTags.TOOL_GIT) { HistoryIcon(color = IdeColors.Text) }
+    ToolButton(project, ToolWindow.Branches, AppTags.TOOL_BRANCHES) { BranchIcon(color = IdeColors.Text) }
     Spacer(Modifier.weight(1f))
     // Bottom tool windows sit at the bottom of the strip, like in IntelliJ's New UI.
     if (devtools) {

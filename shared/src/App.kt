@@ -20,7 +20,7 @@ fun App(state: AppState) {
     IdeTheme {
         Box(Modifier.fillMaxSize()) {
             when (val screen = state.session.screen) {
-                Screen.Welcome -> WelcomeScreen(state)
+                Screen.Welcome -> if (!state.launching) WelcomeScreen(state)
                 is Screen.Project -> key(screen.project) { ProjectScreen(state, screen.project) }
             }
             state.remote.dialog?.let { RemoteDialog(state.remote, it) }

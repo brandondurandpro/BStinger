@@ -11,6 +11,23 @@ object AgentTags {
     const val AGENT_NEW = "agent.new"
     const val AGENT_FILTER = "agent.filter"
     const val AGENT_DELETE = "agent.delete"
+    const val AGENT_REVIEW = "agent.review"
+    const val AGENT_CHANGES_TOGGLE = "agent.changes.toggle"
+    const val AGENT_CHANGES_REFRESH = "agent.changes.refresh"
+    const val AGENT_CHANGES_REVERT_ALL = "agent.changes.revertAll"
+
+    fun agentChanges(id: Int) = "agent.changes.$id"
+
+    fun agentChange(path: String) = "agent.change:$path"
+
+    fun agentChangeRevert(path: String) = "agent.change.revert:$path"
+
+    const val AGENT_REVIEW_DEFAULT = "agent.review.default"
+
+    fun agentReviewer(id: String) = "agent.review.$id"
+
+    const val AGENT_RENAME = "agent.rename"
+    const val AGENT_RENAME_FIELD = "agent.renameField"
     const val AGENT_TABS = "agent.tabs"
     const val AGENT_EMPTY = "agent.empty"
     const val AGENT_PROMPT = "agent.prompt"
@@ -42,6 +59,17 @@ object AgentTags {
     fun agentTab(id: Int) = "agent.tab.$id"
 
     fun agentTabClose(id: Int) = "agent.tab.$id.close"
+
+    const val AGENT_LIST_SPLITTER = "agent.listSplitter"
+    const val AGENT_LAST_MESSAGE = "agent.lastMessage"
+
+    fun agentConversationAgent(id: Int) = "agent.conversation.$id.agent"
+
+    fun agentWorking(id: Int) = "agent.working.$id"
+
+    fun agentDone(id: Int) = "agent.done.$id"
+
+    fun agentSeen(id: Int) = "agent.seen.$id"
 
     fun agentTabDetails(id: Int) = "agent.tab.$id.details"
 

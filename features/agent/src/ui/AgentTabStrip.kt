@@ -28,18 +28,25 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.example.kotlineditor.state.AgentState
 import org.example.kotlineditor.state.Conversation
+import org.example.kotlineditor.state.EditorState
+import org.example.kotlineditor.state.EditorTab
 import org.example.kotlineditor.state.toggle
 
 // The tabs of agent mode, one per open conversation, and the button of the strip that shows the conversation list.
@@ -81,64 +88,164 @@ private fun StripButton(
 fun AgentTabStrip(agent: AgentState) {
     val listState = rememberLazyListState()
     val active = agent.tabs.active
-    LaunchedEffect(active) {
-        val index = agent.tabs.open.indexOf(active)
-        if (index >= 0 && !isFullyVisible(listState, index)) listState.animateScrollToItem(index)
+    val items = stripItems(agent)
+    val shown = items.indexOfFirst { it.isShown(active) }
+    LaunchedEffect(shown) {
+        if (shown >= 0 && !isFullyVisible(listState, shown)) listState.animateScrollToItem(shown)
     }
+    val density = LocalDensity.current
+    var contextMenu by remember { mutableStateOf<Pair<String, DpOffset>?>(null) }
     LazyRow(
         Modifier
             .fillMaxWidth()
             .height(36.dp)
             .background(IdeColors.Panel)
+            .wheelScrollsHorizontally(listState)
             .testTag(AgentTags.AGENT_TABS),
         state = listState,
     ) {
-        items(agent.tabs.open, key = { it.id }) { conversation ->
-            AgentTabView(agent, conversation, conversation == active)
-        }
-    }
-}
-
-@OptIn(ExperimentalComposeUiApi::class)
-@Composable
-private fun AgentTabView(agent: AgentState, conversation: Conversation, active: Boolean) {
-    val interaction = remember { MutableInteractionSource() }
-    val hovered by interaction.collectIsHoveredAsState()
-    val press =
-        Modifier.onPointerEvent(PointerEventType.Press) { event ->
-            onTabPress(event, { agent.open(conversation) }, { agent.tabs.close(conversation) }, {})
-        }
-    Row(
-        Modifier
-            .fillMaxHeight()
-            .background(if (hovered && !active) IdeColors.Hover else Color.Transparent)
-            .activeUnderline(active)
-            .hoverable(interaction)
-            .then(press)
-            .testTag(AgentTags.agentTab(conversation.id))
-            .padding(start = 10.dp, end = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        ChatTabIcon(conversation.busy)
-        Label(conversation.title, Modifier.widthIn(max = 220.dp).padding(start = 6.dp, end = 4.dp))
-        // How many files and diffs are open inside, so none is forgotten behind another conversation.
-        val editor = conversation.workspace?.editor
-        val details = editor?.allTabs?.size ?: 0
-        if (details > 0) DetailCount(details, Modifier.testTag(AgentTags.agentTabDetails(conversation.id)))
-        Box(Modifier.size(22.dp), contentAlignment = Alignment.Center) {
-            if (hovered || active) {
-                IconButton(
-                    { agent.tabs.close(conversation) },
-                    Modifier.testTag(AgentTags.agentTabClose(conversation.id)),
-                ) { CloseIcon() }
+        items(items, key = { it.key }) { item ->
+            val openMenu = { position: Offset ->
+                contextMenu = item.key to with(density) { DpOffset(position.x.toDp(), position.y.toDp()) }
+            }
+            val menu =
+                @Composable {
+                    val asked = contextMenu?.takeIf { it.first == item.key }
+                    if (asked != null) {
+                        val actions = closeActionsOf(items, item)
+                        val index = items.indexOf(item)
+                        CloseTabsMenu(index, items.size, actions, asked.second, { contextMenu = null })
+                    }
+                }
+            when (item) {
+                is StripItem.Chat -> AgentTabView(agent, item.conversation, item.isShown(active), openMenu, menu)
+                is StripItem.File -> FileTabView(item, openMenu, menu)
             }
         }
     }
 }
 
+// The tabs the menu of [item] closes: conversations are closed (not deleted), files and diffs are closed.
+private fun closeActionsOf(items: List<StripItem>, item: StripItem): CloseTabsActions {
+    val index = items.indexOf(item)
+    val closeAll = { items.toList().forEach { it.close() } }
+    return CloseTabsActions(
+        close = item::close,
+        closeOthers = { items.filter { it != item }.forEach { it.close() } },
+        closeToLeft = { items.take(index).forEach { it.close() } },
+        closeToRight = { items.drop(index + 1).forEach { it.close() } },
+        closeAll = closeAll,
+    )
+}
+
+// What the strip lists: each open conversation, then the files and diffs open in the worktree of the active one.
+private sealed interface StripItem {
+    val key: String
+
+    fun isShown(active: Conversation?): Boolean
+
+    fun close()
+
+    class Chat(val agent: AgentState, val conversation: Conversation) : StripItem {
+        override fun close() = agent.tabs.close(conversation)
+
+        override val key = "chat:${conversation.id}"
+
+        override fun isShown(active: Conversation?): Boolean {
+            val workspace = conversation.workspace
+            return conversation == active && (workspace == null || conversation.showsChat)
+        }
+    }
+
+    class File(val conversation: Conversation, val editor: EditorState, val tab: EditorTab) : StripItem {
+        override fun close() {
+            editor.close(tab)
+            if (editor.allTabs.isEmpty()) conversation.showsChat = true
+        }
+
+        override val key = "file:${conversation.id}:${tab.key}"
+
+        override fun isShown(active: Conversation?): Boolean =
+            conversation == active && !conversation.showsChat && editor.activeTab == tab
+    }
+}
+
+private fun stripItems(agent: AgentState): List<StripItem> {
+    val active = agent.tabs.active
+    return agent.tabs.open.flatMap { conversation ->
+        val chat = StripItem.Chat(agent, conversation)
+        val editor = conversation.workspace?.editor
+        val files = if (conversation == active && editor != null) editor.allTabs else emptyList()
+        listOf<StripItem>(chat) + files.map { StripItem.File(conversation, editor!!, it) }
+    }
+}
+
 @Composable
-private fun ChatTabIcon(busy: Boolean) {
-    if (busy) RunningDot() else SpeechBubbleIcon(IdeColors.TextSecondary)
+private fun FileTabView(item: StripItem.File, onContextMenu: (Offset) -> Unit, menu: @Composable () -> Unit) {
+    val conversation = item.conversation
+    val editor = item.editor
+    val tab = item.tab
+    val select = {
+        conversation.showsChat = false
+        editor.activate(tab)
+    }
+    EditorTabView(tab, item.isShown(conversation), select, item::close, onContextMenu, menu)
+}
+
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+private fun AgentTabView(
+    agent: AgentState,
+    conversation: Conversation,
+    active: Boolean,
+    onContextMenu: (Offset) -> Unit,
+    menu: @Composable () -> Unit,
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val hovered by interaction.collectIsHoveredAsState()
+    val press =
+        Modifier.onPointerEvent(PointerEventType.Press) { event ->
+            val select = {
+                conversation.showsChat = true
+                agent.open(conversation)
+            }
+            onTabPress(event, select, { agent.tabs.close(conversation) }, onContextMenu)
+        }
+    // The menu is a sibling of the tab, anchored on the whole tab rather than at the end of its content.
+    Box(Modifier.fillMaxHeight()) {
+        Row(
+            Modifier
+                .fillMaxHeight()
+                .background(if (hovered && !active) IdeColors.Hover else Color.Transparent)
+                .activeUnderline(active)
+                .hoverable(interaction)
+                .then(press)
+                .testTag(AgentTags.agentTab(conversation.id))
+                .padding(start = 10.dp, end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ChatTabIcon(conversation)
+            Label(conversation.title, Modifier.widthIn(max = 220.dp).padding(start = 6.dp, end = 4.dp))
+            // How many files and diffs are open inside another conversation, so none is forgotten behind this one.
+            val editor = conversation.workspace?.editor
+            val details = if (agent.tabs.active == conversation) 0 else editor?.allTabs?.size ?: 0
+            if (details > 0) DetailCount(details, Modifier.testTag(AgentTags.agentTabDetails(conversation.id)))
+            Box(Modifier.size(22.dp), contentAlignment = Alignment.Center) {
+                if (hovered || active) {
+                    IconButton(
+                        { agent.tabs.close(conversation) },
+                        Modifier.testTag(AgentTags.agentTabClose(conversation.id)),
+                    ) { CloseIcon() }
+                }
+            }
+        }
+        menu()
+    }
+}
+
+@Composable
+private fun ChatTabIcon(conversation: Conversation) {
+    if (conversation.busy || conversation.finished) AgentStatus(conversation) else SpeechBubbleIcon(IdeColors.TextSecondary)
 }
 
 @Composable

@@ -47,7 +47,7 @@ private fun apply(conversation: Conversation, transcript: AgentTranscript) {
     }
     val wasBusy = conversation.state != AgentTurnState.Idle
     transcript.session?.let { conversation.session = it }
-    transcript.title?.let { conversation.title = titleOf(it) }
+    if (!conversation.renamed) transcript.title?.let { conversation.title = titleOf(it) }
     if (transcript.commands.isNotEmpty()) conversation.commands = transcript.commands
     // A choice on its way shows until the server has it.
     if (transcript.options.isNotEmpty()) conversation.serverOptions = transcript.options
@@ -58,16 +58,22 @@ private fun apply(conversation: Conversation, transcript: AgentTranscript) {
         conversation.replayedEpoch = transcript.epoch
         conversation.replaceByHistory()
     }
+    if (transcript.items.isNotEmpty() && !transcript.replayed) conversation.lastMessageAt = System.currentTimeMillis()
     var wrote = false
     for (item in transcript.items) {
         wrote = wrote || finishedWriting(conversation, item)
         conversation.upsert(item)
     }
     conversation.state = transcript.state
+    conversation.syncWorkingClock()
     transcript.agentName?.let { conversation.agentName = it }
     // The turn is over the way the server said it: a prompt queued while it answered goes now.
     if (transcript.state == AgentTurnState.Idle) conversation.onTurnIdle?.invoke()
     val turnEnded = wasBusy && transcript.state == AgentTurnState.Idle
+    if (turnEnded) {
+        conversation.finished = true
+        conversation.seen = false
+    }
     // The tree, the Git panel and the open editors pick the changes of the agent up.
     if (wrote || turnEnded) conversation.workspace?.synchronize()
 }
@@ -77,6 +83,7 @@ private fun apply(conversation: Conversation, transcript: AgentTranscript) {
 private fun forgotten(conversation: Conversation, restarted: Boolean) {
     val wasBusy = conversation.state != AgentTurnState.Idle
     conversation.state = AgentTurnState.Idle
+    conversation.syncWorkingClock()
     conversation.onTurnIdle?.invoke()
     val shownByServer = conversation.items.any { it.version > 0 }
     val lost = shownByServer && conversation.session == null

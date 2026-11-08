@@ -3,6 +3,7 @@ package org.example.kotlineditor.state
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -47,6 +48,13 @@ class Conversation(val id: Int, title: String, val branch: String) {
     var title by mutableStateOf(title)
         internal set
 
+    /** The uncommitted changes where the agent works, to review. */
+    val changes = ChangesState()
+
+    /** True once the user gave the conversation its title: the one the agent proposes no longer replaces it. */
+    var renamed by mutableStateOf(false)
+        internal set
+
     /** The transcript, oldest first. */
     val items = mutableStateListOf<AgentItem>()
     private val positions = HashMap<String, Int>()
@@ -78,6 +86,27 @@ class Conversation(val id: Int, title: String, val branch: String) {
 
     /** True while the agent is answering; the prompt then offers to stop it. */
     val busy: Boolean get() = sending || state != AgentTurnState.Idle
+
+    /** True once the agent finished its turn, until the next prompt is sent: the work is done and waits for a look. */
+    var finished by mutableStateOf(false)
+        internal set
+
+    /** True once the user looked at the conversation after the agent finished its turn; false again at the next end. */
+    var seen by mutableStateOf(false)
+        internal set
+
+    /** When the last message was sent or received (milliseconds since the epoch); null when none is known. */
+    var lastMessageAt: Long? by mutableStateOf(null)
+        internal set
+
+    /** When the agent started the turn it is working on (milliseconds since the epoch), null while it is idle. */
+    var workingSince: Long? by mutableStateOf(null)
+        private set
+
+    /** Starts the clock of the turn when the agent became busy, stops it when it is idle. */
+    internal fun syncWorkingClock() {
+        workingSince = if (busy) workingSince ?: System.currentTimeMillis() else null
+    }
 
     /** Name and version of the agent, once it introduced itself. */
     var agentName: String? by mutableStateOf(null)
@@ -231,6 +260,8 @@ class AgentState(
     /** The project of agent mode. */
     val project: AgentHost,
     private val agentCommand: () -> AgentCommand = { agentCommandOf("") },
+    /** The preferences saved by the last run: the width of the list, and the tabs and titles of this project. */
+    private val saved: Map<String, String> = emptyMap(),
 ) {
     private val git get() = project.services.git
     private val agents get() = project.services.agents
@@ -263,10 +294,31 @@ class AgentState(
 
     /** Whether the conversation list is shown on the left. */
     var conversationsVisible by mutableStateOf(true)
+
+    /** Width of the conversation list in dp, set by dragging its right edge. */
+    var conversationsWidth by mutableFloatStateOf(DEFAULT_CONVERSATIONS_WIDTH)
+        private set
+
+    /** Widens the conversation list by [delta] dp (narrows it when negative), within its limits. */
+    fun resizeConversations(delta: Float) {
+        conversationsWidth = (conversationsWidth + delta).coerceIn(MIN_CONVERSATIONS_WIDTH, MAX_CONVERSATIONS_WIDTH)
+    }
+
+    /** The agent of the registry the user chose last, which a new conversation starts with; null: the settings'. */
+    var lastAgent: String? by mutableStateOf(saved[PreferenceKeys.AGENT_LAST_CHOSEN]?.takeIf { it.isNotBlank() })
+        private set
+
     internal var nextId = 1
 
+    // Whether the tabs and titles of the last run were put back: until then, nothing of them is saved.
+    internal var restored = false
+    internal val savedPreferences get() = saved
+
     init {
+        savedWidth(saved)?.let { conversationsWidth = it }
         followEditors()
+        followSeen()
+        followChanges()
         followHistory(project, agentCommand)
     }
 
@@ -298,9 +350,18 @@ class AgentState(
         // The state delivers the prompts queued while the agent answered: only it has the command, the scope
         // and the transcript machinery held together (the transcript only says the turn is over).
         conversation.onTurnIdle = { deliverQueued(conversation) }
+        conversation.agent = lastAgent?.let { AgentCommand(emptyList(), registry = it) }
         conversations.add(0, conversation)
         open(conversation)
         return conversation
+    }
+
+    /** Gives [conversation] the title [title] (blank is ignored); the agent's own titles no longer replace it. */
+    fun rename(conversation: Conversation, title: String) {
+        val trimmed = title.trim()
+        if (trimmed.isEmpty()) return
+        conversation.title = trimmed
+        conversation.renamed = true
     }
 
     /** Deletes [conversation], its session and its worktree, if it has one (Git keeps it when it has changes). */
@@ -318,7 +379,11 @@ class AgentState(
             if (session != null) runCatching { agents.delete(agent, session) }
         }
         conversation.closeWorktree(project)?.let { worktree ->
-            project.scope.launch { runCatching { git.removeWorktree(project.root.path, worktree.root.path) } }
+            // A reviewer works in the worktree of the conversation it reviews: it goes with the last of them.
+            val shared = conversations.any { it.workspace?.root?.path == worktree.root.path }
+            if (!shared) {
+                project.scope.launch { runCatching { git.removeWorktree(project.root.path, worktree.root.path) } }
+            }
         }
     }
 
@@ -358,8 +423,9 @@ class AgentState(
      * settings of its previous agent — the prompt runs in a new session of the new agent, which does not remember
      * what the previous one was told (as the transcript says in a notice).
      */
-    fun chooseAgent(conversation: Conversation, entry: String?) {
+    fun chooseAgent(conversation: Conversation, entry: String?, remember: Boolean = true) {
         if (conversation.busy || conversation.settingOptions > 0) return
+        if (remember) lastAgent = entry
         val chosen = entry?.let { AgentCommand(emptyList(), registry = it) }
         if (conversation.agent == chosen) return
         conversation.offering?.cancel()
@@ -401,6 +467,9 @@ class AgentState(
     /** One prompt in flight; a queued one goes once the turn of the agent is over (see [onTurnIdle]). */
     private fun launchDelivery(conversation: Conversation, prompt: OutgoingPrompt) {
         conversation.sending = true
+        conversation.finished = false
+        conversation.lastMessageAt = System.currentTimeMillis()
+        conversation.syncWorkingClock()
         conversation.job = project.scope.launch { deliver(conversation, prompt) }
     }
 
@@ -436,6 +505,7 @@ class AgentState(
             }
         } finally {
             conversation.sending = false
+            conversation.syncWorkingClock()
         }
     }
 
@@ -471,6 +541,15 @@ class AgentState(
         }
     }
 
+    // The agent finished and the user is looking at the conversation: it is seen.
+    private fun followSeen() {
+        project.scope.launch {
+            snapshotFlow {
+                current?.takeIf { project.agentMode && it.showsChat && it.finished && !it.seen }
+            }.filterNotNull().collect { it.seen = true }
+        }
+    }
+
     // A file or a diff opened from the tool windows is shown in place of the active conversation; selecting another
     // conversation, or its worktree opening, changes nothing.
     private fun followEditors() {
@@ -496,3 +575,7 @@ internal fun titleOf(text: String): String {
     val line = text.lineSequence().firstOrNull().orEmpty()
     return if (line.length <= TITLE_LENGTH) line else line.take(TITLE_LENGTH).trimEnd() + "…"
 }
+
+private const val DEFAULT_CONVERSATIONS_WIDTH = 260f
+private const val MIN_CONVERSATIONS_WIDTH = 160f
+private const val MAX_CONVERSATIONS_WIDTH = 640f

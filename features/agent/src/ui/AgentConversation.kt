@@ -76,6 +76,7 @@ fun ConversationView(agent: AgentState, conversation: Conversation) {
                 Modifier.align(Alignment.CenterEnd).fillMaxHeight(),
             )
         }
+        ChangesBar(agent, conversation)
         Prompt(agent, conversation)
     }
 }
@@ -234,6 +235,7 @@ private fun PromptActions(agent: AgentState, conversation: Conversation) {
         ModelPicker(agent, conversation)
         EffortPicker(agent, conversation)
         PermissionsPicker(agent, conversation)
+        ReviewButton(agent, conversation)
         Spacer(Modifier.width(8.dp))
         val name = conversation.agentName ?: "Agent: " + agent.agentLabelOf(conversation)
         Label(
