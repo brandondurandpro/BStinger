@@ -95,6 +95,10 @@ internal fun ContextChips(context: PromptContext, modifier: Modifier = Modifier)
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         attachments.forEach { attachment ->
+            if (attachment is AgentAttachment.Image) {
+                ImageChip(attachment) { context.remove(attachment) }
+                return@forEach
+            }
             ContextChip(attachment.label, Modifier.testTag(AgentTags.agentAttachment(attachment.label))) {
                 Label(
                     "×",

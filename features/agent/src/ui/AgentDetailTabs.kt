@@ -32,51 +32,6 @@ import org.example.kotlineditor.state.AgentState
 import org.example.kotlineditor.state.Conversation
 import org.example.kotlineditor.state.WorkMode
 
-// Sub-tabs of a conversation: the conversation itself, then the editors of the project it works on (files and diffs
-// opened from the Project and Git tool windows).
-
-@Composable
-fun DetailStrip(conversation: Conversation) {
-    val workspace = conversation.workspace
-    val editor = workspace?.editor
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .height(32.dp)
-            .background(IdeColors.Editor)
-            .padding(horizontal = 6.dp)
-            .testTag(AgentTags.AGENT_DETAILS),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        DetailChip(
-            selected = conversation.showsChat || editor == null,
-            tag = AgentTags.AGENT_DETAIL_CONVERSATION,
-            onSelect = { conversation.showsChat = true },
-        ) {
-            SpeechBubbleIcon(IdeColors.TextSecondary)
-            Label("Conversation", Modifier.padding(start = 6.dp), fontSize = 12.sp)
-        }
-        val files = editor?.allTabs.orEmpty()
-        if (files.isNotEmpty()) {
-            val active = editor?.activeTab
-            DetailChip(
-                selected = !conversation.showsChat,
-                tag = AgentTags.AGENT_DETAIL_EDITOR,
-                onSelect = { conversation.showsChat = false },
-            ) {
-                FileIcon(active?.entry?.name.orEmpty(), isDirectory = false, size = 14.dp)
-                Label(
-                    active?.title ?: "Files",
-                    Modifier.widthIn(max = 220.dp).padding(start = 6.dp, end = 6.dp),
-                    fontSize = 12.sp,
-                )
-                DetailCount(files.size)
-            }
-        }
-    }
-}
-
 /** Where the agent works, in words, and the switch between the current branch and a worktree of its own. */
 @Composable
 internal fun WorkspaceStatus(agent: AgentState, conversation: Conversation, modifier: Modifier = Modifier) {
@@ -142,41 +97,6 @@ private val WORK_MODES =
         Triple(WorkMode.Direct, "Current branch", AgentTags.AGENT_MODE_DIRECT),
         Triple(WorkMode.Worktree, "Worktree", AgentTags.AGENT_MODE_WORKTREE),
     )
-
-// A rounded sub-tab.
-@OptIn(ExperimentalComposeUiApi::class)
-@Composable
-private fun DetailChip(
-    selected: Boolean,
-    tag: String,
-    onSelect: () -> Unit,
-    content: @Composable RowScope.() -> Unit,
-) {
-    val interaction = remember { MutableInteractionSource() }
-    val hovered by interaction.collectIsHoveredAsState()
-    val background =
-        when {
-            selected -> IdeColors.Selection
-            hovered -> IdeColors.Hover
-            else -> Color.Transparent
-        }
-    val press =
-        Modifier.onPointerEvent(PointerEventType.Press) { event ->
-            onTabPress(event, onSelect, {}, {})
-        }
-    Row(
-        Modifier
-            .height(24.dp)
-            .background(background, RoundedCornerShape(5.dp))
-            .hoverable(interaction)
-            .then(press)
-            .testTag(tag)
-            .padding(horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        content()
-    }
-}
 
 /** Number of files and diffs open in the worktree of a conversation, shown on its tab. */
 @Composable

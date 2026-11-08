@@ -48,6 +48,22 @@ enum class AgentTurnState {
  */
 const val AGENT_BUSY_MESSAGE = "The agent is still answering"
 
+/**
+ * What the server answers, as the start of its message, when the agent needs the user to log in before it starts a
+ * session: the IDE then offers the ways to log in ([AgentChoices.authMethods]).
+ */
+const val AGENT_LOGIN_MESSAGE = "Log in to the agent first"
+
+/** A way to log in to an agent, as it lists them when it starts (the `authMethods` of ACP). */
+data class AgentAuthMethod(
+    /** Its id, to log in with it. */
+    val id: String,
+    /** What the user reads (`Log in with Claude`). */
+    val name: String,
+    /** What it does, when the agent says. */
+    val description: String? = null,
+)
+
 /** What a tool call does, from the agent: it picks the icon and how the call is shown. */
 enum class AgentToolKind {
     /** Reads files. */
@@ -254,6 +270,17 @@ sealed interface AgentAttachment {
             }
     }
 
+    /** A sound joined to the prompt, [data] being its bytes in Base64; only an agent that takes audio gets it. */
+    data class Audio(
+        /** What the prompt calls it (`voice.wav`). */
+        val name: String,
+        /** Its type (`audio/wav`). */
+        val mimeType: String,
+        val data: String,
+    ) : AgentAttachment {
+        override val label: String get() = name
+    }
+
     /** An image pasted in the prompt, [data] being its bytes in Base64. */
     data class Image(
         /** What the prompt calls it (`image-1.png`). */
@@ -343,6 +370,20 @@ data class AgentTranscript(
     val options: List<AgentOption> = emptyList(),
     /** The commands the agent offers in this session; empty before it said. */
     val commands: List<AgentSlashCommand> = emptyList(),
+    /** How much of the context window the session uses, and what it cost; null before the agent said. */
+    val usage: AgentUsage? = null,
+)
+
+/** The context window of a session and what it cost so far, as the agent says (`usage_update`). */
+data class AgentUsage(
+    /** Tokens in the context now. */
+    val used: Long,
+    /** Size of the context window, in tokens. */
+    val size: Long,
+    /** What the session cost so far, in [currency]; null when the agent does not say. */
+    val cost: Double? = null,
+    /** ISO 4217 code of [cost] (`USD`). */
+    val currency: String? = null,
 )
 
 /** A session an agent keeps, as the agent lists it: the history of a conversation. */
@@ -386,6 +427,21 @@ interface AgentChoices {
 
     /** The commands [agent] offered in its latest session, without starting it; empty before it said. */
     suspend fun commands(agent: AgentCommand): List<AgentSlashCommand>
+
+    /** The ways to log in to [agent]; empty when it asks for none. The agent starts for it when needed. */
+    suspend fun authMethods(agent: AgentCommand): List<AgentAuthMethod>
+
+    /**
+     * Logs in to [agent] with the method [method] (one of [authMethods]): the agent does what its method needs, such
+     * as opening the browser, and the call returns once it is done. Fails with the agent's reason.
+     */
+    suspend fun authenticate(agent: AgentCommand, method: String)
+
+    /**
+     * Forks the [session] of [agent] working in [directory]: the agent keeps a copy of its history under a new session,
+     * whose id is returned. Fails when the agent cannot fork.
+     */
+    suspend fun fork(agent: AgentCommand, session: String, directory: String): String
 }
 
 /** Conversations with agents, run by the server. Every call returns at once except [transcript], a long poll. */
@@ -472,4 +528,11 @@ private object NoChoices : AgentChoices {
         throw java.io.IOException(NO_SERVER)
 
     override suspend fun commands(agent: AgentCommand): List<AgentSlashCommand> = emptyList()
+
+    override suspend fun authMethods(agent: AgentCommand): List<AgentAuthMethod> = emptyList()
+
+    override suspend fun authenticate(agent: AgentCommand, method: String): Unit = throw java.io.IOException(NO_SERVER)
+
+    override suspend fun fork(agent: AgentCommand, session: String, directory: String): String =
+        throw java.io.IOException(NO_SERVER)
 }

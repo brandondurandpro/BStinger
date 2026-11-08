@@ -16,11 +16,26 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerButton
+import androidx.compose.ui.input.pointer.PointerEvent
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.isCtrlPressed
+import androidx.compose.ui.input.pointer.isMetaPressed
+import androidx.compose.ui.input.pointer.isPrimaryPressed
+import androidx.compose.ui.input.pointer.isShiftPressed
+import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -135,6 +150,13 @@ private fun SelectAll(project: GitHost, changes: Int) {
             }
         }
         Label("Changes ($changes)", Modifier.padding(start = 8.dp), color = IdeColors.TextSecondary, fontSize = 11.sp)
+        Box(Modifier.weight(1f))
+        val checkedFiles = project.git.selectedForCommit
+        if (checkedFiles.isNotEmpty()) {
+            ConfirmButton("Revert checked", GitTags.GIT_REVERT_CHECKED, enabled = !project.git.busy) {
+                project.git.revert(checkedFiles)
+            }
+        }
     }
 }
 
@@ -142,18 +164,39 @@ private fun SelectAll(project: GitHost, changes: Int) {
 // a click on the file name opens its diff. The checked state is read per row, so a tick recomposes only that row.
 @Composable
 private fun ChangeList(project: GitHost, changes: List<Map.Entry<String, GitFileStatus>>) {
+    val ordered = changes.map { it.key }
     LazyColumn(Modifier.fillMaxSize()) {
         items(changes, key = { it.key }) { (path, status) ->
-            ChangeRow(project, path, status, checked = path in project.git.selectedForCommit)
+            val checked = path in project.git.selectedForCommit
+            ChangeRow(project, path, status, checked, picked = path in project.git.pickedChanges, ordered)
         }
     }
 }
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
-private fun ChangeRow(project: GitHost, path: String, status: GitFileStatus, checked: Boolean) {
+private fun ChangeRow(
+    project: GitHost,
+    path: String,
+    status: GitFileStatus,
+    checked: Boolean,
+    picked: Boolean,
+    ordered: List<String>,
+) {
     val name = path.substringAfterLast('/')
     val directory = path.substringBeforeLast('/', "")
-    Row(Modifier.fillMaxWidth().height(24.dp), verticalAlignment = Alignment.CenterVertically) {
+    var menu by remember { mutableStateOf(false) }
+    // A click highlights the row (Ctrl adds or removes it, Shift extends to it) and, alone, shows its diff; a right
+    // click opens the menu on the highlighted rows.
+    val press =
+        Modifier.onPointerEvent(PointerEventType.Press) { event ->
+            pressRow(project, path, ordered, event) { menu = true }
+        }
+    val background = if (picked) IdeColors.Selection else Color.Transparent
+    Row(
+        Modifier.fillMaxWidth().height(24.dp).background(background),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         // The checkbox decides what the next commit carries; the file name opens the diff.
         BranchCheckbox(
             checked,
@@ -163,7 +206,7 @@ private fun ChangeRow(project: GitHost, path: String, status: GitFileStatus, che
         Row(
             Modifier
                 .weight(1f)
-                .clickable { project.openDiff(path) }
+                .then(press)
                 .testTag(GitTags.gitChange(path))
                 .padding(horizontal = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -186,6 +229,54 @@ private fun ChangeRow(project: GitHost, path: String, status: GitFileStatus, che
                 )
             }
         }
+        ConfirmButton("Revert", GitTags.gitChangeRevert(path), enabled = !project.git.busy) {
+            project.git.revert(listOf(path))
+        }
+        if (menu) ChangesMenu(project) { menu = false }
+    }
+}
+
+@OptIn(ExperimentalComposeUiApi::class)
+private fun pressRow(project: GitHost, path: String, ordered: List<String>, event: PointerEvent, openMenu: () -> Unit) {
+    val modifiers = event.keyboardModifiers
+    val ctrl = modifiers.isCtrlPressed || modifiers.isMetaPressed
+    val shift = modifiers.isShiftPressed
+    when {
+        event.button == PointerButton.Secondary -> {
+            project.git.pickChangeForMenu(path)
+            openMenu()
+        }
+
+        event.buttons.isPrimaryPressed -> {
+            project.git.pickChange(path, ordered, toggle = ctrl, extend = shift)
+            if (!ctrl && !shift) project.openDiff(path)
+        }
+    }
+}
+
+// The menu of a right click: reverts every highlighted row at once; the item asks again before it does.
+@Composable
+private fun ChangesMenu(project: GitHost, onClose: () -> Unit) {
+    val rows = project.git.pickedChanges
+    var confirming by remember { mutableStateOf(false) }
+    val noun = if (rows.size == 1) "file" else "files"
+    DropdownMenu(expanded = true, onDismissRequest = onClose) {
+        DropdownMenuItem(
+            text = {
+                val text = if (confirming) "Sure? Revert ${rows.size} $noun" else "Revert ${rows.size} $noun"
+                Text(text, fontSize = 13.sp, color = if (confirming) IdeColors.Error else IdeColors.Text)
+            },
+            enabled = rows.isNotEmpty() && !project.git.busy,
+            onClick = {
+                if (confirming) {
+                    onClose()
+                    project.git.revert(rows)
+                } else {
+                    confirming = true
+                }
+            },
+            modifier = Modifier.testTag(GitTags.GIT_REVERT_PICKED),
+        )
     }
 }
 

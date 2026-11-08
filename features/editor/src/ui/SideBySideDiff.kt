@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import org.example.kotlineditor.model.DiffKind
@@ -28,13 +29,13 @@ import org.example.kotlineditor.model.DiffLine
 
 /** Side-by-side diff: the old file on the left, the new file on the right, one line of the diff per row. */
 @Composable
-internal fun SideBySideDiff(listState: LazyListState, lines: List<DiffLine>, style: TextStyle) {
+internal fun SideBySideDiff(listState: LazyListState, lines: List<DiffLine>, style: TextStyle, code: DiffCode) {
     val rows = sideBySideRows(lines)
     Box(Modifier.fillMaxSize().testTag(EditorTags.DIFF_SPLIT)) {
         LazyColumn(Modifier.fillMaxSize(), state = listState) {
             itemsIndexed(rows, key = { index, _ -> index }) { index, row ->
                 if (row.hunkText == null) {
-                    SideBySideRow(index, row, style)
+                    SideBySideRow(index, row, style, code)
                 } else {
                     HunkRow(index, row.hunkText, style)
                 }
@@ -51,7 +52,7 @@ internal fun SideBySideDiff(listState: LazyListState, lines: List<DiffLine>, sty
 internal data class SideBySideDiffRow(val left: DiffCell?, val right: DiffCell?, val hunkText: String? = null)
 
 /** One cell of a [SideBySideDiffRow] (a blank cell is null). */
-internal data class DiffCell(val number: Int, val text: String, val kind: DiffKind)
+internal data class DiffCell(val number: Int, val text: String, val kind: DiffKind, val index: Int = -1)
 
 /**
  * Pairs the unified diff lines for a side-by-side layout: within each changed block, removed lines face added
@@ -71,8 +72,8 @@ internal fun sideBySideRows(lines: List<DiffLine>): List<SideBySideDiffRow> {
             DiffKind.Context -> {
                 rows +=
                     SideBySideDiffRow(
-                        left = DiffCell(line.oldLine, line.text, line.kind),
-                        right = DiffCell(line.newLine, line.text, line.kind),
+                        left = DiffCell(line.oldLine, line.text, line.kind, index),
+                        right = DiffCell(line.newLine, line.text, line.kind, index),
                     )
                 index++
             }
@@ -83,9 +84,9 @@ internal fun sideBySideRows(lines: List<DiffLine>): List<SideBySideDiffRow> {
                 while (index < lines.size && lines[index].kind.isChange()) {
                     val changed = lines[index]
                     if (changed.kind == DiffKind.Removed) {
-                        removed += DiffCell(changed.oldLine, changed.text, changed.kind)
+                        removed += DiffCell(changed.oldLine, changed.text, changed.kind, index)
                     } else {
-                        added += DiffCell(changed.newLine, changed.text, changed.kind)
+                        added += DiffCell(changed.newLine, changed.text, changed.kind, index)
                     }
                     index++
                 }
@@ -121,11 +122,11 @@ private fun HunkRow(index: Int, text: String, style: TextStyle) {
 }
 
 @Composable
-private fun SideBySideRow(index: Int, row: SideBySideDiffRow, style: TextStyle) {
+private fun SideBySideRow(index: Int, row: SideBySideDiffRow, style: TextStyle, code: DiffCode) {
     Row(Modifier.fillMaxWidth().height(DIFF_LINE_HEIGHT).testTag(EditorTags.diffSplitRow(index))) {
-        SplitCell(row.left, index, SIDE_LEFT, style, Modifier.weight(1f))
+        SplitCell(row.left, index, SIDE_LEFT, style, code, Modifier.weight(1f))
         Box(Modifier.fillMaxHeight().width(1.dp).background(IdeColors.Border))
-        SplitCell(row.right, index, SIDE_RIGHT, style, Modifier.weight(1f))
+        SplitCell(row.right, index, SIDE_RIGHT, style, code, Modifier.weight(1f))
     }
 }
 
@@ -133,7 +134,7 @@ private const val SIDE_LEFT = 0
 private const val SIDE_RIGHT = 1
 
 @Composable
-private fun SplitCell(cell: DiffCell?, index: Int, side: Int, style: TextStyle, modifier: Modifier) {
+private fun SplitCell(cell: DiffCell?, index: Int, side: Int, style: TextStyle, code: DiffCode, modifier: Modifier) {
     Row(
         modifier
             .fillMaxHeight()
@@ -150,8 +151,8 @@ private fun SplitCell(cell: DiffCell?, index: Int, side: Int, style: TextStyle, 
             maxLines = 1,
         )
         BasicText(
-            cell?.text ?: "",
-            style = style.copy(color = cell?.let { textColorOf(it.kind) } ?: Color.Transparent),
+            cell?.let { code.colored(it.text, it.index, it.kind) } ?: AnnotatedString(""),
+            style = style.copy(color = cell?.let { codeColorOf(it.kind) } ?: Color.Transparent),
             softWrap = false,
             maxLines = 1,
         )

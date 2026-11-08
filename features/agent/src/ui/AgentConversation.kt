@@ -3,8 +3,10 @@ package org.example.kotlineditor.ui
 import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -24,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -34,12 +37,15 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.example.kotlineditor.model.AgentItem
@@ -48,6 +54,10 @@ import org.example.kotlineditor.model.AgentTurnState
 import org.example.kotlineditor.state.AgentState
 import org.example.kotlineditor.state.Completing
 import org.example.kotlineditor.state.Conversation
+import org.example.kotlineditor.state.drop
+import org.example.kotlineditor.state.isLoginNotice
+import org.example.kotlineditor.state.recallPrompt
+import org.example.kotlineditor.state.usageText
 
 private val CONTENT_WIDTH = 760.dp
 
@@ -58,9 +68,22 @@ private const val TO_THE_END = 100_000f
 
 @Composable
 fun ConversationView(agent: AgentState, conversation: Conversation) {
-    val listState = conversation.listState
-    val items = conversation.items
     FollowTheEnd(conversation)
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        // The card of the quota is at the right of the transcript, which makes room for it when the window is narrow.
+        val hasFigures = conversation.quota.isNotEmpty() || conversation.usage != null || conversation.started
+        val showsCard = maxWidth >= QUOTA_CARD_MIN_WIDTH && hasFigures
+        val reserve = if (showsCard) (QUOTA_CARD_ROOM * 2 - (maxWidth - CONTENT_WIDTH)).coerceAtLeast(0.dp) else 0.dp
+        CompositionLocalProvider(LocalQuotaCard provides showsCard) {
+            ConversationColumn(agent, conversation, showsCard, reserve)
+        }
+    }
+}
+
+@Composable
+private fun ConversationColumn(agent: AgentState, conversation: Conversation, showsCard: Boolean, reserve: Dp) {
+    val listState = conversation.listState
+    val items = conversation.shownItems
     Column(Modifier.fillMaxSize().testTag(AgentTags.agentView(conversation.id))) {
         Box(Modifier.weight(1f).fillMaxWidth()) {
             if (items.isEmpty()) {
@@ -70,12 +93,16 @@ fun ConversationView(agent: AgentState, conversation: Conversation) {
                     color = IdeColors.TextSecondary,
                 )
             }
-            SelectionContainer { Transcript(agent, conversation) }
+            Box(Modifier.fillMaxSize().padding(end = reserve)) {
+                SelectionContainer { Transcript(agent, conversation) }
+            }
+            if (showsCard) QuotaCard(conversation, Modifier.align(Alignment.TopEnd).padding(top = 12.dp, end = 20.dp))
             VerticalScrollbar(
                 rememberScrollbarAdapter(listState),
                 Modifier.align(Alignment.CenterEnd).fillMaxHeight(),
             )
         }
+        ChangesBar(agent, conversation)
         Prompt(agent, conversation)
     }
 }
@@ -84,7 +111,7 @@ fun ConversationView(agent: AgentState, conversation: Conversation) {
 @Composable
 private fun FollowTheEnd(conversation: Conversation) {
     val listState = conversation.listState
-    val items = conversation.items
+    val items = conversation.shownItems
     val last = items.lastOrNull()
     LaunchedEffect(items.size, last?.version) {
         if (items.isNotEmpty()) {
@@ -98,7 +125,7 @@ private fun FollowTheEnd(conversation: Conversation) {
 @Composable
 private fun Transcript(agent: AgentState, conversation: Conversation) {
     val listState = conversation.listState
-    val items = conversation.items
+    val items = conversation.shownItems
     LazyColumn(
         Modifier.fillMaxSize(),
         state = listState,
@@ -138,8 +165,8 @@ private fun ThinkingLabel(conversation: Conversation) {
 
 // Busy with nothing to show for it yet: no text streaming, no tool running, no question asked.
 private fun thinking(conversation: Conversation): Boolean {
-    if (!conversation.busy) return false
-    return when (val last = conversation.items.lastOrNull()) {
+    if (!conversation.busy || conversation.probeFrom != null) return false
+    return when (val last = conversation.shownItems.lastOrNull()) {
         is AgentItem.AgentText -> false
         is AgentItem.ToolCall -> last.status != AgentToolStatus.Running
         is AgentItem.Permission -> !last.pending
@@ -158,7 +185,19 @@ private fun ItemView(agent: AgentState, conversation: Conversation, item: AgentI
         is AgentItem.ToolCall -> ToolCallCard(item)
         is AgentItem.Plan -> PlanView(item)
         is AgentItem.Permission -> PermissionCard(item) { option -> agent.answer(conversation, item, option) }
-        is AgentItem.Notice -> NoticeView(item)
+        is AgentItem.Notice -> NoticeWithLogin(agent, conversation, item)
+    }
+}
+
+// A notice, with the ways to log in when the agent asked for it and nothing came after.
+@Composable
+private fun NoticeWithLogin(agent: AgentState, conversation: Conversation, notice: AgentItem.Notice) {
+    // In a column: an item of the list stacks what it composes, the buttons would cover the text.
+    Column(Modifier.fillMaxWidth()) {
+        NoticeView(notice)
+        val after = conversation.items.dropWhile { it.id != notice.id }.drop(1)
+        val onlyNotices = after.all { it is AgentItem.Notice && !isLoginNotice(it) }
+        if (isLoginNotice(notice) && onlyNotices) LoginBar(agent, conversation)
     }
 }
 
@@ -188,8 +227,19 @@ private fun Prompt(agent: AgentState, conversation: Conversation) {
         SearchesFiles(files, completion.completing as? Completing.File, index, context)
         CompletionList(completion, width.padding(bottom = 6.dp))
         WorkspaceStatus(agent, conversation, width.padding(horizontal = 4.dp, vertical = 6.dp))
+        // Above the input, not in its row of buttons: a narrow window must never push Stop and Send out of sight.
+        Row(width.padding(horizontal = 4.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+            val usage = conversation.usage
+            // In the card, the context and the cost are not said twice.
+            val shown = if (LocalQuotaCard.current) "" else usage?.let(::usageText).orEmpty()
+            Label(shown, Modifier.weight(1f).testTag(AgentTags.AGENT_USAGE), color = IdeColors.TextSecondary, fontSize = 12.sp)
+            if (conversation.started && !LocalQuotaCard.current) StatsLink(conversation)
+        }
+        QuotaBar(agent, conversation, width.padding(horizontal = 4.dp, vertical = 2.dp))
+        val workspaceRoot = (conversation.workspace ?: agent.project).root.path
         Column(
             width
+                .droppableFiles { files -> files.forEach { context.drop(it, workspaceRoot) } }
                 .background(IdeColors.Input, RoundedCornerShape(8.dp))
                 .border(1.dp, IdeColors.InputBorder, RoundedCornerShape(8.dp))
                 .padding(10.dp),
@@ -209,7 +259,7 @@ private fun Prompt(agent: AgentState, conversation: Conversation) {
                         .onPreviewKeyEvent { event ->
                             // The list of suggestions first: Enter chooses one there, and sends otherwise.
                             val handled = completion.handle(event) || pastesImage(event, context)
-                            handled || sendsOnEnter(event) { agent.send(conversation) }
+                            handled || recallsPrompt(event, conversation) || sendsOnEnter(event) { agent.send(conversation) }
                         },
                     textStyle = bodyStyle,
                     cursorBrush = SolidColor(IdeColors.Caret),
@@ -218,6 +268,15 @@ private fun Prompt(agent: AgentState, conversation: Conversation) {
             PromptActions(agent, conversation)
         }
     }
+}
+
+// Up and Down walk through the prompts already sent while the draft is empty.
+private fun recallsPrompt(event: KeyEvent, conversation: Conversation): Boolean {
+    val older = event.key == Key.DirectionUp
+    val newer = event.key == Key.DirectionDown
+    val plain = !event.isShiftPressed && !event.isAltPressed && !event.isCtrlPressed
+    val wanted = (older || newer) && plain && event.type == KeyEventType.KeyDown
+    return wanted && conversation.recallPrompt(older)
 }
 
 private fun sendsOnEnter(event: KeyEvent, send: () -> Unit): Boolean {
@@ -234,6 +293,8 @@ private fun PromptActions(agent: AgentState, conversation: Conversation) {
         ModelPicker(agent, conversation)
         EffortPicker(agent, conversation)
         PermissionsPicker(agent, conversation)
+        DiscussButton(agent, conversation)
+        ReviewButton(agent, conversation)
         Spacer(Modifier.width(8.dp))
         val name = conversation.agentName ?: "Agent: " + agent.agentLabelOf(conversation)
         Label(
@@ -243,7 +304,8 @@ private fun PromptActions(agent: AgentState, conversation: Conversation) {
             fontSize = 12.sp,
         )
         Spacer(Modifier.width(8.dp))
-        if (conversation.busy) {
+        // The silent question about the quota is no work to stop: the prompt keeps its Send button.
+        if (conversation.busy && conversation.probeFrom == null) {
             IdeButton("Stop", { agent.stop(conversation) }, Modifier.testTag(AgentTags.AGENT_STOP))
         } else {
             IdeButton(

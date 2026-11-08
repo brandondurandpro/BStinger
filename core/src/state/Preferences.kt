@@ -26,9 +26,45 @@ object PreferenceKeys {
     const val EDITOR_FONT_SIZE = "editor.fontSize"
     const val AUTO_SELECT_OPENED_FILE = "project.autoSelectOpenedFile"
     const val AGENT_MODE = "experimental.agentMode"
+    const val AGENT_MODE_BY_DEFAULT = "experimental.agentModeByDefault"
+
+    /** Width of the conversation list of agent mode, in dp. */
+    const val AGENT_CONVERSATIONS_WIDTH = "agent.conversationsWidth"
+
+    /** The agents of the registry the user chose, one per line: the history lists the sessions of each. */
+    const val AGENT_USED = "agent.used"
+
+    /** The agent of the registry last chosen in a conversation; blank for the agent of the settings. */
+    const val AGENT_LAST_CHOSEN = "agent.lastChosen"
+
+    /** The prompt templates of the user: one per line, `name`, a tab, the text with `\\`, newlines and tabs escaped. */
+    const val AGENT_TEMPLATES = "agent.templates"
+
+    /** Per project (the key ends with its path): its prompt templates, in the format of [AGENT_TEMPLATES]. */
+    const val AGENT_TEMPLATES_PREFIX = "agent.templates."
+
+    /** Per project (the key ends with its path): the sessions open in tabs of agent mode, one per line, in order. */
+    const val AGENT_OPEN_PREFIX = "agent.open."
+
+    /** Per project: the session of the tab that was active. */
+    const val AGENT_ACTIVE_PREFIX = "agent.active."
+
+    /** Per project: the titles the user gave to conversations, one `session<TAB>title` per line. */
+    const val AGENT_TITLES_PREFIX = "agent.titles."
+
+    /** Per project: `session`, the milliseconds the agent worked and what it cost, one session per line. */
+    const val AGENT_STATS_PREFIX = "agent.stats."
+
+    /** Per project: the sessions of the conversations the user pinned to the top of the list, one per line. */
+    const val AGENT_PINNED_PREFIX = "agent.pinned."
+
+    /** Per project: the sessions of the conversations the user archived (hidden from the list), one per line. */
+    const val AGENT_ARCHIVED_PREFIX = "agent.archived."
+
     const val AGENT_COMMAND = "agent.command"
     const val AGENT_REGISTRY = "agent.registry"
     const val INLAY_HINTS = "editor.inlayHints"
+    const val DIFF_SIDE_BY_SIDE = "editor.diffSideBySide"
     const val LAYOUT_PREFIX = "layout."
 
     /** Branches pinned in the toolbar, per project: the key ends with the project's path (`GitState`). */

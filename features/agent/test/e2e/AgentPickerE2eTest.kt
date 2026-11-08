@@ -95,11 +95,11 @@ class AgentPickerE2eTest {
             awaitIdle(first)
             awaitTag(AgentTags.AGENT_NEW).performClick()
             val second = checkNotNull(app.project.agent.current)
-            // The new conversation runs the agent of the settings: its choice to show, its own counting.
-            assertNull(second.agent)
-            awaitAgent("Settings")
+            // The new conversation starts with the agent last chosen, and counts on its own session.
+            assertEquals(first.agent, second.agent)
+            awaitAgent("Fake Agent")
             sendPrompt("count")
-            awaitShown(second, "Prompt 1 of session-")
+            awaitShown(second, "Prompt 1 of")
             awaitIdle(second)
             // The first conversation kept its choice, and shows the agent it runs.
             awaitTag(AgentTags.agentTab(first.id)).performClick()

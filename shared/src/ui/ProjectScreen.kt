@@ -17,6 +17,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -51,6 +52,7 @@ import org.example.kotlineditor.state.hasInsight
 import org.example.kotlineditor.state.openFileOfDiff
 import org.example.kotlineditor.state.saveAll
 import org.example.kotlineditor.state.visualColumn
+import org.example.kotlineditor.syntax.treesitter.LineSpans
 import org.example.kotlineditor.telemetry.ClientTelemetry
 import org.example.kotlineditor.telemetry.Operation
 import org.example.kotlineditor.telemetry.measureToFrame
@@ -182,12 +184,20 @@ internal fun closePopup(project: ProjectState) {
 }
 
 @Composable
-internal fun EditorArea(app: AppState, project: ProjectState, findFocus: FocusRequester, modifier: Modifier) {
+internal fun EditorArea(
+    app: AppState,
+    project: ProjectState,
+    findFocus: FocusRequester,
+    modifier: Modifier,
+    /** False in agent mode, where the tab strip of the window lists the files; split panes keep their own. */
+    showTabs: Boolean = true,
+) {
     val editor = project.editor
+    val tabsShown = showTabs || editor.panes.size > 1
     Row(modifier.fillMaxHeight().background(IdeColors.Editor)) {
         editor.panes.forEachIndexed { index, pane ->
             if (index > 0) VerticalDivider(Modifier.fillMaxHeight())
-            key(pane) { EditorPaneView(app, project, pane, index, findFocus, Modifier.weight(1f)) }
+            key(pane) { EditorPaneView(app, project, pane, index, findFocus, Modifier.weight(1f), tabsShown) }
         }
     }
 }
@@ -201,6 +211,7 @@ private fun EditorPaneView(
     index: Int,
     findFocus: FocusRequester,
     modifier: Modifier,
+    tabsShown: Boolean,
 ) {
     val editor = project.editor
     val tab = pane.activeTab
@@ -218,8 +229,10 @@ private fun EditorPaneView(
         if (pane.tabs.isEmpty()) {
             EmptyEditor()
         } else {
-            EditorTabs(editor, pane)
-            Box(Modifier.fillMaxWidth().height(1.dp).background(IdeColors.Separator))
+            if (tabsShown) {
+                EditorTabs(editor, pane)
+                Box(Modifier.fillMaxWidth().height(1.dp).background(IdeColors.Separator))
+            }
             tab?.let { key(it) { TabContent(app, project, pane, it, findFocus) } }
         }
     }
@@ -247,9 +260,14 @@ private fun TabContent(
         }
 
         is TabStatus.Diff -> {
+            // The grammar may download: the lexer colors the diff until the tree-sitter colors arrive.
+            val spans by produceState<List<LineSpans?>?>(null, status.lines) {
+                value = project.grammars?.highlightDiff(tab.entry.name, status.lines)
+            }
             DiffView(
                 tab,
                 status.lines,
+                spans = spans,
                 sideBySide = project.diffSideBySide,
                 onToggleSideBySide = { project.diffSideBySide = !project.diffSideBySide },
                 onOpenFile = { project.openFileOfDiff(tab) },

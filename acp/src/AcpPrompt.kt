@@ -1,6 +1,8 @@
 package org.example.kotlineditor.acp
 
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.example.kotlineditor.model.AgentAttachment
 import java.io.IOException
 import java.net.URI
@@ -61,6 +63,7 @@ private fun AgentAttachment.block(root: Path, take: PromptCapabilities): JsonObj
         is AgentAttachment.File -> fileBlock(fileUnder(root, path), take)
         is AgentAttachment.Lines -> linesBlock(this, fileUnder(root, path), take)
         is AgentAttachment.Image -> imageBlock(this, take)
+        is AgentAttachment.Audio -> audioBlock(this, take)
     }
 
 // The file at [path] under [root]; fails for one outside it.
@@ -100,6 +103,15 @@ private fun imageBlock(pasted: AgentAttachment.Image, take: PromptCapabilities):
     return image(pasted.mimeType, pasted.data, uri = null)
 }
 
+private fun audioBlock(sound: AgentAttachment.Audio, take: PromptCapabilities): JsonObject {
+    if (!take.audio) throw IOException("the agent takes no audio")
+    return buildJsonObject {
+        put("type", "audio")
+        put("mimeType", sound.mimeType)
+        put("data", sound.data)
+    }
+}
+
 /**
  * What the prompt shows of this block of a prompt the agent replays, when the user joined it: the name of a file, of
  * lines of one (`Main.kt:3-7`), of an image; null for text.
@@ -110,6 +122,7 @@ internal fun JsonObject.contextLabel(): String? {
         "resource_link" -> text("name") ?: text("uri")?.let(::labelOf)
         "resource" -> resource?.text("uri")?.let(::labelOf)
         "image" -> text("uri")?.let(::labelOf) ?: "Image"
+        "audio" -> "Audio"
         else -> null
     }
 }

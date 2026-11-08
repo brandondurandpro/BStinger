@@ -39,6 +39,8 @@ import org.example.kotlineditor.model.DiffLine
 import org.example.kotlineditor.state.CommitDiffTarget
 import org.example.kotlineditor.state.CommitHeader
 import org.example.kotlineditor.state.EditorTab
+import org.example.kotlineditor.syntax.Language
+import org.example.kotlineditor.syntax.treesitter.LineSpans
 
 internal val DIFF_LINE_HEIGHT = 20.dp
 private val LINE_NUMBER_WIDTH = 44.dp
@@ -52,17 +54,21 @@ fun DiffView(
     onToggleSideBySide: () -> Unit,
     onOpenFile: () -> Unit,
     modifier: Modifier = Modifier,
+    /** The tree-sitter colors of each line of [lines], once known; the line lexer colors the code until then. */
+    spans: List<LineSpans?>? = null,
 ) {
     val style = LocalCodeStyle.current
+    val language = Language.fromFileName(tab.entry.name)
+    val code = DiffCode(language, spans)
     Column(modifier.fillMaxSize().background(IdeColors.Editor).testTag(EditorTags.DIFF)) {
         DiffToolbar(sideBySide, onToggleSideBySide, onOpenFile)
         if (tab.isCompare) SideLabels()
         tab.commit?.let { commit -> commit.header?.let { CommitHeaderView(commit, it) } }
         Box(Modifier.weight(1f).fillMaxWidth()) {
             if (sideBySide) {
-                SideBySideDiff(tab.splitListState, lines, style)
+                SideBySideDiff(tab.splitListState, lines, style, code)
             } else {
-                UnifiedDiff(tab, lines, style)
+                UnifiedDiff(tab, lines, style, code)
             }
         }
     }
@@ -162,11 +168,11 @@ private fun DiffLayoutToggle(sideBySide: Boolean, onToggle: () -> Unit) {
 }
 
 @Composable
-private fun UnifiedDiff(tab: EditorTab, lines: List<DiffLine>, style: TextStyle) {
+private fun UnifiedDiff(tab: EditorTab, lines: List<DiffLine>, style: TextStyle, code: DiffCode) {
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize(), state = tab.listState) {
             itemsIndexed(lines, key = { index, _ -> index }) { index, line ->
-                DiffRow(index, line, style)
+                DiffRow(index, line, style, code)
             }
         }
         VerticalScrollbar(
@@ -177,7 +183,7 @@ private fun UnifiedDiff(tab: EditorTab, lines: List<DiffLine>, style: TextStyle)
 }
 
 @Composable
-private fun DiffRow(index: Int, line: DiffLine, style: TextStyle) {
+private fun DiffRow(index: Int, line: DiffLine, style: TextStyle, code: DiffCode) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -195,9 +201,9 @@ private fun DiffRow(index: Int, line: DiffLine, style: TextStyle) {
             maxLines = 1,
         )
         BasicText(
-            line.text,
+            code.colored(line.text, index, line.kind),
             Modifier.testTag(EditorTags.diffLineKind(index, line.kind.name)),
-            style = style.copy(color = textColorOf(line.kind)),
+            style = style.copy(color = codeColorOf(line.kind)),
             softWrap = false,
             maxLines = 1,
         )

@@ -415,6 +415,9 @@ enum class Method(
     /** Deletes local branches, even when they are not merged. */
     GitDeleteBranches("git/deleteBranches", mutating = true),
 
+    /** Discards the uncommitted changes of some files. */
+    GitRevert("git/revert", mutating = true),
+
     /** Stages every change and commits it. */
     GitCommit("git/commit", mutating = true),
 
@@ -603,6 +606,15 @@ enum class Method(
 
     /** The slash commands an agent offered in its latest session. */
     AgentCommands("agent/commands", mutating = false),
+
+    /** The ways to log in to an agent. */
+    AgentAuthMethods("agent/authMethods", mutating = false),
+
+    /** Forks a session of an agent: a copy of its history under a new session. */
+    AgentFork("agent/fork", mutating = true),
+
+    /** Logs in to an agent with one of its methods. */
+    AgentAuthenticate("agent/authenticate", mutating = true),
 }
 
 /** A JSON-RPC error object `{"code": ..., "message": ...}`. */

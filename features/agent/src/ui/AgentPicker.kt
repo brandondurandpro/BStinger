@@ -89,22 +89,25 @@ fun AgentPicker(agent: AgentState, conversation: Conversation) {
             val button = buttonLabel(agent, conversation, entries)
             AgentPickerButton(button, open, onOpen = { open = true })
         }
-        // Escape closes it without a choice, as every menu of the IDE.
-        val escape =
-            Modifier.onPreviewKeyEvent { event ->
-                val closes = event.key == Key.Escape && event.type == KeyEventType.KeyDown
-                if (closes) { open = false }
-                closes
-            }
         val choose: (String?) -> Unit = { entry ->
             open = false
             agent.chooseAgent(conversation, entry)
         }
-        DropdownMenu(open, onDismissRequest = { open = false }, Modifier.widthIn(max = MENU_WIDTH).then(escape)) {
-            AgentPickerMenu(agent, conversation, entries, failure, choose)
+        DropdownMenu(open, onDismissRequest = { open = false }, Modifier.widthIn(max = MENU_WIDTH).closesOnEscape { open = false }) {
+            val tags = RegistryTags(AgentTags.AGENT_AGENT_DEFAULT, AgentTags.AGENT_AGENT_FILTER, AgentTags::agentAgent)
+            val settings = agent.settingsAgentLabel.takeIf { conversation.agent != null }
+            AgentRegistryMenu(RegistryMenu(settings, conversation.agent?.registry, tags), entries, failure, choose)
         }
     }
 }
+
+/** Escape closes a menu without a choice, as every menu of the IDE. */
+internal fun Modifier.closesOnEscape(close: () -> Unit): Modifier =
+    onPreviewKeyEvent { event ->
+        val closes = event.key == Key.Escape && event.type == KeyEventType.KeyDown
+        if (closes) close()
+        closes
+    }
 
 @Composable
 private fun AgentPickerButton(label: String, open: Boolean, onOpen: () -> Unit) {
@@ -145,10 +148,22 @@ private fun buttonLabel(
     return agent.settingsAgentId ?: "Settings"
 }
 
+/** The test tags of the rows of a menu of agents: the settings' one, the filter field, a row of the registry. */
+internal class RegistryTags(val default: String, val filter: String, val row: (String) -> String)
+
+/**
+ * What a menu of the agents of the registry shows: [settingsLabel], the agent of the settings, as the first row (none
+ * when null), [chosenId], the agent marked as chosen (none when null), and the [tags] of its rows.
+ */
+internal class RegistryMenu(val settingsLabel: String?, val chosenId: String?, val tags: RegistryTags)
+
+/**
+ * The content of a menu of the agents of the registry, with the field that filters them: the picker of the agent of a
+ * conversation and the choice of the agent that reviews its work share it.
+ */
 @Composable
-private fun AgentPickerMenu(
-    agent: AgentState,
-    conversation: Conversation,
+internal fun AgentRegistryMenu(
+    menu: RegistryMenu,
     entries: List<AgentRegistryEntry>?,
     failure: String?,
     choose: (String?) -> Unit,
@@ -156,9 +171,9 @@ private fun AgentPickerMenu(
     // What the field above the list shows: the agents it names, the one the settings choose always standing.
     var filter by remember { mutableStateOf("") }
     val wanted = wantedAgents(entries, filter)
-    AgentFilterField(filter) { filter = it }
-    if (conversation.agent != null) {
-        AgentOfSettingsRow(agent, choose)
+    AgentFilterField(filter, menu.tags.filter) { filter = it }
+    if (menu.settingsLabel != null) {
+        AgentOfSettingsRow(menu.settingsLabel, menu.tags.default, choose)
         HorizontalDivider(color = IdeColors.Separator, thickness = 1.dp)
     }
     // The registry may be longer than the menu shows: a window of fixed height on it, scrolled, with its scrollbar.
@@ -171,7 +186,7 @@ private fun AgentPickerMenu(
     Row(Modifier.width(MENU_WIDTH).height(listHeight)) {
         Column(Modifier.weight(1f).verticalScroll(scroll)) {
             for (entry in wanted.orEmpty()) {
-                AgentChoiceRow(conversation, entry, choose)
+                AgentChoiceRow(menu, entry, choose)
             }
             if (wanted?.isEmpty() == true) {
                 RegistryStatusRow("""No agent named "$filter".""", canClose = false, choose = choose)
@@ -204,7 +219,12 @@ private fun matchesFilter(entry: AgentRegistryEntry, filter: String): Boolean =
 // The field that [onChange] filters the list of agents with, focused as the menu opens: the agents of the registry
 // are typed, and the field is shown when it stands empty.
 @Composable
-private fun AgentFilterField(filter: String, onChange: (String) -> Unit) {
+internal fun AgentFilterField(
+    filter: String,
+    tag: String,
+    placeholder: String = "Filter the agents…",
+    onChange: (String) -> Unit,
+) {
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
     Box(
@@ -214,14 +234,14 @@ private fun AgentFilterField(filter: String, onChange: (String) -> Unit) {
             .border(1.dp, IdeColors.InputBorder, RoundedCornerShape(4.dp))
             .padding(horizontal = 8.dp, vertical = 6.dp),
     ) {
-        if (filter.isEmpty()) Label("Filter the agents…", color = IdeColors.TextSecondary, fontSize = 12.sp)
+        if (filter.isEmpty()) Label(placeholder, color = IdeColors.TextSecondary, fontSize = 12.sp)
         BasicTextField(
             filter,
             onChange,
             Modifier
                 .fillMaxWidth()
                 .focusRequester(focus)
-                .testTag(AgentTags.AGENT_AGENT_FILTER),
+                .testTag(tag),
             textStyle = TextStyle(color = IdeColors.Text, fontSize = 12.sp),
             singleLine = true,
             cursorBrush = SolidColor(IdeColors.Caret),
@@ -230,26 +250,26 @@ private fun AgentFilterField(filter: String, onChange: (String) -> Unit) {
 }
 
 @Composable
-private fun AgentOfSettingsRow(agent: AgentState, choose: (String?) -> Unit) {
+private fun AgentOfSettingsRow(label: String, tag: String, choose: (String?) -> Unit) {
     MenuRow(
-        tag = AgentTags.AGENT_AGENT_DEFAULT,
+        tag = tag,
         chosen = false,
         enabled = true,
         onClick = { choose(null) },
     ) {
         Column(Modifier.weight(1f)) {
             Label("Agent of the settings")
-            Label(agent.settingsAgentLabel, color = IdeColors.TextSecondary, fontSize = 11.sp)
+            Label(label, color = IdeColors.TextSecondary, fontSize = 11.sp)
         }
     }
 }
 
 @Composable
-private fun AgentChoiceRow(conversation: Conversation, entry: AgentRegistryEntry, choose: (String?) -> Unit) {
+private fun AgentChoiceRow(menu: RegistryMenu, entry: AgentRegistryEntry, choose: (String?) -> Unit) {
     val available = entry.unavailable == null
-    val chosen = conversation.agent?.registry == entry.id
+    val chosen = menu.chosenId == entry.id
     MenuRow(
-        tag = AgentTags.agentAgent(entry.id),
+        tag = menu.tags.row(entry.id),
         chosen = chosen,
         enabled = available,
         onClick = { choose(entry.id) },

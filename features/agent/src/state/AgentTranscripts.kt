@@ -37,7 +37,7 @@ private suspend fun AgentHost.poll(conversation: Conversation) {
     }
 }
 
-private fun apply(conversation: Conversation, transcript: AgentTranscript) {
+private fun AgentHost.apply(conversation: Conversation, transcript: AgentTranscript) {
     val restarted = conversation.epoch.isNotEmpty() && conversation.epoch != transcript.epoch
     conversation.epoch = transcript.epoch
     conversation.since = transcript.version
@@ -47,7 +47,8 @@ private fun apply(conversation: Conversation, transcript: AgentTranscript) {
     }
     val wasBusy = conversation.state != AgentTurnState.Idle
     transcript.session?.let { conversation.session = it }
-    transcript.title?.let { conversation.title = titleOf(it) }
+    if (!conversation.renamed) transcript.title?.let { conversation.title = titleOf(it) }
+    transcript.usage?.let { conversation.usage = it }
     if (transcript.commands.isNotEmpty()) conversation.commands = transcript.commands
     // A choice on its way shows until the server has it.
     if (transcript.options.isNotEmpty()) conversation.serverOptions = transcript.options
@@ -58,16 +59,37 @@ private fun apply(conversation: Conversation, transcript: AgentTranscript) {
         conversation.replayedEpoch = transcript.epoch
         conversation.replaceByHistory()
     }
+    if (transcript.items.isNotEmpty() && !transcript.replayed) conversation.lastMessageAt = System.currentTimeMillis()
     var wrote = false
+    var asked: String? = null
     for (item in transcript.items) {
+        if (item.id in conversation.hidden) continue
+        asked = asked ?: newQuestion(conversation, item)
         wrote = wrote || finishedWriting(conversation, item)
+        if (item is AgentItem.AgentText) quotaLimitsOf(item.text).takeIf { it.isNotEmpty() }?.let { conversation.quota = it }
         conversation.upsert(item)
     }
+    asked?.let { question -> agentAsking(conversation.title, question) }
     conversation.state = transcript.state
+    conversation.syncWorkingClock()
     transcript.agentName?.let { conversation.agentName = it }
     // The turn is over the way the server said it: a prompt queued while it answered goes now.
     if (transcript.state == AgentTurnState.Idle) conversation.onTurnIdle?.invoke()
     val turnEnded = wasBusy && transcript.state == AgentTurnState.Idle
+    val probeFrom = conversation.probeFrom
+    // An idle snapshot before the question reached the server is no answer: the probe waits for its items.
+    val answeredFrom = probeFrom?.takeIf { conversation.items.size > it }
+    if (turnEnded && answeredFrom != null) {
+        // The silent question about the quota is answered: the bars read it, the conversation forgets it.
+        conversation.probeFrom = null
+        // Their ids are remembered: the server sends them again with the next snapshot.
+        while (conversation.items.size > answeredFrom) conversation.hidden.add(conversation.items.removeAt(conversation.items.lastIndex).id)
+    } else if (turnEnded && probeFrom == null) {
+        conversation.quotaStale = true
+        conversation.finished = true
+        conversation.seen = false
+        agentFinished(conversation.title, conversation.outcome == AgentOutcome.Failed)
+    }
     // The tree, the Git panel and the open editors pick the changes of the agent up.
     if (wrote || turnEnded) conversation.workspace?.synchronize()
 }
@@ -77,6 +99,7 @@ private fun apply(conversation: Conversation, transcript: AgentTranscript) {
 private fun forgotten(conversation: Conversation, restarted: Boolean) {
     val wasBusy = conversation.state != AgentTurnState.Idle
     conversation.state = AgentTurnState.Idle
+    conversation.syncWorkingClock()
     conversation.onTurnIdle?.invoke()
     val shownByServer = conversation.items.any { it.version > 0 }
     val lost = shownByServer && conversation.session == null
@@ -92,4 +115,11 @@ private fun finishedWriting(conversation: Conversation, item: AgentItem): Boolea
     val done = item.status == AgentToolStatus.Completed || item.status == AgentToolStatus.Failed
     val before = conversation.items.firstOrNull { it.id == item.id } as? AgentItem.ToolCall
     return done && before?.status != item.status
+}
+
+// What a permission request that just appeared asks, null for any other item or a request already shown.
+private fun newQuestion(conversation: Conversation, item: AgentItem): String? {
+    if (item !is AgentItem.Permission || !item.pending) return null
+    val before = conversation.items.firstOrNull { it.id == item.id } as? AgentItem.Permission
+    return item.title.takeIf { before?.pending != true }
 }

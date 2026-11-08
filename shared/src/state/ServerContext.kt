@@ -45,6 +45,8 @@ class ServerContext(
     private val grammars: GrammarStore?,
     /** The agent of agent mode, as set in the settings. */
     private val agentCommand: () -> AgentCommand,
+    /** Whether a project opens in agent mode (the user's default mode, when agent mode is on). */
+    private val startsInAgentMode: () -> Boolean = { false },
     /** What the server is told about the telemetry. */
     private val consent: () -> SharedConsent,
     /** A project was opened on this remote server (never called for a local one). */
@@ -184,6 +186,7 @@ class ServerContext(
             opened.dispose()
             return
         }
+        opened.agentMode = startsInAgentMode()
         opening = null
         // The worktrees of agent mode share this repository: only the opened project fetches its remotes.
         opened.git.startAutoFetch()
@@ -250,7 +253,10 @@ class ServerContext(
         val autoSelect = PreferenceKeys.AUTO_SELECT_OPENED_FILE to shown.autoSelectOpenedFile.toString()
         val inlayHints = PreferenceKeys.INLAY_HINTS to shown.inlayHintsMode.name
         val pins = shown.git.pinnedBranchesPreference()
-        return shown.toolWindows.toPreferences() + autoSelect + inlayHints + pins
+        val windows = shown.toolWindows.toPreferences()
+        val agent = shown.agentPreferences()
+        val diffs = shown.diffLayout.toPreferences()
+        return windows + autoSelect + inlayHints + pins + agent + diffs
     }
 
     /** Saves the open project's session and files, then disposes it; it stays shown until [leave]. */

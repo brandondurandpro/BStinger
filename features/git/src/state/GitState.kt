@@ -102,6 +102,9 @@ class GitState(
     /** The paths checked in the Git panel for the next commit; the Commit button commits only these. */
     val selectedForCommit: Set<String> get() = changes.selectedForCommit
 
+    /** The rows highlighted in the list of changes. */
+    val pickedChanges: Set<String> get() = changes.picked
+
     /** False when the project is not a Git repository (or Git is unavailable). */
     var isRepository by mutableStateOf(true)
         private set
@@ -127,6 +130,13 @@ class GitState(
 
     /** Checks or unchecks [path] (the checkbox of a change in the Git panel) for the next commit. */
     fun toggleCommitSelection(path: String) = changes.toggle(path)
+
+    /** Highlights the row [path] of [ordered]: alone, toggled (Ctrl) or extended from the last one clicked (Shift). */
+    fun pickChange(path: String, ordered: List<String>, toggle: Boolean, extend: Boolean) =
+        changes.pick(path, ordered, toggle, extend)
+
+    /** Highlights [path] if it is not yet, before a menu acts on the highlighted rows. */
+    fun pickChangeForMenu(path: String) = changes.pickForMenu(path)
 
     /** Ticks every change of the status for the next commit (the master checkbox), or unticks them all. */
     fun toggleAllCommitSelection() = changes.toggleAll()
@@ -314,6 +324,21 @@ class GitState(
                 commitMessage = ""
                 val noun = if (paths.size == 1) "file" else "files"
                 "Committed ${paths.size} $noun"
+            }
+        }
+    }
+
+    /**
+     * Throws away the uncommitted changes of [paths] (the Git panel's Revert): modified files go back to what HEAD
+     * holds, new files are deleted. Open editors of these files reload from the disk.
+     */
+    fun revert(paths: Collection<String>) {
+        if (paths.isEmpty()) return
+        scope.launch {
+            gitOperation(reloadFiles = true) {
+                git.revert(root.path, paths.toList())
+                val noun = if (paths.size == 1) "file" else "files"
+                "Reverted ${paths.size} $noun"
             }
         }
     }

@@ -11,6 +11,77 @@ object AgentTags {
     const val AGENT_NEW = "agent.new"
     const val AGENT_FILTER = "agent.filter"
     const val AGENT_DELETE = "agent.delete"
+    const val AGENT_REVIEW = "agent.review"
+    const val AGENT_DISCUSS = "agent.discuss"
+    const val AGENT_DISCUSS_FILTER = "agent.discuss.filter"
+    const val AGENT_DISCUSS_DEFAULT = "agent.discuss.default"
+    const val AGENT_LOGIN = "agent.login"
+    const val AGENT_PIN = "agent.pin"
+    const val AGENT_DUPLICATE = "agent.duplicate"
+    const val AGENT_ARCHIVE = "agent.archive"
+    const val AGENT_REVIEW_FILTER = "agent.review.filter"
+    const val AGENT_PROJECT_GROUP = "agent.group.project"
+    const val AGENT_ARCHIVED = "agent.archived"
+    const val AGENT_USAGE = "agent.usage"
+    const val AGENT_QUOTA = "agent.quota"
+    const val AGENT_COMMANDS = "agent.commands"
+    const val AGENT_COMMANDS_FILTER = "agent.commands.filter"
+    const val AGENT_COST = "agent.cost"
+    const val AGENT_QUOTA_CARD = "agent.quota.card"
+    const val AGENT_CARD_CONTEXT = "agent.quota.card.context"
+    const val AGENT_CARD_COST = "agent.quota.card.cost"
+    const val AGENT_DETAIL_TABS = "agent.detail.tabs"
+    const val AGENT_IMAGE_VIEWER = "agent.image.viewer"
+    const val AGENT_IMAGE_CLOSE = "agent.image.close"
+    const val AGENT_STATS = "agent.stats"
+    const val AGENT_STATS_DIALOG = "agent.stats.dialog"
+    const val AGENT_STATS_TIME = "agent.stats.time"
+    const val AGENT_STATS_COST = "agent.stats.cost"
+    const val AGENT_STATS_PROMPTS = "agent.stats.prompts"
+    const val AGENT_STATS_CLOSE = "agent.stats.close"
+    const val AGENT_TEMPLATES = "agent.templates"
+    const val AGENT_TEMPLATE_NEW = "agent.template.new"
+    const val AGENT_TEMPLATE_NAME = "agent.template.name"
+    const val AGENT_TEMPLATE_TEXT = "agent.template.text"
+    const val AGENT_TEMPLATE_SAVE = "agent.template.save"
+    const val AGENT_TEMPLATE_DELETE = "agent.template.delete"
+    const val AGENT_TEMPLATE_USE = "agent.template.use"
+    const val AGENT_TEMPLATE_GLOBAL = "agent.template.global"
+    const val AGENT_TEMPLATE_PROJECT = "agent.template.project"
+
+    fun agentQuotaLimit(index: Int) = "agent.quota.$index"
+
+    fun agentCommand(name: String) = "agent.command.$name"
+
+    fun agentTemplateVariable(name: String) = "agent.template.variable.$name"
+
+    fun agentImagePreview(name: String) = "agent.image.preview.$name"
+
+    fun agentFolderGroup(label: String) = "agent.group.folder.$label"
+
+    fun agentDetailChat(id: Int) = "agent.detail.chat.$id"
+
+    fun agentTemplate(name: String) = "agent.template.$name"
+
+    const val AGENT_LOGIN_RUNNING = "agent.login.running"
+    const val AGENT_CHANGES_TOGGLE = "agent.changes.toggle"
+    const val AGENT_CHANGES_REFRESH = "agent.changes.refresh"
+    const val AGENT_CHANGES_REVERT_ALL = "agent.changes.revertAll"
+
+    fun agentChanges(id: Int) = "agent.changes.$id"
+
+    fun agentChange(path: String) = "agent.change:$path"
+
+    fun agentChangeRevert(path: String) = "agent.change.revert:$path"
+
+    const val AGENT_REVIEW_DEFAULT = "agent.review.default"
+
+    fun agentReviewer(id: String) = "agent.review.$id"
+
+    fun agentDiscussPeer(id: String) = "agent.discuss.$id"
+
+    const val AGENT_RENAME = "agent.rename"
+    const val AGENT_RENAME_FIELD = "agent.renameField"
     const val AGENT_TABS = "agent.tabs"
     const val AGENT_EMPTY = "agent.empty"
     const val AGENT_PROMPT = "agent.prompt"
@@ -42,6 +113,21 @@ object AgentTags {
     fun agentTab(id: Int) = "agent.tab.$id"
 
     fun agentTabClose(id: Int) = "agent.tab.$id.close"
+
+    const val AGENT_LIST_SPLITTER = "agent.listSplitter"
+    const val AGENT_LAST_MESSAGE = "agent.lastMessage"
+
+    fun agentConversationAgent(id: Int) = "agent.conversation.$id.agent"
+
+    fun agentWorking(id: Int) = "agent.working.$id"
+
+    fun agentDone(id: Int) = "agent.done.$id"
+
+    fun agentAsking(id: Int) = "agent.asking.$id"
+
+    fun agentFailed(id: Int) = "agent.failed.$id"
+
+    fun agentSeen(id: Int) = "agent.seen.$id"
 
     fun agentTabDetails(id: Int) = "agent.tab.$id.details"
 
