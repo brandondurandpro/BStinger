@@ -3,6 +3,7 @@ package org.example.kotlineditor.ui
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -92,7 +93,10 @@ fun ConversationList(agent: AgentState, modifier: Modifier) {
         val searching = filter.isNotBlank()
         val matching = agent.conversations.filter { it.matches(filter) && (searching || !it.archived) }
         val shown = matching.sortedByDescending { it.pinned }
-        if (shown.isEmpty()) {
+        // The archived ones have a zone of their own under the list, folded; the search finds them as well.
+        val archived = if (searching) emptyList() else agent.conversations.filter { it.archived }
+        var archivedOpen by remember { mutableStateOf(false) }
+        if (shown.isEmpty() && archived.isEmpty()) {
             Label(
                 if (agent.conversations.isEmpty()) "No conversations" else "No match",
                 Modifier.padding(12.dp),
@@ -103,8 +107,34 @@ fun ConversationList(agent: AgentState, modifier: Modifier) {
             items(shown, key = { it.id }) { conversation ->
                 ConversationRow(agent, conversation, selected = conversation == agent.current)
             }
+            if (archived.isNotEmpty()) {
+                item(key = "archived-header") {
+                    ArchivedHeader(archived.size, archivedOpen) { archivedOpen = !archivedOpen }
+                }
+                if (archivedOpen) {
+                    items(archived, key = { "archived-${it.id}" }) { conversation ->
+                        ConversationRow(agent, conversation, selected = conversation == agent.current)
+                    }
+                }
+            }
         }
     }
+}
+
+// "Archived (2) ▸": a click folds or unfolds the archived conversations.
+@Composable
+private fun ArchivedHeader(count: Int, open: Boolean, toggle: () -> Unit) {
+    val arrow = if (open) "▾" else "▸"
+    Label(
+        "$arrow Archived ($count)",
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = toggle)
+            .padding(horizontal = 14.dp, vertical = 8.dp)
+            .testTag(AgentTags.AGENT_ARCHIVED),
+        color = IdeColors.TextSecondary,
+        fontSize = 12.sp,
+    )
 }
 
 @OptIn(ExperimentalComposeUiApi::class, ExperimentalFoundationApi::class)

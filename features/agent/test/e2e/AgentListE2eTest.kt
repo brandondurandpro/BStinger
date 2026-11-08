@@ -50,6 +50,22 @@ class AgentListE2eTest {
             awaitTag(AgentTags.AGENT_ARCHIVE).performClick()
             awaitCondition { conversation.archived }
             awaitNoTag(AgentTags.agentConversation(conversation.id))
+            // The archived ones have a folded zone under the list.
+            awaitTag(AgentTags.AGENT_ARCHIVED).performClick()
+            awaitTag(AgentTags.agentConversation(conversation.id))
+        }
+
+    @Test
+    fun `the search finds an archived conversation too`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, agentPreferences())
+            val conversation = startConversation(app)
+            sendPrompt("echo archived-words")
+            awaitShown(conversation, "archived-words")
+            awaitIdle(conversation)
+            rightClickOn(AgentTags.agentConversation(conversation.id))
+            awaitTag(AgentTags.AGENT_ARCHIVE).performClick()
+            awaitNoTag(AgentTags.agentConversation(conversation.id))
             awaitTag(AgentTags.AGENT_FILTER).performTextInput("archived-words")
             awaitTag(AgentTags.agentConversation(conversation.id))
         }
