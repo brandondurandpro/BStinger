@@ -125,7 +125,7 @@ class FakePhpServers(vararg options: String, idleStopMs: Long = 1_000, alternati
                 file("src/app.ts", "export const answer: number = 42\n")
                 file("src/view.tsx", "export const View = () => <p>hello</p>\n")
                 file("src/legacy.js", "module.exports = 1\n")
-                file("src/App.vue", "<script setup lang=\"ts\">\nconst hello = 1\n</script>\n")
+                file("src/App.vue", """<script setup lang="ts">\nconst hello = 1\n</script>\n""")
                 file("README.md", "# Shop\n")
             }
 
