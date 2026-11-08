@@ -63,7 +63,7 @@ private fun AgentHost.apply(conversation: Conversation, transcript: AgentTranscr
     var wrote = false
     for (item in transcript.items) {
         wrote = wrote || finishedWriting(conversation, item)
-        if (item is AgentItem.AgentText) quotaLinesOf(item.text).takeIf { it.isNotEmpty() }?.let { conversation.quota = it }
+        if (item is AgentItem.AgentText) quotaLimitsOf(item.text).takeIf { it.isNotEmpty() }?.let { conversation.quota = it }
         conversation.upsert(item)
     }
     conversation.state = transcript.state

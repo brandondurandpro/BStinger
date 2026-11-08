@@ -13,23 +13,34 @@ private val USED_LINE =
 
 private val QUOTA_LABEL = Regex("""limit|weekly|monthly|daily|hour""", RegexOption.IGNORE_CASE)
 
+private const val FULL = 100
+
+/** One limit of the plan of an agent: [percent] of it is [remaining] (left) or used, until [reset] when it says. */
+data class QuotaLimit(val label: String, val percent: Int, val remaining: Boolean, val reset: String?) {
+    /** The share of the limit already used, from 0 to 100. */
+    val used: Int get() = if (remaining) FULL - percent else percent
+
+    /** `28% used`, `100% left`. */
+    val text: String get() = "$percent% ${if (remaining) "left" else "used"}"
+}
+
+/** The limits [text] gives, one per line such as `Weekly limit: 100% left (resets 13:01)`; none for any other text. */
+fun quotaLimitsOf(text: String): List<QuotaLimit> = text.lineSequence().mapNotNull { quotaLimitOf(it) }.toList()
+
+private fun quotaLimitOf(line: String): QuotaLimit? {
+    val left = LEFT_LINE.matchEntire(line)
+    if (left != null) return limit(left.groupValues[1], left.groupValues[2], remaining = true, left.groupValues[3])
+    val used = USED_LINE.matchEntire(line)
+    val label = used?.groupValues?.get(1).orEmpty()
+    if (used == null || !QUOTA_LABEL.containsMatchIn(label)) return null
+    return limit(label, used.groupValues[2], remaining = false, used.groupValues[3])
+}
+
+private fun limit(label: String, percent: String, remaining: Boolean, rest: String): QuotaLimit? {
+    val value = percent.toIntOrNull()?.coerceIn(0, FULL) ?: return null
+    val reset = rest.trim().removeSurrounding("(", ")").trim().ifEmpty { null }
+    return QuotaLimit(label.trim(), value, remaining, reset)
+}
+
 /** The commands that tell the quota, in the order they are asked for. */
 val QUOTA_COMMANDS = listOf("usage", "status")
-
-private fun joined(label: String, percent: String, kind: String, rest: String): String {
-    val head = "$label: $percent% $kind"
-    return listOf(head, rest.trim()).filter { it.isNotEmpty() }.joinToString(" · ")
-}
-
-/** The lines of [text] that give the quota: `Weekly limit: 100% left · (resets 13:01)`, `5-hour limit: 28% used · …`. */
-fun quotaLinesOf(text: String): List<String> =
-    text.lineSequence().mapNotNull { line -> quotaLineOf(line) }.toList()
-
-private fun quotaLineOf(line: String): String? {
-    val left = LEFT_LINE.matchEntire(line)
-    if (left != null) return joined(left.groupValues[1].trim(), left.groupValues[2], "left", left.groupValues[3])
-    val used = USED_LINE.matchEntire(line)
-    val label = used?.groupValues?.get(1)?.trim()
-    if (used == null || label == null || !QUOTA_LABEL.containsMatchIn(label)) return null
-    return joined(label, used.groupValues[2], "used", used.groupValues[3])
-}

@@ -12,7 +12,9 @@ class QuotaTextTest {
             Context window: 5% used (13.2K used / 258.4K)
             codex Weekly limit: 100% left (resets 13:01 on 8 déc.)
             """.trimIndent()
-        assertEquals(listOf("codex Weekly limit: 100% left · (resets 13:01 on 8 déc.)"), quotaLinesOf(text))
+        val expected = QuotaLimit("codex Weekly limit", 100, remaining = true, reset = "resets 13:01 on 8 déc.")
+        assertEquals(listOf(expected), quotaLimitsOf(text))
+        assertEquals(0, expected.used)
     }
 
     @Test
@@ -26,17 +28,14 @@ class QuotaTextTest {
             | Cost | API time | Active |
             93% Stop sessions you no longer need · some ran 8 hours or more
             """.trimIndent()
-        assertEquals(
-            listOf(
-                "5-hour limit: 28% used · Resets Nov 8, 2:09 PM GMT+1",
-                "Weekly · all models: 12% used · Resets Nov 14, 4:59 PM GMT+1",
-            ),
-            quotaLinesOf(text),
-        )
+        val limits = quotaLimitsOf(text)
+        assertEquals(listOf("5-hour limit", "Weekly · all models"), limits.map { it.label })
+        assertEquals(listOf(28, 12), limits.map { it.used })
+        assertEquals("28% used", limits.firstOrNull()?.text)
     }
 
     @Test
     fun `a text without a quota gives nothing`() {
-        assertEquals(emptyList(), quotaLinesOf("Hello, here is the code you asked for."))
+        assertEquals(emptyList(), quotaLimitsOf("Hello, here is the code you asked for."))
     }
 }
