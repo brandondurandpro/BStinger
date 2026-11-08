@@ -83,7 +83,7 @@ fun ConversationView(agent: AgentState, conversation: Conversation) {
 @Composable
 private fun ConversationColumn(agent: AgentState, conversation: Conversation, showsCard: Boolean, reserve: Dp) {
     val listState = conversation.listState
-    val items = conversation.items
+    val items = conversation.shownItems
     Column(Modifier.fillMaxSize().testTag(AgentTags.agentView(conversation.id))) {
         Box(Modifier.weight(1f).fillMaxWidth()) {
             if (items.isEmpty()) {
@@ -111,7 +111,7 @@ private fun ConversationColumn(agent: AgentState, conversation: Conversation, sh
 @Composable
 private fun FollowTheEnd(conversation: Conversation) {
     val listState = conversation.listState
-    val items = conversation.items
+    val items = conversation.shownItems
     val last = items.lastOrNull()
     LaunchedEffect(items.size, last?.version) {
         if (items.isNotEmpty()) {
@@ -125,7 +125,7 @@ private fun FollowTheEnd(conversation: Conversation) {
 @Composable
 private fun Transcript(agent: AgentState, conversation: Conversation) {
     val listState = conversation.listState
-    val items = conversation.items
+    val items = conversation.shownItems
     LazyColumn(
         Modifier.fillMaxSize(),
         state = listState,
@@ -165,8 +165,8 @@ private fun ThinkingLabel(conversation: Conversation) {
 
 // Busy with nothing to show for it yet: no text streaming, no tool running, no question asked.
 private fun thinking(conversation: Conversation): Boolean {
-    if (!conversation.busy) return false
-    return when (val last = conversation.items.lastOrNull()) {
+    if (!conversation.busy || conversation.probeFrom != null) return false
+    return when (val last = conversation.shownItems.lastOrNull()) {
         is AgentItem.AgentText -> false
         is AgentItem.ToolCall -> last.status != AgentToolStatus.Running
         is AgentItem.Permission -> !last.pending
@@ -303,7 +303,8 @@ private fun PromptActions(agent: AgentState, conversation: Conversation) {
             fontSize = 12.sp,
         )
         Spacer(Modifier.width(8.dp))
-        if (conversation.busy) {
+        // The silent question about the quota is no work to stop: the prompt keeps its Send button.
+        if (conversation.busy && conversation.probeFrom == null) {
             IdeButton("Stop", { agent.stop(conversation) }, Modifier.testTag(AgentTags.AGENT_STOP))
         } else {
             IdeButton(

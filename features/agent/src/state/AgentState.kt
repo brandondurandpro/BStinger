@@ -229,7 +229,17 @@ class Conversation(val id: Int, title: String, val branch: String) {
     internal val queued = ArrayDeque<OutgoingPrompt>()
 
     /** Where the items of the silent question about the quota start, null when none is in flight. */
-    internal var probeFrom: Int? = null
+    internal var probeFrom: Int? by mutableStateOf(null)
+
+    /**
+     * The items the conversation shows: all of them, but the question about the quota and its answer while they are in
+     * flight. The user never sees what the IDE asks on its own.
+     */
+    val shownItems: List<AgentItem>
+        get() {
+            val from = probeFrom ?: return items
+            return items.take(from)
+        }
 
     /** True when a turn ended since the quota was read: it is read again once the agent is free. */
     internal var quotaStale by mutableStateOf(false)
@@ -596,7 +606,10 @@ class AgentState(
         conversation.quotaProbed = true
         conversation.probeFrom = conversation.items.size
         val itemId = "probe-${UUID.randomUUID()}"
+        // Sending a prompt clears the mark of the finished turn; this one is not a turn of the user.
+        val wasFinished = conversation.finished
         launchDelivery(conversation, OutgoingPrompt(itemId, "/$command", emptyList()))
+        conversation.finished = wasFinished
     }
 
     /** One prompt in flight; a queued one goes once the turn of the agent is over (see [onTurnIdle]). */

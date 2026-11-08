@@ -33,7 +33,7 @@ val Conversation.outcome: AgentOutcome
         val notice = last as? AgentItem.Notice
         return when {
             asking -> AgentOutcome.Asking
-            busy -> AgentOutcome.Working
+            busy && probeFrom == null -> AgentOutcome.Working
             !finished -> AgentOutcome.Quiet
             notice != null && notice.error -> AgentOutcome.Failed
             notice?.text == STOPPED_NOTICE -> AgentOutcome.Quiet

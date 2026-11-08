@@ -82,7 +82,6 @@ private fun AgentHost.apply(conversation: Conversation, transcript: AgentTranscr
     if (turnEnded && answeredFrom != null) {
         // The silent question about the quota is answered: the bars read it, the conversation forgets it.
         conversation.probeFrom = null
-        conversation.finished = true
         // Their ids are remembered: the server sends them again with the next snapshot.
         while (conversation.items.size > answeredFrom) conversation.hidden.add(conversation.items.removeAt(conversation.items.lastIndex).id)
     } else if (turnEnded && probeFrom == null) {
