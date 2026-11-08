@@ -1,10 +1,8 @@
 package org.example.kotlineditor.ui
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
@@ -30,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -142,7 +141,7 @@ private fun ArchivedHeader(count: Int, open: Boolean, toggle: () -> Unit) {
     )
 }
 
-@OptIn(ExperimentalComposeUiApi::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun ConversationRow(agent: AgentState, conversation: Conversation, selected: Boolean) {
     val interaction = remember { MutableInteractionSource() }
@@ -165,18 +164,20 @@ private fun ConversationRow(agent: AgentState, conversation: Conversation, selec
             }
         }
     Box {
+        var lastClickAt by remember { mutableLongStateOf(0L) }
         Row(
             Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 6.dp, vertical = 1.dp)
                 .background(background, RoundedCornerShape(6.dp))
                 .hoverable(interaction)
-                .combinedClickable(
-                    interactionSource = interaction,
-                    indication = null,
-                    onDoubleClick = { agent.openChat(conversation) },
-                    onClick = { agent.open(conversation) },
-                )
+                .clickable(interactionSource = interaction, indication = null) {
+                    // A click opens at once: waiting to tell it from a double click would delay every one.
+                    val now = System.currentTimeMillis()
+                    val doubled = now - lastClickAt < DOUBLE_CLICK_MILLIS
+                    lastClickAt = now
+                    if (doubled) agent.openChat(conversation) else agent.open(conversation)
+                }
                 .then(press)
                 .testTag(AgentTags.agentConversation(conversation.id))
                 .padding(horizontal = 8.dp, vertical = 6.dp),
@@ -299,6 +300,8 @@ private fun LastMessageAge(at: Long, modifier: Modifier) {
     )
 }
 
+// Two clicks on a conversation this close are a double click.
+private const val DOUBLE_CLICK_MILLIS = 400L
 private const val AGE_TICK_MILLIS = 30_000L
 
 /** `now`, `5m`, `3h`, `10d`, `2mo`, `1y`: the biggest unit that fits in [millis]. */
