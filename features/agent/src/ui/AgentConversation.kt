@@ -204,6 +204,15 @@ private fun Prompt(agent: AgentState, conversation: Conversation) {
         SearchesFiles(files, completion.completing as? Completing.File, index, context)
         CompletionList(completion, width.padding(bottom = 6.dp))
         WorkspaceStatus(agent, conversation, width.padding(horizontal = 4.dp, vertical = 6.dp))
+        // Above the input, not in its row of buttons: a narrow window must never push Stop and Send out of sight.
+        conversation.usage?.let { usage ->
+            Label(
+                usageText(usage),
+                width.padding(horizontal = 4.dp, vertical = 2.dp).testTag(AgentTags.AGENT_USAGE),
+                color = IdeColors.TextSecondary,
+                fontSize = 12.sp,
+            )
+        }
         val workspaceRoot = (conversation.workspace ?: agent.project).root.path
         Column(
             width
@@ -270,14 +279,6 @@ private fun PromptActions(agent: AgentState, conversation: Conversation) {
             color = IdeColors.TextSecondary,
             fontSize = 12.sp,
         )
-        conversation.usage?.let { usage ->
-            Label(
-                usageText(usage),
-                Modifier.padding(end = 8.dp).testTag(AgentTags.AGENT_USAGE),
-                color = IdeColors.TextSecondary,
-                fontSize = 12.sp,
-            )
-        }
         Spacer(Modifier.width(8.dp))
         if (conversation.busy) {
             IdeButton("Stop", { agent.stop(conversation) }, Modifier.testTag(AgentTags.AGENT_STOP))
