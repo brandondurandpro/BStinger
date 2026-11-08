@@ -78,13 +78,13 @@ private fun AgentHost.apply(conversation: Conversation, transcript: AgentTranscr
     val turnEnded = wasBusy && transcript.state == AgentTurnState.Idle
     val probeFrom = conversation.probeFrom
     // An idle snapshot before the question reached the server is no answer: the probe waits for its items.
-    val probeAnswered = probeFrom != null && conversation.items.size > probeFrom
-    if (turnEnded && probeAnswered && probeFrom != null) {
+    val answeredFrom = probeFrom?.takeIf { conversation.items.size > it }
+    if (turnEnded && answeredFrom != null) {
         // The silent question about the quota is answered: the bars read it, the conversation forgets it.
         conversation.probeFrom = null
         conversation.finished = true
         // Their ids are remembered: the server sends them again with the next snapshot.
-        while (conversation.items.size > probeFrom) conversation.hidden.add(conversation.items.removeAt(conversation.items.lastIndex).id)
+        while (conversation.items.size > answeredFrom) conversation.hidden.add(conversation.items.removeAt(conversation.items.lastIndex).id)
     } else if (turnEnded && probeFrom == null) {
         conversation.quotaStale = true
         conversation.finished = true
