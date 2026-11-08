@@ -93,7 +93,7 @@ class AgentContextE2eTest {
         }
 
     @Test
-    fun `an image pasted shows a preview, which opens large and closes on a click`() =
+    fun `an image pasted shows a preview, which opens large and closes with its button`() =
         runComposeUiTest {
             val launched = launchWithProject(project, agentPreferences())
             startConversation(launched)
@@ -101,7 +101,10 @@ class AgentContextE2eTest {
             typePrompt("look")
             pasteInPrompt()
             awaitTag(AgentTags.agentImagePreview("image-1.png")).performClick()
+            // A click inside the window does not close it.
             awaitTag(AgentTags.AGENT_IMAGE_VIEWER).performClick()
+            awaitTag(AgentTags.AGENT_IMAGE_VIEWER)
+            awaitTag(AgentTags.AGENT_IMAGE_CLOSE).performClick()
             awaitNoTag(AgentTags.AGENT_IMAGE_VIEWER)
             awaitTag(AgentTags.agentAttachmentRemove("image-1.png")).performClick()
             awaitNoTag(AgentTags.agentAttachment("image-1.png"))

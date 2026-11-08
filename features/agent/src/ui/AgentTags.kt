@@ -27,6 +27,7 @@ object AgentTags {
     const val AGENT_CARD_CONTEXT = "agent.quota.card.context"
     const val AGENT_CARD_COST = "agent.quota.card.cost"
     const val AGENT_IMAGE_VIEWER = "agent.image.viewer"
+    const val AGENT_IMAGE_CLOSE = "agent.image.close"
     const val AGENT_STATS = "agent.stats"
     const val AGENT_STATS_DIALOG = "agent.stats.dialog"
     const val AGENT_STATS_TIME = "agent.stats.time"

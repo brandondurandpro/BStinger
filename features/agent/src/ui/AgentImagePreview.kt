@@ -6,6 +6,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -25,11 +28,13 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import org.example.kotlineditor.model.AgentAttachment
 import java.util.Base64
 
 private val THUMBNAIL = 64.dp
-private val LARGE = 720.dp
+// The share of the window the viewer takes, in width and in height.
+private const val VIEWER_SHARE = 0.9f
 
 // The image of a pasted attachment, decoded once; null when its bytes are not an image.
 private fun decoded(image: AgentAttachment.Image): ImageBitmap? =
@@ -75,20 +80,29 @@ internal fun ImageChip(image: AgentAttachment.Image, remove: () -> Unit) {
     if (large && bitmap != null) ImageViewer(image.name, bitmap) { large = false }
 }
 
-// The image at its size, fitted to the window; a click anywhere or Escape closes it.
+// The image large, fitted to most of the window; the Close button at the top right or Escape closes it; a click on the image does nothing.
 @Composable
 private fun ImageViewer(name: String, bitmap: ImageBitmap, close: () -> Unit) {
-    Dialog(onDismissRequest = close) {
+    Dialog(onDismissRequest = close, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Column(
             Modifier
+                .fillMaxWidth(VIEWER_SHARE)
+                .fillMaxHeight(VIEWER_SHARE)
                 .background(IdeColors.Popup, RoundedCornerShape(8.dp))
                 .border(1.dp, IdeColors.Separator, RoundedCornerShape(8.dp))
                 .padding(12.dp)
-                .clickable(onClick = close)
                 .testTag(AgentTags.AGENT_IMAGE_VIEWER),
         ) {
-            Label(name, Modifier.padding(bottom = 8.dp), color = IdeColors.TextSecondary, fontSize = 12.sp)
-            Image(bitmap, name, Modifier.size(LARGE, LARGE * bitmap.height / bitmap.width.coerceAtLeast(1)), contentScale = ContentScale.Fit)
+            Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Label(name, Modifier.weight(1f), color = IdeColors.TextSecondary, fontSize = 12.sp)
+                IdeButton("Close", close, Modifier.testTag(AgentTags.AGENT_IMAGE_CLOSE))
+            }
+            Image(
+                bitmap,
+                name,
+                Modifier.weight(1f).fillMaxWidth(),
+                contentScale = ContentScale.Fit,
+            )
         }
     }
 }
