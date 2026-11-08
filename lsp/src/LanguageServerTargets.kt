@@ -31,7 +31,8 @@ internal class LanguageServerTargets(private val settings: LanguageServerSetting
         for ((file, language) in handled.filter { settings.candidates.offered(it.second).isNotEmpty() }) {
             val offered = settings.candidates.offered(language)
             val chosenId = choices.choice(language, project)
-            val chosen = chosenId?.let { id -> offered.firstOrNull { it.id == id } }
+            // A language with one server needs no choice: that server is the one.
+            val chosen = chosenId?.let { id -> offered.firstOrNull { it.id == id } } ?: offered.singleOrNull()
             if (chosen == null) {
                 unchosen += language
             } else {

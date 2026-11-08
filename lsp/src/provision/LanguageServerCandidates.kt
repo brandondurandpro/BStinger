@@ -32,9 +32,11 @@ data class LanguageServerCandidate(
     val drawbacks: List<String>,
     /** Runtimes it needs. */
     val requirements: List<Requirement>,
-    /** The artifact downloaded on first use, null for a server already on the machine. */
+    /** The artifact downloaded on first use, null for a server already on the machine or one of a [bundle]. */
     val tool: PinnedTool?,
-    /** The command line, from the found runtimes and the installed artifact (null without [tool]). */
+    /** Several npm packages installed side by side (a server and the `typescript` it finds), instead of [tool]. */
+    val bundle: PinnedBundle? = null,
+    /** The command line, from the found runtimes and the installed artifact (null without [tool] and [bundle]). */
     val command: (runtimes: Map<RuntimeKind, Path>, installed: Path?) -> List<String>,
     /** `initializationOptions` of its `initialize` request: what it leaves off unless asked (phpactor's hints). */
     val initializationOptions: JsonElement? = null,
@@ -57,7 +59,7 @@ data class CandidateStatus(
 /** The language servers known for each language, with their requirements checked on this machine. */
 class CandidateRegistry(
     private val detector: RuntimeDetector = RuntimeDetector(),
-    private val known: List<LanguageServerCandidate> = PhpServers.all,
+    private val known: List<LanguageServerCandidate> = PhpServers.all + WebServers.all,
 ) {
     /** The candidates of [language], without checking their requirements (which runs programs). */
     fun offered(language: String): List<LanguageServerCandidate> = known.filter { it.language == language }
@@ -68,7 +70,9 @@ class CandidateRegistry(
     /** The command that starts [status]'s server, installing its artifact first when needed. Blocking. */
     fun commandFor(status: CandidateStatus, downloader: ToolDownloader): List<String> {
         check(status.available) { "${status.candidate.displayName} cannot run here: ${status.details.joinToString()}" }
-        return status.candidate.command(status.runtimes, status.candidate.tool?.let(downloader::obtain))
+        val candidate = status.candidate
+        val installed = candidate.tool?.let(downloader::obtain) ?: candidate.bundle?.let(downloader::obtainBundle)
+        return candidate.command(status.runtimes, installed)
     }
 
     private fun status(candidate: LanguageServerCandidate): CandidateStatus {

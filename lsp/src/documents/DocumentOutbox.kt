@@ -91,7 +91,7 @@ internal class DocumentOutbox(
     }
 
     fun didOpen(document: MirroredDocument) {
-        val opening = Outgoing.Opening(document.uri, document.language, document.lspVersion, snapshotOf(document))
+        val opening = Outgoing.Opening(document.uri, document.languageId, document.lspVersion, snapshotOf(document))
         submit { append(opening, endsMergeOf = document.uri) }
     }
 

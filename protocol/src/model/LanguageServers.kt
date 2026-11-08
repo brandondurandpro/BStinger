@@ -224,14 +224,47 @@ interface LanguageServers : CodeIntelligence {
     }
 }
 
-/** The languages that have language servers, by file extension. */
+/**
+ * The languages that have language servers, by file extension. A file has a *language identifier* (what the server is
+ * told in `didOpen`: `typescriptreact` for a `.tsx`) and belongs to a *language* (the group one server serves:
+ * TypeScript, JavaScript and their React forms are all `typescript`).
+ */
 object Languages {
-    private val byExtension = mapOf("php" to "php", "phtml" to "php")
-    private val names = mapOf("php" to "PHP")
-    private val rootMarkers = mapOf("php" to "composer.json")
+    private const val PHP = "php"
+    private const val TYPESCRIPT = "typescript"
+    private const val TYPESCRIPT_REACT = "typescriptreact"
+    private const val JAVASCRIPT = "javascript"
+    private const val JAVASCRIPT_REACT = "javascriptreact"
 
-    /** Language of [path], null when no language server handles it. */
-    fun languageOf(path: String): String? = byExtension[path.substringAfterLast('.', "").lowercase()]
+    private val identifiers =
+        mapOf(
+            "php" to PHP,
+            "phtml" to PHP,
+            "ts" to TYPESCRIPT,
+            "mts" to TYPESCRIPT,
+            "cts" to TYPESCRIPT,
+            "tsx" to TYPESCRIPT_REACT,
+            "js" to JAVASCRIPT,
+            "mjs" to JAVASCRIPT,
+            "cjs" to JAVASCRIPT,
+            "jsx" to JAVASCRIPT_REACT,
+        )
+
+    // The identifiers one server serves under another name; the others are their own language.
+    private val groups =
+        mapOf(
+            TYPESCRIPT_REACT to TYPESCRIPT,
+            JAVASCRIPT to TYPESCRIPT,
+            JAVASCRIPT_REACT to TYPESCRIPT,
+        )
+    private val names = mapOf(PHP to "PHP", TYPESCRIPT to "TypeScript and JavaScript")
+    private val rootMarkers = mapOf(PHP to "composer.json")
+
+    /** Language identifier of [path] (`typescriptreact`), null when no language server handles it. */
+    fun identifierOf(path: String): String? = identifiers[path.substringAfterLast('.', "").lowercase()]
+
+    /** Language of [path] (`typescript` for a `.tsx`, `.js`…), null when no language server handles it. */
+    fun languageOf(path: String): String? = identifierOf(path)?.let { groups[it] ?: it }
 
     /** Name of [language] for people. */
     fun nameOf(language: String): String = names[language] ?: language

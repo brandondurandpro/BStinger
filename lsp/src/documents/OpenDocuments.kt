@@ -2,6 +2,7 @@ package org.example.kotlineditor.lsp.documents
 
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import org.example.kotlineditor.model.Languages
 import org.example.kotlineditor.model.TextChange
 import java.io.IOException
 import java.nio.file.Paths
@@ -24,11 +25,14 @@ data class ClientVersion(
 class MirroredDocument internal constructor(
     /** Path on the server machine, as the client names it. */
     val path: String,
-    /** Language identifier (`php`). */
+    /** Language of the server that handles it (`php`, `typescript`). */
     val language: String,
     /** Root of the language server that handles it. */
     val root: String,
 ) {
+    /** What the servers are told it is (`typescriptreact` for a `.tsx`): [language] for the languages with one name. */
+    val languageId: String = Languages.identifierOf(path) ?: language
+
     /** `file:` URI given to the language servers. */
     val uri: String = Paths.get(path).toUri().toString()
 

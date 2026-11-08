@@ -31,3 +31,27 @@ enum class Unpack {
      */
     NpmTarball,
 }
+
+/** One npm package of a [PinnedBundle]: its [name] (`typescript`, `@vue/language-server`), tarball and checksum. */
+data class PinnedPackage(
+    /** Name of the package, which is the directory it installs into under `node_modules`. */
+    val name: String,
+    /** Address of its `.tgz`, exactly the one verified in the pin's source. */
+    val url: String,
+    /** Its `dist.integrity` (SHA-512) or another checksum the tarball must have. */
+    val digest: Digest,
+)
+
+/**
+ * Several npm packages installed side by side in one `node_modules`, the way `npm install` lays them out: a language
+ * server and the `typescript` it finds next to it. Each tarball is pinned and verified like a [PinnedTool]; nothing
+ * runs at install time (no scripts, no resolution of dependencies: a package needing one is pinned here too).
+ */
+data class PinnedBundle(
+    /** Name the bundle installs under: `<toolsDirectory>/<name>/<version>/`. */
+    val name: String,
+    /** Version of the bundle (that of its main package), also the directory it installs into. */
+    val version: String,
+    /** The packages, installed under `node_modules/<package name>/`. */
+    val packages: List<PinnedPackage>,
+)
