@@ -231,6 +231,9 @@ class Conversation(val id: Int, title: String, val branch: String) {
     /** Where the items of the silent question about the quota start, null when none is in flight. */
     internal var probeFrom: Int? by mutableStateOf(null)
 
+    /** The discussion with another agent this conversation leads, null when none runs. */
+    internal var discussion: Job? = null
+
     /**
      * The items the conversation shows: all of them, but the question about the quota and its answer while they are in
      * flight. The user never sees what the IDE asks on its own.
@@ -612,8 +615,20 @@ class AgentState(
         conversation.finished = wasFinished
     }
 
+    /**
+     * Sends [text] to [conversation] as a prompt the user did not type (the IDE relays it): shown in its transcript,
+     * queued while it answers. Returns the id of the prompt, to wait for its answer.
+     */
+    internal fun deliverText(conversation: Conversation, text: String): String {
+        val itemId = "prompt-${UUID.randomUUID()}"
+        conversation.upsert(AgentItem.UserText(itemId, 0, text))
+        val prompt = OutgoingPrompt(itemId, text, emptyList())
+        if (conversation.busy) conversation.queued.addLast(prompt) else launchDelivery(conversation, prompt)
+        return itemId
+    }
+
     /** One prompt in flight; a queued one goes once the turn of the agent is over (see [onTurnIdle]). */
-    private fun launchDelivery(conversation: Conversation, prompt: OutgoingPrompt) {
+    internal fun launchDelivery(conversation: Conversation, prompt: OutgoingPrompt) {
         conversation.sending = true
         conversation.finished = false
         conversation.lastMessageAt = System.currentTimeMillis()
@@ -662,6 +677,8 @@ class AgentState(
 
     /** Stops the agent of [conversation]; its permission requests are cancelled. */
     fun stop(conversation: Conversation) {
+        // The user stops the agent: the discussion it led stops too, instead of going on with the next question.
+        conversation.discussion?.cancel()
         if (!conversation.busy) return
         project.scope.launch {
             try {

@@ -12,6 +12,9 @@ object AgentTags {
     const val AGENT_FILTER = "agent.filter"
     const val AGENT_DELETE = "agent.delete"
     const val AGENT_REVIEW = "agent.review"
+    const val AGENT_DISCUSS = "agent.discuss"
+    const val AGENT_DISCUSS_FILTER = "agent.discuss.filter"
+    const val AGENT_DISCUSS_DEFAULT = "agent.discuss.default"
     const val AGENT_LOGIN = "agent.login"
     const val AGENT_PIN = "agent.pin"
     const val AGENT_DUPLICATE = "agent.duplicate"
@@ -71,6 +74,8 @@ object AgentTags {
     const val AGENT_REVIEW_DEFAULT = "agent.review.default"
 
     fun agentReviewer(id: String) = "agent.review.$id"
+
+    fun agentDiscussPeer(id: String) = "agent.discuss.$id"
 
     const val AGENT_RENAME = "agent.rename"
     const val AGENT_RENAME_FIELD = "agent.renameField"

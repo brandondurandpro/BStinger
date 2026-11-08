@@ -293,6 +293,7 @@ private fun PromptActions(agent: AgentState, conversation: Conversation) {
         ModelPicker(agent, conversation)
         EffortPicker(agent, conversation)
         PermissionsPicker(agent, conversation)
+        DiscussButton(agent, conversation)
         ReviewButton(agent, conversation)
         Spacer(Modifier.width(8.dp))
         val name = conversation.agentName ?: "Agent: " + agent.agentLabelOf(conversation)

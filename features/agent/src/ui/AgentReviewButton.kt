@@ -28,6 +28,7 @@ import kotlinx.coroutines.CancellationException
 import org.example.kotlineditor.model.AgentRegistryEntry
 import org.example.kotlineditor.state.AgentState
 import org.example.kotlineditor.state.Conversation
+import org.example.kotlineditor.state.discussWith
 import org.example.kotlineditor.state.reviewWith
 
 private val MENU_WIDTH = 320.dp
@@ -36,9 +37,37 @@ private val MENU_WIDTH = 320.dp
  * "Review ▾" under the prompt: a click lists the agents the server can run, and the one chosen reviews the work of
  * [conversation] in a conversation of its own, in the same worktree. Offered once the agent has worked and is idle.
  */
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ReviewButton(agent: AgentState, conversation: Conversation) {
+    val enabled = conversation.started && !conversation.busy
+    val tags = RegistryTags(AgentTags.AGENT_REVIEW_DEFAULT, AgentTags.AGENT_REVIEW_FILTER, AgentTags::agentReviewer)
+    val button = RegistryButton("Review", "Ask another agent to review this work", AgentTags.AGENT_REVIEW, tags)
+    RegistryAgentButton(agent, button, enabled) { entry -> agent.reviewWith(conversation, entry) }
+}
+
+/**
+ * "Discuss ▾" under the prompt: the agent chosen talks the request typed in the prompt over with the agent of
+ * [conversation], which asks it questions until they agree on the best solution, then carries it out.
+ */
+@Composable
+fun DiscussButton(agent: AgentState, conversation: Conversation) {
+    val enabled = conversation.draft.isNotBlank() && !conversation.busy
+    val tags = RegistryTags(AgentTags.AGENT_DISCUSS_DEFAULT, AgentTags.AGENT_DISCUSS_FILTER, AgentTags::agentDiscussPeer)
+    val tooltip = "Type a request, then choose a second agent: they discuss it before anything is changed"
+    val button = RegistryButton("Discuss", tooltip, AgentTags.AGENT_DISCUSS, tags)
+    RegistryAgentButton(agent, button, enabled) { entry ->
+        val request = conversation.draft.trim()
+        conversation.draft = ""
+        agent.discussWith(conversation, entry, request)
+    }
+}
+
+/** What a button that lists the agents of the registry shows: its [label], its tooltip, its tag and those of its menu. */
+private class RegistryButton(val label: String, val tooltip: String, val tag: String, val tags: RegistryTags)
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun RegistryAgentButton(agent: AgentState, button: RegistryButton, enabled: Boolean, choose: (String?) -> Unit) {
     var open by remember { mutableStateOf(false) }
     var entries by remember { mutableStateOf<List<AgentRegistryEntry>?>(null) }
     var failure by remember { mutableStateOf<String?>(null) }
@@ -52,29 +81,26 @@ fun ReviewButton(agent: AgentState, conversation: Conversation) {
             failure = refused.message ?: "unknown error"
         }
     }
-    val enabled = conversation.started && !conversation.busy
     Box {
-        TooltipArea(tooltip = { Tooltip("Ask another agent to review this work") }) {
+        TooltipArea(tooltip = { Tooltip(button.tooltip) }) {
             Label(
-                "Review ▾",
+                "${button.label} ▾",
                 Modifier
                     .background(if (open) IdeColors.Selection else Color.Transparent, RoundedCornerShape(4.dp))
                     .clickable(enabled = enabled) { open = true }
-                    .testTag(AgentTags.AGENT_REVIEW)
+                    .testTag(button.tag)
                     .padding(horizontal = 6.dp, vertical = 2.dp),
                 color = if (enabled) IdeColors.TextSecondary else IdeColors.LineNumber,
                 fontSize = 12.sp,
             )
         }
-        val choose: (String?) -> Unit = { entry ->
+        val picked: (String?) -> Unit = { entry ->
             open = false
-            agent.reviewWith(conversation, entry)
+            choose(entry)
         }
         DropdownMenu(open, onDismissRequest = { open = false }, Modifier.widthIn(max = MENU_WIDTH).closesOnEscape { open = false }) {
-            val tags = RegistryTags(AgentTags.AGENT_REVIEW_DEFAULT, AgentTags.AGENT_REVIEW_FILTER, AgentTags::agentReviewer)
-            val menu = RegistryMenu(agent.settingsAgentLabel, chosenId = null, tags = tags)
-            AgentRegistryMenu(menu, entries, failure, choose)
+            val menu = RegistryMenu(agent.settingsAgentLabel, chosenId = null, tags = button.tags)
+            AgentRegistryMenu(menu, entries, failure, picked)
         }
     }
 }
-

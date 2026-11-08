@@ -289,7 +289,9 @@ class FakeAgent(
         val count = kept?.turns?.size ?: 1
         if (kept != null && kept.title == null) titled(kept, prompt)
         try {
-            val stopReason = answer(session, prompt, count)
+            // A session whose first prompt starts with `discuss` leads a discussion: a question, then its plan.
+            val leads = kept?.turns?.firstOrNull()?.prompt?.startsWith("discuss") == true
+            val stopReason = if (leads) discussing(session, count) else answer(session, prompt, count)
             usage(session, count)
             return buildJsonObject { put("stopReason", stopReason) }
         } finally {
@@ -344,6 +346,11 @@ class FakeAgent(
             "context" -> chunks(session, listOf(describeContext(turns[session]?.context.orEmpty())))
             else -> chunks(session, listOf("You said: $prompt"))
         }
+    }
+
+    private fun discussing(session: String, count: Int): String {
+        val move = if (count == 1) "ASK: which storage do we use?" else "FINAL: use sqlite"
+        return chunks(session, listOf("I read the code.\n$move"))
     }
 
     private fun chunks(session: String, texts: List<String>): String {
