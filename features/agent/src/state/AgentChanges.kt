@@ -5,8 +5,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import org.example.kotlineditor.model.DiffKind
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.GitFileStatus
@@ -14,6 +19,9 @@ import java.io.IOException
 
 // More files than this and the lines added and removed are not counted for the rest: each count is a Git process.
 private const val MAX_COUNTED_FILES = 100
+
+// Files whose lines are counted at the same time.
+private const val PARALLEL_DIFFS = 8
 
 /** A file the agent changed where it works, with the lines its changes add and remove. */
 class ChangedFile(val path: String, val status: GitFileStatus, val added: Int, val removed: Int) {
@@ -55,10 +63,16 @@ fun AgentState.refreshChanges(conversation: Conversation) {
     project.scope.launch {
         try {
             val status = project.services.git.status(root)
-            conversation.changes.files = status.entries.sortedBy { it.key }.mapIndexed { index, entry ->
-                val counted = index < MAX_COUNTED_FILES
-                changedFile(root, entry.key, entry.value, counted)
-            }
+            val sorted = status.entries.sortedBy { it.key }
+            // The lines of each file are counted together, not one Git process after the other.
+            val limit = Semaphore(PARALLEL_DIFFS)
+            conversation.changes.files =
+                coroutineScope {
+                    sorted.mapIndexed { index, entry ->
+                        val counted = index < MAX_COUNTED_FILES
+                        async { limit.withPermit { changedFile(root, entry.key, entry.value, counted) } }
+                    }.awaitAll()
+                }
             conversation.changes.failure = null
         } catch (failed: IOException) {
             conversation.changes.failure = "Cannot read the changes: ${failed.message}"

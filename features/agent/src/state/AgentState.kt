@@ -401,6 +401,9 @@ class AgentState(
     internal val usedAgents =
         saved[PreferenceKeys.AGENT_USED].orEmpty().lines().filter { it.isNotBlank() }.toMutableList()
 
+    /** The quota last read for each agent (by its label): shared by its conversations. */
+    internal val quotaOfAgents = HashMap<String, List<QuotaLimit>>()
+
     internal var nextId = 1
 
     // Whether the tabs and titles of the last run were put back: until then, nothing of them is saved.
@@ -581,7 +584,9 @@ class AgentState(
      * quota is not known yet; only when the agent lists such a command.
      */
     internal fun refreshQuota(conversation: Conversation) {
-        val unknown = conversation.quota.isEmpty() && conversation.started && readsQuotaAlone(agentOf(conversation))
+        // Not while the history replays (no item yet): the question would wait behind it, and slow the opening.
+        val loaded = conversation.items.isNotEmpty()
+        val unknown = conversation.quota.isEmpty() && loaded && readsQuotaAlone(agentOf(conversation))
         val outdated = conversation.quotaStale && conversation.quota.isNotEmpty()
         if (!(outdated || unknown) || conversation.busy || conversation.probeFrom != null) return
         if (conversation.quotaProbed && conversation.quota.isEmpty()) return
