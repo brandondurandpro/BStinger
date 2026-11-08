@@ -219,7 +219,12 @@ private fun matchesFilter(entry: AgentRegistryEntry, filter: String): Boolean =
 // The field that [onChange] filters the list of agents with, focused as the menu opens: the agents of the registry
 // are typed, and the field is shown when it stands empty.
 @Composable
-private fun AgentFilterField(filter: String, tag: String, onChange: (String) -> Unit) {
+internal fun AgentFilterField(
+    filter: String,
+    tag: String,
+    placeholder: String = "Filter the agents…",
+    onChange: (String) -> Unit,
+) {
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
     Box(
@@ -229,7 +234,7 @@ private fun AgentFilterField(filter: String, tag: String, onChange: (String) -> 
             .border(1.dp, IdeColors.InputBorder, RoundedCornerShape(4.dp))
             .padding(horizontal = 8.dp, vertical = 6.dp),
     ) {
-        if (filter.isEmpty()) Label("Filter the agents…", color = IdeColors.TextSecondary, fontSize = 12.sp)
+        if (filter.isEmpty()) Label(placeholder, color = IdeColors.TextSecondary, fontSize = 12.sp)
         BasicTextField(
             filter,
             onChange,
