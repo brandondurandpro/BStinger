@@ -34,6 +34,8 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -49,6 +51,7 @@ import org.example.kotlineditor.state.AgentState
 import org.example.kotlineditor.state.Completing
 import org.example.kotlineditor.state.Conversation
 import org.example.kotlineditor.state.isLoginNotice
+import org.example.kotlineditor.state.recallPrompt
 
 private val CONTENT_WIDTH = 760.dp
 
@@ -220,7 +223,7 @@ private fun Prompt(agent: AgentState, conversation: Conversation) {
                         .onPreviewKeyEvent { event ->
                             // The list of suggestions first: Enter chooses one there, and sends otherwise.
                             val handled = completion.handle(event) || pastesImage(event, context)
-                            handled || sendsOnEnter(event) { agent.send(conversation) }
+                            handled || recallsPrompt(event, conversation) || sendsOnEnter(event) { agent.send(conversation) }
                         },
                     textStyle = bodyStyle,
                     cursorBrush = SolidColor(IdeColors.Caret),
@@ -229,6 +232,15 @@ private fun Prompt(agent: AgentState, conversation: Conversation) {
             PromptActions(agent, conversation)
         }
     }
+}
+
+// Up and Down walk through the prompts already sent while the draft is empty.
+private fun recallsPrompt(event: KeyEvent, conversation: Conversation): Boolean {
+    val older = event.key == Key.DirectionUp
+    val newer = event.key == Key.DirectionDown
+    val plain = !event.isShiftPressed && !event.isAltPressed && !event.isCtrlPressed
+    val wanted = (older || newer) && plain && event.type == KeyEventType.KeyDown
+    return wanted && conversation.recallPrompt(older)
 }
 
 private fun sendsOnEnter(event: KeyEvent, send: () -> Unit): Boolean {

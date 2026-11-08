@@ -59,6 +59,9 @@ class Conversation(val id: Int, title: String, val branch: String) {
     val items = mutableStateListOf<AgentItem>()
     private val positions = HashMap<String, Int>()
 
+    /** Which of the prompts already sent the Up key brought back to the draft (0 = the latest); -1 when none. */
+    internal var recalled = -1
+
     /** Text being typed in the prompt and its caret, kept per conversation like an unsent draft. */
     var draftValue by mutableStateOf(TextFieldValue(""))
 
