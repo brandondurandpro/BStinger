@@ -3,10 +3,13 @@ package org.example.kotlineditor.state
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.example.kotlineditor.model.CompletionItem
@@ -20,6 +23,12 @@ import org.example.kotlineditor.telemetry.sizeOf
 
 // Rows of the popup a Page Up or Page Down moves by.
 private const val PAGE_ROWS = 8
+
+// Rows of the popup whose type is asked at once: the ones the list shows.
+private const val DETAILED_ROWS = 12
+
+// How long the list stays unchanged before the types of its rows are asked.
+private const val DETAILS_DELAY_MS = 100L
 
 // How long an item stays selected before its documentation is asked: the arrows run through items without asking.
 internal const val DOCUMENTATION_DELAY_MS = 200L
@@ -45,6 +54,12 @@ class CompletionPopup internal constructor(
     // Documentation already resolved, by resolve index: moving back to an item does not ask again. An item without
     // (or whose request failed, the link being down) is asked again when selected again.
     internal val resolved = HashMap<Int, String>()
+
+    /**
+     * The type or signature of the items whose server gives it only once they are resolved, by resolve index: the
+     * rows show it at their end, as they do the `detail` the list carries.
+     */
+    val details = mutableStateMapOf<Int, String>()
 
     /** The selected item. */
     val selectedItem: CompletionItem? get() = items.getOrNull(selected)
@@ -281,16 +296,43 @@ private class Describer(
     private val current: () -> CompletionPopup?,
 ) {
     private var job: Job? = null
+    private var detailsJob: Job? = null
 
     val active: Boolean get() = job?.isActive == true
 
     fun cancel() {
         job?.cancel()
         job = null
+        detailsJob?.cancel()
+        detailsJob = null
+    }
+
+    // The types of the first rows of the list that the server gives only on resolve: asked together, once the list
+    // stops changing; the answers are kept, so the documentation of an item is not asked a second time.
+    private fun detailRows() {
+        detailsJob?.cancel()
+        val shown = current() ?: return
+        val wanted =
+            shown.items
+                .take(DETAILED_ROWS)
+                .filter { it.detail == null && it.resolveIndex >= 0 && it.resolveIndex !in shown.details }
+        if (shown.token.isEmpty() || wanted.isEmpty()) return
+        detailsJob =
+            scope.launch {
+                delay(DETAILS_DELAY_MS)
+                wanted
+                    .map { item -> async { item.resolveIndex to resolve(shown.token, item.resolveIndex) } }
+                    .awaitAll()
+                    .forEach { (index, markdown) ->
+                        markdown?.let { shown.resolved.putIfAbsent(index, it) }
+                        signatureOf(markdown)?.let { shown.details[index] = it }
+                    }
+            }
     }
 
     fun describe() {
         cancel()
+        detailRows()
         val shown = current() ?: return
         val item = shown.selectedItem
         val index = item?.resolveIndex ?: -1
@@ -318,4 +360,14 @@ private fun itemsOf(result: CompletionResult): Attributes {
             else -> "found"
         }
     return sizeOf(result.items.size) + Attributes.of(Attribute.Result to found)
+}
+
+// The type or signature a resolved item starts with: the first fenced block of its Markdown (see the resolve of
+// the language servers), null when it starts with something else.
+internal fun signatureOf(markdown: String?): String? {
+    val fence = "```"
+    val body = markdown?.takeIf { it.startsWith("$fence\n") }?.substring(fence.length + 1)
+    val end = body?.indexOf("\n$fence") ?: -1
+    val signature = if (end < 0) null else body?.substring(0, end)
+    return signature?.lineSequence()?.joinToString(" ") { it.trim() }?.takeIf { it.isNotBlank() }
 }

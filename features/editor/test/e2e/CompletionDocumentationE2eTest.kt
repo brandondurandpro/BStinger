@@ -141,6 +141,9 @@ class CompletionDocumentationE2eTest {
             awaitCompletion("generated_00001")
             awaitTag(EditorTags.COMPLETION_DOCUMENTATION)
             awaitCondition { textOf(EditorTags.COMPLETION_DOCUMENTATION).contains("resolved type of generated_00001") }
+            // The rows show it at their end too, the ones that are not selected as well.
+            awaitCondition { textOf(EditorTags.completionItem("generated_00001")).contains("resolved type of") }
+            awaitCondition { textOf(EditorTags.completionItem("generated_00002")).contains("resolved type of") }
         }
 
     @Test
