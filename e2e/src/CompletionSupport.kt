@@ -49,6 +49,10 @@ fun ComposeUiTest.typeCode(text: String) {
                 editorKeys { pressKey(Key.Spacebar) }
             }
 
+            c == '.' -> {
+                editorKeys { pressKey(Key.Period) }
+            }
+
             c == '\n' -> {
                 editorKeys { pressKey(Key.Enter) }
             }

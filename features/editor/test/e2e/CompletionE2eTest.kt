@@ -60,6 +60,15 @@ class CompletionE2eTest {
         }
 
     @Test
+    fun `a dot in PHP is a concatenation and proposes nothing`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, languageServers = servers().settings)
+            openPhp(app)
+            typeCode("\$name.")
+            awaitNoTag(EditorTags.COMPLETION)
+        }
+
+    @Test
     fun `a function typed a moment ago is proposed`() =
         runComposeUiTest {
             val app = launchWithProject(project, languageServers = servers().settings)

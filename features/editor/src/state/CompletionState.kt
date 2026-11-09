@@ -21,6 +21,9 @@ import org.example.kotlineditor.telemetry.Operation
 import org.example.kotlineditor.telemetry.measureToFrame
 import org.example.kotlineditor.telemetry.sizeOf
 
+// Files where `.` is the concatenation operator, not a member access.
+private val PHP_EXTENSIONS = setOf("php", "phtml", "inc")
+
 // Rows of the popup a Page Up or Page Down moves by.
 private const val PAGE_ROWS = 8
 
@@ -166,7 +169,7 @@ class CompletionState(
         val line = document.lines[document.caret.line]
         val before = line.substring(0, document.caret.column)
         val startsWord = isWordChar(c) && !c.isDigit()
-        val afterAccess = before.endsWith("->") || before.endsWith("::")
+        val afterAccess = before.endsWith("->") || before.endsWith("::") || isMemberDot(path, before)
         val startsName = c == '\\' || c == '$'
         val trigger = startsWord || afterAccess || startsName
         when {
@@ -389,4 +392,14 @@ internal fun finalTypeOf(signature: String): String {
     }
     val type = if (colon < 0) "" else signature.substring(colon + 2).trim()
     return type.ifEmpty { signature }
+}
+
+// A `.` that opens a member access (`oDate.`, `list[0].`, `f().`), not a PHP concatenation nor a number (`1.`).
+private fun isMemberDot(path: String, before: String): Boolean {
+    val extension = path.substringAfterLast('.').lowercase()
+    val operand = before.dropLast(1)
+    val last = operand.lastOrNull() ?: return false
+    val word = operand.takeLastWhile { it.isLetterOrDigit() || it == '_' || it == '$' }
+    val endsOperand = last in ")]" || word.any { it.isLetter() || it == '_' || it == '$' }
+    return before.endsWith(".") && extension !in PHP_EXTENSIONS && endsOperand
 }

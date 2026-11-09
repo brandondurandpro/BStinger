@@ -88,4 +88,24 @@ class WebCompletionE2eTest {
             typeCode("tw")
             awaitNoTag(EditorTags.COMPLETION)
         }
+
+    @Test
+    fun `typing a dot after a name proposes the members at once`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, languageServers = servers.settings)
+            openView(app)
+            typeCode("date.")
+            awaitCompletion("strtoupper")
+            editorKeys { pressKey(Key.Escape) }
+            awaitNoTag(EditorTags.COMPLETION)
+        }
+
+    @Test
+    fun `a dot after a number is a decimal point and proposes nothing`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, languageServers = servers.settings)
+            openView(app)
+            typeCode("x = 1.")
+            awaitNoTag(EditorTags.COMPLETION)
+        }
 }
