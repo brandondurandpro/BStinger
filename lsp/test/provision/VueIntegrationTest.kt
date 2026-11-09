@@ -16,7 +16,21 @@ import kotlin.test.assertTrue
 
 private const val ANSWER_MS = 120_000L
 private const val SESSION = "s1"
-private const val TSCONFIG = """{"compilerOptions": {"strict": true, "module": "esnext"}}"""
+private const val TSCONFIG =
+    """{"compilerOptions": {"strict": true, "module": "esnext", "moduleResolution": "bundler"}}"""
+
+private val TYPED_VUE =
+    listOf(
+        "<script setup lang=\"ts\">",
+        "const greeting: string = 'hello'",
+        "</script>",
+        "",
+        "<template>",
+        "  <p>{{ greeting.nope }}</p>",
+        "  <",
+        "</template>",
+        "",
+    ).joinToString("\n")
 
 private val APP_VUE =
     listOf(
@@ -86,6 +100,57 @@ class VueIntegrationTest {
         assertTrue("vue-language-server" in servers, "servers: $servers")
         assertTrue("typescript-language-server" in servers, "servers: $servers")
     }
+
+    // `vue` is the project's own: installed once in the cache, then linked into each test project.
+    private fun vueInstalled(): java.nio.file.Path? {
+        val home = cache.resolve("vue-project")
+        val modules = home.resolve("node_modules")
+        if (!Files.isDirectory(modules.resolve("vue"))) {
+            Files.createDirectories(home)
+            Files.writeString(home.resolve("package.json"), "{}")
+            val install = ProcessBuilder("npm", "install", "--silent", "vue@3").directory(home.toFile())
+            val exit = runCatching { install.redirectErrorStream(true).start().waitFor() }.getOrDefault(-1)
+            if (exit != 0) println("SKIPPED: vue could not be installed")
+        }
+        return modules.takeIf { Files.isDirectory(it.resolve("vue")) }
+    }
+
+    @Test
+    fun `in a project with vue, the HTML elements are proposed and the errors of the template are reported`() {
+        if (!nodeAvailable()) return
+        val modules = vueInstalled() ?: return
+        Files.createSymbolicLink(project.resolve("node_modules"), modules)
+        Files.writeString(project.resolve("package.json"), """{"dependencies": {"vue": "3"}}""")
+        Files.writeString(project.resolve("tsconfig.json"), TSCONFIG)
+        val app = project.resolve("App.vue")
+        Files.writeString(app, TYPED_VUE)
+        service.use(SESSION, project.toString(), listOf(app.toString()))
+        service.openDocument(SESSION, project.toString(), app.toString(), 1, TYPED_VUE)
+        val labels =
+            try {
+                awaitLabels(app.toString(), line = 6, column = 3) { "button" in it || "div" in it }
+            } catch (timeout: kotlinx.coroutines.TimeoutCancellationException) {
+                throw IllegalStateException("No element proposed: ${report()}", timeout)
+            }
+        assertTrue("button" in labels || "div" in labels, "completion: ${labels.take(10)}")
+        // What vue-tsc would report, without running it: the engine is the same, and the server publishes it.
+        val messages = awaitMessages(app.toString()) { list -> list.any { it.contains("nope") } }
+        assertTrue(messages.any { it.contains("nope") }, "problems: $messages\n${report()}")
+    }
+
+    private fun awaitMessages(file: String, enough: (List<String>) -> Boolean): List<String> =
+        runBlocking {
+            withTimeout(ANSWER_MS) {
+                var messages = emptyList<String>()
+                while (!enough(messages)) {
+                    delay(500)
+                    val snapshot = service.intelligence.diagnostics(SESSION, -1)
+                    val mine = snapshot.files.filter { it.path == file }
+                    messages = mine.flatMap { f -> f.diagnostics.map { it.message } }
+                }
+                messages
+            }
+        }
 
     private fun awaitLabels(file: String, line: Int, column: Int, enough: (List<String>) -> Boolean): List<String> =
         runBlocking {
