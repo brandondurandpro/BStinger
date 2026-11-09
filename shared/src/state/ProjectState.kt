@@ -202,11 +202,16 @@ class ProjectState(
 
     // The file a path of some output names: an absolute path, a path from the project, or only a file name.
     private suspend fun locateOutputFile(path: String): FileEntry? {
-        val direct = runCatching { services.fileSystem.fileAt(path) }.getOrNull()
-        if (direct != null) return direct
         val fromRoot = root.path.trimEnd('/', '\\') + "/" + path.removePrefix("./")
-        val inProject = runCatching { services.fileSystem.fileAt(fromRoot) }.getOrNull()
-        if (inProject != null) return inProject
+        val exact =
+            listOf(
+                path,
+                fromRoot,
+            ).firstNotNullOfOrNull { runCatching { services.fileSystem.fileAt(it) }.getOrNull() }
+        return exact ?: locateByName(path)
+    }
+
+    private suspend fun locateByName(path: String): FileEntry? {
         fileIndex.ensureLoaded()
         val files = snapshotFlow { fileIndex.files }.filterNotNull().first()
         val wanted = slashed(path).trimStart('/')
@@ -215,7 +220,11 @@ class ProjectState(
 
     // Output counts lines and columns from 1; the editor from 0.
     private fun openOutputFile(entry: FileEntry, line: Int, column: Int) {
-        navigate(entry, TextPos(maxOf(line - 1, 0), maxOf(column - 1, 0)), TextPos(maxOf(line - 1, 0), maxOf(column - 1, 0)))
+        navigate(
+            entry,
+            TextPos(maxOf(line - 1, 0), maxOf(column - 1, 0)),
+            TextPos(maxOf(line - 1, 0), maxOf(column - 1, 0)),
+        )
     }
 
     /** Shows or hides a tool window (Alt+1, Alt+9, Alt+F12, Ctrl+Alt+Shift+D or its button in the left strip). */

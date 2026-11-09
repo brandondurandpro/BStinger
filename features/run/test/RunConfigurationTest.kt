@@ -23,7 +23,9 @@ class RunConfigurationTest {
 
     @Test
     fun `a backslash is a character of the word, as in a Windows path`() {
-        assertEquals(listOf("C:\\Program Files\\x.exe", "a"), splitCommandLine("\"C:\\Program Files\\x.exe\" a"))
+        val program = """C:\Program Files\x.exe"""
+        val quoted = listOf('"' + program + '"', "a").joinToString(" ")
+        assertEquals(listOf(program, "a"), splitCommandLine(quoted))
     }
 
     @Test
@@ -33,17 +35,20 @@ class RunConfigurationTest {
 
     @Test
     fun `configurations survive their saved form, including tabs and line breaks in the fields`() {
+        val command = listOf("""echo "a""", """b"""").joinToString("\n")
         val configurations =
             listOf(
                 RunConfiguration("a", "All tests", RunKind.Tests, "./kotlin test"),
-                RunConfiguration("b", "Odd\tname\\", RunKind.Run, "echo \"a\nb\"", "sub dir"),
+                RunConfiguration("b", """Odd""" + "\t" + """name\""", RunKind.Run, command, "sub dir"),
             )
         assertEquals(configurations, decodeConfigurations(encodeConfigurations(configurations)))
     }
 
     @Test
     fun `lines that are not configurations are skipped`() {
-        val text = "garbage\nid\tNope\tname\t\tcmd\nok\tRun\tname\t\tcmd"
+        val unknownKind = listOf("id", "Nope", "name", "", "cmd").joinToString("\t")
+        val valid = listOf("ok", "Run", "name", "", "cmd").joinToString("\t")
+        val text = listOf("garbage", unknownKind, valid).joinToString("\n")
         assertEquals(listOf(RunConfiguration("ok", "name", RunKind.Run, "cmd")), decodeConfigurations(text))
     }
 

@@ -205,19 +205,8 @@ private fun terminalHandlers(): Map<Method, Handler> =
         Method.TerminalDestroy to { nothing { terminals.stop(params.long(TERMINAL)) } },
     )
 
-private fun runHandlers(): Map<Method, Handler> =
-    mapOf(
-        Method.RunStart to {
-            val directory = params.string(DIRECTORY)
-            val command = params.read("command") { it.strings() }
-            nothing { runs.start(id, directory, command) }
-        },
-        Method.RunStop to { nothing { runs.stop(params.long(STREAM)) } },
-        Method.RunResume to { nothing { runs.resume(params.long(STREAM), params.long("lastSeq")) } },
-    )
-
 // A method that returns nothing answers with a null result.
-private inline fun nothing(block: () -> Unit): JsonElement {
+internal inline fun nothing(block: () -> Unit): JsonElement {
     block()
     return JsonNull
 }

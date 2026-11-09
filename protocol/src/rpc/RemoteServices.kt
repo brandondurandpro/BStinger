@@ -27,10 +27,10 @@ import org.example.kotlineditor.model.GitCommit
 import org.example.kotlineditor.model.GitCommitDetails
 import org.example.kotlineditor.model.GitFileStatus
 import org.example.kotlineditor.model.ProjectFileSystem
+import org.example.kotlineditor.model.ProjectRunner
 import org.example.kotlineditor.model.ProjectSearch
 import org.example.kotlineditor.model.ProjectSession
 import org.example.kotlineditor.model.RecentProjectsStore
-import org.example.kotlineditor.model.ProjectRunner
 import org.example.kotlineditor.model.RunStream
 import org.example.kotlineditor.model.SearchStream
 import org.example.kotlineditor.model.ServerPlaces

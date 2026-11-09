@@ -66,7 +66,11 @@ class RunTestsE2eTest {
             awaitTag(RunTags.test("MathTest", "adds()")).assertIsDisplayed()
             awaitTag(RunTags.suite("StringsTest")).assertIsDisplayed()
             awaitNoTag(RunTags.test("StringsTest", "shouts()"))
-            val statuses = app.project.run.session?.results?.flatMap { it.tests }?.map { it.status }
+            val statuses =
+                app.project.run.session
+                    ?.results
+                    ?.flatMap { it.tests }
+                    ?.map { it.status }
             assertEquals(listOf(TestStatus.Passed, TestStatus.Failed, TestStatus.Skipped, TestStatus.Passed), statuses)
         }
 
@@ -144,7 +148,11 @@ class RunTestsE2eTest {
             openRunWindow()
             addConfiguration("Slow", emit("out.txt", mode = "hang"), RunKind.Tests)
             pressRun()
-            awaitCondition { app.project.run.session?.results?.isNotEmpty() == true }
+            awaitCondition {
+                app.project.run.session
+                    ?.results
+                    ?.isNotEmpty() == true
+            }
             awaitTag(RunTags.SUMMARY).assertTextEquals("0 passed, 0 failed, 0 skipped, 1 running")
             onNodeWithTag(RunTags.STOP).performClick()
             awaitRunStatus(app, RunStatus.Stopped)
@@ -165,7 +173,7 @@ class RunTestsE2eTest {
     @Test
     fun `a program configuration has no tests tab`() =
         runComposeUiTest {
-            project.file("out.txt", "Started MathTest\nStarted adds()\nPassed adds()\n")
+            project.file("out.txt", textOf("Started MathTest", "Started adds()", "Passed adds()", ""))
             val app = launchWithProject(project)
             openRunWindow()
             addConfiguration("Program", emit("out.txt"))
@@ -173,6 +181,10 @@ class RunTestsE2eTest {
             awaitRunStatus(app, RunStatus.Succeeded)
             awaitTag(RunTags.OUTPUT)
             awaitNoTag(RunTags.TAB_TESTS)
-            assertEquals(emptyList(), app.project.run.session?.results)
+            assertEquals(
+                emptyList(),
+                app.project.run.session
+                    ?.results,
+            )
         }
 }

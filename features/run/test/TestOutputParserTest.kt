@@ -48,7 +48,12 @@ class TestOutputParserTest {
 
     @Test
     fun `a failed test keeps what the runner printed under it, and the summary does not repeat it`() {
-        val failed = parse(AMPER_OUTPUT).results().single().tests.first()
+        val failed =
+            parse(AMPER_OUTPUT)
+                .results()
+                .single()
+                .tests
+                .first()
         assertEquals(3, failed.details.size)
         assertTrue(failed.details.first().startsWith("Exception: org.opentest4j.AssertionFailedError"))
         assertTrue(failed.details.last().contains("TmpFailTest.kt:7"))
@@ -56,14 +61,24 @@ class TestOutputParserTest {
 
     @Test
     fun `a skipped test keeps its reason`() {
-        val skipped = parse(AMPER_OUTPUT).results().single().tests.last()
+        val skipped =
+            parse(AMPER_OUTPUT)
+                .results()
+                .single()
+                .tests
+                .last()
         assertEquals(listOf("Reason: public final void TmpFailTest.is skipped() is @Disabled"), skipped.details)
     }
 
     @Test
     fun `a test that started and did not end is running`() {
         val parser = parse("Started MyTest\nStarted slow()")
-        val test = parser.results().single().tests.single()
+        val test =
+            parser
+                .results()
+                .single()
+                .tests
+                .single()
         assertEquals(TestStatus.Running, test.status)
         assertEquals(TestStatus.Running, parser.results().single().status)
     }
@@ -93,7 +108,14 @@ class TestOutputParserTest {
         val divides = suites.first().tests.last()
         assertEquals(TestStatus.Failed, divides.status)
         assertEquals(listOf("java.lang.ArithmeticException at MyTest.kt:12"), divides.details)
-        assertEquals(TestStatus.Skipped, suites.last().tests.single().status)
+        assertEquals(
+            TestStatus.Skipped,
+            suites
+                .last()
+                .tests
+                .single()
+                .status,
+        )
     }
 
     @Test

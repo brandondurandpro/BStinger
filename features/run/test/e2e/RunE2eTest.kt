@@ -78,7 +78,11 @@ class RunE2eTest {
             pressRun()
             awaitRunStatus(app, RunStatus.Failed)
             onNodeWithTag(RunTags.STATUS).assertTextEquals("Failed (exit code 3)")
-            assertEquals(3, app.project.run.session?.exitCode)
+            assertEquals(
+                3,
+                app.project.run.session
+                    ?.exitCode,
+            )
         }
 
     @Test
@@ -89,9 +93,16 @@ class RunE2eTest {
             addConfiguration("Nothing", "no-such-program-in-this-project --flag")
             pressRun()
             awaitRunStatus(app, RunStatus.NotStarted)
-            assertTrue(app.project.run.session?.error?.isNotBlank() == true)
+            assertTrue(
+                app.project.run.session
+                    ?.error
+                    ?.isNotBlank() == true,
+            )
             awaitTag(RunTags.STATUS)
-            assertTrue(app.project.run.session?.running == false)
+            assertTrue(
+                app.project.run.session
+                    ?.running == false,
+            )
         }
 
     @Test
@@ -118,7 +129,11 @@ class RunE2eTest {
             addConfiguration("Hang", emit("out.txt", mode = "hang"))
             pressRun()
             awaitTag(RunTags.line(0)).assertTextEquals("started and waiting")
-            assertEquals(RunStatus.Running, app.project.run.session?.status)
+            assertEquals(
+                RunStatus.Running,
+                app.project.run.session
+                    ?.status,
+            )
             onNodeWithTag(RunTags.STOP).performClick()
             awaitRunStatus(app, RunStatus.Stopped)
             onNodeWithTag(RunTags.STATUS).assertTextEquals("Stopped")
@@ -151,16 +166,23 @@ class RunE2eTest {
             addConfiguration("Quick", emit("quick.txt"))
             // The slow one is selected again, and started.
             awaitTag(RunTags.SELECTOR).performClick()
-            val slow = app.project.run.configurations.first { it.name == "Slow" }
+            val slow =
+                app.project.run.configurations
+                    .first { it.name == "Slow" }
             awaitTag(RunTags.configuration(slow.id)).performClick()
             pressRun()
             awaitCondition { app.runOutput() == listOf("slow") }
             val slowRun = app.project.run.session
             awaitTag(RunTags.SELECTOR).performClick()
-            val quick = app.project.run.configurations.first { it.name == "Quick" }
+            val quick =
+                app.project.run.configurations
+                    .first { it.name == "Quick" }
             awaitTag(RunTags.configuration(quick.id)).performClick()
             pressRun()
-            awaitCondition { app.project.run.session?.status == RunStatus.Succeeded }
+            awaitCondition {
+                app.project.run.session
+                    ?.status == RunStatus.Succeeded
+            }
             awaitCondition { slowRun?.status == RunStatus.Stopped }
             assertEquals(listOf("quick"), app.runOutput())
         }
@@ -187,13 +209,25 @@ class RunE2eTest {
             openRunWindow()
             addConfiguration("First", "echo-first")
             addConfiguration("Second", "echo-second")
-            assertEquals(listOf("First", "Second"), app.project.run.configurations.map { it.name })
+            assertEquals(
+                listOf("First", "Second"),
+                app.project.run.configurations
+                    .map { it.name },
+            )
             awaitTag(RunTags.SELECTOR).performClick()
             awaitTag(RunTags.EDIT).performClick()
             awaitTag(RunTags.EDITOR_DELETE).performClick()
             awaitNoTag(RunTags.EDITOR)
-            assertEquals(listOf("First"), app.project.run.configurations.map { it.name })
-            assertEquals("First", app.project.run.selected?.name)
+            assertEquals(
+                listOf("First"),
+                app.project.run.configurations
+                    .map { it.name },
+            )
+            assertEquals(
+                "First",
+                app.project.run.selected
+                    ?.name,
+            )
         }
 
     @Test
@@ -221,7 +255,11 @@ class RunE2eTest {
             awaitTag(RunTags.link(0, 0)).performClick()
             awaitTag(EditorTags.tab("src/main/kotlin/App.kt"))
             awaitEditorReady()
-            awaitCondition { app.project.editor.activeTab?.document?.caret == TextPos(7, 4) }
+            awaitCondition {
+                app.project.editor.activeTab
+                    ?.document
+                    ?.caret == TextPos(7, 4)
+            }
         }
 
     @Test
@@ -236,7 +274,12 @@ class RunE2eTest {
             awaitTag(RunTags.link(0, 0)).performClick()
             awaitTag(EditorTags.tab("src/test/kotlin/AppTest.kt"))
             awaitEditorReady()
-            awaitCondition { app.project.editor.activeTab?.document?.caret?.line == 2 }
+            awaitCondition {
+                app.project.editor.activeTab
+                    ?.document
+                    ?.caret
+                    ?.line == 2
+            }
         }
 
     @Test
@@ -261,29 +304,56 @@ class RunE2eTest {
             project.file("project.yaml", "modules:\n  - app\n")
             val app = launchWithProject(project)
             openRunWindow()
-            awaitCondition { app.project.run.available.isNotEmpty() }
-            val windows = !app.project.root.path.startsWith("/")
+            awaitCondition {
+                app.project.run.available
+                    .isNotEmpty()
+            }
+            val windows =
+                !app.project.root.path
+                    .startsWith("/")
             val wrapper = if (windows) ".\\kotlin.bat" else "./kotlin"
-            assertEquals(listOf("$wrapper test", "$wrapper run"), app.project.run.available.map { it.commandLine })
-            assertEquals("All tests (Amper)", app.project.run.selected?.name)
-            assertEquals(RunKind.Tests, app.project.run.selected?.kind)
+            assertEquals(
+                listOf("$wrapper test", "$wrapper run"),
+                app.project.run.available
+                    .map { it.commandLine },
+            )
+            assertEquals(
+                "All tests (Amper)",
+                app.project.run.selected
+                    ?.name,
+            )
+            assertEquals(
+                RunKind.Tests,
+                app.project.run.selected
+                    ?.kind,
+            )
             // Found, not saved: the project's preferences keep none of them.
-            assertTrue(app.project.run.configurations.isEmpty())
+            assertTrue(
+                app.project.run.configurations
+                    .isEmpty(),
+            )
         }
 
     @Test
     fun `the scripts of every composer json of the project are offered, except the vendored ones`() =
         runComposeUiTest {
-            project.file("composer.json", """{"name": "me/app", "scripts": {"test": "phpunit", "post-install-cmd": "x"}}""")
+            project.file(
+                "composer.json",
+                """{"name": "me/app", "scripts": {"test": "phpunit", "post-install-cmd": "x"}}""",
+            )
             project.file("services/api/composer.json", """{"scripts": {"lint": "phpcs", "fix style": ["phpcbf"]}}""")
             project.file("vendor/lib/composer.json", """{"scripts": {"hidden": "no"}}""")
             project.file("services/web/composer.json", "not json")
             val app = launchWithProject(project)
             openRunWindow()
             awaitCondition { app.project.run.available.size == 3 }
-            val windows = !app.project.root.path.startsWith("/")
+            val windows =
+                !app.project.root.path
+                    .startsWith("/")
             val composer = if (windows) "composer.bat" else "composer"
-            val found = app.project.run.available.associate { it.name to (it.commandLine to it.workingDirectory) }
+            val found =
+                app.project.run.available
+                    .associate { it.name to (it.commandLine to it.workingDirectory) }
             assertEquals("$composer run-script test" to "", found["Composer: test"])
             assertEquals("$composer run-script lint" to "services/api", found["Composer: lint (services/api)"])
             assertEquals(
@@ -291,7 +361,9 @@ class RunE2eTest {
                 found["Composer: fix style (services/api)"],
             )
             awaitTag(RunTags.SELECTOR).performClick()
-            val lint = app.project.run.available.first { it.name.startsWith("Composer: lint") }
+            val lint =
+                app.project.run.available
+                    .first { it.name.startsWith("Composer: lint") }
             awaitTag(RunTags.configuration(lint.id)).assertIsDisplayed()
         }
 
@@ -301,11 +373,22 @@ class RunE2eTest {
             project.file("services/api/composer.json", """{"scripts": {"lint": "phpcs"}}""")
             val app = launchWithProject(project)
             openRunWindow()
-            awaitCondition { app.project.run.available.isNotEmpty() }
+            awaitCondition {
+                app.project.run.available
+                    .isNotEmpty()
+            }
             pressRun()
             awaitCondition { app.project.run.session != null }
             // Composer may not be installed where the test runs: either way the run ends, in the project's directory.
-            awaitCondition { app.project.run.session?.running == false }
-            assertEquals("services/api", app.project.run.session?.configuration?.workingDirectory)
+            awaitCondition {
+                app.project.run.session
+                    ?.running == false
+            }
+            assertEquals(
+                "services/api",
+                app.project.run.session
+                    ?.configuration
+                    ?.workingDirectory,
+            )
         }
 }

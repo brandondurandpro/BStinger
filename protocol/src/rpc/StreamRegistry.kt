@@ -10,10 +10,11 @@ import java.util.concurrent.ConcurrentHashMap
 
 /**
  * The server-pushed streams this client has open: the screens of terminals, the batches of streamed Finds in
- * Files and the chunks of runs. Each event carries the sequence number of what it holds, so duplicates are dropped and a stream whose
- * events arrive after a gap simply continues with the next one (`positions()` and `loseAll()` drive the replay of
- * what was missed).
+ * Files and the chunks of runs. Each event carries the sequence number of what it holds, so duplicates are dropped
+ * and a stream whose events arrive after a gap simply continues with the next one (`positions()` and `loseAll()`
+ * drive the replay of what was missed).
  */
+@Suppress("TooManyFunctions")
 internal class StreamRegistry {
     private val streams = ConcurrentHashMap<Long, Stream>()
 
@@ -112,7 +113,7 @@ internal class StreamRegistry {
         val stream = streams[id] ?: return
         val event = payload.jsonObject
         val seq = event.long("seq")
-        // The kinds are told apart by what they carry: a screen for a terminal, a batch for a search, a chunk for a run.
+        // The kinds are told apart by what they carry: a screen (terminal), a batch (search) or a chunk (run).
         val batch = event[BATCH]?.let { it.searchBatch() }
         val chunk = event[CHUNK]?.let { it.runChunk() }
         when {

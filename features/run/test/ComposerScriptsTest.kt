@@ -30,8 +30,14 @@ class ComposerScriptsTest {
     @Test
     fun `a script becomes a configuration run in the directory of its project`() {
         val configurations = composerConfigurations("services/api", listOf("test", "fix style"), windows = false)
-        assertEquals(listOf("Composer: test (services/api)", "Composer: fix style (services/api)"), configurations.map { it.name })
-        assertEquals(listOf("composer run-script test", "composer run-script \"fix style\""), configurations.map { it.commandLine })
+        assertEquals(
+            listOf("Composer: test (services/api)", "Composer: fix style (services/api)"),
+            configurations.map { it.name },
+        )
+        assertEquals(
+            listOf("composer run-script test", "composer run-script \"fix style\""),
+            configurations.map { it.commandLine },
+        )
         assertEquals(listOf("services/api", "services/api"), configurations.map { it.workingDirectory })
         assertEquals(2, configurations.map { it.id }.toSet().size)
     }

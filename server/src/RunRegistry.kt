@@ -175,7 +175,15 @@ private class ServerRun(
         pending.clear()
         seq++
         val chunk = RunChunk(seq, lines, finished, exitCode, error)
-        val frame = Frame(FrameKind.Event, id, buildJsonObject { put("seq", seq); put("chunk", chunk.toJson()) })
+        val frame =
+            Frame(
+                FrameKind.Event,
+                id,
+                buildJsonObject {
+                    put("seq", seq)
+                    put("chunk", chunk.toJson())
+                },
+            )
         kept[seq] = KeptChunk(lines.size, frame)
         keptLines += lines.size
         dropOldest()

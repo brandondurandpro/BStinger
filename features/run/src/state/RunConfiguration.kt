@@ -89,7 +89,8 @@ private fun decodeConfiguration(line: String): RunConfiguration? {
     val fields = splitEscaped(line)
     val kind = RunKind.entries.firstOrNull { it.name == fields.getOrNull(1) }
     val id = fields.getOrNull(0).orEmpty()
-    if (fields.size != FIELD_COUNT || kind == null || id.isEmpty()) return null
+    val complete = fields.size == FIELD_COUNT && id.isNotEmpty()
+    if (!complete || kind == null) return null
     return RunConfiguration(
         id = id,
         name = fields[2],

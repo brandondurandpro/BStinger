@@ -20,8 +20,8 @@ import kotlinx.serialization.json.put
 import org.example.kotlineditor.model.ConnectionStatus
 import org.example.kotlineditor.model.NetworkInspector
 import org.example.kotlineditor.model.OutcomeUnknownException
-import org.example.kotlineditor.model.SearchBatch
 import org.example.kotlineditor.model.RunChunk
+import org.example.kotlineditor.model.SearchBatch
 import org.example.kotlineditor.model.TerminalSnapshot
 import org.example.kotlineditor.telemetry.Attribute
 import org.example.kotlineditor.telemetry.Attributes
@@ -61,6 +61,8 @@ class RejectedException(message: String) : IOException(message)
 
 // The outcome of a request the server answered with an error.
 private const val REMOTE_ERROR = "RemoteException"
+private const val STREAM_KEY = "stream"
+private const val LAST_SEQ_KEY = "lastSeq"
 
 /**
  * Client side of the protocol: one TCP connection, multiplexed requests, automatic reconnection.
@@ -109,22 +111,22 @@ class RpcClient(
                     when (toResume.kind) {
                         StreamRegistry.Kind.Search -> {
                             call(Method.FindInFilesResume) {
-                                put("stream", toResume.id)
-                                put("lastSeq", toResume.lastSeq)
+                                put(STREAM_KEY, toResume.id)
+                                put(LAST_SEQ_KEY, toResume.lastSeq)
                             }
                         }
 
                         StreamRegistry.Kind.Run -> {
                             call(Method.RunResume) {
-                                put("stream", toResume.id)
-                                put("lastSeq", toResume.lastSeq)
+                                put(STREAM_KEY, toResume.id)
+                                put(LAST_SEQ_KEY, toResume.lastSeq)
                             }
                         }
 
                         StreamRegistry.Kind.Terminal -> {
                             call(Method.TerminalResume) {
                                 put("terminal", toResume.id)
-                                put("lastSeq", toResume.lastSeq)
+                                put(LAST_SEQ_KEY, toResume.lastSeq)
                             }
                         }
                     }

@@ -5,8 +5,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -113,7 +113,7 @@ class RunState(
 
     /** The configurations of the project, in the order of the selector. */
     val configurations: SnapshotStateList<RunConfiguration> =
-        mutableStateListOf<RunConfiguration>().also { it.addAll(decodeConfigurations(savedConfigurations)) }
+        mutableStateListOf<RunConfiguration>().apply { addAll(decodeConfigurations(savedConfigurations)) }
 
     /** Id of the selected configuration, the one the Run button starts. */
     var selectedId by mutableStateOf(preferences[PreferenceKeysRun.selected(rootPath)])
@@ -136,7 +136,7 @@ class RunState(
     /** Name of the suite and test selected in the tree of results, to show its details. */
     var selectedTest by mutableStateOf<Pair<String, String>?>(null)
 
-    /** The configurations found in the project, not saved: the ones a saved configuration has the id of are left out. */
+    /** The configurations found in the project, not saved; [available] leaves out those a saved one replaces. */
     var discovered by mutableStateOf<List<RunConfiguration>>(emptyList())
         private set
 
@@ -231,9 +231,8 @@ class RunState(
 
     /** Stops the command in progress, if any; its last output still comes. */
     fun stop() {
+        val current = session?.takeIf { it.running } ?: return
         val running = stream ?: return
-        val current = session ?: return
-        if (!current.running) return
         current.stopRequested = true
         runner.stop(running)
     }
@@ -305,7 +304,7 @@ class RunState(
     // The program of a command written `./name` is looked up in the working directory, not in the PATH.
     private fun commandOf(configuration: RunConfiguration): List<String> {
         val words = splitCommandLine(configuration.commandLine)
-        val program = words.firstOrNull() ?: return emptyList()
+        val program = words.firstOrNull().orEmpty()
         val relative = program.startsWith("./") || program.startsWith(".\\")
         if (!relative) return words
         val directory = directoryOf(configuration).trimEnd('/', '\\')

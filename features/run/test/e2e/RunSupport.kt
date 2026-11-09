@@ -80,8 +80,15 @@ fun ComposeUiTest.pressRun() {
 /** Waits until the run shown has [status]. */
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.awaitRunStatus(app: E2eApp, status: RunStatus) {
-    awaitCondition { app.project.run.session?.status == status }
+    awaitCondition {
+        app.project.run.session
+            ?.status == status
+    }
 }
 
 /** The lines of output of the run shown. */
-fun E2eApp.runOutput(): List<String> = project.run.session?.lines?.toList().orEmpty()
+fun E2eApp.runOutput(): List<String> =
+    project.run.session
+        ?.lines
+        ?.toList()
+        .orEmpty()

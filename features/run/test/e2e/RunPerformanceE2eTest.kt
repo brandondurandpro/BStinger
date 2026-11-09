@@ -3,7 +3,6 @@ package org.example.kotlineditor.e2e
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertTextEquals
-import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.v2.runComposeUiTest
@@ -79,7 +78,11 @@ class RunPerformanceE2eTest {
             measure("run.tests $total results", budgetMillis = 6_000, budgetMegabytes = 100) {
                 pressRun()
                 awaitRunStatus(app, RunStatus.Failed)
-                awaitCondition { app.project.run.session?.results?.sumOf { it.tests.size } == total }
+                awaitCondition {
+                    app.project.run.session
+                        ?.results
+                        ?.sumOf { it.tests.size } == total
+                }
                 renderFrame()
             }
             val failed = SUITES

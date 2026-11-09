@@ -40,7 +40,11 @@ class RunRegistryTest {
     }
 
     private fun chunks(): List<RunChunk> =
-        frames.filter { it.kind == FrameKind.Event }.map { it.payload.jsonObject.getValue("chunk").runChunk() }
+        frames.filter { it.kind == FrameKind.Event }.map {
+            it.payload.jsonObject
+                .getValue("chunk")
+                .runChunk()
+        }
 
     private fun ended(): Boolean = frames.any { it.kind == FrameKind.End }
 

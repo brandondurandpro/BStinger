@@ -11,9 +11,9 @@ private val EVENT_PREFIXES = listOf("pre-", "post-")
  * itself (`post-install-cmd`...). A file that is not valid JSON, or has no scripts, has none.
  */
 fun composerScriptNames(json: String): List<String> {
-    val root = runCatching { Json.parseToJsonElement(json) }.getOrNull() as? JsonObject ?: return emptyList()
-    val scripts = root["scripts"] as? JsonObject ?: return emptyList()
-    return scripts.keys.filter { name -> EVENT_PREFIXES.none { name.startsWith(it) } }
+    val root = runCatching { Json.parseToJsonElement(json) }.getOrNull() as? JsonObject
+    val scripts = root?.get("scripts") as? JsonObject
+    return scripts?.keys?.filter { name -> EVENT_PREFIXES.none { name.startsWith(it) } }.orEmpty()
 }
 
 /**

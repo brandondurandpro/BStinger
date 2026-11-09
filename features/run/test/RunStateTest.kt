@@ -21,7 +21,12 @@ private const val KEPT_LINES = 50_000
 
 // A runner whose commands the test drives: each start opens a channel the test sends chunks to.
 private class FakeRunner(private val available: Boolean = true) : ProjectRunner {
-    class Started(val directory: String, val command: List<String>, val stream: RunStream, val chunks: Channel<RunChunk>)
+    class Started(
+        val directory: String,
+        val command: List<String>,
+        val stream: RunStream,
+        val chunks: Channel<RunChunk>,
+    )
 
     val started = ArrayList<Started>()
     val stopped = ArrayList<RunStream>()
@@ -66,7 +71,14 @@ class RunStateTest {
     )
 
     private fun RunState.add(command: String, kind: RunKind = RunKind.Run, directory: String = ""): RunConfiguration {
-        val configuration = RunConfiguration("id-${configurations.size}", "c${configurations.size}", kind, command, directory)
+        val configuration =
+            RunConfiguration(
+                "id-${configurations.size}",
+                "c${configurations.size}",
+                kind,
+                command,
+                directory,
+            )
         save(configuration)
         return configuration
     }
@@ -184,11 +196,11 @@ class RunStateTest {
 
     @Test
     fun `the working directory is relative to the project, on a Windows server too`() {
-        val run = state(root = "C:\\work\\p")
-        run.add(".\\gradlew.bat test", directory = "app")
+        val run = state(root = """C:\work\p""")
+        run.add("""..\gradlew.bat test""".removePrefix("."), directory = "app")
         run.runSelected()
-        assertEquals("C:\\work\\p\\app", runner.started[0].directory)
-        assertEquals(listOf("C:\\work\\p\\app\\gradlew.bat", "test"), runner.started[0].command)
+        assertEquals("""C:\work\p\app""", runner.started[0].directory)
+        assertEquals(listOf("""C:\work\p\app\gradlew.bat""", "test"), runner.started[0].command)
     }
 
     @Test
@@ -263,7 +275,10 @@ class RunStateTest {
 
     @Test
     fun `configurations found in the project are listed after the saved ones, and are not saved`() {
-        val found = listOf(RunConfiguration("composer:api:test", "Composer: test (api)", RunKind.Run, "composer run-script test"))
+        val found =
+            listOf(
+                RunConfiguration("composer:api:test", "Composer: test (api)", RunKind.Run, "composer run-script test"),
+            )
         val run = state(found = found)
         val own = run.add("mine")
         run.ensureLoaded()

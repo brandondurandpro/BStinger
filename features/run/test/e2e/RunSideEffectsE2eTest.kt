@@ -26,7 +26,10 @@ class RunSideEffectsE2eTest {
     fun `configurations, runs, stops and the files opened from the output leave the project as it was`() =
         runComposeUiTest {
             val file = project.root.resolve("src/main/kotlin/App.kt")
-            project.file("out.txt", "e: ${file.toUri()}:8:5 broken\nStarted T\nStarted ok()\nPassed ok()\n")
+            project.file(
+                "out.txt",
+                textOf("e: ${file.toUri()}:8:5 broken", "Started T", "Started ok()", "Passed ok()", ""),
+            )
             project.commitAll()
             val before = DiskSnapshot.take(project)
             val app = launchWithProject(project)
@@ -38,7 +41,9 @@ class RunSideEffectsE2eTest {
             awaitCondition { app.runOutput().isNotEmpty() }
             onNodeWithTag(RunTags.STOP).performClick()
             awaitRunStatus(app, RunStatus.Stopped)
-            val program = app.project.run.configurations.first { it.name == "Program" }
+            val program =
+                app.project.run.configurations
+                    .first { it.name == "Program" }
             app.project.run.run(program)
             awaitRunStatus(app, RunStatus.Failed)
             awaitTag(RunTags.link(0, 0)).performClick()
