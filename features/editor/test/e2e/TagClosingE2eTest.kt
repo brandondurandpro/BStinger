@@ -26,6 +26,7 @@ class TagClosingE2eTest {
         FakePhpServers.webProject().apply {
             file("src/Page.vue", TEMPLATE)
             file("public/index.html", TEMPLATE)
+            file("src/Multi.vue", "<template>\n  <Navbar\n    class=\"a\"\n    :title=\"t\"\n</template>\n")
             file("src/notes.ts", "const a = 1\n")
         }
     private val servers = FakePhpServers()
@@ -62,6 +63,18 @@ class TagClosingE2eTest {
             typeOpeningTag(app, "src/Page.vue", 1, 2)
             assertEquals("  <Navbar></Navbar>", app.document().line(1))
             assertEquals(TextPos(1, "  <Navbar>".length), app.document().caret)
+        }
+
+    @Test
+    fun `a tag whose attributes span several lines is closed after the last one`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, languageServers = servers.settings)
+            openFromTree("src/Multi.vue")
+            onNodeWithTag(EditorTags.EDITOR).performClick()
+            app.document().moveTo(TextPos(3, "    :title=\"t\"".length))
+            typeGreaterThan()
+            assertEquals("    :title=\"t\"></Navbar>", app.document().line(3))
+            assertEquals(TextPos(3, "    :title=\"t\">".length), app.document().caret)
         }
 
     @Test
