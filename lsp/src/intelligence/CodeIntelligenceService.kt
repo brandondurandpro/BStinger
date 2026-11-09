@@ -167,13 +167,31 @@ class CodeIntelligenceService internal constructor(
             requests.askEach(session, at.path, at.version, "hoverProvider") { document, request ->
                 val answer = request("textDocument/hover", positionParams(document, at))
                 val range = (answer as? JsonObject)?.get(RANGE).textRange()
-                HoverResult(FeatureStatus.Ready, hoverMarkdown(answer), range)
+                val markdown = hoverMarkdown(answer)
+                val complete = withOverloads(document, request, at, range, markdown)
+                HoverResult(FeatureStatus.Ready, complete, range)
             }
         return when {
             answers == null -> HoverResult.NotReady
             answers.isEmpty() -> HoverResult(FeatureStatus.Unsupported, null)
             else -> mergedHover(answers)
         }
+    }
+
+    // The signatures a hover only counts ("+3 overloads"), asked to the same server as signature help of the call.
+    private suspend fun withOverloads(
+        document: MirroredDocument,
+        request: suspend (String, JsonObject) -> JsonElement?,
+        at: DocumentPosition,
+        range: TextRange?,
+        markdown: String?,
+    ): String? {
+        val counting = markdown != null && HoverOverloads.hidesSome(markdown)
+        val inside = if (counting) HoverOverloads.insideCall(document, at, range) else null
+        if (markdown == null || inside == null) return markdown
+        val answer = request("textDocument/signatureHelp", positionParams(document, inside))
+        val labels = signatureHelpOf(answer).signatures.map { it.label }
+        return HoverOverloads.listing(markdown, labels)
     }
 
     // The texts of every server that knows something here (TypeScript's type, Tailwind's CSS), the first range.

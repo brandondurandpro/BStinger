@@ -107,6 +107,24 @@ class WebFeaturesIntegrationTest {
     }
 
     @Test
+    fun `the hover of a constructor lists its overloads instead of counting them`() {
+        if (!nodeAvailable()) return
+        val text = "const day = new Date()\n"
+        val path = open("overloads.ts", text)
+        start(path)
+        service.openDocument(SESSION, project.toString(), path, 1, text)
+        val at = DocumentPosition(path, 1, 0, 16)
+        val hover =
+            awaitAnswer({ service.intelligence.hover(SESSION, at) }) { answer ->
+                answer.status == FeatureStatus.Ready && answer.markdown != null
+            }
+        val markdown = hover.markdown.orEmpty()
+        assertTrue(!markdown.contains("overloads)"), "no count left: $markdown")
+        assertTrue(markdown.contains("new Date(value: number | string): Date"), "the others are listed: $markdown")
+        assertTrue(markdown.contains("new Date(): Date"), "the first is listed too: $markdown")
+    }
+
+    @Test
     fun `a Vue script is completed like TypeScript`() {
         if (!nodeAvailable()) return
         val lines = listOf("<script setup lang='ts'>", "const name: string = 'a'", "name.", "</script>", "")
