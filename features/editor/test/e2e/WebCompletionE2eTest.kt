@@ -45,12 +45,12 @@ class WebCompletionE2eTest {
         runComposeUiTest {
             val app = launchWithProject(project, languageServers = servers.settings)
             openView(app)
-            typeCode("tw")
+            typeCode("x = 'tw")
             awaitCompletion("twflex")
             awaitCompletion("twgrid")
             editorKeys { pressKey(Key.Enter) }
             awaitNoTag(EditorTags.COMPLETION)
-            assertEquals("twflex", app.document().line(1))
+            assertEquals("x = 'twflex", app.document().line(1))
         }
 
     @Test
@@ -61,6 +61,31 @@ class WebCompletionE2eTest {
             typeCode("strto")
             awaitCompletion("strtoupper")
             editorKeys { pressKey(Key.Escape) }
+            awaitNoTag(EditorTags.COMPLETION)
+        }
+
+    @Test
+    fun `a companion server that never answers does not hold back the code completion`() =
+        runComposeUiTest {
+            val stuck = FakePhpServers(tailwindOptions = arrayOf("--hang-completion"))
+            try {
+                val app = launchWithProject(project, languageServers = stuck.settings)
+                openView(app)
+                typeCode("x = 'strto")
+                measure("completion with a stuck companion server", budgetMillis = 3_000, budgetMegabytes = 200) {
+                    awaitCompletion("strtoupper")
+                }
+            } finally {
+                stuck.delete()
+            }
+        }
+
+    @Test
+    fun `the Tailwind CSS server is not asked outside a string`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, languageServers = servers.settings)
+            openView(app)
+            typeCode("tw")
             awaitNoTag(EditorTags.COMPLETION)
         }
 }

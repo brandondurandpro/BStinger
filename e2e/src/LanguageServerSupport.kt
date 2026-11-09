@@ -29,6 +29,7 @@ const val SERVER_START_MS = 60_000L
  */
 class FakePhpServers(
     vararg options: String,
+    tailwindOptions: Array<String> = emptyArray(),
     idleStopMs: Long = 1_000,
     alternative: Boolean = false,
     check: ((project: String) -> ProjectCheckResult)? = null,
@@ -81,7 +82,9 @@ class FakePhpServers(
             displayName = "faketailwind",
             language = "tailwind",
             // It knows only class names.
-            command = { _, _ -> FakeLanguageServerCommand.command(*options, "--only-items", TAILWIND_CLASSES) },
+            command = { _, _ ->
+                FakeLanguageServerCommand.command(*options, *tailwindOptions, "--only-items", TAILWIND_CLASSES)
+            },
         )
 
     // No PHP nor Node.js: the fake server needs neither, and the other candidate is unavailable.

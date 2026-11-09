@@ -19,6 +19,7 @@ import org.example.kotlineditor.lsp.jsonrpc.LspConnectionClosedException
 import org.example.kotlineditor.lsp.jsonrpc.LspResponseException
 import org.example.kotlineditor.lsp.supervisor.ManagedServer
 import org.example.kotlineditor.model.CompletionResult
+import org.example.kotlineditor.model.Languages
 
 /**
  * Completion in the open documents: asked to their language server once the edits it follows arrived, then
@@ -68,7 +69,7 @@ internal class DocumentCompletions(
             }
         return try {
             // While another server takes over the language, the old one, stopping, is not ready any more.
-            val answers = withTimeoutOrNull(timeoutMs) { askAll(serversOf(document), params) }
+            val answers = withTimeoutOrNull(timeoutMs) { askAll(serversAsked(document, text, column), params) }
             if (answers == null || answers.servers.isEmpty()) {
                 if (answers?.refused == true) refused(column) else CompletionResult.NotReady
             } else {
@@ -83,19 +84,33 @@ internal class DocumentCompletions(
         }
     }
 
+    // Tailwind CSS only knows class names: it is not asked where the cursor is not in a string.
+    private fun serversAsked(document: MirroredDocument, line: String, column: Int): List<ManagedServer> {
+        val beforeCursor = line.take(column)
+        val inString = beforeCursor.any { it in QUOTES }
+        return serversOf(document).filter { inString || it.language != Languages.TAILWIND }
+    }
+
     // The server refused (content modified, request failed): nothing to propose this time.
     private fun refused(column: Int) = CompletionResult(column, emptyList(), incomplete = true, ready = true)
 
-    // What each server of the document proposes, asked together: the server of its language and those of the
-    // companion languages (Tailwind CSS in a class attribute, Vue in a template) each know part of the answer.
+    // What each server of the document proposes, asked together. The first one, the server of the language, is waited
+    // for; the companions (Tailwind CSS in a class attribute, Vue in a template) get a short time after it: one that is
+    // slow or stuck must not hold back the completion of the code.
     private suspend fun askAll(servers: List<ManagedServer>, params: JsonObject): Answers =
         coroutineScope {
-            val asked = servers.map { server -> async { askOne(server, params) } }.awaitAll()
-            val answered = asked.mapNotNull { it?.getOrNull() }
+            val asked = servers.map { server -> async { askOne(server, params) } }
+            val first = asked.firstOrNull()?.await()
+            val companions = asked.drop(1)
+            withTimeoutOrNull(COMPANION_GRACE_MS) { companions.awaitAll() }
+            val finished = companions.filter { it.isCompleted }
+            companions.filterNot { it.isCompleted }.forEach { it.cancel() }
+            val answers = listOf(first) + finished.map { it.await() }
+            val answered = answers.mapNotNull { it?.getOrNull() }
             Answers(
                 answered.map { it.first },
                 answered.map { it.second },
-                refused = asked.any { it?.isFailure == true },
+                refused = answers.any { it?.isFailure == true },
             )
         }
 
@@ -123,6 +138,11 @@ internal class DocumentCompletions(
             }
         }
         return JsonObject(mapOf("isIncomplete" to JsonPrimitive(incomplete), "items" to JsonArray(items)))
+    }
+
+    private companion object {
+        const val COMPANION_GRACE_MS = 400L
+        const val QUOTES = "\"'`"
     }
 
     private class Answers(val servers: List<ManagedServer>, val answers: List<JsonElement>, val refused: Boolean)

@@ -50,7 +50,7 @@ import kotlin.system.exitProcess
  *   after `initialized`), `--indexing-starts-after <ms>` (that moment, 200 ms by default: later than the IDE waits
  *   for an indexing to begin, it counts usages before, like a server slowed down by a loaded machine);
  * - completion: `--only-items a,b` (proposes only these, like a server that knows one thing), `--completion-items <n>` (n more functions, `generated_00001`...), `--full-sync` (asks for the whole
- *   text at each change), `--no-completion` (answers completion with an error).
+ *   text at each change), `--no-completion` (answers completion with an error), `--hang-completion` (never answers it).
  * A crash writes `Fatal error: fake crash` on stderr first, like a real server would.
  * Memory is allocated as direct buffers with one byte written per page, so that it becomes resident.
  */
@@ -133,6 +133,7 @@ object FakeLanguageServer {
         val onlyItems: List<String>? = null,
         val fullSync: Boolean = false,
         val noCompletion: Boolean = false,
+        val hangCompletion: Boolean = false,
         val without: Set<String> = emptySet(),
         val noDiagnostics: Boolean = false,
         // Gives the diagnostics when asked (textDocument/diagnostic) instead of publishing them.
@@ -182,6 +183,7 @@ object FakeLanguageServer {
                     onlyItems = values["only-items"]?.split(','),
                     fullSync = "full-sync" in values,
                     noCompletion = "no-completion" in values,
+                    hangCompletion = "hang-completion" in values,
                     without = values["without"]?.split(',')?.toSet().orEmpty(),
                     noDiagnostics = "no-diagnostics" in values,
                     pullDiagnostics = "pull-diagnostics" in values,
@@ -382,7 +384,9 @@ object FakeLanguageServer {
                 "workspace/executeCommand" -> executeCommand(id!!, message["params"])
                 "completionItem/resolve" -> reply(id, intelligence().resolveCompletion(message["params"]))
                 "textDocument/completion" ->
-                    if (options.noCompletion) {
+                    if (options.hangCompletion) {
+                        Unit // Alive, but never answers a completion.
+                    } else if (options.noCompletion) {
                         error(id!!, CONTENT_MODIFIED, "Content modified")
                     } else {
                         reply(id, completion(message["params"]))
