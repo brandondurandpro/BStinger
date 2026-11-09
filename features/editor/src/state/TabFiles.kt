@@ -387,11 +387,13 @@ internal class TabFiles(
                 Document(content.lines, language, content.lineSeparator).also {
                     // What the disk held when these lines were read: a save carried it, a change on disk answers it.
                     it.diskVersion = content.version
-                    it.commentStates = SyntaxHighlighter.blockCommentStates(content.lines, language)
+                    val starts = SyntaxHighlighter.lineStarts(content.lines, language)
+                    it.commentStates = starts.inComment
+                    it.bracketDepths = starts.bracketDepths
                     it.folding.regions = FoldingModel.computeRegions(content.lines, language)
                 }
             }
-        if (language.slashComments) launch { recomputeOnEdit(document, language) }
+        if (language != Language.Plain) launch { recomputeOnEdit(document, language) }
         launch { followChanges(tab, document) }
         val spec = GrammarSpec.forFileName(tab.entry.name)
         if (grammars != null && spec != null) {
@@ -404,20 +406,19 @@ internal class TabFiles(
         return document
     }
 
-    // Comment boundaries and fold regions move on edit: recompute them off the UI thread once typing pauses.
+    // Comment boundaries, bracket depths and fold regions move on edit: recompute them off the UI thread once typing
+    // pauses.
     @OptIn(FlowPreview::class)
     private suspend fun recomputeOnEdit(document: Document, language: Language) {
         snapshotFlow { document.version }.debounce(RECOMPUTE_DELAY_MS).collect {
             val snapshot = document.lines.toList()
-            val (states, regions) =
+            val (starts, regions) =
                 withContext(Dispatchers.Default) {
-                    SyntaxHighlighter.blockCommentStates(
-                        snapshot,
-                        language,
-                    ) to FoldingModel.computeRegions(snapshot, language)
+                    SyntaxHighlighter.lineStarts(snapshot, language) to FoldingModel.computeRegions(snapshot, language)
                 }
             if (document.lineCount == snapshot.size) {
-                document.commentStates = states
+                document.commentStates = starts.inComment
+                document.bracketDepths = starts.bracketDepths
                 document.folding.regions = regions
             }
         }

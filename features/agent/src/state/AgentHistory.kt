@@ -6,6 +6,7 @@ import kotlinx.coroutines.launch
 import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.model.AgentSession
 import java.io.IOException
+import java.time.Instant
 
 // The history of agent mode: the sessions the agent keeps, listed and opened through the server. The IDE stores none
 // of it, so it never shows a history the agent no longer has.
@@ -18,19 +19,33 @@ internal fun AgentState.followHistory(project: AgentHost, agent: () -> AgentComm
     project.scope.launch {
         snapshotFlow { project.agentMode }.filter { it }.collect {
             val agents = project.services.agents
-            val listed = runCatching { agents.sessions(agent(), project.root.path) }.getOrNull()
-            if (listed != null && listed.supported) addHistory(listed.sessions, project.root.path)
+            // Every agent the user worked with keeps a history: the one of the settings, and those chosen in the picker.
+            for (listed in historyAgents(agent())) {
+                val answer = runCatching { agents.sessions(listed, project.root.path) }.getOrNull()
+                if (answer != null && answer.supported) addHistory(answer.sessions, project.root.path, listed.takeIf { it != agent() })
+            }
+            restoreSaved(project.root.path)
         }
     }
 }
 
-// The sessions no conversation shows yet, after the conversations, newest first.
-private fun AgentState.addHistory(sessions: List<AgentSession>, root: String) {
+// The agent of the settings first, then those of the registry the user chose.
+private fun AgentState.historyAgents(settings: AgentCommand): List<AgentCommand> {
+    val chosen = usedAgentIds().map { AgentCommand(emptyList(), registry = it) }
+    return (listOf(settings) + chosen).distinct()
+}
+
+/** The registry ids of the agents the user worked with, the one chosen last included. */
+internal fun AgentState.usedAgentIds(): List<String> = (usedAgents + listOfNotNull(lastAgent)).distinct()
+
+// The sessions no conversation shows yet, after the conversations, newest first; [agent] is theirs when not the settings'.
+private fun AgentState.addHistory(sessions: List<AgentSession>, root: String, agent: AgentCommand?) {
     val shown = conversations.mapNotNull { it.session }.toSet()
     for (session in sessions.filter { it.id !in shown }) {
         val conversation = conversationOf(session, nextId++, root)
         // The state delivers the prompts queued while the agent answered (the transcript only says the turn is over).
         conversation.onTurnIdle = { deliverQueued(conversation) }
+        conversation.agent = agent
         conversations.add(conversation)
     }
 }
@@ -41,6 +56,8 @@ internal fun conversationOf(session: AgentSession, id: Int, root: String): Conve
     val title = session.title?.takeIf { it.isNotBlank() } ?: "Conversation of ${session.updatedAt.orEmpty().take(DATE)}"
     val conversation = Conversation(id, titleOf(title), branch ?: "agent/conversation-$id")
     conversation.session = session.id
+    val updated = runCatching { Instant.parse(session.updatedAt.orEmpty()).toEpochMilli() }
+    conversation.lastMessageAt = updated.getOrNull()
     conversation.sessionDirectory = session.directory
     conversation.mode = if (branch == null || session.directory == root) WorkMode.Direct else WorkMode.Worktree
     return conversation

@@ -18,18 +18,27 @@ private val QUOTES = setOf('"', '\'')
 private val DECLARING_WORDS = setOf("fun", "def", "function")
 private val TRANSPARENT = setOf('<', '>', '.')
 
+/** Brackets whose nesting [LineLexer.depth] counts. */
+internal const val OPENING_BRACKETS = "([{"
+internal const val CLOSING_BRACKETS = ")]}"
+
 /**
- * Splits one line into highlighted tokens. [collect] false only follows block comments (to precompute, for a whole
- * document, which lines start inside one) without allocating tokens.
+ * Splits one line into highlighted tokens. [collect] false only follows block comments and brackets (to precompute,
+ * for a whole document, what each line starts inside of) without allocating tokens.
  */
 internal class LineLexer(
     private val line: String,
     private val language: Language,
     private val collect: Boolean = true,
+    startDepth: Int = 0,
 ) {
     val tokens = ArrayList<Token>()
 
     var endsInComment = false
+        private set
+
+    /** Brackets open, from [startDepth] where the line starts; those of strings and comments do not count. */
+    var depth = startDepth
         private set
 
     private var i = 0
@@ -139,6 +148,9 @@ internal class LineLexer(
     private fun other() {
         val c = line[i]
         if (!c.isWhitespace() && c !in TRANSPARENT) previousWord = null
+        if (c in OPENING_BRACKETS) depth++
+        // A closing bracket without its opening one leaves the depth at zero.
+        if (c in CLOSING_BRACKETS && depth > 0) depth--
         i++
     }
 

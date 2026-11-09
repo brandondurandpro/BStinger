@@ -98,12 +98,12 @@ class AgentService(
         attachments: List<AgentAttachment> = emptyList(),
     ) {
         val prompt = UserPrompt(itemId, text, attachments)
-        conversation(conversation).prompt(prompt, directory, session) { processes.processFor(agent) }
+        conversation(conversation).prompt(prompt, agent, directory, session) { processes.processFor(agent) }
     }
 
     /** Opens the agent's [session] as [conversation]: the agent replays its history into the transcript. */
     fun open(conversation: String, agent: AgentCommand, directory: String, session: String) {
-        conversation(conversation).open(session, directory) { processes.processFor(agent) }
+        conversation(conversation).open(agent, session, directory) { processes.processFor(agent) }
     }
 
     /**
@@ -148,6 +148,7 @@ class AgentService(
             replayed = header.replayed,
             options = header.options,
             commands = header.commands,
+            usage = header.usage,
         )
     }
 
@@ -188,7 +189,10 @@ class AgentService(
     }
 }
 
+// A coding agent can weigh several hundred MB (an Electron one more): the cap only guards against a runaway download.
+private const val MAX_AGENT_DOWNLOAD = 4L * 1024 * 1024 * 1024
+
 private fun registry(settings: AgentSettings): AgentRegistry {
-    val installer = AgentInstaller(ToolDownloader(settings.toolsDirectory))
+    val installer = AgentInstaller(ToolDownloader(settings.toolsDirectory, maxBytes = MAX_AGENT_DOWNLOAD))
     return AgentRegistry(settings.registryUrl, installer, settings.registryCacheMs)
 }

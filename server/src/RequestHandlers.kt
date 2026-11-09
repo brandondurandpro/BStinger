@@ -34,6 +34,7 @@ private const val PATH = "path"
 private const val DIRECTORY = "directory"
 private const val NAME = "name"
 private const val ROOT = "root"
+private const val PATHS = "paths"
 private const val BRANCH = "branch"
 private const val LIMIT = "limit"
 private const val TERMINAL = "terminal"
@@ -97,7 +98,7 @@ private fun fileHandlers(services: LocalServices): Map<Method, Handler> {
             services.disk.changes(params.string(ROOT), params.read("since") { it.diskCursor() }, open).toJson()
         },
         Method.RecentLoad to { services.recentProjects.load().toJson() },
-        Method.RecentSave to { nothing { services.recentProjects.save(params.read("paths") { it.strings() }) } },
+        Method.RecentSave to { nothing { services.recentProjects.save(params.read(PATHS) { it.strings() }) } },
         Method.SessionLoad to { services.sessions.load(params.string("project")).toJson() },
         Method.SessionSave to {
             val session = checkNotNull(params.read("session") { it.session() }) { "Missing session" }
@@ -158,9 +159,10 @@ private fun gitHandlers(git: GitClient): Map<Method, Handler> =
         Method.GitDeleteBranches to {
             nothing { git.deleteBranches(root(), params.read("branches") { it.strings() }) }
         },
+        Method.GitRevert to { nothing { git.revert(root(), params.read(PATHS) { it.strings() }) } },
         Method.GitCommit to {
             nothing {
-                git.commit(root(), params.string("message"), params.read("paths") { it.strings() })
+                git.commit(root(), params.string("message"), params.read(PATHS) { it.strings() })
             }
         },
         Method.GitPull to { JsonPrimitive(git.pull(root())) },

@@ -19,7 +19,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -132,9 +131,10 @@ private fun tagsOf(tab: EditorTab): TabTags {
     }
 }
 
+/** One tab of a file or a diff; the agent mode strip shows it among the conversations. */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-private fun EditorTabView(
+fun EditorTabView(
     tab: EditorTab,
     active: Boolean,
     onSelect: () -> Unit,
@@ -150,26 +150,29 @@ private fun EditorTabView(
         Modifier.onPointerEvent(PointerEventType.Press) { event ->
             onTabPress(event, onSelect, onClose, onContextMenu)
         }
-    Row(
-        Modifier
-            .fillMaxHeight()
-            .background(if (hovered && !active) IdeColors.Hover else Color.Transparent)
-            .activeUnderline(active)
-            .hoverable(interaction)
-            .then(press)
-            .testTag(tags.tab)
-            .padding(start = 10.dp, end = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        FileIcon(tab.entry.name, isDirectory = false)
-        Label(
-            tab.title,
-            Modifier.padding(start = 6.dp, end = 4.dp),
-            color = if (modified) IdeColors.Modified else IdeColors.Text,
-        )
-        ModifiedDot(tab, modified)
-        CloseTabButton(hovered || active, tags.close, onClose)
-        Spacer(Modifier.width(2.dp))
+    // The menu is a sibling of the tab, anchored on the whole tab rather than at the end of its content.
+    Box(Modifier.fillMaxHeight()) {
+        Row(
+            Modifier
+                .fillMaxHeight()
+                .background(if (hovered && !active) IdeColors.Hover else Color.Transparent)
+                .activeUnderline(active)
+                .hoverable(interaction)
+                .then(press)
+                .testTag(tags.tab)
+                .padding(start = 10.dp, end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            FileIcon(tab.entry.name, isDirectory = false)
+            Label(
+                tab.title,
+                Modifier.padding(start = 6.dp, end = 4.dp),
+                color = if (modified) IdeColors.Modified else IdeColors.Text,
+            )
+            ModifiedDot(tab, modified)
+            CloseTabButton(hovered || active, tags.close, onClose)
+            Spacer(Modifier.width(2.dp))
+        }
         menu()
     }
 }
@@ -207,34 +210,19 @@ private fun TabContextMenu(
     onDismiss: () -> Unit,
 ) {
     val index = pane.tabs.indexOf(tab)
+    val actions =
+        CloseTabsActions(
+            close = { editor.close(tab) },
+            closeOthers = { editor.closeOthers(tab) },
+            closeToLeft = { editor.closeTabsToLeft(tab) },
+            closeToRight = { editor.closeTabsToRight(tab) },
+            closeAll = { editor.closeAll() },
+        )
     val action = { block: () -> Unit ->
         onDismiss()
         block()
     }
-    DropdownMenu(
-        expanded = true,
-        onDismissRequest = onDismiss,
-        offset = offset,
-        modifier = Modifier.testTag(EditorTags.TAB_MENU),
-    ) {
-        TabMenuItem("Close", Tags.MENU_CLOSE_TAB) { action { editor.close(tab) } }
-        TabMenuItem(
-            "Close Others",
-            Tags.MENU_CLOSE_OTHER_TABS,
-            enabled = pane.tabs.size > 1,
-        ) { action { editor.closeOthers(tab) } }
-        TabMenuItem(
-            "Close All to the Left",
-            Tags.MENU_CLOSE_TABS_LEFT,
-            enabled = index > 0,
-        ) { action { editor.closeTabsToLeft(tab) } }
-        TabMenuItem(
-            "Close All to the Right",
-            Tags.MENU_CLOSE_TABS_RIGHT,
-            enabled = index in 0 until pane.tabs.lastIndex,
-        ) { action { editor.closeTabsToRight(tab) } }
-        MenuSeparator()
-        TabMenuItem("Close All", Tags.MENU_CLOSE_ALL_TABS) { action { editor.closeAll() } }
+    CloseTabsMenu(index, pane.tabs.size, actions, offset, onDismiss, Modifier.testTag(EditorTags.TAB_MENU)) {
         MenuSeparator()
         TabMenuItem("Split Right", EditorTags.MENU_SPLIT_RIGHT, enabled = !editor.isSplit) {
             action {

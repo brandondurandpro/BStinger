@@ -46,6 +46,36 @@ class SyntaxHighlighterTest {
     }
 
     @Test
+    fun `bracket depths carry over from line to line`() {
+        val lines = listOf("fun main() {", "    if (a[0]) {", "    }", "}", "")
+        val depths = SyntaxHighlighter.lineStarts(lines, Language.Kotlin).bracketDepths
+        assertEquals(listOf(0, 1, 2, 1, 0), depths?.toList())
+    }
+
+    @Test
+    fun `brackets of strings and comments do not count`() {
+        val lines = listOf("val s = \"(\" // (", "/* [", "{ */ f(", "# (", ")")
+        val depths = SyntaxHighlighter.lineStarts(lines, Language.Kotlin).bracketDepths
+        assertEquals(listOf(0, 0, 0, 1, 2), depths?.toList())
+        val script = SyntaxHighlighter.lineStarts(listOf("x = ( # )", "'('", ")"), Language.Script)
+        assertEquals(listOf(0, 1, 1), script.bracketDepths?.toList())
+        assertNull(script.inComment)
+    }
+
+    @Test
+    fun `a closing bracket nothing opened leaves the depth at zero`() {
+        val depths = SyntaxHighlighter.lineStarts(listOf("))", "(", ""), Language.Kotlin).bracketDepths
+        assertEquals(listOf(0, 0, 1), depths?.toList())
+    }
+
+    @Test
+    fun `plain text has no bracket depths`() {
+        val starts = SyntaxHighlighter.lineStarts(listOf("(", ")"), Language.Plain)
+        assertNull(starts.bracketDepths)
+        assertNull(starts.inComment)
+    }
+
+    @Test
     fun `language detection by extension`() {
         assertEquals(Language.Kotlin, Language.fromFileName("build.gradle.kts"))
         assertEquals(Language.Java, Language.fromFileName("Main.java"))

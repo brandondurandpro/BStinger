@@ -32,6 +32,12 @@ class SettingsController(
     var agentModeEnabled by mutableStateOf(preferences[PreferenceKeys.AGENT_MODE]?.toBooleanStrictOrNull() ?: false)
         private set
 
+    /** Whether the IDE opens in agent mode rather than in the editors: the last project is then reopened at launch. */
+    var agentModeByDefault by mutableStateOf(savedAgentModeByDefault())
+
+    /** Whether a project opens in agent mode: agent mode is on and is the user's default. */
+    val startsInAgentMode: Boolean get() = agentModeEnabled && agentModeByDefault
+
     /** Command line of the agent of agent mode (any ACP agent); blank for the agent of the registry. */
     var agentCommand by mutableStateOf(preferences[PreferenceKeys.AGENT_COMMAND].orEmpty())
 
@@ -108,10 +114,14 @@ class SettingsController(
     fun toPreferences(): Map<String, String> {
         val fontSize = PreferenceKeys.EDITOR_FONT_SIZE to editorFontSize.toString()
         val agentMode = PreferenceKeys.AGENT_MODE to agentModeEnabled.toString()
+        val byDefault = PreferenceKeys.AGENT_MODE_BY_DEFAULT to agentModeByDefault.toString()
         val agentCommandLine = PreferenceKeys.AGENT_COMMAND to agentCommand
         val agentOfRegistry = PreferenceKeys.AGENT_REGISTRY to agentRegistry
-        return mapOf(fontSize, agentMode, agentCommandLine, agentOfRegistry) + telemetry.toPreferences()
+        return mapOf(fontSize, agentMode, byDefault, agentCommandLine, agentOfRegistry) + telemetry.toPreferences()
     }
+
+    private fun savedAgentModeByDefault(): Boolean =
+        preferences[PreferenceKeys.AGENT_MODE_BY_DEFAULT]?.toBooleanStrictOrNull() ?: false
 
     private fun savedFontSize(): Float =
         preferences[PreferenceKeys.EDITOR_FONT_SIZE]

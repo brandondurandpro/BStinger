@@ -11,6 +11,7 @@ import kotlinx.serialization.json.JsonObject
 import org.example.kotlineditor.lsp.jsonrpc.LspResponseException
 import org.example.kotlineditor.model.AGENT_BUSY_MESSAGE
 import org.example.kotlineditor.model.AgentAttachment
+import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.model.AgentItem
 import org.example.kotlineditor.model.AgentPermissionOption
 import org.example.kotlineditor.model.AgentToolStatus
@@ -55,10 +56,16 @@ internal class ServerConversation(
     private val permissions = Permissions(journal, writer)
 
     /**
-     * Starts answering [text], shown as item [itemId], in the agent's [session] when the conversation has none yet. A
-     * prompt sent again (same item) is ignored.
+     * Starts answering [text], shown as item [itemId], by [agent] — in its [session] when the conversation has none
+     * yet, in a new session of [agent] when it runs another one. A prompt sent again (same item) is ignored.
      */
-    fun prompt(prompt: UserPrompt, directory: String, session: String?, process: () -> AgentProcess) {
+    fun prompt(
+        prompt: UserPrompt,
+        agent: AgentCommand,
+        directory: String,
+        session: String?,
+        process: () -> AgentProcess,
+    ) {
         val itemId = prompt.itemId
         synchronized(lock) {
             // A prompt sent again (the same item) is ignored, whether it runs, waits or has run.
@@ -66,26 +73,26 @@ internal class ServerConversation(
             if (busy || queued.isNotEmpty()) {
                 if (queued.size >= QUEUED_PROMPTS) check(false) { AGENT_BUSY_MESSAGE }
                 prompted.add(itemId)
-                queued.addLast(Queued(prompt, session, directory, process))
+                queued.addLast(Queued(prompt, agent, session, directory, process))
                 return
             }
             prompted.add(itemId)
-            start(prompt, directory, session, process)
+            start(prompt, agent, directory, session, process)
         }
     }
 
     /** Opens the agent's [session], whose history replays into the journal; opening it again does nothing. */
-    fun open(session: String, directory: String, process: () -> AgentProcess) {
+    fun open(agent: AgentCommand, session: String, directory: String, process: () -> AgentProcess) {
         synchronized(lock) {
             if (opened || busy) return
             opened = true
-            keeper.resume(session, replay = true)
+            keeper.resume(agent, session, replay = true)
             busy = true
             journal.setState(AgentTurnState.Starting)
             job =
                 scope.launch {
                     try {
-                        failures(writer, keeper, before = {}) { keeper.sessionFor(directory, process) }
+                        failures(writer, keeper, before = {}) { keeper.sessionFor(agent, directory, process) }
                     } finally {
                         busy = false
                         journal.setState(AgentTurnState.Idle)
@@ -126,7 +133,7 @@ internal class ServerConversation(
 
     override suspend fun requestPermission(params: JsonObject): String? = permissions.ask(params, cancelled = stopping)
 
-    private suspend fun run(prompt: UserPrompt, directory: String, process: () -> AgentProcess) {
+    private suspend fun run(prompt: UserPrompt, agent: AgentCommand, directory: String, process: () -> AgentProcess) {
         var stopReason: String? = null
         val context = prompt.attachments.map { it.label }
         // After the history the agent may replay, before what goes wrong.
@@ -135,7 +142,7 @@ internal class ServerConversation(
         }
         try {
             failures(writer, keeper, shown) {
-                val current = keeper.sessionFor(directory, process)
+                val current = keeper.sessionFor(agent, directory, process)
                 shown()
                 journal.setState(AgentTurnState.Running)
                 val take = current.process.ready().prompt
@@ -167,26 +174,33 @@ internal class ServerConversation(
         }
     }
 
-    // Lock held. Makes [prompt] the turn running: the agent starts (or continues in [session]) and answers it.
-    private fun start(prompt: UserPrompt, directory: String, session: String?, process: () -> AgentProcess) {
-        session?.let { keeper.resume(it, replay = false) }
+    // Lock held. Makes [prompt] the turn running: [agent] starts (or continues in [session]) and answers it.
+    private fun start(
+        prompt: UserPrompt,
+        agent: AgentCommand,
+        directory: String,
+        session: String?,
+        process: () -> AgentProcess,
+    ) {
+        session?.let { keeper.resume(agent, it, replay = false) }
         stopping = false
         busy = true
         journal.setState(AgentTurnState.Starting)
-        job = scope.launch { run(prompt, directory, process) }
+        job = scope.launch { run(prompt, agent, directory, process) }
     }
 
     // Lock held. Once the turn is over, the first prompt queued meanwhile goes.
     private fun startQueued() {
         val next = queued.firstOrNull() ?: return
         queued.removeFirst()
-        start(next.prompt, next.directory, next.session, next.process)
+        start(next.prompt, next.agent, next.directory, next.session, next.process)
     }
 }
 
-/** A prompt the server keeps while the agent answers, with where and how it runs once its turn comes. */
+/** A prompt the server keeps while the agent answers, with the agent, where and how it runs once its turn comes. */
 private class Queued(
     val prompt: UserPrompt,
+    val agent: AgentCommand,
     val session: String?,
     val directory: String,
     val process: () -> AgentProcess,

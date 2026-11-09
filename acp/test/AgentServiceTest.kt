@@ -210,6 +210,36 @@ class AgentServiceTest {
     }
 
     @Test
+    fun `a prompt of another agent starts a new session of that one`() {
+        send("count")
+        val before = turn { list -> list.any { it is AgentItem.AgentText } }
+        assertTrue(before.answers().firstOrNull()?.startsWith("Prompt 1 of") == true)
+        // Another agent (its own process, so a JVM argument that differs) takes the conversation over.
+        val newcomer = AgentCommand(FakeAgentCommand.command("--no-commands"))
+        send("count", command = newcomer)
+        val items = turn { answersOf(it).count() == 2 }
+        val notices = items.filterIsInstance<AgentItem.Notice>().joinToString(" ") { it.text }
+        assertContains(notices, "new session")
+        assertContains(notices, "previous agent")
+        // The conversation keeps what the previous agent was told; the newcomer answers from its own first prompt.
+        assertEquals(2, items.count { it is AgentItem.UserText })
+        assertTrue(items.answers().last().startsWith("Prompt 1 of"))
+    }
+
+    @Test
+    fun `a prompt of the agent the conversation ran continues its session`() {
+        send("count")
+        turn { list -> list.any { it is AgentItem.AgentText } }
+        send("count")
+        val items = turn { answersOf(it).count() == 2 }
+        assertTrue(items.filterIsInstance<AgentItem.Notice>().isEmpty(), items.toString())
+        assertTrue(items.answers().last().startsWith("Prompt 2 of"))
+    }
+
+    // The texts the agent answered so far, in [items].
+    private fun answersOf(items: List<AgentItem>) = items.filterIsInstance<AgentItem.AgentText>()
+
+    @Test
     fun `a plan is one item, updated`() {
         send("plan")
         val items = turn { list -> list.any { it is AgentItem.AgentText } }

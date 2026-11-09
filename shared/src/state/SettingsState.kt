@@ -64,6 +64,12 @@ enum class Setting(val category: SettingsCategory, val title: String, val descri
         "The IDE | Agent switch of the toolbar, where agents work in their own worktrees.",
         "ai agents conversations",
     ),
+    AgentModeByDefault(
+        SettingsCategory.Experimental,
+        "Open in agent mode",
+        "Agent mode is the default: the IDE reopens the last project in it at launch, without the welcome screen.",
+        "default start launch startup ide welcome projects",
+    ),
     Agent(
         SettingsCategory.Experimental,
         "Agent",

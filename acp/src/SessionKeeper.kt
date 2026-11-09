@@ -3,10 +3,16 @@ package org.example.kotlineditor.acp
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.example.kotlineditor.lsp.jsonrpc.LspResponseException
+import org.example.kotlineditor.model.AGENT_LOGIN_MESSAGE
+import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.model.AgentOption
 import java.io.IOException
 
 private const val NEW_SESSION = "A new session of the agent started: it no longer remembers the previous messages."
+
+private const val AGENT_CHANGED =
+    "A new session of a new agent started: it no longer remembers what the previous agent was told."
+
 private const val NO_HISTORY = "The agent does not replay its sessions: the conversation goes on from here."
 
 // The error ACP agents answer when the user must log in first.
@@ -49,17 +55,23 @@ internal class SessionKeeper(
     private var replay = false
     private var hadSession = false
 
+    // The agent the current (or resumable) session belongs to: a prompt of another agent starts over.
+    @Volatile
+    private var served: AgentCommand? = null
+
     // The settings the user chose, in order, set in every session it starts (the first one, or one that replaces a
     // session lost); the lock keeps them in order.
     private val choices = LinkedHashMap<String, String>()
     private val settings = Mutex()
 
     /**
-     * Reopens [session] before the next prompt, unless a session runs already; its history replays into the journal
-     * when [replay] (a session opened from the history), not when the IDE shows it already (after a restart).
+     * Reopens [session], the one of [agent], before the next prompt, unless a session runs already; its history
+     * replays into the journal when [replay] (a session opened from the history), not when the IDE shows it already
+     * (after a restart).
      */
-    fun resume(session: String, replay: Boolean) {
+    fun resume(agent: AgentCommand, session: String, replay: Boolean) {
         if (current != null) return
+        served = agent
         resumable = session
         this.replay = replay
     }
@@ -73,26 +85,57 @@ internal class SessionKeeper(
     }
 
     /**
-     * The session to prompt in [directory]: the current one, the one to reopen, or a new one, with its process (started
-     * when needed). Its exceptions say why it could not start.
+     * The session to prompt [agent] in [directory]: the current one, the one to reopen, or a new one, with its
+     * process (started when needed). Its exceptions say why it could not start. A prompt of another agent than the
+     * one the conversation runs leaves that one: the session is released, its settings are forgotten, and a new
+     * session of the new agent replaces it.
      */
-    suspend fun sessionFor(directory: String, process: () -> AgentProcess): AgentSession {
-        val running = current
-        if (running != null && running.serves(directory)) return running
-        running?.process?.release(running.id)
-        val agent = process()
-        val info = agent.ready()
-        journal.describe { it.copy(agentName = info.name) }
-        val previous = resumable ?: running?.id?.takeIf { running.directory == directory }
-        val reopened = previous?.let { reopen(agent, it, directory) }
-        val forgot = hadSession || previous != null
-        if (reopened == null && forgot) writer.notice(NEW_SESSION)
-        val session = started(reopened ?: fresh(agent, info, directory))
+    suspend fun sessionFor(agent: AgentCommand, directory: String, process: () -> AgentProcess): AgentSession {
+        val kept = current?.takeIf { served == agent && it.serves(directory) }
+        if (kept != null) return kept
+        val taken = takenOver(agent, directory)
+        val agentProcess = process()
+        val reopened = taken.replaced?.let { reopen(agentProcess, it, directory) }
+        announced(agentProcess, reopened, taken)
+        val session = started(reopened ?: fresh(agentProcess, agentProcess.ready(), directory), agent)
         // The agent may list its commands before the session is listened to: those it last listed meanwhile.
-        val known = agent.commands
-        if (known.isNotEmpty()) journal.describe { it.copy(commands = it.commands.ifEmpty { known }) }
-        settings.withLock { applyChoices(session) }
+        val commands = agentProcess.commands
+        if (commands.isNotEmpty()) journal.describe { it.copy(commands = it.commands.ifEmpty { commands }) }
+        settings.withLock {
+            if (taken.switched) choices.clear()
+            applyChoices(session)
+        }
         return session
+    }
+
+    // What comes of the session the conversation ran before [agent] takes it over: released, its settings dropped,
+    // and the id of its session kept only while the agent stays the one the conversation ran.
+    private fun takenOver(agent: AgentCommand, directory: String): TakenOver {
+        val running = current
+        val sameAgent = served == agent
+        val replaced =
+            if (sameAgent) resumable ?: running?.id?.takeIf { running.directory == directory } else null
+        val leftover = running != null || resumable != null
+        val switched = !sameAgent && leftover
+        if (!sameAgent) {
+            resumable = null
+            replay = false
+        }
+        running?.process?.release(running.id)
+        return TakenOver(replaced, switched)
+    }
+
+    // Says on the journal who the new agent is, what a switch takes back (the settings of the previous one), and
+    // when a previous session is lost, that the one starting does not remember what was told to it.
+    private suspend fun announced(process: AgentProcess, reopened: AgentSession?, taken: TakenOver) {
+        val info = process.ready()
+        journal.describe { it.copy(agentName = info.name) }
+        if (taken.switched) {
+            journal.describe { it.copy(agentName = null, options = emptyList(), commands = emptyList()) }
+        }
+        val forgot = hadSession || taken.replaced != null
+        val lost = reopened == null
+        if (lost && forgot) writer.notice(if (taken.switched) AGENT_CHANGED else NEW_SESSION)
     }
 
     /**
@@ -148,8 +191,9 @@ internal class SessionKeeper(
         running.process.closeSession(running.id)
     }
 
-    private fun started(session: AgentSession): AgentSession {
+    private fun started(session: AgentSession, agent: AgentCommand): AgentSession {
         resumable = null
+        served = agent
         hadSession = true
         current = session
         journal.describe { it.copy(session = session.id) }
@@ -188,7 +232,15 @@ internal class SessionKeeper(
 }
 
 private fun loginRequired(refused: LspResponseException, info: AgentInfo): IOException {
-    val methods = info.authMethods.joinToString("\n") { "- $it" }
-    val how = if (methods.isEmpty()) "" else "\n$methods"
-    return LoginRequiredException("Log in to the agent first (${refused.message}).$how")
+    val lines = info.authMethods.map { listOfNotNull(it.name, it.description).joinToString(": ") }
+    val how = lines.joinToString("") { "\n- $it" }
+    return LoginRequiredException("$AGENT_LOGIN_MESSAGE (${refused.message}).$how")
 }
+
+/** What comes of a previous session when another agent takes the conversation over. */
+private class TakenOver(
+    /** The id of its session to reopen, while the agent stays the one the conversation ran. */
+    val replaced: String?,
+    /** True when the agent changed: what was told stays, what was chosen (the model…) is dropped. */
+    val switched: Boolean,
+)

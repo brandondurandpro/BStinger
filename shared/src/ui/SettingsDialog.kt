@@ -224,6 +224,13 @@ private fun SettingControl(app: AppState, settings: SettingsState, setting: Sett
             ) { app.settings.enableAgentMode(it) }
         }
 
+        Setting.AgentModeByDefault -> {
+            SettingCheckBox(
+                setting,
+                app.settings.agentModeByDefault,
+            ) { app.settings.agentModeByDefault = it }
+        }
+
         Setting.Agent -> {
             RegistryAgentChoice(app)
         }

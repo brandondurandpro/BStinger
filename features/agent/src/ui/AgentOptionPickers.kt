@@ -6,9 +6,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.Composable
@@ -34,8 +37,11 @@ import org.example.kotlineditor.state.Conversation
 
 private val MENU_WIDTH = 320.dp
 
-// The settings of the session of a conversation, under its prompt: a click lists the values the agent offers, the one
-// chosen applies from the next prompt on. Nothing shows for a setting the agent does not offer.
+// Past this many values, the menu has a field to search them.
+private const val SEARCHABLE_FROM = 5
+
+// A menu shows a few values at once, the rest comes scrolling in place.
+private val MENU_HEIGHT = 300.dp
 
 /** The model of the session of [conversation]. */
 @Composable
@@ -91,14 +97,37 @@ private fun OptionPicker(
                 closes
             }
         DropdownMenu(open, onDismissRequest = { open = false }, Modifier.widthIn(max = MENU_WIDTH).then(escape)) {
-            for (value in option.values) {
-                OptionItem(option, value, valueTag(value.value)) {
-                    open = false
-                    agent.options.choose(conversation, option.id, value.value)
+            // A long list of values (the models of a provider) has a field that filters it.
+            var filter by remember { mutableStateOf("") }
+            val searchable = option.values.size > SEARCHABLE_FROM
+            if (searchable) {
+                AgentFilterField(filter, "$tag.filter", "Search ${option.name.lowercase()}…") { filter = it }
+            }
+            val shown = option.values.filter { it.matches(filter) }
+            if (shown.isEmpty()) {
+                Label("""No match for "$filter".""", Modifier.padding(12.dp), color = IdeColors.TextSecondary, fontSize = 12.sp)
+            }
+            // The values may be longer than a menu shows: capped at a few rows, scrolled in place.
+            Column(Modifier.heightIn(max = MENU_HEIGHT).verticalScroll(rememberScrollState())) {
+                for (value in shown) {
+                    OptionItem(option, value, valueTag(value.value)) {
+                        open = false
+                        agent.options.choose(conversation, option.id, value.value)
+                    }
                 }
             }
         }
     }
+}
+
+// The name, the value or the description of [this] has [filter] in it, case ignored; all match an empty filter.
+private fun AgentOptionValue.matches(filter: String): Boolean {
+    val wanted = filter.trim()
+    if (wanted.isEmpty()) return true
+    val inName = name.contains(wanted, ignoreCase = true)
+    val inValue = value.contains(wanted, ignoreCase = true)
+    val inDescription = description?.contains(wanted, ignoreCase = true) == true
+    return inName || inValue || inDescription
 }
 
 @Composable

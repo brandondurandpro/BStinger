@@ -4,6 +4,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import org.example.kotlineditor.lsp.supervisor.OrphanReaper
 import org.example.kotlineditor.model.AgentTerminalOutput
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
@@ -34,6 +35,9 @@ internal class AgentTerminal(
     private val onChange: (AgentTerminal) -> Unit,
 ) {
     private val lock = Any()
+
+    // Read while it runs: a command that exited has no start time, and its pid may name another process by then.
+    private val processStart = OrphanReaper.startOf(process.toHandle())
     private val output = StringBuilder()
 
     // A command that writes forever does not fill the memory of the server.
@@ -76,7 +80,8 @@ internal class AgentTerminal(
 
     /** Stops the command and the programs it started; its output stays readable. */
     fun kill() {
-        process.descendants().forEach { it.destroyForcibly() }
+        val children = OrphanReaper.ownDescendants(process.toHandle(), processStart)
+        children.forEach { it.destroyForcibly() }
         process.destroyForcibly()
     }
 

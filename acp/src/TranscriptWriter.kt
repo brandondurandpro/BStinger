@@ -56,6 +56,8 @@ internal class TranscriptWriter(
         // The settings are the session's as it is now, even while a replay of the history is muted.
         val options = update.configOptions().takeIf { kind == "config_option_update" }
         if (options != null) journal.describe { it.copy(options = options) }
+        if (kind == "usage_update") usageOf(update)?.let { usage -> journal.describe { it.copy(usage = usage) } }
+        if (kind == "current_mode_update") journal.describe { it.copy(options = modeChanged(it.options, update)) }
         val commands = update.slashCommands()
         if (commands != null) journal.describe { it.copy(commands = commands) }
         if (mode == Mode.Muted) return

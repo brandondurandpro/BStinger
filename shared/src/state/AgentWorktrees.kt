@@ -14,7 +14,15 @@ internal suspend fun ProjectState.openWorktreeProject(branch: String): ProjectSt
     val path = services.git.worktree(root.path, branch)
     val directory = checkNotNull(services.fileSystem.resolveDirectory(path)) { "$path is missing" }
     // Same tool windows open, whether the agent works on the project or in its worktree.
-    val worktree = ProjectState(directory, services, scope, toolWindows = toolWindows, grammars = grammars)
+    val worktree =
+        ProjectState(
+            directory,
+            services,
+            scope,
+            toolWindows = toolWindows,
+            grammars = grammars,
+            diffLayout = diffLayout,
+        )
     withTimeoutOrNull(WORKTREE_LOAD_MILLIS) {
         snapshotFlow { worktree.tree.rows.size > 1 && worktree.git.currentBranch != null }.first { it }
     }

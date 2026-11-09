@@ -4,7 +4,9 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -68,9 +70,26 @@ class AppState(
                 }
             }
 
+    /** Whether the IDE is reopening its last project in agent mode: the welcome screen is not shown meanwhile. */
+    var launching by mutableStateOf(settings.startsInAgentMode)
+        private set
+
     init {
         scope.launch { preferences.saveOnChange(::currentPreferences) }
-        session.reloadRecents()
+        if (launching) scope.launch { launchInAgentMode() } else session.reloadRecents()
+    }
+
+    // The user prefers agent mode: the last project opens straight in it; the welcome screen only when there is none.
+    private suspend fun launchInAgentMode() {
+        val shown = session
+        try {
+            shown.loadRecents()
+            val last = shown.recentProjects.firstOrNull() ?: return
+            shown.openProject(last)
+            snapshotFlow { shown.opening }.first { it == null }
+        } finally {
+            launching = false
+        }
     }
 
     /** Saves the open project, stops the remote session (its daemon keeps running) and shows the local server. */
@@ -140,6 +159,7 @@ class AppState(
             preferences,
             grammars,
             agentCommand = settings::agentCommandLine,
+            startsInAgentMode = { settings.startsInAgentMode },
             consent = { settings.telemetry.shared },
             onRemoteProjectOpened = remote::recordWorkspace,
         )

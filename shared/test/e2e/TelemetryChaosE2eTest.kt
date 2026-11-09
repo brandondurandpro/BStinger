@@ -138,7 +138,8 @@ class TelemetryChaosE2eTest {
             app.network.dropFromServer = false
             awaitReconnected()
             val writes = { spans: List<FinishedSpan> -> spans.filter { it.attributes[Attribute.Method] == "fs/write" } }
-            awaitCondition { writes(capture.clientSpans).isNotEmpty() }
+            // The span of the write is finished once the retry answered: wait for it, not for its first attempt.
+            awaitCondition { writes(capture.clientSpans).any { it.attributes[Attribute.Retried] == "true" } }
             val sent = writes(capture.clientSpans).single()
             assertEquals("true", sent.attributes[Attribute.Retried])
             assertEquals(Outcome.Ok, sent.outcome)

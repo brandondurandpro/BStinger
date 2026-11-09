@@ -43,6 +43,7 @@ import org.example.kotlineditor.model.WorktreeClient
 import java.io.IOException
 
 private const val ROOT = "root"
+private const val PATHS = "paths"
 private const val LIMIT = "limit"
 private const val BRANCH = "branch"
 private const val DIRECTORY = "directory"
@@ -252,11 +253,18 @@ class RemoteGit(private val client: RpcClient) :
         }
     }
 
+    override suspend fun revert(root: String, paths: List<String>) {
+        client.call(Method.GitRevert) {
+            put(ROOT, root)
+            put(PATHS, paths.toJson())
+        }
+    }
+
     override suspend fun commit(root: String, message: String, paths: List<String>) {
         client.call(Method.GitCommit) {
             put(ROOT, root)
             put("message", message)
-            put("paths", paths.toJson())
+            put(PATHS, paths.toJson())
         }
     }
 
@@ -351,7 +359,7 @@ class RemoteRecentProjects(private val client: RpcClient) : RecentProjectsStore 
     override suspend fun load(): List<String> = client.call(Method.RecentLoad).strings()
 
     override suspend fun save(paths: List<String>) {
-        client.call(Method.RecentSave) { put("paths", paths.toJson()) }
+        client.call(Method.RecentSave) { put(PATHS, paths.toJson()) }
     }
 }
 
