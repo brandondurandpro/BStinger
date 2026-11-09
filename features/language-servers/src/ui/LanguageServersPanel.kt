@@ -140,6 +140,7 @@ private fun ColumnScope.LanguageServersContent(project: LanguageServersHost, sta
     val servers = state.status.servers
     InlayHintsModeRow(project)
     InlayHintsNote(servers)
+    SetupNote(servers)
     ProjectCheckSection(project, state)
     Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
         IdeServerRow(state.status.server)
@@ -250,6 +251,20 @@ private fun InlayHintsNote(servers: List<LanguageServerInfo>) {
         notes.joinToString("\n"),
         Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp).testTag(LanguageServerTags.INLAY_HINTS_NOTE),
         color = IdeColors.TextSecondary,
+        fontSize = 11.sp,
+        maxLines = 4,
+    )
+}
+
+// A dependency the project lacks, which costs features of a running server (Vue without `vue` installed).
+@Composable
+private fun SetupNote(servers: List<LanguageServerInfo>) {
+    val notes = servers.mapNotNull { it.setupNote }.distinct()
+    if (notes.isEmpty()) return
+    Label(
+        notes.joinToString("\n"),
+        Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp).testTag(LanguageServerTags.SETUP_NOTE),
+        color = IdeColors.Error,
         fontSize = 11.sp,
         maxLines = 4,
     )

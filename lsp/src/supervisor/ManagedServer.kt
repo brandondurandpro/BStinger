@@ -39,6 +39,8 @@ import org.example.kotlineditor.telemetry.Attributes
 import org.example.kotlineditor.telemetry.Operation
 import org.example.kotlineditor.telemetry.Outcome
 import org.example.kotlineditor.telemetry.Span
+import java.nio.file.Files
+import java.nio.file.Paths
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
@@ -199,7 +201,16 @@ internal class ManagedServer(
             recentCrashes = synchronized(crashes) { crashes.size },
             users = users.size,
             inlayHintsNote = inlayHintsNote(),
+            setupNote = setupNote(),
         )
+    }
+
+    // The Vue plugin is loaded, but the project has no `vue` package: the HTML elements of the templates are unknown.
+    private fun setupNote(): String? {
+        val withVuePlugin = target.spec.variant == VUE_VARIANT || target.spec.language == "vue"
+        val installed = Files.isDirectory(Paths.get(target.root).resolve("node_modules").resolve("vue"))
+        val missing = withVuePlugin && !installed
+        return VUE_MISSING.takeIf { missing }
     }
 
     // Null while no process is ready, or when it gives inlay hints.
@@ -626,6 +637,10 @@ internal class ManagedServer(
 
     private companion object {
         const val MILLIS = 1_000L
+        const val VUE_VARIANT = "+vue"
+        const val VUE_MISSING =
+            "Vue is not installed in this project (no node_modules/vue): run your package manager's install, " +
+                "otherwise the HTML elements of the templates are not suggested."
 
         const val TSSERVER_REQUEST = "tsserver/request"
 

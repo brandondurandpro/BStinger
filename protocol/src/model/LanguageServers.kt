@@ -75,6 +75,8 @@ data class LanguageServerInfo(
      * without them; null when it gives them or has not started.
      */
     val inlayHintsNote: String? = null,
+    /** A dependency the project lacks that costs features (Vue templates without `vue` installed); null when none. */
+    val setupNote: String? = null,
 )
 
 /** Memory of the IDE server itself, shown next to the language servers. */

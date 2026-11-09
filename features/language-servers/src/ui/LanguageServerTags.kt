@@ -23,6 +23,7 @@ object LanguageServerTags {
 
     /** Why a running server gives no inlay hints, under the choice of their mode. */
     const val INLAY_HINTS_NOTE = "languageServers.inlayHints.note"
+    const val SETUP_NOTE = "languageServers.setup.note"
     const val LSP_CHOICE_NOT_NOW = "lsp.choice.notNow"
     const val LSP_CHOICE_OPEN = "lsp.choice.open"
     const val LSP_CHOICE_QUICK = "lsp.choice.quick"
