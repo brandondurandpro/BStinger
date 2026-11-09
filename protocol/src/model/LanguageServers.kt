@@ -233,46 +233,26 @@ object Languages {
     /** The language of `.ts`, `.tsx`, `.js`, `.jsx` and `.vue` files: one server serves them all. */
     const val TYPESCRIPT = "typescript"
 
-    private const val PHP = "php"
-    private const val TYPESCRIPT_REACT = "typescriptreact"
-    private const val JAVASCRIPT = "javascript"
-    private const val JAVASCRIPT_REACT = "javascriptreact"
-    private const val VUE = "vue"
-    private const val HTML = "html"
-    private const val CSS = "css"
-
     /** The language of the Vue server, which serves `.vue` files beside the TypeScript server. */
     const val VUE_SERVER = "vue"
 
     /** The language of the Tailwind CSS server, which serves the files of other languages beside their own server. */
     const val TAILWIND = "tailwind"
 
-    private val identifiers =
-        mapOf(
-            "php" to PHP,
-            "phtml" to PHP,
-            "ts" to TYPESCRIPT,
-            "mts" to TYPESCRIPT,
-            "cts" to TYPESCRIPT,
-            "tsx" to TYPESCRIPT_REACT,
-            "js" to JAVASCRIPT,
-            "mjs" to JAVASCRIPT,
-            "cjs" to JAVASCRIPT,
-            "jsx" to JAVASCRIPT_REACT,
-            "vue" to VUE,
-            "html" to HTML,
-            "htm" to HTML,
-            "css" to CSS,
-        )
+    private const val HTML = "html"
+    private const val CSS = "css"
+    private const val PHP = "php"
 
-    // The identifiers one server serves under another name; the others are their own language.
-    private val groups =
-        mapOf(
-            TYPESCRIPT_REACT to TYPESCRIPT,
-            JAVASCRIPT to TYPESCRIPT,
-            JAVASCRIPT_REACT to TYPESCRIPT,
-            VUE to TYPESCRIPT,
-        )
+    // The languages the IDE has a server for, by extension: declared in [LanguageSupport], with their icon and more.
+    private val served: Map<String, LspSupport> =
+        buildMap {
+            for (language in LanguageSupport.all) {
+                val lsp = language.lsp ?: continue
+                for (extension in language.extensions) put(extension, lsp)
+            }
+        }
+
+    // What the servers are called, by the language they serve (Vue and Tailwind have no files of their own).
     private val names =
         mapOf(
             HTML to "HTML",
@@ -282,42 +262,39 @@ object Languages {
             VUE_SERVER to "Vue",
             TAILWIND to "Tailwind CSS",
         )
-    private val rootMarkers = mapOf(PHP to "composer.json")
+
+    /** The names of the languages that have a server, for a test to check that each has one. */
+    val serverLanguages: Set<String> get() = names.keys
+
+    private fun lspOf(path: String): LspSupport? = served[path.substringAfterLast('.', "").lowercase()]
 
     /** Language identifier of [path] (`typescriptreact`), null when no language server handles it. */
-    fun identifierOf(path: String): String? = identifiers[path.substringAfterLast('.', "").lowercase()]
+    fun identifierOf(path: String): String? = lspOf(path)?.identifier
 
     /** Language of [path] (`typescript` for a `.tsx`, `.js`…), null when no language server handles it. */
-    fun languageOf(path: String): String? = identifierOf(path)?.let { groups[it] ?: it }
+    fun languageOf(path: String): String? = lspOf(path)?.group
 
     /**
      * The languages whose servers serve [path] beside the one of its own language: Tailwind CSS knows the class names
      * of the files of the web, whatever their language.
      */
-    fun companionsOf(path: String): List<String> {
-        val language = languageOf(path)
-        val isVue = identifierOf(path) == VUE
-        return when {
-            isVue -> listOf(VUE_SERVER, TAILWIND)
-            language == TYPESCRIPT || language == HTML || language == CSS -> listOf(TAILWIND)
-            else -> emptyList()
-        }
-    }
+    fun companionsOf(path: String): List<String> = lspOf(path)?.companions.orEmpty()
 
     /**
      * Whether the IDE follows [path] with the code insight of a language server (usage counts, hints, problems): not
      * the files only a companion server knows, such as `.html` and `.css`, which only get completion and hover.
      */
-    fun hasInsight(path: String): Boolean {
-        val language = languageOf(path)
-        return language != null && language != HTML && language != CSS
-    }
+    fun hasInsight(path: String): Boolean = lspOf(path)?.insight == true
 
     /** Name of [language] for people. */
     fun nameOf(language: String): String = names[language] ?: language
 
     /** File whose directory is the root of a [language] server, null when the project is. */
-    fun rootMarkerOf(language: String): String? = rootMarkers[language]
+    fun rootMarkerOf(language: String): String? {
+        val servers = LanguageSupport.all.mapNotNull { it.lsp }
+        val withMarker = servers.firstOrNull { it.group == language && it.rootMarker != null }
+        return withMarker?.rootMarker
+    }
 }
 
 /**

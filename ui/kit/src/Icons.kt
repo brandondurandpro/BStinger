@@ -38,15 +38,9 @@ fun FileIcon(name: String, isDirectory: Boolean, modifier: Modifier = Modifier, 
     if (badge == null) {
         PlainFileIcon(modifier.size(size))
     } else {
-        Box(
-            modifier.size(size).background(badge.color, RoundedCornerShape(3.dp)),
-            contentAlignment = Alignment.Center,
-        ) {
-            BasicText(
-                badge.letter,
-                style =
-                badgeStyle(badge),
-            )
+        Box(modifier.size(size), contentAlignment = Alignment.Center) {
+            Canvas(Modifier.size(size)) { drawBadgeShape(badge, this.size.width) }
+            if (badge.letter.isNotEmpty()) BasicText(badge.letter, style = badgeStyle(badge))
         }
     }
 }
