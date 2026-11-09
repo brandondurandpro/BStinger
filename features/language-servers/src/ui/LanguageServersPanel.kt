@@ -200,7 +200,7 @@ private fun ProjectCheckSection(project: LanguageServersHost, state: LanguageSer
 // One line per problem: `src/App.vue:12:5  message`.
 private fun checkLines(project: LanguageServersHost, check: ProjectCheckResult?): List<String> =
     check?.files.orEmpty().flatMap { file ->
-        val relative = file.path.removePrefix(project.root.path).trimStart('/', '\\')
+        val relative = file.path.removePrefix(project.root.path).trimStart('/', '\\').replace('\\', '/')
         file.diagnostics.map { problem ->
             val where = "$relative:${problem.range.startLine + 1}:${problem.range.startColumn + 1}"
             "$where  ${problem.message.lineSequence().firstOrNull().orEmpty()}"
