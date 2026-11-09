@@ -23,6 +23,7 @@ internal class LanguageServerTargets(private val settings: LanguageServerSetting
     private val choices = LanguageServerChoiceStore(settings.dataDirectory.resolve("language-servers.properties"))
     private val downloader = ToolDownloader(settings.toolsDirectory)
     private val specs = ConcurrentHashMap<String, LanguageServerSpec>()
+    private val vueProjects = VueProjects()
 
     /** The servers [files] of [project] need, and the languages that need a server not chosen yet. */
     fun targetsOf(project: String, files: List<String>): Pair<List<ServerTarget>, List<String>> {
@@ -42,7 +43,7 @@ internal class LanguageServerTargets(private val settings: LanguageServerSetting
             if (chosen == null) {
                 unchosen += language
             } else {
-                val extras = chosen.extras != null && VueProjects.used(project, files)
+                val extras = chosen.extras != null && vueProjects.used(project, files)
                 val spec = specOf(language, chosen.id, extras)
                 val target = ServerTarget(spec, rootOf(language, file, project))
                 targets[target.id] = target
@@ -111,7 +112,8 @@ internal class LanguageServerTargets(private val settings: LanguageServerSetting
         return specs.getOrPut(key) {
             val candidate = settings.candidates.offered(language).firstOrNull { it.id == id }
             val options = candidate?.initializationOptions ?: candidate?.let { bundleOptionsOf(it, withExtras) }
-            LanguageServerSpec(id, language, options, candidate?.withoutInlayHints) {
+            val variant = if (withExtras) "+vue" else ""
+            LanguageServerSpec(id, language, options, candidate?.withoutInlayHints, variant = variant) {
                 val status = settings.candidates.candidates(language).first { it.candidate.id == id }
                 settings.candidates.commandFor(status, downloader, withExtras)
             }

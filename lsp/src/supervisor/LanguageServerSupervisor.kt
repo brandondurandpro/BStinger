@@ -26,7 +26,7 @@ data class ServerTarget(
     val root: String,
 ) {
     /** Id of the server: stable across its restarts. */
-    val id: String get() = "${spec.name}@$root"
+    val id: String get() = "${spec.name}${spec.variant}@$root"
 }
 
 /**
@@ -80,13 +80,20 @@ class LanguageServerSupervisor(
                 val server = managed.getOrPut(id) { newServer(target) }
                 if (server.users.add(user)) server.send(Command.Wanted)
             }
-            for (id in before - wanted.keys) {
-                val server = managed[id] ?: continue
-                server.users.remove(user)
-                if (server.users.isEmpty()) server.send(Command.Unused)
-            }
+            leave(user, before - wanted.keys, wanted.values)
         }
         onChange()
+    }
+
+    // [user] no longer uses [ids]: a server nobody uses stops after the idle delay, at once when [wanted] has the same
+    // server run another way (two would answer for the same files).
+    private fun leave(user: String, ids: Set<String>, wanted: Collection<ServerTarget>) {
+        for (id in ids) {
+            val server = managed[id] ?: continue
+            server.users.remove(user)
+            val replaced = wanted.any { it.spec.name == server.name && it.root == server.root }
+            if (server.users.isEmpty()) server.send(if (replaced) Command.Discard else Command.Unused)
+        }
     }
 
     /** [user] is gone (its session ended): like [use] with nothing. */
