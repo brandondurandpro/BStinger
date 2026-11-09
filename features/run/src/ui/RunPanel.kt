@@ -173,7 +173,7 @@ private fun EmptyRun(run: RunState) {
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Label("No run configuration in this project yet.", color = IdeColors.TextSecondary)
-        IdeButton("Add configuration", { run.newConfiguration() }, Modifier.testTag(RunTags.NEW))
+        IdeButton("Add configuration", { run.newConfiguration() }, Modifier.testTag(RunTags.ADD_FIRST))
     }
 }
 

@@ -10,6 +10,7 @@ object RunTags {
     const val HIDE = "run.hide"
     const val STATUS = "run.status"
     const val NEW = "run.new"
+    const val ADD_FIRST = "run.addFirst"
     const val EDIT = "run.edit"
     const val EMPTY = "run.empty"
     const val TAB_OUTPUT = "run.tab.output"
