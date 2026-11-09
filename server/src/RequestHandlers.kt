@@ -132,6 +132,10 @@ private fun gitHandlers(git: GitClient): Map<Method, Handler> =
         Method.GitStatus to { git.status(root()).toJson() },
         Method.GitBranch to { JsonPrimitive(git.branch(root())) },
         Method.GitDiff to { git.diff(root(), params.string(PATH)).diffJson() },
+        Method.GitHeadLines to {
+            val lines = git.headLines(root(), params.string(PATH))
+            if (lines == null) JsonNull else lines.toJson()
+        },
         Method.GitBlame to { git.blame(root(), params.string(PATH)).blameJson() },
         Method.GitRemoteBranches to { git.remoteBranches(root()).toJson() },
         Method.GitLog to {

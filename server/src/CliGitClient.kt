@@ -56,6 +56,11 @@ class CliGitClient :
             }
         }
 
+    override suspend fun headLines(root: String, path: String): List<String>? =
+        runInterruptible(Dispatchers.IO) {
+            gitOutput(root, "show", "HEAD:./$path") ?: gitOutput(root, "show", ":./$path")
+        }
+
     /**
      * One `git for-each-ref` reads every local branch with its upstream and how far ahead or behind it is. Git reports
      * the distance from the last fetch: the popup fetches nothing, so that opening it never touches the network.

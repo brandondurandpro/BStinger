@@ -385,6 +385,9 @@ enum class Method(
     /** Differences of a file between HEAD and the working tree. */
     GitDiff("git/diff", mutating = false),
 
+    /** The lines of a file as HEAD holds them (the index when there is no commit), null when it is not tracked. */
+    GitHeadLines("git/headLines", mutating = false),
+
     /** Author and date of each line of a file. */
     GitBlame("git/blame", mutating = false),
 

@@ -19,6 +19,7 @@ import org.example.kotlineditor.model.FileChangedException
 import org.example.kotlineditor.model.FileContent
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.FileVersion
+import org.example.kotlineditor.model.GitLineChange
 import org.example.kotlineditor.model.OutcomeUnknownException
 import org.example.kotlineditor.model.ProjectFileSystem
 import org.example.kotlineditor.syntax.Language
@@ -37,6 +38,7 @@ import java.util.WeakHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
 private const val RECOMPUTE_DELAY_MS = 150L
+private const val CHANGES_DELAY_MS = 150L
 private const val MEGABYTE = 1024 * 1024
 
 /** A file whose edits could not be saved, and why (shown to the user, who may try again). */
@@ -58,6 +60,7 @@ internal class TabFiles(
     private val scope: CoroutineScope,
     private val onSaved: (FileEntry) -> Unit,
     private val diffs: suspend (FileEntry) -> List<DiffLine>,
+    private val headLines: suspend (FileEntry) -> List<String>?,
     private val blames: suspend (FileEntry) -> List<BlameLine>,
     private val commitDiffs: suspend (FileEntry, CommitDiffTarget) -> List<DiffLine>,
     private val grammars: GrammarStore?,
@@ -96,7 +99,11 @@ internal class TabFiles(
             }
     }
 
-    /** Recomputes the gutter marks of a text tab (after its content changed or HEAD moved). */
+    /**
+     * Recomputes the gutter marks of a text tab (after its content changed or HEAD moved). A tracked file is compared
+     * with its lines in HEAD, which the tab keeps to follow the edits (see [followChanges]); the others take the
+     * differences the server computes on the disk.
+     */
     fun loadChanges(tab: EditorTab) {
         if (tab.isDiff) return
         tab.changesJob?.cancel()
@@ -104,11 +111,41 @@ internal class TabFiles(
             scope.launch {
                 tab.lineChanges =
                     try {
-                        lineChangesOf(diffs(tab.entry))
+                        val head = headLines(tab.entry)
+                        tab.headLines = head
+                        val document = tab.document
+                        if (head != null && document != null) {
+                            changesAgainst(document, head) ?: tab.lineChanges
+                        } else {
+                            lineChangesOf(diffs(tab.entry))
+                        }
                     } catch (_: IOException) {
                         emptyList()
                     }
             }
+    }
+
+    // The marks of [document] as it is now against [head], null when it was edited while they were computed (the
+    // next computation follows that edit).
+    private suspend fun changesAgainst(document: Document, head: List<String>): List<GitLineChange>? {
+        val version = document.version
+        val snapshot = document.lines.toList()
+        val changes =
+            withContext(Dispatchers.Default) {
+                val lines = if (snapshot.lastOrNull() == "") snapshot.dropLast(1) else snapshot
+                lineChangesOf(CompareLines.diff(head, lines))
+            }
+        return changes.takeIf { document.version == version }
+    }
+
+    // The gutter marks follow what is typed, not only what is saved: they are computed again once typing pauses.
+    @OptIn(FlowPreview::class)
+    private suspend fun followChanges(tab: EditorTab, document: Document) {
+        snapshotFlow { document.version }.debounce(CHANGES_DELAY_MS).collect {
+            val head = tab.headLines
+            val changes = head?.let { changesAgainst(document, it) }
+            if (changes != null) tab.lineChanges = changes
+        }
     }
 
     /** Loads the blame annotations of a text tab; they are shown when the tab's gutter is annotated. */
@@ -347,6 +384,7 @@ internal class TabFiles(
                 }
             }
         if (language.slashComments) launch { recomputeOnEdit(document, language) }
+        launch { followChanges(tab, document) }
         val spec = GrammarSpec.forFileName(tab.entry.name)
         if (grammars != null && spec != null) {
             val session = SyntaxSession(spec)

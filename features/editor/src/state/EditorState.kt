@@ -28,11 +28,12 @@ class EditorState(
     private val relativePath: (FileEntry) -> String = { it.name },
     onSaved: (FileEntry) -> Unit = {},
     diffs: suspend (FileEntry) -> List<DiffLine> = { emptyList() },
+    headLines: suspend (FileEntry) -> List<String>? = { null },
     blames: suspend (FileEntry) -> List<BlameLine> = { emptyList() },
     commitDiffs: suspend (FileEntry, CommitDiffTarget) -> List<DiffLine> = { _, _ -> emptyList() },
     grammars: GrammarStore? = null,
 ) {
-    private val files = TabFiles(fileSystem, scope, onSaved, diffs, blames, commitDiffs, grammars)
+    private val files = TabFiles(fileSystem, scope, onSaved, diffs, headLines, blames, commitDiffs, grammars)
 
     val panes = mutableStateListOf(EditorPane())
 

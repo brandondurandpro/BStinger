@@ -286,6 +286,11 @@ class RemoteGit(private val client: RpcClient) :
         return output.string()
     }
 
+    override suspend fun headLines(root: String, path: String): List<String>? {
+        val answer = client.call(Method.GitHeadLines) { file(root, path) }
+        return if (answer is JsonNull) null else answer.strings()
+    }
+
     override suspend fun blame(root: String, path: String): List<BlameLine> =
         client.call(Method.GitBlame) { file(root, path) }.blameLines()
 

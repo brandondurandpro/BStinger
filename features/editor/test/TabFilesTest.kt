@@ -101,7 +101,7 @@ class TabFilesTest {
     private val fs = GatedFileSystem()
 
     private fun CoroutineScope.files() =
-        TabFiles(fs, this, {}, { emptyList() }, { emptyList() }, { _, _ -> emptyList() }, null)
+        TabFiles(fs, this, {}, { emptyList() }, { null }, { emptyList() }, { _, _ -> emptyList() }, null)
 
     // A tab showing [name] with [text], typed but not saved.
     private fun modifiedTab(name: String, text: String = "first"): EditorTab {
