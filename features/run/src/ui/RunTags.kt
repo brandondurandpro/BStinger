@@ -1,0 +1,45 @@
+package org.example.kotlineditor.ui
+
+/** Semantics test tags of the Run tool window, shared with the end-to-end tests. */
+object RunTags {
+    const val RUN = "run"
+    const val SELECTOR = "run.selector"
+    const val SELECTOR_MENU = "run.selector.menu"
+    const val START = "run.start"
+    const val STOP = "run.stop"
+    const val HIDE = "run.hide"
+    const val STATUS = "run.status"
+    const val NEW = "run.new"
+    const val EDIT = "run.edit"
+    const val EMPTY = "run.empty"
+    const val TAB_OUTPUT = "run.tab.output"
+    const val TAB_TESTS = "run.tab.tests"
+    const val OUTPUT = "run.output"
+    const val DROPPED = "run.output.dropped"
+    const val TESTS = "run.tests"
+    const val SUMMARY = "run.tests.summary"
+    const val ONLY_FAILED = "run.tests.onlyFailed"
+    const val NO_TESTS = "run.tests.none"
+    const val DETAILS = "run.tests.details"
+    const val EDITOR = "run.editor"
+    const val EDITOR_NAME = "run.editor.name"
+    const val EDITOR_COMMAND = "run.editor.command"
+    const val EDITOR_DIRECTORY = "run.editor.directory"
+    const val EDITOR_KIND_RUN = "run.editor.kind.run"
+    const val EDITOR_KIND_TESTS = "run.editor.kind.tests"
+    const val EDITOR_SAVE = "run.editor.save"
+    const val EDITOR_DELETE = "run.editor.delete"
+    const val EDITOR_CANCEL = "run.editor.cancel"
+
+    fun configuration(id: String) = "run.configuration:$id"
+
+    fun line(index: Int) = "run.line:$index"
+
+    fun link(line: Int, number: Int) = "run.link:$line:$number"
+
+    fun suite(name: String) = "run.suite:$name"
+
+    fun test(suite: String, name: String) = "run.test:$suite:$name"
+
+    fun detailLine(index: Int) = "run.detail:$index"
+}

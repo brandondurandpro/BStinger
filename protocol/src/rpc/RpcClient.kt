@@ -21,6 +21,7 @@ import org.example.kotlineditor.model.ConnectionStatus
 import org.example.kotlineditor.model.NetworkInspector
 import org.example.kotlineditor.model.OutcomeUnknownException
 import org.example.kotlineditor.model.SearchBatch
+import org.example.kotlineditor.model.RunChunk
 import org.example.kotlineditor.model.TerminalSnapshot
 import org.example.kotlineditor.telemetry.Attribute
 import org.example.kotlineditor.telemetry.Attributes
@@ -105,15 +106,26 @@ class RpcClient(
         ) { toResume ->
             scope.launch {
                 runCatching {
-                    if (toResume.search) {
-                        call(Method.FindInFilesResume) {
-                            put("stream", toResume.id)
-                            put("lastSeq", toResume.lastSeq)
+                    when (toResume.kind) {
+                        StreamRegistry.Kind.Search -> {
+                            call(Method.FindInFilesResume) {
+                                put("stream", toResume.id)
+                                put("lastSeq", toResume.lastSeq)
+                            }
                         }
-                    } else {
-                        call(Method.TerminalResume) {
-                            put("terminal", toResume.id)
-                            put("lastSeq", toResume.lastSeq)
+
+                        StreamRegistry.Kind.Run -> {
+                            call(Method.RunResume) {
+                                put("stream", toResume.id)
+                                put("lastSeq", toResume.lastSeq)
+                            }
+                        }
+
+                        StreamRegistry.Kind.Terminal -> {
+                            call(Method.TerminalResume) {
+                                put("terminal", toResume.id)
+                                put("lastSeq", toResume.lastSeq)
+                            }
                         }
                     }
                 }
@@ -182,6 +194,9 @@ class RpcClient(
 
     /** Registers the stream of Find in Files batches of [id], like [openStream]. */
     fun openSearchStream(id: Long): Channel<SearchBatch> = streams.openSearch(id)
+
+    /** Registers the stream of run chunks of [id], like [openStream]. */
+    fun openRunStream(id: Long): Channel<RunChunk> = streams.openRun(id)
 
     /** Stops listening to the stream [id]. */
     fun closeStream(id: Long) = streams.close(id)

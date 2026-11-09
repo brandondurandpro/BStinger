@@ -47,6 +47,7 @@ internal fun requestHandlers(services: LocalServices): Map<Method, Handler> =
         searchHandlers(services) +
         gitHandlers(services.git) +
         terminalHandlers() +
+        runHandlers() +
         languageServerHandlers(services) +
         agentHandlers(services)
 
@@ -202,6 +203,17 @@ private fun terminalHandlers(): Map<Method, Handler> =
         Method.TerminalClear to { nothing { terminalOrFail().clear() } },
         Method.TerminalResume to { nothing { terminals[params.long(TERMINAL)]?.resume(params.long("lastSeq")) } },
         Method.TerminalDestroy to { nothing { terminals.stop(params.long(TERMINAL)) } },
+    )
+
+private fun runHandlers(): Map<Method, Handler> =
+    mapOf(
+        Method.RunStart to {
+            val directory = params.string(DIRECTORY)
+            val command = params.read("command") { it.strings() }
+            nothing { runs.start(id, directory, command) }
+        },
+        Method.RunStop to { nothing { runs.stop(params.long(STREAM)) } },
+        Method.RunResume to { nothing { runs.resume(params.long(STREAM), params.long("lastSeq")) } },
     )
 
 // A method that returns nothing answers with a null result.

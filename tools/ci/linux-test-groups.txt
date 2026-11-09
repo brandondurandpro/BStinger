@@ -7,4 +7,4 @@
 # non-ui 1.2, language-servers 0.9, tree 0.7, terminal 0.4; plus about 2.5 min of setup and build in each job.
 shared,terminal
 editor,git
-non-ui,agent,remote,language-servers,tree
+non-ui,agent,remote,language-servers,tree,run

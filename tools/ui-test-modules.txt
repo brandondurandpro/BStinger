@@ -5,6 +5,7 @@ editor
 git
 language-servers
 remote
+run
 terminal
 tree
 shared

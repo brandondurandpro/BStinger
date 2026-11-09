@@ -10,6 +10,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.model.AppServices
@@ -20,6 +21,7 @@ import org.example.kotlineditor.model.GitCommit
 import org.example.kotlineditor.model.GitCommitDetails
 import org.example.kotlineditor.model.GitCommitFile
 import org.example.kotlineditor.model.GitFileStatus
+import org.example.kotlineditor.model.slashed
 import org.example.kotlineditor.syntax.treesitter.GrammarStore
 
 private val INDEXED_POPUPS = setOf(PopupKind.GotoFile, PopupKind.FindInFiles, PopupKind.GotoSymbol)
@@ -99,6 +101,18 @@ class ProjectState(
     val insight = CodeInsightState(scope, { insightBackend() }, ProjectInsightHost { this })
     val terminal = TerminalState(root.path, services.terminal, scope)
 
+    /** Run configurations, the output of their commands and the tree of test results. */
+    val run =
+        RunState(
+            root.path,
+            services.runner,
+            scope,
+            preferences,
+            suggest = ::suggestedRunConfigurations,
+            locate = ::locateOutputFile,
+            openAt = ::openOutputFile,
+        )
+
     /** Git: branch, status, commit, branches of the toolbar, and the Branches tool window's history. */
     override val git =
         GitState(
@@ -162,10 +176,36 @@ class ProjectState(
     /** What to save of agent mode; nothing while it was never used in this project (the saved values stay). */
     fun agentPreferences(): Map<String, String> = if (agentState.isInitialized()) agent.toPreferences() else emptyMap()
 
+    // The configurations a project suggests the first time the Run window opens, from the files at its root.
+    private suspend fun suggestedRunConfigurations(): List<RunConfiguration> {
+        val entries = runCatching { services.fileSystem.list(root) }.getOrDefault(emptyList())
+        val windows = !root.path.startsWith("/")
+        return suggestedConfigurations(entries.map { it.name }.toSet(), windows)
+    }
+
+    // The file a path of some output names: an absolute path, a path from the project, or only a file name.
+    private suspend fun locateOutputFile(path: String): FileEntry? {
+        val direct = runCatching { services.fileSystem.fileAt(path) }.getOrNull()
+        if (direct != null) return direct
+        val fromRoot = root.path.trimEnd('/', '\\') + "/" + path.removePrefix("./")
+        val inProject = runCatching { services.fileSystem.fileAt(fromRoot) }.getOrNull()
+        if (inProject != null) return inProject
+        fileIndex.ensureLoaded()
+        val files = snapshotFlow { fileIndex.files }.filterNotNull().first()
+        val wanted = slashed(path).trimStart('/')
+        return files.firstOrNull { slashed(it.path, root.path).endsWith("/$wanted") }
+    }
+
+    // Output counts lines and columns from 1; the editor from 0.
+    private fun openOutputFile(entry: FileEntry, line: Int, column: Int) {
+        navigate(entry, TextPos(maxOf(line - 1, 0), maxOf(column - 1, 0)), TextPos(maxOf(line - 1, 0), maxOf(column - 1, 0)))
+    }
+
     /** Shows or hides a tool window (Alt+1, Alt+9, Alt+F12, Ctrl+Alt+Shift+D or its button in the left strip). */
     fun toggleToolWindow(window: ToolWindow) {
         toolWindows.toggle(window)
         if (window == ToolWindow.Terminal && toolWindows.isVisible(window)) terminal.ensureStarted()
+        if (window == ToolWindow.Run && toolWindows.isVisible(window)) run.ensureLoaded()
         if (window == ToolWindow.Git && toolWindows.isVisible(window)) git.refreshStatus()
         if (window == ToolWindow.Branches && toolWindows.isVisible(window)) openHistory()
     }
@@ -279,6 +319,7 @@ class ProjectState(
     override fun dispose() {
         if (agentState.isInitialized()) agent.dispose()
         terminal.stop()
+        run.dispose()
         scope.cancel()
     }
 }
