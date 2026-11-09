@@ -325,7 +325,7 @@ private class Describer(
                     .awaitAll()
                     .forEach { (index, markdown) ->
                         markdown?.let { shown.resolved.putIfAbsent(index, it) }
-                        signatureOf(markdown)?.let { shown.details[index] = it }
+                        signatureOf(markdown)?.let { shown.details[index] = finalTypeOf(it) }
                     }
             }
     }
@@ -370,4 +370,23 @@ internal fun signatureOf(markdown: String?): String? {
     val end = body?.indexOf("\n$fence") ?: -1
     val signature = if (end < 0) null else body?.substring(0, end)
     return signature?.lineSequence()?.joinToString(" ") { it.trim() }?.takeIf { it.isNotBlank() }
+}
+
+/**
+ * What a row shows of a signature such as `(method) Date.getDate(): number`: its final type, `number`. It is what
+ * follows the last `: ` outside parentheses, brackets and angle brackets; a signature without one (`class Date`) is
+ * left as it is.
+ */
+internal fun finalTypeOf(signature: String): String {
+    var depth = 0
+    var colon = -1
+    signature.forEachIndexed { index, c ->
+        when {
+            c in "(<[{" -> depth++
+            c in ")>]}" && !(c == '>' && signature.getOrNull(index - 1) == '=') -> depth--
+            c == ':' && depth == 0 && signature.getOrNull(index + 1) == ' ' -> colon = index
+        }
+    }
+    val type = if (colon < 0) "" else signature.substring(colon + 2).trim()
+    return type.ifEmpty { signature }
 }
