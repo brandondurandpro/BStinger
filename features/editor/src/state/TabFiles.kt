@@ -117,12 +117,20 @@ internal class TabFiles(
                         if (head != null && document != null) {
                             changesAgainst(document, head) ?: tab.lineChanges
                         } else {
-                            lineChangesOf(diffs(tab.entry))
+                            changesOfUntracked(tab)
                         }
                     } catch (_: IOException) {
                         emptyList()
                     }
             }
+    }
+
+    // The marks of a file that has no lines in HEAD: the server's differences. When it reports some, the file is new
+    // to Git (untracked): it is followed against an empty HEAD, so every line is added, and the marks follow the typing.
+    private suspend fun changesOfUntracked(tab: EditorTab): List<GitLineChange> {
+        val changes = lineChangesOf(diffs(tab.entry))
+        if (changes.isNotEmpty()) tab.headLines = emptyList()
+        return changes
     }
 
     // The marks of [document] as it is now against [head], null when it was edited while they were computed (the

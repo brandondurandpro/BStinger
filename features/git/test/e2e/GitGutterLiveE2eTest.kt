@@ -48,6 +48,22 @@ class GitGutterLiveE2eTest {
         }
 
     @Test
+    fun `a line typed in an untracked file is marked as added before any save`() =
+        runComposeUiTest {
+            project.commitAll()
+            project.file("fresh.txt", NOTES)
+            val app = launchWithProject(project)
+            openFromTree("fresh.txt")
+            onNodeWithTag(EditorTags.EDITOR).performClick()
+            awaitTag(EditorTags.changeMarker(2, "Added"), unmerged = true)
+            awaitCondition { app.tab()?.followsHead == true }
+            awaitNoTag(EditorTags.changeMarker(3, "Added"), unmerged = true)
+            caretToEnd()
+            typeCode("four")
+            awaitTag(EditorTags.changeMarker(3, "Added"), unmerged = true)
+        }
+
+    @Test
     fun `a line edited in a tracked file is marked as modified, and the mark goes when the edit is undone`() =
         runComposeUiTest {
             openNotes()
