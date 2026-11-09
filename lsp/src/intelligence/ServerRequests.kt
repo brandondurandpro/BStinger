@@ -37,6 +37,7 @@ internal class ServerRequests(
         unsupported: T,
         refused: (LspResponseException) -> T = { notReady },
         needsIndex: Boolean = false,
+        timeoutMs: Long = settings.timeoutMs,
         block: suspend (MirroredDocument, suspend (String, JsonObject) -> JsonElement?) -> T,
     ): T {
         val document = awaitDocument(session, path, version)
@@ -46,7 +47,7 @@ internal class ServerRequests(
             document == null || readyServers.isEmpty() -> notReady
             server == null -> unsupported
             needsIndex && !server.awaitIndexed(settings.indexingWaitMs) -> notReady
-            else -> answered(server, document, notReady, refused, block)
+            else -> answered(server, document, notReady, refused, timeoutMs, block)
         }
     }
 
@@ -79,14 +80,16 @@ internal class ServerRequests(
         document: MirroredDocument,
         notReady: T,
         refused: (LspResponseException) -> T,
+        timeoutMs: Long = settings.timeoutMs,
         block: suspend (MirroredDocument, suspend (String, JsonObject) -> JsonElement?) -> T,
-    ): T = answeredBy(server, notReady, refused) { request -> block(document, request) }
+    ): T = answeredBy(server, notReady, refused, timeoutMs) { request -> block(document, request) }
 
     // What [block] finds asking [server]; [notReady] when it cannot answer in time, [refused] when it refuses.
     suspend fun <T> answeredBy(
         server: ManagedServer,
         notReady: T,
         refused: (LspResponseException) -> T = { notReady },
+        timeoutMs: Long = settings.timeoutMs,
         block: suspend (suspend (String, JsonObject) -> JsonElement?) -> T,
     ): T {
         val request: suspend (String, JsonObject) -> JsonElement? = { method, params ->
@@ -94,7 +97,7 @@ internal class ServerRequests(
             answer.takeIf { it != JsonNull }
         }
         return try {
-            withTimeoutOrNull(settings.timeoutMs) { block(request) } ?: notReady
+            withTimeoutOrNull(timeoutMs) { block(request) } ?: notReady
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: NotReadyException) {

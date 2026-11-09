@@ -50,7 +50,7 @@ import kotlin.system.exitProcess
  *   after `initialized`), `--indexing-starts-after <ms>` (that moment, 200 ms by default: later than the IDE waits
  *   for an indexing to begin, it counts usages before, like a server slowed down by a loaded machine);
  * - completion: `--only-items a,b` (proposes only these, like a server that knows one thing), `--completion-items <n>` (n more functions, `generated_00001`...), `--full-sync` (asks for the whole
- *   text at each change), `--no-completion` (answers completion with an error), `--hang-completion` (never answers it), `--no-detail` (items without `detail`, which resolving adds, as
+ *   text at each change), `--no-completion` (answers completion with an error), `--hang-completion` (never answers it), `--references-budget <n>` (answers that many references requests, then none), `--no-detail` (items without `detail`, which resolving adds, as
  *   typescript-language-server does).
  * A crash writes `Fatal error: fake crash` on stderr first, like a real server would.
  * Memory is allocated as direct buffers with one byte written per page, so that it becomes resident.
@@ -136,6 +136,7 @@ object FakeLanguageServer {
         val noCompletion: Boolean = false,
         val hangCompletion: Boolean = false,
         val noDetail: Boolean = false,
+        val referencesBudget: Int? = null,
         val without: Set<String> = emptySet(),
         val noDiagnostics: Boolean = false,
         // Gives the diagnostics when asked (textDocument/diagnostic) instead of publishing them.
@@ -187,6 +188,7 @@ object FakeLanguageServer {
                     noCompletion = "no-completion" in values,
                     hangCompletion = "hang-completion" in values,
                     noDetail = "no-detail" in values,
+                    referencesBudget = int("references-budget"),
                     without = values["without"]?.split(',')?.toSet().orEmpty(),
                     noDiagnostics = "no-diagnostics" in values,
                     pullDiagnostics = "pull-diagnostics" in values,
@@ -211,6 +213,7 @@ object FakeLanguageServer {
                     "progress",
                     "completion-items",
                     "only-items",
+                    "references-budget",
                     "without",
                     "indexing-starts-after",
                     "stop-reading-on-change",
@@ -355,7 +358,13 @@ object FakeLanguageServer {
                 "workspace/willCreateFiles", "workspace/willDeleteFiles" -> reply(id, JsonNull)
                 "workspace/didCreateFiles", "workspace/didRenameFiles", "workspace/didDeleteFiles" ->
                     log.println("${method.removePrefix("workspace/")} ${message["params"]}").also { log.flush() }
-                "textDocument/definition", "textDocument/references" -> if (!sees) reply(id, JsonArray(emptyList())) else answerNavigation(id, method, message["params"])
+                "textDocument/definition", "textDocument/references" ->
+                    when {
+                        // Past its budget it never answers: a usage must come from what was counted.
+                        method == "textDocument/references" && pastReferencesBudget() -> Unit
+                        !sees -> reply(id, JsonArray(emptyList()))
+                        else -> answerNavigation(id, method, message["params"])
+                    }
                 "textDocument/declaration" -> reply(id, intelligence().definition(message["params"]))
                 "textDocument/typeDefinition" -> reply(id, intelligence().typeDefinition(message["params"]))
                 "textDocument/implementation" -> reply(id, intelligence().implementation(message["params"]))
@@ -397,6 +406,11 @@ object FakeLanguageServer {
                 else -> if (id != null) error(id, METHOD_NOT_FOUND, "Unknown method $method")
             }
         }
+
+        private val referencesAsked = java.util.concurrent.atomic.AtomicInteger()
+
+        private fun pastReferencesBudget(): Boolean =
+            referencesAsked.incrementAndGet() > (options.referencesBudget ?: Int.MAX_VALUE)
 
         // Alive, but reads nothing more: what the IDE writes fills the pipe, then its writes block.
         private fun stopReading(): Nothing {
