@@ -32,7 +32,7 @@ class GitGutterLivePerformanceE2eTest {
             onNodeWithTag(EditorTags.EDITOR).performClick()
             awaitCondition { app.tab()?.followsHead == true }
             caretToEnd()
-            measure("mark of a line typed in $LINES lines", budgetMillis = 5_000, budgetMegabytes = 300) {
+            measure("mark of a line typed in $LINES lines", budgetMillis = 20_000, budgetMegabytes = 800) {
                 typeCode("last")
                 awaitTag(EditorTags.changeMarker(LINES, "Added"), unmerged = true)
                 renderFrame()

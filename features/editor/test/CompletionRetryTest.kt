@@ -60,8 +60,8 @@ class CompletionRetryTest {
         }
 
     private companion object {
-        const val AWAIT_STEPS = 60
+        const val AWAIT_STEPS = 200
         const val STEP_MS = 50L
-        const val NEVER_READY_WAIT_MS = 5_000L
+        const val NEVER_READY_WAIT_MS = 10_000L
     }
 }

@@ -50,6 +50,21 @@ class DocumentTagsTest {
     }
 
     @Test
+    fun `a comparison inside an attribute does not end the tag early or hide it`() {
+        val inQuotes = """<div v-if="a > b" class="x""""
+        assertEquals("$inQuotes></div>", typeEnd(inQuotes).text())
+        val afterGreater = """<div v-if="a > b" """
+        assertEquals("$afterGreater></div>", typeEnd(afterGreater).text())
+    }
+
+    @Test
+    fun `a TypeScript generic is not a tag`() {
+        assertEquals("const x = useRef<T>", typeEnd("const x = useRef<T").text())
+        assertEquals("function f<T extends Base>", typeEnd("function f<T extends Base").text())
+        assertEquals("Array<string>", typeEnd("Array<string").text())
+    }
+
+    @Test
     fun `attributes, bindings and events do not prevent it`() {
         val document = typeEnd("""<div class="a b" :id="x > 1" @click="go()" v-if="ok" data-x""")
         assertTrue(document.text().endsWith("></div>"), document.text())

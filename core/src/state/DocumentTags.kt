@@ -33,9 +33,16 @@ fun Document.closingTagForTypedEnd(): String? {
     val void = name != null && name.lowercase() in VOID_ELEMENTS
     val alreadyClosed = closing != null && after.startsWith(closing)
     val inRawText = tag != null && isInRawText(positionIn(before, tag.range.first, firstLine))
-    val notOpening = selfClosed || void
+    val generic = tag != null && isAfterIdentifier(before, tag.range.first)
+    val notOpening = selfClosed || void || generic
     val skipped = notOpening || alreadyClosed || inRawText
     return if (closing == null || skipped) null else closing
+}
+
+// `useRef<T`, `Array<string`: a `<` glued to a name opens type arguments, not a tag.
+private fun isAfterIdentifier(text: String, offset: Int): Boolean {
+    val previous = text.getOrNull(offset - 1) ?: return false
+    return previous.isLetterOrDigit() || previous == '_' || previous == '$'
 }
 
 // The position of [offset] in [text], which starts at the line [firstLine].
