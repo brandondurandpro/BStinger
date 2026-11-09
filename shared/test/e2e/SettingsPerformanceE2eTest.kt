@@ -13,6 +13,10 @@ import androidx.compose.ui.test.withKeyDown
 import org.example.kotlineditor.state.Setting
 import org.example.kotlineditor.state.SettingsCategory
 import org.example.kotlineditor.ui.AppTags
+import org.example.kotlineditor.ui.DarkPalette
+import org.example.kotlineditor.ui.IdeColors
+import org.example.kotlineditor.ui.LightPalette
+import org.example.kotlineditor.ui.ThemeChoice
 import kotlin.test.AfterTest
 import kotlin.test.Test
 
@@ -25,6 +29,7 @@ private const val ROUNDS = 10
 private const val OPEN_BUDGET_MS = 3_000L
 private const val CATEGORIES_BUDGET_MS = 5_000L
 private const val SEARCH_BUDGET_MS = 3_000L
+private const val THEME_BUDGET_MS = 6_000L
 private const val BUDGET_MB = 400L
 
 /**
@@ -85,6 +90,24 @@ class SettingsPerformanceE2eTest {
                     }
                     onNodeWithTag(AppTags.setting(Setting.InlayHints.name)).assertExists()
                     onNodeWithTag(AppTags.setting(Setting.FontSize.name)).assertDoesNotExist()
+                }
+            }
+        }
+
+    @Test
+    fun `the theme switches fast with a large file open`() =
+        runComposeUiTest {
+            val app = launchWithProject(project)
+            openFromTree("Large.kt")
+            awaitEditorReady()
+            measure("Theme switched light and dark x$ROUNDS", THEME_BUDGET_MS, BUDGET_MB) {
+                repeat(ROUNDS) {
+                    runOnUiThread { app.state.settings.theme = ThemeChoice.Light }
+                    awaitCondition { IdeColors.palette === LightPalette }
+                    renderFrame()
+                    runOnUiThread { app.state.settings.theme = ThemeChoice.Dark }
+                    awaitCondition { IdeColors.palette === DarkPalette }
+                    renderFrame()
                 }
             }
         }

@@ -18,7 +18,7 @@ private val TABLE_ROW = Regex("""^\s*\|.*\|\s*$""")
 
 /** The language of the code block of a table, shown as it is written, in a fixed-width font. */
 internal const val TABLE = "markdown-table"
-private val LINK_STYLE = SpanStyle(color = IdeColors.Link, textDecoration = TextDecoration.Underline)
+private val LINK_STYLE get() = SpanStyle(color = IdeColors.Link, textDecoration = TextDecoration.Underline)
 
 /** One block of a Markdown document. */
 @Immutable

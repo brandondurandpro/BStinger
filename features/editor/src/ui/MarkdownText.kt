@@ -35,7 +35,7 @@ private val TEXT_SIZE = 13.sp
  */
 @Composable
 fun MarkdownText(markdown: String, modifier: Modifier = Modifier) {
-    val blocks = remember(markdown) { parseMarkdown(markdown) }
+    val blocks = remember(markdown, IdeColors.palette) { parseMarkdown(markdown) }
     val codeStyle = LocalCodeStyle.current
     val text = TextStyle(color = IdeColors.Text, fontSize = TEXT_SIZE, lineHeight = 19.sp)
     val inlineCode = SpanStyle(fontFamily = codeStyle.fontFamily, background = IdeColors.DocumentationCode)

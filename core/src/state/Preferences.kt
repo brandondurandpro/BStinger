@@ -24,6 +24,9 @@ class InMemoryPreferenceStore(initial: Map<String, String> = emptyMap()) : Prefe
 /** Keys of the persisted preferences. The tool window layout adds its own keys, prefixed by [LAYOUT_PREFIX]. */
 object PreferenceKeys {
     const val EDITOR_FONT_SIZE = "editor.fontSize"
+
+    /** The theme of the IDE: `System`, `Dark` or `Light`; absent means dark. */
+    const val THEME = "appearance.theme"
     const val AUTO_SELECT_OPENED_FILE = "project.autoSelectOpenedFile"
     const val AGENT_MODE = "experimental.agentMode"
     const val AGENT_MODE_BY_DEFAULT = "experimental.agentModeByDefault"

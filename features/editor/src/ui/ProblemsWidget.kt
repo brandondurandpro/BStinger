@@ -21,7 +21,7 @@ import org.example.kotlineditor.model.DiagnosticSeverity
 import org.example.kotlineditor.state.DocumentInsight
 
 private val WIDGET_SHAPE = RoundedCornerShape(4.dp)
-private val COUNT_STYLE = TextStyle(color = IdeColors.Text, fontSize = 12.sp)
+private val COUNT_STYLE get() = TextStyle(color = IdeColors.Text, fontSize = 12.sp)
 private const val WIDGET_ALPHA = 0.85f
 
 /** The problems of the document at the top right, like IntelliJ's: a click lists them (F2 goes to the next one). */

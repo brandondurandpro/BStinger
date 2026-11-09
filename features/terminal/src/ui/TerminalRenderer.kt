@@ -19,10 +19,10 @@ import org.example.kotlineditor.model.TerminalCell
 import org.example.kotlineditor.model.TerminalSnapshot
 import org.example.kotlineditor.model.line
 
-val TerminalBackground = Color(0xFF1E1F22)
-private val DefaultForeground = Color(0xFFBCBEC4)
-private val SelectionColor = IdeColors.Selection.copy(alpha = 0.55f)
-private val CursorColor = IdeColors.Accent.copy(alpha = 0.55f)
+val TerminalBackground get() = IdeColors.Editor
+private val DefaultForeground get() = IdeColors.Code
+private val SelectionColor get() = IdeColors.Selection.copy(alpha = 0.55f)
+private val CursorColor get() = IdeColors.Accent.copy(alpha = 0.55f)
 private val ScrollbarColor = Color(0x59A6A6A6)
 
 /**

@@ -60,11 +60,11 @@ import org.example.kotlineditor.state.LanguageServersState
 import org.example.kotlineditor.state.recommendedOf
 
 // IntelliJ New UI Dark: editor notification banner, and the colors of its inspection results.
-private val BannerBackground = Color(0xFF25324D)
-private val BannerBorder = Color(0xFF35538F)
-private val InfoBlue = Color(0xFF548AF7)
-private val Success = Color(0xFF5FAD65)
-private val Caution = Color(0xFFE0A458)
+private val BannerBackground get() = IdeColors.BannerBackground
+private val BannerBorder get() = IdeColors.BannerBorder
+private val InfoBlue get() = IdeColors.Link
+private val Success get() = IdeColors.GitAdded
+private val Caution get() = IdeColors.GitBehind
 private val Backdrop = Color(0x66000000)
 
 /**

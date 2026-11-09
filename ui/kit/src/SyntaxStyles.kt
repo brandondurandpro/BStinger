@@ -5,31 +5,44 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextDecoration
 import org.example.kotlineditor.syntax.SyntaxColor
 
-private val syntaxStyles: List<SpanStyle> =
+@Suppress("CyclomaticComplexMethod")
+private fun stylesOf(palette: IdePalette): List<SpanStyle> =
     SyntaxColor.entries.map { color ->
         when (color) {
-            SyntaxColor.Comment -> SpanStyle(color = IdeColors.Comment, fontStyle = FontStyle.Italic)
-            SyntaxColor.Keyword -> SpanStyle(color = IdeColors.Keyword)
-            SyntaxColor.StringLiteral -> SpanStyle(color = IdeColors.StringLiteral)
-            SyntaxColor.StringEscape -> SpanStyle(color = IdeColors.StringEscape)
-            SyntaxColor.Number -> SpanStyle(color = IdeColors.Number)
-            SyntaxColor.Annotation -> SpanStyle(color = IdeColors.Annotation)
-            SyntaxColor.Declaration -> SpanStyle(color = IdeColors.FunctionDeclaration)
-            SyntaxColor.Property -> SpanStyle(color = IdeColors.Property)
-            SyntaxColor.Constant -> SpanStyle(color = IdeColors.Property, fontStyle = FontStyle.Italic)
-            SyntaxColor.TypeParameter -> SpanStyle(color = IdeColors.TypeParameter)
-            SyntaxColor.Label -> SpanStyle(color = IdeColors.Label)
-            SyntaxColor.MarkupTag -> SpanStyle(color = IdeColors.MarkupTag)
-            SyntaxColor.MarkupAttribute -> SpanStyle(color = IdeColors.MarkupAttribute)
-            SyntaxColor.Link -> SpanStyle(color = IdeColors.Link, textDecoration = TextDecoration.Underline)
+            SyntaxColor.Comment -> SpanStyle(color = palette.comment, fontStyle = FontStyle.Italic)
+            SyntaxColor.Keyword -> SpanStyle(color = palette.keyword)
+            SyntaxColor.StringLiteral -> SpanStyle(color = palette.stringLiteral)
+            SyntaxColor.StringEscape -> SpanStyle(color = palette.stringEscape)
+            SyntaxColor.Number -> SpanStyle(color = palette.number)
+            SyntaxColor.Annotation -> SpanStyle(color = palette.annotation)
+            SyntaxColor.Declaration -> SpanStyle(color = palette.functionDeclaration)
+            SyntaxColor.Property -> SpanStyle(color = palette.property)
+            SyntaxColor.Constant -> SpanStyle(color = palette.property, fontStyle = FontStyle.Italic)
+            SyntaxColor.TypeParameter -> SpanStyle(color = palette.typeParameter)
+            SyntaxColor.Label -> SpanStyle(color = palette.label)
+            SyntaxColor.MarkupTag -> SpanStyle(color = palette.markupTag)
+            SyntaxColor.MarkupAttribute -> SpanStyle(color = palette.markupAttribute)
+            SyntaxColor.Link -> SpanStyle(color = palette.link, textDecoration = TextDecoration.Underline)
             SyntaxColor.Emphasis -> SpanStyle(fontStyle = FontStyle.Italic)
-            SyntaxColor.DiffAdded -> SpanStyle(color = IdeColors.GitAdded)
-            SyntaxColor.DiffDeleted -> SpanStyle(color = IdeColors.GitDeleted)
+            SyntaxColor.DiffAdded -> SpanStyle(color = palette.gitAdded)
+            SyntaxColor.DiffDeleted -> SpanStyle(color = palette.gitDeleted)
         }
     }
 
-/** The text style of a syntax color, by its ordinal (as `LineSpans.styles` stores it). */
-fun syntaxStyle(ordinal: Int): SpanStyle = syntaxStyles[ordinal]
+// The styles of the palette last used: a theme change builds them again, and the lookup stays a read and a compare.
+private var cached: Pair<IdePalette, List<SpanStyle>>? = null
 
-/** The text style of [color]. */
-fun syntaxStyle(color: SyntaxColor): SpanStyle = syntaxStyles[color.ordinal]
+private fun currentStyles(): List<SpanStyle> {
+    val palette = IdeColors.palette
+    val known = cached
+    if (known != null && known.first === palette) return known.second
+    val built = stylesOf(palette)
+    cached = palette to built
+    return built
+}
+
+/** The text style of a syntax color, by its ordinal (as `LineSpans.styles` stores it), in the theme in use. */
+fun syntaxStyle(ordinal: Int): SpanStyle = currentStyles()[ordinal]
+
+/** The text style of [color], in the theme in use. */
+fun syntaxStyle(color: SyntaxColor): SpanStyle = currentStyles()[color.ordinal]

@@ -174,7 +174,7 @@ private fun thinking(conversation: Conversation): Boolean {
     }
 }
 
-internal val bodyStyle = TextStyle(color = IdeColors.Text, fontSize = 13.sp, lineHeight = 20.sp)
+internal val bodyStyle get() = TextStyle(color = IdeColors.Text, fontSize = 13.sp, lineHeight = 20.sp)
 
 @Composable
 private fun ItemView(agent: AgentState, conversation: Conversation, item: AgentItem) {

@@ -37,7 +37,7 @@ import kotlin.math.roundToInt
 
 private val ChipShape = RoundedCornerShape(4.dp)
 private val CardShape = RoundedCornerShape(6.dp)
-private val Success = Color(0xFF5FAD65)
+private val Success get() = IdeColors.GitAdded
 
 /** The editors' font size: smaller, larger, back to the default. */
 @Composable
@@ -50,6 +50,30 @@ internal fun FontSizeControl(app: AppState) {
         )
         IdeButton("+", { app.settings.zoomEditor(1f) }, Modifier.testTag(AppTags.SETTINGS_FONT_LARGER))
         IdeButton("Reset", { app.settings.resetEditorZoom() }, Modifier.testTag(AppTags.SETTINGS_FONT_RESET))
+    }
+}
+
+/** System, Dark or Light, the one chosen highlighted. */
+@Composable
+internal fun ThemeControl(app: AppState) {
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        for (choice in ThemeChoice.entries) {
+            val chosen = app.settings.theme == choice
+            Label(
+                choice.title,
+                Modifier
+                    .background(if (chosen) IdeColors.Selection else Color.Transparent, ChipShape)
+                    .border(1.dp, IdeColors.Separator, ChipShape)
+                    .clickable(
+                        remember { MutableInteractionSource() },
+                        indication = null,
+                    ) { app.settings.theme = choice }
+                    .pointerHoverIcon(PointerIcon.Hand)
+                    .semantics { selected = chosen }
+                    .testTag(AppTags.settingsTheme(choice.name))
+                    .padding(horizontal = 10.dp, vertical = 3.dp),
+            )
+        }
     }
 }
 

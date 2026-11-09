@@ -8,6 +8,7 @@ import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CoroutineScope
 import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.telemetry.Telemetry
+import org.example.kotlineditor.ui.ThemeChoice
 
 /**
  * The settings of the whole IDE, whatever the server shown: the editor font size, agent mode, the telemetry consent
@@ -50,6 +51,9 @@ class SettingsController(
     /** Editor font size in points, shared by every editor (Alt+Shift+. / Alt+Shift+, / Ctrl+wheel). */
     var editorFontSize by mutableFloatStateOf(savedFontSize())
         private set
+
+    /** The theme of the IDE: dark, light, or the operating system's. */
+    var theme by mutableStateOf(ThemeChoice.fromSaved(preferences[PreferenceKeys.THEME]))
 
     /** The Settings dialog, null while it is closed. */
     var dialog: SettingsState? by mutableStateOf(null)
@@ -117,7 +121,9 @@ class SettingsController(
         val byDefault = PreferenceKeys.AGENT_MODE_BY_DEFAULT to agentModeByDefault.toString()
         val agentCommandLine = PreferenceKeys.AGENT_COMMAND to agentCommand
         val agentOfRegistry = PreferenceKeys.AGENT_REGISTRY to agentRegistry
-        return mapOf(fontSize, agentMode, byDefault, agentCommandLine, agentOfRegistry) + telemetry.toPreferences()
+        val themeName = PreferenceKeys.THEME to theme.name
+        val values = mapOf(fontSize, themeName, agentMode, byDefault, agentCommandLine, agentOfRegistry)
+        return values + telemetry.toPreferences()
     }
 
     private fun savedAgentModeByDefault(): Boolean =

@@ -17,7 +17,7 @@ import org.example.kotlineditor.ui.WelcomeScreen
 
 @Composable
 fun App(state: AppState) {
-    IdeTheme {
+    IdeTheme(state.settings.theme) {
         Box(Modifier.fillMaxSize()) {
             when (val screen = state.session.screen) {
                 Screen.Welcome -> if (!state.launching) WelcomeScreen(state)
