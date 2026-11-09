@@ -54,13 +54,24 @@ internal class OfferedCompletions(private val timeoutMs: Long) {
             } catch (_: LspResponseException) {
                 null
             }
-        val documentation = (answer as? JsonObject)?.get("documentation")
-        return contentsMarkdown(documentation)?.takeIf { it.isNotBlank() }
+        val resolved = answer as? JsonObject
+        val documentation = contentsMarkdown(resolved?.get("documentation"))?.takeIf { it.isNotBlank() }
+        val resolvedDetail = resolved?.let(::detailOf)
+        // Shown above the documentation only when the list did not already show it beside the label.
+        val signature = resolvedDetail.takeIf { detailOf(item) == null }
+        return withSignature(signature, documentation)
     }
 
     /** [session] ended. */
     fun release(session: String) {
         bySession.remove(session)
+    }
+
+    // The type or signature the server gives once the item is resolved, above its documentation.
+    private fun withSignature(signature: String?, documentation: String?): String? {
+        if (signature == null) return documentation
+        val code = "```\n$signature\n```"
+        return if (documentation == null) code else "$code\n\n$documentation"
     }
 
     private fun resolves(server: ManagedServer): Boolean {

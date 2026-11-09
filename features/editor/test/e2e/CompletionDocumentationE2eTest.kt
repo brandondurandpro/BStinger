@@ -134,6 +134,16 @@ class CompletionDocumentationE2eTest {
         }
 
     @Test
+    fun `the type a server gives only once the item is resolved is shown above its documentation`() =
+        runComposeUiTest {
+            openPhp("--no-detail", "--completion-items", "3")
+            typeCode("gener")
+            awaitCompletion("generated_00001")
+            awaitTag(EditorTags.COMPLETION_DOCUMENTATION)
+            awaitCondition { textOf(EditorTags.COMPLETION_DOCUMENTATION).contains("resolved type of generated_00001") }
+        }
+
+    @Test
     fun `a server that cannot resolve items shows no documentation and does not ask`() =
         runComposeUiTest {
             val app = openPhp("--without", "completionResolve")

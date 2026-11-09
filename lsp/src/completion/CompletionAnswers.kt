@@ -140,8 +140,7 @@ object CompletionAnswers {
 
         val kindElement = item["kind"] as? JsonPrimitive
         val kindNumber = kindElement?.intOrNull
-        val detail = item.string("detail")
-        val visibleDetail = detail?.takeIf { it.isNotBlank() }
+        val visibleDetail = detailOf(item)
         val documentation = contentsMarkdown(item["documentation"])?.takeIf { it.isNotBlank() }
         val completionItem = CompletionItem(label, kindOf(kindNumber), visibleDetail, insertedText, documentation)
 
@@ -200,3 +199,13 @@ object CompletionAnswers {
 }
 
 private fun isWordChar(c: Char) = c.isLetterOrDigit() || c == '_' || c == '$'
+
+// The type or signature shown beside the label: `detail`, else the `labelDetails` of servers that give only those
+// (typescript-language-server gives `detail` only once the item is resolved).
+internal fun detailOf(item: JsonObject): String? {
+    fun text(from: JsonObject?, key: String) = (from?.get(key) as? JsonPrimitive)?.contentOrNull
+    val details = item["labelDetails"] as? JsonObject
+    val fromLabel = listOfNotNull(text(details, "detail"), text(details, "description")).joinToString(" ")
+    val detail = text(item, "detail") ?: fromLabel
+    return detail.takeIf { it.isNotBlank() }
+}

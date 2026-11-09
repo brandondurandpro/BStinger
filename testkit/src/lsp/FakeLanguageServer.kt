@@ -50,7 +50,8 @@ import kotlin.system.exitProcess
  *   after `initialized`), `--indexing-starts-after <ms>` (that moment, 200 ms by default: later than the IDE waits
  *   for an indexing to begin, it counts usages before, like a server slowed down by a loaded machine);
  * - completion: `--only-items a,b` (proposes only these, like a server that knows one thing), `--completion-items <n>` (n more functions, `generated_00001`...), `--full-sync` (asks for the whole
- *   text at each change), `--no-completion` (answers completion with an error), `--hang-completion` (never answers it).
+ *   text at each change), `--no-completion` (answers completion with an error), `--hang-completion` (never answers it), `--no-detail` (items without `detail`, which resolving adds, as
+ *   typescript-language-server does).
  * A crash writes `Fatal error: fake crash` on stderr first, like a real server would.
  * Memory is allocated as direct buffers with one byte written per page, so that it becomes resident.
  */
@@ -134,6 +135,7 @@ object FakeLanguageServer {
         val fullSync: Boolean = false,
         val noCompletion: Boolean = false,
         val hangCompletion: Boolean = false,
+        val noDetail: Boolean = false,
         val without: Set<String> = emptySet(),
         val noDiagnostics: Boolean = false,
         // Gives the diagnostics when asked (textDocument/diagnostic) instead of publishing them.
@@ -184,6 +186,7 @@ object FakeLanguageServer {
                     fullSync = "full-sync" in values,
                     noCompletion = "no-completion" in values,
                     hangCompletion = "hang-completion" in values,
+                    noDetail = "no-detail" in values,
                     without = values["without"]?.split(',')?.toSet().orEmpty(),
                     noDiagnostics = "no-diagnostics" in values,
                     pullDiagnostics = "pull-diagnostics" in values,
@@ -617,7 +620,7 @@ object FakeLanguageServer {
             buildJsonObject {
                 put("label", label)
                 put("kind", kind)
-                put("detail", detail)
+                if (!options.noDetail) put("detail", detail)
                 putJsonObject("textEdit") {
                     putJsonObject("range") {
                         putJsonObject("start") {
