@@ -38,6 +38,18 @@ private const val NOT_READY_RETRY_MS = 500L
 // How long an item stays selected before its documentation is asked: the arrows run through items without asking.
 internal const val DOCUMENTATION_DELAY_MS = 200L
 
+// A server that is still loading the project answers "not ready": ask again, as long as nothing changed.
+private suspend fun askUntilReady(ask: suspend () -> CompletionResult): CompletionResult {
+    var result = ask()
+    var attempts = 0
+    while (!result.ready && attempts < NOT_READY_RETRIES) {
+        attempts++
+        delay(NOT_READY_RETRY_MS)
+        result = ask()
+    }
+    return result
+}
+
 /** What the completion popup shows: the server's items for a word, filtered by what was typed since. */
 @Stable
 class CompletionPopup internal constructor(
@@ -258,24 +270,12 @@ class CompletionState(
             scope.launch {
                 // From the keystroke to the frame that shows the items; a newer keystroke cancels it.
                 ClientTelemetry.measureToFrame(Operation.EditorCompletion, attributesOf = ::itemsOf) {
-                    val result = askUntilReady(path, document)
+                    val result = askUntilReady { source(path, document) }
                     // Typed or moved meanwhile: a newer request is on its way, or the popup was closed.
                     if (document.version == version && document.caret == caret) show(document, caret, result)
                     result
                 }
             }
-    }
-
-    // A server that is still loading the project answers "not ready": ask again, as long as nothing changed.
-    private suspend fun askUntilReady(path: String, document: Document): CompletionResult {
-        var result = source(path, document)
-        var attempts = 0
-        while (!result.ready && attempts < NOT_READY_RETRIES) {
-            attempts++
-            delay(NOT_READY_RETRY_MS)
-            result = source(path, document)
-        }
-        return result
     }
 
     private fun show(document: Document, caret: TextPos, result: CompletionResult) {

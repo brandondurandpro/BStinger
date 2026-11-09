@@ -17,6 +17,8 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
+private val MULTI_LINE_TAG =
+    listOf("<template>", "  <Navbar", """    class="a"""", """    :title="t"""", "</template>", "").joinToString("\n")
 private val TEMPLATE = listOf("<template>", "  ", "</template>", "").joinToString("\n")
 
 /** Typing the `>` of an opening tag in a Vue or HTML file adds the closing tag and leaves the caret between them. */
@@ -26,7 +28,7 @@ class TagClosingE2eTest {
         FakePhpServers.webProject().apply {
             file("src/Page.vue", TEMPLATE)
             file("public/index.html", TEMPLATE)
-            file("src/Multi.vue", "<template>\n  <Navbar\n    class=\"a\"\n    :title=\"t\"\n</template>\n")
+            file("src/Multi.vue", MULTI_LINE_TAG)
             file("src/notes.ts", "const a = 1\n")
         }
     private val servers = FakePhpServers()

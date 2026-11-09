@@ -7,6 +7,7 @@ private val OPEN_TAG = Regex("""<([A-Za-z][\w.:-]*)(?:\s+$ATTRIBUTE)*\s*$""")
 private val VOID_ELEMENTS =
     setOf("area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr")
 private val RAW_TEXT_BLOCKS = listOf("script", "style")
+
 // A tag written over more lines than this is not closed automatically.
 private const val MAX_TAG_LINES = 30
 private val TAG_EXTENSIONS = setOf("vue", "html", "htm")

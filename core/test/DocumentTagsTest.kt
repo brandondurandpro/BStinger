@@ -30,21 +30,23 @@ class DocumentTagsTest {
 
     @Test
     fun `a tag written over several lines is closed too`() {
-        val document = typeEnd("<Navbar\n  class=\"a b\"\n  :title=\"t\"\n")
-        assertEquals("<Navbar\n  class=\"a b\"\n  :title=\"t\"\n></Navbar>", document.text())
+        val open = listOf("<Navbar", """  class="a b"""", """  :title="t"""", "")
+        val document = typeEnd(open.joinToString("\n"))
+        assertEquals(open.joinToString("\n") + "></Navbar>", document.text())
         assertEquals(TextPos(3, 1), document.caret)
     }
 
     @Test
     fun `a multi-line self-closed tag and text after a finished tag get nothing`() {
-        assertEquals("<Navbar\n  a=\"1\"\n/>", typeEnd("<Navbar\n  a=\"1\"\n/").text())
+        val selfClosed = listOf("<Navbar", """  a="1"""", "/").joinToString("\n")
+        assertEquals("$selfClosed>", typeEnd(selfClosed).text())
         assertEquals("<p>a</p>\nb >", typeEnd("<p>a</p>\nb ").text())
     }
 
     @Test
     fun `a multi-line tag inside a script body is not closed`() {
-        val document = typeEnd("<script>\nconst a = <div\n  b=\"1\"\n")
-        assertEquals("<script>\nconst a = <div\n  b=\"1\"\n>", document.text())
+        val open = listOf("<script>", "const a = <div", """  b="1"""", "").joinToString("\n")
+        assertEquals("$open>", typeEnd(open).text())
     }
 
     @Test

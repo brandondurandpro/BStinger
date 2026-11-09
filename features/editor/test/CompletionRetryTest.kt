@@ -9,10 +9,10 @@ import kotlinx.coroutines.runBlocking
 import org.example.kotlineditor.model.CompletionItem
 import org.example.kotlineditor.model.CompletionKind
 import org.example.kotlineditor.model.CompletionResult
-import org.example.kotlineditor.syntax.Language
 import org.example.kotlineditor.state.CompletionState
 import org.example.kotlineditor.state.Document
 import org.example.kotlineditor.state.moveEnd
+import org.example.kotlineditor.syntax.Language
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
