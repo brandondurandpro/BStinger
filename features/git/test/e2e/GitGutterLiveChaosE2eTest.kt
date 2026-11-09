@@ -40,4 +40,23 @@ class GitGutterLiveChaosE2eTest {
             awaitReconnected()
             awaitTag(EditorTags.changeMarker(3, "Added"), unmerged = true)
         }
+
+    @Test
+    fun `lines typed in an untracked file while the network is down are marked, and still are once it is back`() =
+        runComposeUiTest {
+            project.commitAll()
+            project.file("fresh.txt", NOTES)
+            val app = launchWithProject(project, chaos = true)
+            openFromTree("fresh.txt")
+            onNodeWithTag(EditorTags.EDITOR).performClick()
+            awaitCondition { app.tab()?.followsHead == true }
+            app.network.goDown()
+            awaitReconnecting()
+            caretToEnd()
+            typeCode("four")
+            awaitTag(EditorTags.changeMarker(3, "Added"), unmerged = true)
+            app.network.comeBack()
+            awaitReconnected()
+            awaitTag(EditorTags.changeMarker(3, "Added"), unmerged = true)
+        }
 }

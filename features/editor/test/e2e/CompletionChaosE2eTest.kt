@@ -51,6 +51,18 @@ class CompletionChaosE2eTest {
         }
 
     @Test
+    fun `a word typed while the server restarts is completed once it is back`() =
+        runComposeUiTest {
+            val app = openPhp()
+            typeCode("function again() {}\n")
+            app.process.restart()
+            awaitReconnected()
+            // The server may answer "not ready" while it starts again: the completion asks again by itself.
+            typeCode("agai")
+            awaitCompletion("again", timeout = SERVER_START_MS)
+        }
+
+    @Test
     fun `an edit whose answer was lost is applied once`() =
         runComposeUiTest {
             val app = openPhp()
