@@ -14,6 +14,7 @@ import org.example.kotlineditor.lsp.provision.RuntimeDetector
 import org.example.kotlineditor.lsp.provision.RuntimeKind
 import org.example.kotlineditor.lsp.supervisor.SupervisorTimings
 import org.example.kotlineditor.model.LanguageServerInfo
+import org.example.kotlineditor.model.ProjectCheckResult
 import org.example.kotlineditor.testkit.lsp.FakeLanguageServerCommand
 import java.nio.file.Files
 import java.nio.file.Path
@@ -26,7 +27,12 @@ const val SERVER_START_MS = 60_000L
  * started with [options], and `needs-node`, which needs Node.js and finds none; with [alternative], also `other`,
  * the same fake server under another name, to switch to.
  */
-class FakePhpServers(vararg options: String, idleStopMs: Long = 1_000, alternative: Boolean = false) {
+class FakePhpServers(
+    vararg options: String,
+    idleStopMs: Long = 1_000,
+    alternative: Boolean = false,
+    check: ((project: String) -> ProjectCheckResult)? = null,
+) {
     /** Choices and pids of the servers. */
     val data: Path = Files.createTempDirectory("kotlin-editor-lsp")
     private val fake =
@@ -101,6 +107,7 @@ class FakePhpServers(vararg options: String, idleStopMs: Long = 1_000, alternati
                 listOfNotNull(fake, needsNode, other.takeIf { alternative }, typescript, vue, tailwind),
             ),
             timings = timings,
+            projectCheck = check,
             statusHoldMs = 5_000,
             sampleIntervalMs = 250,
         )

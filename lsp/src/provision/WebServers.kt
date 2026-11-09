@@ -42,6 +42,7 @@ object WebServers {
     private const val VUE_SERVER = "vue-language-server"
     private const val VUE_SERVER_PACKAGE = "@vue/language-server"
     private const val VUE_SERVER_LOCK = "/pins/vue-language-server.lock"
+    private const val VUE_TSC_LOCK = "/pins/vue-tsc.lock"
 
     private val STRENGTHS =
         listOf(
@@ -150,6 +151,18 @@ object WebServers {
             optionsIn = { bundle, _ -> vueServerOptions(bundle) },
         )
 
+    /**
+     * `vue-tsc`, the type checker of Vue projects (it checks `.ts` files as `tsc` does): not a language server but
+     * a command that checks the whole project, run on request. Its own copy of `typescript`.
+     */
+    val vueTsc =
+        PinnedBundle(
+            name = "vue-tsc",
+            version = "$VUE_PLUGIN_VERSION+ts$TYPESCRIPT_VERSION",
+            packages =
+            listOf(npm(TYPESCRIPT_PACKAGE, TYPESCRIPT_VERSION, TYPESCRIPT_SHA_512)) + lockedPackages(VUE_TSC_LOCK),
+        )
+
     /** All of them, in the order the choice panel shows them. */
     val all: List<LanguageServerCandidate> =
         listOf(typescriptLanguageServer, vueLanguageServer, tailwindLanguageServer)
@@ -159,6 +172,11 @@ object WebServers {
         val url = "https://registry.npmjs.org/$name/-/$file-$version.tgz"
         return PinnedPackage(name, url, Digest(Digest.SHA_512, integrity))
     }
+
+    /** `node <vue-tsc> --noEmit --pretty false`, in the project to check. */
+    fun vueTscCommand(runtimes: Map<RuntimeKind, Path>, installed: Path): List<String> =
+        nodeCommand(runtimes, installed, "vue-tsc", "bin", "vue-tsc.js").dropLast(1) +
+            listOf("--noEmit", "--pretty", "false")
 
     // `node <installed>/node_modules/<package>/<path…> --stdio`
     private fun nodeCommand(

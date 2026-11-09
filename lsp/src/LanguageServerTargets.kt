@@ -21,7 +21,9 @@ import java.util.concurrent.ConcurrentHashMap
  */
 internal class LanguageServerTargets(private val settings: LanguageServerSettings) {
     private val choices = LanguageServerChoiceStore(settings.dataDirectory.resolve("language-servers.properties"))
-    private val downloader = ToolDownloader(settings.toolsDirectory)
+
+    /** Downloads the servers; shared, so that a bundle is installed once at a time. */
+    val downloader = ToolDownloader(settings.toolsDirectory)
     private val specs = ConcurrentHashMap<String, LanguageServerSpec>()
     private val vueProjects = VueProjects()
 

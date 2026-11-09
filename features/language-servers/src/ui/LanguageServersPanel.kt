@@ -36,8 +36,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.example.kotlineditor.model.FeatureStatus
 import org.example.kotlineditor.model.LanguageServerInfo
 import org.example.kotlineditor.model.LanguageServerState
+import org.example.kotlineditor.model.ProjectCheckResult
 import org.example.kotlineditor.model.ServerMemory
 import org.example.kotlineditor.state.InlayHintsMode
 import org.example.kotlineditor.state.LanguageServersHost
@@ -138,6 +140,7 @@ private fun ColumnScope.LanguageServersContent(project: LanguageServersHost, sta
     val servers = state.status.servers
     InlayHintsModeRow(project)
     InlayHintsNote(servers)
+    ProjectCheckSection(project, state)
     Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
         IdeServerRow(state.status.server)
         if (servers.isEmpty()) {
@@ -155,6 +158,56 @@ private fun ColumnScope.LanguageServersContent(project: LanguageServersHost, sta
         LogView(log.lines, Modifier.weight(1f))
     }
 }
+
+// The check of the whole project with vue-tsc: the language servers only know the files that are open.
+@Composable
+private fun ProjectCheckSection(project: LanguageServersHost, state: LanguageServersState) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IdeButton(
+            if (state.checking) "Checking…" else "Check project (vue-tsc)",
+            { state.checkProject(project.root.path) },
+            Modifier.testTag(LanguageServerTags.PROJECT_CHECK),
+            enabled = !state.checking,
+        )
+        state.projectCheck?.let {
+            Label(
+                it.summary,
+                Modifier.testTag(LanguageServerTags.PROJECT_CHECK_SUMMARY),
+                color = if (it.status == FeatureStatus.Ready) IdeColors.TextSecondary else IdeColors.Error,
+                fontSize = 12.sp,
+                maxLines = 2,
+            )
+        }
+    }
+    val lines = checkLines(project, state.projectCheck)
+    if (lines.isNotEmpty()) {
+        LazyColumn(
+            Modifier
+                .fillMaxWidth()
+                .height(PROBLEMS_HEIGHT)
+                .padding(horizontal = 12.dp)
+                .testTag(LanguageServerTags.PROJECT_CHECK_PROBLEMS),
+        ) {
+            items(lines) { Label(it, fontSize = 12.sp, maxLines = 1) }
+        }
+    }
+}
+
+// One line per problem: `src/App.vue:12:5  message`.
+private fun checkLines(project: LanguageServersHost, check: ProjectCheckResult?): List<String> =
+    check?.files.orEmpty().flatMap { file ->
+        val relative = file.path.removePrefix(project.root.path).trimStart('/', '\\')
+        file.diagnostics.map { problem ->
+            val where = "$relative:${problem.range.startLine + 1}:${problem.range.startColumn + 1}"
+            "$where  ${problem.message.lineSequence().firstOrNull().orEmpty()}"
+        }
+    }
+
+private val PROBLEMS_HEIGHT = 160.dp
 
 // How the inlay hints (`name:` before an argument) show in the editors: not at all, above the caret's line, or in
 // the code.

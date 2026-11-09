@@ -553,6 +553,9 @@ enum class Method(
     /** Diagnostics of the session's documents, answered once newer than the client's version (long poll). */
     LspDiagnostics("lsp/diagnostics", mutating = false),
 
+    /** Checks the whole project with its type checker (`vue-tsc`) and returns the problems of every file. */
+    LspCheckProject("lsp/checkProject", mutating = false),
+
     /** What can be renamed at a position. */
     LspPrepareRename("lsp/prepareRename", mutating = false),
 

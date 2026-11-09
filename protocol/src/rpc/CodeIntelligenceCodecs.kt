@@ -28,6 +28,7 @@ import org.example.kotlineditor.model.FormatOptions
 import org.example.kotlineditor.model.HighlightKind
 import org.example.kotlineditor.model.HoverResult
 import org.example.kotlineditor.model.LocationsResult
+import org.example.kotlineditor.model.ProjectCheckResult
 import org.example.kotlineditor.model.RenameTarget
 import org.example.kotlineditor.model.SignatureHelpResult
 import org.example.kotlineditor.model.SignatureInfo
@@ -235,6 +236,26 @@ fun DiagnosticsSnapshot.toJson(): JsonObject =
             ),
         )
     }
+
+/** The JSON of a check of the whole project. */
+fun ProjectCheckResult.toJson(): JsonObject =
+    buildJsonObject {
+        putStatus(status)
+        put("tool", tool)
+        put("summary", summary)
+        put("snapshot", DiagnosticsSnapshot(0, files).toJson())
+    }
+
+/** The check of the whole project in [this] JSON. */
+fun JsonElement.projectCheckResult(): ProjectCheckResult {
+    val fields = jsonObject
+    return ProjectCheckResult(
+        fields.status(),
+        fields.string("tool"),
+        fields.string("summary"),
+        fields.getValue("snapshot").diagnosticsSnapshot().files,
+    )
+}
 
 private fun Diagnostic.toJson(): JsonObject =
     buildJsonObject {

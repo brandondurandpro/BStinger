@@ -24,6 +24,7 @@ import org.example.kotlineditor.model.LanguageServerInfo
 import org.example.kotlineditor.model.LanguageServerState
 import org.example.kotlineditor.model.LanguageServers
 import org.example.kotlineditor.model.LanguageServersStatus
+import org.example.kotlineditor.model.ProjectCheckResult
 import java.io.IOException
 
 private const val RETRY_MS = 1_000L
@@ -96,6 +97,14 @@ class LanguageServersState(
 
     /** The log open in the Language Servers window. */
     var log: LanguageServerLog? by mutableStateOf(null)
+        private set
+
+    /** The last check of the whole project (`vue-tsc`), null before the first. */
+    var projectCheck: ProjectCheckResult? by mutableStateOf(null)
+        private set
+
+    /** Whether a check of the whole project is running. */
+    var checking by mutableStateOf(false)
         private set
 
     // "Not now" for these languages, until the IDE restarts.
@@ -282,6 +291,22 @@ class LanguageServersState(
 
     /** Whether [server] can be restarted, stopped or started now. */
     fun isRunning(server: LanguageServerInfo) = server.state !in STOPPED
+
+    /** Checks the whole [project] with its type checker; the result replaces the previous one. */
+    fun checkProject(project: String) {
+        if (checking) return
+        checking = true
+        error = null
+        scope.launch {
+            try {
+                projectCheck = servers.checkProject(project)
+            } catch (failure: IOException) {
+                error = "Could not check the project: ${failure.message}"
+            } finally {
+                checking = false
+            }
+        }
+    }
 
     private fun control(action: suspend () -> Unit) {
         error = null
