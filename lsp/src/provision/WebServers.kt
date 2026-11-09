@@ -22,7 +22,6 @@ object WebServers {
     private const val SERVER_VERSION = "5.1.3"
     private const val VUE_PLUGIN = "@vue/typescript-plugin"
     private const val VUE_PLUGIN_VERSION = "3.3.14"
-    private const val VUE_PLUGIN_LOCK = "/pins/vue-typescript-plugin.lock"
     private const val SERVER_SHA_512 =
         "r+pAcYtWdN8tKlYZPwiiHNA2QPjXnI02NrW5Sf2cVM3TRtuQ3V9EKKwOxqwaQ0krsaEXk/CbN90I5erBuf84Vg=="
     private const val SERVER_NODE_MINIMUM = "20"
@@ -57,6 +56,14 @@ object WebServers {
             "Memory grows with the size of the project (tsserver keeps its program in memory)",
         )
 
+    // The Vue server, which carries the Vue plugin tsserver loads in Vue projects.
+    private val vueBundle =
+        PinnedBundle(
+            name = VUE_SERVER,
+            version = "$VUE_PLUGIN_VERSION+ts$TYPESCRIPT_VERSION",
+            packages = vueServerPackages(),
+        )
+
     /** typescript-language-server with the `typescript` it finds in the same `node_modules`. */
     val typescriptLanguageServer =
         LanguageServerCandidate(
@@ -71,11 +78,12 @@ object WebServers {
             bundle =
             PinnedBundle(
                 name = SERVER,
-                version = "$SERVER_VERSION+ts$TYPESCRIPT_VERSION+vue$VUE_PLUGIN_VERSION",
+                version = "$SERVER_VERSION+ts$TYPESCRIPT_VERSION",
                 packages = serverPackages(),
             ),
-            // tsserver loads the Vue plugin from the bundle, and understands .vue files through it.
-            optionsIn = { bundle -> vuePluginOptions(bundle) },
+            // In a Vue project tsserver loads the Vue plugin from the Vue server's bundle, and understands .vue files.
+            extras = vueBundle,
+            optionsIn = { _, extras -> extras?.let(::vuePluginOptions) },
             command = { runtimes, installed -> nodeCommand(runtimes, installed, SERVER, "lib", "cli.mjs") },
         )
 
@@ -135,16 +143,11 @@ object WebServers {
             ),
             requirements = listOf(Requirement(RuntimeKind.Node, SERVER_NODE_MINIMUM)),
             tool = null,
-            bundle =
-            PinnedBundle(
-                name = VUE_SERVER,
-                version = "$VUE_PLUGIN_VERSION+ts$TYPESCRIPT_VERSION",
-                packages = vueServerPackages(),
-            ),
+            bundle = vueBundle,
             command = { runtimes, installed ->
                 nodeCommand(runtimes, installed, VUE_SERVER_PACKAGE, "bin", "vue-language-server.js")
             },
-            optionsIn = { bundle -> vueServerOptions(bundle) },
+            optionsIn = { bundle, _ -> vueServerOptions(bundle) },
         )
 
     /** All of them, in the order the choice panel shows them. */
@@ -173,7 +176,7 @@ object WebServers {
     private fun serverPackages(): List<PinnedPackage> {
         val server = npm(SERVER, SERVER_VERSION, SERVER_SHA_512)
         val compiler = npm(TYPESCRIPT_PACKAGE, TYPESCRIPT_VERSION, TYPESCRIPT_SHA_512)
-        return listOf(server, compiler) + lockedPackages(VUE_PLUGIN_LOCK)
+        return listOf(server, compiler)
     }
 
     private fun vueServerPackages(): List<PinnedPackage> {

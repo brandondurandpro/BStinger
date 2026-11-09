@@ -6,7 +6,6 @@ import kotlinx.coroutines.withTimeout
 import org.example.kotlineditor.lsp.LanguageServerService
 import org.example.kotlineditor.lsp.LanguageServerSettings
 import org.example.kotlineditor.lsp.supervisor.SupervisorTimings
-import org.example.kotlineditor.model.CompletionResult
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths

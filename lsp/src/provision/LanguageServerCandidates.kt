@@ -41,10 +41,15 @@ data class LanguageServerCandidate(
     /** `initializationOptions` of its `initialize` request: what it leaves off unless asked (phpactor's hints). */
     val initializationOptions: JsonElement? = null,
     /**
-     * `initializationOptions` that depend on where its [bundle] installs (the plugins tsserver loads from it); used
-     * when [initializationOptions] is null. Gets the directory holding the bundle's `node_modules`.
+     * A bundle installed only for the projects that need it (the Vue plugin tsserver loads, for Vue projects), beside
+     * the [bundle].
      */
-    val optionsIn: ((bundle: Path) -> JsonElement)? = null,
+    val extras: PinnedBundle? = null,
+    /**
+     * `initializationOptions` that depend on where its [bundle] installs (the plugins tsserver loads), and on where
+     * the [extras] did when the project needs them; used when [initializationOptions] is null.
+     */
+    val optionsIn: ((bundle: Path, extras: Path?) -> JsonElement?)? = null,
     /** Why it may give no inlay hints, shown in the Language Servers window when it gives none. */
     val withoutInlayHints: String? = null,
 )
@@ -73,9 +78,10 @@ class CandidateRegistry(
     fun candidates(language: String): List<CandidateStatus> = known.filter { it.language == language }.map(::status)
 
     /** The command that starts [status]'s server, installing its artifact first when needed. Blocking. */
-    fun commandFor(status: CandidateStatus, downloader: ToolDownloader): List<String> {
+    fun commandFor(status: CandidateStatus, downloader: ToolDownloader, withExtras: Boolean = false): List<String> {
         check(status.available) { "${status.candidate.displayName} cannot run here: ${status.details.joinToString()}" }
         val candidate = status.candidate
+        if (withExtras) candidate.extras?.let(downloader::obtainBundle)
         val installed = candidate.tool?.let(downloader::obtain) ?: candidate.bundle?.let(downloader::obtainBundle)
         return candidate.command(status.runtimes, installed)
     }

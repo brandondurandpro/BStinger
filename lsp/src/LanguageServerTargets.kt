@@ -42,7 +42,8 @@ internal class LanguageServerTargets(private val settings: LanguageServerSetting
             if (chosen == null) {
                 unchosen += language
             } else {
-                val spec = specs.getOrPut(chosen.id) { specOf(language, chosen.id) }
+                val extras = chosen.extras != null && VueProjects.used(project, files)
+                val spec = specOf(language, chosen.id, extras)
                 val target = ServerTarget(spec, rootOf(language, file, project))
                 targets[target.id] = target
             }
@@ -64,14 +65,15 @@ internal class LanguageServerTargets(private val settings: LanguageServerSetting
         return if (candidate == null || root == null) {
             null
         } else {
-            ServerTarget(specs.getOrPut(candidate.id) { specOf(companion, candidate.id) }, root)
+            ServerTarget(specOf(companion, candidate.id, false), root)
         }
     }
 
-    private fun bundleOptionsOf(candidate: LanguageServerCandidate): JsonElement? {
+    private fun bundleOptionsOf(candidate: LanguageServerCandidate, withExtras: Boolean): JsonElement? {
         val bundle = candidate.bundle
         val optionsIn = candidate.optionsIn
-        return if (bundle == null || optionsIn == null) null else optionsIn(downloader.bundleDirectory(bundle))
+        val extras = candidate.extras?.takeIf { withExtras }?.let(downloader::bundleDirectory)
+        return if (bundle == null || optionsIn == null) null else optionsIn(downloader.bundleDirectory(bundle), extras)
     }
 
     /** The servers offered for [language], their requirements checked now, and the chosen one. Blocking. */
@@ -103,12 +105,16 @@ internal class LanguageServerTargets(private val settings: LanguageServerSetting
         )
 
     // The requirements are checked again at each start: PHP may have been installed since.
-    private fun specOf(language: String, id: String): LanguageServerSpec {
-        val candidate = settings.candidates.offered(language).firstOrNull { it.id == id }
-        val options = candidate?.initializationOptions ?: candidate?.let(::bundleOptionsOf)
-        return LanguageServerSpec(id, language, options, candidate?.withoutInlayHints) {
-            val status = settings.candidates.candidates(language).first { it.candidate.id == id }
-            settings.candidates.commandFor(status, downloader)
+    // One spec per server and per kind of project: the Vue plugin of the TypeScript server is for Vue projects only.
+    private fun specOf(language: String, id: String, withExtras: Boolean): LanguageServerSpec {
+        val key = if (withExtras) "$id+extras" else id
+        return specs.getOrPut(key) {
+            val candidate = settings.candidates.offered(language).firstOrNull { it.id == id }
+            val options = candidate?.initializationOptions ?: candidate?.let { bundleOptionsOf(it, withExtras) }
+            LanguageServerSpec(id, language, options, candidate?.withoutInlayHints) {
+                val status = settings.candidates.candidates(language).first { it.candidate.id == id }
+                settings.candidates.commandFor(status, downloader, withExtras)
+            }
         }
     }
 
