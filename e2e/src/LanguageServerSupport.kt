@@ -70,7 +70,13 @@ class FakePhpServers(vararg options: String, idleStopMs: Long = 1_000, alternati
 
     // Tailwind CSS beside it, for the projects that have a tailwind.config.js.
     private val tailwind =
-        typescript.copy(id = FAKE_TAILWIND, displayName = "faketailwind", language = "tailwind")
+        typescript.copy(
+            id = FAKE_TAILWIND,
+            displayName = "faketailwind",
+            language = "tailwind",
+            // It knows only class names.
+            command = { _, _ -> FakeLanguageServerCommand.command(*options, "--only-items", TAILWIND_CLASSES) },
+        )
 
     // No PHP nor Node.js: the fake server needs neither, and the other candidate is unavailable.
     private val nothingInstalled =
@@ -117,6 +123,9 @@ class FakePhpServers(vararg options: String, idleStopMs: Long = 1_000, alternati
         const val FAKE_TYPESCRIPT = "fake-ts"
         const val FAKE_TAILWIND = "fake-tailwind"
         const val FAKE_VUE = "fake-vue"
+
+        /** The class names the fake Tailwind CSS server proposes, comma-separated. */
+        const val TAILWIND_CLASSES = "twflex,twgrid"
 
         /** Why the fake server gives no inlay hints, when started `--without inlayHint`. */
         const val WITHOUT_INLAY_HINTS = "fakephp gives inlay hints only with a licence."

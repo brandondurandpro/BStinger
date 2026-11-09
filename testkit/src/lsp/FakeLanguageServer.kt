@@ -49,7 +49,7 @@ import kotlin.system.exitProcess
  *   `--progress`: like intelephense, finds no definition nor usage until its indexing ended, which begins a moment
  *   after `initialized`), `--indexing-starts-after <ms>` (that moment, 200 ms by default: later than the IDE waits
  *   for an indexing to begin, it counts usages before, like a server slowed down by a loaded machine);
- * - completion: `--completion-items <n>` (n more functions, `generated_00001`...), `--full-sync` (asks for the whole
+ * - completion: `--only-items a,b` (proposes only these, like a server that knows one thing), `--completion-items <n>` (n more functions, `generated_00001`...), `--full-sync` (asks for the whole
  *   text at each change), `--no-completion` (answers completion with an error).
  * A crash writes `Fatal error: fake crash` on stderr first, like a real server would.
  * Memory is allocated as direct buffers with one byte written per page, so that it becomes resident.
@@ -130,6 +130,7 @@ object FakeLanguageServer {
         val diagnostics: Boolean = false,
         val progressSeconds: Int? = null,
         val completionItems: Int = 0,
+        val onlyItems: List<String>? = null,
         val fullSync: Boolean = false,
         val noCompletion: Boolean = false,
         val without: Set<String> = emptySet(),
@@ -178,6 +179,7 @@ object FakeLanguageServer {
                     diagnostics = "diagnostics" in values,
                     progressSeconds = int("progress"),
                     completionItems = int("completion-items") ?: 0,
+                    onlyItems = values["only-items"]?.split(','),
                     fullSync = "full-sync" in values,
                     noCompletion = "no-completion" in values,
                     without = values["without"]?.split(',')?.toSet().orEmpty(),
@@ -203,6 +205,7 @@ object FakeLanguageServer {
                     "progress-on-references",
                     "progress",
                     "completion-items",
+                    "only-items",
                     "without",
                     "indexing-starts-after",
                     "stop-reading-on-change",
@@ -591,10 +594,11 @@ object FakeLanguageServer {
                 }
             val variables = lines.flatMap { VARIABLE.findAll(it).map { match -> match.value } }.distinct()
             val generated = (1..options.completionItems).map { "generated_%05d".format(it) to "function generated()" }
+            val proposed = options.onlyItems?.map { it to "class" } ?: (BUILT_INS + functions + generated)
             val items =
-                (BUILT_INS + functions + generated).distinctBy { it.first }.map { (name, detail) ->
+                proposed.distinctBy { it.first }.map { (name, detail) ->
                     item(name, FUNCTION_KIND, detail, line, start, column)
-                } + variables.filter { it != text.substring(start, column) }.map {
+                } + variables.takeIf { options.onlyItems == null }.orEmpty().filter { it != text.substring(start, column) }.map {
                     item(it, VARIABLE_KIND, "mixed", line, start, column)
                 }
             return buildJsonObject {
