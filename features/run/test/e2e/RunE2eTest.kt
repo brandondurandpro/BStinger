@@ -255,17 +255,57 @@ class RunE2eTest {
         }
 
     @Test
-    fun `an Amper project suggests its test and run configurations`() =
+    fun `an Amper project offers its test and run configurations`() =
         runComposeUiTest {
             project.file("kotlin", "#!/bin/sh\n")
             project.file("project.yaml", "modules:\n  - app\n")
             val app = launchWithProject(project)
             openRunWindow()
-            awaitCondition { app.project.run.configurations.isNotEmpty() }
+            awaitCondition { app.project.run.available.isNotEmpty() }
             val windows = !app.project.root.path.startsWith("/")
-            val wrapper = if (windows) "kotlin.bat" else "./kotlin"
-            assertEquals(listOf("$wrapper test", "$wrapper run"), app.project.run.configurations.map { it.commandLine })
+            val wrapper = if (windows) ".\\kotlin.bat" else "./kotlin"
+            assertEquals(listOf("$wrapper test", "$wrapper run"), app.project.run.available.map { it.commandLine })
             assertEquals("All tests (Amper)", app.project.run.selected?.name)
             assertEquals(RunKind.Tests, app.project.run.selected?.kind)
+            // Found, not saved: the project's preferences keep none of them.
+            assertTrue(app.project.run.configurations.isEmpty())
+        }
+
+    @Test
+    fun `the scripts of every composer json of the project are offered, except the vendored ones`() =
+        runComposeUiTest {
+            project.file("composer.json", """{"name": "me/app", "scripts": {"test": "phpunit", "post-install-cmd": "x"}}""")
+            project.file("services/api/composer.json", """{"scripts": {"lint": "phpcs", "fix style": ["phpcbf"]}}""")
+            project.file("vendor/lib/composer.json", """{"scripts": {"hidden": "no"}}""")
+            project.file("services/web/composer.json", "not json")
+            val app = launchWithProject(project)
+            openRunWindow()
+            awaitCondition { app.project.run.available.size == 3 }
+            val windows = !app.project.root.path.startsWith("/")
+            val composer = if (windows) "composer.bat" else "composer"
+            val found = app.project.run.available.associate { it.name to (it.commandLine to it.workingDirectory) }
+            assertEquals("$composer run-script test" to "", found["Composer: test"])
+            assertEquals("$composer run-script lint" to "services/api", found["Composer: lint (services/api)"])
+            assertEquals(
+                "$composer run-script \"fix style\"" to "services/api",
+                found["Composer: fix style (services/api)"],
+            )
+            awaitTag(RunTags.SELECTOR).performClick()
+            val lint = app.project.run.available.first { it.name.startsWith("Composer: lint") }
+            awaitTag(RunTags.configuration(lint.id)).assertIsDisplayed()
+        }
+
+    @Test
+    fun `a composer script runs in the directory of its project`() =
+        runComposeUiTest {
+            project.file("services/api/composer.json", """{"scripts": {"lint": "phpcs"}}""")
+            val app = launchWithProject(project)
+            openRunWindow()
+            awaitCondition { app.project.run.available.isNotEmpty() }
+            pressRun()
+            awaitCondition { app.project.run.session != null }
+            // Composer may not be installed where the test runs: either way the run ends, in the project's directory.
+            awaitCondition { app.project.run.session?.running == false }
+            assertEquals("services/api", app.project.run.session?.configuration?.workingDirectory)
         }
 }

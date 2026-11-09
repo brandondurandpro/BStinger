@@ -15,8 +15,9 @@ import java.nio.file.Path
 private val JAVA = Path.of(System.getProperty("java.home"), "bin", "java").toString()
 
 // A program the tests run through `java Emit.java <file> <exit code> [mode]` (a single source file, no build): it
-// prints the lines of <file>, then ends with the exit code. The mode `hang` makes it wait for ever instead, and
-// `ticks:<count>:<pause in ms>` makes it print "tick <n>" lines slowly.
+// prints the lines of <file>, then ends with the exit code. The mode `hang` makes it wait for ever instead,
+// `ticks:<count>:<pause in ms>` makes it print "tick <n>" lines slowly, and `mark:<file>` appends a line to <file>
+// when it starts, so that a test can count how many times it ran.
 private val EMIT_SOURCE =
     """
     import java.nio.file.*;
@@ -27,6 +28,9 @@ private val EMIT_SOURCE =
             for (String line : Files.readAllLines(Path.of(args[0]))) System.out.println(line);
             System.out.flush();
             String mode = args.length > 2 ? args[2] : "";
+            if (mode.startsWith("mark:")) {
+                Files.writeString(Path.of(mode.substring(5)), "ran\n", StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+            }
             if (mode.equals("hang")) Thread.sleep(600000);
             if (mode.startsWith("ticks:")) {
                 String[] parts = mode.split(":");

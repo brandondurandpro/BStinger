@@ -153,18 +153,19 @@ private fun unescaped(char: Char): Char =
 /**
  * Configurations a project suggests from the files at its root: [names] are the entries of the root. An Amper
  * project (`kotlin` or `amper` wrapper) and a Gradle one (`gradlew`) each get a test run and an application run.
- * [windows] picks the `.bat` wrappers, which are the ones a Windows server can run.
+ * [windows] picks the `.bat` wrappers, which are the ones a Windows server can run; they are written `.\name`, as
+ * Windows looks a program up in its own directory, not in the one the command runs in (see [RunState]).
  */
 fun suggestedConfigurations(names: Set<String>, windows: Boolean): List<RunConfiguration> {
     val suggestions = ArrayList<RunConfiguration>()
     val amper = listOf("kotlin", "amper").firstOrNull { it in names }
     if (amper != null) {
-        val wrapper = if (windows) "$amper.bat" else "./$amper"
+        val wrapper = if (windows) ".\\$amper.bat" else "./$amper"
         suggestions += RunConfiguration("amper-test", "All tests (Amper)", RunKind.Tests, "$wrapper test")
         suggestions += RunConfiguration("amper-run", "Run (Amper)", RunKind.Run, "$wrapper run")
     }
     if ("gradlew" in names) {
-        val wrapper = if (windows) "gradlew.bat" else "./gradlew"
+        val wrapper = if (windows) ".\\gradlew.bat" else "./gradlew"
         suggestions += RunConfiguration("gradle-test", "All tests (Gradle)", RunKind.Tests, "$wrapper test")
         suggestions += RunConfiguration("gradle-run", "Run (Gradle)", RunKind.Run, "$wrapper run")
     }

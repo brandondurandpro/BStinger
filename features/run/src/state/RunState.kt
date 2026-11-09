@@ -14,7 +14,6 @@ import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.ProjectRunner
 import org.example.kotlineditor.model.RunChunk
 import org.example.kotlineditor.model.RunStream
-import org.example.kotlineditor.model.separatorsOf
 import java.util.UUID
 
 // Lines kept in the output: older ones are dropped, the pane says how many.
@@ -94,7 +93,9 @@ class RunSession(
 }
 
 /**
- * The run configurations of a project and the run being shown. [locate] finds the file a path of the output names
+ * The run configurations of a project and the run being shown: the ones the user saved, and the ones [discover]
+ * finds in the project each time the window opens (the Composer scripts of its `composer.json` files, the wrappers
+ * of Amper and Gradle), which are listed after them. [locate] finds the file a path of the output names
  * (absolute, relative to the project, or a bare file name), and [openAt] opens it at a line and column.
  */
 @Stable
@@ -104,7 +105,7 @@ class RunState(
     private val runner: ProjectRunner,
     private val scope: CoroutineScope,
     preferences: Map<String, String>,
-    private val suggest: suspend () -> List<RunConfiguration>,
+    private val discover: suspend () -> List<RunConfiguration>,
     private val locate: suspend (String) -> FileEntry?,
     private val openAt: (FileEntry, Int, Int) -> Unit,
 ) {
@@ -135,29 +136,37 @@ class RunState(
     /** Name of the suite and test selected in the tree of results, to show its details. */
     var selectedTest by mutableStateOf<Pair<String, String>?>(null)
 
-    /** Whether the saved configurations were read, or suggested from the files of the project. */
+    /** The configurations found in the project, not saved: the ones a saved configuration has the id of are left out. */
+    var discovered by mutableStateOf<List<RunConfiguration>>(emptyList())
+        private set
+
+    // Whether the user changed the saved configurations, or some were saved: only then are they written back.
     private var loaded = savedConfigurations != null
 
     private var stream: RunStream? = null
     private var collecting: Job? = null
 
-    /** The selected configuration, if the selection names one that exists. */
-    val selected: RunConfiguration? get() = configurations.firstOrNull { it.id == selectedId }
+    /** The saved configurations, then the ones discovered in the project, as the selector lists them. */
+    val available: List<RunConfiguration>
+        get() {
+            val savedIds = configurations.map { it.id }.toSet()
+            return configurations.toList() + discovered.filter { it.id !in savedIds }
+        }
 
-    /** Reads the files of the project once to suggest configurations, unless some were saved. */
+    /** The selected configuration, if the selection names one that exists. */
+    val selected: RunConfiguration? get() = available.firstOrNull { it.id == selectedId }
+
+    /** Looks in the project for configurations (again, the project may have changed since the window last opened). */
     fun ensureLoaded() {
-        if (loaded) return
-        loaded = true
         scope.launch {
-            val suggestions = suggest()
-            if (configurations.isEmpty()) configurations.addAll(suggestions)
-            if (selected == null) selectedId = configurations.firstOrNull()?.id
+            discovered = discover()
+            if (selected == null) selectedId = available.firstOrNull()?.id
         }
     }
 
     /** Selects the configuration [id]. */
     fun select(id: String) {
-        if (configurations.any { it.id == id }) selectedId = id
+        if (available.any { it.id == id }) selectedId = id
     }
 
     /** Opens the editor on a new configuration. */
@@ -180,6 +189,7 @@ class RunState(
         val named = configuration.copy(name = configuration.name.trim().ifEmpty { configuration.commandLine.trim() })
         val index = configurations.indexOfFirst { it.id == named.id }
         if (index >= 0) configurations[index] = named else configurations += named
+        loaded = true
         selectedId = named.id
         editing = null
     }
@@ -187,7 +197,8 @@ class RunState(
     /** Deletes the configuration [id]; the selection moves to the first one left. */
     fun delete(id: String) {
         configurations.removeAll { it.id == id }
-        if (selectedId == id) selectedId = configurations.firstOrNull()?.id
+        loaded = true
+        if (selectedId == id) selectedId = available.firstOrNull()?.id
         editing = null
     }
 
@@ -297,18 +308,19 @@ class RunState(
         val program = words.firstOrNull() ?: return emptyList()
         val relative = program.startsWith("./") || program.startsWith(".\\")
         if (!relative) return words
-        val separator = separatorsOf(rootPath).first()
         val directory = directoryOf(configuration).trimEnd('/', '\\')
-        val resolved = directory + separator + program.substring(2)
+        val resolved = directory + separatorOfRoot() + program.substring(2)
         return listOf(resolved) + words.drop(1)
     }
 
     private fun directoryOf(configuration: RunConfiguration): String {
         val relative = configuration.workingDirectory.trim().trim('/', '\\')
         if (relative.isEmpty()) return rootPath
-        val separator = separatorsOf(rootPath).first()
-        return rootPath.trimEnd('/', '\\') + separator + relative
+        return rootPath.trimEnd('/', '\\') + separatorOfRoot() + relative
     }
+
+    // The separator the server's paths use: `/` on Linux and macOS, `\` on Windows.
+    private fun separatorOfRoot(): Char = if (rootPath.startsWith('/')) '/' else '\\'
 }
 
 /** The preference keys of the Run tool window. */

@@ -77,7 +77,7 @@ fun RunPanel(run: RunState, layout: ToolWindowLayout, drag: ToolWindowDrag, modi
         when {
             editing != null -> ConfigurationEditor(run, editing)
             session != null -> RunBody(run, session)
-            run.configurations.isEmpty() -> EmptyRun(run)
+            run.available.isEmpty() -> EmptyRun(run)
             else -> Hint("Press ▶ to run ${run.selected?.name ?: "a configuration"}")
         }
     }
@@ -99,7 +99,7 @@ private fun ConfigurationSelector(run: RunState) {
             Chevron(expanded = open)
         }
         DropdownMenu(open, { open = false }, Modifier.testTag(RunTags.SELECTOR_MENU)) {
-            run.configurations.forEach { configuration ->
+            run.available.forEach { configuration ->
                 MenuRow(configuration.name, RunTags.configuration(configuration.id)) {
                     run.select(configuration.id)
                     open = false

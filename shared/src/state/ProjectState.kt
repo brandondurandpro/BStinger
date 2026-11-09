@@ -16,6 +16,7 @@ import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.model.AppServices
 import org.example.kotlineditor.model.BlameLine
 import org.example.kotlineditor.model.CompletionResult
+import org.example.kotlineditor.model.FileContent
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.GitCommit
 import org.example.kotlineditor.model.GitCommitDetails
@@ -108,7 +109,7 @@ class ProjectState(
             services.runner,
             scope,
             preferences,
-            suggest = ::suggestedRunConfigurations,
+            discover = ::discoverRunConfigurations,
             locate = ::locateOutputFile,
             openAt = ::openOutputFile,
         )
@@ -176,11 +177,27 @@ class ProjectState(
     /** What to save of agent mode; nothing while it was never used in this project (the saved values stay). */
     fun agentPreferences(): Map<String, String> = if (agentState.isInitialized()) agent.toPreferences() else emptyMap()
 
-    // The configurations a project suggests the first time the Run window opens, from the files at its root.
-    private suspend fun suggestedRunConfigurations(): List<RunConfiguration> {
+    // What the project offers to run: the wrappers of Amper and Gradle at its root, and the scripts of each of its
+    // composer.json files (a project may hold several PHP projects).
+    private suspend fun discoverRunConfigurations(): List<RunConfiguration> {
         val entries = runCatching { services.fileSystem.list(root) }.getOrDefault(emptyList())
         val windows = !root.path.startsWith("/")
-        return suggestedConfigurations(entries.map { it.name }.toSet(), windows)
+        val wrappers = suggestedConfigurations(entries.map { it.name }.toSet(), windows)
+        return wrappers + discoverComposerScripts(windows)
+    }
+
+    private suspend fun discoverComposerScripts(windows: Boolean): List<RunConfiguration> {
+        fileIndex.ensureLoaded()
+        val files = snapshotFlow { fileIndex.files }.filterNotNull().first()
+        val rootPrefix = slashed(root.path).trimEnd('/') + "/"
+        val manifests = files.filter { isProjectComposerFile(slashed(it.path, root.path).removePrefix(rootPrefix)) }
+        return manifests.flatMap { manifest ->
+            val relative = slashed(manifest.path, root.path).removePrefix(rootPrefix)
+            val directory = relative.substringBeforeLast('/', "")
+            val content = runCatching { services.fileSystem.read(manifest) }.getOrNull()
+            val text = (content as? FileContent.Text)?.lines?.joinToString("\n").orEmpty()
+            composerConfigurations(directory, composerScriptNames(text), windows)
+        }
     }
 
     // The file a path of some output names: an absolute path, a path from the project, or only a file name.

@@ -64,7 +64,7 @@ class RunConfigurationTest {
     @Test
     fun `a Windows server gets the bat wrappers`() {
         val commands = suggestedConfigurations(setOf("kotlin"), windows = true).map { it.commandLine }
-        assertEquals(listOf("kotlin.bat test", "kotlin.bat run"), commands)
+        assertEquals(listOf(".\\kotlin.bat test", ".\\kotlin.bat run"), commands)
     }
 
     @Test
