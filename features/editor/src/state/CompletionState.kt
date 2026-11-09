@@ -32,6 +32,8 @@ private const val DETAILED_ROWS = 12
 
 // How long the list stays unchanged before the types of its rows are asked.
 private const val DETAILS_DELAY_MS = 100L
+private const val NOT_READY_RETRIES = 8
+private const val NOT_READY_RETRY_MS = 500L
 
 // How long an item stays selected before its documentation is asked: the arrows run through items without asking.
 internal const val DOCUMENTATION_DELAY_MS = 200L
@@ -256,12 +258,24 @@ class CompletionState(
             scope.launch {
                 // From the keystroke to the frame that shows the items; a newer keystroke cancels it.
                 ClientTelemetry.measureToFrame(Operation.EditorCompletion, attributesOf = ::itemsOf) {
-                    val result = source(path, document)
+                    val result = askUntilReady(path, document)
                     // Typed or moved meanwhile: a newer request is on its way, or the popup was closed.
                     if (document.version == version && document.caret == caret) show(document, caret, result)
                     result
                 }
             }
+    }
+
+    // A server that is still loading the project answers "not ready": ask again, as long as nothing changed.
+    private suspend fun askUntilReady(path: String, document: Document): CompletionResult {
+        var result = source(path, document)
+        var attempts = 0
+        while (!result.ready && attempts < NOT_READY_RETRIES) {
+            attempts++
+            delay(NOT_READY_RETRY_MS)
+            result = source(path, document)
+        }
+        return result
     }
 
     private fun show(document: Document, caret: TextPos, result: CompletionResult) {
