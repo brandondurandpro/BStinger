@@ -40,6 +40,10 @@ import org.example.kotlineditor.syntax.Language
 import org.example.kotlineditor.syntax.SyntaxHighlighter
 import org.example.kotlineditor.syntax.treesitter.LineSpans
 
+// The three columns of a row: the file and line, the code (the rest), the directory; the same widths on every row.
+private val FILE_COLUMN = 180.dp
+private val DIRECTORY_COLUMN = 150.dp
+
 /** The list of places (usages, declarations to choose from) under the word it was asked on. */
 @Composable
 internal fun LocationsView(popup: org.example.kotlineditor.state.LocationsPopup, insight: CodeInsightState) {
@@ -101,7 +105,7 @@ private fun LocationRow(
     ) {
         BasicText(
             "${name.substringAfterLast('/')}:${location.range.startLine + 1}",
-            Modifier.width(200.dp),
+            Modifier.width(FILE_COLUMN).testTag(EditorTags.locationFile(index)),
             style = POPUP_LABEL_STYLE,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -115,9 +119,10 @@ private fun LocationRow(
         )
         BasicText(
             name.substringBeforeLast('/', ""),
-            Modifier.padding(start = 8.dp),
+            Modifier.padding(start = 8.dp).width(DIRECTORY_COLUMN).testTag(EditorTags.locationDirectory(index)),
             style = POPUP_SECONDARY_STYLE,
             maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }

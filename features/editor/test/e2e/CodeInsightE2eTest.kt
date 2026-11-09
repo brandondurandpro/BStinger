@@ -1,6 +1,7 @@
 package org.example.kotlineditor.e2e
 
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsSelected
@@ -144,6 +145,26 @@ class CodeInsightE2eTest {
             awaitCondition { app.activePath() == "src/index.php" }
             awaitCondition { app.caret() == TextPos(3, 15) }
             awaitNoTag(EditorTags.LOCATIONS)
+        }
+
+    @Test
+    fun `the places of a list are in three aligned columns`() =
+        runComposeUiTest {
+            open("src/Greeter.php")
+            clickAt(13, 22)
+            editorKeys { withKeyDown(Key.CtrlLeft) { pressKey(Key.B) } }
+            awaitTag(EditorTags.LOCATIONS, timeout = SERVER_START_MS)
+            val columns =
+                listOf(EditorTags::locationFile, EditorTags::locationPreview, EditorTags::locationDirectory)
+            for (column in columns) {
+                val first = onNodeWithTag(column(0)).fetchSemanticsNode().positionInRoot.x
+                val second = onNodeWithTag(column(1)).fetchSemanticsNode().positionInRoot.x
+                assertEquals(first, second, "the rows start their column at the same place")
+            }
+            val file = onNodeWithTag(EditorTags.locationFile(0)).fetchSemanticsNode().positionInRoot.x
+            val code = onNodeWithTag(EditorTags.locationPreview(0)).fetchSemanticsNode().positionInRoot.x
+            val directory = onNodeWithTag(EditorTags.locationDirectory(0)).fetchSemanticsNode().positionInRoot.x
+            assertTrue(file < code && code < directory, "file, then code, then directory")
         }
 
     @Test
