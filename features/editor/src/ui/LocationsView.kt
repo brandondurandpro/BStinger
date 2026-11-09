@@ -58,7 +58,7 @@ private val MIN_FILE_COLUMN = 90.dp
 private val MAX_FILE_COLUMN = 260.dp
 private val MAX_DIRECTORY_COLUMN = 240.dp
 private val ROW_PADDING = 20.dp
-private val DIRECTORY_GAP = 8.dp
+private val COLUMN_GAP = 16.dp
 private val BOLD_SLACK = 16.dp
 
 private data class LocationColumns(val file: Dp, val directory: Dp, val total: Dp)
@@ -89,7 +89,7 @@ private fun columnsOf(
     val fileWidth = labelsWidth.coerceIn(MIN_FILE_COLUMN, MAX_FILE_COLUMN)
     val directoryWidth = directoriesWidth.coerceAtMost(MAX_DIRECTORY_COLUMN)
     val codeWidth = widest(popup.previews, code, measurer, density)
-    val total = fileWidth + codeWidth + directoryWidth + DIRECTORY_GAP + ROW_PADDING + BOLD_SLACK
+    val total = fileWidth + codeWidth + directoryWidth + COLUMN_GAP + COLUMN_GAP + ROW_PADDING + BOLD_SLACK
     return LocationColumns(fileWidth, directoryWidth, total.coerceIn(MIN_POPUP_WIDTH, MAX_POPUP_WIDTH))
 }
 
@@ -160,7 +160,7 @@ private fun LocationRow(
     ) {
         BasicText(
             fileLabel(name, location),
-            Modifier.width(columns.file).testTag(EditorTags.locationFile(index)),
+            Modifier.padding(end = COLUMN_GAP).width(columns.file).testTag(EditorTags.locationFile(index)),
             style = POPUP_LABEL_STYLE,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -175,7 +175,7 @@ private fun LocationRow(
         BasicText(
             name.substringBeforeLast('/', ""),
             Modifier
-                .padding(start = DIRECTORY_GAP)
+                .padding(start = COLUMN_GAP)
                 .width(columns.directory)
                 .testTag(EditorTags.locationDirectory(index)),
             style = POPUP_SECONDARY_STYLE,

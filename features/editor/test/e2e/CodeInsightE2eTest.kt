@@ -166,6 +166,9 @@ class CodeInsightE2eTest {
             val code = onNodeWithTag(EditorTags.locationPreview(0)).fetchSemanticsNode().positionInRoot.x
             val directory = onNodeWithTag(EditorTags.locationDirectory(0)).fetchSemanticsNode().positionInRoot.x
             assertTrue(file < code && code < directory, "file, then code, then directory")
+            val fileEnd = file + onNodeWithTag(EditorTags.locationFile(0)).fetchSemanticsNode().size.width
+            val gap = density.run { 8.dp.toPx() }
+            assertTrue(code - fileEnd >= gap, "the code is spaced from the file column")
             val width = onNodeWithTag(EditorTags.LOCATIONS).fetchSemanticsNode().size.width
             val limit = density.run { 1000.dp.toPx() }
             assertTrue(width <= limit, "the popup fits its content within its limit: $width px")
