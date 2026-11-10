@@ -97,6 +97,7 @@ internal class Request(
     val params: JsonObject,
     val terminals: TerminalRegistry,
     val streams: SearchRegistry,
+    val runs: RunRegistry,
     val session: String = "",
 ) {
     /** Set by a handler whose answer is source code, so the codec may use the code dictionary. */
@@ -154,6 +155,7 @@ internal class ServerSession(
         }
     private val terminals = TerminalRegistry(::send)
     private val streams = SearchRegistry(scope, ::send)
+    private val runs = RunRegistry(::send)
 
     fun attach(new: ServerConnection) {
         val old = connection
@@ -181,6 +183,7 @@ internal class ServerSession(
         inFlight.values.forEach { it.job.cancel() }
         terminals.stopAll()
         streams.stopAll()
+        runs.stopAll()
         connection?.close()
         onDispose(id)
     }
@@ -272,7 +275,7 @@ internal class ServerSession(
 
     private suspend fun execute(id: Long, method: Method, params: JsonElement): Frame =
         try {
-            val request = Request(id, params.params(), terminals, streams, this.id)
+            val request = Request(id, params.params(), terminals, streams, runs, this.id)
             val result = checkNotNull(handlers[method]) { "No handler for $method" }.invoke(request)
             Frame(FrameKind.Response, id, result, code = request.code)
         } catch (e: IOException) {

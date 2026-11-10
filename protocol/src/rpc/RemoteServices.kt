@@ -27,9 +27,11 @@ import org.example.kotlineditor.model.GitCommit
 import org.example.kotlineditor.model.GitCommitDetails
 import org.example.kotlineditor.model.GitFileStatus
 import org.example.kotlineditor.model.ProjectFileSystem
+import org.example.kotlineditor.model.ProjectRunner
 import org.example.kotlineditor.model.ProjectSearch
 import org.example.kotlineditor.model.ProjectSession
 import org.example.kotlineditor.model.RecentProjectsStore
+import org.example.kotlineditor.model.RunStream
 import org.example.kotlineditor.model.SearchStream
 import org.example.kotlineditor.model.ServerPlaces
 import org.example.kotlineditor.model.SessionStore
@@ -72,6 +74,7 @@ fun RpcClient.appServices(): AppServices =
         telemetry = RemoteTelemetrySettings(this),
         disk = RemoteDiskWatch(this),
         agents = RemoteAgents(this),
+        runner = RemoteRunner(this),
     )
 
 /** [TelemetrySettings] of the server. */
@@ -351,6 +354,33 @@ class RemoteGit(private val client: RpcClient) :
     private fun JsonObjectBuilder.file(root: String, path: String) {
         put(ROOT, root)
         put(PATH, path)
+    }
+}
+
+/**
+ * [ProjectRunner] of the server. The request id of RunStart is the id of the run's chunk stream, registered before
+ * the request is sent so no chunk can arrive unlistened; the stream resumes by itself after a reconnection.
+ */
+class RemoteRunner(private val client: RpcClient) : ProjectRunner {
+    override fun start(directory: String, command: List<String>): RunStream {
+        val id = client.newId()
+        val chunks = client.openRunStream(id)
+        client.scope.launch {
+            try {
+                client.call(Method.RunStart, id = id) {
+                    put(DIRECTORY, directory)
+                    put("command", command.toJson())
+                }
+            } catch (_: IOException) {
+                // The client closed, or the server (restart? no session any more): end the stream cleanly.
+                client.closeStream(id)
+            }
+        }
+        return RunStream(id, flow { for (chunk in chunks) emit(chunk) })
+    }
+
+    override fun stop(stream: RunStream) {
+        client.scope.launch { runCatching { client.call(Method.RunStop) { put(STREAM, stream.id) } } }
     }
 }
 

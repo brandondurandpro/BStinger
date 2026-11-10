@@ -45,6 +45,7 @@ object AppTags {
     const val TOOL_GIT = "tool.git"
     const val TOOL_BRANCHES = "tool.branches"
     const val TOOL_TERMINAL = "tool.terminal"
+    const val TOOL_RUN = "tool.run"
     const val TOOL_NETWORK = "tool.network"
     const val NETWORK = "network"
     const val NETWORK_RECORD = "network.record"

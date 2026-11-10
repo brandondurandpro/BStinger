@@ -11,6 +11,7 @@ modules:
   - features/git
   - features/language-servers
   - features/remote
+  - features/run
   - features/terminal
   - features/tree
   - lsp

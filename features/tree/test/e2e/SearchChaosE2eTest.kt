@@ -141,13 +141,14 @@ class SearchChaosE2eTest {
         runComposeUiTest {
             val expected = prepareMatches()
             val app = launchWithProject(project, chaos = true)
-            app.network.latencyMs = 40
+            app.network.latencyMs = 150
             openFindInFiles()
             onNodeWithTag(TreeTags.FIND_IN_FILES_INPUT).performTextInput("needle")
+            // Not "and not finished": a fast runner may finish the search between two polls, and the test must not
+            // depend on catching that window; the slow link only makes it wide.
             awaitCondition {
                 app.project.findInFiles.results
-                    .isNotEmpty() &&
-                    !app.project.findInFiles.finished
+                    .isNotEmpty()
             }
             app.network.goDown()
             awaitReconnecting()

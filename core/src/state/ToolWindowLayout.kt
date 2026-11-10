@@ -8,7 +8,7 @@ import androidx.compose.runtime.mutableStateMapOf
  * Panels around the editors; their buttons stay in the left strip wherever the panels are docked. Network is a
  * devtools panel: its button only appears once Ctrl+Alt+Shift+D has shown it.
  */
-enum class ToolWindow { Project, Git, Branches, Terminal, Network, LanguageServers }
+enum class ToolWindow { Project, Git, Branches, Run, Terminal, Network, LanguageServers }
 
 /** Where tool windows can be docked. */
 enum class Dock { Left, Right, Bottom }
@@ -42,6 +42,7 @@ class ToolWindowLayout {
             ToolWindow.Project to Dock.Left,
             ToolWindow.Git to Dock.Left,
             ToolWindow.Branches to Dock.Bottom,
+            ToolWindow.Run to Dock.Bottom,
             ToolWindow.Terminal to Dock.Bottom,
             ToolWindow.Network to Dock.Bottom,
             ToolWindow.LanguageServers to Dock.Bottom,
@@ -51,6 +52,7 @@ class ToolWindowLayout {
             ToolWindow.Project,
             ToolWindow.Git,
             ToolWindow.Branches,
+            ToolWindow.Run,
             ToolWindow.Terminal,
             ToolWindow.Network,
             ToolWindow.LanguageServers,
@@ -60,6 +62,7 @@ class ToolWindowLayout {
             ToolWindow.Project to true,
             ToolWindow.Git to false,
             ToolWindow.Branches to false,
+            ToolWindow.Run to false,
             ToolWindow.Terminal to false,
             ToolWindow.Network to false,
             ToolWindow.LanguageServers to false,

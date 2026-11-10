@@ -46,6 +46,7 @@ import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.Document
 import org.example.kotlineditor.state.PopupKind
 import org.example.kotlineditor.state.ProjectState
+import org.example.kotlineditor.state.ToolWindow
 import org.example.kotlineditor.state.workspaceProject
 
 // The IDE frame around the editors: toolbar, tool window strip and panels, splitters, status bar.
@@ -75,6 +76,8 @@ internal fun Toolbar(app: AppState, project: ProjectState) {
             ModeSwitch(project.agentMode) { project.agentMode = it }
             Spacer(Modifier.width(10.dp))
         }
+        RunWidget(project.run, { project.showToolWindow(ToolWindow.Run) })
+        Spacer(Modifier.width(10.dp))
         IconButton({ project.showPopup(PopupKind.GotoFile) }) { SearchIcon(color = IdeColors.Text) }
     }
 }
