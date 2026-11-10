@@ -159,6 +159,42 @@ class ToolDownloaderTest {
         assertFalse(Files.exists(tools.resolve("evil/1/package")))
     }
 
+    private fun package_(name: String, body: String): PinnedPackage {
+        val tgz = gzip(tar("package/package.json" to "{}", "package/index.js" to body))
+        files["/$name.tgz"] = tgz
+        return PinnedPackage(name, url("/$name.tgz"), Digest(Digest.SHA_512, sha512Base64(tgz)))
+    }
+
+    @Test
+    fun `a bundle installs its packages side by side under node_modules`() {
+        val bundle = PinnedBundle("web", "1", listOf(package_("server", "a"), package_("typescript", "b")))
+        val installed = downloader.obtainBundle(bundle)
+        assertEquals(tools.resolve("web/1"), installed)
+        assertEquals("a", Files.readString(installed.resolve("node_modules/server/index.js")))
+        assertEquals("b", Files.readString(installed.resolve("node_modules/typescript/index.js")))
+        downloader.obtainBundle(bundle)
+        assertEquals(2, requests.get())
+    }
+
+    @Test
+    fun `a bundle with a package that does not match its pin installs nothing`() {
+        val good = package_("server", "a")
+        val bad = package_("typescript", "b").copy(digest = Digest(Digest.SHA_512, sha512Base64(ByteArray(1))))
+        val bundle = PinnedBundle("web", "1", listOf(good, bad))
+        val failure = assertFailsWith<IOException> { downloader.obtainBundle(bundle) }
+        assertContains(failure.message.orEmpty(), "Checksum mismatch")
+        assertFalse(Files.exists(tools.resolve("web/1/node_modules/typescript")))
+    }
+
+    @Test
+    fun `a package removed from an installed bundle is installed again`() {
+        val bundle = PinnedBundle("web", "1", listOf(package_("server", "a")))
+        val installed = downloader.obtainBundle(bundle)
+        installed.resolve("node_modules/server").toFile().deleteRecursively()
+        downloader.obtainBundle(bundle)
+        assertTrue(Files.exists(installed.resolve("node_modules/server/index.js")))
+    }
+
     @Test
     fun `a pin with an unreadable checksum is rejected when it is written`() {
         assertFailsWith<IllegalArgumentException> { Digest(Digest.SHA_256, "not a checksum") }

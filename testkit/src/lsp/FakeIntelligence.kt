@@ -53,6 +53,7 @@ internal class FakeIntelligence(private val code: FakePhpCode) {
         return JsonObject(
             item +
                 listOfNotNull(
+                    ("detail" to JsonPrimitive("resolved type of $label")).takeIf { "detail" !in item },
                     markdown?.let {
                         "documentation" to
                             buildJsonObject {

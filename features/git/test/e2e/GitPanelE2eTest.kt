@@ -257,7 +257,7 @@ class GitPanelE2eTest {
             val network = app.client.network
 
             fun diffs(direction: Direction) =
-                network.snapshot().count { it.direction == direction && it.method == "GitDiff" }
+                network.snapshot().count { it.direction == direction && it.method == "GitHeadLines" }
 
             onNodeWithTag(TreeTags.TREE).performClick()
             onNodeWithTag(TreeTags.TREE).performKeyInput {
@@ -284,7 +284,7 @@ class GitPanelE2eTest {
                     ?.isNotEmpty() == true
             }
             waitForIdle()
-            // Three files are open, but only the saved one changed: its diff is the only one asked again.
+            // Three files are open, but only the saved one changed: its HEAD is the only one asked again.
             assertEquals(1, diffs(Direction.Sent))
         }
 

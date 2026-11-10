@@ -1,7 +1,15 @@
 package org.example.kotlineditor.lsp.completion
 
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
@@ -11,6 +19,7 @@ import org.example.kotlineditor.lsp.jsonrpc.LspConnectionClosedException
 import org.example.kotlineditor.lsp.jsonrpc.LspResponseException
 import org.example.kotlineditor.lsp.supervisor.ManagedServer
 import org.example.kotlineditor.model.CompletionResult
+import org.example.kotlineditor.model.Languages
 
 /**
  * Completion in the open documents: asked to their language server once the edits it follows arrived, then
@@ -60,21 +69,81 @@ internal class DocumentCompletions(
             }
         return try {
             // While another server takes over the language, the old one, stopping, is not ready any more.
-            val answered =
-                withTimeoutOrNull(timeoutMs) {
-                    serversOf(document).firstNotNullOfOrNull { server ->
-                        server.request("textDocument/completion", params)?.let { server to it }
-                    }
-                }
-            answered?.let { (server, answer) ->
-                val (result, items) = CompletionAnswers.translateWithItems(answer, text, column)
-                result.copy(token = offered.offer(session, server, items))
-            } ?: CompletionResult.NotReady
+            val answers = withTimeoutOrNull(timeoutMs) { askAll(serversAsked(document, text, column), params) }
+            if (answers == null || answers.servers.isEmpty()) {
+                if (answers?.refused == true) refused(column) else CompletionResult.NotReady
+            } else {
+                val merged = merge(answers.answers)
+                val (result, items) = CompletionAnswers.translateWithItems(merged, text, column)
+                result.copy(token = offered.offer(session, answers.servers, items))
+            }
         } catch (_: LspConnectionClosedException) {
             CompletionResult.NotReady
         } catch (_: LspResponseException) {
-            // The server refused (content modified, request failed): nothing to propose this time.
-            CompletionResult(column, emptyList(), incomplete = true, ready = true)
+            refused(column)
         }
     }
+
+    // Tailwind CSS only knows class names: it is not asked where the cursor is not in a string.
+    private fun serversAsked(document: MirroredDocument, line: String, column: Int): List<ManagedServer> {
+        val beforeCursor = line.take(column)
+        val inString = beforeCursor.any { it in QUOTES }
+        return serversOf(document).filter { inString || it.language != Languages.TAILWIND }
+    }
+
+    // The server refused (content modified, request failed): nothing to propose this time.
+    private fun refused(column: Int) = CompletionResult(column, emptyList(), incomplete = true, ready = true)
+
+    // What each server of the document proposes, asked together. The first one, the server of the language, is waited
+    // for; the companions (Tailwind CSS in a class attribute, Vue in a template) get a short time after it: one that is
+    // slow or stuck must not hold back the completion of the code.
+    private suspend fun askAll(servers: List<ManagedServer>, params: JsonObject): Answers =
+        coroutineScope {
+            val asked = servers.map { server -> async { askOne(server, params) } }
+            val first = asked.firstOrNull()?.await()
+            val companions = asked.drop(1)
+            withTimeoutOrNull(COMPANION_GRACE_MS) { companions.awaitAll() }
+            val finished = companions.filter { it.isCompleted }
+            companions.filterNot { it.isCompleted }.forEach { it.cancel() }
+            val answers = listOf(first) + finished.map { it.await() }
+            val answered = answers.mapNotNull { it?.getOrNull() }
+            Answers(
+                answered.map { it.first },
+                answered.map { it.second },
+                refused = answers.any { it?.isFailure == true },
+            )
+        }
+
+    // The server and its answer; a failure when it refused; null when it is not ready or closed meanwhile.
+    private suspend fun askOne(server: ManagedServer, params: JsonObject): Result<Pair<ManagedServer, JsonElement>>? =
+        try {
+            server.request("textDocument/completion", params)?.let { Result.success(server to it) }
+        } catch (failure: LspResponseException) {
+            Result.failure(failure)
+        } catch (_: LspConnectionClosedException) {
+            null
+        }
+
+    // One completion list: the items of every answer, each marked with the server it came from (by its position).
+    private fun merge(answers: List<JsonElement>): JsonObject {
+        var incomplete = false
+        val items = mutableListOf<JsonElement>()
+        answers.forEachIndexed { index, answer ->
+            val list = answer as? JsonObject
+            incomplete = incomplete || (list?.get("isIncomplete") as? JsonPrimitive)?.booleanOrNull == true
+            val proposed = (list?.get("items") ?: answer) as? JsonArray
+            val marker = JsonPrimitive(index)
+            proposed?.filterIsInstance<JsonObject>()?.forEach {
+                items += JsonObject(it + (OfferedCompletions.SERVER to marker))
+            }
+        }
+        return JsonObject(mapOf("isIncomplete" to JsonPrimitive(incomplete), "items" to JsonArray(items)))
+    }
+
+    private companion object {
+        const val COMPANION_GRACE_MS = 400L
+        const val QUOTES = "\"'`"
+    }
+
+    private class Answers(val servers: List<ManagedServer>, val answers: List<JsonElement>, val refused: Boolean)
 }

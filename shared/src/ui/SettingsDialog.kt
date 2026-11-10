@@ -202,7 +202,7 @@ private fun SettingControl(app: AppState, settings: SettingsState, setting: Sett
             InlayHintsControl(app)
         }
 
-        Setting.PhpServer -> {
+        Setting.LanguageServers -> {
             ServerControl(settings)
         }
 

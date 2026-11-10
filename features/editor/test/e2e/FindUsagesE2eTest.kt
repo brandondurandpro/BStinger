@@ -62,6 +62,9 @@ class FindUsagesE2eTest {
         }
     private val servers = FakePhpServers().chosen()
 
+    // Answers the three references requests that count the declarations of Shop.php, then none.
+    private val countedOnly = FakePhpServers("--references-budget", "3").chosen()
+
     // Like intelephense: indexes the project for a while after it started, and finds no usage until it is done.
     private val indexing = FakePhpServers("--progress", "$INDEXING_SECONDS", "--blind-until-indexed").chosen()
 
@@ -79,6 +82,7 @@ class FindUsagesE2eTest {
     fun cleanup() {
         project.delete()
         servers.delete()
+        countedOnly.delete()
         indexing.delete()
         lateIndexing.delete()
     }
@@ -124,6 +128,15 @@ class FindUsagesE2eTest {
                 clickHint(10, "Usages of checkout  2 usages")
                 closeList()
             }
+        }
+
+    @Test
+    fun `a click on a count lists the usages found with it, without asking the server again`() =
+        runComposeUiTest {
+            open("src/Shop.php", countedOnly)
+            clickHint(2, "Usages of Cart  1 usage")
+            closeList()
+            clickHint(10, "Usages of checkout  2 usages")
         }
 
     @Test

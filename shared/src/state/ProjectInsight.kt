@@ -95,7 +95,7 @@ internal fun ProjectState.followInsight() {
         snapshotFlow {
             editor.allTabs
                 .filterNot { it.isDiff }
-                .filter { Languages.languageOf(it.entry.path) != null }
+                .filter { Languages.hasInsight(it.entry.path) }
                 .mapNotNull { tab -> tab.document?.let { tab.entry.path to it } }
                 .toMap()
         }.distinctUntilChanged().collect { insight.track(it) }
@@ -120,8 +120,7 @@ internal fun ProjectState.followInsight() {
 }
 
 /** Whether the file of [tab] has a language server in this project. */
-fun ProjectState.hasInsight(tab: EditorTab): Boolean =
-    languageServers != null && Languages.languageOf(tab.entry.path) != null
+fun ProjectState.hasInsight(tab: EditorTab): Boolean = languageServers != null && Languages.hasInsight(tab.entry.path)
 
 /** Runs [action] on the active editor when its file has a language server. */
 fun ProjectState.withInsight(action: CodeInsightState.(path: String, document: Document) -> Unit) {

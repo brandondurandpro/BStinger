@@ -54,6 +54,7 @@ import org.example.kotlineditor.state.EditorTab
 import org.example.kotlineditor.state.HorizontalScroll
 import org.example.kotlineditor.state.TextPos
 import org.example.kotlineditor.state.VerticalScroll
+import org.example.kotlineditor.state.closesTags
 import org.example.kotlineditor.state.extendSelection
 import org.example.kotlineditor.state.identifierAt
 import org.example.kotlineditor.state.matchingBracket
@@ -171,6 +172,7 @@ private fun editorKeys(
     page: () -> Int,
 ): (KeyEvent) -> Boolean =
     { event ->
+        val closeTags = path != null && closesTags(path)
         val completionShown = completion?.popup?.document === document
         insight?.let { ctrlKey(event, it) }
         val byInsight = insight != null && !completionShown
@@ -181,9 +183,9 @@ private fun editorKeys(
         } else if (byInsight && insightKey(event, insight, document)) {
             true
         } else if (completion != null && path != null) {
-            completionKey(event, completion, path, document) { handleEditorKey(event, document, page()) }
+            completionKey(event, completion, path, document) { handleEditorKey(event, document, page(), closeTags) }
         } else {
-            handleEditorKey(event, document, page())
+            handleEditorKey(event, document, page(), closeTags)
         }
     }
 

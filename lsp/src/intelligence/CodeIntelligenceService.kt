@@ -10,9 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -59,7 +57,6 @@ import org.example.kotlineditor.model.SourceLocation
 import org.example.kotlineditor.model.SymbolHighlight
 import org.example.kotlineditor.model.TextRange
 import org.example.kotlineditor.model.TypeFormattingTriggers
-import org.example.kotlineditor.model.UsageCount
 import org.example.kotlineditor.model.UsageCountsResult
 import org.example.kotlineditor.model.WorkspaceSymbol
 import org.example.kotlineditor.model.WorkspaceSymbolsResult
@@ -73,6 +70,11 @@ import java.util.concurrent.atomic.AtomicLong
 private const val URI = "uri"
 private const val TEXT_DOCUMENT = "textDocument"
 private const val RANGE = "range"
+private const val HOVER_SEPARATOR = """
+
+---
+
+"""
 private const val COMMAND = "command"
 private const val RENAME_PROVIDER = "renameProvider"
 private const val POSITION = "position"
@@ -98,6 +100,8 @@ class IntelligenceSettings(
     val maxCountedSymbols: Int = 150,
     /** References requests run at once to count usages. */
     val countParallelism: Int = 4,
+    /** How long the usages of a document's declarations are counted; the ones counted by then are kept. */
+    val countBudgetMs: Long = 60_000,
 )
 
 /** A code action offered to a session, kept until it asks for another list. */
@@ -106,8 +110,15 @@ private class OfferedActions(val token: String, val server: ManagedServer, val a
 /**
  * The usage counts of a document, for its version [lspVersion] and the indexings its servers had ended by then
  * ([indexed]): a server such as intelephense finds no usage before it indexed, so its counts are asked again after.
+ * The usages themselves are kept with the counts.
  */
-private data class CountedUsages(val lspVersion: Int, val indexed: List<Long?>, val result: UsageCountsResult)
+private data class CountedUsages(
+    val lspVersion: Int,
+    val indexed: List<Long?>,
+    val result: UsageCountsResult,
+    /** The usages found for each counted declaration, so that a click on its count does not ask again. */
+    val usages: Map<TextRange, List<SourceLocation>>,
+)
 
 /** Diagnostics of a document as one language server published them. */
 private data class Published(val server: String, val uri: String, val diagnostics: List<Diagnostic>)
@@ -143,6 +154,7 @@ class CodeIntelligenceService internal constructor(
     private val offered = ConcurrentHashMap<String, OfferedActions>()
     private val tokens = AtomicLong()
     private val tokenPrefix = newTokenPrefix()
+    private val counter = UsageCounter(settings, serversOf)
     private val usageCache = ConcurrentHashMap<String, CountedUsages>()
 
     // Edits a running command asks for, by server id; a command runs alone on its server.
@@ -150,22 +162,44 @@ class CodeIntelligenceService internal constructor(
     private val commandLocks = ConcurrentHashMap<String, Mutex>()
 
     /** Documentation at [at]. */
-    suspend fun hover(session: String, at: DocumentPosition): HoverResult =
-        requests.ask(
-            session,
-            at.path,
-            at.version,
-            "hoverProvider",
-            HoverResult.NotReady,
-            HoverResult(FeatureStatus.Unsupported, null),
-        ) {
-                document,
-                request,
-            ->
-            val answer = request("textDocument/hover", positionParams(document, at))
-            val range = (answer as? JsonObject)?.get(RANGE).textRange()
-            HoverResult(FeatureStatus.Ready, hoverMarkdown(answer), range)
+    suspend fun hover(session: String, at: DocumentPosition): HoverResult {
+        val answers =
+            requests.askEach(session, at.path, at.version, "hoverProvider") { document, request ->
+                val answer = request("textDocument/hover", positionParams(document, at))
+                val range = (answer as? JsonObject)?.get(RANGE).textRange()
+                val markdown = hoverMarkdown(answer)
+                val complete = withOverloads(document, request, at, range, markdown)
+                HoverResult(FeatureStatus.Ready, complete, range)
+            }
+        return when {
+            answers == null -> HoverResult.NotReady
+            answers.isEmpty() -> HoverResult(FeatureStatus.Unsupported, null)
+            else -> mergedHover(answers)
         }
+    }
+
+    // The signatures a hover only counts ("+3 overloads"), asked to the same server as signature help of the call.
+    private suspend fun withOverloads(
+        document: MirroredDocument,
+        request: suspend (String, JsonObject) -> JsonElement?,
+        at: DocumentPosition,
+        range: TextRange?,
+        markdown: String?,
+    ): String? {
+        val counting = markdown != null && HoverOverloads.hidesSome(markdown)
+        val inside = if (counting) HoverOverloads.insideCall(document, at, range) else null
+        if (markdown == null || inside == null) return markdown
+        val answer = request("textDocument/signatureHelp", positionParams(document, inside))
+        val labels = signatureHelpOf(answer).signatures.map { it.label }
+        return HoverOverloads.listing(markdown, labels)
+    }
+
+    // The texts of every server that knows something here (TypeScript's type, Tailwind's CSS), the first range.
+    private fun mergedHover(answers: List<HoverResult>): HoverResult {
+        val known = answers.filter { !it.markdown.isNullOrBlank() }
+        val markdown = known.joinToString(HOVER_SEPARATOR) { it.markdown.orEmpty() }.ifEmpty { null }
+        return HoverResult(FeatureStatus.Ready, markdown, known.firstOrNull()?.range)
+    }
 
     /** Declaration, type or implementations of the symbol at [at]. */
     suspend fun navigate(session: String, at: DocumentPosition, kind: NavigationKind): LocationsResult {
@@ -197,8 +231,24 @@ class CodeIntelligenceService internal constructor(
 
     /** Usages of the symbol at [at]. */
     suspend fun references(session: String, at: DocumentPosition, includeDeclaration: Boolean): LocationsResult {
+        val counted = if (includeDeclaration) null else countedUsagesAt(session, at)
+        if (counted != null) return counted
         val params = referencesParams(at.line, at.column, includeDeclaration)
         return locations(session, at, "textDocument/references", "referencesProvider", params)
+    }
+
+    // The usages of the declaration at [at] when they were found with its count, for the version of the document the
+    // click is about: they are shown at once, without asking the server again.
+    private suspend fun countedUsagesAt(session: String, at: DocumentPosition): LocationsResult? {
+        val document = requests.awaitDocument(session, at.path, at.version)
+        val lspVersion = document?.let { documents.locked { it.lspVersion } }
+        val indexed = document?.let { serversOf(it).map { server -> server.indexingEndedAt } }
+        val cached = usageCache[document?.uri]?.takeIf { it.lspVersion == lspVersion && it.indexed == indexed }
+        val caret = TextRange(at.line, at.column, at.line, at.column)
+        val declaration = cached?.usages?.keys?.firstOrNull { contains(it, caret) }
+        val found = declaration?.let { cached.usages[it] }
+        val kept = found?.take(settings.maxLocations)
+        return kept?.let { LocationsResult(FeatureStatus.Ready, withPreviews(it), truncated = found.size > it.size) }
     }
 
     private suspend fun locations(
@@ -324,59 +374,18 @@ class CodeIntelligenceService internal constructor(
             notReady,
             unsupported,
             needsIndex = true,
+            // The counting stops itself at its budget; the request waits for it.
+            timeoutMs = settings.countBudgetMs + settings.timeoutMs,
         ) { document, request ->
             val lspVersion = documents.locked { document.lspVersion }
             // Read before counting: an indexing that ends meanwhile makes these counts obsolete.
             val indexed = serversOf(document).map { it.indexingEndedAt }
             val cached = usageCache[document.uri]?.takeIf { it.lspVersion == lspVersion && it.indexed == indexed }
-            cached?.result ?: countUsages(document, request).also {
-                usageCache[document.uri] = CountedUsages(lspVersion, indexed, it)
+            cached?.result ?: counter.count(document, request).let { counted ->
+                usageCache[document.uri] = CountedUsages(lspVersion, indexed, counted.result, counted.usages)
+                counted.result
             }
         }
-    }
-
-    private suspend fun countUsages(
-        document: MirroredDocument,
-        request: suspend (String, JsonObject) -> JsonElement?,
-    ): UsageCountsResult {
-        val symbolParams = buildJsonObject { putJsonObject(TEXT_DOCUMENT) { put(URI, document.uri) } }
-        val symbols =
-            countedSymbolsOf(
-                request("textDocument/documentSymbol", symbolParams),
-            ).take(settings.maxCountedSymbols)
-        val supportsReferences = serversOf(document).any { it.supports("referencesProvider") == true }
-        if (!supportsReferences) return UsageCountsResult(FeatureStatus.Unsupported, emptyList())
-        val permits = Semaphore(settings.countParallelism)
-        val counts =
-            coroutineScope {
-                val asked =
-                    symbols.map { symbol ->
-                        async {
-                            permits.withPermit {
-                                usageCount(
-                                    document,
-                                    symbol,
-                                    request,
-                                )
-                            }
-                        }
-                    }
-                asked.awaitAll()
-            }
-        return UsageCountsResult(FeatureStatus.Ready, counts)
-    }
-
-    private suspend fun usageCount(
-        document: MirroredDocument,
-        symbol: CountedSymbol,
-        request: suspend (String, JsonObject) -> JsonElement?,
-    ): UsageCount {
-        val start = symbol.range
-        val params = referencesParams(start.startLine, start.startColumn, false)(document)
-        val usages = locationsOf(request("textDocument/references", params))
-        // Some servers count the declaration even when asked not to.
-        val others = usages.filterNot { it.path == document.path && contains(it.range, start) }
-        return UsageCount(symbol.range, symbol.name, others.size)
     }
 
     /** The diagnostics of [session]'s documents once newer than [since], or the current ones after a while. */

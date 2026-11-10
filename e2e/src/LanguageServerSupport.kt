@@ -14,6 +14,7 @@ import org.example.kotlineditor.lsp.provision.RuntimeDetector
 import org.example.kotlineditor.lsp.provision.RuntimeKind
 import org.example.kotlineditor.lsp.supervisor.SupervisorTimings
 import org.example.kotlineditor.model.LanguageServerInfo
+import org.example.kotlineditor.model.ProjectCheckResult
 import org.example.kotlineditor.testkit.lsp.FakeLanguageServerCommand
 import java.nio.file.Files
 import java.nio.file.Path
@@ -26,7 +27,13 @@ const val SERVER_START_MS = 60_000L
  * started with [options], and `needs-node`, which needs Node.js and finds none; with [alternative], also `other`,
  * the same fake server under another name, to switch to.
  */
-class FakePhpServers(vararg options: String, idleStopMs: Long = 1_000, alternative: Boolean = false) {
+class FakePhpServers(
+    vararg options: String,
+    tailwindOptions: Array<String> = emptyArray(),
+    idleStopMs: Long = 1_000,
+    alternative: Boolean = false,
+    check: ((project: String) -> ProjectCheckResult)? = null,
+) {
     /** Choices and pids of the servers. */
     val data: Path = Files.createTempDirectory("kotlin-editor-lsp")
     private val fake =
@@ -53,6 +60,33 @@ class FakePhpServers(vararg options: String, idleStopMs: Long = 1_000, alternati
 
     private val other = fake.copy(id = OTHER, displayName = "otherphp")
 
+    // The only server of TypeScript and JavaScript, as typescript-language-server is: no choice to make.
+    private val typescript =
+        fake.copy(
+            id = FAKE_TYPESCRIPT,
+            displayName = "fakets",
+            language = "typescript",
+            strengths = listOf("Starts in a second"),
+            drawbacks = listOf("Knows nothing about TypeScript"),
+            initializationOptions = null,
+            withoutInlayHints = null,
+        )
+
+    // The Vue server beside it, for .vue files.
+    private val vue = typescript.copy(id = FAKE_VUE, displayName = "fakevue", language = "vue")
+
+    // Tailwind CSS beside it, for the projects that have a tailwind.config.js.
+    private val tailwind =
+        typescript.copy(
+            id = FAKE_TAILWIND,
+            displayName = "faketailwind",
+            language = "tailwind",
+            // It knows only class names.
+            command = { _, _ ->
+                FakeLanguageServerCommand.command(*options, *tailwindOptions, "--only-items", TAILWIND_CLASSES)
+            },
+        )
+
     // No PHP nor Node.js: the fake server needs neither, and the other candidate is unavailable.
     private val nothingInstalled =
         RuntimeDetector(pathEnvironment = "", extraDirectories = { emptyList() }, probe = { _, _ -> null })
@@ -73,9 +107,10 @@ class FakePhpServers(vararg options: String, idleStopMs: Long = 1_000, alternati
             candidates =
             CandidateRegistry(
                 nothingInstalled,
-                listOfNotNull(fake, needsNode, other.takeIf { alternative }),
+                listOfNotNull(fake, needsNode, other.takeIf { alternative }, typescript, vue, tailwind),
             ),
             timings = timings,
+            projectCheck = check,
             statusHoldMs = 5_000,
             sampleIntervalMs = 250,
         )
@@ -95,9 +130,31 @@ class FakePhpServers(vararg options: String, idleStopMs: Long = 1_000, alternati
         const val FAKE = "fake"
         const val NEEDS_NODE = "needs-node"
         const val OTHER = "other"
+        const val FAKE_TYPESCRIPT = "fake-ts"
+        const val FAKE_TAILWIND = "fake-tailwind"
+        const val FAKE_VUE = "fake-vue"
+
+        /** The class names the fake Tailwind CSS server proposes, comma-separated. */
+        const val TAILWIND_CLASSES = "twflex,twgrid"
 
         /** Why the fake server gives no inlay hints, when started `--without inlayHint`. */
         const val WITHOUT_INLAY_HINTS = "fakephp gives inlay hints only with a licence."
+
+        /** A web project: `package.json` and `tsconfig.json` at its root, TypeScript, React and JavaScript files. */
+        fun webProject(): SampleProject =
+            SampleProject().apply {
+                file("package.json", "{}\n")
+                file("tsconfig.json", "{}\n")
+                file("src/app.ts", "export const answer: number = 42\n")
+                file("src/view.tsx", "export const View = () => <p>hello</p>\n")
+                file("src/legacy.js", "module.exports = 1\n")
+                file("src/App.vue", """<script setup lang="ts">\nconst hello = 1\n</script>\n""")
+                file("README.md", "# Shop\n")
+            }
+
+        /** A web project that uses Tailwind CSS: [webProject] with a `tailwind.config.js`. */
+        fun tailwindProject(): SampleProject =
+            webProject().apply { file("tailwind.config.js", "module.exports = { content: ['./src/**/*.tsx'] }\n") }
 
         /** A PHP project: a `composer.json` at its root and two PHP files. */
         fun project(): SampleProject =

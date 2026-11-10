@@ -49,8 +49,9 @@ import kotlin.system.exitProcess
  *   `--progress`: like intelephense, finds no definition nor usage until its indexing ended, which begins a moment
  *   after `initialized`), `--indexing-starts-after <ms>` (that moment, 200 ms by default: later than the IDE waits
  *   for an indexing to begin, it counts usages before, like a server slowed down by a loaded machine);
- * - completion: `--completion-items <n>` (n more functions, `generated_00001`...), `--full-sync` (asks for the whole
- *   text at each change), `--no-completion` (answers completion with an error).
+ * - completion: `--only-items a,b` (proposes only these, like a server that knows one thing), `--completion-items <n>` (n more functions, `generated_00001`...), `--full-sync` (asks for the whole
+ *   text at each change), `--no-completion` (answers completion with an error), `--hang-completion` (never answers it), `--references-budget <n>` (answers that many references requests, then none), `--no-detail` (items without `detail`, which resolving adds, as
+ *   typescript-language-server does).
  * A crash writes `Fatal error: fake crash` on stderr first, like a real server would.
  * Memory is allocated as direct buffers with one byte written per page, so that it becomes resident.
  */
@@ -130,8 +131,12 @@ object FakeLanguageServer {
         val diagnostics: Boolean = false,
         val progressSeconds: Int? = null,
         val completionItems: Int = 0,
+        val onlyItems: List<String>? = null,
         val fullSync: Boolean = false,
         val noCompletion: Boolean = false,
+        val hangCompletion: Boolean = false,
+        val noDetail: Boolean = false,
+        val referencesBudget: Int? = null,
         val without: Set<String> = emptySet(),
         val noDiagnostics: Boolean = false,
         // Gives the diagnostics when asked (textDocument/diagnostic) instead of publishing them.
@@ -178,8 +183,12 @@ object FakeLanguageServer {
                     diagnostics = "diagnostics" in values,
                     progressSeconds = int("progress"),
                     completionItems = int("completion-items") ?: 0,
+                    onlyItems = values["only-items"]?.split(','),
                     fullSync = "full-sync" in values,
                     noCompletion = "no-completion" in values,
+                    hangCompletion = "hang-completion" in values,
+                    noDetail = "no-detail" in values,
+                    referencesBudget = int("references-budget"),
                     without = values["without"]?.split(',')?.toSet().orEmpty(),
                     noDiagnostics = "no-diagnostics" in values,
                     pullDiagnostics = "pull-diagnostics" in values,
@@ -203,6 +212,8 @@ object FakeLanguageServer {
                     "progress-on-references",
                     "progress",
                     "completion-items",
+                    "only-items",
+                    "references-budget",
                     "without",
                     "indexing-starts-after",
                     "stop-reading-on-change",
@@ -347,7 +358,13 @@ object FakeLanguageServer {
                 "workspace/willCreateFiles", "workspace/willDeleteFiles" -> reply(id, JsonNull)
                 "workspace/didCreateFiles", "workspace/didRenameFiles", "workspace/didDeleteFiles" ->
                     log.println("${method.removePrefix("workspace/")} ${message["params"]}").also { log.flush() }
-                "textDocument/definition", "textDocument/references" -> if (!sees) reply(id, JsonArray(emptyList())) else answerNavigation(id, method, message["params"])
+                "textDocument/definition", "textDocument/references" ->
+                    when {
+                        // Past its budget it never answers: a usage must come from what was counted.
+                        method == "textDocument/references" && pastReferencesBudget() -> Unit
+                        !sees -> reply(id, JsonArray(emptyList()))
+                        else -> answerNavigation(id, method, message["params"])
+                    }
                 "textDocument/declaration" -> reply(id, intelligence().definition(message["params"]))
                 "textDocument/typeDefinition" -> reply(id, intelligence().typeDefinition(message["params"]))
                 "textDocument/implementation" -> reply(id, intelligence().implementation(message["params"]))
@@ -379,7 +396,9 @@ object FakeLanguageServer {
                 "workspace/executeCommand" -> executeCommand(id!!, message["params"])
                 "completionItem/resolve" -> reply(id, intelligence().resolveCompletion(message["params"]))
                 "textDocument/completion" ->
-                    if (options.noCompletion) {
+                    if (options.hangCompletion) {
+                        Unit // Alive, but never answers a completion.
+                    } else if (options.noCompletion) {
                         error(id!!, CONTENT_MODIFIED, "Content modified")
                     } else {
                         reply(id, completion(message["params"]))
@@ -387,6 +406,11 @@ object FakeLanguageServer {
                 else -> if (id != null) error(id, METHOD_NOT_FOUND, "Unknown method $method")
             }
         }
+
+        private val referencesAsked = java.util.concurrent.atomic.AtomicInteger()
+
+        private fun pastReferencesBudget(): Boolean =
+            referencesAsked.incrementAndGet() > (options.referencesBudget ?: Int.MAX_VALUE)
 
         // Alive, but reads nothing more: what the IDE writes fills the pipe, then its writes block.
         private fun stopReading(): Nothing {
@@ -591,10 +615,11 @@ object FakeLanguageServer {
                 }
             val variables = lines.flatMap { VARIABLE.findAll(it).map { match -> match.value } }.distinct()
             val generated = (1..options.completionItems).map { "generated_%05d".format(it) to "function generated()" }
+            val proposed = options.onlyItems?.map { it to "class" } ?: (BUILT_INS + functions + generated)
             val items =
-                (BUILT_INS + functions + generated).distinctBy { it.first }.map { (name, detail) ->
+                proposed.distinctBy { it.first }.map { (name, detail) ->
                     item(name, FUNCTION_KIND, detail, line, start, column)
-                } + variables.filter { it != text.substring(start, column) }.map {
+                } + variables.takeIf { options.onlyItems == null }.orEmpty().filter { it != text.substring(start, column) }.map {
                     item(it, VARIABLE_KIND, "mixed", line, start, column)
                 }
             return buildJsonObject {
@@ -609,7 +634,7 @@ object FakeLanguageServer {
             buildJsonObject {
                 put("label", label)
                 put("kind", kind)
-                put("detail", detail)
+                if (!options.noDetail) put("detail", detail)
                 putJsonObject("textEdit") {
                     putJsonObject("range") {
                         putJsonObject("start") {

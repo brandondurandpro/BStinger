@@ -37,6 +37,7 @@ internal class ServerRequests(
         unsupported: T,
         refused: (LspResponseException) -> T = { notReady },
         needsIndex: Boolean = false,
+        timeoutMs: Long = settings.timeoutMs,
         block: suspend (MirroredDocument, suspend (String, JsonObject) -> JsonElement?) -> T,
     ): T {
         val document = awaitDocument(session, path, version)
@@ -46,8 +47,32 @@ internal class ServerRequests(
             document == null || readyServers.isEmpty() -> notReady
             server == null -> unsupported
             needsIndex && !server.awaitIndexed(settings.indexingWaitMs) -> notReady
-            else -> answered(server, document, notReady, refused, block)
+            else -> answered(server, document, notReady, refused, timeoutMs, block)
         }
+    }
+
+    /**
+     * What [block] finds asking each ready server of [path] that offers [capability], in the order of the servers
+     * (the server of the language first, then those of the companion languages); null when the document or every
+     * server is not ready or none answered, empty when none offers the capability.
+     */
+    suspend fun <T : Any> askEach(
+        session: String,
+        path: String,
+        version: Int,
+        capability: String,
+        block: suspend (MirroredDocument, suspend (String, JsonObject) -> JsonElement?) -> T?,
+    ): List<T>? {
+        val document = awaitDocument(session, path, version)
+        val readyServers = document?.let { serversOf(it) }.orEmpty().filter { it.supports(capability) != null }
+        if (document == null || readyServers.isEmpty()) return null
+        val offering = readyServers.filter { it.supports(capability) == true }
+        val found =
+            offering.mapNotNull { server ->
+                answered<T?>(server, document, null, { null }) { doc, request -> block(doc, request) }
+            }
+        // Servers offered it but none answered in time: not ready, unlike none offering it.
+        return found.ifEmpty { if (offering.isEmpty()) found else null }
     }
 
     suspend fun <T> answered(
@@ -55,14 +80,16 @@ internal class ServerRequests(
         document: MirroredDocument,
         notReady: T,
         refused: (LspResponseException) -> T,
+        timeoutMs: Long = settings.timeoutMs,
         block: suspend (MirroredDocument, suspend (String, JsonObject) -> JsonElement?) -> T,
-    ): T = answeredBy(server, notReady, refused) { request -> block(document, request) }
+    ): T = answeredBy(server, notReady, refused, timeoutMs) { request -> block(document, request) }
 
     // What [block] finds asking [server]; [notReady] when it cannot answer in time, [refused] when it refuses.
     suspend fun <T> answeredBy(
         server: ManagedServer,
         notReady: T,
         refused: (LspResponseException) -> T = { notReady },
+        timeoutMs: Long = settings.timeoutMs,
         block: suspend (suspend (String, JsonObject) -> JsonElement?) -> T,
     ): T {
         val request: suspend (String, JsonObject) -> JsonElement? = { method, params ->
@@ -70,7 +97,7 @@ internal class ServerRequests(
             answer.takeIf { it != JsonNull }
         }
         return try {
-            withTimeoutOrNull(settings.timeoutMs) { block(request) } ?: notReady
+            withTimeoutOrNull(timeoutMs) { block(request) } ?: notReady
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: NotReadyException) {

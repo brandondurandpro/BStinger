@@ -398,6 +398,9 @@ enum class Method(
     /** Differences of a file between HEAD and the working tree. */
     GitDiff("git/diff", mutating = false),
 
+    /** The lines of a file as HEAD holds them (the index when there is no commit), null when it is not tracked. */
+    GitHeadLines("git/headLines", mutating = false),
+
     /** Author and date of each line of a file. */
     GitBlame("git/blame", mutating = false),
 
@@ -577,6 +580,9 @@ enum class Method(
 
     /** Diagnostics of the session's documents, answered once newer than the client's version (long poll). */
     LspDiagnostics("lsp/diagnostics", mutating = false),
+
+    /** Checks the whole project with its type checker (`vue-tsc`) and returns the problems of every file. */
+    LspCheckProject("lsp/checkProject", mutating = false),
 
     /** What can be renamed at a position. */
     LspPrepareRename("lsp/prepareRename", mutating = false),

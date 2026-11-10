@@ -25,6 +25,7 @@ import org.example.kotlineditor.model.LocationsResult
 import org.example.kotlineditor.model.NavigationKind
 import org.example.kotlineditor.model.OperatedFile
 import org.example.kotlineditor.model.OutlineResult
+import org.example.kotlineditor.model.ProjectCheckResult
 import org.example.kotlineditor.model.RenameTarget
 import org.example.kotlineditor.model.SelectionRangesResult
 import org.example.kotlineditor.model.SemanticTokensResult
@@ -264,6 +265,9 @@ class RemoteLanguageServers(private val client: RpcClient) : LanguageServers {
 
     override suspend fun diagnostics(since: Long): DiagnosticsSnapshot =
         client.call(Method.LspDiagnostics) { put("since", since) }.diagnosticsSnapshot()
+
+    override suspend fun checkProject(project: String): ProjectCheckResult =
+        client.call(Method.LspCheckProject) { put("project", project) }.projectCheckResult()
 
     override suspend fun prepareRename(at: DocumentPosition): RenameTarget =
         client.call(Method.LspPrepareRename) { putPosition(at) }.renameTarget()

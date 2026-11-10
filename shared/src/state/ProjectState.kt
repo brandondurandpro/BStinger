@@ -65,6 +65,7 @@ class ProjectState(
                 git.refreshStatus(reloadEditors = false)
             },
             diffs = { entry -> services.git.diff(root.path, tree.relativePath(entry)) },
+            headLines = { entry -> services.git.headLines(root.path, tree.relativePath(entry)) },
             commitDiffs = { entry, commit ->
                 services.git.commitDiff(root.path, commit.hash, tree.relativePath(entry), commit.oldPath)
             },

@@ -1,6 +1,7 @@
 package org.example.kotlineditor.e2e
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ComposeTimeoutException
 import androidx.compose.ui.test.ComposeUiTest
@@ -21,7 +22,9 @@ fun ComposeUiTest.previewColorOf(index: Int, word: String): Color? {
     val whole = Regex("(?<!\\w)${Regex.escape(word)}(?!\\w)")
     val match = text?.text?.let { whole.find(it) } ?: return null
     val start = match.range.first
-    val span = text.spanStyles.lastOrNull { it.start <= start && it.end >= start + word.length }
+    // The bold of the usage has no color of its own: the color is the last one that covers the word.
+    val colored = text.spanStyles.filter { it.item.color.isSpecified }
+    val span = colored.lastOrNull { it.start <= start && it.end >= start + word.length }
     return span?.item?.color ?: IdeColors.Code
 }
 

@@ -2,6 +2,7 @@ package org.example.kotlineditor.state
 
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CoroutineScope
@@ -13,8 +14,8 @@ import kotlinx.coroutines.plus
 import org.example.kotlineditor.model.LanguageServerChoice
 import java.io.IOException
 
-/** Language whose server the Settings dialog chooses. */
-const val PHP_LANGUAGE = "php"
+/** The languages whose server the Settings dialog chooses, in the order it lists them. */
+val SERVER_LANGUAGES = listOf("php", "typescript", "vue", "tailwind")
 
 /** The categories of the Settings dialog, in the order of its list. */
 enum class SettingsCategory(val title: String) {
@@ -39,11 +40,11 @@ enum class Setting(val category: SettingsCategory, val title: String, val descri
         "The parameter names and the types the language server adds to the code.",
         "parameter names types variables lsp",
     ),
-    PhpServer(
+    LanguageServers(
         SettingsCategory.LanguageServers,
-        "PHP language server",
-        "The server that understands PHP: completion, navigation, problems, inlay hints.",
-        "lsp phpactor intelephense",
+        "Language servers",
+        "The servers that understand each language: completion, navigation, problems, inlay hints.",
+        "lsp php phpactor intelephense typescript javascript react tsx jsx tsserver",
     ),
     AutoSelect(
         SettingsCategory.ProjectView,
@@ -109,9 +110,7 @@ class SettingsState(private val languageServers: () -> LanguageServersState, par
     /** What the search field holds; not blank, it shows the matching settings of every category. */
     var query by mutableStateOf("")
 
-    /** The PHP servers offered, null until the server answered. */
-    var phpServers: LanguageServerChoice? by mutableStateOf(null)
-        private set
+    private val choices = mutableStateMapOf<String, LanguageServerChoice>()
 
     /** Why the servers offered could not be listed or changed, null when nothing failed. */
     var serverError: String? by mutableStateOf(null)
@@ -128,17 +127,22 @@ class SettingsState(private val languageServers: () -> LanguageServersState, par
             return Setting.entries.filter { if (searching) it.matches(query) else it.category == category }
         }
 
+    /** The servers offered for [language], null until the server answered. */
+    fun serversOf(language: String): LanguageServerChoice? = choices[language]
+
     /** Shows [category], clearing the search. */
     fun select(category: SettingsCategory) {
         this.category = category
         query = ""
     }
 
-    /** Asks the server which PHP servers it offers, and which one is used. */
+    /** Asks the server which servers it offers for each language, and which one is used. */
     fun loadServers() {
         scope.launch {
             try {
-                phpServers = languageServers().choiceFor(PHP_LANGUAGE)
+                for (language in SERVER_LANGUAGES) {
+                    choices[language] = languageServers().choiceFor(language)
+                }
                 serverError = null
             } catch (failure: IOException) {
                 serverError = "Could not list the language servers: ${failure.message}"
@@ -146,14 +150,14 @@ class SettingsState(private val languageServers: () -> LanguageServersState, par
         }
     }
 
-    /** Uses [candidate] for PHP: the running PHP servers switch to it. */
-    fun useServer(candidate: String) {
+    /** Uses [candidate] for [language]: the running servers of the language switch to it. */
+    fun useServer(language: String, candidate: String) {
         if (switchingTo != null) return
         switchingTo = candidate
         scope.launch {
             try {
-                languageServers().use(PHP_LANGUAGE, candidate)
-                phpServers = phpServers?.copy(chosen = candidate)
+                languageServers().use(language, candidate)
+                choices[language]?.let { choices[language] = it.copy(chosen = candidate) }
                 serverError = null
             } catch (failure: IOException) {
                 serverError = "Could not change the language server: ${failure.message}"

@@ -2,6 +2,7 @@ package org.example.kotlineditor.lsp.documents
 
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import org.example.kotlineditor.model.Languages
 import org.example.kotlineditor.model.TextChange
 import java.io.IOException
 import java.nio.file.Paths
@@ -24,11 +25,14 @@ data class ClientVersion(
 class MirroredDocument internal constructor(
     /** Path on the server machine, as the client names it. */
     val path: String,
-    /** Language identifier (`php`). */
+    /** Language of the server that handles it (`php`, `typescript`). */
     val language: String,
     /** Root of the language server that handles it. */
     val root: String,
 ) {
+    /** What the servers are told it is (`typescriptreact` for a `.tsx`): [language] for the languages with one name. */
+    val languageId: String = Languages.identifierOf(path) ?: language
+
     /** `file:` URI given to the language servers. */
     val uri: String = Paths.get(path).toUri().toString()
 
@@ -200,7 +204,16 @@ class OpenDocuments {
 
     /** Runs [block] under the lock with the documents of [language] under [root]. */
     fun <T> withDocuments(language: String, root: String, block: (List<MirroredDocument>) -> T): T =
-        synchronized(lock) { block(documents.values.filter { it.language == language && it.root == root }) }
+        synchronized(lock) { block(documents.values.filter { isServedBy(it, language, root) }) }
+
+    // Of the language and under the root of the server, or of a language it serves beside the one of its own server.
+    private fun isServedBy(document: MirroredDocument, language: String, root: String): Boolean {
+        if (document.language == language) return document.root == root
+        val prefix = root.trimEnd('/', '\\')
+        val path = document.path
+        val inside = path == prefix || path.startsWith("$prefix/") || path.startsWith("$prefix\\")
+        return inside && language in Languages.companionsOf(document.path)
+    }
 
     /** Runs [block] under the lock: reads of a document's lines that must not see half an edit. */
     fun <T> locked(block: () -> T): T = synchronized(lock, block)
