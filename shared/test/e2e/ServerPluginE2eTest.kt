@@ -34,7 +34,7 @@ private val CLIENT_HALF =
         org.example.kotlineditor.plugin.StripGroup.Bottom,
         false,
         host -> kotlin.Unit.INSTANCE,
-        (composer, changed) -> kotlin.Unit.INSTANCE,
+        org.example.kotlineditor.ui.Lucide.INSTANCE.getFolder(),
         (host, drag, modifier, composer, changed) -> kotlin.Unit.INSTANCE));
     """.trimIndent()
 

@@ -12,6 +12,12 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.put
 import org.example.kotlineditor.model.AppServices
 import org.example.kotlineditor.model.BlameLine
+import org.example.kotlineditor.model.DeployDestination
+import org.example.kotlineditor.model.DeployItem
+import org.example.kotlineditor.model.DeployProfile
+import org.example.kotlineditor.model.DeployProfiles
+import org.example.kotlineditor.model.DeployResult
+import org.example.kotlineditor.model.Deployer
 import org.example.kotlineditor.model.DiffLine
 import org.example.kotlineditor.model.DiskChanges
 import org.example.kotlineditor.model.DiskCursor
@@ -47,6 +53,7 @@ import org.example.kotlineditor.model.TerminalProcess
 import org.example.kotlineditor.model.TerminalSnapshot
 import org.example.kotlineditor.model.TextMatch
 import org.example.kotlineditor.model.WorktreeClient
+import org.example.kotlineditor.remote.SshConfigHost
 import java.io.IOException
 
 private const val ROOT = "root"
@@ -57,6 +64,7 @@ private const val DIRECTORY = "directory"
 private const val ENTRY = "entry"
 private const val FILE = "file"
 private const val PATH = "path"
+private const val PROJECT = "project"
 private const val NAME = "name"
 private const val TERMINAL = "terminal"
 private const val STREAM = "stream"
@@ -81,6 +89,8 @@ fun RpcClient.appServices(): AppServices =
         agents = RemoteAgents(this),
         runner = RemoteRunner(this),
         plugins = RemotePluginServer(this),
+        deployer = RemoteDeployer(this),
+        deployProfiles = RemoteDeployProfiles(this),
     )
 
 /** [PluginServer] of the server. */
@@ -161,6 +171,38 @@ class RemoteFileSystem(private val client: RpcClient) : ProjectFileSystem {
 
     override suspend fun delete(entry: FileEntry) {
         client.call(Method.Delete) { put(ENTRY, entry.toJson()) }
+    }
+}
+
+/** [Deployer] of the server: the files are copied where the server runs, only the request and the count travel. */
+class RemoteDeployer(private val client: RpcClient) : Deployer {
+    override suspend fun deploy(
+        root: FileEntry,
+        items: List<DeployItem>,
+        destination: DeployDestination,
+    ): DeployResult {
+        val result =
+            client.call(Method.Deploy) {
+                put(ROOT, root.toJson())
+                put("items", items.itemsJson())
+                put("destination", destination.toJson())
+            }
+        return result.deployResult()
+    }
+
+    override suspend fun sshHosts(): List<SshConfigHost> = client.call(Method.DeploySshHosts).sshHosts()
+}
+
+/** [DeployProfiles] of the server. */
+class RemoteDeployProfiles(private val client: RpcClient) : DeployProfiles {
+    override suspend fun load(projectPath: String): List<DeployProfile> =
+        client.call(Method.DeployProfilesLoad) { put(PROJECT, projectPath) }.deployProfiles()
+
+    override suspend fun save(projectPath: String, profiles: List<DeployProfile>) {
+        client.call(Method.DeployProfilesSave) {
+            put(PROJECT, projectPath)
+            put("profiles", profiles.toJson())
+        }
     }
 }
 
@@ -434,11 +476,11 @@ class RemoteRecentProjects(private val client: RpcClient) : RecentProjectsStore 
 /** [SessionStore] of the server. */
 class RemoteSessions(private val client: RpcClient) : SessionStore {
     override suspend fun load(projectPath: String): ProjectSession? =
-        client.call(Method.SessionLoad) { put("project", projectPath) }.session()
+        client.call(Method.SessionLoad) { put(PROJECT, projectPath) }.session()
 
     override suspend fun save(projectPath: String, session: ProjectSession) {
         client.call(Method.SessionSave) {
-            put("project", projectPath)
+            put(PROJECT, projectPath)
             put("session", session.toJson())
         }
     }

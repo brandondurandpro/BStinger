@@ -1,7 +1,6 @@
 package org.example.kotlineditor.ui
 
 import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.text.font.FontWeight
 import org.example.kotlineditor.plugin.ActionContext
 import org.example.kotlineditor.plugin.StripGroup
 import org.example.kotlineditor.plugin.ToolWindowContribution
@@ -21,7 +20,7 @@ fun terminalToolWindow(): ToolWindowContribution =
         tag = TerminalTags.TOOL_BUTTON,
         group = StripGroup.Bottom,
         onShown = { host -> host.service(TERMINAL_SERVICE).ensureStarted() },
-        icon = { Label(">_", color = IdeColors.Text, fontWeight = FontWeight.Bold) },
+        icon = Lucide.SquareTerminal,
         content = { host, drag, modifier ->
             TerminalPanel(host.service(TERMINAL_SERVICE), host.toolWindows, drag, modifier)
         },

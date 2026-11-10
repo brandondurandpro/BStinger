@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -25,7 +24,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.example.kotlineditor.plugin.StripGroup
 import org.example.kotlineditor.plugin.ToolWindowContribution
@@ -71,18 +69,21 @@ private fun ColumnScope.ToolButtons(project: ProjectState, devtools: Boolean, re
     shown.filter { it.group == StripGroup.Bottom }.forEach { ToolButton(project, it.window, it.tag, it.icon) }
 }
 
+// The button of a tool window: a muted icon, lit up on a filled background while its window is open.
 @Composable
-private fun ToolButton(project: ProjectState, window: ToolWindow, tag: String, icon: @Composable () -> Unit) {
+private fun ToolButton(project: ProjectState, window: ToolWindow, tag: String, icon: LucideIcon) {
     val active = project.toolWindows.isVisible(window)
+    val background = if (active) IdeColors.Selection else Color.Transparent
+    val tint = if (active) IdeColors.Text else IdeColors.TextSecondary
     Box(
         Modifier
             .size(30.dp)
-            .background(if (active) IdeColors.Selection else Color.Transparent, RoundedCornerShape(6.dp))
+            .background(background, IdeShapes.Large)
             .clickable { project.toggleToolWindow(window) }
             .testTag(tag),
         contentAlignment = Alignment.Center,
     ) {
-        icon()
+        IdeIcon(icon, color = tint)
     }
 }
 
@@ -150,7 +151,7 @@ private fun StackedWindows(
 @Composable
 private fun ToolWindowContent(project: ProjectState, window: ToolWindow, drag: ToolWindowDrag, modifier: Modifier) {
     val contribution = IdeRegistries.toolWindows.find(window) ?: return
-    contribution.content(project, drag, modifier)
+    contribution.content(project, drag, modifier.island())
 }
 
 private fun builtIn(
@@ -158,7 +159,7 @@ private fun builtIn(
     group: StripGroup,
     tag: String,
     devtools: Boolean = false,
-    icon: @Composable () -> Unit,
+    icon: LucideIcon,
     content: @Composable (ProjectState, ToolWindowDrag, Modifier) -> Unit,
 ): ToolWindowContribution {
     val found = BUILT_IN_TOOL_WINDOWS.firstOrNull { it.window == window }
@@ -182,7 +183,7 @@ internal fun builtInToolWindows(): List<ToolWindowContribution> =
             StripGroup.Bottom,
             AppTags.TOOL_NETWORK,
             devtools = true,
-            icon = { Label("⇅", color = IdeColors.Text, fontWeight = FontWeight.Bold) },
+            icon = Lucide.ArrowUpDown,
         ) { project, drag, modifier -> NetworkPanel(project, drag, modifier) },
     )
 

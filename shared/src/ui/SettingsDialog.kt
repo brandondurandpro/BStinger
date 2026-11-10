@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -50,8 +49,8 @@ import org.example.kotlineditor.state.SettingsCategory
 import org.example.kotlineditor.state.SettingsState
 
 private val Backdrop = Color(0x66000000)
-private val DialogShape = RoundedCornerShape(10.dp)
-private val RowShape = RoundedCornerShape(6.dp)
+private val DialogShape = IdeShapes.ExtraLarge
+private val RowShape = IdeShapes.Large
 
 /**
  * The Settings dialog, like IntelliJ's (Ctrl+Alt+S): a search and the categories on the left, the settings of the

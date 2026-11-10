@@ -153,6 +153,8 @@ class ServerProcess(
     private val agents: AgentSettings? = null,
     // Where Find in Files gets its ripgrep executable: null is the default lookup (a configured path or a download).
     private val ripgrep: RipgrepSettings? = null,
+    // The command that runs OpenSSH for deployments to another machine: null is the real `ssh`.
+    private val ssh: List<String>? = null,
 ) : AutoCloseable {
     var server: EditorServer = EditorServer(services(), options = options(), telemetry = telemetry()).start()
         private set
@@ -173,6 +175,7 @@ class ServerProcess(
             languageServerSettings = languageServers ?: LanguageServerSettings(data.toPath()),
             agentSettings = agents ?: offlineAgents(data),
             ripgrep = ripgrep ?: RipgrepSettings(),
+            ssh = ssh ?: listOf("ssh"),
         )
 
     /** Kills the server: connections drop and new ones are refused until [start]. */
@@ -267,11 +270,12 @@ fun ComposeUiTest.launchApp(
     plugins: List<IdePlugin> = emptyList(),
     /** A folder of installed plugins (jars), loaded before the UI starts and unloaded when the test ends. */
     pluginsDirectory: File? = null,
+    ssh: List<String>? = null,
 ): E2eApp {
     TextClipboard.useSystem = false
     val pluginSetup = PluginSetup(plugins.map(::loadPlugin), pluginsDirectory?.let { startPlugins(it) })
     val data = Files.createTempDirectory("kotlin-editor-server").toFile()
-    val process = ServerProcess(data, languageServers, telemetry?.serverHook ?: InMemoryHook(), agents, ripgrep)
+    val process = ServerProcess(data, languageServers, telemetry?.serverHook ?: InMemoryHook(), agents, ripgrep, ssh)
     val token = process.server.token
     // Chaos tests go through a proxy that breaks the network, and notice a dead link within a second.
     val proxy = if (chaos) ChaosProxy(process.port) else null
@@ -349,6 +353,9 @@ private fun withRecorders(
         remote.disk,
         remote.agents,
         remote.runner,
+        remote.plugins,
+        remote.deployer,
+        remote.deployProfiles,
     )
 
 /** Opens the Open Project dialog from the welcome screen and waits for it to list a directory. */
@@ -415,6 +422,7 @@ fun ComposeUiTest.launchWithProject(
     ripgrep: RipgrepSettings? = null,
     plugins: List<IdePlugin> = emptyList(),
     pluginsDirectory: File? = null,
+    ssh: List<String>? = null,
 ): E2eApp {
     val app =
         launchApp(
@@ -427,6 +435,7 @@ fun ComposeUiTest.launchWithProject(
             ripgrep = ripgrep,
             plugins = plugins,
             pluginsDirectory = pluginsDirectory,
+            ssh = ssh,
         )
     openProjectDirectoryFromWelcome(project.path)
     awaitTag(TreeTags.treeRow("src"))

@@ -87,13 +87,18 @@ internal fun NetworkPanel(project: ProjectState, drag: ToolWindowDrag, modifier:
 @Composable
 private fun CaptureActions(view: NetworkView) {
     IconButton({ view.paused = !view.paused }, Modifier.testTag(AppTags.NETWORK_RECORD)) {
-        Label("●", color = if (view.paused) IdeColors.TextSecondary else IdeColors.Error)
+        IdeIcon(
+            Lucide.Circle,
+            color = if (view.paused) IdeColors.TextSecondary else IdeColors.Error,
+            size = 12.dp,
+            filled = !view.paused,
+        )
     }
     IconButton({ view.hidePings = !view.hidePings }, Modifier.testTag(AppTags.NETWORK_PINGS)) {
-        Label("♡", color = if (view.hidePings) IdeColors.TextSecondary else IdeColors.Text)
+        IdeIcon(Lucide.Heart, color = if (view.hidePings) IdeColors.TextSecondary else IdeColors.Text, size = 14.dp)
     }
     IconButton(view::clear, Modifier.testTag(AppTags.NETWORK_CLEAR)) {
-        Label("⊘", color = IdeColors.TextSecondary)
+        IdeIcon(Lucide.Ban, size = 14.dp)
     }
 }
 

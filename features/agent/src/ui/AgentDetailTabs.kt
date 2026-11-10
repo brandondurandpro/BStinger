@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -82,8 +81,8 @@ private fun WorkspaceText(conversation: Conversation) {
 private fun WorkModeSwitch(agent: AgentState, conversation: Conversation) {
     Row(
         Modifier
-            .background(IdeColors.Panel, RoundedCornerShape(6.dp))
-            .border(1.dp, IdeColors.Separator, RoundedCornerShape(6.dp))
+            .background(IdeColors.Panel, IdeShapes.Large)
+            .border(1.dp, IdeColors.Separator, IdeShapes.Large)
             .padding(2.dp),
     ) {
         for ((mode, text, tag) in WORK_MODES) {
@@ -104,7 +103,7 @@ internal fun DetailCount(count: Int, modifier: Modifier = Modifier) {
     Box(
         modifier
             .padding(end = 2.dp)
-            .background(IdeColors.Hover, RoundedCornerShape(8.dp))
+            .background(IdeColors.Hover, IdeShapes.ExtraLarge)
             .padding(horizontal = 6.dp),
         contentAlignment = Alignment.Center,
     ) {

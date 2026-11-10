@@ -47,7 +47,7 @@ import java.io.OutputStream
  */
 object Protocol {
     /** Version announced in the handshake; client and server must speak the same one. */
-    const val VERSION = 13
+    const val VERSION = 15
 
     /** Version of the application, shown in the welcome screen and used to identify remote server bundles. */
     const val APP_VERSION = "2026.1"
@@ -330,6 +330,18 @@ enum class Method(
 
     /** Deletes a file or a directory tree. */
     Delete("fs/delete", mutating = true),
+
+    /** Copies files of a project to a folder of the server's disk or of another machine reached over SSH. */
+    Deploy("deploy/run", mutating = true),
+
+    /** The machines of the SSH configuration of the server, where a deployment can go. */
+    DeploySshHosts("deploy/sshHosts", mutating = false),
+
+    /** The deployments saved for a project. */
+    DeployProfilesLoad("deploy/profilesLoad", mutating = false),
+
+    /** Replaces the deployments saved for a project. */
+    DeployProfilesSave("deploy/profilesSave", mutating = true),
 
     /** Changes on disk under a project after a cursor, whoever made them (long poll). */
     DiskChanges("fs/changes", mutating = false),

@@ -51,8 +51,8 @@ internal fun ImageChip(image: AgentAttachment.Image, remove: () -> Unit) {
     Box(
         Modifier
             .size(THUMBNAIL)
-            .clip(RoundedCornerShape(6.dp))
-            .border(1.dp, IdeColors.Separator, RoundedCornerShape(6.dp))
+            .clip(IdeShapes.Large)
+            .border(1.dp, IdeColors.Separator, IdeShapes.Large)
             .background(IdeColors.Panel)
             .testTag(AgentTags.agentAttachment(image.name)),
     ) {
@@ -66,13 +66,13 @@ internal fun ImageChip(image: AgentAttachment.Image, remove: () -> Unit) {
                 contentScale = ContentScale.Crop,
             )
         }
-        Label(
-            "×",
+        CloseIcon(
             Modifier
                 .align(Alignment.TopEnd)
                 .background(IdeColors.Panel, RoundedCornerShape(bottomStart = 6.dp))
                 .clickable(onClick = remove)
-                .padding(horizontal = 6.dp)
+                .padding(3.dp)
+                .size(14.dp)
                 .testTag(AgentTags.agentAttachmentRemove(image.name)),
             color = IdeColors.Text,
         )
@@ -88,8 +88,8 @@ private fun ImageViewer(name: String, bitmap: ImageBitmap, close: () -> Unit) {
             Modifier
                 .fillMaxWidth(VIEWER_SHARE)
                 .fillMaxHeight(VIEWER_SHARE)
-                .background(IdeColors.Popup, RoundedCornerShape(8.dp))
-                .border(1.dp, IdeColors.Separator, RoundedCornerShape(8.dp))
+                .background(IdeColors.Popup, IdeShapes.ExtraLarge)
+                .border(1.dp, IdeColors.Separator, IdeShapes.ExtraLarge)
                 .padding(12.dp)
                 .testTag(AgentTags.AGENT_IMAGE_VIEWER),
         ) {

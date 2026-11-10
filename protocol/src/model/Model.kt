@@ -722,6 +722,10 @@ class AppServices(
     val runner: ProjectRunner = ProjectRunner.None,
     /** The methods the server halves of plugins answer. */
     val plugins: PluginServer = PluginServer.None,
+    /** Deployment of files to a folder, on the server's disk or on another machine. */
+    val deployer: Deployer = Deployer.None,
+    /** The deployments saved for each project. */
+    val deployProfiles: DeployProfiles = InMemoryDeployProfiles(),
 )
 
 /** The link a plugin's client half uses to call the methods its server half answers. */

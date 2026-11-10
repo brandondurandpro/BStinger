@@ -77,7 +77,7 @@ internal fun OutputLine(text: String, tag: String, linkTag: (Int) -> String, onO
         var from = 0
         links.forEachIndexed { number, link ->
             if (link.start > from) CodeText(text.substring(from, link.start), style)
-            val linkStyle = style.copy(color = IdeColors.Accent, textDecoration = TextDecoration.Underline)
+            val linkStyle = style.copy(color = IdeColors.Link, textDecoration = TextDecoration.Underline)
             CodeText(
                 text.substring(link.start, link.end),
                 linkStyle,

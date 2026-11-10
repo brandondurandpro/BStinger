@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -220,7 +219,7 @@ private fun BranchPickerHeader(project: GitHost, count: Int, onClose: () -> Unit
     val ahead = project.git.branchInfos.count { it.ahead > 0 }
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
-            Modifier.size(30.dp).background(IdeColors.Accent.copy(alpha = 0.16f), RoundedCornerShape(8.dp)),
+            Modifier.size(30.dp).background(IdeColors.Accent.copy(alpha = 0.16f), IdeShapes.ExtraLarge),
             contentAlignment = Alignment.Center,
         ) {
             BranchIcon(color = IdeColors.Accent)
@@ -243,14 +242,14 @@ private fun BranchPickerHeader(project: GitHost, count: Int, onClose: () -> Unit
             Box(
                 Modifier
                     .padding(end = 8.dp)
-                    .background(IdeColors.Accent.copy(alpha = 0.18f), RoundedCornerShape(10.dp))
+                    .background(IdeColors.Accent.copy(alpha = 0.18f), IdeShapes.ExtraLarge)
                     .padding(horizontal = 8.dp, vertical = 3.dp),
             ) {
                 Label("$pinned pinned", color = IdeColors.Accent, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
             }
         }
         IconButton({ project.git.refreshBranches() }, Modifier.testTag(GitTags.BRANCH_REFRESH)) {
-            Label("⟳", color = IdeColors.TextSecondary, fontSize = 16.sp)
+            RefreshIcon(Modifier.size(16.dp))
         }
         IconButton(onClose) { CloseIcon() }
     }
@@ -277,7 +276,7 @@ internal fun BranchStatusLine(text: String, tag: String, isError: Boolean = fals
         Modifier
             .fillMaxWidth()
             .padding(top = 8.dp)
-            .background(color.copy(alpha = 0.12f), RoundedCornerShape(5.dp))
+            .background(color.copy(alpha = 0.12f), IdeShapes.Medium)
             .padding(horizontal = 8.dp, vertical = 5.dp)
             .semantics(mergeDescendants = true) {}
             .testTag(tag),
@@ -300,7 +299,7 @@ private fun BranchRow(
         Modifier
             .fillMaxWidth()
             .heightIn(min = 46.dp)
-            .background(branchRowBackground(branch, selected, hovered), RoundedCornerShape(6.dp))
+            .background(branchRowBackground(branch, selected, hovered), IdeShapes.Large)
             .hoverable(interaction)
             .clickable(interaction, indication = null, onClick = onChoose)
             .testTag(GitTags.branchItem(branch.name))
@@ -348,7 +347,7 @@ private fun BranchName(branch: GitBranchInfo, query: String, modifier: Modifier 
         Row(verticalAlignment = Alignment.CenterVertically) {
             BasicText(
                 highlightedBranch(branch.name, query),
-                style = TextStyle(fontSize = 12.sp, color = IdeColors.Text),
+                style = TextStyle(fontFamily = IdeFonts.ui, fontSize = 12.sp, color = IdeColors.Text),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -367,7 +366,7 @@ private fun BranchName(branch: GitBranchInfo, query: String, modifier: Modifier 
 internal fun BranchCheckbox(checked: Boolean, modifier: Modifier = Modifier, size: Dp = 18.dp, onClick: () -> Unit) {
     // No ripple: a checkbox flips state, and a fading rectangle over it reads as a slow tick.
     val interaction = remember { MutableInteractionSource() }
-    val shape = RoundedCornerShape(4.dp)
+    val shape = IdeShapes.Small
     Box(
         modifier
             .size(size)
@@ -376,7 +375,7 @@ internal fun BranchCheckbox(checked: Boolean, modifier: Modifier = Modifier, siz
             .clickable(interaction, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        if (checked) CheckIcon(Modifier.size(size * 2 / 3), color = Color.White)
+        if (checked) CheckIcon(Modifier.size(size * 2 / 3), color = IdeColors.OnAccent)
     }
 }
 
@@ -385,7 +384,7 @@ private fun CurrentBranchPill() {
     Box(
         Modifier
             .padding(start = 8.dp)
-            .background(IdeColors.Accent.copy(alpha = 0.18f), RoundedCornerShape(4.dp))
+            .background(IdeColors.Accent.copy(alpha = 0.18f), IdeShapes.Medium)
             .padding(horizontal = 5.dp, vertical = 1.dp),
     ) {
         Label("current", color = IdeColors.Accent, fontSize = 9.sp, fontWeight = FontWeight.SemiBold)

@@ -5,6 +5,11 @@ package org.example.kotlineditor.state
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.example.kotlineditor.model.DeployDestination
+import org.example.kotlineditor.model.DeployFolder
+import org.example.kotlineditor.model.DeployItem
+import org.example.kotlineditor.model.DeployProfile
+import org.example.kotlineditor.model.DeployResult
 import org.example.kotlineditor.model.DiffKind
 import org.example.kotlineditor.model.DiffLine
 import org.example.kotlineditor.model.FileContent
@@ -14,6 +19,7 @@ import org.example.kotlineditor.model.FileVersion
 import org.example.kotlineditor.model.OperatedFile
 import org.example.kotlineditor.model.OutcomeUnknownException
 import org.example.kotlineditor.model.pathName
+import org.example.kotlineditor.model.relativeToRoot
 import org.example.kotlineditor.syntax.Structure
 import org.example.kotlineditor.telemetry.ClientTelemetry
 import org.example.kotlineditor.telemetry.Operation
@@ -156,6 +162,48 @@ fun ProjectState.delete(entry: FileEntry) =
             tree.select(it)
         }
     }
+
+/**
+ * Deploys the entries of [dialog] to the folder [text] names (`/var/www`, or `host:folder` for another machine).
+ * The dialog stays open: it shows the number of files copied, or why nothing was.
+ */
+fun ProjectState.deploy(dialog: FileDialog.Deploy, text: String) {
+    if (dialog.running || dialog.result != null) return
+    val destination = DeployDestination.parse(text)
+    if (destination == null) {
+        fileDialog = dialog.withError("Enter a folder, or host:folder for another machine")
+        return
+    }
+    deployDestination = text.trim()
+    val running = dialog.copy(running = true, result = null, error = null)
+    fileDialog = running
+    scope.launch {
+        try {
+            val items = dialog.entries.map { DeployItem(it, relativeToRoot(it.path, root.path)) }
+            val result = services.deployer.deploy(root, items, destination)
+            val summary = deploySummary(result, destination)
+            val done = running.copy(running = false, result = summary, destination = text.trim())
+            if (fileDialog === running) fileDialog = done
+        } catch (e: IOException) {
+            val failed = running.withError(e.message ?: e::class.simpleName.orEmpty())
+            if (fileDialog === running) fileDialog = failed
+        }
+    }
+}
+
+/** Saves the deployment of the finished [dialog] (its folders and its destination) among the project's deployments. */
+fun ProjectState.rememberDeployment(dialog: FileDialog.Deploy) {
+    val destination = dialog.destination ?: return
+    val relatives = dialog.entries.map { relativeToRoot(it.path, root.path) }
+    val sources = relatives.filter { it.isNotEmpty() }
+    val name = if (sources.size < relatives.size) name else sources.joinToString(", ")
+    deployments.remember(DeployProfile(name, sources.map { DeployFolder(it, it) }, destination))
+}
+
+internal fun deploySummary(result: DeployResult, destination: DeployDestination): String {
+    val noun = if (result.files == 1) "file" else "files"
+    return "Deployed ${result.files} $noun (${formatBytes(result.bytes)}) to $destination"
+}
 
 // A server that restarted before answering a change may or may not have made it; it is not asked again (it could
 // apply twice), the disk says whether it was. These operations end as if answered when it was, and throw otherwise.

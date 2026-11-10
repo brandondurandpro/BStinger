@@ -7,6 +7,7 @@ import androidx.compose.ui.Modifier
 import org.example.kotlineditor.state.ProjectHost
 import org.example.kotlineditor.state.ToolWindow
 import org.example.kotlineditor.state.ToolWindowDefaults
+import org.example.kotlineditor.ui.LucideIcon
 import org.example.kotlineditor.ui.ToolWindowDrag
 
 /** Which group of the strip holds the button of a tool window: the top one, or the bottom one under the spacer. */
@@ -26,7 +27,7 @@ class ToolWindowContribution(
     /** Runs when the window is shown, to start what it needs (load the configurations, start a shell...). */
     val onShown: (ProjectHost) -> Unit = {},
     /** The icon of the button. */
-    val icon: @Composable () -> Unit,
+    val icon: LucideIcon,
     /** The panel; [Modifier] sizes it in its dock. */
     val content: @Composable (project: ProjectHost, drag: ToolWindowDrag, modifier: Modifier) -> Unit,
 ) {

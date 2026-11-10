@@ -212,7 +212,7 @@ private fun SymbolRow(match: SymbolMatch, selected: Boolean, onClick: () -> Unit
         BasicText(
             highlightIndices(match.declaration.name, match.matchedIndices),
             Modifier.padding(start = 8.dp),
-            style = TextStyle(fontSize = 13.sp),
+            style = TextStyle(fontFamily = IdeFonts.ui, fontSize = 13.sp),
             maxLines = 1,
         )
         Label(

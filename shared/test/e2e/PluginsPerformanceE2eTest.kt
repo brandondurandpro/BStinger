@@ -1,7 +1,6 @@
 package org.example.kotlineditor.e2e
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
@@ -21,6 +20,7 @@ import org.example.kotlineditor.plugin.ToolWindowContribution
 import org.example.kotlineditor.state.Dock
 import org.example.kotlineditor.state.ToolWindow
 import org.example.kotlineditor.state.ToolWindowDefaults
+import org.example.kotlineditor.ui.Lucide
 import org.example.kotlineditor.ui.TreeTags
 import org.example.kotlineditor.ui.binding
 import kotlin.test.AfterTest
@@ -40,7 +40,7 @@ private fun fakePlugin(index: Int, hits: IntArray): IdePlugin {
             defaults = ToolWindowDefaults(ToolWindow("perf.plugin.$index"), Dock.Bottom),
             tag = buttonOf(index),
             group = StripGroup.Bottom,
-            icon = { Box(Modifier) },
+            icon = Lucide.Folder,
             content = { _, _, modifier -> Box(modifier) },
         )
     val keys = listOf(Key.F1, Key.F2, Key.F3, Key.F4, Key.F5, Key.F6, Key.F7, Key.F8, Key.F9)

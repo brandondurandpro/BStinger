@@ -1,9 +1,6 @@
 package org.example.kotlineditor.ui
 
-import androidx.compose.foundation.layout.size
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.unit.dp
 import org.example.kotlineditor.plugin.ActionContext
 import org.example.kotlineditor.plugin.StripGroup
 import org.example.kotlineditor.plugin.ToolWindowContribution
@@ -18,7 +15,7 @@ fun projectToolWindow(): ToolWindowContribution =
         defaults = ToolWindowDefaults(ToolWindow.Project, Dock.Left, shown = true),
         tag = TreeTags.TOOL_BUTTON,
         group = StripGroup.Top,
-        icon = { FolderIcon(Modifier.size(18.dp)) },
+        icon = Lucide.Folder,
         content = { host, drag, modifier -> ProjectPanel(host as TreeHost, drag, modifier) },
     )
 

@@ -5,6 +5,7 @@ import androidx.compose.ui.input.key.Key
 import org.example.kotlineditor.state.Dock
 import org.example.kotlineditor.state.ToolWindow
 import org.example.kotlineditor.state.ToolWindowDefaults
+import org.example.kotlineditor.ui.Lucide
 import org.example.kotlineditor.ui.binding
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -17,7 +18,7 @@ class RegistriesTest {
             defaults = ToolWindowDefaults(ToolWindow(name), Dock.Bottom),
             tag = name,
             group = StripGroup.Bottom,
-            icon = {},
+            icon = Lucide.Folder,
             content = { _, _, _ -> Modifier },
         )
 

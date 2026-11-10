@@ -20,8 +20,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollbarAdapter
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -104,7 +102,7 @@ fun TerminalPanel(
         terminal.error?.let {
             Label(it, Modifier.padding(horizontal = 12.dp, vertical = 4.dp), color = IdeColors.Error)
         }
-        TerminalView(terminal, Modifier.weight(1f).fillMaxWidth())
+        TerminalView(terminal, Modifier.weight(1f).fillMaxWidth().padding(start = 8.dp))
     }
 }
 
@@ -160,7 +158,7 @@ private fun TerminalTabChip(
     menu: @Composable () -> Unit,
 ) {
     val background = if (active) IdeColors.Selection else IdeColors.Panel
-    val shape = RoundedCornerShape(4.dp)
+    val shape = IdeShapes.Medium
     val press =
         Modifier.onPointerEvent(PointerEventType.Press) { event ->
             onTabPress(event, onSelect, onClose, onContextMenu)
@@ -201,7 +199,7 @@ private fun TerminalTabContextMenu(terminal: TerminalState, index: Int, offset: 
         onDismiss()
         block()
     }
-    DropdownMenu(
+    IdeDropdownMenu(
         expanded = true,
         onDismissRequest = onDismiss,
         offset = offset,

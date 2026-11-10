@@ -1,7 +1,6 @@
 package org.example.kotlineditor.e2e
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.ExperimentalTestApi
@@ -18,6 +17,7 @@ import org.example.kotlineditor.plugin.ToolWindowContribution
 import org.example.kotlineditor.state.Dock
 import org.example.kotlineditor.state.ToolWindow
 import org.example.kotlineditor.state.ToolWindowDefaults
+import org.example.kotlineditor.ui.Lucide
 import org.example.kotlineditor.ui.TreeTags
 import org.example.kotlineditor.ui.binding
 import org.example.kotlineditor.ui.loadPlugin
@@ -44,7 +44,7 @@ class PluginContributionsE2eTest {
             defaults = ToolWindowDefaults(ToolWindow("plugin.todo"), Dock.Bottom),
             tag = BUTTON,
             group = StripGroup.Bottom,
-            icon = { Box(Modifier) },
+            icon = Lucide.Folder,
             content = { _, _, modifier -> Box(modifier.testTag(PANEL)) },
         )
 

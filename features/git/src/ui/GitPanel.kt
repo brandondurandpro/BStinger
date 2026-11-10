@@ -16,8 +16,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -54,7 +52,7 @@ fun GitPanel(project: GitHost, drag: ToolWindowDrag, modifier: Modifier = Modifi
         ToolWindowHeader("Git", ToolWindow.Git, project.toolWindows, drag) {
             BlameToggle(project)
             IconButton(project.git::refreshStatus, Modifier.testTag(GitTags.GIT_REFRESH)) {
-                Label("⟳", color = IdeColors.TextSecondary)
+                RefreshIcon()
             }
             IconButton(
                 { project.toolWindows.setVisible(ToolWindow.Git, false) },
@@ -84,7 +82,7 @@ private fun BlameToggle(project: GitHost) {
     Box(
         Modifier
             .padding(end = 2.dp)
-            .background(if (active) IdeColors.Selection else Color.Transparent, RoundedCornerShape(4.dp))
+            .background(if (active) IdeColors.Selection else Color.Transparent, IdeShapes.Medium)
             .clickable(enabled = enabled) { project.git.toggleBlame() }
             .padding(horizontal = 5.dp, vertical = 3.dp)
             .testTag(GitTags.GIT_BLAME),
@@ -127,24 +125,24 @@ private fun SelectAll(project: GitHost, changes: Int) {
         Box(
             Modifier
                 .size(14.dp)
-                .background(if (allChecked) IdeColors.Accent else Color.Transparent, RoundedCornerShape(4.dp))
+                .background(if (allChecked) IdeColors.Accent else Color.Transparent, IdeShapes.Small)
                 .border(
                     1.dp,
                     if (allChecked || someChecked) IdeColors.Accent else IdeColors.InputBorder,
-                    RoundedCornerShape(4.dp),
+                    IdeShapes.Small,
                 ),
             contentAlignment = Alignment.Center,
         ) {
             when {
                 allChecked -> {
-                    CheckIcon(Modifier.size(9.dp), color = Color.White)
+                    CheckIcon(Modifier.size(9.dp), color = IdeColors.OnAccent)
                 }
 
                 someChecked -> {
                     Box(
                         Modifier
                             .size(width = 8.dp, height = 2.dp)
-                            .background(Color.White, RoundedCornerShape(1.dp)),
+                            .background(IdeColors.Accent, RoundedCornerShape(1.dp)),
                     )
                 }
             }
@@ -260,8 +258,8 @@ private fun ChangesMenu(project: GitHost, onClose: () -> Unit) {
     val rows = project.git.pickedChanges
     var confirming by remember { mutableStateOf(false) }
     val noun = if (rows.size == 1) "file" else "files"
-    DropdownMenu(expanded = true, onDismissRequest = onClose) {
-        DropdownMenuItem(
+    IdeDropdownMenu(expanded = true, onDismissRequest = onClose) {
+        IdeMenuItem(
             text = {
                 val text = if (confirming) "Sure? Revert ${rows.size} $noun" else "Revert ${rows.size} $noun"
                 Text(text, fontSize = 13.sp, color = if (confirming) IdeColors.Error else IdeColors.Text)

@@ -23,7 +23,6 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -91,7 +90,7 @@ fun BranchesPanel(project: GitHost, drag: ToolWindowDrag, modifier: Modifier = M
                 },
                 Modifier.testTag(GitTags.HISTORY_REFRESH),
             ) {
-                Label("⟳", color = IdeColors.TextSecondary)
+                RefreshIcon()
             }
             IconButton(
                 { project.toolWindows.setVisible(ToolWindow.Branches, false) },
@@ -227,7 +226,7 @@ private fun HistoryBranchRow(name: String, selected: Boolean, local: GitBranchIn
     Row(
         Modifier
             .fillMaxWidth()
-            .background(if (selected) IdeColors.Selection else Color.Transparent, RoundedCornerShape(4.dp))
+            .background(if (selected) IdeColors.Selection else Color.Transparent, IdeShapes.Medium)
             .clickable(onClick = onClick)
             .testTag(GitTags.historyBranch(name))
             .padding(horizontal = 6.dp, vertical = 3.dp),
@@ -392,7 +391,7 @@ private fun HighlightedText(text: String, query: String, color: Color, fontSize:
     BasicText(
         annotated,
         modifier,
-        style = TextStyle(color = color, fontSize = fontSize),
+        style = TextStyle(fontFamily = IdeFonts.ui, color = color, fontSize = fontSize),
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
     )
@@ -403,7 +402,7 @@ private fun RefPill(ref: String) {
     val color = if (ref.startsWith("tag: ")) IdeColors.GitBehind else IdeColors.Accent
     Box(
         Modifier
-            .background(color.copy(alpha = 0.16f), RoundedCornerShape(4.dp))
+            .background(color.copy(alpha = 0.16f), IdeShapes.Medium)
             .padding(horizontal = 5.dp, vertical = 1.dp),
     ) {
         Label(ref.removePrefix("tag: "), Modifier.widthIn(max = 140.dp), color = color, fontSize = 10.sp)

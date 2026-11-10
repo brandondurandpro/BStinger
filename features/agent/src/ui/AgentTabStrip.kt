@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -60,7 +59,7 @@ import org.example.kotlineditor.state.toggle
 fun ConversationsButton(agent: AgentState) {
     val toggle = { agent.conversationsVisible = !agent.conversationsVisible }
     StripButton(agent.conversationsVisible, "Conversations", AgentTags.AGENT_STRIP_CONVERSATIONS, toggle) {
-        SpeechBubbleIcon()
+        SpeechBubbleIcon(if (agent.conversationsVisible) IdeColors.Text else IdeColors.TextSecondary)
     }
     val separator = Modifier.padding(vertical = 6.dp).width(22.dp)
     Box(separator.height(1.dp).background(IdeColors.Separator))
@@ -79,7 +78,7 @@ private fun StripButton(
         Box(
             Modifier
                 .size(30.dp)
-                .background(if (active) IdeColors.Selection else Color.Transparent, RoundedCornerShape(6.dp))
+                .background(if (active) IdeColors.Selection else Color.Transparent, IdeShapes.Large)
                 .clickable(onClick = onClick)
                 .testTag(tag),
             contentAlignment = Alignment.Center,

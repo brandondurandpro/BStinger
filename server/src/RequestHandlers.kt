@@ -33,6 +33,7 @@ import org.example.kotlineditor.rpc.toJsonOrNull
 internal typealias Handler = suspend Request.() -> JsonElement
 
 private const val PATH = "path"
+private const val PROJECT = "project"
 private const val DIRECTORY = "directory"
 private const val NAME = "name"
 private const val ROOT = "root"
@@ -92,10 +93,10 @@ internal fun fileHandlers(services: LocalServices): Map<MethodSpec, Handler> {
         },
         Method.RecentLoad to { services.recentProjects.load().toJson() },
         Method.RecentSave to { nothing { services.recentProjects.save(params.read(PATHS) { it.strings() }) } },
-        Method.SessionLoad to { services.sessions.load(params.string("project")).toJson() },
+        Method.SessionLoad to { services.sessions.load(params.string(PROJECT)).toJson() },
         Method.SessionSave to {
             val session = checkNotNull(params.read("session") { it.session() }) { "Missing session" }
-            nothing { services.sessions.save(params.string("project"), session) }
+            nothing { services.sessions.save(params.string(PROJECT), session) }
         },
     )
 }
@@ -212,7 +213,7 @@ internal inline fun nothing(block: () -> Unit): JsonElement {
     return JsonNull
 }
 
-private fun Request.entry(name: String) = params.read(name) { it.entry() }
+internal fun Request.entry(name: String) = params.read(name) { it.entry() }
 
 // `fs/changes`: the open documents the client holds (an old client names none, and answers as today).
 private fun Request.open() = params.get("open")?.let { fields -> fields.strings() } ?: emptyList()

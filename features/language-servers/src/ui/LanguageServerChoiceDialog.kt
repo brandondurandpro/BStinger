@@ -2,7 +2,6 @@
 
 package org.example.kotlineditor.ui
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -27,7 +26,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -37,10 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -130,13 +125,7 @@ private fun linkColor(enabled: Boolean, hovered: Boolean) =
 
 @Composable
 private fun InfoIcon() {
-    Canvas(Modifier.size(16.dp)) {
-        val stroke = 1.3.dp.toPx()
-        drawCircle(InfoBlue, radius = size.width / 2 - stroke, style = Stroke(stroke))
-        val x = size.width / 2
-        drawLine(InfoBlue, Offset(x, size.height * 0.45f), Offset(x, size.height * 0.72f), stroke, StrokeCap.Round)
-        drawCircle(InfoBlue, radius = stroke * 0.8f, center = Offset(x, size.height * 0.3f))
-    }
+    IdeIcon(Lucide.Info, color = InfoBlue)
 }
 
 /**
@@ -162,8 +151,8 @@ fun LanguageServerChoiceDialog(project: LanguageServersHost) {
             Modifier
                 .width(760.dp)
                 .height(480.dp)
-                .background(IdeColors.Panel, RoundedCornerShape(10.dp))
-                .border(1.dp, IdeColors.Separator, RoundedCornerShape(10.dp))
+                .background(IdeColors.Panel, IdeShapes.ExtraLarge)
+                .border(1.dp, IdeColors.Separator, IdeShapes.ExtraLarge)
                 .pointerInput(Unit) { awaitEachGesture { awaitFirstDown().consume() } }
                 .dialogKeys(state, use)
                 .focusRequester(focus)
@@ -267,7 +256,7 @@ private fun CandidateRow(
     Row(
         Modifier
             .fillMaxWidth()
-            .background(background, RoundedCornerShape(6.dp))
+            .background(background, IdeShapes.Large)
             .hoverable(interaction)
             .clickable(interaction, indication = null, onClick = onClick)
             .padding(horizontal = 8.dp, vertical = 7.dp)
@@ -298,7 +287,7 @@ private fun Chip(text: String, color: Color) {
     Label(
         text,
         Modifier
-            .border(1.dp, color.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
+            .border(1.dp, color.copy(alpha = 0.6f), IdeShapes.Medium)
             .padding(horizontal = 5.dp, vertical = 1.dp),
         color = color,
         fontSize = 10.sp,
@@ -376,11 +365,7 @@ private fun Bullet(text: String, color: Color = IdeColors.Text, icon: @Composabl
 
 @Composable
 private fun DashIcon() {
-    Canvas(Modifier.size(16.dp)) {
-        val stroke = 1.8.dp.toPx()
-        val y = size.height / 2
-        drawLine(Caution, Offset(size.width * 0.28f, y), Offset(size.width * 0.72f, y), stroke, StrokeCap.Round)
-    }
+    IdeIcon(Lucide.Minus, color = Caution)
 }
 
 @Composable

@@ -7,6 +7,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
+import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -16,6 +18,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -29,6 +32,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.example.kotlineditor.model.GitFileStatus
 import org.example.kotlineditor.resources.Res
+import org.example.kotlineditor.resources.geist_bold
+import org.example.kotlineditor.resources.geist_medium
+import org.example.kotlineditor.resources.geist_regular
+import org.example.kotlineditor.resources.geist_semibold
 import org.example.kotlineditor.resources.jetbrains_mono_italic
 import org.example.kotlineditor.resources.jetbrains_mono_regular
 import org.jetbrains.compose.resources.Font
@@ -39,6 +46,8 @@ class IdePalette(
     /** Whether it is a dark theme. */
     val dark: Boolean,
     val panel: Color,
+    /** Background of the window behind the islands (the tool windows and the editors). */
+    val frame: Color,
     val editor: Color,
     val border: Color,
     val separator: Color,
@@ -47,7 +56,14 @@ class IdePalette(
     val hover: Color,
     val selection: Color,
     val selectionInactive: Color,
+    /** The primary color (shadcn's `primary`): filled buttons, checked boxes, the active tab. */
     val accent: Color,
+    /** Text and icons drawn on [accent]. */
+    val onAccent: Color,
+    /** Focus ring of inputs and buttons. */
+    val ring: Color,
+    /** Shadow of popups, menus and dialogs. */
+    val shadow: Color,
     val accentHover: Color,
     val error: Color,
     val input: Color,
@@ -122,162 +138,171 @@ class IdePalette(
 val DarkPalette =
     IdePalette(
         dark = true,
-        panel = Color(0xFF2B2D30),
-        editor = Color(0xFF1E1F22),
-        border = Color(0xFF1E1F22),
-        separator = Color(0xFF393B40),
-        text = Color(0xFFDFE1E5),
-        textSecondary = Color(0xFF868A91),
-        hover = Color(0xFF393B40),
-        selection = Color(0xFF2E436E),
-        selectionInactive = Color(0xFF43454A),
-        accent = Color(0xFF3574F0),
-        accentHover = Color(0xFF3369D6),
-        error = Color(0xFFDB5C5C),
-        input = Color(0xFF1E1F22),
-        inputBorder = Color(0xFF4E5157),
-        popup = Color(0xFF2B2D30),
-        code = Color(0xFFBCBEC4),
-        lineNumber = Color(0xFF4B5059),
-        lineNumberCurrent = Color(0xFFA1A3AB),
-        currentLine = Color(0xFF26282E),
-        searchMatch = Color(0xFF32593D),
-        searchMatchCurrent = Color(0xFF2D5B8C),
-        caret = Color(0xFFCED0D6),
-        textSelection = Color(0xFF214283),
-        bracketMatch = Color(0xFF3B514D),
+        panel = Color(0xFF242428),
+        frame = Color(0xFF1C1C1F),
+        editor = Color(0xFF212124),
+        border = Color(0xFF34343A),
+        separator = Color(0xFF34343A),
+        text = Color(0xFFFAFAFA),
+        textSecondary = Color(0xFFA1A1AA),
+        hover = Color(0xFF2E2E33),
+        selection = Color(0xFF3A3A41),
+        selectionInactive = Color(0xFF303036),
+        accent = Color(0xFFFAFAFA),
+        onAccent = Color(0xFF18181B),
+        ring = Color(0xFFD4D4D8),
+        shadow = Color(0x66000000),
+        accentHover = Color(0xFFE4E4E7),
+        error = Color(0xFFF87171),
+        input = Color(0xFF212124),
+        inputBorder = Color(0xFF3A3A41),
+        popup = Color(0xFF242428),
+        code = Color(0xFFF4F4F5),
+        lineNumber = Color(0xFF62626C),
+        lineNumberCurrent = Color(0xFFFAFAFA),
+        currentLine = Color(0xFF2A2A2E),
+        searchMatch = Color(0xFF1F4D33),
+        searchMatchCurrent = Color(0xFF1E4A7A),
+        caret = Color(0xFFFAFAFA),
+        textSelection = Color(0xFF2A3A5C),
+        bracketMatch = Color(0xFF27403A),
         bracketDepths = listOf(Color(0xFFFFD700), Color(0xFFDA70D6), Color(0xFF179FFF)),
         bracketUnmatched = Color(0xFFF75464),
-        identifierUsage = Color(0xFF373B39),
-        identifierWrite = Color(0xFF472C47),
-        problemError = Color(0xFFF75464),
-        problemWarning = Color(0xFFE5B53D),
-        problemInformation = Color(0xFF7E838B),
-        inlayHint = Color(0xFF868A91),
-        documentationCode = Color(0xFF1E1F22),
-        foldPlaceholder = Color(0xFF393B40),
-        semanticType = Color(0xFF6FAFBD),
-        semanticCall = Color(0xFF57AAF7),
-        semanticParameter = Color(0xFFD0A86C),
-        inlayHintBackground = Color(0xFF3B3D42),
-        keyword = Color(0xFFCF8E6D),
-        stringLiteral = Color(0xFF6AAB73),
-        number = Color(0xFF2AACB8),
-        comment = Color(0xFF7A7E85),
-        annotation = Color(0xFFB3AE60),
-        functionDeclaration = Color(0xFF56A8F5),
-        property = Color(0xFFC77DBB),
-        stringEscape = Color(0xFFCF8E6D),
-        typeParameter = Color(0xFF16BAAC),
+        identifierUsage = Color(0xFF34343A),
+        identifierWrite = Color(0xFF3A2440),
+        problemError = Color(0xFFF87171),
+        problemWarning = Color(0xFFFBBF24),
+        problemInformation = Color(0xFF71717A),
+        inlayHint = Color(0xFF71717A),
+        documentationCode = Color(0xFF2A2A2E),
+        foldPlaceholder = Color(0xFF34343A),
+        semanticType = Color(0xFF4ADE80),
+        semanticCall = Color(0xFF38BDF8),
+        semanticParameter = Color(0xFFFCD34D),
+        inlayHintBackground = Color(0xFF2A2A2E),
+        keyword = Color(0xFFC084FC),
+        stringLiteral = Color(0xFFFDBA74),
+        number = Color(0xFFF472B6),
+        comment = Color(0xFF71717A),
+        annotation = Color(0xFFFDE047),
+        functionDeclaration = Color(0xFF22D3EE),
+        property = Color(0xFFF0ABFC),
+        stringEscape = Color(0xFFC084FC),
+        typeParameter = Color(0xFF4ADE80),
         label = Color(0xFF32B8AF),
-        markupTag = Color(0xFFD5B778),
-        markupAttribute = Color(0xFFBABABA),
-        link = Color(0xFF548AF7),
-        folder = Color(0xFF9AA7B0),
-        gitAdded = Color(0xFF73BD79),
-        gitModified = Color(0xFF4E7DD4),
-        gitDeleted = Color(0xFF7E838B),
-        gitUntracked = Color(0xFFD1675A),
-        gitAhead = Color(0xFF73BD79),
-        gitBehind = Color(0xFFE0A458),
-        diffAddedBackground = Color(0xFF294436),
-        diffRemovedBackground = Color(0xFF4A2E30),
-        diffHunkBackground = Color(0xFF252A33),
-        mergeConflictBackground = Color(0xFF4D3F1E),
-        mergeResolvedBackground = Color(0xFF263B4F),
-        kindClass = Color(0xFF3D8BD1),
-        kindInterface = Color(0xFF5FB2A7),
-        kindObject = Color(0xFF8F6CF5),
-        kindFunction = Color(0xFFD9853B),
-        kindProperty = Color(0xFF9B7FD1),
-        modified = Color(0xFF6C9BEA),
-        bannerBackground = Color(0xFF25324D),
-        bannerBorder = Color(0xFF35538F),
+        markupTag = Color(0xFFC084FC),
+        markupAttribute = Color(0xFF38BDF8),
+        link = Color(0xFF60A5FA),
+        folder = Color(0xFFA1A1AA),
+        gitAdded = Color(0xFF4ADE80),
+        gitModified = Color(0xFF60A5FA),
+        gitDeleted = Color(0xFF71717A),
+        gitUntracked = Color(0xFFFB923C),
+        gitAhead = Color(0xFF4ADE80),
+        gitBehind = Color(0xFFFBBF24),
+        diffAddedBackground = Color(0xFF0F2E1C),
+        diffRemovedBackground = Color(0xFF3B1619),
+        diffHunkBackground = Color(0xFF2A2A2E),
+        mergeConflictBackground = Color(0xFF3A2E0E),
+        mergeResolvedBackground = Color(0xFF132840),
+        kindClass = Color(0xFF3B82F6),
+        kindInterface = Color(0xFF14B8A6),
+        kindObject = Color(0xFF8B5CF6),
+        kindFunction = Color(0xFFF97316),
+        kindProperty = Color(0xFFA855F7),
+        modified = Color(0xFF60A5FA),
+        bannerBackground = Color(0xFF2A2A2E),
+        bannerBorder = Color(0xFF3F3F46),
     )
 
 val LightPalette =
     IdePalette(
         dark = false,
-        panel = Color(0xFFF7F8FA),
+        panel = Color(0xFFFFFFFF),
+        frame = Color(0xFFF0F0F2),
         editor = Color(0xFFFFFFFF),
-        border = Color(0xFFEBECF0),
-        separator = Color(0xFFDFE1E5),
-        text = Color(0xFF1E1F22),
-        textSecondary = Color(0xFF6C707E),
-        hover = Color(0xFFEBECF0),
-        selection = Color(0xFFD4E2FF),
-        selectionInactive = Color(0xFFDFE1E5),
-        accent = Color(0xFF3574F0),
-        accentHover = Color(0xFF315FBD),
-        error = Color(0xFFE55765),
+        border = Color(0xFFE4E4E7),
+        separator = Color(0xFFE4E4E7),
+        text = Color(0xFF09090B),
+        textSecondary = Color(0xFF71717A),
+        hover = Color(0xFFF4F4F5),
+        selection = Color(0xFFE4E4E7),
+        selectionInactive = Color(0xFFF4F4F5),
+        accent = Color(0xFF18181B),
+        onAccent = Color(0xFFFAFAFA),
+        ring = Color(0xFFA1A1AA),
+        shadow = Color(0x1F000000),
+        accentHover = Color(0xFF27272A),
+        error = Color(0xFFDC2626),
         input = Color(0xFFFFFFFF),
-        inputBorder = Color(0xFFC9CCD6),
+        inputBorder = Color(0xFFE4E4E7),
         popup = Color(0xFFFFFFFF),
-        code = Color(0xFF080808),
-        lineNumber = Color(0xFFAEB3C2),
-        lineNumberCurrent = Color(0xFF6C707E),
-        currentLine = Color(0xFFFCFAED),
+        code = Color(0xFF09090B),
+        lineNumber = Color(0xFFA1A1AA),
+        lineNumberCurrent = Color(0xFF18181B),
+        currentLine = Color(0xFFFAFAFA),
         searchMatch = Color(0xFFBDE3C0),
         searchMatchCurrent = Color(0xFF9DC3F5),
-        caret = Color(0xFF000000),
-        textSelection = Color(0xFFA6D2FF),
+        caret = Color(0xFF09090B),
+        textSelection = Color(0xFFBFDBFE),
         bracketMatch = Color(0xFF93D9D9),
         bracketDepths = listOf(Color(0xFFB8860B), Color(0xFFB34DB0), Color(0xFF0B6FD6)),
         bracketUnmatched = Color(0xFFD6303F),
         identifierUsage = Color(0xFFE4E4FF),
         identifierWrite = Color(0xFFF5D9F5),
-        problemError = Color(0xFFE55765),
-        problemWarning = Color(0xFFC99A00),
-        problemInformation = Color(0xFF818594),
-        inlayHint = Color(0xFF6C707E),
-        documentationCode = Color(0xFFF2F4F7),
-        foldPlaceholder = Color(0xFFDFE1E5),
-        semanticType = Color(0xFF0B7285),
-        semanticCall = Color(0xFF0A5DAB),
+        problemError = Color(0xFFDC2626),
+        problemWarning = Color(0xFFCA8A04),
+        problemInformation = Color(0xFF71717A),
+        inlayHint = Color(0xFF71717A),
+        documentationCode = Color(0xFFF4F4F5),
+        foldPlaceholder = Color(0xFFE4E4E7),
+        semanticType = Color(0xFF16A34A),
+        semanticCall = Color(0xFF0284C7),
         semanticParameter = Color(0xFF8A5A00),
-        inlayHintBackground = Color(0xFFEDEEF2),
-        keyword = Color(0xFF0033B3),
-        stringLiteral = Color(0xFF067D17),
-        number = Color(0xFF1750EB),
-        comment = Color(0xFF8C8C8C),
+        inlayHintBackground = Color(0xFFF4F4F5),
+        keyword = Color(0xFF7C3AED),
+        stringLiteral = Color(0xFFC2410C),
+        number = Color(0xFFDB2777),
+        comment = Color(0xFF71717A),
         annotation = Color(0xFF9E880D),
-        functionDeclaration = Color(0xFF00627A),
-        property = Color(0xFF871094),
-        stringEscape = Color(0xFF0037A6),
-        typeParameter = Color(0xFF007E8A),
+        functionDeclaration = Color(0xFF0891B2),
+        property = Color(0xFFC026D3),
+        stringEscape = Color(0xFF7C3AED),
+        typeParameter = Color(0xFF16A34A),
         label = Color(0xFF007E8A),
-        markupTag = Color(0xFF0033B3),
-        markupAttribute = Color(0xFF174AD4),
-        link = Color(0xFF2470B3),
-        folder = Color(0xFF6E7B87),
-        gitAdded = Color(0xFF3C8C3C),
-        gitModified = Color(0xFF2D5AD0),
-        gitDeleted = Color(0xFF818594),
-        gitUntracked = Color(0xFFC1502E),
-        gitAhead = Color(0xFF3C8C3C),
-        gitBehind = Color(0xFFB77A1E),
-        diffAddedBackground = Color(0xFFD5F0D5),
-        diffRemovedBackground = Color(0xFFF7D4D4),
-        diffHunkBackground = Color(0xFFEEF1F6),
-        mergeConflictBackground = Color(0xFFFBEBC8),
-        mergeResolvedBackground = Color(0xFFDCE9F7),
-        kindClass = Color(0xFF2F6FBF),
-        kindInterface = Color(0xFF2B8F82),
-        kindObject = Color(0xFF6F4BD6),
-        kindFunction = Color(0xFFB8631A),
-        kindProperty = Color(0xFF7A58B8),
-        modified = Color(0xFF2D5AD0),
-        bannerBackground = Color(0xFFE8F0FE),
-        bannerBorder = Color(0xFFB3CBF5),
+        markupTag = Color(0xFF7C3AED),
+        markupAttribute = Color(0xFF0284C7),
+        link = Color(0xFF2563EB),
+        folder = Color(0xFF71717A),
+        gitAdded = Color(0xFF16A34A),
+        gitModified = Color(0xFF2563EB),
+        gitDeleted = Color(0xFFA1A1AA),
+        gitUntracked = Color(0xFFEA580C),
+        gitAhead = Color(0xFF16A34A),
+        gitBehind = Color(0xFFD97706),
+        diffAddedBackground = Color(0xFFDCFCE7),
+        diffRemovedBackground = Color(0xFFFEE2E2),
+        diffHunkBackground = Color(0xFFF4F4F5),
+        mergeConflictBackground = Color(0xFFFEF3C7),
+        mergeResolvedBackground = Color(0xFFDBEAFE),
+        kindClass = Color(0xFF2563EB),
+        kindInterface = Color(0xFF0D9488),
+        kindObject = Color(0xFF7C3AED),
+        kindFunction = Color(0xFFEA580C),
+        kindProperty = Color(0xFF9333EA),
+        modified = Color(0xFF2563EB),
+        bannerBackground = Color(0xFFF4F4F5),
+        bannerBorder = Color(0xFFD4D4D8),
     )
 
-/** IntelliJ IDEA (New UI) colors of the active theme: reading one inside a composable makes it follow the theme. */
+/** Colors of the active theme (shadcn/ui's zinc palette): reading one inside a composable makes it follow the theme. */
 object IdeColors {
     /** The palette in use; set by [IdeTheme]. */
     var palette by mutableStateOf(DarkPalette)
         internal set
 
     val Panel get() = palette.panel
+    val Frame get() = palette.frame
     val Editor get() = palette.editor
     val Border get() = palette.border
     val Separator get() = palette.separator
@@ -287,6 +312,9 @@ object IdeColors {
     val Selection get() = palette.selection
     val SelectionInactive get() = palette.selectionInactive
     val Accent get() = palette.accent
+    val OnAccent get() = palette.onAccent
+    val Ring get() = palette.ring
+    val Shadow get() = palette.shadow
     val AccentHover get() = palette.accentHover
     val Error get() = palette.error
     val Input get() = palette.input
@@ -370,6 +398,31 @@ object IdeFonts {
     /** Fallback only: [IdeTheme] provides the bundled JetBrains Mono through [LocalCodeStyle]. */
     val Code =
         TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp, lineHeight = 20.sp, color = IdeColors.Code)
+
+    /** Font of the chrome (labels, buttons, menus): Geist, shadcn/ui's font, once [IdeTheme] has loaded it. */
+    var ui: FontFamily by mutableStateOf(FontFamily.Default)
+        internal set
+}
+
+/** Corner radii of shadcn/ui (`rounded-sm` to `rounded-xl`), for every rounded surface of the chrome. */
+object IdeShapes {
+    /** Badges, check boxes, small chips. */
+    val Small = RoundedCornerShape(4.dp)
+
+    /** Buttons, inputs, list rows and menu items. */
+    val Medium = RoundedCornerShape(6.dp)
+
+    /** Popovers, menus, cards. */
+    val Large = RoundedCornerShape(8.dp)
+
+    /** Dialogs. */
+    val ExtraLarge = RoundedCornerShape(12.dp)
+
+    /** The islands: tool windows and editors, floating on the frame of the window. */
+    val Island = RoundedCornerShape(10.dp)
+
+    /** Pills: toggles, counters. */
+    val Full = RoundedCornerShape(percent = 50)
 }
 
 /** Text style of code. Every glyph must have the same advance: caret, selection and clicks rely on it. */
@@ -416,46 +469,67 @@ fun IdeTheme(choice: ThemeChoice = ThemeChoice.Dark, content: @Composable () -> 
                 color = palette.code,
             )
         }
+    val regular = Font(Res.font.geist_regular, FontWeight.Normal)
+    val medium = Font(Res.font.geist_medium, FontWeight.Medium)
+    val semiBold = Font(Res.font.geist_semibold, FontWeight.SemiBold)
+    val bold = Font(Res.font.geist_bold, FontWeight.Bold)
+    val ui = remember(regular, medium, semiBold, bold) { FontFamily(regular, medium, semiBold, bold) }
+    // Compared without reading the state, so that setting it never recomposes the theme itself.
+    val current = Snapshot.withoutReadObservation { IdeFonts.ui }
+    if (current != ui) IdeFonts.ui = ui
     val colorScheme = materialColors(palette)
-    MaterialTheme(colorScheme = colorScheme) {
+    val typography = remember(ui) { materialTypography(ui) }
+    val shapes = remember { Shapes(extraSmall = IdeShapes.Large, small = IdeShapes.Medium, medium = IdeShapes.Large) }
+    MaterialTheme(colorScheme = colorScheme, typography = typography, shapes = shapes) {
         CompositionLocalProvider(
             LocalCodeStyle provides codeStyle,
             LocalScrollbarStyle provides
                 ScrollbarStyle(
                     minimalHeight = 24.dp,
                     thickness = 8.dp,
-                    shape = RoundedCornerShape(4.dp),
-                    hoverDurationMillis = 200,
-                    unhoverColor = Color(0x59A6A6A6),
-                    hoverColor = Color(0x80A6A6A6),
+                    shape = IdeShapes.Full,
+                    hoverDurationMillis = 150,
+                    unhoverColor = palette.textSecondary.copy(alpha = 0.25f),
+                    hoverColor = palette.textSecondary.copy(alpha = 0.45f),
                 ),
             content = content,
         )
     }
 }
 
+private fun materialTypography(ui: FontFamily): Typography {
+    val base = Typography()
+    return base.copy(
+        bodyLarge = base.bodyLarge.copy(fontFamily = ui),
+        bodyMedium = base.bodyMedium.copy(fontFamily = ui),
+        bodySmall = base.bodySmall.copy(fontFamily = ui),
+        labelLarge = base.labelLarge.copy(fontFamily = ui),
+        labelMedium = base.labelMedium.copy(fontFamily = ui),
+        labelSmall = base.labelSmall.copy(fontFamily = ui),
+        titleSmall = base.titleSmall.copy(fontFamily = ui),
+        titleMedium = base.titleMedium.copy(fontFamily = ui),
+    )
+}
+
+// Material's components (menus, progress) wear shadcn's tokens: flat popover surfaces, no tonal tint.
 private fun materialColors(palette: IdePalette): ColorScheme {
-    val primary = palette.accent
-    val background = palette.panel
-    val surface = palette.popup
-    val onSurface = palette.text
-    return if (palette.dark) {
-        darkColorScheme(
-            primary = primary,
-            background = background,
-            surface = surface,
-            onSurface = onSurface,
-            onBackground = onSurface,
-        )
-    } else {
-        lightColorScheme(
-            primary = primary,
-            background = background,
-            surface = surface,
-            onSurface = onSurface,
-            onBackground = onSurface,
-        )
-    }
+    val base = if (palette.dark) darkColorScheme() else lightColorScheme()
+    return base.copy(
+        primary = palette.accent,
+        onPrimary = palette.onAccent,
+        background = palette.panel,
+        onBackground = palette.text,
+        surface = palette.popup,
+        onSurface = palette.text,
+        onSurfaceVariant = palette.textSecondary,
+        surfaceTint = Color.Transparent,
+        surfaceContainer = palette.popup,
+        surfaceContainerLow = palette.popup,
+        surfaceContainerHigh = palette.popup,
+        outline = palette.border,
+        outlineVariant = palette.separator,
+        error = palette.error,
+    )
 }
 
 /** Lightweight label: [BasicText] is cheaper than Material's Text and is what IDE chrome needs. */
@@ -468,17 +542,26 @@ fun Label(
     fontWeight: FontWeight? = null,
     maxLines: Int = 1,
     overflow: TextOverflow = TextOverflow.Ellipsis,
+    letterSpacing: TextUnit = TextUnit.Unspecified,
 ) {
+    val style =
+        TextStyle(
+            color = color,
+            fontSize = fontSize,
+            fontWeight = fontWeight,
+            fontFamily = IdeFonts.ui,
+            letterSpacing = letterSpacing,
+        )
     BasicText(
         text = text,
         modifier = modifier,
-        style = TextStyle(color = color, fontSize = fontSize, fontWeight = fontWeight),
+        style = style,
         maxLines = maxLines,
         overflow = overflow,
     )
 }
 
-/** IntelliJ's VCS file status colors. */
+/** Colors of the Git status of a file. */
 fun gitColor(status: GitFileStatus): Color =
     when (status) {
         GitFileStatus.Modified, GitFileStatus.Renamed -> IdeColors.Modified

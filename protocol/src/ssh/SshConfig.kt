@@ -19,11 +19,13 @@ import java.util.concurrent.TimeUnit
     "LoopWithTooManyJumpStatements",
 ) // a small, explicit parser for a line-oriented config format
 object SshConfig {
+    /** The hosts of `~/.ssh/config` (or of the file named by the `kotlin.editor.ssh.config` property). */
     fun load(): List<SshConfigHost> {
         val configured = System.getProperty("kotlin.editor.ssh.config")
         return load(File(configured ?: File(System.getProperty("user.home"), ".ssh/config").path))
     }
 
+    /** The hosts of the configuration file [config]; none when it is missing or has no concrete alias. */
     fun load(config: File): List<SshConfigHost> {
         if (!config.isFile) return emptyList()
         val aliases = runCatching { readAliases(config.toPath(), mutableSetOf()) }.getOrDefault(emptyList())
@@ -129,5 +131,5 @@ object SshConfig {
     }
 }
 
-// `~/…` or `~\…`: a path under the home directory.
-internal fun isUnderHome(path: String): Boolean = path.startsWith("~/") || path.startsWith("~\\")
+/** Whether [path] starts with the home directory marker, followed by a separator. */
+fun isUnderHome(path: String): Boolean = path.startsWith("~/") || path.startsWith("~\\")

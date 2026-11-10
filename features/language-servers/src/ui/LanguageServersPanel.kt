@@ -9,9 +9,11 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -21,7 +23,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -31,8 +33,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.selected
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -59,6 +59,7 @@ fun LanguageServerStatusItems(project: LanguageServersHost) {
         StatusItem(
             text = statusText(server),
             color = colorOf(server),
+            dot = dotColor(server),
             tooltip = tooltipOf(server),
             tag = LanguageServerTags.statusLanguageServer(server.id),
             tooltipTag = LanguageServerTags.statusLanguageServerTooltip(server.id),
@@ -84,18 +85,22 @@ private fun StatusItem(
     tooltip: String,
     tag: String,
     tooltipTag: String,
+    dot: Color? = null,
     onClick: () -> Unit,
 ) {
     TooltipArea(tooltip = { MultilineTooltip(tooltip, Modifier.testTag(tooltipTag)) }) {
-        Label(
-            text,
-            Modifier
-                .clickable(onClick = onClick)
-                .pointerHoverIcon(PointerIcon.Hand)
-                .testTag(tag),
-            color = color,
-            fontSize = 12.sp,
-        )
+        Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
+            dot?.let { StatusDot(it) }
+            Label(
+                text,
+                Modifier
+                    .clickable(onClick = onClick)
+                    .pointerHoverIcon(PointerIcon.Hand)
+                    .testTag(tag),
+                color = color,
+                fontSize = 12.sp,
+            )
+        }
     }
 }
 
@@ -103,8 +108,8 @@ private fun StatusItem(
 private fun MultilineTooltip(text: String, modifier: Modifier = Modifier) {
     Box(
         modifier
-            .background(IdeColors.Popup, RoundedCornerShape(4.dp))
-            .border(1.dp, IdeColors.Separator, RoundedCornerShape(4.dp))
+            .background(IdeColors.Popup, IdeShapes.Medium)
+            .border(1.dp, IdeColors.Separator, IdeShapes.Medium)
             .padding(8.dp),
     ) {
         Label(text, fontSize = 12.sp, maxLines = 12)
@@ -115,7 +120,7 @@ private fun MultilineTooltip(text: String, modifier: Modifier = Modifier) {
 @Composable
 fun LanguageServersPanel(project: LanguageServersHost, drag: ToolWindowDrag, modifier: Modifier = Modifier) {
     val state = project.languageServers
-    Column(modifier.fillMaxSize().background(IdeColors.Editor).testTag(LanguageServerTags.LANGUAGE_SERVERS)) {
+    Column(modifier.fillMaxSize().background(IdeColors.Panel).testTag(LanguageServerTags.LANGUAGE_SERVERS)) {
         ToolWindowHeader("Language Servers", ToolWindow.LanguageServers, project.toolWindows, drag) {
             IconButton(
                 { project.toolWindows.setVisible(ToolWindow.LanguageServers, false) },
@@ -138,21 +143,25 @@ private fun ColumnScope.LanguageServersContent(project: LanguageServersHost, sta
         )
     }
     val servers = state.status.servers
-    InlayHintsModeRow(project)
-    InlayHintsNote(servers)
-    SetupNote(servers)
-    ProjectCheckSection(project, state)
-    Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
-        IdeServerRow(state.status.server)
-        if (servers.isEmpty()) {
-            Label(
-                "No language server is running. Opening a PHP, TypeScript or JavaScript file starts one.",
-                Modifier.padding(12.dp).testTag(LanguageServerTags.LANGUAGE_SERVERS_EMPTY),
-                color = IdeColors.TextSecondary,
-                fontSize = 12.sp,
-            )
+    BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+        // Wide (the bottom dock): the settings on the left and the servers beside them, all in view at once.
+        if (maxWidth >= WIDE_LAYOUT) {
+            Row(Modifier.fillMaxSize()) {
+                Column(Modifier.width(SETTINGS_WIDTH).fillMaxHeight().verticalScroll(rememberScrollState())) {
+                    SettingsSections(project, state, servers)
+                }
+                Box(Modifier.fillMaxHeight().width(1.dp).background(IdeColors.Separator))
+                Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState())) {
+                    ServersSection(project, state, servers)
+                }
+            }
+        } else {
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                SettingsSections(project, state, servers)
+                SectionDivider()
+                ServersSection(project, state, servers)
+            }
         }
-        servers.forEach { ServerRow(project, state, it) }
     }
     state.log?.let { log ->
         Box(Modifier.fillMaxWidth().height(1.dp).background(IdeColors.Separator))
@@ -160,29 +169,75 @@ private fun ColumnScope.LanguageServersContent(project: LanguageServersHost, sta
     }
 }
 
+// From this width the window shows its settings and its servers side by side.
+private val WIDE_LAYOUT = 640.dp
+private val SETTINGS_WIDTH = 340.dp
+
+// The inlay hints, the check of the project, and the memory of the IDE server.
+@Composable
+private fun SettingsSections(
+    project: LanguageServersHost,
+    state: LanguageServersState,
+    servers: List<LanguageServerInfo>,
+) {
+    Column(SECTION, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        InlayHintsModeRow(project)
+        InlayHintsNote(servers)
+        SetupNote(servers)
+        ProjectCheckSection(project, state)
+    }
+    SectionDivider()
+    IdeServerRow(state.status.server)
+}
+
+// A card per running language server, or why there is none.
+@Composable
+private fun ServersSection(
+    project: LanguageServersHost,
+    state: LanguageServersState,
+    servers: List<LanguageServerInfo>,
+) {
+    Column(SECTION, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SectionLabel("Active servers")
+        if (servers.isEmpty()) {
+            Label(
+                "No language server is running. Opening a PHP, TypeScript or JavaScript file starts one.",
+                Modifier.testTag(LanguageServerTags.LANGUAGE_SERVERS_EMPTY),
+                color = IdeColors.TextSecondary,
+                fontSize = 12.sp,
+                maxLines = 3,
+            )
+        }
+        servers.forEach { ServerRow(project, state, it) }
+    }
+}
+
+// Padding of a section of the window, between two dividers.
+private val SECTION = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp)
+
+@Composable
+private fun SectionDivider() {
+    Box(Modifier.fillMaxWidth().height(1.dp).background(IdeColors.Separator))
+}
+
 // The check of the whole project with vue-tsc: the language servers only know the files that are open.
 @Composable
 private fun ProjectCheckSection(project: LanguageServersHost, state: LanguageServersState) {
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        IdeButton(
-            if (state.checking) "Checking…" else "Check project (vue-tsc)",
-            { state.checkProject(project.root.path) },
-            Modifier.testTag(LanguageServerTags.PROJECT_CHECK),
-            enabled = !state.checking,
+    IdeButton(
+        if (state.checking) "Checking…" else "Check project (vue-tsc)",
+        { state.checkProject(project.root.path) },
+        Modifier.fillMaxWidth().testTag(LanguageServerTags.PROJECT_CHECK),
+        enabled = !state.checking,
+        icon = Lucide.Check,
+    )
+    state.projectCheck?.let {
+        Label(
+            it.summary,
+            Modifier.testTag(LanguageServerTags.PROJECT_CHECK_SUMMARY),
+            color = if (it.status == FeatureStatus.Ready) IdeColors.TextSecondary else IdeColors.Error,
+            fontSize = 12.sp,
+            maxLines = 2,
         )
-        state.projectCheck?.let {
-            Label(
-                it.summary,
-                Modifier.testTag(LanguageServerTags.PROJECT_CHECK_SUMMARY),
-                color = if (it.status == FeatureStatus.Ready) IdeColors.TextSecondary else IdeColors.Error,
-                fontSize = 12.sp,
-                maxLines = 2,
-            )
-        }
     }
     val lines = checkLines(project, state.projectCheck)
     if (lines.isNotEmpty()) {
@@ -190,7 +245,6 @@ private fun ProjectCheckSection(project: LanguageServersHost, state: LanguageSer
             Modifier
                 .fillMaxWidth()
                 .height(PROBLEMS_HEIGHT)
-                .padding(horizontal = 12.dp)
                 .testTag(LanguageServerTags.PROJECT_CHECK_PROBLEMS),
         ) {
             items(lines) { Label(it, fontSize = 12.sp, maxLines = 1) }
@@ -215,31 +269,17 @@ private val PROBLEMS_HEIGHT = 160.dp
 // the code.
 @Composable
 private fun InlayHintsModeRow(project: LanguageServersHost) {
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Label("Inlay hints", color = IdeColors.TextSecondary, fontSize = 12.sp)
-        for (mode in InlayHintsMode.entries) {
-            val chosen = project.inlayHintsMode == mode
-            Label(
-                mode.name,
-                Modifier
-                    .background(if (chosen) IdeColors.Selection else Color.Transparent, MODE_SHAPE)
-                    .border(1.dp, IdeColors.Separator, MODE_SHAPE)
-                    .clickable { project.inlayHintsMode = mode }
-                    .pointerHoverIcon(PointerIcon.Hand)
-                    .semantics { selected = chosen }
-                    .testTag(LanguageServerTags.inlayHintsMode(mode.name))
-                    .padding(horizontal = 8.dp, vertical = 2.dp),
-                fontSize = 12.sp,
-            )
-        }
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Label("Inlay hints", Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
+        SegmentedControl(
+            InlayHintsMode.entries,
+            project.inlayHintsMode,
+            { project.inlayHintsMode = it },
+            labelOf = { it.name },
+            tagOf = { LanguageServerTags.inlayHintsMode(it.name) },
+        )
     }
 }
-
-private val MODE_SHAPE = RoundedCornerShape(4.dp)
 
 // Why the running servers that give no inlay hints give none (intelephense without its licence): the mode chosen
 // above would otherwise seem to do nothing.
@@ -249,10 +289,10 @@ private fun InlayHintsNote(servers: List<LanguageServerInfo>) {
     if (notes.isEmpty()) return
     Label(
         notes.joinToString("\n"),
-        Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp).testTag(LanguageServerTags.INLAY_HINTS_NOTE),
+        Modifier.testTag(LanguageServerTags.INLAY_HINTS_NOTE),
         color = IdeColors.TextSecondary,
-        fontSize = 11.sp,
-        maxLines = 4,
+        fontSize = 12.sp,
+        maxLines = 8,
     )
 }
 
@@ -263,73 +303,93 @@ private fun SetupNote(servers: List<LanguageServerInfo>) {
     if (notes.isEmpty()) return
     Label(
         notes.joinToString("\n"),
-        Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp).testTag(LanguageServerTags.SETUP_NOTE),
+        Modifier.testTag(LanguageServerTags.SETUP_NOTE),
         color = IdeColors.Error,
-        fontSize = 11.sp,
-        maxLines = 4,
+        fontSize = 12.sp,
+        maxLines = 8,
     )
 }
 
 @Composable
 private fun IdeServerRow(server: ServerMemory) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 8.dp)
-            .testTag(LanguageServerTags.LANGUAGE_SERVERS_IDE),
-        verticalAlignment = Alignment.CenterVertically,
+    Column(
+        SECTION.testTag(LanguageServerTags.LANGUAGE_SERVERS_IDE),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Column(Modifier.weight(1f)) {
-            Label("IDE server", fontWeight = FontWeight.Bold)
-            Label("Kotlin Editor's own server process", color = IdeColors.TextSecondary, fontSize = 11.sp)
-        }
-        if (server.heapMaxBytes > 0) {
-            Label(serverTooltip(server).replace('\n', ' '), color = IdeColors.TextSecondary, fontSize = 12.sp)
+        if (server.heapMaxBytes <= 0) {
+            MemoryLine("IDE server", "Kotlin Editor's own server process")
+        } else {
+            MemoryLine("IDE server · heap", "${memoryText(server.heapUsedBytes)} / ${memoryText(server.heapMaxBytes)}")
+            ProgressBar(server.heapUsedBytes.toFloat() / server.heapMaxBytes, Modifier.fillMaxWidth())
+            if (server.residentBytes > 0) MemoryLine("Whole process (UI included)", memoryText(server.residentBytes))
         }
     }
 }
 
+// A muted name on the left, its value on the right in the code font.
+@Composable
+private fun MemoryLine(name: String, value: String) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Label(name, Modifier.weight(1f), color = IdeColors.TextSecondary, fontSize = 12.sp)
+        MonoValue(value)
+    }
+}
+
+@Composable
+private fun MonoValue(value: String, modifier: Modifier = Modifier) {
+    val style = LocalCodeStyle.current.copy(color = IdeColors.Text, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+    BasicText(value, modifier, style = style, maxLines = 1)
+}
+
+// A card per server: its state as a dot, its memory, then its actions.
 @Composable
 private fun ServerRow(project: LanguageServersHost, state: LanguageServersState, server: LanguageServerInfo) {
-    Box(Modifier.fillMaxWidth().height(1.dp).background(IdeColors.Separator))
-    Row(
+    Column(
         Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .card()
+            .padding(12.dp)
             .testTag(LanguageServerTags.languageServerRow(server.id)),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Label("${server.languageName} · ${server.serverName}", fontWeight = FontWeight.Bold)
-                Label(
-                    "  ${stateText(server)}",
-                    Modifier.testTag(LanguageServerTags.languageServerState(server.id)),
-                    color = colorOf(server),
-                    fontSize = 12.sp,
-                )
-            }
-            Label(server.root, color = IdeColors.TextSecondary, fontSize = 11.sp)
-            val growing = server.leakVerdict in LEAKS || server.leakVerdict == "Growing"
-            val note = server.message ?: server.leakReason.takeIf { growing }
-            note?.let {
-                Label(
-                    it,
-                    Modifier.testTag(LanguageServerTags.languageServerMessage(server.id)),
-                    color = colorOf(server),
-                    fontSize = 12.sp,
-                    maxLines = 3,
-                )
-            }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            StatusDot(dotColor(server))
+            Label(
+                "${server.languageName} · ${server.serverName}",
+                Modifier.weight(1f),
+                fontWeight = FontWeight.SemiBold,
+            )
+            server.memory?.let { MonoValue(memoryText(it.privateBytes)) }
         }
-        Label(
-            memoryDetails(server),
-            Modifier.width(260.dp).testTag(LanguageServerTags.languageServerMemory(server.id)),
-            color = IdeColors.TextSecondary,
-            fontSize = 12.sp,
-        )
-        ServerActions(project, state, server)
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Label(
+                stateText(server),
+                Modifier.testTag(LanguageServerTags.languageServerState(server.id)),
+                color = colorOf(server),
+                fontSize = 12.sp,
+            )
+            Label(
+                memoryDetails(server),
+                Modifier.testTag(LanguageServerTags.languageServerMemory(server.id)),
+                color = IdeColors.TextSecondary,
+                fontSize = 12.sp,
+            )
+        }
+        Label(server.root, color = IdeColors.TextSecondary, fontSize = 11.sp)
+        val growing = server.leakVerdict in LEAKS || server.leakVerdict == "Growing"
+        val note = server.message ?: server.leakReason.takeIf { growing }
+        note?.let {
+            Label(
+                it,
+                Modifier.testTag(LanguageServerTags.languageServerMessage(server.id)),
+                color = colorOf(server),
+                fontSize = 12.sp,
+                maxLines = 3,
+            )
+        }
+        Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            ServerActions(project, state, server)
+        }
     }
 }
 
@@ -339,26 +399,36 @@ private fun ServerActions(project: LanguageServersHost, state: LanguageServersSt
         "Restart",
         { state.restart(server) },
         Modifier.testTag(LanguageServerTags.languageServerRestart(server.id)),
+        compact = true,
     )
     if (state.isRunning(server)) {
         IdeButton(
             "Stop",
             { state.stop(server) },
             Modifier.testTag(LanguageServerTags.languageServerStop(server.id)),
+            compact = true,
         )
     } else {
         IdeButton(
             "Start",
             { state.start(server) },
             Modifier.testTag(LanguageServerTags.languageServerStart(server.id)),
+            compact = true,
         )
     }
     IdeButton(
         if (state.log?.id == server.id) "Hide log" else "Log",
         { state.toggleLog(server) },
         Modifier.testTag(LanguageServerTags.languageServerLog(server.id)),
+        variant = ButtonVariant.Ghost,
+        compact = true,
     )
-    IdeButton("Change…", { state.offerChoice(server.language, project.root.path) })
+    IdeButton(
+        "Change…",
+        { state.offerChoice(server.language, project.root.path) },
+        variant = ButtonVariant.Ghost,
+        compact = true,
+    )
 }
 
 @Composable
@@ -388,6 +458,15 @@ private fun statusText(server: LanguageServerInfo): String {
     val detail = if (memory != null) memoryText(memory.privateBytes) else stateText(server)
     return "$leak${server.languageName} · $detail"
 }
+
+// Green while it runs, amber while it gets ready, red when it failed, muted when stopped.
+private fun dotColor(server: LanguageServerInfo): Color =
+    when (server.state) {
+        LanguageServerState.Running -> Good
+        LanguageServerState.Starting, LanguageServerState.Indexing, LanguageServerState.Restarting -> Warning
+        LanguageServerState.Crashed, LanguageServerState.Unavailable -> IdeColors.Error
+        LanguageServerState.Stopped -> IdeColors.TextSecondary
+    }
 
 private fun colorOf(server: LanguageServerInfo): Color =
     when {

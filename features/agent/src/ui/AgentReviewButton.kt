@@ -9,8 +9,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -86,7 +84,7 @@ private fun RegistryAgentButton(agent: AgentState, button: RegistryButton, enabl
             Label(
                 "${button.label} ▾",
                 Modifier
-                    .background(if (open) IdeColors.Selection else Color.Transparent, RoundedCornerShape(4.dp))
+                    .background(if (open) IdeColors.Selection else Color.Transparent, IdeShapes.Medium)
                     .clickable(enabled = enabled) { open = true }
                     .testTag(button.tag)
                     .padding(horizontal = 6.dp, vertical = 2.dp),
@@ -98,7 +96,7 @@ private fun RegistryAgentButton(agent: AgentState, button: RegistryButton, enabl
             open = false
             choose(entry)
         }
-        DropdownMenu(open, onDismissRequest = { open = false }, Modifier.widthIn(max = MENU_WIDTH).closesOnEscape { open = false }) {
+        IdeDropdownMenu(open, onDismissRequest = { open = false }, Modifier.widthIn(max = MENU_WIDTH).closesOnEscape { open = false }) {
             val menu = RegistryMenu(agent.settingsAgentLabel, chosenId = null, tags = button.tags)
             AgentRegistryMenu(menu, entries, failure, picked)
         }

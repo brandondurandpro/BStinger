@@ -1,7 +1,6 @@
 package org.example.kotlineditor.ui
 
 import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.text.font.FontWeight
 import org.example.kotlineditor.plugin.ActionContext
 import org.example.kotlineditor.plugin.StripGroup
 import org.example.kotlineditor.plugin.ToolWindowContribution
@@ -21,7 +20,7 @@ fun runToolWindow(): ToolWindowContribution =
         tag = RunTags.TOOL_BUTTON,
         group = StripGroup.Bottom,
         onShown = { host -> host.service(RUN_SERVICE).ensureLoaded() },
-        icon = { Label("▶", color = IdeColors.Text, fontWeight = FontWeight.Bold) },
+        icon = Lucide.Play,
         content = { host, drag, modifier ->
             RunPanel(host.service(RUN_SERVICE), host.toolWindows, drag, modifier)
         },

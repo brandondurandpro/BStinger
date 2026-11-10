@@ -149,6 +149,12 @@ class ProjectState(
     var popup: PopupKind? by mutableStateOf(null)
     override var fileDialog: FileDialog? by mutableStateOf(null)
 
+    /** The deployments saved for this project (which folders go where), and their popup. */
+    val deployments = DeploymentsState(this)
+
+    /** The destination of the last deployment, offered again by the next one. */
+    var deployDestination: String by mutableStateOf("")
+
     /** "Always Select Opened File" (IntelliJ): the active file is selected and revealed in the project tree. */
     override var autoSelectOpenedFile by mutableStateOf(autoSelectOf(preferences))
 

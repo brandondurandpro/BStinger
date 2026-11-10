@@ -214,7 +214,7 @@ private fun CatalogRow(tag: String, isSelected: Boolean, onClick: () -> Unit, co
     Row(
         Modifier
             .fillMaxWidth()
-            .background(rowBackground, RoundedCornerShape(4.dp))
+            .background(rowBackground, IdeShapes.Medium)
             .hoverable(interaction)
             .testTag(tag)
             .padding(horizontal = 8.dp, vertical = 5.dp)

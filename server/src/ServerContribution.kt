@@ -15,6 +15,7 @@ internal fun interface ServerContribution {
 internal fun builtInContributions(): List<ServerContribution> =
     listOf(
         ServerContribution(::fileHandlers),
+        ServerContribution(::deployHandlers),
         ServerContribution(::searchHandlers),
         ServerContribution { gitHandlers(it.git) },
         ServerContribution { terminalHandlers() },

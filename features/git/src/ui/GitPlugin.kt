@@ -16,7 +16,7 @@ fun gitToolWindow(): ToolWindowContribution =
         tag = GitTags.TOOL_GIT,
         group = StripGroup.Top,
         onShown = { host -> (host as GitHost).git.refreshStatus() },
-        icon = { HistoryIcon(color = IdeColors.Text) },
+        icon = Lucide.History,
         content = { host, drag, modifier -> GitPanel(host as GitHost, drag, modifier) },
     )
 
@@ -33,7 +33,7 @@ fun branchesToolWindow(): ToolWindowContribution =
             git.refreshBranches()
             if (git.history.selectedRef != null) git.history.reload()
         },
-        icon = { BranchIcon(color = IdeColors.Text) },
+        icon = Lucide.GitBranch,
         content = { host, drag, modifier -> BranchesPanel(host as GitHost, drag, modifier) },
     )
 
