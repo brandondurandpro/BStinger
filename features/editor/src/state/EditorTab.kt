@@ -149,6 +149,12 @@ class EditorTab(
     internal var lastActivated = 0L
     internal var job: Job? = null
     internal var changesJob: Job? = null
+
+    /** The lines of the file in HEAD, null when it is not tracked: what the gutter marks are computed against. */
+    internal var headLines: List<String>? = null
+
+    /** Whether the gutter marks follow the edits: the file is tracked and its lines in HEAD are known. */
+    val followsHead: Boolean get() = headLines != null
     internal var blameJob: Job? = null
 }
 

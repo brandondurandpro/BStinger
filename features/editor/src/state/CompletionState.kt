@@ -3,10 +3,13 @@ package org.example.kotlineditor.state
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.example.kotlineditor.model.CompletionItem
@@ -18,11 +21,36 @@ import org.example.kotlineditor.telemetry.Operation
 import org.example.kotlineditor.telemetry.measureToFrame
 import org.example.kotlineditor.telemetry.sizeOf
 
+// Files where `.` is the concatenation operator, not a member access.
+private val PHP_EXTENSIONS = setOf("php", "phtml", "inc")
+
 // Rows of the popup a Page Up or Page Down moves by.
 private const val PAGE_ROWS = 8
 
+// Rows of the popup whose type is asked at once: the ones the list shows.
+private const val DETAILED_ROWS = 12
+
+// How long the list stays unchanged before the types of its rows are asked.
+private const val DETAILS_DELAY_MS = 100L
+
+// About 30 seconds: a language server restarting on a slow machine takes longer than a few seconds to be ready.
+private const val NOT_READY_RETRIES = 60
+private const val NOT_READY_RETRY_MS = 500L
+
 // How long an item stays selected before its documentation is asked: the arrows run through items without asking.
 internal const val DOCUMENTATION_DELAY_MS = 200L
+
+// A server that is still loading the project answers "not ready": ask again, as long as nothing changed.
+private suspend fun askUntilReady(retryMs: Long, ask: suspend () -> CompletionResult): CompletionResult {
+    var result = ask()
+    var attempts = 0
+    while (!result.ready && attempts < NOT_READY_RETRIES) {
+        attempts++
+        delay(retryMs)
+        result = ask()
+    }
+    return result
+}
 
 /** What the completion popup shows: the server's items for a word, filtered by what was typed since. */
 @Stable
@@ -45,6 +73,12 @@ class CompletionPopup internal constructor(
     // Documentation already resolved, by resolve index: moving back to an item does not ask again. An item without
     // (or whose request failed, the link being down) is asked again when selected again.
     internal val resolved = HashMap<Int, String>()
+
+    /**
+     * The type or signature of the items whose server gives it only once they are resolved, by resolve index: the
+     * rows show it at their end, as they do the `detail` the list carries.
+     */
+    val details = mutableStateMapOf<Int, String>()
 
     /** The selected item. */
     val selectedItem: CompletionItem? get() = items.getOrNull(selected)
@@ -129,6 +163,8 @@ class CompletionState(
     private val scope: CoroutineScope,
     // The documentation of an item of a completion answer (token, resolve index).
     private val resolve: suspend (token: String, index: Int) -> String? = { _, _ -> null },
+    // The wait before asking again a server that is not ready.
+    private val notReadyRetryMs: Long = NOT_READY_RETRY_MS,
     // The server's proposals at the caret of a document.
     private val source: suspend (path: String, document: Document) -> CompletionResult,
 ) {
@@ -151,7 +187,7 @@ class CompletionState(
         val line = document.lines[document.caret.line]
         val before = line.substring(0, document.caret.column)
         val startsWord = isWordChar(c) && !c.isDigit()
-        val afterAccess = before.endsWith("->") || before.endsWith("::")
+        val afterAccess = before.endsWith("->") || before.endsWith("::") || isMemberDot(path, before)
         val startsName = c == '\\' || c == '$'
         val trigger = startsWord || afterAccess || startsName
         when {
@@ -238,7 +274,7 @@ class CompletionState(
             scope.launch {
                 // From the keystroke to the frame that shows the items; a newer keystroke cancels it.
                 ClientTelemetry.measureToFrame(Operation.EditorCompletion, attributesOf = ::itemsOf) {
-                    val result = source(path, document)
+                    val result = askUntilReady(notReadyRetryMs) { source(path, document) }
                     // Typed or moved meanwhile: a newer request is on its way, or the popup was closed.
                     if (document.version == version && document.caret == caret) show(document, caret, result)
                     result
@@ -281,16 +317,43 @@ private class Describer(
     private val current: () -> CompletionPopup?,
 ) {
     private var job: Job? = null
+    private var detailsJob: Job? = null
 
     val active: Boolean get() = job?.isActive == true
 
     fun cancel() {
         job?.cancel()
         job = null
+        detailsJob?.cancel()
+        detailsJob = null
+    }
+
+    // The types of the first rows of the list that the server gives only on resolve: asked together, once the list
+    // stops changing; the answers are kept, so the documentation of an item is not asked a second time.
+    private fun detailRows() {
+        detailsJob?.cancel()
+        val shown = current() ?: return
+        val wanted =
+            shown.items
+                .take(DETAILED_ROWS)
+                .filter { it.detail == null && it.resolveIndex >= 0 && it.resolveIndex !in shown.details }
+        if (shown.token.isEmpty() || wanted.isEmpty()) return
+        detailsJob =
+            scope.launch {
+                delay(DETAILS_DELAY_MS)
+                wanted
+                    .map { item -> async { item.resolveIndex to resolve(shown.token, item.resolveIndex) } }
+                    .awaitAll()
+                    .forEach { (index, markdown) ->
+                        markdown?.let { shown.resolved.putIfAbsent(index, it) }
+                        signatureOf(markdown)?.let { shown.details[index] = finalTypeOf(it) }
+                    }
+            }
     }
 
     fun describe() {
         cancel()
+        detailRows()
         val shown = current() ?: return
         val item = shown.selectedItem
         val index = item?.resolveIndex ?: -1
@@ -318,4 +381,43 @@ private fun itemsOf(result: CompletionResult): Attributes {
             else -> "found"
         }
     return sizeOf(result.items.size) + Attributes.of(Attribute.Result to found)
+}
+
+// The type or signature a resolved item starts with: the first fenced block of its Markdown (see the resolve of
+// the language servers), null when it starts with something else.
+internal fun signatureOf(markdown: String?): String? {
+    val fence = "```"
+    val body = markdown?.takeIf { it.startsWith("$fence\n") }?.substring(fence.length + 1)
+    val end = body?.indexOf("\n$fence") ?: -1
+    val signature = if (end < 0) null else body?.substring(0, end)
+    return signature?.lineSequence()?.joinToString(" ") { it.trim() }?.takeIf { it.isNotBlank() }
+}
+
+/**
+ * What a row shows of a signature such as `(method) Date.getDate(): number`: its final type, `number`. It is what
+ * follows the last `: ` outside parentheses, brackets and angle brackets; a signature without one (`class Date`) is
+ * left as it is.
+ */
+internal fun finalTypeOf(signature: String): String {
+    var depth = 0
+    var colon = -1
+    signature.forEachIndexed { index, c ->
+        when {
+            c in "(<[{" -> depth++
+            c in ")>]}" && !(c == '>' && signature.getOrNull(index - 1) == '=') -> depth--
+            c == ':' && depth == 0 && signature.getOrNull(index + 1) == ' ' -> colon = index
+        }
+    }
+    val type = if (colon < 0) "" else signature.substring(colon + 2).trim()
+    return type.ifEmpty { signature }
+}
+
+// A `.` that opens a member access (`oDate.`, `list[0].`, `f().`), not a PHP concatenation nor a number (`1.`).
+private fun isMemberDot(path: String, before: String): Boolean {
+    val extension = path.substringAfterLast('.').lowercase()
+    val operand = before.dropLast(1)
+    val last = operand.lastOrNull() ?: return false
+    val word = operand.takeLastWhile { it.isLetterOrDigit() || it == '_' || it == '$' }
+    val endsOperand = last in ")]" || word.any { it.isLetter() || it == '_' || it == '$' }
+    return before.endsWith(".") && extension !in PHP_EXTENSIONS && endsOperand
 }

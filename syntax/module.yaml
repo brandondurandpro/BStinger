@@ -15,6 +15,9 @@ test-dependencies:
   - $libs.tree.sitter.kotlin
   - $libs.tree.sitter.json
   - $libs.tree.sitter.php
+  - $libs.tree.sitter.vue
+  - $libs.tree.sitter.typescript
+  - $libs.tree.sitter.css
 
 test-settings:
   jvm:

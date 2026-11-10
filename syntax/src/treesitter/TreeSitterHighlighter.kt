@@ -142,6 +142,15 @@ internal class TreeSitterHighlighter(private val grammar: LoadedGrammar) : AutoC
     private fun endPoint(text: List<String>): Point =
         if (text.isEmpty()) Point(0, 0) else Point(text.size - 1, text.last().length * 2)
 
+    /**
+     * The code of another language inside the document, by character offsets: what a `.vue` file holds besides its
+     * markup (see [Injection]). Empty for a grammar that has none.
+     */
+    fun injections(): List<Injection> {
+        val root = tree?.rootNode
+        return if (grammar.spec.id == VUE && root != null) VueInjections.find(root, ::textOf) else emptyList()
+    }
+
     /** Frees the tree; the next [update] parses the whole text again. */
     fun release() {
         tree?.close()
@@ -175,6 +184,8 @@ internal class TreeSitterHighlighter(private val grammar: LoadedGrammar) : AutoC
     }
 
     private companion object {
+        const val VUE = "vue"
+
         // Colors stop there on very long lines (minified files): nobody reads that far, and it bounds the work.
         const val MAX_COLORED_COLUMNS = 10_000
 

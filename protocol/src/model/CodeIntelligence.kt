@@ -213,6 +213,24 @@ data class FileDiagnostics(
     val diagnostics: List<Diagnostic>,
 )
 
+/** What a check of the whole project found (`vue-tsc`): the files with problems, open or not. */
+data class ProjectCheckResult(
+    /** Ready: the check ran, whatever it found. NotReady: it could not run ([summary] says why). */
+    val status: FeatureStatus,
+    /** The checker (`vue-tsc`), or empty. */
+    val tool: String,
+    /** One line: how many problems in how many files, or why nothing was checked. */
+    val summary: String,
+    /** The files with problems, by absolute path. */
+    val files: List<FileDiagnostics>,
+) {
+    /** Results shared by every client. */
+    companion object {
+        /** Before the first check, and for a client that cannot ask. */
+        val NotReady = ProjectCheckResult(FeatureStatus.NotReady, "", "", emptyList())
+    }
+}
+
 /** The diagnostics of every document a session has open, as one snapshot: a newer one replaces an older one. */
 data class DiagnosticsSnapshot(
     /** Increases with every change; the client keeps the snapshot with the highest. */
@@ -334,6 +352,9 @@ interface CodeIntelligence {
      * while (a long poll, like the status of the servers).
      */
     suspend fun diagnostics(since: Long): DiagnosticsSnapshot = kotlinx.coroutines.awaitCancellation()
+
+    /** Checks the whole [project] with its type checker (`vue-tsc`, `tsc`): the problems of every file, open or not. */
+    suspend fun checkProject(project: String): ProjectCheckResult = ProjectCheckResult.NotReady
 
     /** What can be renamed at [at] (Shift+F6). */
     suspend fun prepareRename(at: DocumentPosition): RenameTarget = RenameTarget(FeatureStatus.NotReady, null, null)

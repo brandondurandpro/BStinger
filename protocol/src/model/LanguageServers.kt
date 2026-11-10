@@ -75,6 +75,8 @@ data class LanguageServerInfo(
      * without them; null when it gives them or has not started.
      */
     val inlayHintsNote: String? = null,
+    /** A dependency the project lacks that costs features (Vue templates without `vue` installed); null when none. */
+    val setupNote: String? = null,
 )
 
 /** Memory of the IDE server itself, shown next to the language servers. */
@@ -224,20 +226,77 @@ interface LanguageServers : CodeIntelligence {
     }
 }
 
-/** The languages that have language servers, by file extension. */
+/**
+ * The languages that have language servers, by file extension. A file has a *language identifier* (what the server is
+ * told in `didOpen`: `typescriptreact` for a `.tsx`) and belongs to a *language* (the group one server serves:
+ * TypeScript, JavaScript and their React forms are all `typescript`).
+ */
 object Languages {
-    private val byExtension = mapOf("php" to "php", "phtml" to "php")
-    private val names = mapOf("php" to "PHP")
-    private val rootMarkers = mapOf("php" to "composer.json")
+    /** The language of `.ts`, `.tsx`, `.js`, `.jsx` and `.vue` files: one server serves them all. */
+    const val TYPESCRIPT = "typescript"
 
-    /** Language of [path], null when no language server handles it. */
-    fun languageOf(path: String): String? = byExtension[path.substringAfterLast('.', "").lowercase()]
+    /** The language of the Vue server, which serves `.vue` files beside the TypeScript server. */
+    const val VUE_SERVER = "vue"
+
+    /** The language of the Tailwind CSS server, which serves the files of other languages beside their own server. */
+    const val TAILWIND = "tailwind"
+
+    private const val HTML = "html"
+    private const val CSS = "css"
+    private const val PHP = "php"
+
+    // The languages the IDE has a server for, by extension: declared in [LanguageSupport], with their icon and more.
+    private val served: Map<String, LspSupport> =
+        buildMap {
+            for (language in LanguageSupport.all) {
+                val lsp = language.lsp ?: continue
+                for (extension in language.extensions) put(extension, lsp)
+            }
+        }
+
+    // What the servers are called, by the language they serve (Vue and Tailwind have no files of their own).
+    private val names =
+        mapOf(
+            HTML to "HTML",
+            CSS to "CSS",
+            PHP to "PHP",
+            TYPESCRIPT to "TypeScript and JavaScript",
+            VUE_SERVER to "Vue",
+            TAILWIND to "Tailwind CSS",
+        )
+
+    /** The names of the languages that have a server, for a test to check that each has one. */
+    val serverLanguages: Set<String> get() = names.keys
+
+    private fun lspOf(path: String): LspSupport? = served[path.substringAfterLast('.', "").lowercase()]
+
+    /** Language identifier of [path] (`typescriptreact`), null when no language server handles it. */
+    fun identifierOf(path: String): String? = lspOf(path)?.identifier
+
+    /** Language of [path] (`typescript` for a `.tsx`, `.js`…), null when no language server handles it. */
+    fun languageOf(path: String): String? = lspOf(path)?.group
+
+    /**
+     * The languages whose servers serve [path] beside the one of its own language: Tailwind CSS knows the class names
+     * of the files of the web, whatever their language.
+     */
+    fun companionsOf(path: String): List<String> = lspOf(path)?.companions.orEmpty()
+
+    /**
+     * Whether the IDE follows [path] with the code insight of a language server (usage counts, hints, problems): not
+     * the files only a companion server knows, such as `.html` and `.css`, which only get completion and hover.
+     */
+    fun hasInsight(path: String): Boolean = lspOf(path)?.insight == true
 
     /** Name of [language] for people. */
     fun nameOf(language: String): String = names[language] ?: language
 
     /** File whose directory is the root of a [language] server, null when the project is. */
-    fun rootMarkerOf(language: String): String? = rootMarkers[language]
+    fun rootMarkerOf(language: String): String? {
+        val servers = LanguageSupport.all.mapNotNull { it.lsp }
+        val withMarker = servers.firstOrNull { it.group == language && it.rootMarker != null }
+        return withMarker?.rootMarker
+    }
 }
 
 /**

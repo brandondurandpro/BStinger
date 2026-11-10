@@ -15,6 +15,7 @@ import org.example.kotlineditor.lsp.leak.LeakSettings
 import org.example.kotlineditor.lsp.leak.MemoryPoint
 import org.example.kotlineditor.lsp.memory.ProcessMemorySampler
 import org.example.kotlineditor.model.LanguageServerInfo
+import org.example.kotlineditor.model.Languages
 import java.io.Closeable
 
 /** A language server wanted for a root directory. */
@@ -25,7 +26,7 @@ data class ServerTarget(
     val root: String,
 ) {
     /** Id of the server: stable across its restarts. */
-    val id: String get() = "${spec.name}@$root"
+    val id: String get() = "${spec.name}${spec.variant}@$root"
 }
 
 /**
@@ -58,6 +59,7 @@ class LanguageServerSupervisor(
 ) : Closeable {
     private val lock = Any()
     private val managed = LinkedHashMap<String, ManagedServer>()
+    private val tsserverRelay = TsserverRelay(scope, ::typescriptServersAround)
     private val uses = HashMap<String, Set<String>>()
 
     init {
@@ -78,13 +80,20 @@ class LanguageServerSupervisor(
                 val server = managed.getOrPut(id) { newServer(target) }
                 if (server.users.add(user)) server.send(Command.Wanted)
             }
-            for (id in before - wanted.keys) {
-                val server = managed[id] ?: continue
-                server.users.remove(user)
-                if (server.users.isEmpty()) server.send(Command.Unused)
-            }
+            leave(user, before - wanted.keys, wanted.values)
         }
         onChange()
+    }
+
+    // [user] no longer uses [ids]: a server nobody uses stops after the idle delay, at once when [wanted] has the same
+    // server run another way (two would answer for the same files).
+    private fun leave(user: String, ids: Set<String>, wanted: Collection<ServerTarget>) {
+        for (id in ids) {
+            val server = managed[id] ?: continue
+            server.users.remove(user)
+            val replaced = wanted.any { it.spec.name == server.name && it.root == server.root }
+            if (server.users.isEmpty()) server.send(if (replaced) Command.Discard else Command.Unused)
+        }
     }
 
     /** [user] is gone (its session ended): like [use] with nothing. */
@@ -116,6 +125,14 @@ class LanguageServerSupervisor(
     /** The servers of [language] whose root is [root]: the ones that handle a document there. */
     internal fun serving(language: String, root: String): List<ManagedServer> =
         synchronized(lock) { managed.values.filter { it.language == language && it.root == root } }
+
+    // The TypeScript servers of the project around [root], where a Vue server asks them its questions.
+    private fun typescriptServersAround(root: String): List<ManagedServer> =
+        synchronized(lock) {
+            managed.values.filter {
+                it.language == Languages.TYPESCRIPT && (isWithin(root, it.root) || isWithin(it.root, root))
+            }
+        }
 
     /** The servers whose root is [project] or inside it. */
     internal fun servingInside(project: String): List<ManagedServer> =
@@ -163,7 +180,19 @@ class LanguageServerSupervisor(
     }
 
     private fun newServer(target: ServerTarget) =
-        ManagedServer(target, scope, sampler, reaper, timings, clock, ::forget, onChange, documents, hooks)
+        ManagedServer(
+            target,
+            scope,
+            sampler,
+            reaper,
+            timings,
+            clock,
+            ::forget,
+            onChange,
+            documents,
+            hooks,
+            tsserverRelay::relay,
+        )
 
     private fun forget(server: ManagedServer): Boolean {
         val removed =

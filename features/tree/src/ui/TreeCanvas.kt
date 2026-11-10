@@ -1,7 +1,6 @@
 package org.example.kotlineditor.ui
 
 import androidx.compose.runtime.Stable
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -32,7 +31,6 @@ internal val TREE_ROW_START = 8.dp
 private val ICON_SIZE = 16.dp
 private val ICON_START = 2.dp
 private val LABEL_START = 6.dp
-private val BADGE_RADIUS = 3.dp
 private const val EXPANDED_DEGREES = 90f
 private const val NAME_CAPACITY = 1024
 private const val PATH_CAPACITY = 1024
@@ -171,8 +169,8 @@ private fun DrawScope.drawFileIcon(cache: TreeTextCache, row: TreeRow, side: Flo
         }
 
         else -> {
-            val radius = BADGE_RADIUS.toPx()
-            drawRoundRect(badge.color, size = Size(side, side), cornerRadius = CornerRadius(radius, radius))
+            drawBadgeShape(badge, side)
+            if (badge.letter.isEmpty()) return
             val letter = cache.badge(badge)
             drawText(letter, topLeft = Offset((side - letter.size.width) / 2, (side - letter.size.height) / 2))
         }

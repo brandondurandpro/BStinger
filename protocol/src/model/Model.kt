@@ -491,6 +491,13 @@ interface GitClient : WorktreeClient {
     suspend fun diff(root: String, path: String): List<DiffLine>
 
     /**
+     * The lines of [path] (relative to [root]) as HEAD holds them, as the index holds them when there is no commit;
+     * null when the file is not tracked. A final newline ends the last line, it does not start another one. The
+     * editor compares them with what is typed, for its gutter marks.
+     */
+    suspend fun headLines(root: String, path: String): List<String>?
+
+    /**
      * The three versions of the conflicted file [path] (relative to [root]); fails when the file is not in conflict or
      * when a version is not text.
      */
@@ -619,6 +626,8 @@ interface GitClient : WorktreeClient {
         override suspend fun pushBranch(root: String, branch: String): String = ""
 
         override suspend fun pullBranch(root: String, branch: String): String = ""
+
+        override suspend fun headLines(root: String, path: String): List<String>? = null
 
         override suspend fun blame(root: String, path: String): List<BlameLine> = emptyList()
 

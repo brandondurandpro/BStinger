@@ -52,6 +52,49 @@ class ToolDownloader(
     /** Where [tool] is (or would be) installed. */
     fun directoryOf(tool: PinnedTool): Path = toolsDirectory.resolve(tool.name).resolve(tool.version)
 
+    /**
+     * The directory of an installed [bundle]: its packages under `node_modules/`, each verified against its pin.
+     * A bundle verified earlier is reused without downloading again.
+     *
+     * @throws IOException when a download fails or does not match its pinned checksum; the bundle is not used then.
+     */
+    fun obtainBundle(bundle: PinnedBundle): Path {
+        val directory = bundleDirectory(bundle)
+        return synchronized(locks.computeIfAbsent("${bundle.name}/${bundle.version}") { Any() }) {
+            val marker = directory.resolve(INSTALLED_MARKER)
+            val wanted = bundle.packages.joinToString("\n") { "${it.location} ${it.digest.value}" }
+            val recorded = runCatching { Files.readString(marker) }.getOrNull()
+            val complete = bundle.packages.all { Files.isDirectory(modulePath(directory, it.location)) }
+            if (!complete || recorded != wanted) {
+                Files.deleteIfExists(marker)
+                bundle.packages.sortedBy { it.location.length }.forEach { install(directory, it) }
+                Files.writeString(marker, wanted)
+            }
+            directory
+        }
+    }
+
+    /** Where [bundle] installs (or is installed): the directory holding its `node_modules`. */
+    fun bundleDirectory(bundle: PinnedBundle): Path = toolsDirectory.resolve(bundle.name).resolve(bundle.version)
+
+    // The tarball is extracted next to its place, then renamed: a half-extracted package is never used.
+    private fun install(directory: Path, pkg: PinnedPackage) {
+        val archive = download(pkg.url, pkg.digest, "${pkg.name.replace('/', '-')}.tgz", directory)
+        val staging = Files.createTempDirectory(directory, "extract-")
+        try {
+            Files.newInputStream(archive).use { TarArchive.extract(GZIPInputStream(it), staging) }
+            val extracted = staging.resolve(PACKAGE)
+            if (!Files.isDirectory(extracted)) throw IOException("${pkg.name} has no $PACKAGE/ directory")
+            val target = modulePath(directory, pkg.location)
+            deleteTree(target)
+            Files.createDirectories(target.parent)
+            Files.move(extracted, target)
+        } finally {
+            Files.deleteIfExists(archive)
+            deleteTree(staging)
+        }
+    }
+
     private fun obtainFile(tool: PinnedTool, directory: Path): Path {
         val target = directory.resolve(tool.fileName)
         if (!isVerified(target, tool.digest)) {
@@ -91,18 +134,21 @@ class ToolDownloader(
     }
 
     // Downloads into a temporary file of the version directory, checking size and checksum while it streams.
-    private fun download(tool: PinnedTool, directory: Path): Path {
+    private fun download(tool: PinnedTool, directory: Path): Path =
+        download(tool.url, tool.digest, tool.fileName, directory)
+
+    private fun download(url: String, digest: Digest, fileName: String, directory: Path): Path {
         Files.createDirectories(directory)
-        val part = Files.createTempFile(directory, "${tool.fileName}-", ".part")
+        val part = Files.createTempFile(directory, "$fileName-", ".part")
         try {
             val computed =
-                fetch(tool.url).use { input ->
+                fetch(url).use { input ->
                     Files.newOutputStream(part).use { output ->
-                        copyHashing(input, output, tool.digest.algorithm, maxBytes)
+                        copyHashing(input, output, digest.algorithm, maxBytes)
                     }
                 }
-            if (!tool.digest.matches(computed)) {
-                throw IOException("Checksum mismatch for ${tool.fileName} ${tool.version}: not the pinned release")
+            if (!digest.matches(computed)) {
+                throw IOException("Checksum mismatch for $fileName: not the pinned release")
             }
             return part
         } catch (failure: IOException) {
@@ -187,3 +233,5 @@ class ToolDownloader(
         }
     }
 }
+
+private fun modulePath(directory: Path, location: String): Path = directory.resolve("node_modules").resolve(location)

@@ -114,11 +114,11 @@ private val BINDINGS =
     )
 
 /** Handles a key event of the editor; returns whether it was used. [page] is the number of visible rows. */
-internal fun handleEditorKey(event: KeyEvent, document: Document, page: Int): Boolean =
+internal fun handleEditorKey(event: KeyEvent, document: Document, page: Int, closeTags: Boolean = false): Boolean =
     when {
         event.type != KeyEventType.KeyDown -> false
         shortcut(event, document, page) -> true
-        else -> typeEvent(event, document)
+        else -> typeEvent(event, document, closeTags)
     }
 
 private fun shortcut(event: KeyEvent, document: Document, page: Int): Boolean =
@@ -126,9 +126,9 @@ private fun shortcut(event: KeyEvent, document: Document, page: Int): Boolean =
 
 // Printable characters arrive as KeyDown events carrying their code point. Keys without a character
 // (Shift, Ctrl, function keys, …) report CHAR_UNDEFINED and must never be inserted in the document.
-private fun typeEvent(event: KeyEvent, document: Document): Boolean {
+private fun typeEvent(event: KeyEvent, document: Document, closeTags: Boolean): Boolean {
     val typed = typedChar(event)
-    if (typed != null) document.forEachCaret { typeChar(typed) }
+    if (typed != null) document.forEachCaret { typeChar(typed, closeTags) }
     return typed != null
 }
 

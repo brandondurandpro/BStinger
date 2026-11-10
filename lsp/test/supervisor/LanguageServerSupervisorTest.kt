@@ -96,6 +96,28 @@ class LanguageServerSupervisorTest {
         await("process $pid to exit") { gone(pid) }
     }
 
+    private fun vueTarget() =
+        ServerTarget(
+            LanguageServerSpec("fake", "typescript", variant = "+vue") { FakeLanguageServerCommand.command() },
+            root.toString(),
+        )
+
+    @Test
+    fun `a Vue server in a project without the vue package says so`() {
+        val target = vueTarget()
+        supervisor.use("session-1", listOf(target))
+        val running = awaitState(target.id, LanguageServerState.Running)
+        assertContains(assertNotNull(running.setupNote), "node_modules/vue")
+    }
+
+    @Test
+    fun `a Vue server in a project with the vue package says nothing`() {
+        Files.createDirectories(root.resolve("node_modules").resolve("vue"))
+        val target = vueTarget()
+        supervisor.use("session-1", listOf(target))
+        assertNull(awaitState(target.id, LanguageServerState.Running).setupNote)
+    }
+
     @Test
     fun `two sessions share one process, which outlives the first one`() {
         val target = target()

@@ -6,6 +6,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.sp
 import org.example.kotlineditor.model.GitFileStatus
+import org.example.kotlineditor.model.IconShape
 import org.example.kotlineditor.syntax.SyntaxColor
 import org.example.kotlineditor.ui.DarkPalette
 import org.example.kotlineditor.ui.IdeColors
@@ -80,6 +81,18 @@ class ThemeTest {
         assertEquals("K", fileBadge("build.gradle.KTS")?.letter)
         assertEquals("JS", fileBadge("app.min.js")?.letter)
         assertEquals("Y", fileBadge("ci.yml")?.letter)
+    }
+
+    @Test
+    fun `the logos of the languages of the web have their shape and colors`() {
+        assertEquals(IconShape.Vue, fileBadge("App.vue")?.shape)
+        assertEquals("", fileBadge("App.vue")?.letter)
+        assertEquals(IconShape.Shield, fileBadge("index.html")?.shape)
+        assertEquals(IconShape.Shield, fileBadge("site.css")?.shape)
+        assertEquals(IconShape.Oval, fileBadge("index.php")?.shape)
+        assertEquals("TS", fileBadge("view.tsx")?.letter)
+        assertEquals(Color.Black, fileBadge("legacy.js")?.textColor)
+        assertEquals(Color.White, fileBadge("app.ts")?.textColor)
     }
 
     @Test

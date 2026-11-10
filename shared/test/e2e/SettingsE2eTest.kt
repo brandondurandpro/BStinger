@@ -119,13 +119,13 @@ class SettingsE2eTest {
             launchWithProject(project)
             openSettingsFromMenu()
             onNodeWithTag(AppTags.SETTINGS_SEARCH).performTextInput("phpactor")
-            awaitTag(AppTags.setting(Setting.PhpServer.name))
+            awaitTag(AppTags.setting(Setting.LanguageServers.name))
             onNodeWithTag(AppTags.SETTINGS_TITLE).assertTextEquals("Search results")
             awaitNoTag(AppTags.setting(Setting.FontSize.name))
             // Words of the title and of the category, in any order.
             onNodeWithTag(AppTags.SETTINGS_SEARCH).performTextReplacement("view always")
             awaitTag(AppTags.setting(Setting.AutoSelect.name))
-            awaitNoTag(AppTags.setting(Setting.PhpServer.name))
+            awaitNoTag(AppTags.setting(Setting.LanguageServers.name))
             onNodeWithTag(AppTags.SETTINGS_SEARCH).performTextReplacement("nothing like this")
             awaitTag(AppTags.SETTINGS_EMPTY)
             // A category clears the search.
@@ -306,5 +306,29 @@ class SettingsE2eTest {
             awaitTag(AppTags.settingsServerUse(FakePhpServers.FAKE)).performClick()
             awaitNoTag(LanguageServerTags.LSP_CHOICE)
             awaitServer(app) { it.isRunning() && it.serverName == FakePhpServers.FAKE }
+        }
+
+    @Test
+    fun `the settings list the TypeScript server beside the PHP ones, the only one in use`() =
+        runComposeUiTest {
+            val servers = FakePhpServers().chosen()
+            val web = FakePhpServers.webProject()
+            try {
+                launchWithProject(web, languageServers = servers.settings)
+                openSettingsFromMenu()
+                category(SettingsCategory.LanguageServers)
+                awaitTag(AppTags.settingsServerLanguage("php"))
+                awaitTag(AppTags.settingsServerLanguage("typescript"))
+                awaitTag(AppTags.settingsServer(FakePhpServers.FAKE_TYPESCRIPT))
+                // The only server of its language is the one in use: nothing to switch to.
+                awaitNoTag(AppTags.settingsServerUse(FakePhpServers.FAKE_TYPESCRIPT))
+                awaitNoTag(AppTags.SETTINGS_SERVERS_ERROR)
+                // The search finds the section by the names of the languages it serves.
+                onNodeWithTag(AppTags.SETTINGS_SEARCH).performTextInput("tsx")
+                awaitTag(AppTags.setting(Setting.LanguageServers.name))
+            } finally {
+                web.delete()
+                servers.delete()
+            }
         }
 }
