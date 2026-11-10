@@ -85,17 +85,26 @@ internal object LineMatching {
         }
     }
 
-    // Whether the path to [diagonal] in step [steps] comes from the diagonal above it (an insertion) rather than the one
-    // below it (a deletion): at the edges there is only one choice, elsewhere the path that got further ([left] is
-    // the x reached on the diagonal before, [right] on the one after).
+    // Whether the path to [diagonal] in step [steps] comes from the diagonal above it (an insertion) rather than the
+    // one below it (a deletion): at the edges there is only one choice, elsewhere the path that got further
+    // ([left] is the x reached on the diagonal before, [right] on the one after).
     private fun comesFromBelow(diagonal: Int, steps: Int, left: Int, right: Int): Boolean =
-        diagonal == -steps || (diagonal != steps && left < right)
+        when (diagonal) {
+            -steps -> true
+            steps -> false
+            else -> left < right
+        }
+
+    private fun sameLine(base: IntArray, other: IntArray, x: Int, y: Int): Boolean {
+        val inside = x < base.size && y < other.size
+        return inside && base[x] == other[y]
+    }
 
     // Follows the equal lines from (x, y) as far as they go; returns the x reached.
     private fun slide(base: IntArray, other: IntArray, startX: Int, startY: Int): Int {
         var x = startX
         var y = startY
-        while (x < base.size && y < other.size && base[x] == other[y]) {
+        while (sameLine(base, other, x, y)) {
             x += 1
             y += 1
         }

@@ -49,7 +49,7 @@ class CliGitClient :
     /** Differences with HEAD (with the index in a repository without commits); untracked files are all added. */
     override suspend fun diff(root: String, path: String): List<DiffLine> =
         runInterruptible(Dispatchers.IO) {
-            val tracked = gitOutput(root, "ls-files", "--error-unmatch", "--", path) != null
+            val tracked = gitOutput(root, LS_FILES, "--error-unmatch", "--", path) != null
             if (tracked) {
                 val output =
                     gitOutput(root, "diff", NO_COLOR, "--no-ext-diff", "-U3", "HEAD", "--", path)
@@ -78,15 +78,9 @@ class CliGitClient :
 
     // The stages `git ls-files -u` lists for [path]: one line `mode hash stage<TAB>path` each.
     private fun unmergedStages(root: String, path: String): Set<Int> {
-        val lines = gitOutput(root, "ls-files", "-u", "--", path).orEmpty()
-        return lines
-            .mapNotNull {
-                it
-                    .substringBefore('\t')
-                    .split(' ')
-                    .lastOrNull()
-                    ?.toIntOrNull()
-            }.toSet()
+        val lines = gitOutput(root, LS_FILES, "-u", "--", path).orEmpty()
+        val numbers = lines.map { it.substringBefore('\t').substringAfterLast(' ') }
+        return numbers.mapNotNull { it.toIntOrNull() }.toSet()
     }
 
     private fun stageText(root: String, path: String, stage: Int, stages: Set<Int>): FileContent.Text? {
@@ -423,7 +417,7 @@ class CliGitClient :
         }
 
     private fun isTracked(root: String, path: String): Boolean =
-        gitOutput(root, "ls-files", "--error-unmatch", "--", path) != null
+        gitOutput(root, LS_FILES, "--error-unmatch", "--", path) != null
 
     // The content first, then HEAD: read from its files, or asked to Git when they cannot tell.
     private fun blameVersion(root: String, file: File): BlameCache.Version? {
@@ -439,6 +433,7 @@ class CliGitClient :
 
     private companion object {
         const val BRANCH_REF = "ref: refs/heads/"
+        const val LS_FILES = "ls-files"
         const val UNTRACKED_CODE = "??"
         const val MAX_MERGE_HISTORY = 100
         val INCOMING_REFS = listOf("MERGE_HEAD", "CHERRY_PICK_HEAD", "REBASE_HEAD", "REVERT_HEAD")

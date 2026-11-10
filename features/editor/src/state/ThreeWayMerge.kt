@@ -96,9 +96,12 @@ object ThreeWayMerge {
     // The first line of the base from [from] that both sides kept.
     private fun nextAnchor(matchOurs: IntArray, matchTheirs: IntArray, from: Int): Int {
         var at = from
-        while (at < matchOurs.size && (matchOurs[at] < 0 || matchTheirs[at] < 0)) at += 1
+        while (at < matchOurs.size && !keptByBoth(matchOurs, matchTheirs, at)) at += 1
         return at
     }
+
+    private fun keptByBoth(matchOurs: IntArray, matchTheirs: IntArray, at: Int): Boolean =
+        matchOurs[at] >= 0 && matchTheirs[at] >= 0
 
     private fun unchangedLine(line: String): MergeChunk {
         val lines = listOf(line)
@@ -171,9 +174,6 @@ class MergeState(
 
     private val choices = mutableStateListOf<MergeChoice>().apply { chunks.forEach { add(it.defaultChoice()) } }
 
-    /** What the result holds for the stretch [index]. */
-    fun choiceOf(index: Int): MergeChoice = choices[index]
-
     /** Number of conflicts nobody decided yet. */
     val unresolved: Int by derivedStateOf { choices.count { it == MergeChoice.Pending } }
 
@@ -182,6 +182,9 @@ class MergeState(
 
     /** Indexes of the stretches that changed on at least one side. */
     val changedChunks: List<Int> = chunks.indices.filter { chunks[it].kind != MergeKind.Unchanged }
+
+    /** What the result holds for the stretch [index]. */
+    fun choiceOf(index: Int): MergeChoice = choices[index]
 
     /** Decides what the result holds for the stretch [index]. */
     fun choose(index: Int, choice: MergeChoice) {

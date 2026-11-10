@@ -12,11 +12,8 @@ import kotlinx.serialization.json.put
 import org.example.kotlineditor.model.BlameLine
 import org.example.kotlineditor.model.DiffKind
 import org.example.kotlineditor.model.DiffLine
-import org.example.kotlineditor.model.FileContent
 import org.example.kotlineditor.model.GitBranchInfo
 import org.example.kotlineditor.model.GitFileStatus
-import org.example.kotlineditor.model.MergeHistory
-import org.example.kotlineditor.model.MergeSides
 
 // JSON of Git data. Enums travel by name.
 
@@ -95,37 +92,3 @@ fun JsonElement.blameLines(): List<BlameLine> =
         val line = it.jsonObject
         BlameLine(line.int("line"), line.string("commit"), line.string("author"), line.string("date"))
     }
-
-/** The three versions of a conflicted file; a missing version is `null`. */
-fun MergeSides.toJson(): JsonObject =
-    buildJsonObject {
-        put("base", base?.toJson() ?: JsonNull)
-        put("ours", ours?.toJson() ?: JsonNull)
-        put("theirs", theirs?.toJson() ?: JsonNull)
-    }
-
-/** Reads the three versions of a conflicted file. */
-fun JsonElement.mergeSides(): MergeSides {
-    val sides = jsonObject
-    return MergeSides(sides.textOrNull("base"), sides.textOrNull("ours"), sides.textOrNull("theirs"))
-}
-
-private fun JsonObject.textOrNull(name: String): FileContent.Text? {
-    val side = get(name)
-    return if (side == null || side == JsonNull) null else side.content() as? FileContent.Text
-}
-
-/** Reads a file content that must be text (the resolution of a conflict). */
-fun JsonElement.textContent(): FileContent.Text =
-    content() as? FileContent.Text ?: throw InvalidParamsException("Not a text file content")
-
-/** The commits of a conflicted file on each side of a merge. */
-fun MergeHistory.toJson(): JsonObject =
-    buildJsonObject {
-        put("ours", ours.commitsJson())
-        put("theirs", theirs.commitsJson())
-    }
-
-/** Reads the commits of a conflicted file on each side of a merge. */
-fun JsonElement.mergeHistory(): MergeHistory =
-    MergeHistory(jsonObject.field("ours").commits(), jsonObject.field("theirs").commits())

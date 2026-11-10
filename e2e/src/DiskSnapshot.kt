@@ -160,8 +160,8 @@ private fun gitStateOf(project: SampleProject): List<String> {
     return listOf("HEAD $head", "refs $branches") + index.map { "index $it" } + status.map { "status $it" }
 }
 
-// A status line of one of [paths] (`status XY path`), or an index entry of one of them (`index mode hash stage<TAB>path`):
-// the files a feature is meant to change or to stage.
+// A status line of one of [paths] (`status XY path`), or an index entry of one of them
+// (`index mode hash stage<TAB>path`): the files a feature is meant to change or to stage.
 private fun String.excepted(paths: Set<String>): Boolean {
     val status = startsWith("status ") && drop("status ".length + 3) in paths
     val staged = startsWith("index ") && substringAfter('\t') in paths
