@@ -18,10 +18,12 @@ class PluginHostTest {
     private val installed = mutableListOf<IdePlugin>()
     private val uninstalled = mutableListOf<String>()
     private val host =
-        PluginHost { plugin ->
-            installed += plugin
-            AutoCloseable { uninstalled += plugin.id }
-        }
+        PluginHost(
+            install = { plugin ->
+                installed += plugin
+                AutoCloseable { uninstalled += plugin.id }
+            },
+        )
 
     private fun fixture(id: String, apiVersion: Int = API_VERSION, body: String = "", extraManifest: String = "") =
         PluginFixture.create(directory, id, apiVersion, body, extraManifest)

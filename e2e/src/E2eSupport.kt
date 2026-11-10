@@ -212,6 +212,13 @@ class E2eApp(
     val project: ProjectState get() = (state.session.screen as Screen.Project).project
 }
 
+@OptIn(ExperimentalTestApi::class)
+private fun ComposeUiTest.startPlugins(directory: File): ClientPlugins {
+    val plugins = ClientPlugins(directory, beforeCollect = { waitForIdle() })
+    plugins.start()
+    return plugins
+}
+
 /**
  * Starts the app as in production: a real [EditorServer] (data in a temporary directory) and the UI talking to
  * it through the network client. Everything the e2e tests do therefore goes through the protocol.
@@ -234,12 +241,7 @@ fun ComposeUiTest.launchApp(
 ): E2eApp {
     TextClipboard.useSystem = false
     val loaded = plugins.map(::loadPlugin)
-    val installed =
-        pluginsDirectory?.let { directory ->
-            val plugins = ClientPlugins(directory, beforeCollect = { waitForIdle() })
-            plugins.start()
-            plugins
-        }
+    val installed = pluginsDirectory?.let { startPlugins(it) }
     val data = Files.createTempDirectory("kotlin-editor-server").toFile()
     val process = ServerProcess(data, languageServers, telemetry?.serverHook ?: InMemoryHook(), agents, ripgrep)
     val token = process.server.token
