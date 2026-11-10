@@ -55,9 +55,12 @@ class AgentQuotaRefreshE2eTest {
             val seen = mutableListOf<String>()
             sendPrompt("echo hello")
             // While the probe is in flight, everything the view shows is the user's own turns.
+            // Done once the quota moved on to the echo's turn (the probe was answered) and the agent is idle again:
+            // the count of timed turns varies with the pace of the agent, the probe's answer does not.
             awaitCondition(AGENT_TIMEOUT) {
                 seen += conversation.shownItems.map { it.id }
-                conversation.timedTurns >= 3 && !conversation.busy
+                val percent = conversation.quota.firstOrNull()?.percent ?: 0
+                percent >= THIRD_TURN_PERCENT && !conversation.busy && conversation.probeFrom == null
             }
             assertTrue(seen.none { it.startsWith("probe-") }, "the question was shown: $seen")
         }
