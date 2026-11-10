@@ -13,6 +13,7 @@ object TreeTags {
     const val MENU_NEW_DIRECTORY = "menu.newDirectory"
     const val MENU_RENAME = "menu.rename"
     const val MENU_DELETE = "menu.delete"
+    const val MENU_DEPLOY = "menu.deploy"
     const val MENU_COPY_PATH = "menu.copyPath"
     const val MENU_RELOAD = "menu.reload"
     const val GOTO_FILE = "gotoFile"

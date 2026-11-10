@@ -93,9 +93,7 @@ fun ProjectScreen(app: AppState, project: ProjectState) {
                 ProjectPopups(project) { closePopup(project) }
                 if (project.git.branchPickerOpen) BranchPicker(project)
             }
-            project.fileDialog?.let { dialog ->
-                FileDialogPopup(project, dialog, onClose = { project.fileDialog = null })
-            }
+            ProjectDialogs(project)
             if (!project.agentMode) LanguageServerChoiceDialog(project)
         }
         StatusBar(app, project)

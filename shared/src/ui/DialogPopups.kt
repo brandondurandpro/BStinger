@@ -26,6 +26,8 @@ import org.example.kotlineditor.state.ProjectState
 import org.example.kotlineditor.state.TextPos
 import org.example.kotlineditor.state.createFile
 import org.example.kotlineditor.state.delete
+import org.example.kotlineditor.state.deploy
+import org.example.kotlineditor.state.rememberDeployment
 import org.example.kotlineditor.state.rename
 
 /** Go to Line:Column (Ctrl+G). */
@@ -69,7 +71,7 @@ fun GotoLinePopup(document: Document, onClose: () -> Unit) {
 /** New File, New Directory, Rename and Delete dialogs of the project tree. */
 @Composable
 fun FileDialogPopup(project: ProjectState, dialog: FileDialog, onClose: () -> Unit) {
-    var name by remember(dialog::class) { mutableStateOf((dialog as? FileDialog.Rename)?.entry?.name.orEmpty()) }
+    var name by remember(dialog::class) { mutableStateOf(initialText(project, dialog)) }
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
     val submit = { submit(project, dialog, name) }
@@ -91,16 +93,10 @@ fun FileDialogPopup(project: ProjectState, dialog: FileDialog, onClose: () -> Un
                         .testTag(AppTags.FILE_DIALOG_INPUT)
                         .focusRequester(focus)
                         .popupKeys(submit, onClose),
-                    placeholder =
-                    if (dialog is FileDialog.Create &&
-                        !dialog.isDirectory
-                    ) {
-                        "Name, e.g. src/Main.kt"
-                    } else {
-                        "Name"
-                    },
+                    placeholder = placeholderOf(dialog),
                 )
             }
+            if (dialog is FileDialog.Deploy) DeployDetails(dialog)
             dialog.error?.let {
                 Label(
                     it,
@@ -108,24 +104,43 @@ fun FileDialogPopup(project: ProjectState, dialog: FileDialog, onClose: () -> Un
                     modifier = Modifier.padding(top = 6.dp).testTag(AppTags.FILE_DIALOG_ERROR),
                 )
             }
-            Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.End) {
-                IdeButton("Cancel", onClose)
-                IdeButton(
-                    action(dialog),
-                    submit,
-                    Modifier.padding(start = 8.dp).testTag(AppTags.FILE_DIALOG_OK),
-                    primary = true,
-                )
-            }
+            DialogButtons(dialog, submit, onClose) { (dialog as? FileDialog.Deploy)?.let(project::rememberDeployment) }
         }
     }
 }
+
+@Composable
+private fun DialogButtons(dialog: FileDialog, submit: () -> Unit, onClose: () -> Unit, onSave: () -> Unit) {
+    val done = isDone(dialog)
+    Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.End) {
+        if (done) {
+            IdeButton("Save as deployment", { onSave() }, Modifier.testTag(AppTags.DEPLOY_REMEMBER))
+        }
+        IdeButton(if (done) "Close" else "Cancel", onClose, Modifier.padding(start = 8.dp))
+        if (!done) {
+            IdeButton(
+                action(dialog),
+                submit,
+                Modifier.padding(start = 8.dp).testTag(AppTags.FILE_DIALOG_OK),
+                primary = true,
+            )
+        }
+    }
+}
+
+private fun placeholderOf(dialog: FileDialog): String =
+    when {
+        dialog is FileDialog.Create && !dialog.isDirectory -> "Name, e.g. src/Main.kt"
+        dialog is FileDialog.Deploy -> "Folder, e.g. /var/www or user@host:/var/www"
+        else -> "Name"
+    }
 
 private fun title(dialog: FileDialog): String =
     when (dialog) {
         is FileDialog.Create -> if (dialog.isDirectory) "New Directory" else "New File"
         is FileDialog.Rename -> "Rename"
         is FileDialog.Delete -> "Delete"
+        is FileDialog.Deploy -> "Deploy"
     }
 
 private fun action(dialog: FileDialog): String =
@@ -133,11 +148,45 @@ private fun action(dialog: FileDialog): String =
         is FileDialog.Create -> "OK"
         is FileDialog.Rename -> "Refactor"
         is FileDialog.Delete -> "Delete"
+        is FileDialog.Deploy -> if (dialog.running) "Deploying…" else "Deploy"
     }
+
+private fun isDone(dialog: FileDialog): Boolean = (dialog as? FileDialog.Deploy)?.result != null
+
+private fun initialText(project: ProjectState, dialog: FileDialog): String =
+    when (dialog) {
+        is FileDialog.Rename -> dialog.entry.name
+        is FileDialog.Deploy -> project.deployDestination
+        else -> ""
+    }
+
+@Composable
+private fun DeployDetails(dialog: FileDialog.Deploy) {
+    val names = dialog.entries.joinToString(", ") { it.name }
+    Label(
+        "Copies $names; existing files are replaced, nothing is deleted.",
+        color = IdeColors.TextSecondary,
+        fontSize = 12.sp,
+        modifier = Modifier.padding(top = 6.dp),
+    )
+    dialog.result?.let {
+        Label(it, modifier = Modifier.padding(top = 6.dp).testTag(AppTags.FILE_DIALOG_RESULT))
+    }
+}
 
 private fun submit(project: ProjectState, dialog: FileDialog, name: String) =
     when (dialog) {
         is FileDialog.Create -> project.createFile(dialog.directory, name, dialog.isDirectory)
         is FileDialog.Rename -> project.rename(dialog.entry, name)
         is FileDialog.Delete -> project.delete(dialog.entry)
+        is FileDialog.Deploy -> project.deploy(dialog, name)
     }
+
+// The dialogs over the project: the tree's file dialogs, and the saved deployments.
+@Composable
+internal fun ProjectDialogs(project: ProjectState) {
+    project.fileDialog?.let { dialog ->
+        FileDialogPopup(project, dialog, onClose = { project.fileDialog = null })
+    }
+    if (project.deployments.open) DeploymentsPopup(project.deployments)
+}
