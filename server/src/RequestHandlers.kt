@@ -5,6 +5,7 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import org.example.kotlineditor.model.GitClient
 import org.example.kotlineditor.rpc.Method
+import org.example.kotlineditor.rpc.MethodSpec
 import org.example.kotlineditor.rpc.blameJson
 import org.example.kotlineditor.rpc.bool
 import org.example.kotlineditor.rpc.branchesJson
@@ -43,7 +44,7 @@ private const val STREAM = "stream"
 private const val VERSION = "version"
 
 /** Implementation of each [Method]: read the named params, call the local services, return the JSON result. */
-internal fun requestHandlers(services: LocalServices): Map<Method, Handler> =
+internal fun requestHandlers(services: LocalServices): Map<MethodSpec, Handler> =
     fileHandlers(services) +
         searchHandlers(services) +
         gitHandlers(services.git) +
@@ -52,7 +53,7 @@ internal fun requestHandlers(services: LocalServices): Map<Method, Handler> =
         languageServerHandlers(services) +
         agentHandlers(services)
 
-private fun fileHandlers(services: LocalServices): Map<Method, Handler> {
+private fun fileHandlers(services: LocalServices): Map<MethodSpec, Handler> {
     val fs = services.fileSystem
     val disk = DiskNotifications(services)
     return mapOf(
@@ -109,7 +110,7 @@ private fun fileHandlers(services: LocalServices): Map<Method, Handler> {
     )
 }
 
-private fun searchHandlers(services: LocalServices): Map<Method, Handler> {
+private fun searchHandlers(services: LocalServices): Map<MethodSpec, Handler> {
     val search = services.search
     return mapOf(
         Method.WalkFiles to { search.walkFiles(entry(ROOT), params.int(LIMIT)).toJson() },
@@ -130,7 +131,7 @@ private fun searchHandlers(services: LocalServices): Map<Method, Handler> {
     )
 }
 
-private fun gitHandlers(git: GitClient): Map<Method, Handler> =
+private fun gitHandlers(git: GitClient): Map<MethodSpec, Handler> =
     mapOf(
         Method.GitStatus to { git.status(root()).toJson() },
         Method.GitBranch to { JsonPrimitive(git.branch(root())) },
@@ -181,7 +182,7 @@ private fun gitHandlers(git: GitClient): Map<Method, Handler> =
         Method.GitRemoveWorktree to { nothing { git.removeWorktree(root(), params.string(PATH)) } },
     )
 
-private fun terminalHandlers(): Map<Method, Handler> =
+private fun terminalHandlers(): Map<MethodSpec, Handler> =
     mapOf(
         Method.TerminalStart to {
             nothing {
@@ -232,7 +233,7 @@ private fun Request.terminalOrFail(): ServerTerminal =
     checkNotNull(terminals[params.long(TERMINAL)]) { "This terminal has ended" }
 
 /** `telemetry/config`: the client says whether the user agreed to share performance measures. */
-internal fun telemetryHandlers(telemetry: ServerTelemetry): Map<Method, Handler> =
+internal fun telemetryHandlers(telemetry: ServerTelemetry): Map<MethodSpec, Handler> =
     mapOf(
         Method.TelemetryConfig to {
             telemetry.configure(params.bool("enabled"), params.stringOrNull("instanceId"))

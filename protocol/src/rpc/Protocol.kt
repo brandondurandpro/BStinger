@@ -260,7 +260,7 @@ class Frame(
     /** Params of a request or notification, result of a response, error object of an error. */
     val payload: JsonElement = JsonNull,
     /** Method of a [FrameKind.Request]; null for an unknown method. */
-    val method: Method? = null,
+    val method: MethodSpec? = null,
     /**
      * Whether the message carries source code: a compression hint, not part of the payload.
      *
@@ -278,16 +278,29 @@ class Frame(
     val body: ByteArray get() = encoded ?: Protocol.encode(this).also { encoded = it }
 }
 
-/** Remote operations. [mutating] ones have their answer cached by the server so a retried request runs once. */
-enum class Method(
+/**
+ * A remote operation: its JSON-RPC name and whether it is [mutating]. The built-in operations are the [Method]
+ * enum; a plugin declares its own with [PluginMethod], named `plugin/<id>/<name>`, and registers them in the
+ * [MethodRegistry] so that the codec resolves their names.
+ */
+interface MethodSpec {
     /** Name of the JSON-RPC method. */
-    val rpcName: String,
+    val rpcName: String
+
     /**
      * Whether executing the method twice would have a different effect than executing it once. There is no default:
      * a method that changes something and is not marked runs again when the client replays it after a lost answer.
      */
-    val mutating: Boolean,
-) {
+    val mutating: Boolean
+}
+
+/** Remote operations. [mutating] ones have their answer cached by the server so a retried request runs once. */
+enum class Method(
+    /** Name of the JSON-RPC method. */
+    override val rpcName: String,
+    /** See [MethodSpec.mutating]. */
+    override val mutating: Boolean,
+) : MethodSpec {
     /** Path to directory entry, if it is a directory. */
     ResolveDirectory("fs/resolveDirectory", mutating = false),
 

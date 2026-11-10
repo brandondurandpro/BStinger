@@ -10,6 +10,7 @@ import org.example.kotlineditor.acp.fork
 import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.model.AgentSessions
 import org.example.kotlineditor.rpc.Method
+import org.example.kotlineditor.rpc.MethodSpec
 import org.example.kotlineditor.rpc.agentAttachments
 import org.example.kotlineditor.rpc.agentCommand
 import org.example.kotlineditor.rpc.authMethodsToJson
@@ -27,11 +28,11 @@ private const val DIRECTORY = "directory"
 private const val SESSION = "session"
 
 /** Agent mode: conversations with the agents, run by [LocalServices.agents]. */
-internal fun agentHandlers(services: LocalServices): Map<Method, Handler> =
+internal fun agentHandlers(services: LocalServices): Map<MethodSpec, Handler> =
     conversationHandlers(services) + optionHandlers(services)
 
 // The conversations: prompts, answers, transcripts, history.
-private fun conversationHandlers(services: LocalServices): Map<Method, Handler> =
+private fun conversationHandlers(services: LocalServices): Map<MethodSpec, Handler> =
     mapOf(
         Method.AgentPrompt to {
             services.agents.prompt(
@@ -85,7 +86,7 @@ private fun conversationHandlers(services: LocalServices): Map<Method, Handler> 
     )
 
 // The settings of the sessions (the model…).
-private fun optionHandlers(services: LocalServices): Map<Method, Handler> =
+private fun optionHandlers(services: LocalServices): Map<MethodSpec, Handler> =
     mapOf(
         Method.AgentOptions to {
             val agent = params.read(AGENT) { it.agentCommand() }

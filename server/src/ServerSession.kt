@@ -17,6 +17,7 @@ import org.example.kotlineditor.rpc.Frame
 import org.example.kotlineditor.rpc.FrameKind
 import org.example.kotlineditor.rpc.InvalidParamsException
 import org.example.kotlineditor.rpc.Method
+import org.example.kotlineditor.rpc.MethodSpec
 import org.example.kotlineditor.rpc.Protocol
 import org.example.kotlineditor.rpc.params
 import org.example.kotlineditor.rpc.rpcError
@@ -36,7 +37,7 @@ private const val REMOTE_ERROR = "RemoteError"
 // Methods whose order matters: each runs after the previous request of its key (see [orderingKey]) has finished,
 // on a coroutine, never on the reading thread.
 private val TERMINAL_METHODS =
-    setOf(
+    setOf<MethodSpec>(
         Method.TerminalWrite,
         Method.TerminalKey,
         Method.TerminalPaste,
@@ -48,7 +49,7 @@ private val TERMINAL_METHODS =
     )
 
 // The edits of a document apply in the order they were typed.
-private val DOCUMENT_METHODS = setOf(Method.DocOpen, Method.DocChange, Method.DocClose)
+private val DOCUMENT_METHODS = setOf<MethodSpec>(Method.DocOpen, Method.DocChange, Method.DocClose)
 
 private const val TERMINAL = "terminal"
 private const val PATH = "path"
@@ -74,7 +75,7 @@ private fun documentPathOf(frame: Frame): String? {
 
 // The sequential queue a method runs in, null for the methods that run concurrently. A request of a malformed key
 // still gets its family's queue, so its order is kept until its handler rejects its params.
-private fun orderingKey(method: Method, frame: Frame): String? =
+private fun orderingKey(method: MethodSpec, frame: Frame): String? =
     when (method) {
         Method.TerminalStart -> terminalKey(frame.id)
         in TERMINAL_METHODS -> terminalKey(frame.payload.namedOrNull(TERMINAL)?.longOrNull)
@@ -130,7 +131,7 @@ internal class TerminalRegistry(private val push: (Frame) -> Unit) {
 internal class ServerSession(
     val id: String,
     private val scope: CoroutineScope,
-    private val handlers: Map<Method, suspend Request.() -> JsonElement>,
+    private val handlers: Map<MethodSpec, suspend Request.() -> JsonElement>,
     private val options: ServerOptions,
     private val telemetry: Telemetry = Telemetry.Disabled,
     private val onDispose: (String) -> Unit = {},
@@ -215,7 +216,7 @@ internal class ServerSession(
     // Runs the request on a coroutine: the reading thread only dispatches. A request of a sequential queue starts
     // once the previous one of its key finished; a request that names a document starts once the edits of that
     // document received before it applied, as when they ran on the reading thread.
-    private fun dispatch(frame: Frame, method: Method) {
+    private fun dispatch(frame: Frame, method: MethodSpec) {
         synchronized(dispatching) {
             val id = frame.id
             // Already running (sent again after a reconnection): its answer will be sent when it completes.
@@ -242,7 +243,7 @@ internal class ServerSession(
 
     // Cached, then no longer running, then sent: a retry sent as soon as the answer arrived finds it cached, or runs
     // again, instead of being dropped as still running.
-    private fun complete(id: Long, method: Method, answer: Frame, self: Job) {
+    private fun complete(id: Long, method: MethodSpec, answer: Frame, self: Job) {
         if (method.mutating) synchronized(answers) { answers[id] = answer }
         inFlight.release(id, self)
         send(answer)
@@ -250,7 +251,7 @@ internal class ServerSession(
 
     // The rpc.server span of a request, child of the client's span named by its traceparent. A retry of a request
     // already answered or running is not executed again, so it is not measured twice.
-    private suspend fun measured(frame: Frame, method: Method): Frame {
+    private suspend fun measured(frame: Frame, method: MethodSpec): Frame {
         if (!telemetry.isEnabled) return execute(frame.id, method, frame.payload)
         val attributes = Attributes.of(Attribute.Method to method.rpcName)
         val span = telemetry.start(Operation.RpcServer, attributes, SpanContext.parse(frame.trace))
@@ -273,7 +274,7 @@ internal class ServerSession(
         }
     }
 
-    private suspend fun execute(id: Long, method: Method, params: JsonElement): Frame =
+    private suspend fun execute(id: Long, method: MethodSpec, params: JsonElement): Frame =
         try {
             val request = Request(id, params.params(), terminals, streams, runs, this.id)
             val result = checkNotNull(handlers[method]) { "No handler for $method" }.invoke(request)
@@ -300,7 +301,7 @@ internal class ServerSession(
 
 private fun Throwable.text(): String = message ?: this::class.simpleName.orEmpty()
 
-private fun unexpected(id: Long, method: Method, failure: Throwable): Frame {
+private fun unexpected(id: Long, method: MethodSpec, failure: Throwable): Frame {
     System.err.println("Request ${method.rpcName} failed unexpectedly: ${failure.stackTraceToString()}")
     val message = "Internal error in ${method.rpcName}: ${failure.text()}"
     return failure(id, message, Protocol.INTERNAL_ERROR)
