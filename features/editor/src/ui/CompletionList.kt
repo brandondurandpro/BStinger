@@ -113,7 +113,9 @@ internal fun CompletionList(
             val listHeight = COMPLETION_ROW_HEIGHT * COMPLETION_ROWS
             LazyColumn(Modifier.fillMaxWidth().heightIn(max = listHeight), state = listState) {
                 itemsIndexed(items, key = { index, item -> "$index:${item.label}" }) { index, item ->
-                    CompletionRow(item, popup.typed, index == popup.selected) { completion.accept(index = index) }
+                    val detail = item.detail ?: popup.details[item.resolveIndex]
+                    val selected = index == popup.selected
+                    CompletionRow(item, detail, popup.typed, selected) { completion.accept(index = index) }
                 }
             }
         }
@@ -138,7 +140,13 @@ private fun CompletionDocumentation(markdown: String) {
 }
 
 @Composable
-private fun CompletionRow(item: CompletionItem, typed: String, selected: Boolean, onAccept: () -> Unit) {
+private fun CompletionRow(
+    item: CompletionItem,
+    detail: String?,
+    typed: String,
+    selected: Boolean,
+    onAccept: () -> Unit,
+) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -159,7 +167,7 @@ private fun CompletionRow(item: CompletionItem, typed: String, selected: Boolean
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        item.detail?.let {
+        detail?.let {
             BasicText(
                 it,
                 // At most half the row, against the right edge: the types line up whatever the label's length.

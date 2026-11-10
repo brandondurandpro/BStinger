@@ -61,6 +61,11 @@ class CliGitClient :
             }
         }
 
+    override suspend fun headLines(root: String, path: String): List<String>? =
+        runInterruptible(Dispatchers.IO) {
+            gitOutput(root, "show", "HEAD:./$path") ?: gitOutput(root, "show", ":./$path")
+        }
+
     /**
      * The versions of the index at stages 1 (base), 2 (ours) and 3 (theirs) of [path]; a stage that does not exist is
      * `null`. A version that is not text fails the call: a binary conflict is resolved by choosing a whole version.

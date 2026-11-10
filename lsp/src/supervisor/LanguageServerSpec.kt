@@ -14,6 +14,8 @@ class LanguageServerSpec(
     val initializationOptions: JsonElement? = null,
     /** Why it may give no inlay hints, shown when it gives none; null: a generic sentence. */
     val withoutInlayHints: String? = null,
+    /** Told apart from the same server run another way (`+vue`: with the Vue plugin); part of the server id. */
+    val variant: String = "",
     /**
      * The command line. Blocking, it may download the server first; an exception (runtime missing, failed
      * download) makes the server unavailable with the exception's message.

@@ -2,10 +2,13 @@ package org.example.kotlineditor.ui
 
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withLink
 
 private val FENCE = Regex("""^(```+|~~~+)\s*([\w+-]*).*$""")
 private val HEADING = Regex("""^(#{1,6})\s+(.*?)\s*#*$""")
@@ -128,6 +131,8 @@ private fun joinLines(lines: List<String>): String =
         }
     }
 
+private fun isWebUrl(target: String): Boolean = target.startsWith("https://") || target.startsWith("http://")
+
 /** Inline Markdown: `**bold**`, `*italic*`, `_italic_`, `` `code` ``, `[link](url)`, `\` escapes. */
 internal fun inlineMarkdown(text: String, code: SpanStyle): AnnotatedString = InlineMarkdown(text, code).read()
 
@@ -175,7 +180,13 @@ private class InlineMarkdown(private val text: String, private val code: SpanSty
 
     private fun link(index: Int): Int {
         val link = LINK.matchAt(text, index) ?: return plain("[", 1)
-        styled(LINK_STYLE, link.groupValues[1])
+        val label = link.groupValues[1]
+        val target = link.groupValues[2]
+        if (isWebUrl(target)) {
+            builder.withLink(LinkAnnotation.Url(target, TextLinkStyles(LINK_STYLE))) { append(label) }
+        } else {
+            styled(LINK_STYLE, label)
+        }
         return link.value.length
     }
 

@@ -325,15 +325,11 @@ class ProjectWatchesTest {
         open.forEach { it.writeText("class Many changed\n") }
         val seen = pollForAll(cursor, written, written)
         assertTrue(seen.paths.containsAll(written), "${seen.paths}")
-        // One answer hashes at most the cap; the burst may be answered in several, which cap each their own.
-        assertTrue(
-            seen.answers.all { it.versions.size <= MAX_VERSIONED_OPEN_FILES },
-            seen.answers.joinToString { "${it.paths.size} paths, ${it.versions.size} versions" },
-        )
-        assertTrue(
-            seen.answers.any { it.versions.size == MAX_VERSIONED_OPEN_FILES },
-            seen.answers.joinToString { "${it.paths.size} paths, ${it.versions.size} versions" },
-        )
+        // However the burst is split into answers, each hashes its open files up to the cap, and no more.
+        seen.answers.forEach { answer ->
+            val expected = minOf(answer.paths.size, MAX_VERSIONED_OPEN_FILES)
+            assertEquals(expected, answer.versions.size, "${answer.paths.size} paths, ${answer.versions.size} versions")
+        }
         assertTrue(seen.versions.keys.all { it in written }, "${seen.versions.keys}")
     }
 

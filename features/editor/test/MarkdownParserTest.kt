@@ -1,5 +1,7 @@
 package org.example.kotlineditor.ui
 
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -34,6 +36,16 @@ class MarkdownParserTest {
                 MarkdownBlock.Paragraph("Text on two lines"),
             )
         assertEquals(expected, blocks)
+    }
+
+    @Test
+    fun `a web link carries its address, a relative one does not`() {
+        val text = "[MDN](https://developer.mozilla.org/x) and [local](./a.md)"
+        val parsed = inlineMarkdown(text, SpanStyle())
+        val links = parsed.getLinkAnnotations(0, parsed.length)
+        val urls = links.mapNotNull { (it.item as? LinkAnnotation.Url)?.url }
+        assertEquals(listOf("https://developer.mozilla.org/x"), urls)
+        assertEquals("MDN and local", parsed.text)
     }
 
     private fun lines(vararg lines: String): String = lines.joinToString("\n")

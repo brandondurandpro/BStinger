@@ -76,26 +76,7 @@ internal class LineSpanBuilder(private val length: Int) {
             )
         val painted = IntArray(length) { CaptureStyles.NONE }
         for (i in order) painted.fill(styles[i], starts[i], ends[i])
-        return runs(painted)
-    }
-
-    private fun runs(painted: IntArray): LineSpans {
-        val runStarts = ArrayList<Int>()
-        val runEnds = ArrayList<Int>()
-        val runStyles = ArrayList<Int>()
-        var i = 0
-        while (i < painted.size) {
-            val style = painted[i]
-            var j = i + 1
-            while (j < painted.size && painted[j] == style) j++
-            if (style != CaptureStyles.NONE) {
-                runStarts += i
-                runEnds += j
-                runStyles += style
-            }
-            i = j
-        }
-        return LineSpans(runStarts.toIntArray(), runEnds.toIntArray(), runStyles.toIntArray())
+        return spansOf(painted)
     }
 
     private fun grow() {
@@ -108,4 +89,44 @@ internal class LineSpanBuilder(private val length: Int) {
     private companion object {
         const val INITIAL = 16
     }
+}
+
+/** The runs of the same color of [painted], one style per character of a line. */
+internal fun spansOf(painted: IntArray): LineSpans {
+    val runStarts = ArrayList<Int>()
+    val runEnds = ArrayList<Int>()
+    val runStyles = ArrayList<Int>()
+    var i = 0
+    while (i < painted.size) {
+        val style = painted[i]
+        var j = i + 1
+        while (j < painted.size && painted[j] == style) j++
+        if (style != CaptureStyles.NONE) {
+            runStarts += i
+            runEnds += j
+            runStyles += style
+        }
+        i = j
+    }
+    return LineSpans(runStarts.toIntArray(), runEnds.toIntArray(), runStyles.toIntArray())
+}
+
+/**
+ * [base] with the colors of [inner] painted over it where [allowed] (ranges of the line), for a line of [length]
+ * characters: the code of another language embedded in the line.
+ */
+internal fun overlaid(base: LineSpans, inner: LineSpans, allowed: List<IntRange>, length: Int): LineSpans {
+    val painted = IntArray(length) { CaptureStyles.NONE }
+    for (i in 0 until base.size) {
+        val end = base.ends[i].coerceAtMost(length)
+        painted.fill(base.styles[i], base.starts[i].coerceAtMost(end), end)
+    }
+    for (i in 0 until inner.size) {
+        for (range in allowed) {
+            val from = maxOf(inner.starts[i], range.first)
+            val to = minOf(inner.ends[i], range.last + 1, length)
+            if (from < to) painted.fill(inner.styles[i], from, to)
+        }
+    }
+    return spansOf(painted)
 }

@@ -84,6 +84,7 @@ class SyntaxSession(val spec: GrammarSpec) {
         // Parser and tree are used by one thread at a time; the UI thread only reads the published highlights.
         val worker = Dispatchers.Default.limitedParallelism(1)
         val highlighter = withContext(worker) { TreeSitterHighlighter(grammar) }
+        val injected = InjectedHighlighters(store)
         try {
             val visible = shown.map { it > 0 }.distinctUntilChanged()
             val requests =
@@ -95,12 +96,15 @@ class SyntaxSession(val spec: GrammarSpec) {
                     // Hidden: the tree is freed, the colors kept for when the document is shown again.
                     withContext(worker) { highlighter.release() }
                 } else {
-                    highlights = highlightsOf(source.snapshotLines(), range, highlighter, worker)
+                    highlights = highlightsOf(source.snapshotLines(), range, highlighter, injected, worker)
                 }
                 isParsed = range != null && highlights != null
             }
         } finally {
-            withContext(NonCancellable + worker) { highlighter.close() }
+            withContext(NonCancellable + worker) {
+                highlighter.close()
+                injected.close()
+            }
         }
     }
 
@@ -109,6 +113,7 @@ class SyntaxSession(val spec: GrammarSpec) {
         lines: List<String>,
         range: IntRange,
         highlighter: TreeSitterHighlighter,
+        injected: InjectedHighlighters,
         worker: CoroutineDispatcher,
     ): SyntaxHighlights? {
         if (lines.sumOf { it.length + 1 } > MAX_CHARACTERS) {
@@ -120,7 +125,8 @@ class SyntaxSession(val spec: GrammarSpec) {
         val spans =
             withContext(worker) {
                 highlighter.update(lines)
-                highlighter.highlight(window.first, window.last + 1)
+                val own = highlighter.highlight(window.first, window.last + 1)
+                injected.overlay(own, lines, highlighter.injections(), window)
             }
         return SyntaxHighlights(spans.mapValues { (index, line) -> lines[index] to line }, window)
     }

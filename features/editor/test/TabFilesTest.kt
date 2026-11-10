@@ -106,6 +106,7 @@ class TabFilesTest {
             this,
             {},
             { emptyList() },
+            { null },
             { emptyList() },
             { _, _ -> emptyList() },
             { throw IOException("no merge") },

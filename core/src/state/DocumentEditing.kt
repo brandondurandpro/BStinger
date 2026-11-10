@@ -18,9 +18,24 @@ fun Document.insert(text: String) {
 
 /**
  * Types one character like IntelliJ does: closes brackets and quotes, steps over an auto-inserted closer,
- * and wraps the selection when an opening bracket or quote is typed over it.
+ * and wraps the selection when an opening bracket or quote is typed over it. With [closeTags], `>` that ends an
+ * opening tag adds its closing tag after the caret.
  */
-fun Document.typeChar(c: Char) {
+fun Document.typeChar(c: Char, closeTags: Boolean = false) {
+    val endsTag = c == '>' && closeTags && !hasSelection
+    if (endsTag && closeTypedTag()) return
+    typeCharacter(c)
+}
+
+// `>` that ends an opening tag: its closing tag is added after the caret.
+private fun Document.closeTypedTag(): Boolean {
+    val closingTag = closingTagForTypedEnd() ?: return false
+    insert(">$closingTag")
+    moveTo(TextPos(caret.line, caret.column - closingTag.length))
+    return true
+}
+
+private fun Document.typeCharacter(c: Char) {
     val range = selectionRange()
     val closer = PAIRS[c]
     val next = lines[caret.line].getOrNull(caret.column)

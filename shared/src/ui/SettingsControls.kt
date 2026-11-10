@@ -29,8 +29,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.example.kotlineditor.model.LanguageServerCandidateInfo
+import org.example.kotlineditor.model.LanguageServerChoice
+import org.example.kotlineditor.model.Languages
 import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.InlayHintsMode
+import org.example.kotlineditor.state.SERVER_LANGUAGES
 import org.example.kotlineditor.state.Setting
 import org.example.kotlineditor.state.SettingsState
 import kotlin.math.roundToInt
@@ -122,7 +125,7 @@ internal fun TelemetryControl(app: AppState) {
     }
 }
 
-/** The PHP servers the server offers, the one used marked, a button to switch to each of the others. */
+/** The servers the server offers for each language, the one used marked, a button to switch to each of the others. */
 @Composable
 internal fun ServerControl(settings: SettingsState) {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -135,21 +138,43 @@ internal fun ServerControl(settings: SettingsState) {
                 maxLines = 3,
             )
         }
-        val choice = settings.phpServers
-        if (choice == null) {
+        val loaded = SERVER_LANGUAGES.all { settings.serversOf(it) != null }
+        if (!loaded) {
             Label(
                 "Asking the server…",
                 Modifier.testTag(AppTags.SETTINGS_SERVERS_LOADING),
                 color = IdeColors.TextSecondary,
             )
-        } else {
-            choice.candidates.forEach { ServerCard(settings, it, isCurrent = it.id == choice.chosen) }
+        }
+        SERVER_LANGUAGES.forEach { language ->
+            val choice = settings.serversOf(language)
+            if (choice != null && choice.candidates.isNotEmpty()) LanguageServerList(settings, language, choice)
         }
     }
 }
 
 @Composable
-private fun ServerCard(settings: SettingsState, candidate: LanguageServerCandidateInfo, isCurrent: Boolean) {
+private fun LanguageServerList(settings: SettingsState, language: String, choice: LanguageServerChoice) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Label(
+            Languages.nameOf(language),
+            Modifier.testTag(AppTags.settingsServerLanguage(language)),
+            color = IdeColors.TextSecondary,
+            fontSize = 12.sp,
+        )
+        choice.candidates.forEach {
+            ServerCard(settings, language, it, isCurrent = it.id == choice.chosen)
+        }
+    }
+}
+
+@Composable
+private fun ServerCard(
+    settings: SettingsState,
+    language: String,
+    candidate: LanguageServerCandidateInfo,
+    isCurrent: Boolean,
+) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -181,7 +206,7 @@ private fun ServerCard(settings: SettingsState, candidate: LanguageServerCandida
             else -> {
                 IdeButton(
                     "Use",
-                    { settings.useServer(candidate.id) },
+                    { settings.useServer(language, candidate.id) },
                     Modifier.testTag(AppTags.settingsServerUse(candidate.id)),
                     enabled = candidate.available && settings.switchingTo == null,
                 )

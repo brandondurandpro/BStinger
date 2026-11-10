@@ -118,6 +118,7 @@ private fun codeIntelligenceHandlers(services: LocalServices): Map<Method, Handl
             intelligence().usageCounts(session, params.string(PATH), params.int(VERSION)).toJson()
         },
         Method.LspWorkspaceSymbols to { intelligence().workspaceSymbols(session, params.string("query")).toJson() },
+        Method.LspCheckProject to { services.languageServers.checkProject(params.string("project")).toJson() },
         Method.LspDiagnostics to { intelligence().diagnostics(session, params.long("since")).toJson() },
         Method.LspPrepareRename to { intelligence().prepareRename(session, params.documentPosition()).toJson() },
         Method.LspRename to {

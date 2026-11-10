@@ -16,8 +16,14 @@ object LanguageServerTags {
     const val LANGUAGE_SERVERS_LOG = "languageServers.log"
     const val LSP_CHOICE = "lsp.choice"
 
+    /** The button checking the whole project, the line telling what it found, and its list of problems. */
+    const val PROJECT_CHECK = "languageServers.check"
+    const val PROJECT_CHECK_SUMMARY = "languageServers.check.summary"
+    const val PROJECT_CHECK_PROBLEMS = "languageServers.check.problems"
+
     /** Why a running server gives no inlay hints, under the choice of their mode. */
     const val INLAY_HINTS_NOTE = "languageServers.inlayHints.note"
+    const val SETUP_NOTE = "languageServers.setup.note"
     const val LSP_CHOICE_NOT_NOW = "lsp.choice.notNow"
     const val LSP_CHOICE_OPEN = "lsp.choice.open"
     const val LSP_CHOICE_QUICK = "lsp.choice.quick"

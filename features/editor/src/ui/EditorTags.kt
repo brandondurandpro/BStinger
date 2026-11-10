@@ -146,6 +146,12 @@ object EditorTags {
     /** A row of the list of places (usages, declarations), by its index. */
     fun location(index: Int) = "locations.item:$index"
 
+    /** The file and line of row [index] of the list of places. */
+    fun locationFile(index: Int) = "locations.file:$index"
+
+    /** The directory of row [index] of the list of places. */
+    fun locationDirectory(index: Int) = "locations.directory:$index"
+
     /** The code of row [index] of the list of places. */
     fun locationPreview(index: Int) = "locations.preview:$index"
 

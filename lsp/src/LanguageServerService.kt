@@ -27,6 +27,7 @@ import org.example.kotlineditor.model.LanguageServerChoice
 import org.example.kotlineditor.model.LanguageServersStatus
 import org.example.kotlineditor.model.Languages
 import org.example.kotlineditor.model.OperatedFile
+import org.example.kotlineditor.model.ProjectCheckResult
 import org.example.kotlineditor.model.TextChange
 import org.example.kotlineditor.telemetry.Telemetry
 import java.io.Closeable
@@ -41,6 +42,8 @@ class LanguageServerSettings(
     val toolsDirectory: Path = Paths.get(System.getProperty("user.home"), ".kotlin-editor", "tools"),
     /** The servers offered for each language, with their requirements checked on this machine. */
     val candidates: CandidateRegistry = CandidateRegistry(),
+    /** Replaces the project check (tests: no `vue-tsc` to download and run). */
+    val projectCheck: ((project: String) -> ProjectCheckResult)? = null,
     /** Delays of the supervisor. */
     val timings: SupervisorTimings = SupervisorTimings(),
     /** How long a status request waits for a change before answering the current status. */
@@ -97,6 +100,13 @@ class LanguageServerService(
     init {
         scope.launch { publisher.run() }
     }
+
+    /**
+     * Checks the whole [project] with `vue-tsc` (downloaded on first use): the problems of every file, open or not.
+     * [ProjectCheckResult.status] is NotReady, with the reason in its summary, when the check could not run.
+     */
+    suspend fun checkProject(project: String): ProjectCheckResult =
+        withContext(Dispatchers.IO) { (settings.projectCheck ?: ProjectChecker(targets.downloader)::check)(project) }
 
     /** The status once newer than [since], or the current one after [LanguageServerSettings.statusHoldMs]. */
     suspend fun status(since: Long): LanguageServersStatus = publisher.status(since)
@@ -171,8 +181,13 @@ class LanguageServerService(
     suspend fun resolveCompletion(session: String, token: String, index: Int): String? =
         completions.resolve(session, token, index)
 
-    private fun serversOf(document: MirroredDocument): List<ManagedServer> =
-        supervisor.serving(document.language, document.root)
+    // Its own language's servers first (they answer by default), then those of the companion languages that hold it.
+    private fun serversOf(document: MirroredDocument): List<ManagedServer> {
+        val own = supervisor.serving(document.language, document.root)
+        val companions = Languages.companionsOf(document.path)
+        val beside = supervisor.servingPath(document.path).filter { it.language in companions }
+        return own + beside
+    }
 
     /**
      * Files changed on disk through the IDE ([DiskChange] by absolute path): the servers whose root holds them are
