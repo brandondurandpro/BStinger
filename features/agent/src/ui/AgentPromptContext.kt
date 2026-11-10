@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
@@ -100,13 +100,12 @@ internal fun ContextChips(context: PromptContext, modifier: Modifier = Modifier)
                 return@forEach
             }
             ContextChip(attachment.label, Modifier.testTag(AgentTags.agentAttachment(attachment.label))) {
-                Label(
-                    "×",
+                CloseIcon(
                     Modifier
                         .padding(start = 6.dp)
                         .clickable { context.remove(attachment) }
+                        .size(14.dp)
                         .testTag(AgentTags.agentAttachmentRemove(attachment.label)),
-                    color = IdeColors.TextSecondary,
                 )
             }
         }
@@ -127,8 +126,8 @@ internal fun SentContext(labels: List<String>, modifier: Modifier = Modifier) {
 private fun ContextChip(label: String, modifier: Modifier = Modifier, trailing: @Composable () -> Unit = {}) {
     Row(
         modifier
-            .background(IdeColors.Panel, RoundedCornerShape(4.dp))
-            .border(1.dp, IdeColors.Separator, RoundedCornerShape(4.dp))
+            .background(IdeColors.Panel, IdeShapes.Medium)
+            .border(1.dp, IdeColors.Separator, IdeShapes.Medium)
             .padding(horizontal = 6.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
@@ -134,8 +133,8 @@ internal fun CompletionList(completion: PromptCompletion, modifier: Modifier = M
     LazyColumn(
         modifier
             .heightIn(max = LIST_HEIGHT)
-            .background(IdeColors.Panel, RoundedCornerShape(8.dp))
-            .border(1.dp, IdeColors.Separator, RoundedCornerShape(8.dp))
+            .background(IdeColors.Panel, IdeShapes.ExtraLarge)
+            .border(1.dp, IdeColors.Separator, IdeShapes.ExtraLarge)
             .padding(4.dp)
             .testTag(AgentTags.AGENT_COMPLETION),
         state = state,
@@ -151,7 +150,7 @@ private fun SuggestionRow(suggestion: Suggestion, selected: Boolean, pick: () ->
     Row(
         Modifier
             .fillMaxWidth()
-            .background(if (selected) IdeColors.Selection else Color.Transparent, RoundedCornerShape(4.dp))
+            .background(if (selected) IdeColors.Selection else Color.Transparent, IdeShapes.Medium)
             .clickable(onClick = pick)
             .testTag(AgentTags.agentCompletion(suggestion.label))
             .padding(horizontal = 8.dp, vertical = 4.dp),

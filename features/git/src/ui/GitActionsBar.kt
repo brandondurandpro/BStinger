@@ -8,8 +8,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -79,9 +77,9 @@ private fun BranchMenu(project: GitHost) {
             Label(project.git.currentBranch ?: "No branch", Modifier.padding(start = 4.dp), fontSize = 12.sp)
             Chevron(expanded = false)
         }
-        DropdownMenu(open, onDismissRequest = { open = false }) {
+        IdeDropdownMenu(open, onDismissRequest = { open = false }) {
             project.git.branches.forEach { branch ->
-                DropdownMenuItem(
+                IdeMenuItem(
                     text = { Text(branch, fontSize = 13.sp) },
                     onClick = {
                         open = false

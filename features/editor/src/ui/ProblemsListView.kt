@@ -44,9 +44,15 @@ private val PANEL_WIDTH = 560.dp
 private val PROBLEM_ROW_HEIGHT = 26.dp
 private const val VISIBLE_ROWS = 14
 private const val SCRIM_ALPHA = 0.25f
-private val TITLE_STYLE get() = TextStyle(color = IdeColors.Text, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-private val MESSAGE_STYLE get() = TextStyle(color = IdeColors.Text, fontSize = 13.sp)
-private val PLACE_STYLE get() = TextStyle(color = IdeColors.TextSecondary, fontSize = 12.sp)
+private val TITLE_STYLE get() =
+    TextStyle(
+        fontFamily = IdeFonts.ui,
+        color = IdeColors.Text,
+        fontSize = 13.sp,
+        fontWeight = FontWeight.Bold,
+    )
+private val MESSAGE_STYLE get() = TextStyle(fontFamily = IdeFonts.ui, color = IdeColors.Text, fontSize = 13.sp)
+private val PLACE_STYLE get() = TextStyle(fontFamily = IdeFonts.ui, color = IdeColors.TextSecondary, fontSize = 12.sp)
 
 /**
  * The problems of [document] over the editor, from the widget at the top right: one row per problem, its severity,

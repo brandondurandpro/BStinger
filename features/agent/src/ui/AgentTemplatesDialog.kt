@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -52,7 +51,7 @@ internal fun TemplatesButton(agent: AgentState, conversation: Conversation) {
     Label(
         "★",
         Modifier
-            .background(if (open) IdeColors.Selection else Color.Transparent, RoundedCornerShape(4.dp))
+            .background(if (open) IdeColors.Selection else Color.Transparent, IdeShapes.Medium)
             .clickable { open = true }
             .padding(horizontal = 8.dp, vertical = 2.dp)
             .testTag(AgentTags.AGENT_TEMPLATES),
@@ -79,8 +78,8 @@ private fun TemplatesDialog(agent: AgentState, conversation: Conversation, close
         Column(
             Modifier
                 .width(DIALOG_WIDTH)
-                .background(IdeColors.Popup, RoundedCornerShape(8.dp))
-                .border(1.dp, IdeColors.Separator, RoundedCornerShape(8.dp))
+                .background(IdeColors.Popup, IdeShapes.ExtraLarge)
+                .border(1.dp, IdeColors.Separator, IdeShapes.ExtraLarge)
                 .padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -137,7 +136,7 @@ private fun TemplateList(templates: List<PromptTemplate>, editing: String?, choo
                 "★ ${template.name}" + if (template.global) "" else "  · this project",
                 Modifier
                     .fillMaxWidth()
-                    .background(background, RoundedCornerShape(4.dp))
+                    .background(background, IdeShapes.Medium)
                     .clickable { choose(template) }
                     .padding(horizontal = 8.dp, vertical = 4.dp)
                     .testTag(AgentTags.agentTemplate(template.name)),
@@ -153,13 +152,13 @@ private fun TemplateTextField(text: String, change: (String) -> Unit, modifier: 
         onValueChange = change,
         modifier = modifier.fillMaxWidth().height(TEXT_HEIGHT),
         cursorBrush = SolidColor(IdeColors.Caret),
-        textStyle = TextStyle(color = IdeColors.Text, fontSize = 13.sp),
+        textStyle = TextStyle(fontFamily = IdeFonts.ui, color = IdeColors.Text, fontSize = 13.sp),
         decorationBox = { inner ->
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .background(IdeColors.Input, RoundedCornerShape(4.dp))
-                    .border(1.dp, IdeColors.InputBorder, RoundedCornerShape(4.dp))
+                    .background(IdeColors.Input, IdeShapes.Medium)
+                    .border(1.dp, IdeColors.InputBorder, IdeShapes.Medium)
                     .padding(8.dp),
             ) {
                 if (text.isEmpty()) Label("Prompt", color = IdeColors.TextSecondary)
@@ -185,8 +184,8 @@ private fun ScopeButton(text: String, selected: Boolean, tag: String, choose: ()
     Label(
         text,
         Modifier
-            .background(background, RoundedCornerShape(4.dp))
-            .border(1.dp, IdeColors.InputBorder, RoundedCornerShape(4.dp))
+            .background(background, IdeShapes.Medium)
+            .border(1.dp, IdeColors.InputBorder, IdeShapes.Medium)
             .clickable(onClick = choose)
             .padding(horizontal = 8.dp, vertical = 3.dp)
             .testTag(tag),
@@ -204,7 +203,7 @@ private fun VariableChips(add: (String) -> Unit) {
                 Label(
                     "{$variable}",
                     Modifier
-                        .border(1.dp, IdeColors.InputBorder, RoundedCornerShape(10.dp))
+                        .border(1.dp, IdeColors.InputBorder, IdeShapes.ExtraLarge)
                         .clickable { add(variable) }
                         .padding(horizontal = 8.dp, vertical = 2.dp)
                         .testTag(AgentTags.agentTemplateVariable(variable)),

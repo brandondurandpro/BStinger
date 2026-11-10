@@ -18,10 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
@@ -89,10 +86,10 @@ private fun QuotaChip(limit: QuotaLimit, modifier: Modifier) {
                     .padding(horizontal = 8.dp)
                     .width(BAR_WIDTH)
                     .height(BAR_HEIGHT)
-                    .background(IdeColors.Separator, RoundedCornerShape(3.dp)),
+                    .background(IdeColors.Separator, IdeShapes.Small),
             ) {
                 val filled = limit.used / FULL
-                Box(Modifier.fillMaxHeight().fillMaxWidth(filled).background(colorOf(limit.used), RoundedCornerShape(3.dp)))
+                Box(Modifier.fillMaxHeight().fillMaxWidth(filled).background(colorOf(limit.used), IdeShapes.Small))
             }
             Label(limit.text, color = IdeColors.TextSecondary, fontSize = 12.sp)
         }
@@ -114,14 +111,14 @@ private fun CommandsButton(conversation: Conversation, commands: List<AgentSlash
         Label(
             "/ ▾",
             Modifier
-                .background(if (open) IdeColors.Selection else Color.Transparent, RoundedCornerShape(4.dp))
+                .background(if (open) IdeColors.Selection else Color.Transparent, IdeShapes.Medium)
                 .clickable { open = true }
                 .padding(horizontal = 8.dp, vertical = 2.dp)
                 .testTag(AgentTags.AGENT_COMMANDS),
             color = IdeColors.TextSecondary,
             fontSize = 13.sp,
         )
-        DropdownMenu(open, onDismissRequest = { open = false }, Modifier.widthIn(max = MENU_WIDTH).closesOnEscape { open = false }) {
+        IdeDropdownMenu(open, onDismissRequest = { open = false }, Modifier.widthIn(max = MENU_WIDTH).closesOnEscape { open = false }) {
             var filter by remember { mutableStateOf("") }
             AgentFilterField(filter, AgentTags.AGENT_COMMANDS_FILTER, "Search commands…") { filter = it }
             val shown = commands.filter { it.matches(filter) }
@@ -150,7 +147,7 @@ private fun AgentSlashCommand.matches(filter: String): Boolean {
 
 @Composable
 private fun CommandItem(command: AgentSlashCommand, choose: () -> Unit) {
-    DropdownMenuItem(
+    IdeMenuItem(
         text = {
             Column {
                 val hint = command.hint?.let { " $it" }.orEmpty()

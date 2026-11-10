@@ -14,9 +14,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -54,7 +51,7 @@ fun BranchWidget(project: GitHost, modifier: Modifier = Modifier) {
     ) {
         Row(
             Modifier
-                .background(background, RoundedCornerShape(5.dp))
+                .background(background, IdeShapes.Medium)
                 .clickable { project.git.branchPickerOpen = true }
                 .testTag(GitTags.GIT_BRANCH)
                 .padding(horizontal = 6.dp, vertical = 4.dp),
@@ -106,7 +103,7 @@ private fun QuickPullButton(project: GitHost, current: GitBranchInfo) {
         Row(
             Modifier
                 .height(22.dp)
-                .clip(RoundedCornerShape(5.dp))
+                .clip(IdeShapes.Medium)
                 .clickable(enabled = enabled) { project.git.syncBranch(current.name, BranchSync.Action.Pull) }
                 .testTag(GitTags.QUICK_PULL)
                 .padding(start = 2.dp, end = 6.dp),
@@ -156,8 +153,8 @@ private fun PinnedBranchChip(project: GitHost, branch: GitBranchInfo) {
     Row(
         Modifier
             .height(22.dp)
-            .background(IdeColors.Editor, RoundedCornerShape(5.dp))
-            .border(1.dp, IdeColors.Separator, RoundedCornerShape(5.dp))
+            .background(IdeColors.Editor, IdeShapes.Medium)
+            .border(1.dp, IdeColors.Separator, IdeShapes.Medium)
             .clickable { project.git.checkoutBranch(branch.name) }
             .testTag(GitTags.pinnedBranch(branch.name))
             .padding(start = 6.dp, end = 2.dp),
@@ -197,9 +194,9 @@ private fun PinnedBranchMenu(project: GitHost, branch: GitBranchInfo) {
         ) {
             Chevron(expanded = true, Modifier.size(12.dp))
         }
-        DropdownMenu(open, onDismissRequest = { open = false }) {
+        IdeDropdownMenu(open, onDismissRequest = { open = false }) {
             val item = @Composable { text: String, tag: String, enabled: Boolean, action: () -> Unit ->
-                DropdownMenuItem(
+                IdeMenuItem(
                     text = { Text(text, fontSize = 13.sp) },
                     onClick = {
                         open = false

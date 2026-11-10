@@ -63,7 +63,7 @@ internal class TreeRowGeometry(density: Density) {
  * names are laid out without color, each row draws them in its Git status color.
  */
 internal class TreeTextCache(private val measurer: TextMeasurer) {
-    private val style = TextStyle(fontSize = 13.sp)
+    private val style = TextStyle(fontFamily = IdeFonts.ui, fontSize = 13.sp)
     private val names = LruMap<String, TextLayoutResult>(NAME_CAPACITY)
     private val badges = HashMap<FileBadge, TextLayoutResult>()
 

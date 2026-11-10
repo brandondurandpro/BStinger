@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -75,7 +77,7 @@ fun ProjectScreen(app: AppState, project: ProjectState) {
     Column(
         Modifier
             .fillMaxSize()
-            .background(IdeColors.Panel)
+            .background(IdeColors.Frame)
             .testTag(AppTags.PROJECT)
             .onPreviewKeyEvent(shortcuts::handle)
             .focusRequester(rootFocus)
@@ -83,7 +85,6 @@ fun ProjectScreen(app: AppState, project: ProjectState) {
             .focusable(),
     ) {
         Toolbar(app, project)
-        Box(Modifier.fillMaxWidth().height(1.dp).background(IdeColors.Border))
         Box(Modifier.weight(1f)) {
             if (project.agentMode) {
                 AgentWorkspace(app, project)
@@ -97,7 +98,6 @@ fun ProjectScreen(app: AppState, project: ProjectState) {
             }
             if (!project.agentMode) LanguageServerChoiceDialog(project)
         }
-        Box(Modifier.fillMaxWidth().height(1.dp).background(IdeColors.Border))
         StatusBar(app, project)
     }
 }
@@ -128,8 +128,7 @@ private fun ProjectBody(app: AppState, project: ProjectState, findFocus: FocusRe
     ) {
         Row(Modifier.fillMaxSize()) {
             ToolStrip(project, app.devtools)
-            VerticalDivider(Modifier.fillMaxHeight())
-            Column(Modifier.weight(1f).fillMaxHeight()) {
+            Column(Modifier.weight(1f).fillMaxHeight().padding(end = ISLAND_GAP, bottom = ISLAND_GAP)) {
                 Row(Modifier.weight(1f).fillMaxWidth()) {
                     ToolDock(project, Dock.Left, drag)
                     Column(Modifier.weight(1f)) {
@@ -191,13 +190,15 @@ internal fun EditorArea(
     modifier: Modifier,
     /** False in agent mode, where the tab strip of the window lists the files; split panes keep their own. */
     showTabs: Boolean = true,
+    /** False inside another island (agent mode): the panes are then only split by a gap. */
+    islands: Boolean = true,
 ) {
     val editor = project.editor
     val tabsShown = showTabs || editor.panes.size > 1
-    Row(modifier.fillMaxHeight().background(IdeColors.Editor)) {
+    Row(modifier.fillMaxHeight(), horizontalArrangement = Arrangement.spacedBy(ISLAND_GAP)) {
         editor.panes.forEachIndexed { index, pane ->
-            if (index > 0) VerticalDivider(Modifier.fillMaxHeight())
-            key(pane) { EditorPaneView(app, project, pane, index, findFocus, Modifier.weight(1f), tabsShown) }
+            val island = if (islands) Modifier.weight(1f).island(IdeColors.Editor) else Modifier.weight(1f)
+            key(pane) { EditorPaneView(app, project, pane, index, findFocus, island, tabsShown) }
         }
     }
 }

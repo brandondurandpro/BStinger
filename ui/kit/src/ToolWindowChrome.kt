@@ -190,7 +190,8 @@ val STRIP_WIDTH = 40.dp
 /** Height of the header of a tool window. */
 val HEADER_HEIGHT = 34.dp
 
-val SPLITTER_SIZE = 5.dp
+/** The splitters are the gaps between the islands: nothing is drawn, the pointer shows they resize. */
+val SPLITTER_SIZE = ISLAND_GAP
 
 @Composable
 fun SplitterBox(horizontalBar: Boolean, tag: String?, onDrag: (Float) -> Unit) {
@@ -212,11 +213,5 @@ fun SplitterBox(horizontalBar: Boolean, tag: String?, onDrag: (Float) -> Unit) {
             orientation = if (horizontalBar) Orientation.Vertical else Orientation.Horizontal,
         )
     val splitter = if (tag != null) dragging.testTag(tag) else dragging
-    Box(splitter, contentAlignment = Alignment.Center) {
-        if (horizontalBar) {
-            Box(Modifier.fillMaxWidth().height(1.dp).background(IdeColors.Border))
-        } else {
-            Box(Modifier.fillMaxHeight().width(1.dp).background(IdeColors.Border))
-        }
-    }
+    Box(splitter)
 }

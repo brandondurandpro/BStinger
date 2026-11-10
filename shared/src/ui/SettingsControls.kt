@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -38,8 +37,8 @@ import org.example.kotlineditor.state.Setting
 import org.example.kotlineditor.state.SettingsState
 import kotlin.math.roundToInt
 
-private val ChipShape = RoundedCornerShape(4.dp)
-private val CardShape = RoundedCornerShape(6.dp)
+private val ChipShape = IdeShapes.Medium
+private val CardShape = IdeShapes.Large
 private val Success get() = IdeColors.GitAdded
 
 /** The editors' font size: smaller, larger, back to the default. */
@@ -122,11 +121,11 @@ internal fun SettingCheckBox(
         Box(
             Modifier
                 .size(16.dp)
-                .background(if (checked) IdeColors.Accent else IdeColors.Input, ChipShape)
-                .border(1.dp, IdeColors.InputBorder, ChipShape),
+                .background(if (checked) IdeColors.Accent else IdeColors.Input, IdeShapes.Small)
+                .border(1.dp, if (checked) IdeColors.Accent else IdeColors.InputBorder, IdeShapes.Small),
             contentAlignment = Alignment.Center,
         ) {
-            if (checked) CheckIcon(color = Color.White)
+            if (checked) CheckIcon(color = IdeColors.OnAccent)
         }
         Label(setting.title, color = if (enabled) IdeColors.Text else IdeColors.TextSecondary)
     }

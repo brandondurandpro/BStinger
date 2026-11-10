@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -61,8 +60,8 @@ private fun StatsDialog(conversation: Conversation, close: () -> Unit) {
         Column(
             Modifier
                 .width(DIALOG_WIDTH)
-                .background(IdeColors.Popup, RoundedCornerShape(8.dp))
-                .border(1.dp, IdeColors.Separator, RoundedCornerShape(8.dp))
+                .background(IdeColors.Popup, IdeShapes.ExtraLarge)
+                .border(1.dp, IdeColors.Separator, IdeShapes.ExtraLarge)
                 .padding(16.dp)
                 .testTag(AgentTags.AGENT_STATS_DIALOG),
             verticalArrangement = Arrangement.spacedBy(4.dp),

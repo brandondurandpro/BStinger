@@ -6,9 +6,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -19,12 +17,8 @@ import org.example.kotlineditor.model.LanguageSupport
 
 // File icons drawn in a DrawScope, shared by the icon composables and the canvas of the project tree.
 
-// Proportions of the plain file icon.
-private const val PAGE_LEFT = 0.2f
-private const val PAGE_TOP = 0.1f
-private const val TEXT_LEFT = 0.33f
-private const val TEXT_TOP = 0.35f
-private const val TEXT_SPACING = 0.17f
+// How much of the folder's color fills it, under its outline.
+private const val FOLDER_FILL_ALPHA = 0.25f
 
 @Immutable
 data class FileBadge(
@@ -110,39 +104,22 @@ private fun DrawScope.drawVueChevron(points: List<Pair<Float, Float>>, color: Co
 
 fun badgeStyle(badge: FileBadge) =
     TextStyle(
+        fontFamily = IdeFonts.ui,
         color = badge.textColor,
         fontSize = if (badge.letter.length > 1) 7.sp else 9.sp,
         fontWeight = FontWeight.Bold,
     )
 
-/** The folder icon, filling the draw scope. */
+/** The folder icon (Lucide's), filling the draw scope. */
 fun DrawScope.drawFolderIcon(w: Float = size.width, h: Float = size.height) {
-    val stroke = Stroke(width = 1.2.dp.toPx(), join = StrokeJoin.Round)
-    val path =
-        Path().apply {
-            moveTo(w * 0.08f, h * 0.22f)
-            lineTo(w * 0.40f, h * 0.22f)
-            lineTo(w * 0.50f, h * 0.34f)
-            lineTo(w * 0.92f, h * 0.34f)
-            lineTo(w * 0.92f, h * 0.82f)
-            lineTo(w * 0.08f, h * 0.82f)
-            close()
-        }
-    drawPath(path, IdeColors.Folder.copy(alpha = 0.25f))
-    drawPath(path, IdeColors.Folder, style = stroke)
+    val side = minOf(w, h)
+    val inset = Offset((w - side) / 2, (h - side) / 2)
+    drawLucide(Lucide.Folder, IdeColors.Folder, side, inset, fillAlpha = FOLDER_FILL_ALPHA)
 }
 
-/** The icon of a file without a badge, filling the draw scope: a page with three lines of text. */
+/** The icon of a file without a badge (Lucide's page with lines of text), filling the draw scope. */
 fun DrawScope.drawPlainFileIcon(w: Float = size.width, h: Float = size.height) {
-    drawRoundRect(
-        color = IdeColors.TextSecondary,
-        topLeft = Offset(w * PAGE_LEFT, h * PAGE_TOP),
-        size = Size(w * (1 - 2 * PAGE_LEFT), h * (1 - 2 * PAGE_TOP)),
-        cornerRadius = CornerRadius(1.5.dp.toPx()),
-        style = Stroke(width = 1.2.dp.toPx()),
-    )
-    for (i in 0..2) {
-        val y = h * (TEXT_TOP + i * TEXT_SPACING)
-        drawLine(IdeColors.TextSecondary, Offset(w * TEXT_LEFT, y), Offset(w * (1 - TEXT_LEFT), y), 1.dp.toPx())
-    }
+    val side = minOf(w, h)
+    val inset = Offset((w - side) / 2, (h - side) / 2)
+    drawLucide(Lucide.FileText, IdeColors.TextSecondary, side, inset)
 }

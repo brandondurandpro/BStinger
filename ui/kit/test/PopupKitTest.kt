@@ -14,7 +14,7 @@ class PopupKitTest {
     private fun rangesOf(text: AnnotatedString, predicate: (SpanStyle) -> Boolean): List<IntRange> =
         text.spanStyles.filter { predicate(it.item) }.map { it.start until it.end }
 
-    private fun accentRanges(text: AnnotatedString) = rangesOf(text) { it.color == IdeColors.Accent }
+    private fun accentRanges(text: AnnotatedString) = rangesOf(text) { it.color == IdeColors.Link }
 
     private fun matchRanges(text: AnnotatedString) = rangesOf(text) { it.background == IdeColors.SearchMatch }
 

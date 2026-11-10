@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -63,7 +62,7 @@ internal fun BranchBulkBar(
         Modifier
             .fillMaxWidth()
             .padding(top = 8.dp)
-            .background(barColor, RoundedCornerShape(5.dp))
+            .background(barColor, IdeShapes.Medium)
             .padding(horizontal = 6.dp, vertical = 4.dp)
             .testTag(GitTags.BRANCH_BULK_BAR),
         verticalAlignment = Alignment.CenterVertically,
@@ -212,7 +211,7 @@ private fun DeletionList(candidates: List<GitBranchInfo>, unticked: Set<String>,
             .fillMaxWidth()
             .heightIn(max = 300.dp)
             .padding(top = 8.dp)
-            .border(1.dp, IdeColors.Separator, RoundedCornerShape(5.dp))
+            .border(1.dp, IdeColors.Separator, IdeShapes.Medium)
             .padding(4.dp),
     ) {
         items(candidates, key = { it.name }) { branch ->
@@ -257,8 +256,8 @@ private fun BarButton(
         }
     Box(
         Modifier
-            .background(if (hovered && enabled) IdeColors.Hover else Color.Transparent, RoundedCornerShape(4.dp))
-            .border(1.dp, if (enabled) IdeColors.InputBorder else IdeColors.Separator, RoundedCornerShape(4.dp))
+            .background(if (hovered && enabled) IdeColors.Hover else Color.Transparent, IdeShapes.Medium)
+            .border(1.dp, if (enabled) IdeColors.InputBorder else IdeColors.Separator, IdeShapes.Medium)
             .hoverable(interaction)
             .clickable(interaction, indication = null, enabled = enabled, onClick = onClick)
             .pointerHoverIcon(if (enabled) PointerIcon.Hand else PointerIcon.Default)

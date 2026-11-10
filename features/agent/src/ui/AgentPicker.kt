@@ -18,14 +18,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.rememberScrollbarAdapter
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -93,7 +92,7 @@ fun AgentPicker(agent: AgentState, conversation: Conversation) {
             open = false
             agent.chooseAgent(conversation, entry)
         }
-        DropdownMenu(open, onDismissRequest = { open = false }, Modifier.widthIn(max = MENU_WIDTH).closesOnEscape { open = false }) {
+        IdeDropdownMenu(open, onDismissRequest = { open = false }, Modifier.widthIn(max = MENU_WIDTH).closesOnEscape { open = false }) {
             val tags = RegistryTags(AgentTags.AGENT_AGENT_DEFAULT, AgentTags.AGENT_AGENT_FILTER, AgentTags::agentAgent)
             val settings = agent.settingsAgentLabel.takeIf { conversation.agent != null }
             AgentRegistryMenu(RegistryMenu(settings, conversation.agent?.registry, tags), entries, failure, choose)
@@ -114,7 +113,7 @@ private fun AgentPickerButton(label: String, open: Boolean, onOpen: () -> Unit) 
     Label(
         "$label ▾",
         Modifier
-            .background(if (open) IdeColors.Selection else Color.Transparent, RoundedCornerShape(4.dp))
+            .background(if (open) IdeColors.Selection else Color.Transparent, IdeShapes.Medium)
             .clickable(onClick = onOpen)
             .testTag(AgentTags.AGENT_AGENT)
             .padding(horizontal = 6.dp, vertical = 2.dp),
@@ -230,8 +229,8 @@ internal fun AgentFilterField(
     Box(
         Modifier
             .fillMaxWidth()
-            .background(IdeColors.Input, RoundedCornerShape(4.dp))
-            .border(1.dp, IdeColors.InputBorder, RoundedCornerShape(4.dp))
+            .background(IdeColors.Input, IdeShapes.Medium)
+            .border(1.dp, IdeColors.InputBorder, IdeShapes.Medium)
             .padding(horizontal = 8.dp, vertical = 6.dp),
     ) {
         if (filter.isEmpty()) Label(placeholder, color = IdeColors.TextSecondary, fontSize = 12.sp)
@@ -242,7 +241,7 @@ internal fun AgentFilterField(
                 .fillMaxWidth()
                 .focusRequester(focus)
                 .testTag(tag),
-            textStyle = TextStyle(color = IdeColors.Text, fontSize = 12.sp),
+            textStyle = TextStyle(fontFamily = IdeFonts.ui, color = IdeColors.Text, fontSize = 12.sp),
             singleLine = true,
             cursorBrush = SolidColor(IdeColors.Caret),
         )
@@ -283,7 +282,7 @@ private fun AgentChoiceRow(menu: RegistryMenu, entry: AgentRegistryEntry, choose
             val description = entry.unavailable ?: entry.description
             Label(description, Modifier.padding(top = 1.dp), color = IdeColors.TextSecondary, fontSize = 11.sp)
         }
-        if (chosen) Label("✓", fontSize = 12.sp)
+        if (chosen) CheckIcon(Modifier.size(14.dp), IdeColors.Text)
     }
 }
 

@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -24,9 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import org.example.kotlineditor.state.Dock
 import org.example.kotlineditor.state.ProjectState
 import org.example.kotlineditor.state.ToolWindow
@@ -52,39 +49,32 @@ internal fun ToolStrip(project: ProjectState?, devtools: Boolean, top: @Composab
 
 @Composable
 private fun ColumnScope.ToolButtons(project: ProjectState, devtools: Boolean) {
-    ToolButton(project, ToolWindow.Project, AppTags.TOOL_PROJECT) { FolderIcon(Modifier.size(18.dp)) }
-    ToolButton(project, ToolWindow.Git, AppTags.TOOL_GIT) { HistoryIcon(color = IdeColors.Text) }
-    ToolButton(project, ToolWindow.Branches, AppTags.TOOL_BRANCHES) { BranchIcon(color = IdeColors.Text) }
+    ToolButton(project, ToolWindow.Project, AppTags.TOOL_PROJECT, Lucide.Folder)
+    ToolButton(project, ToolWindow.Git, AppTags.TOOL_GIT, Lucide.History)
+    ToolButton(project, ToolWindow.Branches, AppTags.TOOL_BRANCHES, Lucide.GitBranch)
     Spacer(Modifier.weight(1f))
-    ToolButton(project, ToolWindow.Run, AppTags.TOOL_RUN) {
-        Label("▶", color = IdeColors.Text, fontWeight = FontWeight.Bold)
-    }
+    ToolButton(project, ToolWindow.Run, AppTags.TOOL_RUN, Lucide.Play)
     // Bottom tool windows sit at the bottom of the strip, like in IntelliJ's New UI.
-    if (devtools) {
-        ToolButton(project, ToolWindow.Network, AppTags.TOOL_NETWORK) {
-            Label("⇅", color = IdeColors.Text, fontWeight = FontWeight.Bold)
-        }
-    }
-    ToolButton(project, ToolWindow.LanguageServers, AppTags.TOOL_LANGUAGE_SERVERS) {
-        Label("LS", color = IdeColors.Text, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-    }
-    ToolButton(project, ToolWindow.Terminal, AppTags.TOOL_TERMINAL) {
-        Label(">_", color = IdeColors.Text, fontWeight = FontWeight.Bold)
-    }
+    if (devtools) ToolButton(project, ToolWindow.Network, AppTags.TOOL_NETWORK, Lucide.ArrowUpDown)
+    ToolButton(project, ToolWindow.LanguageServers, AppTags.TOOL_LANGUAGE_SERVERS, Lucide.Braces)
+    ToolButton(project, ToolWindow.Terminal, AppTags.TOOL_TERMINAL, Lucide.SquareTerminal)
 }
 
+// The button of a tool window: a muted icon, lit up on a filled background while its window is open.
 @Composable
-private fun ToolButton(project: ProjectState, window: ToolWindow, tag: String, icon: @Composable () -> Unit) {
+private fun ToolButton(project: ProjectState, window: ToolWindow, tag: String, icon: LucideIcon) {
     val active = project.toolWindows.isVisible(window)
+    val background = if (active) IdeColors.Selection else Color.Transparent
+    val tint = if (active) IdeColors.Text else IdeColors.TextSecondary
     Box(
         Modifier
             .size(30.dp)
-            .background(if (active) IdeColors.Selection else Color.Transparent, RoundedCornerShape(6.dp))
+            .background(background, IdeShapes.Large)
             .clickable { project.toggleToolWindow(window) }
             .testTag(tag),
         contentAlignment = Alignment.Center,
     ) {
-        icon()
+        IdeIcon(icon, color = tint)
     }
 }
 
@@ -151,14 +141,15 @@ private fun StackedWindows(
 
 @Composable
 private fun ToolWindowContent(project: ProjectState, window: ToolWindow, drag: ToolWindowDrag, modifier: Modifier) {
+    val island = modifier.island()
     when (window) {
-        ToolWindow.Project -> ProjectPanel(project, drag, modifier)
-        ToolWindow.Git -> GitPanel(project, drag, modifier)
-        ToolWindow.Branches -> BranchesPanel(project, drag, modifier)
-        ToolWindow.Run -> RunPanel(project.run, project.toolWindows, drag, modifier)
-        ToolWindow.Terminal -> TerminalPanel(project.terminal, project.toolWindows, drag, modifier)
-        ToolWindow.Network -> NetworkPanel(project, drag, modifier)
-        ToolWindow.LanguageServers -> LanguageServersPanel(project, drag, modifier)
+        ToolWindow.Project -> ProjectPanel(project, drag, island)
+        ToolWindow.Git -> GitPanel(project, drag, island)
+        ToolWindow.Branches -> BranchesPanel(project, drag, island)
+        ToolWindow.Run -> RunPanel(project.run, project.toolWindows, drag, island)
+        ToolWindow.Terminal -> TerminalPanel(project.terminal, project.toolWindows, drag, island)
+        ToolWindow.Network -> NetworkPanel(project, drag, island)
+        ToolWindow.LanguageServers -> LanguageServersPanel(project, drag, island)
     }
 }
 

@@ -7,8 +7,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -41,7 +39,7 @@ fun RunWidget(run: RunState, showWindow: () -> Unit, modifier: Modifier = Modifi
         Box {
             Row(
                 Modifier
-                    .background(IdeColors.Hover, RoundedCornerShape(4.dp))
+                    .background(IdeColors.Hover, IdeShapes.Medium)
                     .clickable { open = true }
                     .padding(horizontal = 8.dp, vertical = 3.dp)
                     .testTag(RunTags.WIDGET_SELECTOR),
@@ -53,7 +51,7 @@ fun RunWidget(run: RunState, showWindow: () -> Unit, modifier: Modifier = Modifi
                 )
                 Chevron(expanded = open)
             }
-            DropdownMenu(open, { open = false }, Modifier.testTag(RunTags.WIDGET_MENU)) {
+            IdeDropdownMenu(open, { open = false }, Modifier.testTag(RunTags.WIDGET_MENU)) {
                 RunMenu(run, showWindow) { open = false }
             }
         }
@@ -66,10 +64,10 @@ fun RunWidget(run: RunState, showWindow: () -> Unit, modifier: Modifier = Modifi
             },
             Modifier.padding(start = 4.dp).testTag(RunTags.WIDGET_START),
         ) {
-            Label("▶", color = if (run.selected != null) IdeColors.Accent else IdeColors.TextSecondary)
+            PlayIcon(color = if (run.selected != null) IdeColors.GitAdded else IdeColors.TextSecondary)
         }
         IconButton({ run.stop() }, Modifier.testTag(RunTags.WIDGET_STOP)) {
-            Label("■", color = if (running) IdeColors.Error else IdeColors.TextSecondary)
+            StopIcon(color = if (running) IdeColors.Error else IdeColors.TextSecondary)
         }
     }
 }

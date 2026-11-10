@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -57,9 +58,9 @@ internal fun AgentWorkspace(app: AppState, project: ProjectState) {
     ) {
         Row(Modifier.fillMaxSize()) {
             ToolStrip(workspace, app.devtools) { ConversationsButton(agent) }
-            VerticalDivider(Modifier.fillMaxHeight())
             if (agent.conversationsVisible) {
-                ConversationList(agent, Modifier.width(agent.conversationsWidth.dp).fillMaxHeight())
+                val list = Modifier.width(agent.conversationsWidth.dp).fillMaxHeight().padding(bottom = ISLAND_GAP)
+                ConversationList(agent, list.island())
                 // Dragging to the right widens the list, on the left of the splitter.
                 val density = LocalDensity.current
                 SplitterBox(horizontalBar = false, tag = AgentTags.AGENT_LIST_SPLITTER) { delta ->
@@ -83,10 +84,10 @@ private fun AgentBody(
     findFocus: FocusRequester,
     modifier: Modifier,
 ) {
-    Column(modifier.fillMaxHeight()) {
+    Column(modifier.fillMaxHeight().padding(end = ISLAND_GAP, bottom = ISLAND_GAP)) {
         Row(Modifier.weight(1f).fillMaxWidth()) {
             workspace?.let { ToolDock(it, Dock.Left, drag) }
-            AgentTabsArea(app, agent, findFocus, Modifier.weight(1f).fillMaxHeight().background(IdeColors.Editor))
+            AgentTabsArea(app, agent, findFocus, Modifier.weight(1f).fillMaxHeight().island(IdeColors.Editor))
             workspace?.let { ToolDock(it, Dock.Right, drag) }
         }
         workspace?.let { ToolDock(it, Dock.Bottom, drag) }
@@ -118,7 +119,7 @@ private fun AgentTabsArea(app: AppState, agent: AgentState, findFocus: FocusRequ
                 if (workspace == null || conversation.showsChat) {
                     ConversationView(agent, conversation)
                 } else {
-                    EditorArea(app, workspace, findFocus, Modifier.fillMaxSize(), showTabs = false)
+                    EditorArea(app, workspace, findFocus, Modifier.fillMaxSize(), showTabs = false, islands = false)
                 }
             }
         }

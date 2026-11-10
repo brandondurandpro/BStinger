@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -70,7 +69,7 @@ private fun AgentRow(entry: AgentRegistryEntry, selected: Boolean, choose: () ->
     Column(
         Modifier
             .fillMaxWidth()
-            .background(background, RoundedCornerShape(4.dp))
+            .background(background, IdeShapes.Medium)
             .clickable(enabled = available, onClick = choose)
             .testTag(AgentTags.settingsAgent(entry.id))
             .padding(horizontal = 8.dp, vertical = 4.dp),

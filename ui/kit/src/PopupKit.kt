@@ -14,8 +14,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -43,7 +41,7 @@ import org.example.kotlineditor.syntax.DeclarationKind
 
 private const val MAX_PREVIEW = 300
 
-/** Popup frame: dimmed backdrop (click closes) and panel anchored near the top, like IntelliJ's popups. */
+/** Popup frame: dimmed backdrop (click closes) and panel anchored near the top, like shadcn/ui's command dialog. */
 @Composable
 fun PopupFrame(tag: String, onClose: () -> Unit, width: Int = 640, content: @Composable () -> Unit) {
     // The backdrop is a sibling of the panel, not its parent, so a click inside the panel is never offered to
@@ -52,7 +50,7 @@ fun PopupFrame(tag: String, onClose: () -> Unit, width: Int = 640, content: @Com
         Box(
             Modifier
                 .fillMaxSize()
-                .background(Color(0x33000000))
+                .background(Color(0x66000000))
                 .pointerInput(onClose) { detectTapGestures { onClose() } },
         )
         Box(
@@ -60,10 +58,9 @@ fun PopupFrame(tag: String, onClose: () -> Unit, width: Int = 640, content: @Com
                 .align(Alignment.TopCenter)
                 .padding(top = 90.dp)
                 .width(width.dp)
-                .background(IdeColors.Popup, RoundedCornerShape(8.dp))
-                .border(1.dp, IdeColors.Separator, RoundedCornerShape(8.dp))
+                .surface(IdeShapes.ExtraLarge, elevation = 24.dp)
                 .testTag(tag)
-                .padding(10.dp),
+                .padding(8.dp),
         ) {
             content()
         }
@@ -129,24 +126,37 @@ fun <T> ResultList(items: List<T>, selected: Int, row: @Composable (Int, T) -> U
 
 /** Background of a result row, highlighted when selected. */
 fun Modifier.resultRow(selected: Boolean): Modifier =
-    background(if (selected) IdeColors.Selection else Color.Transparent, RoundedCornerShape(4.dp))
+    background(if (selected) IdeColors.Selection else Color.Transparent, IdeShapes.Medium)
 
 @Composable
 fun ToggleChip(text: String, on: Boolean, modifier: Modifier = Modifier, onToggle: () -> Unit) {
     Box(
         modifier
-            .background(if (on) IdeColors.Accent.copy(alpha = 0.35f) else Color.Transparent, RoundedCornerShape(3.dp))
+            .background(if (on) IdeColors.Selection else Color.Transparent, IdeShapes.Small)
+            .border(1.dp, if (on) IdeColors.InputBorder else Color.Transparent, IdeShapes.Small)
             .clickable(onClick = onToggle)
-            .padding(horizontal = 4.dp, vertical = 1.dp),
+            .padding(horizontal = 5.dp, vertical = 1.dp),
     ) {
-        Label(text, fontSize = 11.sp, color = if (on) IdeColors.Text else IdeColors.TextSecondary)
+        Label(
+            text,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            color = if (on) IdeColors.Text else IdeColors.TextSecondary,
+        )
     }
 }
 
 @Composable
 fun KindBadge(kind: DeclarationKind) {
-    Box(Modifier.size(16.dp).background(kindColor(kind), CircleShape), contentAlignment = Alignment.Center) {
-        BasicText(kind.badge, style = TextStyle(color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold))
+    Box(Modifier.size(16.dp).background(kindColor(kind), IdeShapes.Small), contentAlignment = Alignment.Center) {
+        val style =
+            TextStyle(
+                color = Color.White,
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = IdeFonts.ui,
+            )
+        BasicText(kind.badge, style = style)
     }
 }
 
@@ -165,7 +175,7 @@ fun highlightIndices(text: String, indices: List<Int>): AnnotatedString =
         append(text)
         addStyle(SpanStyle(color = IdeColors.Text), 0, text.length)
         indices.filter { it in text.indices }.forEach {
-            addStyle(SpanStyle(color = IdeColors.Accent, fontWeight = FontWeight.Bold), it, it + 1)
+            addStyle(SpanStyle(color = IdeColors.Link, fontWeight = FontWeight.SemiBold), it, it + 1)
         }
     }
 

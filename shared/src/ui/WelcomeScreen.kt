@@ -21,7 +21,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollbarAdapter
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -51,7 +50,7 @@ fun WelcomeScreen(state: AppState) {
                 }
             }
             Spacer(Modifier.height(20.dp))
-            val selectedShape = RoundedCornerShape(4.dp)
+            val selectedShape = IdeShapes.Medium
             Box(
                 Modifier
                     .fillMaxWidth()
@@ -173,7 +172,7 @@ private fun RecentProjectRow(path: String, onOpen: () -> Unit, onRemove: () -> U
     Row(
         Modifier
             .fillMaxWidth()
-            .background(if (hovered) IdeColors.Hover else Color.Transparent, RoundedCornerShape(6.dp))
+            .background(if (hovered) IdeColors.Hover else Color.Transparent, IdeShapes.Large)
             .hoverable(interaction)
             .clickable(interaction, indication = null, onClick = onOpen)
             .testTag(AppTags.recentProject(path))

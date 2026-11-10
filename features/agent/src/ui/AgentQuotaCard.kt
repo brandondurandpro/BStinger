@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -46,8 +45,8 @@ internal fun QuotaCard(conversation: Conversation, modifier: Modifier) {
     Column(
         modifier
             .width(QUOTA_CARD_WIDTH)
-            .background(IdeColors.Panel, RoundedCornerShape(8.dp))
-            .border(1.dp, IdeColors.Separator, RoundedCornerShape(8.dp))
+            .background(IdeColors.Panel, IdeShapes.ExtraLarge)
+            .border(1.dp, IdeColors.Separator, IdeShapes.ExtraLarge)
             .padding(12.dp)
             .testTag(AgentTags.AGENT_QUOTA_CARD),
         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -76,9 +75,9 @@ private fun ContextFigure(usage: AgentUsage, modifier: Modifier) {
     val percent = if (usage.size > 0) (usage.used * FULL / usage.size).toInt() else 0
     Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Label("Context", fontSize = 12.sp, fontWeight = FontWeight.Medium)
-        Box(Modifier.fillMaxWidth().height(CARD_BAR_HEIGHT).background(IdeColors.Separator, RoundedCornerShape(3.dp))) {
+        Box(Modifier.fillMaxWidth().height(CARD_BAR_HEIGHT).background(IdeColors.Separator, IdeShapes.Small)) {
             val filled = (percent / FULL.toFloat()).coerceIn(0f, 1f)
-            Box(Modifier.fillMaxHeight().fillMaxWidth(filled).background(cardColorOf(percent), RoundedCornerShape(3.dp)))
+            Box(Modifier.fillMaxHeight().fillMaxWidth(filled).background(cardColorOf(percent), IdeShapes.Small))
         }
         Label("$percent% · ${tokensText(usage.used)}/${tokensText(usage.size)}", color = IdeColors.TextSecondary, fontSize = 11.sp)
     }
@@ -93,9 +92,9 @@ private fun costText(cost: Double, currency: String?): String {
 private fun CardLimit(limit: QuotaLimit, modifier: Modifier) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Label(limit.label, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-        Box(Modifier.fillMaxWidth().height(CARD_BAR_HEIGHT).background(IdeColors.Separator, RoundedCornerShape(3.dp))) {
+        Box(Modifier.fillMaxWidth().height(CARD_BAR_HEIGHT).background(IdeColors.Separator, IdeShapes.Small)) {
             val filled = limit.used / FULL.toFloat()
-            Box(Modifier.fillMaxHeight().fillMaxWidth(filled.coerceIn(0f, 1f)).background(cardColorOf(limit.used), RoundedCornerShape(3.dp)))
+            Box(Modifier.fillMaxHeight().fillMaxWidth(filled.coerceIn(0f, 1f)).background(cardColorOf(limit.used), IdeShapes.Small))
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Label(limit.text, color = IdeColors.TextSecondary, fontSize = 11.sp)

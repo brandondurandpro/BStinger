@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollbarAdapter
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.Composable
@@ -174,7 +173,7 @@ private fun thinking(conversation: Conversation): Boolean {
     }
 }
 
-internal val bodyStyle get() = TextStyle(color = IdeColors.Text, fontSize = 13.sp, lineHeight = 20.sp)
+internal val bodyStyle get() = TextStyle(fontFamily = IdeFonts.ui, color = IdeColors.Text, fontSize = 13.sp, lineHeight = 20.sp)
 
 @Composable
 private fun ItemView(agent: AgentState, conversation: Conversation, item: AgentItem) {
@@ -240,8 +239,8 @@ private fun Prompt(agent: AgentState, conversation: Conversation) {
         Column(
             width
                 .droppableFiles { files -> files.forEach { context.drop(it, workspaceRoot) } }
-                .background(IdeColors.Input, RoundedCornerShape(8.dp))
-                .border(1.dp, IdeColors.InputBorder, RoundedCornerShape(8.dp))
+                .background(IdeColors.Input, IdeShapes.ExtraLarge)
+                .border(1.dp, IdeColors.InputBorder, IdeShapes.ExtraLarge)
                 .padding(10.dp),
         ) {
             ContextChips(context, Modifier.fillMaxWidth().padding(bottom = 6.dp))

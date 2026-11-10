@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -85,7 +84,7 @@ internal fun MergeAction(
     selected: Boolean = false,
     onClick: () -> Unit,
 ) {
-    val shape = RoundedCornerShape(4.dp)
+    val shape = IdeShapes.Medium
     val filled = primary && enabled
     val background =
         when {
@@ -95,7 +94,7 @@ internal fun MergeAction(
         }
     val content =
         when {
-            filled -> Color.White
+            filled -> IdeColors.OnAccent
             !enabled -> IdeColors.LineNumber
             selected -> IdeColors.Text
             else -> IdeColors.TextSecondary

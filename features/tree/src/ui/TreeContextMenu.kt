@@ -1,8 +1,6 @@
 package org.example.kotlineditor.ui
 
 import androidx.compose.foundation.layout.height
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -23,7 +21,7 @@ internal fun TreeContextMenu(project: TreeHost, entry: FileEntry, offset: DpOffs
         onDismiss()
         block()
     }
-    DropdownMenu(
+    IdeDropdownMenu(
         expanded = true,
         onDismissRequest = onDismiss,
         offset = offset,
@@ -48,7 +46,7 @@ internal fun TreeContextMenu(project: TreeHost, entry: FileEntry, offset: DpOffs
 
 @Composable
 private fun MenuItem(text: String, tag: String, onClick: () -> Unit) {
-    DropdownMenuItem(
+    IdeMenuItem(
         text = { Text(text, fontSize = 13.sp) },
         onClick = onClick,
         modifier = Modifier.height(30.dp).testTag(tag),
