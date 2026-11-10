@@ -3,6 +3,7 @@ package org.example.kotlineditor.ui
 /** Semantics test tags of the Run tool window, shared with the end-to-end tests. */
 object RunTags {
     const val RUN = "run"
+    const val TOOL_BUTTON = "tool.run"
     const val SELECTOR = "run.selector"
     const val SELECTOR_MENU = "run.selector.menu"
     const val START = "run.start"

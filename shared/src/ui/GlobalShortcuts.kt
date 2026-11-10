@@ -7,6 +7,9 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
 import org.example.kotlineditor.model.HierarchyKind
+import org.example.kotlineditor.plugin.ActionContext
+import org.example.kotlineditor.plugin.ActionRegistry
+import org.example.kotlineditor.plugin.ActionScope
 import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.PopupKind
 import org.example.kotlineditor.state.ProjectState
@@ -29,7 +32,8 @@ import org.example.kotlineditor.state.withInsight
 private const val DOUBLE_SHIFT_MILLIS = 400L
 
 /** What IDE-wide shortcuts act on. */
-internal class IdeContext(val app: AppState, val project: ProjectState, val findFocus: FocusRequester) {
+internal class IdeContext(val app: AppState, override val project: ProjectState, val findFocus: FocusRequester) :
+    ActionContext {
     val editor get() = project.editor
 
     /** Focus target of the active pane's editor. */
@@ -171,12 +175,6 @@ internal val BUILT_IN_IDE_SHORTCUTS =
         bind(setOf(Key.DirectionRight), alt = true) { editor.selectNext() },
         bind(setOf(Key.One), alt = true) { project.toggleToolWindow(ToolWindow.Project) },
         bind(setOf(Key.Nine), alt = true) { project.toggleToolWindow(ToolWindow.Git) },
-        bind(setOf(Key.Four), alt = true) { project.toggleToolWindow(ToolWindow.Run) },
-        bind(setOf(Key.F10), shift = true) {
-            project.showToolWindow(ToolWindow.Run)
-            project.run.runSelected()
-        },
-        bind(setOf(Key.F2), ctrl = true) { project.run.stop() },
         bind(setOf(Key.F12), alt = true) { project.toggleToolWindow(ToolWindow.Terminal) },
         bind(setOf(Key.D), ctrl = true, shift = true, alt = true) {
             app.devtools = true
@@ -200,7 +198,7 @@ internal val BUILT_IN_IDE_SHORTCUTS =
 internal class GlobalShortcuts(
     private val context: IdeContext,
     private val ideOnly: Boolean = false,
-    private val actions: ActionRegistry = ActionRegistry.default,
+    private val actions: ActionRegistry = IdeRegistries.actions,
 ) {
     private val doubleShift = DoubleShift()
 

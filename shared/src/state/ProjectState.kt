@@ -25,6 +25,8 @@ import org.example.kotlineditor.model.GitFileStatus
 import org.example.kotlineditor.model.MergeHistory
 import org.example.kotlineditor.model.slashed
 import org.example.kotlineditor.syntax.treesitter.GrammarStore
+import org.example.kotlineditor.ui.IdeRegistries
+import org.example.kotlineditor.ui.RUN_SERVICE
 
 private val INDEXED_POPUPS = setOf(PopupKind.GotoFile, PopupKind.FindInFiles, PopupKind.GotoSymbol)
 private val DOCUMENT_POPUPS = setOf(PopupKind.GotoLine, PopupKind.FileStructure)
@@ -244,11 +246,18 @@ class ProjectState(
         )
     }
 
+    /** The state the features keep in the project, by the key they publish it under (see [service]). */
+    override fun <T : Any> service(key: ServiceKey<T>): T {
+        val found = if (key === RUN_SERVICE) run else null
+        @Suppress("UNCHECKED_CAST")
+        return checkNotNull(found as T?) { "No ${key.name} in this project" }
+    }
+
     /** Shows or hides a tool window (Alt+1, Alt+9, Alt+F12, Ctrl+Alt+Shift+D or its button in the left strip). */
-    fun toggleToolWindow(window: ToolWindow) {
+    override fun toggleToolWindow(window: ToolWindow) {
         toolWindows.toggle(window)
         if (window == ToolWindow.Terminal && toolWindows.isVisible(window)) terminal.ensureStarted()
-        if (window == ToolWindow.Run && toolWindows.isVisible(window)) run.ensureLoaded()
+        if (toolWindows.isVisible(window)) IdeRegistries.toolWindows.find(window)?.onShown(this)
         if (window == ToolWindow.Git && toolWindows.isVisible(window)) git.refreshStatus()
         if (window == ToolWindow.Branches && toolWindows.isVisible(window)) openHistory()
     }

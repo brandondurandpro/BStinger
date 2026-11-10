@@ -28,6 +28,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.example.kotlineditor.plugin.StripGroup
+import org.example.kotlineditor.plugin.ToolWindowContribution
+import org.example.kotlineditor.plugin.ToolWindowRegistry
 import org.example.kotlineditor.state.BUILT_IN_TOOL_WINDOWS
 import org.example.kotlineditor.state.Dock
 import org.example.kotlineditor.state.ProjectState
@@ -43,7 +46,7 @@ private val BUTTON_GAP = 4.dp
 internal fun ToolStrip(
     project: ProjectState?,
     devtools: Boolean,
-    registry: ToolWindowRegistry = ToolWindowRegistry.default,
+    registry: ToolWindowRegistry = IdeRegistries.toolWindows,
     top: @Composable ColumnScope.() -> Unit = {},
 ) {
     Column(
@@ -147,7 +150,7 @@ private fun StackedWindows(
 
 @Composable
 private fun ToolWindowContent(project: ProjectState, window: ToolWindow, drag: ToolWindowDrag, modifier: Modifier) {
-    val contribution = ToolWindowRegistry.default.find(window) ?: return
+    val contribution = IdeRegistries.toolWindows.find(window) ?: return
     contribution.content(project, drag, modifier)
 }
 
@@ -161,10 +164,18 @@ private fun builtIn(
 ): ToolWindowContribution {
     val found = BUILT_IN_TOOL_WINDOWS.firstOrNull { it.window == window }
     val defaults = checkNotNull(found) { "No defaults for $window" }
-    return ToolWindowContribution(defaults, tag, group, devtools, icon, content)
+    return ToolWindowContribution(
+        defaults = defaults,
+        tag = tag,
+        group = group,
+        devtools = devtools,
+        icon = icon,
+        // Every project of the IDE is a ProjectState.
+        content = { host, drag, modifier -> content(host as ProjectState, drag, modifier) },
+    )
 }
 
-/** The tool windows of the IDE itself, in the order of their buttons. */
+/** The tool windows of the IDE itself, in the order of their buttons; Run comes from its own feature. */
 internal fun builtInToolWindows(): List<ToolWindowContribution> =
     listOf(
         builtIn(
@@ -185,12 +196,6 @@ internal fun builtInToolWindows(): List<ToolWindowContribution> =
             AppTags.TOOL_BRANCHES,
             icon = { BranchIcon(color = IdeColors.Text) },
         ) { project, drag, modifier -> BranchesPanel(project, drag, modifier) },
-        builtIn(
-            ToolWindow.Run,
-            StripGroup.Bottom,
-            AppTags.TOOL_RUN,
-            icon = { Label("▶", color = IdeColors.Text, fontWeight = FontWeight.Bold) },
-        ) { project, drag, modifier -> RunPanel(project.run, project.toolWindows, drag, modifier) },
         builtIn(
             ToolWindow.Network,
             StripGroup.Bottom,

@@ -30,6 +30,10 @@ class KeyBinding<C>(
         return key in keys && modifiersMatch
     }
 
+    /** The same shortcut for another context, [convert]ed from it (a plugin's context seen as the IDE's own). */
+    fun <D> adapt(convert: (D) -> C): KeyBinding<D> =
+        KeyBinding(keys, ctrl, shift, alt) { held -> action(convert(this), held) }
+
     private fun Boolean?.orAny(held: Boolean) = this == null || this == held
 }
 

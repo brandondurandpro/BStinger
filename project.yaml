@@ -15,6 +15,7 @@ modules:
   - features/terminal
   - features/tree
   - lsp
+  - plugin-api
   - packaging
   - protocol
   - server
