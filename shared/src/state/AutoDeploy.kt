@@ -34,7 +34,13 @@ internal class AutoDeploy(private val deployments: DeploymentsState, private val
     private val everything = HashSet<String>()
 
     /** [paths] changed: queues them for each automatic deployment whose folders hold them. */
+    internal var received = 0
+    internal var batches = 0
+    internal val debug get() = "received=$received batches=$batches pending=${pending.mapValues { it.value.size }} jobs=${jobs.mapValues { it.value.isActive }}"
+
     fun changed(paths: List<String>) {
+        received += paths.size
+        batches++
         for (profile in deployments.profiles.filter { it.auto }) {
             val matching = paths.flatMap { filesOf(profile, it) }
             if (matching.isNotEmpty()) queue(profile.name, matching)

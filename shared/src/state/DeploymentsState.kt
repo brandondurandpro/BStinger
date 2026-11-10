@@ -143,6 +143,8 @@ class DeploymentsState(internal val project: ProjectState) {
     /** Files of the project changed on disk: the automatic deployments send those under their folders. */
     fun filesChanged(paths: List<String>) = auto.changed(paths)
 
+    internal val autoDebug get() = auto.debug
+
     /** The watch lost track of the changes (too many at once): the automatic deployments send all their folders. */
     fun changesLost() = auto.lostTrack()
 
