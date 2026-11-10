@@ -2,6 +2,7 @@ package org.example.kotlineditor.e2e
 
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
@@ -86,9 +87,34 @@ fun ComposeUiTest.awaitRunStatus(app: E2eApp, status: RunStatus) {
     }
 }
 
-/** The lines of output of the run shown. */
-fun E2eApp.runOutput(): List<String> =
+// The notice a JVM prints on its error output when JAVA_TOOL_OPTIONS is set, as on the CI: the first lines of the
+// output of every run of `emit`, before the program prints anything.
+private const val JAVA_NOTICE = "Picked up "
+
+private fun String.isJavaNotice(): Boolean = startsWith(JAVA_NOTICE)
+
+private fun E2eApp.allOutput(): List<String> =
     project.run.session
         ?.lines
         ?.toList()
         .orEmpty()
+
+/** The lines of output of the run shown, without the notices of the JVM. */
+fun E2eApp.runOutput(): List<String> = allOutput().filterNot { it.isJavaNotice() }
+
+/** How many notices of the JVM come before the output of the program in the run shown. */
+fun E2eApp.javaNotices(): Int = allOutput().count { it.isJavaNotice() }
+
+/** The line [index] of the output of the program (the notices of the JVM do not count), once it is shown. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.awaitOutputLine(app: E2eApp, index: Int): SemanticsNodeInteraction {
+    awaitCondition { app.runOutput().size > index }
+    return awaitTag(RunTags.line(app.javaNotices() + index))
+}
+
+/** The link [number] of the line [line] of the output of the program, once it is shown. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.awaitOutputLink(app: E2eApp, line: Int, number: Int = 0): SemanticsNodeInteraction {
+    awaitCondition { app.runOutput().size > line }
+    return awaitTag(RunTags.link(app.javaNotices() + line, number))
+}

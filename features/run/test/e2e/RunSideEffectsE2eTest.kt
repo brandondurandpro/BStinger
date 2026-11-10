@@ -46,7 +46,7 @@ class RunSideEffectsE2eTest {
                     .first { it.name == "Program" }
             app.project.run.run(program)
             awaitRunStatus(app, RunStatus.Failed)
-            awaitTag(RunTags.link(0, 0)).performClick()
+            awaitOutputLink(app, 0, 0).performClick()
             awaitTag(EditorTags.tab("src/main/kotlin/App.kt"))
             awaitEditorReady()
             before.assertUnchanged(project)

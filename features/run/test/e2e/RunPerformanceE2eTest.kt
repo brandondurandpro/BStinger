@@ -51,7 +51,9 @@ class RunPerformanceE2eTest {
             }
             val session = checkNotNull(app.project.run.session)
             assertEquals(KEPT_LINES, session.lines.size)
-            assertEquals(OUTPUT_LINES - KEPT_LINES, session.droppedLines)
+            // The notice of the JVM (one line, when JAVA_TOOL_OPTIONS is set) may be among the dropped lines.
+            val expectedDropped = OUTPUT_LINES - KEPT_LINES
+            assertTrue(session.droppedLines in expectedDropped..expectedDropped + 1, "dropped: ${session.droppedLines}")
             assertEquals("line $OUTPUT_LINES of the build output", session.lines.last())
             awaitTag(RunTags.DROPPED)
             assertTrue(composedRows("run.line:") in 1..MAX_COMPOSED_ROWS, "rows: ${composedRows("run.line:")}")

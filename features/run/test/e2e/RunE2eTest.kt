@@ -62,8 +62,8 @@ class RunE2eTest {
             onNodeWithTag(RunTags.SELECTOR).assertIsDisplayed()
             pressRun()
             awaitRunStatus(app, RunStatus.Succeeded)
-            awaitTag(RunTags.line(0)).assertTextEquals("hello from the run")
-            awaitTag(RunTags.line(1)).assertTextEquals("second line")
+            awaitOutputLine(app, 0).assertTextEquals("hello from the run")
+            awaitOutputLine(app, 1).assertTextEquals("second line")
             onNodeWithTag(RunTags.STATUS).assertTextEquals("Finished (exit code 0)")
             assertEquals(listOf("hello from the run", "second line"), app.runOutput())
         }
@@ -128,7 +128,7 @@ class RunE2eTest {
             openRunWindow()
             addConfiguration("Hang", emit("out.txt", mode = "hang"))
             pressRun()
-            awaitTag(RunTags.line(0)).assertTextEquals("started and waiting")
+            awaitOutputLine(app, 0).assertTextEquals("started and waiting")
             assertEquals(
                 RunStatus.Running,
                 app.project.run.session
@@ -252,7 +252,7 @@ class RunE2eTest {
             addConfiguration("Compile", emit("out.txt", exitCode = 1))
             pressRun()
             awaitRunStatus(app, RunStatus.Failed)
-            awaitTag(RunTags.link(0, 0)).performClick()
+            awaitOutputLink(app, 0, 0).performClick()
             awaitTag(EditorTags.tab("src/main/kotlin/App.kt"))
             awaitEditorReady()
             awaitCondition {
@@ -271,7 +271,7 @@ class RunE2eTest {
             addConfiguration("Stack", emit("out.txt", exitCode = 1))
             pressRun()
             awaitRunStatus(app, RunStatus.Failed)
-            awaitTag(RunTags.link(0, 0)).performClick()
+            awaitOutputLink(app, 0, 0).performClick()
             awaitTag(EditorTags.tab("src/test/kotlin/AppTest.kt"))
             awaitEditorReady()
             awaitCondition {
@@ -292,7 +292,7 @@ class RunE2eTest {
             pressRun()
             awaitRunStatus(app, RunStatus.Failed)
             val tabs = app.project.editor.activePane.tabs.size
-            awaitTag(RunTags.link(0, 0)).performClick()
+            awaitOutputLink(app, 0, 0).performClick()
             waitForIdle()
             assertEquals(tabs, app.project.editor.activePane.tabs.size)
         }

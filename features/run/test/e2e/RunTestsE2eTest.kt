@@ -135,7 +135,7 @@ class RunTestsE2eTest {
             pressRun()
             awaitRunStatus(app, RunStatus.Failed)
             awaitTag(RunTags.TAB_OUTPUT).performClick()
-            awaitTag(RunTags.line(0)).assertTextEquals("Started MathTest")
+            awaitOutputLine(app, 0).assertTextEquals("Started MathTest")
             onNodeWithTag(RunTags.TAB_TESTS).performClick()
             awaitTag(RunTags.SUMMARY)
         }

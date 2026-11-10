@@ -202,6 +202,8 @@ class ProjectState(
 
     // The file a path of some output names: an absolute path, a path from the project, or only a file name.
     private suspend fun locateOutputFile(path: String): FileEntry? {
+        val indexed = locateInProject(path)
+        if (indexed != null) return indexed
         val fromRoot = root.path.trimEnd('/', '\\') + "/" + path.removePrefix("./")
         val exact =
             listOf(
@@ -209,6 +211,18 @@ class ProjectState(
                 fromRoot,
             ).firstNotNullOfOrNull { runCatching { services.fileSystem.fileAt(it) }.getOrNull() }
         return exact ?: locateByName(path)
+    }
+
+    // An absolute path inside the project, however it is written (`C:/p/A.kt` or `C:\p\A.kt`, any case of the drive
+    // letter on Windows): the entry of the project index, so that the editor opens it under its path in the project.
+    private suspend fun locateInProject(path: String): FileEntry? {
+        val rootPrefix = slashed(root.path).trimEnd('/') + "/"
+        val written = slashed(path, root.path)
+        val caseSensitive = root.path.startsWith('/')
+        if (!written.startsWith(rootPrefix, ignoreCase = !caseSensitive)) return null
+        fileIndex.ensureLoaded()
+        val files = snapshotFlow { fileIndex.files }.filterNotNull().first()
+        return files.firstOrNull { slashed(it.path, root.path).equals(written, ignoreCase = !caseSensitive) }
     }
 
     private suspend fun locateByName(path: String): FileEntry? {
