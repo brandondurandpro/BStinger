@@ -12,13 +12,13 @@ import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.test.withKeyDown
 import org.example.kotlineditor.plugin.ActionContext
-import org.example.kotlineditor.plugin.ActionScope
+import org.example.kotlineditor.plugin.IdePlugin
 import org.example.kotlineditor.plugin.StripGroup
 import org.example.kotlineditor.plugin.ToolWindowContribution
 import org.example.kotlineditor.state.Dock
 import org.example.kotlineditor.state.ToolWindow
 import org.example.kotlineditor.state.ToolWindowDefaults
-import org.example.kotlineditor.ui.IdeRegistries
+import org.example.kotlineditor.ui.loadPlugin
 import org.example.kotlineditor.ui.TreeTags
 import org.example.kotlineditor.ui.binding
 import kotlin.test.AfterTest
@@ -51,13 +51,15 @@ class PluginContributionsE2eTest {
     @Test
     fun `a tool window registered by a plugin gets a button and a panel, and leaves with the plugin`() =
         runComposeUiTest {
-            registrations += IdeRegistries.toolWindows.register(listOf(todoWindow()))
+            val todo = IdePlugin("todo", toolWindows = listOf(todoWindow()))
+            val registration = loadPlugin(todo)
+            registrations += registration
             launchWithProject(project)
 
             awaitTag(BUTTON).performClick()
             awaitTag(PANEL)
 
-            registrations.removeLast().close()
+            registration.close()
             awaitNoTag(BUTTON)
             awaitNoTag(PANEL)
         }
@@ -72,7 +74,7 @@ class PluginContributionsE2eTest {
                     ctrl = true,
                     alt = true,
                 ) { runs++ }
-            val registration = IdeRegistries.actions.register(ActionScope.Ide, listOf(shortcut))
+            val registration = loadPlugin(IdePlugin("keys", shortcuts = listOf(shortcut)))
             registrations += registration
             launchWithProject(project)
             onNodeWithTag(TreeTags.TREE).performClick()

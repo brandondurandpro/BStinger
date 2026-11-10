@@ -3,6 +3,7 @@ package org.example.kotlineditor.ui
 import org.example.kotlineditor.plugin.ActionContext
 import org.example.kotlineditor.plugin.ActionRegistry
 import org.example.kotlineditor.plugin.ActionScope
+import org.example.kotlineditor.plugin.IdePlugin
 import org.example.kotlineditor.plugin.ToolWindowContribution
 import org.example.kotlineditor.plugin.ToolWindowRegistry
 import org.example.kotlineditor.state.ToolWindow
@@ -48,3 +49,16 @@ private fun allToolWindows(): List<ToolWindowContribution> {
 }
 
 private fun bundledShortcuts() = runShortcuts() + gitShortcuts() + terminalShortcuts()
+
+/**
+ * Loads [plugin] into the running IDE: its tool windows and shortcuts appear at once. Closing the result unloads it,
+ * and takes everything it contributed away.
+ */
+fun loadPlugin(plugin: IdePlugin): AutoCloseable {
+    val windows = IdeRegistries.toolWindows.register(plugin.toolWindows)
+    val shortcuts = IdeRegistries.actions.register(ActionScope.Ide, plugin.shortcuts)
+    return AutoCloseable {
+        shortcuts.close()
+        windows.close()
+    }
+}

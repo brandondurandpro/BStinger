@@ -1,0 +1,34 @@
+class org.example.kotlineditor.plugin.ActionContext
+  getProject(): ProjectHost
+class org.example.kotlineditor.plugin.ActionRegistry
+  <init>()
+  bindings(ActionScope): List
+  register(ActionScope,List): AutoCloseable
+class org.example.kotlineditor.plugin.ActionScope
+  getEntries(): EnumEntries
+  valueOf(String): ActionScope
+  values(): ActionScope[]
+class org.example.kotlineditor.plugin.IdePlugin
+  <init>(String,List,List)
+  getId(): String
+  getShortcuts(): List
+  getToolWindows(): List
+class org.example.kotlineditor.plugin.StripGroup
+  getEntries(): EnumEntries
+  valueOf(String): StripGroup
+  values(): StripGroup[]
+class org.example.kotlineditor.plugin.ToolWindowContribution
+  <init>(ToolWindowDefaults,String,StripGroup,boolean,Function1,Function2,Function5)
+  getContent(): Function5
+  getDefaults(): ToolWindowDefaults
+  getDevtools(): boolean
+  getGroup(): StripGroup
+  getIcon(): Function2
+  getOnShown(): Function1
+  getTag(): String
+  getWindow(): ToolWindow
+class org.example.kotlineditor.plugin.ToolWindowRegistry
+  <init>()
+  find(ToolWindow): ToolWindowContribution
+  getContributions(): List
+  register(List): AutoCloseable

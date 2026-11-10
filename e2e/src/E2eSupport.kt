@@ -24,6 +24,8 @@ import kotlinx.coroutines.runBlocking
 import org.example.kotlineditor.App
 import org.example.kotlineditor.acp.AgentSettings
 import org.example.kotlineditor.lsp.LanguageServerSettings
+import org.example.kotlineditor.plugin.IdePlugin
+import org.example.kotlineditor.ui.loadPlugin
 import org.example.kotlineditor.model.AppServices
 import org.example.kotlineditor.remote.JvmRemoteFactory
 import org.example.kotlineditor.rpc.ClientOptions
@@ -221,8 +223,11 @@ fun ComposeUiTest.launchApp(
     telemetry: TelemetryCapture? = null,
     agents: AgentSettings? = null,
     ripgrep: RipgrepSettings? = null,
+    /** Plugins loaded before the UI starts, unloaded when the test ends. */
+    plugins: List<IdePlugin> = emptyList(),
 ): E2eApp {
     TextClipboard.useSystem = false
+    val loaded = plugins.map(::loadPlugin)
     val data = Files.createTempDirectory("kotlin-editor-server").toFile()
     val process = ServerProcess(data, languageServers, telemetry?.serverHook ?: InMemoryHook(), agents, ripgrep)
     val token = process.server.token
@@ -253,6 +258,7 @@ fun ComposeUiTest.launchApp(
         DisposableEffect(Unit) {
             onDispose {
                 created?.dispose()
+                loaded.forEach { it.close() }
                 ClientTelemetry.switchTo(Telemetry.Disabled)
                 client.close()
                 proxy?.close()
@@ -362,6 +368,7 @@ fun ComposeUiTest.launchWithProject(
     telemetry: TelemetryCapture? = null,
     agents: AgentSettings? = null,
     ripgrep: RipgrepSettings? = null,
+    plugins: List<IdePlugin> = emptyList(),
 ): E2eApp {
     val app =
         launchApp(
@@ -372,6 +379,7 @@ fun ComposeUiTest.launchWithProject(
             telemetry = telemetry,
             agents = agents,
             ripgrep = ripgrep,
+            plugins = plugins,
         )
     openProjectDirectoryFromWelcome(project.path)
     awaitTag(TreeTags.treeRow("src"))
