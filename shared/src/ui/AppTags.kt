@@ -112,6 +112,8 @@ object AppTags {
     fun settingToggle(name: String) = "settings.toggle:$name"
 
     /** The button of an inlay hints mode (`Inline`) in the Settings dialog. */
+    fun settingsTheme(name: String) = "settings.theme:$name"
+
     fun settingsInlayHints(mode: String) = "settings.inlayHints:$mode"
 
     /** A language server offered in the Settings dialog, by its id (`phpactor`). */

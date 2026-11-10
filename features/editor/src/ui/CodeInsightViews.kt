@@ -73,8 +73,8 @@ private val HOVER_MAX_HEIGHT = 420.dp
 internal val LIST_WIDTH = 640.dp
 internal val LIST_ROW_HEIGHT = 22.dp
 internal const val LIST_ROWS = 12
-internal val POPUP_LABEL_STYLE = TextStyle(color = IdeColors.Text, fontSize = 13.sp)
-internal val POPUP_SECONDARY_STYLE = TextStyle(color = IdeColors.TextSecondary, fontSize = 12.sp)
+internal val POPUP_LABEL_STYLE get() = TextStyle(color = IdeColors.Text, fontSize = 13.sp)
+internal val POPUP_SECONDARY_STYLE get() = TextStyle(color = IdeColors.TextSecondary, fontSize = 12.sp)
 
 /** Where an overlay is placed relative to its anchor's line. */
 internal enum class Placement { Below, Above }

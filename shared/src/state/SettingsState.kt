@@ -19,6 +19,7 @@ val SERVER_LANGUAGES = listOf("php", "typescript", "vue", "tailwind")
 
 /** The categories of the Settings dialog, in the order of its list. */
 enum class SettingsCategory(val title: String) {
+    Appearance("Appearance"),
     Editor("Editor"),
     LanguageServers("Language Servers"),
     ProjectView("Project View"),
@@ -28,6 +29,12 @@ enum class SettingsCategory(val title: String) {
 
 /** Every setting of the Settings dialog: its category, what it is called, and other words a search finds it by. */
 enum class Setting(val category: SettingsCategory, val title: String, val description: String, keywords: String) {
+    Theme(
+        SettingsCategory.Appearance,
+        "Theme",
+        "The colors of the IDE and of the code: dark, light, or the one of the operating system.",
+        "color scheme dark light night day mode appearance",
+    ),
     FontSize(
         SettingsCategory.Editor,
         "Font size",

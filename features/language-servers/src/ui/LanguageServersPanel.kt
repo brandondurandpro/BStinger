@@ -47,8 +47,8 @@ import org.example.kotlineditor.state.LanguageServersState
 import org.example.kotlineditor.state.ToolWindow
 import org.example.kotlineditor.state.memoryText
 
-private val Warning = Color(0xFFE0A458)
-private val Good = Color(0xFF73BD79)
+private val Warning get() = IdeColors.GitBehind
+private val Good get() = IdeColors.GitAdded
 private val LEAKS = setOf("SuspectedLeak", "OverLimit")
 
 /** One status bar item per language server of the project, then the IDE server's own memory. */

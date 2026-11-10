@@ -1,13 +1,17 @@
 package org.example.kotlineditor.unit
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.sp
 import org.example.kotlineditor.model.GitFileStatus
 import org.example.kotlineditor.model.IconShape
 import org.example.kotlineditor.syntax.SyntaxColor
+import org.example.kotlineditor.ui.DarkPalette
 import org.example.kotlineditor.ui.IdeColors
+import org.example.kotlineditor.ui.LightPalette
+import org.example.kotlineditor.ui.ThemeChoice
 import org.example.kotlineditor.ui.badgeStyle
 import org.example.kotlineditor.ui.fileBadge
 import org.example.kotlineditor.ui.gitColor
@@ -15,8 +19,10 @@ import org.example.kotlineditor.ui.plural
 import org.example.kotlineditor.ui.syntaxStyle
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class ThemeTest {
     @Test
@@ -26,6 +32,41 @@ class ThemeTest {
         }
         assertEquals(FontStyle.Italic, syntaxStyle(SyntaxColor.Comment).fontStyle)
         assertEquals(TextDecoration.Underline, syntaxStyle(SyntaxColor.Link).textDecoration)
+    }
+
+    @Test
+    fun `a saved theme is read by name, an unknown or missing one is dark`() {
+        assertEquals(ThemeChoice.Light, ThemeChoice.fromSaved("Light"))
+        assertEquals(ThemeChoice.System, ThemeChoice.fromSaved("System"))
+        assertEquals(ThemeChoice.Dark, ThemeChoice.fromSaved("light"))
+        assertEquals(ThemeChoice.Dark, ThemeChoice.fromSaved(null))
+    }
+
+    @Test
+    fun `the system theme follows the operating system, the others do not`() {
+        assertEquals(DarkPalette, ThemeChoice.System.paletteFor(systemDark = true))
+        assertEquals(LightPalette, ThemeChoice.System.paletteFor(systemDark = false))
+        assertEquals(DarkPalette, ThemeChoice.Dark.paletteFor(systemDark = false))
+        assertEquals(LightPalette, ThemeChoice.Light.paletteFor(systemDark = true))
+    }
+
+    @Test
+    fun `the light palette is light and readable, the dark one is dark`() {
+        assertTrue(DarkPalette.dark)
+        assertFalse(LightPalette.dark)
+        assertTrue(LightPalette.editor.luminance() > 0.9f)
+        assertTrue(DarkPalette.editor.luminance() < 0.1f)
+        assertTrue(contrast(LightPalette.code, LightPalette.editor) >= 7f)
+        assertTrue(contrast(LightPalette.text, LightPalette.panel) >= 7f)
+        assertTrue(contrast(LightPalette.comment, LightPalette.editor) >= 3f)
+        assertEquals(DarkPalette.bracketDepths.size, LightPalette.bracketDepths.size)
+    }
+
+    // WCAG contrast ratio of two colors.
+    private fun contrast(a: Color, b: Color): Float {
+        val first = a.luminance() + 0.05f
+        val second = b.luminance() + 0.05f
+        return maxOf(first, second) / minOf(first, second)
     }
 
     @Test

@@ -194,6 +194,10 @@ private fun SettingRow(app: AppState, settings: SettingsState, setting: Setting,
 @Composable
 private fun SettingControl(app: AppState, settings: SettingsState, setting: Setting) {
     when (setting) {
+        Setting.Theme -> {
+            ThemeControl(app)
+        }
+
         Setting.FontSize -> {
             FontSizeControl(app)
         }

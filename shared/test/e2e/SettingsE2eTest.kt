@@ -1,5 +1,6 @@
 package org.example.kotlineditor.e2e
 
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
@@ -8,6 +9,7 @@ import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertTextEquals
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
@@ -21,9 +23,15 @@ import org.example.kotlineditor.state.InlayHintsMode
 import org.example.kotlineditor.state.PreferenceKeys
 import org.example.kotlineditor.state.Setting
 import org.example.kotlineditor.state.SettingsCategory
+import org.example.kotlineditor.syntax.SyntaxColor
 import org.example.kotlineditor.ui.AgentTags
 import org.example.kotlineditor.ui.AppTags
+import org.example.kotlineditor.ui.DarkPalette
+import org.example.kotlineditor.ui.IdeColors
 import org.example.kotlineditor.ui.LanguageServerTags
+import org.example.kotlineditor.ui.LightPalette
+import org.example.kotlineditor.ui.ThemeChoice
+import org.example.kotlineditor.ui.syntaxStyle
 import java.nio.file.Files
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -147,6 +155,66 @@ class SettingsE2eTest {
             awaitTag(AppTags.SETTINGS_FONT_RESET).performClick()
             awaitCondition { app.state.settings.editorFontSize == 13f }
         }
+    }
+
+    @Test
+    fun `the theme is dark at first, then the one chosen, repainted at once and kept for the next session`() {
+        runComposeUiTest {
+            val app = launchWithProject(project, preferences())
+            openSettingsFromMenu()
+            category(SettingsCategory.Appearance)
+            onNodeWithTag(AppTags.settingsTheme(ThemeChoice.Dark.name)).assertIsSelected()
+            assertEquals(DarkPalette.panel, dialogColor())
+            onNodeWithTag(AppTags.settingsTheme(ThemeChoice.Light.name)).performClick()
+            onNodeWithTag(AppTags.settingsTheme(ThemeChoice.Light.name)).assertIsSelected()
+            awaitCondition { dialogColor() == LightPalette.panel }
+            assertEquals(ThemeChoice.Light, app.state.settings.theme)
+            assertEquals(LightPalette.editor, IdeColors.Editor)
+            awaitCondition { preferences().load()[PreferenceKeys.THEME] == "Light" }
+        }
+        runComposeUiTest {
+            val app = launchApp(preferences = preferences())
+            assertEquals(ThemeChoice.Light, app.state.settings.theme)
+            assertEquals(LightPalette.panel, IdeColors.Panel)
+            onNodeWithTag(AppTags.WELCOME_SETTINGS).performClick()
+            awaitTag(AppTags.SETTINGS)
+            category(SettingsCategory.Appearance)
+            onNodeWithTag(AppTags.settingsTheme(ThemeChoice.Light.name)).assertIsSelected()
+            onNodeWithTag(AppTags.settingsTheme(ThemeChoice.Dark.name)).performClick()
+            awaitCondition { dialogColor() == DarkPalette.panel }
+            awaitCondition { preferences().load()[PreferenceKeys.THEME] == "Dark" }
+        }
+    }
+
+    @Test
+    fun `the code is recolored by the theme, in the editor too`() =
+        runComposeUiTest {
+            val app = launchWithProject(project)
+            openFromTree("README.md")
+            assertEquals(DarkPalette.comment, syntaxStyle(SyntaxColor.Comment).color)
+            runOnUiThread { app.state.settings.theme = ThemeChoice.Light }
+            awaitCondition { syntaxStyle(SyntaxColor.Comment).color == LightPalette.comment }
+            awaitCondition { IdeColors.Keyword == LightPalette.keyword }
+            runOnUiThread { app.state.settings.theme = ThemeChoice.Dark }
+            awaitCondition { syntaxStyle(SyntaxColor.Comment).color == DarkPalette.comment }
+        }
+
+    @Test
+    fun `a theme name nobody knows reads as dark, and the theme can be searched`() =
+        runComposeUiTest {
+            val saved = FilePreferenceStore(dir.resolve("preferences.properties"))
+            saved.save(mapOf(PreferenceKeys.THEME to "Solarized"))
+            val app = launchWithProject(project, preferences())
+            assertEquals(ThemeChoice.Dark, app.state.settings.theme)
+            openSettingsFromMenu()
+            onNodeWithTag(AppTags.SETTINGS_SEARCH).performTextInput("dark")
+            awaitTag(AppTags.setting(Setting.Theme.name))
+        }
+
+    // The color of the top of the dialog, which is the panel color.
+    private fun ComposeUiTest.dialogColor(): androidx.compose.ui.graphics.Color {
+        val image = onNodeWithTag(AppTags.SETTINGS).captureToImage()
+        return image.toPixelMap()[image.width / 2, 2]
     }
 
     @Test

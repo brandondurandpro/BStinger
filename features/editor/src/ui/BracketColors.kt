@@ -25,7 +25,7 @@ internal fun withBracketColors(
         }
         if (counted && c in CLOSING_BRACKETS) {
             depth--
-            val style = if (depth < 0) UNMATCHED_BRACKET_STYLE else bracketStyle(depth)
+            val style = if (depth < 0) currentBracketStyles().unmatched else bracketStyle(depth)
             builder.addStyle(style, column, column + 1)
             depth = maxOf(depth, 0)
         }
@@ -46,12 +46,31 @@ private fun quotedColumns(length: Int, spans: LineSpans, columns: IntArray?): Bo
     return quoted
 }
 
-private fun bracketStyle(depth: Int): SpanStyle = BRACKET_STYLES[depth % BRACKET_STYLES.size]
+private fun bracketStyle(depth: Int): SpanStyle {
+    val styles = currentBracketStyles().depths
+    return styles[depth % styles.size]
+}
 
 private const val OPENING_BRACKETS = "([{"
 private const val CLOSING_BRACKETS = ")]}"
 private const val BRACKETS = OPENING_BRACKETS + CLOSING_BRACKETS
-private val BRACKET_STYLES = IdeColors.BracketDepths.map { SpanStyle(color = it) }
-private val UNMATCHED_BRACKET_STYLE = SpanStyle(color = IdeColors.BracketUnmatched)
+
+// The styles of the palette last used, built again when the theme changes.
+private class BracketStyles(val palette: IdePalette) {
+    val depths = palette.bracketDepths.map { SpanStyle(color = it) }
+    val unmatched = SpanStyle(color = palette.bracketUnmatched)
+}
+
+private var bracketStyles: BracketStyles? = null
+
+private fun currentBracketStyles(): BracketStyles {
+    val palette = IdeColors.palette
+    val known = bracketStyles
+    if (known != null && known.palette === palette) return known
+    val built = BracketStyles(palette)
+    bracketStyles = built
+    return built
+}
+
 private val QUOTED_STYLES =
     setOf(SyntaxColor.Comment.ordinal, SyntaxColor.StringLiteral.ordinal, SyntaxColor.StringEscape.ordinal)

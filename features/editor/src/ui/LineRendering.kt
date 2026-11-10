@@ -121,7 +121,7 @@ private fun withInlays(text: AnnotatedString, line: String, inlays: LineInlays?)
     }
 }
 
-private val INLAY_STYLE = SpanStyle(color = IdeColors.InlayHint, background = IdeColors.InlayHintBackground)
+private val INLAY_STYLE get() = SpanStyle(color = IdeColors.InlayHint, background = IdeColors.InlayHintBackground)
 
 // [text] with the colors of [spans]; [columns] maps their offsets to the columns of [text] (`null`: the same).
 private fun styled(text: String, spans: LineSpans, columns: IntArray?): AnnotatedString {
