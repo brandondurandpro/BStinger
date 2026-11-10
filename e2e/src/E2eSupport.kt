@@ -35,6 +35,7 @@ import org.example.kotlineditor.server.LocalServices
 import org.example.kotlineditor.server.ServerTelemetry
 import org.example.kotlineditor.server.ripgrep.RipgrepSettings
 import org.example.kotlineditor.state.AppState
+import org.example.kotlineditor.state.ClientPlugins
 import org.example.kotlineditor.state.InMemoryPreferenceStore
 import org.example.kotlineditor.state.PreferenceStore
 import org.example.kotlineditor.state.ProjectState
@@ -51,6 +52,7 @@ import org.example.kotlineditor.ui.RemoteTags
 import org.example.kotlineditor.ui.TextClipboard
 import org.example.kotlineditor.ui.TreeTags
 import org.example.kotlineditor.ui.loadPlugin
+import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
@@ -197,6 +199,8 @@ class E2eApp(
     val telemetry: TelemetryCapture?,
     /** What the UI declared and mirrored to the language servers of the app's own (local) server. */
     val localLanguageServers: LanguageServersRecorder,
+    /** The installed plugins of an app launched with a `pluginsDirectory`. */
+    val installedPlugins: ClientPlugins? = null,
 ) {
     val server: EditorServer get() = process.server
 
@@ -225,9 +229,17 @@ fun ComposeUiTest.launchApp(
     ripgrep: RipgrepSettings? = null,
     /** Plugins loaded before the UI starts, unloaded when the test ends. */
     plugins: List<IdePlugin> = emptyList(),
+    /** A folder of installed plugins (jars), loaded before the UI starts and unloaded when the test ends. */
+    pluginsDirectory: File? = null,
 ): E2eApp {
     TextClipboard.useSystem = false
     val loaded = plugins.map(::loadPlugin)
+    val installed =
+        pluginsDirectory?.let { directory ->
+            val plugins = ClientPlugins(directory, beforeCollect = { waitForIdle() })
+            plugins.start()
+            plugins
+        }
     val data = Files.createTempDirectory("kotlin-editor-server").toFile()
     val process = ServerProcess(data, languageServers, telemetry?.serverHook ?: InMemoryHook(), agents, ripgrep)
     val token = process.server.token
@@ -258,6 +270,7 @@ fun ComposeUiTest.launchApp(
         DisposableEffect(Unit) {
             onDispose {
                 created?.dispose()
+                installed?.stop()
                 loaded.forEach { it.close() }
                 ClientTelemetry.switchTo(Telemetry.Disabled)
                 client.close()
@@ -278,6 +291,7 @@ fun ComposeUiTest.launchApp(
         terminalInput,
         telemetry,
         languageServerCalls,
+        installed,
     )
 }
 
@@ -369,6 +383,7 @@ fun ComposeUiTest.launchWithProject(
     agents: AgentSettings? = null,
     ripgrep: RipgrepSettings? = null,
     plugins: List<IdePlugin> = emptyList(),
+    pluginsDirectory: File? = null,
 ): E2eApp {
     val app =
         launchApp(
@@ -380,6 +395,7 @@ fun ComposeUiTest.launchWithProject(
             agents = agents,
             ripgrep = ripgrep,
             plugins = plugins,
+            pluginsDirectory = pluginsDirectory,
         )
     openProjectDirectoryFromWelcome(project.path)
     awaitTag(TreeTags.treeRow("src"))

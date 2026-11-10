@@ -2,6 +2,7 @@ product:
   type: jvm/lib
 
 dependencies:
+  - //plugin-host: exported
   - //features/agent: exported
   - //features/editor: exported
   - //features/git: exported

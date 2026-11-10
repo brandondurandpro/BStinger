@@ -66,7 +66,15 @@ class LoadResult(
  * Loads plugins from folders `<id>/` holding `plugin.yaml` and `client.jar`, each in a class loader of its own, and
  * unloads them without restarting. [install] puts what a plugin contributed into the IDE and returns what removes it.
  */
-class PluginHost(private val install: (IdePlugin) -> AutoCloseable) {
+class PluginHost(
+    /** Puts a plugin's contributions into the IDE; the result removes them. */
+    private val install: (IdePlugin) -> AutoCloseable,
+    /**
+     * Called before each attempt to collect an unloaded class loader: the UI still shows the removed contributions
+     * until it recomposes, and holds their code until then. A UI under test advances its clock here.
+     */
+    private val beforeCollect: () -> Unit = {},
+) {
     private val running = linkedMapOf<String, LoadedPlugin>()
 
     /** The ids of the running plugins, in load order. */
@@ -161,6 +169,7 @@ class PluginHost(private val install: (IdePlugin) -> AutoCloseable) {
     // Collection is not immediate: ask for it a few times before concluding that something holds the class loader.
     private fun collected(reference: WeakReference<PluginClassLoader>): Boolean {
         repeat(COLLECTION_ATTEMPTS) {
+            beforeCollect()
             System.gc()
             if (reference.get() == null) return true
             Thread.sleep(COLLECTION_PAUSE_MILLIS)
