@@ -27,12 +27,12 @@ class org.example.kotlineditor.plugin.StripGroup
   valueOf(String): StripGroup
   values(): StripGroup[]
 class org.example.kotlineditor.plugin.ToolWindowContribution
-  <init>(ToolWindowDefaults,String,StripGroup,boolean,Function1,Function2,Function5)
+  <init>(ToolWindowDefaults,String,StripGroup,boolean,Function1,LucideIcon,Function5)
   getContent(): Function5
   getDefaults(): ToolWindowDefaults
   getDevtools(): boolean
   getGroup(): StripGroup
-  getIcon(): Function2
+  getIcon(): LucideIcon
   getOnShown(): Function1
   getTag(): String
   getWindow(): ToolWindow
