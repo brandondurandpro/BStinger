@@ -1,6 +1,7 @@
 package org.example.kotlineditor.state
 
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.example.kotlineditor.model.DeployDestination
@@ -29,23 +30,15 @@ private const val GIT = ".git"
 internal class AutoDeploy(private val deployments: DeploymentsState, private val project: ProjectState) {
     private val pending = HashMap<String, MutableSet<PendingFile>>()
     private val jobs = HashMap<String, Job>()
+    private val inFlight = HashMap<String, Job?>()
     private val firstQueued = HashMap<String, Long>()
     private val retries = HashMap<String, Int>()
     private val everything = HashSet<String>()
 
     /** [paths] changed: queues them for each automatic deployment whose folders hold them. */
-    internal var received = 0
-    internal var batches = 0
-    internal var matched = 0
-    internal var sent = ""
-    internal val debug get() = "received=$received matched=$matched sent=[$sent] batches=$batches pending=${pending.mapValues { it.value.size }} jobs=${jobs.mapValues { it.value.isActive }}"
-
     fun changed(paths: List<String>) {
-        received += paths.size
-        batches++
         for (profile in deployments.profiles.filter { it.auto }) {
             val matching = paths.flatMap { filesOf(profile, it) }
-            matched += matching.size
             if (matching.isNotEmpty()) queue(profile.name, matching)
         }
     }
@@ -82,8 +75,23 @@ internal class AutoDeploy(private val deployments: DeploymentsState, private val
             project.scope.launch {
                 delay(AUTO_DELAY_MS)
                 firstQueued.remove(name)
-                flush(name)
+                flushAfterPrevious(name)
             }
+    }
+
+    // A run that has started is never cancelled by the changes that follow (it took its files off the queue): the
+    // next run waits for it, and goes on with what came meanwhile.
+    private suspend fun flushAfterPrevious(name: String) {
+        val current = currentCoroutineContext()[Job]
+        jobs.remove(name)
+        val previous = inFlight[name]
+        inFlight[name] = current
+        previous?.join()
+        try {
+            flush(name)
+        } finally {
+            if (inFlight[name] === current) inFlight.remove(name)
+        }
     }
 
     private suspend fun flush(name: String) {
@@ -111,7 +119,6 @@ internal class AutoDeploy(private val deployments: DeploymentsState, private val
         val fs = project.services.fileSystem
         val items = files.mapNotNull { file -> existingEntry(fs, file.path)?.let { DeployItem(it, file.target) } }
         val destination = DeployDestination.parse(profile.destination)
-        sent += "${files.size}>${items.size} "
         if (items.isNotEmpty() && destination != null) {
             deployments.deploy(profile, items, destination, true)
             retryIfFailed(profile.name, files)

@@ -72,7 +72,7 @@ class DeploymentsPerformanceE2eTest {
                     awaitCondition(timeout = 30_000) { last.exists() }
                 } catch (e: androidx.compose.ui.test.ComposeTimeoutException) {
                     val copied = Files.walk(target).use { it.filter(Files::isRegularFile).count() }
-                    error("$copied of $FILES files copied, status ${app.project.deployments.statuses} ${app.project.deployments.autoDebug}: ${e.message}")
+                    error("$copied of $FILES files copied, status ${app.project.deployments.statuses}: ${e.message}")
                 }
                 renderFrame()
             }
