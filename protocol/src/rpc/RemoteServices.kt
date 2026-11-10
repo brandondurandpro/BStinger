@@ -26,6 +26,8 @@ import org.example.kotlineditor.model.GitClient
 import org.example.kotlineditor.model.GitCommit
 import org.example.kotlineditor.model.GitCommitDetails
 import org.example.kotlineditor.model.GitFileStatus
+import org.example.kotlineditor.model.MergeHistory
+import org.example.kotlineditor.model.MergeSides
 import org.example.kotlineditor.model.ProjectFileSystem
 import org.example.kotlineditor.model.ProjectRunner
 import org.example.kotlineditor.model.ProjectSearch
@@ -241,6 +243,32 @@ class RemoteGit(private val client: RpcClient) :
 
     override suspend fun branches(root: String): List<String> =
         client.call(Method.GitBranches) { put(ROOT, root) }.strings()
+
+    override suspend fun mergeSides(root: String, path: String): MergeSides {
+        val sides =
+            client.call(Method.GitMergeSides) {
+                put(ROOT, root)
+                put(PATH, path)
+            }
+        return sides.mergeSides()
+    }
+
+    override suspend fun mergeHistory(root: String, path: String): MergeHistory {
+        val history =
+            client.call(Method.GitMergeHistory) {
+                put(ROOT, root)
+                put(PATH, path)
+            }
+        return history.mergeHistory()
+    }
+
+    override suspend fun resolveConflict(root: String, path: String, result: FileContent.Text) {
+        client.call(Method.GitResolveConflict) {
+            put(ROOT, root)
+            put(PATH, path)
+            put("result", result.toJson())
+        }
+    }
 
     override suspend fun checkout(root: String, branch: String) {
         client.call(Method.GitCheckout) {

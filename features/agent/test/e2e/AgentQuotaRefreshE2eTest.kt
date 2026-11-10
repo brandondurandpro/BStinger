@@ -6,6 +6,7 @@ import org.example.kotlineditor.ui.AgentTags
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.minutes
 
 /** Once the quota is known, the bars follow it after every turn, and the question asked for it stays out of sight. */
 @OptIn(ExperimentalTestApi::class)
@@ -19,7 +20,7 @@ class AgentQuotaRefreshE2eTest {
 
     @Test
     fun `the quota is read again after a turn without showing the question`() =
-        runComposeUiTest {
+        runComposeUiTest(testTimeout = 3.minutes) {
             val app = launchWithProject(project, agentPreferences())
             val conversation = startConversation(app)
             // The list folded, the conversation is wide enough for the card of the quota.
@@ -45,7 +46,7 @@ class AgentQuotaRefreshE2eTest {
 
     @Test
     fun `the silent question never shows in the conversation, even while it is asked`() =
-        runComposeUiTest {
+        runComposeUiTest(testTimeout = 3.minutes) {
             val app = launchWithProject(project, agentPreferences())
             val conversation = startConversation(app)
             sendPrompt("usage")

@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import org.example.kotlineditor.model.FileContent
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.GitBranchInfo
 import org.example.kotlineditor.model.GitClient
@@ -340,6 +341,21 @@ class GitState(
                 val noun = if (paths.size == 1) "file" else "files"
                 "Reverted ${paths.size} $noun"
             }
+        }
+    }
+
+    /**
+     * Resolves the conflict of [path] with [result] (the merge tab's Apply): the file is written and staged, so that
+     * Git no longer lists it as unmerged. [onDone] tells whether it worked.
+     */
+    fun resolveConflict(path: String, result: FileContent.Text, onDone: (Boolean) -> Unit = {}) {
+        scope.launch {
+            val resolved =
+                gitOperation(reloadFiles = true) {
+                    git.resolveConflict(root.path, path, result)
+                    "Resolved $path"
+                }
+            onDone(resolved)
         }
     }
 

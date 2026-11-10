@@ -106,6 +106,8 @@ class IdePalette(
     val diffAddedBackground: Color,
     val diffRemovedBackground: Color,
     val diffHunkBackground: Color,
+    val mergeConflictBackground: Color,
+    val mergeResolvedBackground: Color,
     val kindClass: Color,
     val kindInterface: Color,
     val kindObject: Color,
@@ -181,6 +183,8 @@ val DarkPalette =
         diffAddedBackground = Color(0xFF294436),
         diffRemovedBackground = Color(0xFF4A2E30),
         diffHunkBackground = Color(0xFF252A33),
+        mergeConflictBackground = Color(0xFF4D3F1E),
+        mergeResolvedBackground = Color(0xFF263B4F),
         kindClass = Color(0xFF3D8BD1),
         kindInterface = Color(0xFF5FB2A7),
         kindObject = Color(0xFF8F6CF5),
@@ -255,6 +259,8 @@ val LightPalette =
         diffAddedBackground = Color(0xFFD5F0D5),
         diffRemovedBackground = Color(0xFFF7D4D4),
         diffHunkBackground = Color(0xFFEEF1F6),
+        mergeConflictBackground = Color(0xFFFBEBC8),
+        mergeResolvedBackground = Color(0xFFDCE9F7),
         kindClass = Color(0xFF2F6FBF),
         kindInterface = Color(0xFF2B8F82),
         kindObject = Color(0xFF6F4BD6),
@@ -346,6 +352,10 @@ object IdeColors {
     val DiffAddedBackground get() = palette.diffAddedBackground
     val DiffRemovedBackground get() = palette.diffRemovedBackground
     val DiffHunkBackground get() = palette.diffHunkBackground
+
+    /** A conflict nobody resolved yet in the three-way merge, and the stretch of the result once resolved. */
+    val MergeConflictBackground get() = palette.mergeConflictBackground
+    val MergeResolvedBackground get() = palette.mergeResolvedBackground
     val KindClass get() = palette.kindClass
     val KindInterface get() = palette.kindInterface
     val KindObject get() = palette.kindObject
@@ -475,4 +485,5 @@ fun gitColor(status: GitFileStatus): Color =
         GitFileStatus.Added -> IdeColors.GitAdded
         GitFileStatus.Untracked -> IdeColors.GitUntracked
         GitFileStatus.Deleted -> IdeColors.TextSecondary
+        GitFileStatus.Conflicted -> IdeColors.Error
     }
