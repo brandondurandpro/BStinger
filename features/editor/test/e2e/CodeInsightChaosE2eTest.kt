@@ -54,13 +54,18 @@ class CodeInsightChaosE2eTest {
             clickAt(2, 18)
             app.network.goDown()
             awaitReconnecting()
+            // A hover started by the click may have been answered just before the link went down: close it, so that
+            // what follows is only the answer to the shortcut.
+            editorKeys { pressKey(Key.Escape) }
+            awaitNoTag(EditorTags.HOVER)
             quickDocumentation()
             // Nothing pretends to answer while the server is out of reach.
             assertTrue(!shown(EditorTags.HOVER))
             app.network.comeBack()
             awaitReconnected()
             awaitTag(EditorTags.HOVER_DOCUMENTATION, timeout = SERVER_START_MS)
-            assertTrue("Greeter # greet" in textOf(EditorTags.HOVER_DOCUMENTATION))
+            // The documentation text is rendered after the popup appears: wait for it rather than read one frame.
+            awaitCondition(SERVER_START_MS) { "Greeter # greet" in textOf(EditorTags.HOVER_DOCUMENTATION) }
             editorKeys { pressKey(Key.Escape) }
             awaitNoTag(EditorTags.HOVER)
             quickDocumentation()
