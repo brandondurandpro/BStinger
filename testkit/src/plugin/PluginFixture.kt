@@ -5,6 +5,8 @@ import java.io.File
 import java.nio.file.Files
 import java.util.jar.JarEntry
 import java.util.jar.JarOutputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 import javax.tools.ToolProvider
 
 private const val CLIENT_CLASS = "fixture.TodoPlugin"
@@ -44,6 +46,18 @@ object PluginFixture {
     fun serverHalf(id: String, body: String, version: String = "1.0", apiVersion: Int = 1): ServerHalf {
         val manifest = "id: $id\nversion: $version\napiVersion: $apiVersion\nserver: $SERVER_CLASS\n"
         return ServerHalf(manifest, jarOf("fixture/TodoServerPlugin", serverSource(body)))
+    }
+
+    /** Packs the files of plugin folder [folder] into the archive [target], as `<id>.plugin` is distributed. */
+    fun archive(folder: File, target: File): File {
+        ZipOutputStream(target.outputStream()).use { zip ->
+            for (file in folder.listFiles { entry -> entry.isFile }.orEmpty()) {
+                zip.putNextEntry(ZipEntry(file.name))
+                zip.write(file.readBytes())
+                zip.closeEntry()
+            }
+        }
+        return target
     }
 
     private fun clientSource(body: String) =

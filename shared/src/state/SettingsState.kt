@@ -24,6 +24,7 @@ enum class SettingsCategory(val title: String) {
     LanguageServers("Language Servers"),
     ProjectView("Project View"),
     Privacy("Privacy"),
+    Plugins("Plugins"),
     Experimental("Experimental"),
 }
 
@@ -64,6 +65,12 @@ enum class Setting(val category: SettingsCategory, val title: String, val descri
         "Share anonymous performance measures",
         "How long operations take, never a path, a name or a content (see docs/telemetry.md).",
         "telemetry statistics",
+    ),
+    Plugins(
+        SettingsCategory.Plugins,
+        "Installed plugins",
+        "The plugins of the IDE: install one from a file, turn it on or off, or update it. No restart.",
+        "extensions install enable disable update add-on",
     ),
     AgentMode(
         SettingsCategory.Experimental,

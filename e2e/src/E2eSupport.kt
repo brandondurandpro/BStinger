@@ -226,9 +226,26 @@ class E2eApp(
 
 @OptIn(ExperimentalTestApi::class)
 private fun ComposeUiTest.startPlugins(directory: File): ClientPlugins {
-    val plugins = ClientPlugins(directory, beforeCollect = { waitForIdle() })
+    // Unloading from the settings runs off the test thread, while the test polls: the clock advances there.
+    val testThread = Thread.currentThread()
+    val plugins = ClientPlugins(directory, beforeCollect = { if (Thread.currentThread() === testThread) waitForIdle() })
     plugins.start()
     return plugins
+}
+
+/** The plugins of a launched app: those loaded from objects, the installed ones, and the sync with the server. */
+private class PluginSetup(private val loaded: List<AutoCloseable>, val installed: ClientPlugins?) : AutoCloseable {
+    private val syncing = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    fun keepInSync(client: RpcClient) {
+        installed?.let { syncing.launch { it.keepServerInSync(client) } }
+    }
+
+    override fun close() {
+        syncing.cancel()
+        installed?.stop()
+        loaded.forEach { it.close() }
+    }
 }
 
 /**
@@ -252,9 +269,7 @@ fun ComposeUiTest.launchApp(
     pluginsDirectory: File? = null,
 ): E2eApp {
     TextClipboard.useSystem = false
-    val loaded = plugins.map(::loadPlugin)
-    val installed = pluginsDirectory?.let { startPlugins(it) }
-    val syncing = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    val pluginSetup = PluginSetup(plugins.map(::loadPlugin), pluginsDirectory?.let { startPlugins(it) })
     val data = Files.createTempDirectory("kotlin-editor-server").toFile()
     val process = ServerProcess(data, languageServers, telemetry?.serverHook ?: InMemoryHook(), agents, ripgrep)
     val token = process.server.token
@@ -268,7 +283,7 @@ fun ComposeUiTest.launchApp(
         }
     Runtime.getRuntime().addShutdownHook(Thread { data.deleteRecursively() })
     runBlocking { client.awaitConnected() }
-    installed?.let { syncing.launch { it.keepServerInSync(client) } }
+    pluginSetup.keepInSync(client)
     val remote = client.appServices()
     if (recent.isNotEmpty()) runBlocking { remote.recentProjects.save(recent) }
     val terminalInput = TerminalInputRecorder(remote.terminal)
@@ -283,12 +298,11 @@ fun ComposeUiTest.launchApp(
                 AppState(services, scope, withoutRealAgent(preferences), grammars, services, JvmRemoteFactory, measured)
             }
         created = state
+        state.plugins = pluginSetup.installed
         DisposableEffect(Unit) {
             onDispose {
                 created?.dispose()
-                syncing.cancel()
-                installed?.stop()
-                loaded.forEach { it.close() }
+                pluginSetup.close()
                 ClientTelemetry.switchTo(Telemetry.Disabled)
                 client.close()
                 proxy?.close()
@@ -308,7 +322,7 @@ fun ComposeUiTest.launchApp(
         terminalInput,
         telemetry,
         languageServerCalls,
-        installed,
+        pluginSetup.installed,
     )
 }
 

@@ -38,6 +38,9 @@ class AppState(
     val settings =
         SettingsController(preferences, scope, { session.project }, { session.languageServers }, telemetryOf)
 
+    /** The plugins installed in the plugins folder; set by whoever starts them (the desktop app), null in previews. */
+    var plugins: ClientPlugins? by mutableStateOf(null)
+
     val remote = RemoteController(preferences, scope, remoteFactory, ::showRemote)
 
     /** The server shown: its services, language servers, recent projects and open project. */

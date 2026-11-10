@@ -70,7 +70,7 @@ fun main(args: Array<String>) {
                     localServices,
                     JvmRemoteFactory,
                     telemetryOf = exporter::telemetryOf,
-                )
+                ).also { it.plugins = plugins }
             }
         LaunchedEffect(Unit) { measureStartup() }
         LaunchedEffect(Unit) { plugins.keepServerInSync(client) }
