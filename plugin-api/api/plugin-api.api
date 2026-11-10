@@ -8,6 +8,15 @@ class org.example.kotlineditor.plugin.ActionScope
   getEntries(): EnumEntries
   valueOf(String): ActionScope
   values(): ActionScope[]
+class org.example.kotlineditor.plugin.ClientContributions
+  <init>()
+  cleanups(): List
+  onUnload(AutoCloseable): void
+  shortcut(KeyBinding): void
+  toPlugin(String): IdePlugin
+  toolWindow(ToolWindowContribution): void
+class org.example.kotlineditor.plugin.ClientPlugin
+  register(ClientContributions): void
 class org.example.kotlineditor.plugin.IdePlugin
   <init>(String,List,List)
   getId(): String
