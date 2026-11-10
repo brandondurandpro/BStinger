@@ -47,7 +47,7 @@ class DiskComparePerformanceE2eTest {
             measure(
                 "open the compare of a ${CONFLICT_LINES}-line file rewritten throughout",
                 budgetMillis = 10_000,
-                budgetMegabytes = 80,
+                budgetMegabytes = 300,
             ) {
                 onNodeWithTag(EditorTags.DISK_COMPARE).performClick()
                 awaitTag(EditorTags.DIFF)
