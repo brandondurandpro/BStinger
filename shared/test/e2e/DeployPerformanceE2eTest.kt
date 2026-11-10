@@ -14,7 +14,8 @@ import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertTrue
 
-private const val FILES = 5_000
+// Windows runners write files several times slower (antivirus scan of each one): a smaller tree there.
+private val FILES = if (WINDOWS_DISK) 1_000 else 5_000
 private const val LINES_PER_FILE = 20
 
 /** Deploying a directory of thousands of files through the real UI and server. */

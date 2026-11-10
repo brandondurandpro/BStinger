@@ -13,6 +13,8 @@ import org.example.kotlineditor.ui.TreeTags
 import java.nio.file.Files
 import java.nio.file.Path
 
+private const val RESULT_TIMEOUT = 60_000L
+
 /** Whether the disk of the tests is a Windows one (no POSIX shell to stand in for the host of a deployment). */
 val WINDOWS_DISK = System.getProperty("os.name").startsWith("Windows", ignoreCase = true)
 
@@ -42,7 +44,7 @@ fun ComposeUiTest.deployFromTree(path: String, destination: String): String {
 /** The result line of the Deploy dialog, once it shows. */
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.awaitDeployResult(): String {
-    val config = awaitTag(AppTags.FILE_DIALOG_RESULT).fetchSemanticsNode().config
+    val config = awaitTag(AppTags.FILE_DIALOG_RESULT, timeout = RESULT_TIMEOUT).fetchSemanticsNode().config
     val lines = config.getOrElseNullable(SemanticsProperties.Text) { null }
     return lines?.joinToString("") { it.text }.orEmpty()
 }

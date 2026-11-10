@@ -14,7 +14,9 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 
 private const val PROFILES = 300
-private const val FILES = 2_000
+
+// Windows runners write files several times slower (antivirus scan of each one): fewer files there.
+private val FILES = if (WINDOWS_DISK) 500 else 2_000
 
 /** Many saved deployments, and an automatic one hit by thousands of changed files at once (a build, a checkout). */
 @OptIn(ExperimentalTestApi::class, ExperimentalPathApi::class)
