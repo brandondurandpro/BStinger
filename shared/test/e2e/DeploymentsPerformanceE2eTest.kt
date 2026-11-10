@@ -69,7 +69,7 @@ class DeploymentsPerformanceE2eTest {
                 repeat(FILES) { project.file("big/g${it / 100}/f$it.txt", "content $it") }
                 val last = target.resolve("big/g${(FILES - 1) / 100}/f${FILES - 1}.txt")
                 try {
-                    awaitCondition(timeout = 60_000) { last.exists() }
+                    awaitCondition(timeout = 30_000) { last.exists() }
                 } catch (e: androidx.compose.ui.test.ComposeTimeoutException) {
                     val copied = Files.walk(target).use { it.filter(Files::isRegularFile).count() }
                     error("$copied of $FILES files copied, status ${app.project.deployments.statuses}: ${e.message}")
