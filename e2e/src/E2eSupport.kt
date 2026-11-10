@@ -24,9 +24,8 @@ import kotlinx.coroutines.runBlocking
 import org.example.kotlineditor.App
 import org.example.kotlineditor.acp.AgentSettings
 import org.example.kotlineditor.lsp.LanguageServerSettings
-import org.example.kotlineditor.plugin.IdePlugin
-import org.example.kotlineditor.ui.loadPlugin
 import org.example.kotlineditor.model.AppServices
+import org.example.kotlineditor.plugin.IdePlugin
 import org.example.kotlineditor.remote.JvmRemoteFactory
 import org.example.kotlineditor.rpc.ClientOptions
 import org.example.kotlineditor.rpc.RpcClient
@@ -51,6 +50,7 @@ import org.example.kotlineditor.ui.EditorTags
 import org.example.kotlineditor.ui.RemoteTags
 import org.example.kotlineditor.ui.TextClipboard
 import org.example.kotlineditor.ui.TreeTags
+import org.example.kotlineditor.ui.loadPlugin
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest

@@ -18,9 +18,9 @@ import org.example.kotlineditor.plugin.ToolWindowContribution
 import org.example.kotlineditor.state.Dock
 import org.example.kotlineditor.state.ToolWindow
 import org.example.kotlineditor.state.ToolWindowDefaults
-import org.example.kotlineditor.ui.loadPlugin
 import org.example.kotlineditor.ui.TreeTags
 import org.example.kotlineditor.ui.binding
+import org.example.kotlineditor.ui.loadPlugin
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
