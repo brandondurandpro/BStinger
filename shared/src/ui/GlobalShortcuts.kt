@@ -88,7 +88,7 @@ private fun IdeContext.sendToAgent() {
 }
 
 // Agent mode hides the editors: only its own shortcuts apply, so nothing acts on a file the user cannot see.
-private val AGENT_SHORTCUTS =
+internal val BUILT_IN_AGENT_SHORTCUTS =
     listOf(
         TOGGLE_AGENT_MODE,
         SEND_TO_AGENT,
@@ -98,7 +98,7 @@ private val AGENT_SHORTCUTS =
     )
 
 // IntelliJ default keymap, first match wins. Alt+Shift+. / Alt+Shift+, change the font size (Ctrl+- / Ctrl+= fold).
-private val IDE_SHORTCUTS =
+internal val BUILT_IN_IDE_SHORTCUTS =
     listOf(
         TOGGLE_AGENT_MODE,
         SEND_TO_AGENT,
@@ -197,7 +197,11 @@ private val IDE_SHORTCUTS =
  * IDE-wide shortcuts, intercepted before the focused component sees them; [ideOnly] keeps the IDE ones in agent mode,
  * for the project the agent works on.
  */
-internal class GlobalShortcuts(private val context: IdeContext, private val ideOnly: Boolean = false) {
+internal class GlobalShortcuts(
+    private val context: IdeContext,
+    private val ideOnly: Boolean = false,
+    private val actions: ActionRegistry = ActionRegistry.default,
+) {
     private val doubleShift = DoubleShift()
 
     fun handle(event: KeyEvent): Boolean {
@@ -207,7 +211,7 @@ internal class GlobalShortcuts(private val context: IdeContext, private val ideO
         val closesFindBar = event.key == Key.Escape && project.find.visible && project.popup == null
         return when {
             project.agentMode && !ideOnly -> {
-                event.type == KeyEventType.KeyDown && AGENT_SHORTCUTS.dispatch(event, context)
+                event.type == KeyEventType.KeyDown && actions.bindings(ActionScope.Agent).dispatch(event, context)
             }
 
             doubleShift.isDoubleShift(event) -> {
@@ -230,7 +234,7 @@ internal class GlobalShortcuts(private val context: IdeContext, private val ideO
             }
 
             else -> {
-                IDE_SHORTCUTS.dispatch(event, context)
+                actions.bindings(ActionScope.Ide).dispatch(event, context)
             }
         }
     }

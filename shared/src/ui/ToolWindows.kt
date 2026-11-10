@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -27,6 +28,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.example.kotlineditor.state.BUILT_IN_TOOL_WINDOWS
 import org.example.kotlineditor.state.Dock
 import org.example.kotlineditor.state.ProjectState
 import org.example.kotlineditor.state.ToolWindow
@@ -38,7 +40,12 @@ private val BUTTON_GAP = 4.dp
  * (the conversation list of agent mode).
  */
 @Composable
-internal fun ToolStrip(project: ProjectState?, devtools: Boolean, top: @Composable ColumnScope.() -> Unit = {}) {
+internal fun ToolStrip(
+    project: ProjectState?,
+    devtools: Boolean,
+    registry: ToolWindowRegistry = ToolWindowRegistry.default,
+    top: @Composable ColumnScope.() -> Unit = {},
+) {
     Column(
         Modifier.width(STRIP_WIDTH).fillMaxHeight().padding(vertical = 6.dp),
         // Apart, so that the backgrounds of several windows open at once never touch.
@@ -46,31 +53,20 @@ internal fun ToolStrip(project: ProjectState?, devtools: Boolean, top: @Composab
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         top()
-        if (project != null) ToolButtons(project, devtools)
+        if (project != null) ToolButtons(project, devtools, registry)
     }
 }
 
 @Composable
-private fun ColumnScope.ToolButtons(project: ProjectState, devtools: Boolean) {
-    ToolButton(project, ToolWindow.Project, AppTags.TOOL_PROJECT) { FolderIcon(Modifier.size(18.dp)) }
-    ToolButton(project, ToolWindow.Git, AppTags.TOOL_GIT) { HistoryIcon(color = IdeColors.Text) }
-    ToolButton(project, ToolWindow.Branches, AppTags.TOOL_BRANCHES) { BranchIcon(color = IdeColors.Text) }
+private fun ColumnScope.ToolButtons(project: ProjectState, devtools: Boolean, registry: ToolWindowRegistry) {
+    val contributions = registry.contributions
+    // A window a plugin just registered is unknown to the layout until it is added.
+    LaunchedEffect(contributions.toList()) { contributions.forEach { project.toolWindows.add(it.defaults) } }
+    val shown = contributions.filter { devtools || !it.devtools }
+    shown.filter { it.group == StripGroup.Top }.forEach { ToolButton(project, it.window, it.tag, it.icon) }
     Spacer(Modifier.weight(1f))
-    ToolButton(project, ToolWindow.Run, AppTags.TOOL_RUN) {
-        Label("▶", color = IdeColors.Text, fontWeight = FontWeight.Bold)
-    }
     // Bottom tool windows sit at the bottom of the strip, like in IntelliJ's New UI.
-    if (devtools) {
-        ToolButton(project, ToolWindow.Network, AppTags.TOOL_NETWORK) {
-            Label("⇅", color = IdeColors.Text, fontWeight = FontWeight.Bold)
-        }
-    }
-    ToolButton(project, ToolWindow.LanguageServers, AppTags.TOOL_LANGUAGE_SERVERS) {
-        Label("LS", color = IdeColors.Text, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-    }
-    ToolButton(project, ToolWindow.Terminal, AppTags.TOOL_TERMINAL) {
-        Label(">_", color = IdeColors.Text, fontWeight = FontWeight.Bold)
-    }
+    shown.filter { it.group == StripGroup.Bottom }.forEach { ToolButton(project, it.window, it.tag, it.icon) }
 }
 
 @Composable
@@ -151,16 +147,70 @@ private fun StackedWindows(
 
 @Composable
 private fun ToolWindowContent(project: ProjectState, window: ToolWindow, drag: ToolWindowDrag, modifier: Modifier) {
-    when (window) {
-        ToolWindow.Project -> ProjectPanel(project, drag, modifier)
-        ToolWindow.Git -> GitPanel(project, drag, modifier)
-        ToolWindow.Branches -> BranchesPanel(project, drag, modifier)
-        ToolWindow.Run -> RunPanel(project.run, project.toolWindows, drag, modifier)
-        ToolWindow.Terminal -> TerminalPanel(project.terminal, project.toolWindows, drag, modifier)
-        ToolWindow.Network -> NetworkPanel(project, drag, modifier)
-        ToolWindow.LanguageServers -> LanguageServersPanel(project, drag, modifier)
-    }
+    val contribution = ToolWindowRegistry.default.find(window) ?: return
+    contribution.content(project, drag, modifier)
 }
+
+private fun builtIn(
+    window: ToolWindow,
+    group: StripGroup,
+    tag: String,
+    devtools: Boolean = false,
+    icon: @Composable () -> Unit,
+    content: @Composable (ProjectState, ToolWindowDrag, Modifier) -> Unit,
+): ToolWindowContribution {
+    val found = BUILT_IN_TOOL_WINDOWS.firstOrNull { it.window == window }
+    val defaults = checkNotNull(found) { "No defaults for $window" }
+    return ToolWindowContribution(defaults, tag, group, devtools, icon, content)
+}
+
+/** The tool windows of the IDE itself, in the order of their buttons. */
+internal fun builtInToolWindows(): List<ToolWindowContribution> =
+    listOf(
+        builtIn(
+            ToolWindow.Project,
+            StripGroup.Top,
+            AppTags.TOOL_PROJECT,
+            icon = { FolderIcon(Modifier.size(18.dp)) },
+        ) { project, drag, modifier -> ProjectPanel(project, drag, modifier) },
+        builtIn(
+            ToolWindow.Git,
+            StripGroup.Top,
+            AppTags.TOOL_GIT,
+            icon = { HistoryIcon(color = IdeColors.Text) },
+        ) { project, drag, modifier -> GitPanel(project, drag, modifier) },
+        builtIn(
+            ToolWindow.Branches,
+            StripGroup.Top,
+            AppTags.TOOL_BRANCHES,
+            icon = { BranchIcon(color = IdeColors.Text) },
+        ) { project, drag, modifier -> BranchesPanel(project, drag, modifier) },
+        builtIn(
+            ToolWindow.Run,
+            StripGroup.Bottom,
+            AppTags.TOOL_RUN,
+            icon = { Label("▶", color = IdeColors.Text, fontWeight = FontWeight.Bold) },
+        ) { project, drag, modifier -> RunPanel(project.run, project.toolWindows, drag, modifier) },
+        builtIn(
+            ToolWindow.Network,
+            StripGroup.Bottom,
+            AppTags.TOOL_NETWORK,
+            devtools = true,
+            icon = { Label("⇅", color = IdeColors.Text, fontWeight = FontWeight.Bold) },
+        ) { project, drag, modifier -> NetworkPanel(project, drag, modifier) },
+        builtIn(
+            ToolWindow.LanguageServers,
+            StripGroup.Bottom,
+            AppTags.TOOL_LANGUAGE_SERVERS,
+            icon = { Label("LS", color = IdeColors.Text, fontWeight = FontWeight.Bold, fontSize = 11.sp) },
+        ) { project, drag, modifier -> LanguageServersPanel(project, drag, modifier) },
+        builtIn(
+            ToolWindow.Terminal,
+            StripGroup.Bottom,
+            AppTags.TOOL_TERMINAL,
+            icon = { Label(">_", color = IdeColors.Text, fontWeight = FontWeight.Bold) },
+        ) { project, drag, modifier -> TerminalPanel(project.terminal, project.toolWindows, drag, modifier) },
+    )
 
 @Composable
 private fun stackedWindowSplitter(project: ProjectState, dock: Dock, before: ToolWindow, after: ToolWindow) {

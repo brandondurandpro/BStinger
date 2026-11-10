@@ -43,17 +43,7 @@ private const val TERMINAL = "terminal"
 private const val STREAM = "stream"
 private const val VERSION = "version"
 
-/** Implementation of each [Method]: read the named params, call the local services, return the JSON result. */
-internal fun requestHandlers(services: LocalServices): Map<MethodSpec, Handler> =
-    fileHandlers(services) +
-        searchHandlers(services) +
-        gitHandlers(services.git) +
-        terminalHandlers() +
-        runHandlers() +
-        languageServerHandlers(services) +
-        agentHandlers(services)
-
-private fun fileHandlers(services: LocalServices): Map<MethodSpec, Handler> {
+internal fun fileHandlers(services: LocalServices): Map<MethodSpec, Handler> {
     val fs = services.fileSystem
     val disk = DiskNotifications(services)
     return mapOf(
@@ -110,7 +100,7 @@ private fun fileHandlers(services: LocalServices): Map<MethodSpec, Handler> {
     )
 }
 
-private fun searchHandlers(services: LocalServices): Map<MethodSpec, Handler> {
+internal fun searchHandlers(services: LocalServices): Map<MethodSpec, Handler> {
     val search = services.search
     return mapOf(
         Method.WalkFiles to { search.walkFiles(entry(ROOT), params.int(LIMIT)).toJson() },
@@ -131,7 +121,7 @@ private fun searchHandlers(services: LocalServices): Map<MethodSpec, Handler> {
     )
 }
 
-private fun gitHandlers(git: GitClient): Map<MethodSpec, Handler> =
+internal fun gitHandlers(git: GitClient): Map<MethodSpec, Handler> =
     mapOf(
         Method.GitStatus to { git.status(root()).toJson() },
         Method.GitBranch to { JsonPrimitive(git.branch(root())) },
@@ -182,7 +172,7 @@ private fun gitHandlers(git: GitClient): Map<MethodSpec, Handler> =
         Method.GitRemoveWorktree to { nothing { git.removeWorktree(root(), params.string(PATH)) } },
     )
 
-private fun terminalHandlers(): Map<MethodSpec, Handler> =
+internal fun terminalHandlers(): Map<MethodSpec, Handler> =
     mapOf(
         Method.TerminalStart to {
             nothing {
