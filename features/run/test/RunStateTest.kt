@@ -290,6 +290,24 @@ class RunStateTest {
     }
 
     @Test
+    fun `configurations are grouped by folder, the project first`() {
+        val found =
+            listOf(
+                RunConfiguration("w", "Web", RunKind.Run, "x", "services/web"),
+                RunConfiguration("a", "Api", RunKind.Run, "x", "services/api/"),
+                RunConfiguration("r", "Root", RunKind.Run, "x"),
+            )
+        val run = state(found = found)
+        val own = run.add("mine", directory = "services/api")
+        run.ensureLoaded()
+        val folders = run.byFolder.map { (folder, configurations) -> folder to configurations.map { it.id } }
+        assertEquals(
+            listOf("" to listOf("r"), "services/api" to listOf(own.id, "a"), "services/web" to listOf("w")),
+            folders,
+        )
+    }
+
+    @Test
     fun `the first configuration found is selected when nothing is`() {
         val found = listOf(RunConfiguration("s", "Found", RunKind.Tests, "./kotlin test"))
         val run = state(found = found)

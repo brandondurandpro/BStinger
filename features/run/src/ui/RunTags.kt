@@ -32,6 +32,19 @@ object RunTags {
     const val EDITOR_DELETE = "run.editor.delete"
     const val EDITOR_CANCEL = "run.editor.cancel"
 
+    const val WIDGET = "run.widget"
+    const val WIDGET_SELECTOR = "run.widget.selector"
+    const val WIDGET_MENU = "run.widget.menu"
+    const val WIDGET_START = "run.widget.start"
+    const val WIDGET_STOP = "run.widget.stop"
+    const val WIDGET_NEW = "run.widget.new"
+    const val WIDGET_EDIT = "run.widget.edit"
+    const val WIDGET_SHOW = "run.widget.show"
+
+    fun widgetFolder(folder: String) = "run.widget.folder:$folder"
+
+    fun widgetItem(id: String) = "run.widget.item:$id"
+
     fun configuration(id: String) = "run.configuration:$id"
 
     fun line(index: Int) = "run.line:$index"

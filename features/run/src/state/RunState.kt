@@ -153,6 +153,16 @@ class RunState(
             return configurations.toList() + discovered.filter { it.id !in savedIds }
         }
 
+    /**
+     * [available] grouped by the folder they run in (relative to the project, blank for the project itself): the
+     * project first, then the folders by name; the configurations of a folder keep their order.
+     */
+    val byFolder: List<Pair<String, List<RunConfiguration>>>
+        get() {
+            val folders = available.groupBy { it.workingDirectory.trim().trim('/', '\\') }
+            return folders.toList().sortedWith(compareBy({ it.first.isNotEmpty() }, { it.first }))
+        }
+
     /** The selected configuration, if the selection names one that exists. */
     val selected: RunConfiguration? get() = available.firstOrNull { it.id == selectedId }
 
