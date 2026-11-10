@@ -16,6 +16,9 @@ import java.nio.file.Paths
 // Changes that follow each other (a build, a save of several files) are deployed together.
 private const val AUTO_DELAY_MS = 400L
 private const val AUTO_MAX_WAIT_MS = 3_000L
+
+// A file the program writing it still holds (Windows) makes a run fail: the same files are tried again a few times.
+private const val AUTO_MAX_RETRIES = 3
 private const val NANOS_PER_MS = 1_000_000L
 private const val GIT = ".git"
 
@@ -27,6 +30,7 @@ internal class AutoDeploy(private val deployments: DeploymentsState, private val
     private val pending = HashMap<String, MutableSet<PendingFile>>()
     private val jobs = HashMap<String, Job>()
     private val firstQueued = HashMap<String, Long>()
+    private val retries = HashMap<String, Int>()
 
     /** [paths] changed: queues them for each automatic deployment whose folders hold them. */
     fun changed(paths: List<String>) {
@@ -76,7 +80,21 @@ internal class AutoDeploy(private val deployments: DeploymentsState, private val
         val fs = project.services.fileSystem
         val items = files.mapNotNull { file -> existingEntry(fs, file.path)?.let { DeployItem(it, file.target) } }
         val destination = DeployDestination.parse(profile.destination)
-        if (items.isNotEmpty() && destination != null) deployments.deploy(profile, items, destination, true)
+        if (items.isNotEmpty() && destination != null) {
+            deployments.deploy(profile, items, destination, true)
+            retryIfFailed(name, files)
+        }
+    }
+
+    private fun retryIfFailed(name: String, files: Set<PendingFile>) {
+        val failed = deployments.statuses[name] is DeployStatus.Failed
+        val attempts = retries[name] ?: 0
+        if (failed && attempts < AUTO_MAX_RETRIES) {
+            retries[name] = attempts + 1
+            queue(name, files.toList())
+        } else {
+            retries.remove(name)
+        }
     }
 }
 
