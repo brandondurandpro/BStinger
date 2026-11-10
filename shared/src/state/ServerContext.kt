@@ -256,7 +256,8 @@ class ServerContext(
         val windows = shown.toolWindows.toPreferences()
         val agent = shown.agentPreferences()
         val diffs = shown.diffLayout.toPreferences()
-        return windows + autoSelect + inlayHints + pins + agent + diffs
+        val runs = shown.run.toPreferences()
+        return windows + autoSelect + inlayHints + pins + agent + diffs + runs
     }
 
     /** Saves the open project's session and files, then disposes it; it stays shown until [leave]. */

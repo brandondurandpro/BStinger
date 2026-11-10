@@ -83,9 +83,9 @@ class ToolWindowLayoutPreferencesTest {
                 "layout.order" to "Bogus,,Terminal",
             ),
         )
-        // Only the order changed: Terminal first, the windows it did not name follow (Branches too, so a layout
-        // saved before that window existed still gets it).
-        val order = "Terminal,Project,Git,Branches,Network,LanguageServers"
+        // Only the order changed: Terminal first, the windows it did not name follow (Branches and Run too, so a
+        // layout saved before those windows existed still gets them).
+        val order = "Terminal,Project,Git,Branches,Run,Network,LanguageServers"
         assertEquals(defaults + ("layout.order" to order), layout.toPreferences())
     }
 

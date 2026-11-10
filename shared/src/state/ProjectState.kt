@@ -10,6 +10,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.model.AppServices
@@ -22,6 +23,7 @@ import org.example.kotlineditor.model.GitCommitDetails
 import org.example.kotlineditor.model.GitCommitFile
 import org.example.kotlineditor.model.GitFileStatus
 import org.example.kotlineditor.model.MergeHistory
+import org.example.kotlineditor.model.slashed
 import org.example.kotlineditor.syntax.treesitter.GrammarStore
 
 private val INDEXED_POPUPS = setOf(PopupKind.GotoFile, PopupKind.FindInFiles, PopupKind.GotoSymbol)
@@ -102,6 +104,18 @@ class ProjectState(
     val insight = CodeInsightState(scope, { insightBackend() }, ProjectInsightHost { this })
     val terminal = TerminalState(root.path, services.terminal, scope)
 
+    /** Run configurations, the output of their commands and the tree of test results. */
+    val run =
+        RunState(
+            root.path,
+            services.runner,
+            scope,
+            preferences,
+            discover = ::discoverRunConfigurations,
+            locate = ::locateOutputFile,
+            openAt = ::openOutputFile,
+        )
+
     /** Git: branch, status, commit, branches of the toolbar, and the Branches tool window's history. */
     override val git =
         GitState(
@@ -165,10 +179,75 @@ class ProjectState(
     /** What to save of agent mode; nothing while it was never used in this project (the saved values stay). */
     fun agentPreferences(): Map<String, String> = if (agentState.isInitialized()) agent.toPreferences() else emptyMap()
 
+    // What the project offers to run: the wrappers of Amper and Gradle at its root, and the scripts of each of its
+    // composer.json files (a project may hold several PHP projects).
+    private suspend fun discoverRunConfigurations(): List<RunConfiguration> {
+        val entries = runCatching { services.fileSystem.list(root) }.getOrDefault(emptyList())
+        val windows = !root.path.startsWith("/")
+        val wrappers = suggestedConfigurations(entries.map { it.name }.toSet(), windows)
+        return wrappers + discoverComposerScripts(windows)
+    }
+
+    private suspend fun discoverComposerScripts(windows: Boolean): List<RunConfiguration> {
+        fileIndex.ensureLoaded()
+        val files = snapshotFlow { fileIndex.files }.filterNotNull().first()
+        val rootPrefix = slashed(root.path).trimEnd('/') + "/"
+        val manifests = files.filter { isProjectComposerFile(slashed(it.path, root.path).removePrefix(rootPrefix)) }
+        return manifests.flatMap { manifest ->
+            val relative = slashed(manifest.path, root.path).removePrefix(rootPrefix)
+            val directory = relative.substringBeforeLast('/', "")
+            val content = runCatching { services.fileSystem.read(manifest) }.getOrNull()
+            val text = (content as? FileContent.Text)?.lines?.joinToString("\n").orEmpty()
+            composerConfigurations(directory, composerScriptNames(text), windows)
+        }
+    }
+
+    // The file a path of some output names: an absolute path, a path from the project, or only a file name.
+    private suspend fun locateOutputFile(path: String): FileEntry? {
+        val indexed = locateInProject(path)
+        if (indexed != null) return indexed
+        val fromRoot = root.path.trimEnd('/', '\\') + "/" + path.removePrefix("./")
+        val exact =
+            listOf(
+                path,
+                fromRoot,
+            ).firstNotNullOfOrNull { runCatching { services.fileSystem.fileAt(it) }.getOrNull() }
+        return exact ?: locateByName(path)
+    }
+
+    // An absolute path inside the project, however it is written (`C:/p/A.kt` or `C:\p\A.kt`, any case of the drive
+    // letter on Windows): the entry of the project index, so that the editor opens it under its path in the project.
+    private suspend fun locateInProject(path: String): FileEntry? {
+        val rootPrefix = slashed(root.path).trimEnd('/') + "/"
+        val written = slashed(path, root.path)
+        val caseSensitive = root.path.startsWith('/')
+        if (!written.startsWith(rootPrefix, ignoreCase = !caseSensitive)) return null
+        fileIndex.ensureLoaded()
+        val files = snapshotFlow { fileIndex.files }.filterNotNull().first()
+        return files.firstOrNull { slashed(it.path, root.path).equals(written, ignoreCase = !caseSensitive) }
+    }
+
+    private suspend fun locateByName(path: String): FileEntry? {
+        fileIndex.ensureLoaded()
+        val files = snapshotFlow { fileIndex.files }.filterNotNull().first()
+        val wanted = slashed(path).trimStart('/')
+        return files.firstOrNull { slashed(it.path, root.path).endsWith("/$wanted") }
+    }
+
+    // Output counts lines and columns from 1; the editor from 0.
+    private fun openOutputFile(entry: FileEntry, line: Int, column: Int) {
+        navigate(
+            entry,
+            TextPos(maxOf(line - 1, 0), maxOf(column - 1, 0)),
+            TextPos(maxOf(line - 1, 0), maxOf(column - 1, 0)),
+        )
+    }
+
     /** Shows or hides a tool window (Alt+1, Alt+9, Alt+F12, Ctrl+Alt+Shift+D or its button in the left strip). */
     fun toggleToolWindow(window: ToolWindow) {
         toolWindows.toggle(window)
         if (window == ToolWindow.Terminal && toolWindows.isVisible(window)) terminal.ensureStarted()
+        if (window == ToolWindow.Run && toolWindows.isVisible(window)) run.ensureLoaded()
         if (window == ToolWindow.Git && toolWindows.isVisible(window)) git.refreshStatus()
         if (window == ToolWindow.Branches && toolWindows.isVisible(window)) openHistory()
     }
@@ -308,6 +387,7 @@ class ProjectState(
     override fun dispose() {
         if (agentState.isInitialized()) agent.dispose()
         terminal.stop()
+        run.dispose()
         scope.cancel()
     }
 }

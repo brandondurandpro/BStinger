@@ -706,6 +706,8 @@ class AppServices(
     val disk: DiskWatch = DiskWatch.None,
     /** Conversations with the agents the server runs (agent mode). */
     val agents: Agents = Agents.None,
+    /** Commands run in the projects of the server: run configurations and tests. */
+    val runner: ProjectRunner = ProjectRunner.None,
 )
 
 private val UNIX_SEPARATORS = charArrayOf('/')

@@ -340,6 +340,19 @@ enum class Method(
     /** Declarations of a project. */
     Symbols("search/symbols", mutating = false),
 
+    /**
+     * Runs a command in a project (run configurations, tests). The request id becomes the id of its [RunChunk]
+     * stream, like the one of [TerminalStart]: a retry that lost its answer gets the cached one instead of
+     * (silently) running the command twice.
+     */
+    RunStart("run/start", mutating = true),
+
+    /** Stops a run and the processes it started. */
+    RunStop("run/stop", mutating = true),
+
+    /** Replays the chunks of a run after its last sequence number (a reconnection). */
+    RunResume("run/resume", mutating = false),
+
     /** Git status of the changed files. */
     GitStatus("git/status", mutating = false),
 

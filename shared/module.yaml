@@ -7,6 +7,7 @@ dependencies:
   - //features/git: exported
   - //features/language-servers: exported
   - //features/remote: exported
+  - //features/run: exported
   - //features/terminal: exported
   - //features/tree: exported
   - $libs.androidx.lifecycle.viewmodel.compose
