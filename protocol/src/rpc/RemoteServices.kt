@@ -4,7 +4,9 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.put
@@ -28,6 +30,7 @@ import org.example.kotlineditor.model.GitCommitDetails
 import org.example.kotlineditor.model.GitFileStatus
 import org.example.kotlineditor.model.MergeHistory
 import org.example.kotlineditor.model.MergeSides
+import org.example.kotlineditor.model.PluginServer
 import org.example.kotlineditor.model.ProjectFileSystem
 import org.example.kotlineditor.model.ProjectRunner
 import org.example.kotlineditor.model.ProjectSearch
@@ -77,7 +80,14 @@ fun RpcClient.appServices(): AppServices =
         disk = RemoteDiskWatch(this),
         agents = RemoteAgents(this),
         runner = RemoteRunner(this),
+        plugins = RemotePluginServer(this),
     )
+
+/** [PluginServer] of the server. */
+class RemotePluginServer(private val client: RpcClient) : PluginServer {
+    override suspend fun call(method: MethodSpec, params: JsonObject): JsonElement =
+        client.call(method) { params.forEach { (name, value) -> put(name, value) } }
+}
 
 /** [TelemetrySettings] of the server. */
 class RemoteTelemetrySettings(private val client: RpcClient) : TelemetrySettings {

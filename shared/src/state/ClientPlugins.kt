@@ -4,8 +4,10 @@ import org.example.kotlineditor.plugin.core.UnloadOutcome
 import org.example.kotlineditor.plugin.host.LoadResult
 import org.example.kotlineditor.plugin.host.PluginHost
 import org.example.kotlineditor.plugin.host.PluginProblem
+import org.example.kotlineditor.rpc.RpcClient
 import org.example.kotlineditor.ui.loadPlugin
 import java.io.File
+import java.io.IOException
 
 /**
  * The plugins installed in [directory] (`~/.kotlin-editor/plugins/<id>/` by default), loaded into the running IDE
@@ -31,6 +33,38 @@ class ClientPlugins(
         host.loadAll(directory).forEach(::remember)
     }
 
+    /**
+     * Installs the server halves of the running plugins on the server of [client]. A plugin whose server half the
+     * server cannot take is unloaded here too: a plugin present on one side only does not run half-working.
+     */
+    suspend fun syncServer(client: RpcClient) {
+        val withServer = host.manifests.filterValues { it.server != null }
+        val halves =
+            withServer.map { (id, manifest) ->
+                val folder = File(directory, id)
+                ServerHalfToSend(id, File(folder, "plugin.yaml").readText(), File(folder, "server.jar"))
+            }
+        val failures = syncServerHalves(client, halves)
+        for ((id, reason) in failures) {
+            host.unload(id)
+            problems[id] = PluginProblem.ServerUnavailable(reason)
+        }
+    }
+
+    /**
+     * Keeps the server holding the server halves: at the first connection and at each reconnection, since a server
+     * that restarted may have lost them or come back with another version. Never returns; cancel it to stop.
+     */
+    suspend fun keepServerInSync(client: RpcClient) {
+        client.connections.collect {
+            try {
+                syncServer(client)
+            } catch (@Suppress("SwallowedException") broken: IOException) {
+                // The link broke while syncing: the next connection syncs again.
+            }
+        }
+    }
+
     /** Unloads then loads again the plugin of folder [id], to take a new version. */
     fun reload(id: String): UnloadOutcome? {
         val outcome = if (id in host.loadedIds) host.unload(id) else null
@@ -41,9 +75,9 @@ class ClientPlugins(
     /** Unloads plugin [id]; [UnloadOutcome.RestartRequired] when something still holds its code. */
     fun unload(id: String): UnloadOutcome = host.unload(id)
 
-    /** Unloads every plugin, as the IDE closes. */
+    /** Unloads every plugin, as the IDE closes; does not wait for the garbage collector. */
     fun stop() {
-        host.loadedIds.reversed().forEach { host.unload(it) }
+        host.unloadAll()
     }
 
     private fun remember(folder: String, result: LoadResult) {

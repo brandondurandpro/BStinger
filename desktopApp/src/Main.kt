@@ -73,6 +73,7 @@ fun main(args: Array<String>) {
                 )
             }
         LaunchedEffect(Unit) { measureStartup() }
+        LaunchedEffect(Unit) { plugins.keepServerInSync(client) }
         Window(
             onCloseRequest = {
                 state.exit {

@@ -32,6 +32,9 @@ sealed interface PluginProblem {
     /** The user turned the plugin off. */
     object Disabled : PluginProblem
 
+    /** Its server half could not be installed on the server, so the plugin is off on both sides. */
+    class ServerUnavailable(val reason: String) : PluginProblem
+
     /** A plugin it needs is not loaded. */
     class MissingDependency(val id: String) : PluginProblem
 
@@ -75,6 +78,9 @@ class PluginHost(
     /** The ids of the running plugins, in load order. */
     val loadedIds: List<String> get() = running.keys.toList()
 
+    /** The manifests of the running plugins, by id. */
+    val manifests: Map<String, PluginManifest> get() = running.mapValues { it.value.manifest }
+
     /** Loads the plugin of [folder]; a plugin that crashed its last start, or was disabled, is not started. */
     fun load(folder: File): LoadResult {
         val manifest =
@@ -103,6 +109,11 @@ class PluginHost(
     fun unload(id: String): UnloadOutcome {
         val reference = shutDown(id)
         return outcomeOf(reference, beforeCollect)
+    }
+
+    /** Unloads every plugin without checking that its code is gone: the IDE is closing, or the UI already is. */
+    fun unloadAll() {
+        loadedIds.reversed().forEach { shutDown(it) }
     }
 
     // Nothing of the plugin stays referenced by this frame once it returns, or its class loader could not be collected.

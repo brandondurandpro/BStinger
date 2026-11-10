@@ -23,6 +23,7 @@ import org.example.kotlineditor.model.GitCommitDetails
 import org.example.kotlineditor.model.GitCommitFile
 import org.example.kotlineditor.model.GitFileStatus
 import org.example.kotlineditor.model.MergeHistory
+import org.example.kotlineditor.model.PluginServer
 import org.example.kotlineditor.model.slashed
 import org.example.kotlineditor.syntax.treesitter.GrammarStore
 import org.example.kotlineditor.ui.IdeRegistries
@@ -106,6 +107,8 @@ class ProjectState(
 
     /** Hover, navigation, usages, problems, rename, reformat and quick fixes, from the language servers. */
     val insight = CodeInsightState(scope, { insightBackend() }, ProjectInsightHost { this })
+    override val pluginServer: PluginServer get() = services.plugins
+
     val terminal = TerminalState(root.path, services.terminal, scope)
 
     /** Run configurations, the output of their commands and the tree of test results. */

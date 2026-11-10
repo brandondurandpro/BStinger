@@ -3,6 +3,9 @@ package org.example.kotlineditor.model
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import org.example.kotlineditor.rpc.MethodSpec
 import org.example.kotlineditor.syntax.Declaration
 import java.io.IOException
 
@@ -717,7 +720,21 @@ class AppServices(
     val agents: Agents = Agents.None,
     /** Commands run in the projects of the server: run configurations and tests. */
     val runner: ProjectRunner = ProjectRunner.None,
+    /** The methods the server halves of plugins answer. */
+    val plugins: PluginServer = PluginServer.None,
 )
+
+/** The link a plugin's client half uses to call the methods its server half answers. */
+interface PluginServer {
+    /** Calls [method] (a [org.example.kotlineditor.rpc.PluginMethod] of the plugin) with the named [params]. */
+    suspend fun call(method: MethodSpec, params: JsonObject = JsonObject(emptyMap())): JsonElement
+
+    /** No server: every call fails. */
+    object None : PluginServer {
+        override suspend fun call(method: MethodSpec, params: JsonObject): JsonElement =
+            throw IOException("There is no server to call ${method.rpcName} on")
+    }
+}
 
 private val UNIX_SEPARATORS = charArrayOf('/')
 private val WINDOWS_SEPARATORS = charArrayOf('/', '\\')

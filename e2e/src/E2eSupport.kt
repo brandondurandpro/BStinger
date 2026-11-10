@@ -20,6 +20,11 @@ import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.printToString
 import androidx.compose.ui.test.requestFocus
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.example.kotlineditor.App
 import org.example.kotlineditor.acp.AgentSettings
@@ -32,6 +37,7 @@ import org.example.kotlineditor.rpc.RpcClient
 import org.example.kotlineditor.rpc.appServices
 import org.example.kotlineditor.server.EditorServer
 import org.example.kotlineditor.server.LocalServices
+import org.example.kotlineditor.server.ServerOptions
 import org.example.kotlineditor.server.ServerTelemetry
 import org.example.kotlineditor.server.ripgrep.RipgrepSettings
 import org.example.kotlineditor.state.AppState
@@ -148,10 +154,16 @@ class ServerProcess(
     // Where Find in Files gets its ripgrep executable: null is the default lookup (a configured path or a download).
     private val ripgrep: RipgrepSettings? = null,
 ) : AutoCloseable {
-    var server: EditorServer = EditorServer(services(), telemetry = telemetry()).start()
+    var server: EditorServer = EditorServer(services(), options = options(), telemetry = telemetry()).start()
         private set
     val port: Int = server.port
     private var running = true
+
+    /** Where the server halves of plugins are installed on the server. */
+    val serverPlugins: java.io.File get() = java.io.File(data, "server-plugins")
+
+    // The server halves of plugins installed by a test live with the server's data, never in the user's home.
+    private fun options() = ServerOptions(pluginsDirectory = java.io.File(data, "server-plugins"))
 
     private fun telemetry() = ServerTelemetry(forbidden = false, hookOf = { telemetryHook })
 
@@ -172,7 +184,7 @@ class ServerProcess(
     /** Starts a new server on the same port and data, presenting [token] (the same one by default). */
     fun start(token: String = server.token) {
         check(!running) { "The server is already running" }
-        server = EditorServer(services(), token, telemetry = telemetry()).start(port = port)
+        server = EditorServer(services(), token, options(), telemetry()).start(port = port)
         running = true
     }
 
@@ -242,6 +254,7 @@ fun ComposeUiTest.launchApp(
     TextClipboard.useSystem = false
     val loaded = plugins.map(::loadPlugin)
     val installed = pluginsDirectory?.let { startPlugins(it) }
+    val syncing = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val data = Files.createTempDirectory("kotlin-editor-server").toFile()
     val process = ServerProcess(data, languageServers, telemetry?.serverHook ?: InMemoryHook(), agents, ripgrep)
     val token = process.server.token
@@ -255,6 +268,7 @@ fun ComposeUiTest.launchApp(
         }
     Runtime.getRuntime().addShutdownHook(Thread { data.deleteRecursively() })
     runBlocking { client.awaitConnected() }
+    installed?.let { syncing.launch { it.keepServerInSync(client) } }
     val remote = client.appServices()
     if (recent.isNotEmpty()) runBlocking { remote.recentProjects.save(recent) }
     val terminalInput = TerminalInputRecorder(remote.terminal)
@@ -272,6 +286,7 @@ fun ComposeUiTest.launchApp(
         DisposableEffect(Unit) {
             onDispose {
                 created?.dispose()
+                syncing.cancel()
                 installed?.stop()
                 loaded.forEach { it.close() }
                 ClientTelemetry.switchTo(Telemetry.Disabled)
