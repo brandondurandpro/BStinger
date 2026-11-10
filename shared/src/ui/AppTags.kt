@@ -22,6 +22,7 @@ object AppTags {
     const val TOP_REMOTE = "toolbar.remote"
     const val PROJECT = "project"
     const val PROJECT_WIDGET = "project.widget"
+    const val TOOLBAR_SEARCH = "toolbar.search"
     const val PROJECT_CLOSE = "project.close"
     const val PROJECT_AGENT_MODE = "project.agentMode"
     const val PROJECT_OPEN_OTHER = "project.openOther"

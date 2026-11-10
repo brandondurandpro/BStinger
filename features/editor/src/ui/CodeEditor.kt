@@ -371,6 +371,10 @@ private fun scrollToX(horizontal: HorizontalScroll, metrics: EditorMetrics, x: F
 @Composable
 fun EditorMessage(text: String, modifier: Modifier = Modifier) {
     Box(modifier.fillMaxSize().background(IdeColors.Editor), contentAlignment = Alignment.Center) {
-        BasicText(text, Modifier.testTag(EditorTags.EDITOR_MESSAGE), style = TextStyle(color = IdeColors.TextSecondary))
+        BasicText(
+            text,
+            Modifier.testTag(EditorTags.EDITOR_MESSAGE),
+            style = TextStyle(fontFamily = IdeFonts.ui, color = IdeColors.TextSecondary),
+        )
     }
 }

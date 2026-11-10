@@ -48,9 +48,15 @@ private val ROW_HEIGHT = 24.dp
 private val INDENT = 16.dp
 private const val VISIBLE_ROWS = 16
 private const val SCRIM_ALPHA = 0.25f
-private val TITLE_STYLE get() = TextStyle(color = IdeColors.Text, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-private val NAME_STYLE get() = TextStyle(color = IdeColors.Text, fontSize = 13.sp)
-private val PLACE_STYLE get() = TextStyle(color = IdeColors.TextSecondary, fontSize = 12.sp)
+private val TITLE_STYLE get() =
+    TextStyle(
+        fontFamily = IdeFonts.ui,
+        color = IdeColors.Text,
+        fontSize = 13.sp,
+        fontWeight = FontWeight.Bold,
+    )
+private val NAME_STYLE get() = TextStyle(fontFamily = IdeFonts.ui, color = IdeColors.Text, fontSize = 13.sp)
+private val PLACE_STYLE get() = TextStyle(fontFamily = IdeFonts.ui, color = IdeColors.TextSecondary, fontSize = 12.sp)
 
 /**
  * The call or type hierarchy over [document]: the function or type at the caret, then its callers (or callees,
@@ -102,9 +108,7 @@ private fun HierarchyHeader(insight: CodeInsightState, popup: HierarchyPopup) {
     }
 }
 
-private val ButtonShape =
-    androidx.compose.foundation.shape
-        .RoundedCornerShape(4.dp)
+private val ButtonShape = IdeShapes.Medium
 
 private fun otherSide(direction: HierarchyDirection): String =
     when (direction) {

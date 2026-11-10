@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -52,7 +51,7 @@ fun ChangesBar(agent: AgentState, conversation: Conversation) {
             Modifier
                 .widthIn(max = BAR_WIDTH)
                 .fillMaxWidth()
-                .background(IdeColors.Panel, RoundedCornerShape(8.dp))
+                .background(IdeColors.Panel, IdeShapes.ExtraLarge)
                 .testTag(AgentTags.agentChanges(conversation.id)),
         ) {
             ChangesHeader(agent, conversation)
@@ -80,7 +79,7 @@ private fun ChangesHeader(agent: AgentState, conversation: Conversation) {
         Label("−${changes.removed}", Modifier.padding(start = 6.dp), color = IdeColors.GitDeleted, fontSize = 12.sp)
         Box(Modifier.weight(1f))
         IconButton({ agent.refreshChanges(conversation) }, Modifier.testTag(AgentTags.AGENT_CHANGES_REFRESH)) {
-            Label("⟳", color = IdeColors.TextSecondary)
+            RefreshIcon()
         }
         if (changes.files.isNotEmpty()) {
             ConfirmButton("Revert all", AgentTags.AGENT_CHANGES_REVERT_ALL) {

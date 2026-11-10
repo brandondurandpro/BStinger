@@ -18,7 +18,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -54,7 +53,7 @@ private val COMPLETION_ROW_HEIGHT = 22.dp
 private val COMPLETION_WIDTH = 460.dp
 private val COMPLETION_BADGE = 16.dp
 private val DOCUMENTATION_WIDTH = 420.dp
-private val POPUP_CORNERS = RoundedCornerShape(4.dp)
+private val POPUP_CORNERS = IdeShapes.Medium
 
 /**
  * The completion popup, under the word being completed (above it when there is no room below), like IntelliJ's:
@@ -172,7 +171,13 @@ private fun CompletionRow(
                 it,
                 // At most half the row, against the right edge: the types line up whatever the label's length.
                 Modifier.widthIn(max = COMPLETION_WIDTH / 2),
-                style = TextStyle(color = IdeColors.TextSecondary, textAlign = TextAlign.End, fontSize = 12.sp),
+                style =
+                TextStyle(
+                    fontFamily = IdeFonts.ui,
+                    color = IdeColors.TextSecondary,
+                    textAlign = TextAlign.End,
+                    fontSize = 12.sp,
+                ),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -184,10 +189,19 @@ private fun CompletionRow(
 private fun Badge(kind: CompletionKind) {
     val (letter, color) = badgeOf(kind)
     Box(
-        Modifier.size(COMPLETION_BADGE).background(color, RoundedCornerShape(3.dp)),
+        Modifier.size(COMPLETION_BADGE).background(color, IdeShapes.Small),
         contentAlignment = Alignment.Center,
     ) {
-        BasicText(letter, style = TextStyle(color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold))
+        BasicText(
+            letter,
+            style =
+            TextStyle(
+                fontFamily = IdeFonts.ui,
+                color = Color.White,
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+            ),
+        )
     }
 }
 
@@ -214,7 +228,7 @@ private fun emphasized(label: String, typed: String) =
         var next = offset
         for ((index, c) in label.withIndex()) {
             if (next < typed.length && c.equals(typed[next], ignoreCase = true)) {
-                addStyle(SpanStyle(color = IdeColors.Accent, fontWeight = FontWeight.Bold), index, index + 1)
+                addStyle(SpanStyle(color = IdeColors.Link, fontWeight = FontWeight.SemiBold), index, index + 1)
                 next++
             }
         }

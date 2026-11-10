@@ -8,8 +8,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.ExperimentalComposeUiApi
@@ -48,7 +46,7 @@ fun onTabPress(event: PointerEvent, onSelect: () -> Unit, onClose: () -> Unit, o
 
 @Composable
 fun TabMenuItem(text: String, tag: String, enabled: Boolean = true, onClick: () -> Unit) {
-    DropdownMenuItem(
+    IdeMenuItem(
         text = { Text(text, fontSize = 13.sp) },
         onClick = onClick,
         enabled = enabled,
@@ -82,7 +80,7 @@ fun CloseTabsMenu(
     }
     // The menu opens under its anchor: a point-sized one at the click puts it right there.
     Box(Modifier.offset(offset.x, offset.y).size(0.dp)) {
-        DropdownMenu(expanded = true, onDismissRequest = onDismiss, modifier = modifier) {
+        IdeDropdownMenu(expanded = true, onDismissRequest = onDismiss, modifier = modifier) {
             TabMenuItem("Close", Tags.MENU_CLOSE_TAB) { action(actions.close) }
             TabMenuItem("Close Others", Tags.MENU_CLOSE_OTHER_TABS, enabled = count > 1) { action(actions.closeOthers) }
             TabMenuItem("Close All to the Left", Tags.MENU_CLOSE_TABS_LEFT, enabled = index > 0) {

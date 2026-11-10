@@ -20,7 +20,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.rememberScrollbarAdapter
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -131,7 +130,7 @@ private fun DiffToolbar(sideBySide: Boolean, onToggleSideBySide: () -> Unit, onO
 // Opens the file itself, at its first changed line (F4, like IntelliJ's Jump to Source).
 @Composable
 private fun OpenFileButton(onOpenFile: () -> Unit) {
-    val shape = RoundedCornerShape(4.dp)
+    val shape = IdeShapes.Medium
     Row(
         Modifier
             .testTag(EditorTags.DIFF_OPEN_FILE)
@@ -149,10 +148,10 @@ private fun OpenFileButton(onOpenFile: () -> Unit) {
 
 @Composable
 private fun DiffLayoutToggle(sideBySide: Boolean, onToggle: () -> Unit) {
-    val color = if (sideBySide) Color.White else IdeColors.TextSecondary
+    val color = if (sideBySide) IdeColors.OnAccent else IdeColors.TextSecondary
     val background = if (sideBySide) IdeColors.Accent else Color.Transparent
     val border = if (sideBySide) IdeColors.Accent else IdeColors.InputBorder
-    val shape = RoundedCornerShape(4.dp)
+    val shape = IdeShapes.Medium
     Row(
         Modifier
             .testTag(EditorTags.DIFF_LAYOUT_TOGGLE)

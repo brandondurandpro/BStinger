@@ -163,7 +163,7 @@ private fun FileMatchRow(match: FileMatch, selected: Boolean, onClick: () -> Uni
         BasicText(
             highlightIndices(match.entry.name, match.matchedIndices),
             Modifier.padding(start = 6.dp),
-            style = TextStyle(fontSize = 13.sp),
+            style = TextStyle(fontFamily = IdeFonts.ui, fontSize = 13.sp),
             maxLines = 1,
         )
         Label(

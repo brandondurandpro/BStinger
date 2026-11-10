@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -29,7 +28,7 @@ fun ProjectPanel(project: TreeHost, drag: ToolWindowDrag, modifier: Modifier = M
             IconButton({
                 project.tree.refresh()
                 project.fileIndex.invalidate()
-            }) { Label("⟳", color = IdeColors.TextSecondary) }
+            }) { RefreshIcon() }
         }
         ProjectTree(project, Modifier.fillMaxSize())
     }
@@ -44,7 +43,7 @@ private fun AutoSelectToggle(project: TreeHost) {
         Box(
             Modifier
                 .size(22.dp)
-                .background(if (on) IdeColors.Selection else Color.Transparent, RoundedCornerShape(4.dp))
+                .background(if (on) IdeColors.Selection else Color.Transparent, IdeShapes.Medium)
                 .toggleable(value = on, onValueChange = { project.autoSelectOpenedFile = it })
                 .testTag(TreeTags.TREE_AUTO_SELECT),
             contentAlignment = Alignment.Center,

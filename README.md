@@ -191,7 +191,8 @@ server restart).
 - `./ci` – the whole CI on your machine: `./lint`, then `./linux-vm test`, then `./windows-vm test` (starting the
   VM if needed), with a summary at the end; `./ci --help` lists the options to skip a step or narrow the matrix.
 
-The bundled JetBrains Mono font is licensed under the SIL Open Font License 1.1.
+The bundled JetBrains Mono (code) and Geist (interface) fonts are licensed under the SIL Open Font License 1.1.
+The interface icons are drawn from the path data of [Lucide](https://lucide.dev) (lucide-static 0.460.0), licensed under the ISC License, Copyright (c) Lucide Contributors.
 
 ---
 

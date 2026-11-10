@@ -18,8 +18,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -30,6 +28,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -57,7 +56,7 @@ internal fun Toolbar(app: AppState, project: ProjectState) {
         Modifier
             .fillMaxWidth()
             .height(40.dp)
-            .background(IdeColors.Panel)
+            .background(IdeColors.Frame)
             .padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -80,10 +79,12 @@ internal fun Toolbar(app: AppState, project: ProjectState) {
         Spacer(Modifier.width(10.dp))
         IdeButton("Deploy", { project.deployments.show() }, Modifier.testTag(AppTags.DEPLOY_BUTTON))
         Spacer(Modifier.width(6.dp))
-        IconButton({ project.showPopup(PopupKind.GotoFile) }) { SearchIcon(color = IdeColors.Text) }
+        SearchField { project.showPopup(PopupKind.GotoFile) }
     }
 }
 
+// Longer names end in an ellipsis, leaving room for the branch and its pinned branches.
+private val PROJECT_NAME_WIDTH = 180.dp
 private val MENU_MIN_WIDTH = 320.dp
 private val MENU_MAX_WIDTH = 900.dp
 
@@ -112,8 +113,8 @@ private fun RemoteBadge(app: AppState) {
             )
             Chevron(expanded = false)
         }
-        DropdownMenu(menuOpen, onDismissRequest = { menuOpen = false }) {
-            DropdownMenuItem(
+        IdeDropdownMenu(menuOpen, onDismissRequest = { menuOpen = false }) {
+            IdeMenuItem(
                 text = { Text("Disconnect from $label", fontSize = 13.sp) },
                 onClick = {
                     menuOpen = false
@@ -131,16 +132,23 @@ private fun ProjectWidget(app: AppState, project: ProjectState) {
     Box {
         Row(
             Modifier
+                .height(28.dp)
+                .border(1.dp, IdeColors.Border, IdeShapes.Medium)
+                .clip(IdeShapes.Medium)
                 .clickable { menuOpen = true }
                 .testTag(AppTags.PROJECT_WIDGET)
-                .padding(horizontal = 6.dp, vertical = 4.dp),
+                .padding(horizontal = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             ProjectBadge(project.name)
-            Label(project.name, Modifier.padding(start = 8.dp), fontWeight = FontWeight.SemiBold)
+            Label(
+                project.name,
+                Modifier.padding(start = 8.dp).widthIn(max = PROJECT_NAME_WIDTH),
+                fontWeight = FontWeight.SemiBold,
+            )
             Chevron(expanded = true, Modifier.padding(start = 2.dp))
         }
-        DropdownMenu(
+        IdeDropdownMenu(
             menuOpen,
             onDismissRequest = { menuOpen = false },
             Modifier
@@ -159,7 +167,7 @@ private fun ProjectWidget(app: AppState, project: ProjectState) {
 
 @Composable
 private fun SettingsMenuItem(app: AppState, close: () -> Unit) {
-    DropdownMenuItem(
+    IdeMenuItem(
         text = { Text("Settings…", fontSize = 13.sp) },
         trailingIcon = { Text("Ctrl+Alt+S", fontSize = 12.sp, color = IdeColors.TextSecondary) },
         onClick = {
@@ -172,7 +180,7 @@ private fun SettingsMenuItem(app: AppState, close: () -> Unit) {
 
 @Composable
 private fun ProjectMenuItems(app: AppState, close: () -> Unit) {
-    DropdownMenuItem(
+    IdeMenuItem(
         text = { Text("Open Project…", fontSize = 13.sp) },
         onClick = {
             close()
@@ -180,7 +188,7 @@ private fun ProjectMenuItems(app: AppState, close: () -> Unit) {
         },
         modifier = Modifier.testTag(AppTags.PROJECT_OPEN_OTHER),
     )
-    DropdownMenuItem(
+    IdeMenuItem(
         text = { Text("Go Homepage", fontSize = 13.sp) },
         onClick = {
             close()
@@ -190,7 +198,7 @@ private fun ProjectMenuItems(app: AppState, close: () -> Unit) {
     )
     SettingsMenuItem(app, close)
     // Feature flag of the experimental agent mode, saved with the preferences.
-    DropdownMenuItem(
+    IdeMenuItem(
         text = {
             val check = if (app.settings.agentModeEnabled) "✓  " else "     "
             Text("${check}Agent Mode (Experimental)", fontSize = 13.sp)
@@ -203,7 +211,7 @@ private fun ProjectMenuItems(app: AppState, close: () -> Unit) {
     )
     // The telemetry consent, also asked by the welcome screen: takes effect at once.
     if (!app.settings.telemetry.forbidden) {
-        DropdownMenuItem(
+        IdeMenuItem(
             text = {
                 val check = if (app.settings.telemetry.enabled) "✓  " else "     "
                 Text("${check}Share Performance Measures", fontSize = 13.sp)
@@ -298,7 +306,7 @@ internal fun StatusBar(app: AppState, project: ProjectState) {
         Modifier
             .fillMaxWidth()
             .height(26.dp)
-            .background(IdeColors.Panel)
+            .background(IdeColors.Frame)
             .padding(horizontal = 12.dp)
             .testTag(AppTags.STATUS_BAR),
         verticalAlignment = Alignment.CenterVertically,

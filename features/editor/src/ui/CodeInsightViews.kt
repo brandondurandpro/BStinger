@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
@@ -67,14 +66,19 @@ import org.example.kotlineditor.state.confirmRename
 import org.example.kotlineditor.state.visualColumn
 import kotlin.math.roundToInt
 
-private val POPUP_SHAPE = RoundedCornerShape(4.dp)
+private val POPUP_SHAPE = IdeShapes.Medium
 private val HOVER_MAX_WIDTH = 620.dp
 private val HOVER_MAX_HEIGHT = 420.dp
 internal val LIST_WIDTH = 640.dp
 internal val LIST_ROW_HEIGHT = 22.dp
 internal const val LIST_ROWS = 12
-internal val POPUP_LABEL_STYLE get() = TextStyle(color = IdeColors.Text, fontSize = 13.sp)
-internal val POPUP_SECONDARY_STYLE get() = TextStyle(color = IdeColors.TextSecondary, fontSize = 12.sp)
+internal val POPUP_LABEL_STYLE get() = TextStyle(fontFamily = IdeFonts.ui, color = IdeColors.Text, fontSize = 13.sp)
+internal val POPUP_SECONDARY_STYLE get() =
+    TextStyle(
+        fontFamily = IdeFonts.ui,
+        color = IdeColors.TextSecondary,
+        fontSize = 12.sp,
+    )
 
 /** Where an overlay is placed relative to its anchor's line. */
 internal enum class Placement { Below, Above }
@@ -206,7 +210,7 @@ private fun ProblemLine(problem: Diagnostic) {
             Modifier
                 .padding(top = 4.dp)
                 .size(8.dp)
-                .background(problemColor(problem.severity), RoundedCornerShape(4.dp)),
+                .background(problemColor(problem.severity), IdeShapes.Medium),
         )
         val source = listOfNotNull(problem.source, problem.code).joinToString(" ")
         val text =
@@ -244,7 +248,7 @@ private fun CodeActionsView(popup: org.example.kotlineditor.state.CodeActionsPop
                 Box(
                     Modifier
                         .size(8.dp)
-                        .background(color, RoundedCornerShape(4.dp)),
+                        .background(color, IdeShapes.Medium),
                 )
                 BasicText(action.title, Modifier.padding(start = 8.dp), style = POPUP_LABEL_STYLE, maxLines = 1)
             }
@@ -325,8 +329,8 @@ private fun RenameView(
             Modifier
                 .fillMaxWidth()
                 .padding(top = 6.dp)
-                .background(IdeColors.Input, RoundedCornerShape(3.dp))
-                .border(1.dp, IdeColors.Accent, RoundedCornerShape(3.dp))
+                .background(IdeColors.Input, IdeShapes.Small)
+                .border(1.dp, IdeColors.Accent, IdeShapes.Small)
                 .padding(horizontal = 6.dp, vertical = 4.dp)
                 .focusRequester(focus)
                 .onPreviewKeyEvent { event -> renameKey(event, insight, close) }

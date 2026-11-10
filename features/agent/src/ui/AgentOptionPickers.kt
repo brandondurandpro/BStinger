@@ -10,10 +10,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -81,7 +78,7 @@ private fun OptionPicker(
             Label(
                 "${current?.name ?: option.current} ▾",
                 Modifier
-                    .background(if (open) IdeColors.Selection else Color.Transparent, RoundedCornerShape(4.dp))
+                    .background(if (open) IdeColors.Selection else Color.Transparent, IdeShapes.Medium)
                     .clickable { open = true }
                     .testTag(tag)
                     .padding(horizontal = 6.dp, vertical = 2.dp),
@@ -96,7 +93,7 @@ private fun OptionPicker(
                 if (closes) open = false
                 closes
             }
-        DropdownMenu(open, onDismissRequest = { open = false }, Modifier.widthIn(max = MENU_WIDTH).then(escape)) {
+        IdeDropdownMenu(open, onDismissRequest = { open = false }, Modifier.widthIn(max = MENU_WIDTH).then(escape)) {
             // A long list of values (the models of a provider) has a field that filters it.
             var filter by remember { mutableStateOf("") }
             val searchable = option.values.size > SEARCHABLE_FROM
@@ -133,7 +130,7 @@ private fun AgentOptionValue.matches(filter: String): Boolean {
 @Composable
 private fun OptionItem(option: AgentOption, value: AgentOptionValue, tag: String, choose: () -> Unit) {
     val chosen = value.value == option.current
-    DropdownMenuItem(
+    IdeMenuItem(
         text = {
             Column {
                 val mark = if (chosen) "✓  " else "     "

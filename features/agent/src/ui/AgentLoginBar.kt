@@ -5,7 +5,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -54,7 +53,7 @@ fun LoginBar(agent: AgentState, conversation: Conversation) {
             Label(
                 method.name,
                 Modifier
-                    .background(IdeColors.Selection, RoundedCornerShape(4.dp))
+                    .background(IdeColors.Selection, IdeShapes.Medium)
                     .clickable(onClick = login)
                     .padding(horizontal = 10.dp, vertical = 4.dp),
                 color = IdeColors.Text,

@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -45,8 +44,8 @@ internal fun UserBubble(text: String, context: List<String> = emptyList()) {
             text,
             Modifier
                 .widthIn(max = 560.dp)
-                .background(IdeColors.Panel, RoundedCornerShape(8.dp))
-                .border(1.dp, IdeColors.Separator, RoundedCornerShape(8.dp))
+                .background(IdeColors.Panel, IdeShapes.ExtraLarge)
+                .border(1.dp, IdeColors.Separator, IdeShapes.ExtraLarge)
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             style = bodyStyle,
         )
@@ -82,8 +81,8 @@ internal fun ToolCallCard(call: AgentItem.ToolCall) {
     Column(
         Modifier
             .fillMaxWidth()
-            .background(IdeColors.Panel, RoundedCornerShape(6.dp))
-            .border(1.dp, IdeColors.Separator, RoundedCornerShape(6.dp))
+            .background(IdeColors.Panel, IdeShapes.Large)
+            .border(1.dp, IdeColors.Separator, IdeShapes.Large)
             .padding(horizontal = 10.dp, vertical = 6.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -120,7 +119,7 @@ private fun TerminalOutput(terminal: AgentTerminalOutput) {
     Column(
         Modifier
             .fillMaxWidth()
-            .background(IdeColors.Editor, RoundedCornerShape(4.dp))
+            .background(IdeColors.Editor, IdeShapes.Medium)
             .padding(horizontal = 8.dp, vertical = 4.dp)
             .testTag(AgentTags.AGENT_TERMINAL),
     ) {
@@ -153,7 +152,7 @@ private fun statusText(status: AgentToolStatus) =
 @Composable
 private fun DiffPreview(diff: AgentDiff) {
     val lines = changedLines(diff.oldText, diff.newText)
-    Column(Modifier.fillMaxWidth().background(IdeColors.Input, RoundedCornerShape(4.dp)).padding(6.dp)) {
+    Column(Modifier.fillMaxWidth().background(IdeColors.Input, IdeShapes.Medium).padding(6.dp)) {
         Label(
             diff.path.substringAfterLast('/').substringAfterLast('\\'),
             fontWeight = FontWeight.SemiBold,
@@ -205,8 +204,8 @@ internal fun PermissionCard(request: AgentItem.Permission, onAnswer: (String) ->
     Column(
         Modifier
             .fillMaxWidth()
-            .background(IdeColors.Panel, RoundedCornerShape(6.dp))
-            .border(1.dp, if (request.pending) IdeColors.Accent else IdeColors.Separator, RoundedCornerShape(6.dp))
+            .background(IdeColors.Panel, IdeShapes.Large)
+            .border(1.dp, if (request.pending) IdeColors.Accent else IdeColors.Separator, IdeShapes.Large)
             .padding(10.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {

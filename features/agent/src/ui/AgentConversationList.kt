@@ -19,11 +19,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -173,7 +170,7 @@ private fun ConversationRow(agent: AgentState, conversation: Conversation, selec
             Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 6.dp, vertical = 1.dp)
-                .background(background, RoundedCornerShape(6.dp))
+                .background(background, IdeShapes.Large)
                 .hoverable(interaction)
                 .clickable(interactionSource = interaction, indication = null) {
                     // A click opens at once: waiting to tell it from a double click would delay every one.
@@ -211,8 +208,8 @@ private fun ConversationRow(agent: AgentState, conversation: Conversation, selec
         menu?.let { offset ->
             // The menu opens under its anchor: a point-sized one at the click puts it right there.
             Box(Modifier.offset(offset.x, offset.y).size(0.dp)) {
-                DropdownMenu(true, onDismissRequest = { menu = null }) {
-                    DropdownMenuItem(
+                IdeDropdownMenu(true, onDismissRequest = { menu = null }) {
+                    IdeMenuItem(
                         text = { Text(if (conversation.pinned) "Unpin" else "Pin to the top", fontSize = 13.sp) },
                         onClick = {
                             menu = null
@@ -220,7 +217,7 @@ private fun ConversationRow(agent: AgentState, conversation: Conversation, selec
                         },
                         modifier = Modifier.testTag(AgentTags.AGENT_PIN),
                     )
-                    DropdownMenuItem(
+                    IdeMenuItem(
                         text = { Text("Duplicate", fontSize = 13.sp) },
                         onClick = {
                             menu = null
@@ -228,7 +225,7 @@ private fun ConversationRow(agent: AgentState, conversation: Conversation, selec
                         },
                         modifier = Modifier.testTag(AgentTags.AGENT_DUPLICATE),
                     )
-                    DropdownMenuItem(
+                    IdeMenuItem(
                         text = { Text(if (conversation.archived) "Unarchive" else "Archive", fontSize = 13.sp) },
                         onClick = {
                             menu = null
@@ -236,7 +233,7 @@ private fun ConversationRow(agent: AgentState, conversation: Conversation, selec
                         },
                         modifier = Modifier.testTag(AgentTags.AGENT_ARCHIVE),
                     )
-                    DropdownMenuItem(
+                    IdeMenuItem(
                         text = { Text("Rename", fontSize = 13.sp) },
                         onClick = {
                             menu = null
@@ -244,7 +241,7 @@ private fun ConversationRow(agent: AgentState, conversation: Conversation, selec
                         },
                         modifier = Modifier.testTag(AgentTags.AGENT_RENAME),
                     )
-                    DropdownMenuItem(
+                    IdeMenuItem(
                         text = { Text("Delete", fontSize = 13.sp) },
                         onClick = {
                             menu = null
@@ -400,10 +397,10 @@ private fun TitleField(title: String, onDone: (String?) -> Unit) {
             }
             .testTag(AgentTags.AGENT_RENAME_FIELD),
         singleLine = true,
-        textStyle = TextStyle(color = IdeColors.Text, fontSize = 13.sp, fontWeight = FontWeight.Medium),
+        textStyle = TextStyle(fontFamily = IdeFonts.ui, color = IdeColors.Text, fontSize = 13.sp, fontWeight = FontWeight.Medium),
         cursorBrush = SolidColor(IdeColors.Text),
         decorationBox = { field ->
-            val shape = RoundedCornerShape(4.dp)
+            val shape = IdeShapes.Medium
             val border = if (focused) IdeColors.Accent else IdeColors.InputBorder
             Box(
                 Modifier

@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -37,7 +36,7 @@ private val TEXT_SIZE = 13.sp
 fun MarkdownText(markdown: String, modifier: Modifier = Modifier) {
     val blocks = remember(markdown, IdeColors.palette) { parseMarkdown(markdown) }
     val codeStyle = LocalCodeStyle.current
-    val text = TextStyle(color = IdeColors.Text, fontSize = TEXT_SIZE, lineHeight = 19.sp)
+    val text = TextStyle(fontFamily = IdeFonts.ui, color = IdeColors.Text, fontSize = TEXT_SIZE, lineHeight = 19.sp)
     val inlineCode = SpanStyle(fontFamily = codeStyle.fontFamily, background = IdeColors.DocumentationCode)
     Column(modifier, verticalArrangement = Arrangement.spacedBy(BLOCK_SPACING)) {
         for (block in blocks) Block(block, text, inlineCode)
@@ -93,7 +92,7 @@ private fun CodeBlock(block: MarkdownBlock.Code) {
     Box(
         Modifier
             .fillMaxWidth()
-            .background(IdeColors.DocumentationCode, RoundedCornerShape(3.dp))
+            .background(IdeColors.DocumentationCode, IdeShapes.Small)
             .padding(horizontal = 8.dp, vertical = 6.dp),
     ) {
         BasicText(highlighted, style = codeStyle)

@@ -9,8 +9,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -32,9 +30,9 @@ import org.example.kotlineditor.state.ToolWindow
 import org.example.kotlineditor.state.ToolWindowLayout
 
 internal val ROW_HEIGHT = 20.dp
-internal val PASSED_COLOR = Color(0xFF5FB86B)
-internal val SKIPPED_COLOR = Color(0xFF868A91)
-internal val WARNING_COLOR = Color(0xFFD9A343)
+internal val PASSED_COLOR get() = IdeColors.GitAdded
+internal val SKIPPED_COLOR get() = IdeColors.TextSecondary
+internal val WARNING_COLOR get() = IdeColors.ProblemWarning
 
 /** Run tool window (Alt+4): the run configurations, the output of the command and the tree of test results. */
 @Composable
@@ -70,7 +68,7 @@ private fun ConfigurationSelector(run: RunState) {
     Box(Modifier.padding(end = 8.dp)) {
         Row(
             Modifier
-                .background(IdeColors.Hover, RoundedCornerShape(4.dp))
+                .background(IdeColors.Hover, IdeShapes.Medium)
                 .clickable { open = true }
                 .padding(horizontal = 8.dp, vertical = 2.dp)
                 .testTag(RunTags.SELECTOR),
@@ -79,7 +77,7 @@ private fun ConfigurationSelector(run: RunState) {
             Label(run.selected?.name ?: "No configuration", modifier = Modifier.padding(end = 4.dp))
             Chevron(expanded = open)
         }
-        DropdownMenu(open, { open = false }, Modifier.testTag(RunTags.SELECTOR_MENU)) {
+        IdeDropdownMenu(open, { open = false }, Modifier.testTag(RunTags.SELECTOR_MENU)) {
             run.available.forEach { configuration ->
                 MenuRow(configuration.name, RunTags.configuration(configuration.id)) {
                     run.select(configuration.id)
@@ -122,10 +120,10 @@ private fun RunActions(run: RunState) {
         color = session?.let(::statusColor) ?: IdeColors.TextSecondary,
     )
     IconButton({ run.runSelected() }, Modifier.testTag(RunTags.START)) {
-        Label("▶", color = if (run.selected != null) PASSED_COLOR else IdeColors.TextSecondary)
+        PlayIcon(color = if (run.selected != null) PASSED_COLOR else IdeColors.TextSecondary)
     }
     IconButton({ run.stop() }, Modifier.testTag(RunTags.STOP)) {
-        Label("■", color = if (session?.running == true) IdeColors.Error else IdeColors.TextSecondary)
+        StopIcon(color = if (session?.running == true) IdeColors.Error else IdeColors.TextSecondary)
     }
 }
 
@@ -184,7 +182,7 @@ internal fun TabChip(text: String, active: Boolean, tag: String, onClick: () -> 
     Box(
         Modifier
             .padding(end = 4.dp)
-            .background(if (active) IdeColors.Selection else IdeColors.Panel, RoundedCornerShape(4.dp))
+            .background(if (active) IdeColors.Selection else IdeColors.Panel, IdeShapes.Medium)
             .clickable(onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 2.dp)
             .testTag(tag),
