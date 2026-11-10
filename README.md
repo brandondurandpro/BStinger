@@ -40,8 +40,15 @@ A lightweight IDE in the style of IntelliJ IDEA (New UI, dark theme), written wi
   needed on the host (the bundle carries a jlink runtime).
   (the bundle carries a jlink runtime). See [docs/REMOTE.md](docs/REMOTE.md).
 - **Project view**: lazily loaded, virtualized file tree (directories first), keyboard navigation (arrows, Enter),
-  double click to open, right click for *New File / New Directory / Rename / Delete / Copy Path*, resizable and
-  togglable (`Alt+1`), *Select in Project View* (`Alt+F1`).
+  double click to open, right click for *New File / New Directory / Rename / Delete / Deploy to… / Copy Path*,
+  resizable and togglable (`Alt+1`), *Select in Project View* (`Alt+F1`).
+- **Deploy**: *Deploy to…* on a file or directory of the project view copies it, with its place relative to the
+  project, to a folder: `/var/www` (or `dist`, relative to the project) on the server's disk, or `host:folder` /
+  `user@host:/var/www` on another machine, over SSH (`tar` piped into `ssh`, nothing to install on the host). Existing
+  files are replaced, nothing is deleted, `.git` is left out, permissions and links are kept. The **Deploy** button
+  of the toolbar lists the deployments saved for the project (folders and destination), each *manual* (a button) or
+  *automatic* (sent as soon as its files change). See
+  [docs/DEPLOY.md](docs/DEPLOY.md).
 - **Git panel** (`Alt+9`): changed files against `HEAD` below the project view, with IntelliJ-style status letters and
   colors; a click opens the diff of the file in a tab (green additions, red removals, old and new line numbers),
   switchable to a side-by-side view; its *Open File* button (`F4`) opens the file at its first change. The editor gutter marks added, modified and removed lines, *Annotate* shows the

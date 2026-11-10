@@ -24,6 +24,8 @@ class LocalServices(
     ripgrep: RipgrepSettings = RipgrepSettings(),
     languageServerSettings: LanguageServerSettings = LanguageServerSettings(dataDirectory.toPath()),
     agentSettings: AgentSettings = AgentSettings(),
+    // The command that runs OpenSSH for the deployments to another machine.
+    ssh: List<String> = listOf("ssh"),
 ) {
     private val languageServersLazy = lazy { LanguageServerService(languageServerSettings) { telemetry } }
     private val agentsLazy = lazy { AgentService(AgentFiles(), agentSettings) }
@@ -36,6 +38,12 @@ class LocalServices(
 
     /** Project-wide queries: Find in Files with ripgrep, the built-in search otherwise. */
     val search = RipgrepSearch(LocalSearch(fileSystem), ripgrep, maxFileSize)
+
+    /** Copies files of a project to a folder, here or on another machine. */
+    val deployer = LocalDeployer(ssh)
+
+    /** The deployments saved for each project. */
+    val deployProfiles = FileDeployProfiles(File(dataDirectory, "deployments"))
 
     /** Git information. */
     val git = CliGitClient()

@@ -21,6 +21,8 @@ private const val GIT_DIRECTORY = ".git"
 @Suppress("TooGenericExceptionCaught")
 internal suspend fun ProjectState.followDisk() {
     var cursor = DiskCursor.START
+    // The automatic deployments watch the files from the start, not from the first time the popup is shown.
+    deployments.load()
     while (true) {
         val answer =
             try {
@@ -58,6 +60,7 @@ private suspend fun ProjectState.applyDiskChanges(changes: DiskChanges) {
     val gitPrefix = root.path + separator + GIT_DIRECTORY
     val (inGit, files) = changes.paths.partition { it == gitPrefix || it.startsWith(gitPrefix + separator) }
     if (files.isNotEmpty()) filesChanged(files, changes.versions, separator)
+    if (files.isNotEmpty()) deployments.filesChanged(files)
     // A long poll that waited for nothing.
     if (changes.paths.isEmpty()) return
     // A checkout, a commit or a stage: the branch, the status and every editor's diff may have moved.

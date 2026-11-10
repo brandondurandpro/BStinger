@@ -41,6 +41,9 @@ internal fun TreeContextMenu(project: TreeHost, entry: FileEntry, offset: DpOffs
             MenuItem("Rename…", TreeTags.MENU_RENAME) { action { project.fileDialog = FileDialog.Rename(entry) } }
             MenuItem("Delete…", TreeTags.MENU_DELETE) { action { project.fileDialog = FileDialog.Delete(entry) } }
         }
+        MenuItem("Deploy to…", TreeTags.MENU_DEPLOY) {
+            action { project.fileDialog = FileDialog.Deploy(listOf(entry)) }
+        }
         MenuItem("Copy Path", TreeTags.MENU_COPY_PATH) { action { TextClipboard.set(entry.path) } }
         MenuItem("Reload from Disk", TreeTags.MENU_RELOAD) { action { tree.refresh() } }
     }

@@ -78,6 +78,8 @@ internal fun Toolbar(app: AppState, project: ProjectState) {
         }
         RunWidget(project.run, { project.showToolWindow(ToolWindow.Run) })
         Spacer(Modifier.width(10.dp))
+        IdeButton("Deploy", { project.deployments.show() }, Modifier.testTag(AppTags.DEPLOY_BUTTON))
+        Spacer(Modifier.width(6.dp))
         IconButton({ project.showPopup(PopupKind.GotoFile) }) { SearchIcon(color = IdeColors.Text) }
     }
 }
