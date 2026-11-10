@@ -62,6 +62,9 @@ fun PopupFrame(tag: String, onClose: () -> Unit, width: Int = 640, content: @Com
                 .width(width.dp)
                 .background(IdeColors.Popup, RoundedCornerShape(8.dp))
                 .border(1.dp, IdeColors.Separator, RoundedCornerShape(8.dp))
+                // The panel takes the pointer: a click on an empty place of it does not fall through to the backdrop
+                // under it, which would close the popup. Nothing is consumed, the children get their clicks.
+                .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent() } }
                 .testTag(tag)
                 .padding(10.dp),
         ) {
