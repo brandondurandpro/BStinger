@@ -44,7 +44,7 @@ object AppTags {
     const val PLUGIN_PATH = "settings.plugins.path"
     const val PLUGIN_INSTALL = "settings.plugins.install"
     const val PLUGIN_ERROR = "settings.plugins.error"
-    const val TOOL_PROJECT = "tool.project"
+    const val TOOL_PROJECT = TreeTags.TOOL_BUTTON
     const val TOOL_GIT = GitTags.TOOL_GIT
     const val TOOL_BRANCHES = GitTags.TOOL_BRANCHES
     const val TOOL_TERMINAL = TerminalTags.TOOL_BUTTON
@@ -79,7 +79,7 @@ object AppTags {
     const val STATUS_CONNECTION = "status.connection"
     const val STATUS_OPENING = "status.opening"
     const val STATUS_ERROR = "status.error"
-    const val TOOL_LANGUAGE_SERVERS = "tool.languageServers"
+    const val TOOL_LANGUAGE_SERVERS = LanguageServerTags.TOOL_BUTTON
     const val GOTO_LINE = "gotoLine"
     const val GOTO_LINE_INPUT = "gotoLine.input"
 

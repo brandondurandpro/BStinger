@@ -27,7 +27,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import org.example.kotlineditor.plugin.StripGroup
 import org.example.kotlineditor.plugin.ToolWindowContribution
 import org.example.kotlineditor.plugin.ToolWindowRegistry
@@ -179,24 +178,12 @@ private fun builtIn(
 internal fun builtInToolWindows(): List<ToolWindowContribution> =
     listOf(
         builtIn(
-            ToolWindow.Project,
-            StripGroup.Top,
-            AppTags.TOOL_PROJECT,
-            icon = { FolderIcon(Modifier.size(18.dp)) },
-        ) { project, drag, modifier -> ProjectPanel(project, drag, modifier) },
-        builtIn(
             ToolWindow.Network,
             StripGroup.Bottom,
             AppTags.TOOL_NETWORK,
             devtools = true,
             icon = { Label("⇅", color = IdeColors.Text, fontWeight = FontWeight.Bold) },
         ) { project, drag, modifier -> NetworkPanel(project, drag, modifier) },
-        builtIn(
-            ToolWindow.LanguageServers,
-            StripGroup.Bottom,
-            AppTags.TOOL_LANGUAGE_SERVERS,
-            icon = { Label("LS", color = IdeColors.Text, fontWeight = FontWeight.Bold, fontSize = 11.sp) },
-        ) { project, drag, modifier -> LanguageServersPanel(project, drag, modifier) },
     )
 
 @Composable

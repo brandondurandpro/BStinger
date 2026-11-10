@@ -5,6 +5,7 @@ package org.example.kotlineditor.ui
  * Paths are relative to the project root.
  */
 object TreeTags {
+    const val TOOL_BUTTON = "tool.project"
     const val PROJECT_PANEL = "project.panel"
     const val TREE = "tree"
     const val TREE_MENU = "tree.menu"

@@ -173,7 +173,6 @@ internal val BUILT_IN_IDE_SHORTCUTS =
         bind(setOf(Key.Tab), ctrl = true) { if (it.shift) editor.selectPrevious() else editor.selectNext() },
         bind(setOf(Key.DirectionLeft), alt = true) { editor.selectPrevious() },
         bind(setOf(Key.DirectionRight), alt = true) { editor.selectNext() },
-        bind(setOf(Key.One), alt = true) { project.toggleToolWindow(ToolWindow.Project) },
         bind(setOf(Key.D), ctrl = true, shift = true, alt = true) {
             app.devtools = true
             project.toggleToolWindow(ToolWindow.Network)

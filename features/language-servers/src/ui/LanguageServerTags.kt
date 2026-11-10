@@ -6,6 +6,7 @@ package org.example.kotlineditor.ui
  */
 @Suppress("TooManyFunctions")
 object LanguageServerTags {
+    const val TOOL_BUTTON = "tool.languageServers"
     const val STATUS_SERVER_MEMORY = "status.serverMemory"
     const val STATUS_SERVER_MEMORY_TOOLTIP = "status.serverMemory.tooltip"
     const val LANGUAGE_SERVERS = "languageServers"

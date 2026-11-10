@@ -4,6 +4,7 @@ product:
   type: jvm/lib
 
 dependencies:
+  - //plugin-api: exported
   - //ui/kit: exported
 
 settings:

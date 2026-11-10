@@ -33,7 +33,15 @@ private fun KeyBinding<IdeContext>.asAction(): KeyBinding<ActionContext> = adapt
 // Terminal at the bottom.
 private fun allToolWindows(): List<ToolWindowContribution> {
     val own = builtInToolWindows().associateBy { it.window }
-    val bundled = listOf(gitToolWindow(), branchesToolWindow(), runToolWindow(), terminalToolWindow())
+    val bundled =
+        listOf(
+            projectToolWindow(),
+            gitToolWindow(),
+            branchesToolWindow(),
+            runToolWindow(),
+            languageServersToolWindow(),
+            terminalToolWindow(),
+        )
     val byWindow = own + bundled.associateBy { it.window }
     val order =
         listOf(
@@ -48,7 +56,7 @@ private fun allToolWindows(): List<ToolWindowContribution> {
     return order.mapNotNull { byWindow[it] }
 }
 
-private fun bundledShortcuts() = runShortcuts() + gitShortcuts() + terminalShortcuts()
+private fun bundledShortcuts() = projectShortcuts() + runShortcuts() + gitShortcuts() + terminalShortcuts()
 
 /**
  * Loads [plugin] into the running IDE: its tool windows and shortcuts appear at once. Closing the result unloads it,
