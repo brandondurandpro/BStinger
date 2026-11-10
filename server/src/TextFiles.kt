@@ -61,6 +61,9 @@ object TextFiles {
         return FileContent.Text(lines, if (crlf) "\r\n" else "\n")
     }
 
+    /** The content of [bytes] already in memory (a version Git holds), decoded like a file that was read. */
+    fun decodeBytes(bytes: ByteArray): FileContent = decode(bytes)
+
     private fun decode(bytes: ByteArray): FileContent {
         if (isBinary(bytes)) return FileContent.Binary(null)
         val text = utf8OrNull(bytes) ?: String(bytes, Charsets.ISO_8859_1)

@@ -319,7 +319,31 @@ enum class GitFileStatus {
 
     /** Renamed or moved. */
     Renamed,
+
+    /** Both sides of a merge changed it: the file waits for the user to resolve it (a three-way merge). */
+    Conflicted,
 }
+
+/** The commits that changed a conflicted file on each side since the two sides diverged, newest first. */
+data class MergeHistory(
+    /** Commits of the current branch. */
+    val ours: List<GitCommit>,
+    /** Commits of the branch being merged in (or of the commit being applied). */
+    val theirs: List<GitCommit>,
+)
+
+/**
+ * The three versions of a conflicted file, as the index keeps them during a merge, rebase or cherry-pick. A side is
+ * `null` when that version has no such file: added by one side only (no [base]), or deleted by one side.
+ */
+data class MergeSides(
+    /** The common ancestor of the two sides. */
+    val base: FileContent.Text?,
+    /** The version of the current branch (what HEAD holds). */
+    val ours: FileContent.Text?,
+    /** The version being merged in. */
+    val theirs: FileContent.Text?,
+)
 
 /** Kind of a line of a unified diff. */
 enum class DiffKind {
@@ -466,6 +490,21 @@ interface GitClient : WorktreeClient {
     /** Differences of [path] (relative to [root]) between HEAD and the working tree; empty when unchanged. */
     suspend fun diff(root: String, path: String): List<DiffLine>
 
+    /**
+     * The three versions of the conflicted file [path] (relative to [root]); fails when the file is not in conflict or
+     * when a version is not text.
+     */
+    suspend fun mergeSides(root: String, path: String): MergeSides
+
+    /** The commits that changed [path] on each side of the merge in progress since the sides diverged. */
+    suspend fun mergeHistory(root: String, path: String): MergeHistory
+
+    /**
+     * Resolves the conflict of [path] with [result]: writes it to the file, keeping its encoding and permissions, and
+     * stages it, which ends the conflict for Git. Repeating the call after a lost answer writes the same text again.
+     */
+    suspend fun resolveConflict(root: String, path: String, result: FileContent.Text)
+
     /** Local branches of the repository, with their synchronization against their remote-tracking branch. */
     suspend fun branchDetails(root: String): List<GitBranchInfo>
 
@@ -551,6 +590,13 @@ interface GitClient : WorktreeClient {
         override suspend fun branch(root: String): String? = null
 
         override suspend fun diff(root: String, path: String): List<DiffLine> = emptyList()
+
+        override suspend fun mergeSides(root: String, path: String): MergeSides =
+            throw UnsupportedOperationException("Git is not available")
+
+        override suspend fun mergeHistory(root: String, path: String) = MergeHistory(emptyList(), emptyList())
+
+        override suspend fun resolveConflict(root: String, path: String, result: FileContent.Text) = Unit
 
         override suspend fun branchDetails(root: String): List<GitBranchInfo> = emptyList()
 

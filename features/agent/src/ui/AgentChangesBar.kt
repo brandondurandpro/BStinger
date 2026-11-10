@@ -132,4 +132,5 @@ private fun statusLetter(status: GitFileStatus): String =
         GitFileStatus.Untracked -> "U"
         GitFileStatus.Deleted -> "D"
         GitFileStatus.Renamed -> "R"
+        GitFileStatus.Conflicted -> "C"
     }

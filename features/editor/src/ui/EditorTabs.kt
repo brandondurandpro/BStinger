@@ -117,6 +117,10 @@ private fun tagsOf(tab: EditorTab): TabTags {
             )
         }
 
+        tab.isMerge -> {
+            TabTags(EditorTags.mergeTab(tab.relativePath), EditorTags.mergeTabClose(tab.relativePath))
+        }
+
         tab.isCompare -> {
             TabTags(EditorTags.compareTab(tab.relativePath), EditorTags.compareTabClose(tab.relativePath))
         }

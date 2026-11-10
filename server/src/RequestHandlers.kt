@@ -25,6 +25,7 @@ import org.example.kotlineditor.rpc.stringOrNull
 import org.example.kotlineditor.rpc.strings
 import org.example.kotlineditor.rpc.symbolsJson
 import org.example.kotlineditor.rpc.terminalInput
+import org.example.kotlineditor.rpc.textContent
 import org.example.kotlineditor.rpc.toJson
 import org.example.kotlineditor.rpc.toJsonOrNull
 
@@ -152,6 +153,11 @@ private fun gitHandlers(git: GitClient): Map<Method, Handler> =
         Method.GitCommitDetails to { git.commitDetails(root(), params.string("hash")).toJson() },
         Method.GitBranchDetails to { git.branchDetails(root()).branchesJson() },
         Method.GitBranches to { git.branches(root()).toJson() },
+        Method.GitMergeSides to { git.mergeSides(root(), params.string(PATH)).toJson() },
+        Method.GitMergeHistory to { git.mergeHistory(root(), params.string(PATH)).toJson() },
+        Method.GitResolveConflict to {
+            nothing { git.resolveConflict(root(), params.string(PATH), params.read("result") { it.textContent() }) }
+        },
         Method.GitCheckout to { nothing { git.checkout(root(), params.string(BRANCH)) } },
         Method.GitDeleteBranches to {
             nothing { git.deleteBranches(root(), params.read("branches") { it.strings() }) }

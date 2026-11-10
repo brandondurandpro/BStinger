@@ -422,6 +422,15 @@ enum class Method(
     /** Local branches of the repository. */
     GitBranches("git/branches", mutating = false),
 
+    /** The base, ours and theirs versions of a conflicted file. */
+    GitMergeSides("git/mergeSides", mutating = false),
+
+    /** The commits of a conflicted file on each side of the merge in progress. */
+    GitMergeHistory("git/mergeHistory", mutating = false),
+
+    /** Writes the resolution of a conflicted file and stages it. */
+    GitResolveConflict("git/resolveConflict", mutating = true),
+
     /** Checks out a branch. */
     GitCheckout("git/checkout", mutating = true),
 

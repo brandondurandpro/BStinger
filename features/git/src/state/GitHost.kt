@@ -14,6 +14,9 @@ interface GitHost : ProjectHost {
     /** Opens the diff of the working tree file at [relativePath] against HEAD. */
     fun openDiff(relativePath: String)
 
+    /** Opens the three-way merge of the conflicted working tree file at [relativePath]. */
+    fun openMerge(relativePath: String)
+
     /** Opens the diff of [file] in [commit]. */
     fun openCommitDiff(commit: GitCommit, file: GitCommitFile)
 }

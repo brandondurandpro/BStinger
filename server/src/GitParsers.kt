@@ -127,12 +127,16 @@ internal fun parseStatusEntries(output: List<String>): List<StatusEntry> {
     return entries
 }
 
-/** The status the IDE shows for [entry], or null for a change it does not show (an unmerged path, for one). */
+/** The two letters of an unmerged path: a `U` on either side, or both sides added (`AA`) or deleted (`DD`). */
+internal fun isUnmerged(code: String): Boolean = 'U' in code || code == "AA" || code == "DD"
+
+/** The status the IDE shows for [entry], or null for a change it does not show. */
 internal fun statusOf(entry: StatusEntry): Pair<String, GitFileStatus>? {
     val code = entry.code
     val status =
         when {
             code == "??" -> GitFileStatus.Untracked
+            isUnmerged(code) -> GitFileStatus.Conflicted
             'R' in code -> GitFileStatus.Renamed
             'A' in code -> GitFileStatus.Added
             'D' in code -> GitFileStatus.Deleted

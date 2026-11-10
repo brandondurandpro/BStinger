@@ -10,6 +10,7 @@ import kotlinx.coroutines.launch
 import org.example.kotlineditor.model.BlameLine
 import org.example.kotlineditor.model.DiffLine
 import org.example.kotlineditor.model.FileEntry
+import org.example.kotlineditor.model.MergeSides
 import org.example.kotlineditor.model.ProjectFileSystem
 import org.example.kotlineditor.syntax.treesitter.GrammarStore
 import java.io.IOException
@@ -30,9 +31,10 @@ class EditorState(
     diffs: suspend (FileEntry) -> List<DiffLine> = { emptyList() },
     blames: suspend (FileEntry) -> List<BlameLine> = { emptyList() },
     commitDiffs: suspend (FileEntry, CommitDiffTarget) -> List<DiffLine> = { _, _ -> emptyList() },
+    merges: suspend (FileEntry) -> MergeSides = { throw IOException("No merge available") },
     grammars: GrammarStore? = null,
 ) {
-    private val files = TabFiles(fileSystem, scope, onSaved, diffs, blames, commitDiffs, grammars)
+    private val files = TabFiles(fileSystem, scope, onSaved, diffs, blames, commitDiffs, merges, grammars)
 
     val panes = mutableStateListOf(EditorPane())
 
@@ -62,8 +64,11 @@ class EditorState(
     fun openCommitDiff(entry: FileEntry, commit: CommitDiffTarget): EditorTab =
         openIn(activePane, entry, diff = true, commit = commit)
 
-    /** Recomputes every open diff tab (the Git status changed); a compare tab holds its own lines, not Git's. */
-    fun reloadDiffs() = allTabs.filter { it.isDiff && !it.isCompare && it.commit == null }.forEach(files::loadDiff)
+    /** Opens (or activates) the merge tab of the conflicted [entry]: its three versions side by side. */
+    fun openMerge(entry: FileEntry): EditorTab = openIn(activePane, entry, diff = true, merge = true)
+
+    /** Recomputes every open diff tab (the Git status changed); compare and merge tabs hold their own content. */
+    fun reloadDiffs() = allTabs.filter { it.isUncommittedDiff() }.forEach(files::loadDiff)
 
     /** Recomputes the gutter change marks of the open text files (after a save, a commit, a branch switch). */
     fun reloadChanges() = allTabs.filterNot { it.isDiff }.distinctBy { it.entry.path }.forEach(files::loadChanges)
@@ -75,7 +80,7 @@ class EditorState(
     fun reloadGitOf(entry: FileEntry) {
         val tabs = allTabs.filter { it.entry.path == entry.path }
         // A commit's diff never changes: only the uncommitted one is recomputed (a compare holds its own lines).
-        tabs.filter { it.isDiff && !it.isCompare && it.commit == null }.forEach(files::loadDiff)
+        tabs.filter { it.isUncommittedDiff() }.forEach(files::loadDiff)
         tabs.firstOrNull { !it.isDiff }?.let(files::loadChanges)
         tabs.firstOrNull { it.blameVisible }?.let(files::loadBlame)
     }
@@ -93,8 +98,9 @@ class EditorState(
         diff: Boolean = false,
         commit: CommitDiffTarget? = null,
         compare: Boolean = false,
+        merge: Boolean = false,
     ): EditorTab {
-        val key = tabKey(entry, diff, commit, compare)
+        val key = tabKey(entry, diff, commit, compare, merge)
         val tab =
             pane.tabs.firstOrNull { it.key == key } ?: EditorTab(
                 entry,
@@ -102,6 +108,7 @@ class EditorState(
                 diff,
                 commit,
                 compare,
+                merge,
             ).also { tab ->
                 val insertAt = pane.activeTab?.let { pane.tabs.indexOf(it) + 1 } ?: pane.tabs.size
                 pane.tabs.add(insertAt, tab)
@@ -219,6 +226,12 @@ class EditorState(
      * [timeoutMillis] (closing the IDE while the server is out of reach): the files that could not be saved.
      */
     suspend fun saveAllNow(timeoutMillis: Long): List<UnsavedFile> = files.flush(allTabs, timeoutMillis)
+}
+
+// A diff of the working tree against HEAD, the one a save or a commit changes (not a commit's, a compare, a merge).
+private fun EditorTab.isUncommittedDiff(): Boolean {
+    val other = isCompare || isMerge || commit != null
+    return isDiff && !other
 }
 
 internal fun EditorState.paneOf(tab: EditorTab): EditorPane? = panes.firstOrNull { tab in it.tabs }
