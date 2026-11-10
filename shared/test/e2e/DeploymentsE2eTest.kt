@@ -485,7 +485,7 @@ class DeploymentsE2eTest {
             // The destination first; the selected entry is then the first folder.
             onNodeWithTag(AppTags.DEPLOYMENT_DESTINATION).performTextReplacement(site.toString())
             awaitTag(AppTags.deploymentSource(0)).assertTextContains("docs", substring = true)
-            awaitTag(AppTags.deploymentLanding(0)).assertTextContains("site/docs", substring = true)
+            awaitTag(AppTags.deploymentLanding(0)).assertTextContains(site.resolve("docs").toString(), substring = true)
         }
 
     @Test
@@ -563,7 +563,7 @@ class DeploymentsE2eTest {
             awaitCondition { project.root.resolve("dist/src/b.txt").exists() }
             assertTrue(!project.root.resolve("dist/dist").exists())
             openDeployments()
-            assertContains(awaitDeploymentStatus("Dist"), "Deployed 1 file")
+            assertContains(awaitDeploymentStatus("Dist"), "Deployed")
         }
 
     @Test

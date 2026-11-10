@@ -10,7 +10,6 @@ import org.example.kotlineditor.ui.AppTags
 import java.nio.file.Files
 import kotlin.io.path.ExperimentalPathApi
 import kotlin.io.path.deleteRecursively
-import kotlin.io.path.readText
 import kotlin.io.path.writeText
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -119,7 +118,8 @@ class DeploymentsChaosE2eTest {
                     project.root.resolve("docs/guide.md").writeText("after restart ${round++}")
                     lastWrite = now
                 }
-                docs.resolve("docs/guide.md").readText().startsWith("after restart")
+                val deployed = docs.resolve("docs/guide.md")
+                hasStartingText(deployed, "after restart")
             }
             onNodeWithTag(AppTags.DEPLOY_BUTTON).assertExists()
         }

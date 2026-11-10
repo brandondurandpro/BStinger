@@ -137,11 +137,29 @@ fun ComposeUiTest.awaitDeploymentStatus(name: String): String {
 }
 
 /** Whether the file [path] exists and holds exactly [text]. */
-fun hasText(path: Path, text: String): Boolean = Files.exists(path) && Files.readString(path) == text
+fun hasText(path: Path, text: String): Boolean {
+    if (!Files.exists(path)) return false
+    // On Windows the file may be locked while the deployer is writing it: not there yet.
+    return try {
+        Files.readString(path) == text
+    } catch (_: java.io.IOException) {
+        false
+    }
+}
 
 /** Opens the menu of the row of the deployment [name] (Edit, Duplicate, Delete). */
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.openDeploymentMenu(name: String) {
     awaitTag(AppTags.deploymentMenu(name)).performClick()
     awaitTag(AppTags.deploymentEdit(name))
+}
+
+/** Whether the file at [path] starts with [prefix]; false while it is missing or locked by the deployer (Windows). */
+fun hasStartingText(path: Path, prefix: String): Boolean {
+    if (!Files.exists(path)) return false
+    return try {
+        Files.readString(path).startsWith(prefix)
+    } catch (_: java.io.IOException) {
+        false
+    }
 }
