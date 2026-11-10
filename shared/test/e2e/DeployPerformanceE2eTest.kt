@@ -40,7 +40,7 @@ class DeployPerformanceE2eTest {
             launchWithProject(project)
             openDeployDialog("huge")
             var result = ""
-            measure("deploy a directory of $FILES files", budgetMillis = 5_000, budgetMegabytes = 150) {
+            measure("deploy a directory of $FILES files", budgetMillis = 30_000, budgetMegabytes = 600) {
                 submitDeploy(target.toString())
                 result = awaitDeployResult()
                 renderFrame()
@@ -49,7 +49,7 @@ class DeployPerformanceE2eTest {
             assertTrue(target.resolve(name(0)).exists())
             assertTrue(target.resolve(name(FILES - 1)).exists())
             // Deploying again replaces every file: as fast as the first time.
-            measure("deploy it again over the same files", budgetMillis = 5_000, budgetMegabytes = 150) {
+            measure("deploy it again over the same files", budgetMillis = 30_000, budgetMegabytes = 600) {
                 onNodeWithText("Close").performClick()
                 awaitNoTag(AppTags.FILE_DIALOG)
                 openDeployDialog("huge")

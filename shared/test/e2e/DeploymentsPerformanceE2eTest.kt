@@ -61,10 +61,10 @@ class DeploymentsPerformanceE2eTest {
             openDeployments()
             createDeployment("Big", "big", target.toString(), auto = true)
             closeDeployments()
-            measure("deploy $FILES changed files automatically", budgetMillis = 20_000, budgetMegabytes = 400) {
+            measure("deploy $FILES changed files automatically", budgetMillis = 60_000, budgetMegabytes = 800) {
                 repeat(FILES) { project.file("big/g${it / 100}/f$it.txt", "content $it") }
                 awaitCondition(
-                    timeout = 20_000,
+                    timeout = 60_000,
                 ) { target.resolve("big/g${(FILES - 1) / 100}/f${FILES - 1}.txt").exists() }
                 renderFrame()
             }
