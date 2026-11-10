@@ -15,11 +15,13 @@ import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.model.AppServices
 import org.example.kotlineditor.model.BlameLine
 import org.example.kotlineditor.model.CompletionResult
+import org.example.kotlineditor.model.FileContent
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.GitCommit
 import org.example.kotlineditor.model.GitCommitDetails
 import org.example.kotlineditor.model.GitCommitFile
 import org.example.kotlineditor.model.GitFileStatus
+import org.example.kotlineditor.model.MergeHistory
 import org.example.kotlineditor.syntax.treesitter.GrammarStore
 
 private val INDEXED_POPUPS = setOf(PopupKind.GotoFile, PopupKind.FindInFiles, PopupKind.GotoSymbol)
@@ -64,6 +66,7 @@ class ProjectState(
             commitDiffs = { entry, commit ->
                 services.git.commitDiff(root.path, commit.hash, tree.relativePath(entry), commit.oldPath)
             },
+            merges = { entry -> services.git.mergeSides(root.path, tree.relativePath(entry)) },
             blames = { entry -> services.git.blame(root.path, tree.relativePath(entry)) },
             grammars = grammars,
         )
@@ -200,6 +203,32 @@ class ProjectState(
     /** Opens the diff tab of the file at [relativePath] (a click on a Git panel change). */
     override fun openDiff(relativePath: String) {
         editor.openDiff(entryAt(relativePath))
+    }
+
+    /** Opens the three-way merge of the conflicted file at [relativePath] (a click on a conflict of the Git panel). */
+    override fun openMerge(relativePath: String) {
+        editor.openMerge(entryAt(relativePath))
+    }
+
+    /**
+     * Writes the result of the merge [state] over the conflicted file of [tab] and stages it, then closes the tab. A
+     * failure stays in the Git panel's message and leaves the tab open, with the decisions made so far.
+     */
+    fun applyMerge(tab: EditorTab, state: MergeState) {
+        val result = FileContent.Text(state.resultLines(), state.lineSeparator)
+        git.resolveConflict(tree.relativePath(tab.entry), result) { resolved ->
+            if (resolved) editor.close(tab)
+        }
+    }
+
+    /** The commits of the conflicted file of [tab] on each side of the merge in progress. */
+    suspend fun mergeHistoryOf(tab: EditorTab): MergeHistory =
+        services.git.mergeHistory(root.path, tree.relativePath(tab.entry))
+
+    /** Opens what [commit] changed in the conflicted file of [tab] (a click on its history). */
+    fun openMergeCommit(tab: EditorTab, commit: GitCommit) {
+        val relative = tree.relativePath(tab.entry)
+        openCommitDiff(commit, GitCommitFile(relative, GitFileStatus.Modified))
     }
 
     /** Opens the diff of [file] in [commit] (a click on a changed file in the Branches window). */

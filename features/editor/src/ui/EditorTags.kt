@@ -59,6 +59,18 @@ object EditorTags {
     const val HIERARCHY_EMPTY = "hierarchy.empty"
     const val PROBLEMS_SCRIM = "problems.scrim"
 
+    const val MERGE = "merge"
+    const val MERGE_TOOLBAR = "merge.toolbar"
+    const val MERGE_STATUS = "merge.status"
+    const val MERGE_NEXT = "merge.next"
+    const val MERGE_ALL_OURS = "merge.allOurs"
+    const val MERGE_ALL_THEIRS = "merge.allTheirs"
+    const val MERGE_APPLY = "merge.apply"
+    const val MERGE_CANCEL = "merge.cancel"
+    const val MERGE_LIST = "merge.list"
+    const val MERGE_HISTORY_TOGGLE = "merge.historyToggle"
+    const val MERGE_HISTORY = "merge.history"
+
     const val LINK = "editor.link"
     const val FIND_BAR = "findBar"
     const val FIND_BAR_INPUT = "findBar.input"
@@ -84,6 +96,26 @@ object EditorTags {
     fun compareTab(relativePath: String) = "tab.compare:$relativePath"
 
     fun compareTabClose(relativePath: String) = "tab.compare.close:$relativePath"
+
+    /** The three-way merge of a conflicted file. */
+    fun mergeTab(relativePath: String) = "tab.merge:$relativePath"
+
+    fun mergeTabClose(relativePath: String) = "tab.merge.close:$relativePath"
+
+    /** The decision buttons of the stretch [chunk]: `Ours`, `Theirs`, `Both` or `Base`. */
+    fun mergeChoice(chunk: Int, choice: String) = "merge.choice:$chunk:$choice"
+
+    /** A commit of the history of the file, on [side] (`ours` or `theirs`). */
+    fun mergeHistoryCommit(side: String, hash: String) = "merge.history.$side:$hash"
+
+    /** The heading of the changed stretch [chunk]. */
+    fun mergeHeading(chunk: Int) = "merge.heading:$chunk"
+
+    /** Row [index] of the three columns. */
+    fun mergeRow(index: Int) = "merge.row:$index"
+
+    /** The cell of [column] (`0` ours, `1` result, `2` theirs) in row [index]. */
+    fun mergeCell(index: Int, column: Int) = "merge.cell:$index:$column"
 
     fun commitDiffTab(hash: String, relativePath: String) = "tab.commitDiff:$hash:$relativePath"
 

@@ -4,14 +4,19 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runInterruptible
 import org.example.kotlineditor.model.BlameLine
 import org.example.kotlineditor.model.DiffLine
+import org.example.kotlineditor.model.FileContent
 import org.example.kotlineditor.model.GitBranchInfo
 import org.example.kotlineditor.model.GitClient
 import org.example.kotlineditor.model.GitCommit
 import org.example.kotlineditor.model.GitCommitDetails
 import org.example.kotlineditor.model.GitFileStatus
+import org.example.kotlineditor.model.MergeHistory
+import org.example.kotlineditor.model.MergeSides
 import org.example.kotlineditor.model.WorktreeClient
 import java.io.File
 import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.Paths
 
 private const val REV_PARSE = "rev-parse"
 
@@ -55,6 +60,84 @@ class CliGitClient :
                 UnifiedDiff.newFile(lines)
             }
         }
+
+    /**
+     * The versions of the index at stages 1 (base), 2 (ours) and 3 (theirs) of [path]; a stage that does not exist is
+     * `null`. A version that is not text fails the call: a binary conflict is resolved by choosing a whole version.
+     */
+    override suspend fun mergeSides(root: String, path: String): MergeSides =
+        runInterruptible(Dispatchers.IO) {
+            val stages = unmergedStages(root, path)
+            if (stages.isEmpty()) throw IOException("$path is not in conflict")
+            MergeSides(
+                base = stageText(root, path, BASE_STAGE, stages),
+                ours = stageText(root, path, OURS_STAGE, stages),
+                theirs = stageText(root, path, THEIRS_STAGE, stages),
+            )
+        }
+
+    // The stages `git ls-files -u` lists for [path]: one line `mode hash stage<TAB>path` each.
+    private fun unmergedStages(root: String, path: String): Set<Int> {
+        val lines = gitOutput(root, "ls-files", "-u", "--", path).orEmpty()
+        return lines
+            .mapNotNull {
+                it
+                    .substringBefore('\t')
+                    .split(' ')
+                    .lastOrNull()
+                    ?.toIntOrNull()
+            }.toSet()
+    }
+
+    private fun stageText(root: String, path: String, stage: Int, stages: Set<Int>): FileContent.Text? {
+        if (stage !in stages) return null
+        val bytes = execGitBytes(root, listOf("cat-file", "blob", ":$stage:$path"), GIT_TIMEOUT_SECONDS)
+        val content = bytes?.let(TextFiles::decodeBytes)
+        return when (content) {
+            null -> throw IOException("Cannot read the version $stage of $path")
+            is FileContent.Text -> content
+            else -> throw IOException("$path is not a text file: resolve it by choosing one version")
+        }
+    }
+
+    /**
+     * The commits that changed [path] on each side since the sides diverged: those reachable from HEAD and not from
+     * the commit being merged in (`MERGE_HEAD`, or the one a cherry-pick, a rebase or a revert applies), and the other
+     * way round.
+     */
+    override suspend fun mergeHistory(root: String, path: String): MergeHistory =
+        runInterruptible(Dispatchers.IO) {
+            val incoming = INCOMING_REFS.firstOrNull { gitOutput(root, REV_PARSE, VERIFY, QUIET, it) != null }
+            if (incoming == null) throw IOException("No merge in progress")
+            MergeHistory(
+                ours = fileCommits(root, "HEAD", incoming, path),
+                theirs = fileCommits(root, incoming, "HEAD", path),
+            )
+        }
+
+    private fun fileCommits(root: String, include: String, exclude: String, path: String): List<GitCommit> {
+        val limit = "--max-count=$MAX_MERGE_HISTORY"
+        val output = runGit(root, "log", "--format=$COMMIT_FORMAT", limit, include, "^$exclude", "--", path)
+        return parseCommits(output)
+    }
+
+    /**
+     * Writes [result] over [path] with the encoding the file has (it fails rather than replace a character that
+     * encoding cannot hold) and stages it. The write keeps the permissions of the file, and `git add` ends the
+     * conflict. A file no longer in conflict is refused: someone else resolved it.
+     */
+    override suspend fun resolveConflict(root: String, path: String, result: FileContent.Text) {
+        runInterruptible(Dispatchers.IO) {
+            // Another program may have resolved it since the sides were read: its work must not be overwritten.
+            if (unmergedStages(root, path).isEmpty()) throw IOException("$path is no longer in conflict")
+            val file = Paths.get(root).resolve(path).normalize()
+            require(file.startsWith(Paths.get(root).normalize())) { "Not a path of the project: $path" }
+            val existing = if (Files.exists(file)) Files.readAllBytes(file) else null
+            val bytes = TextFiles.encode(result.lines.joinToString(result.lineSeparator), existing)
+            writeFileNow(file, bytes)
+            runGitOnIndex(root, "add", "--", path)
+        }
+    }
 
     /**
      * One `git for-each-ref` reads every local branch with its upstream and how far ahead or behind it is. Git reports
@@ -357,6 +440,11 @@ class CliGitClient :
     private companion object {
         const val BRANCH_REF = "ref: refs/heads/"
         const val UNTRACKED_CODE = "??"
+        const val MAX_MERGE_HISTORY = 100
+        val INCOMING_REFS = listOf("MERGE_HEAD", "CHERRY_PICK_HEAD", "REBASE_HEAD", "REVERT_HEAD")
+        const val BASE_STAGE = 1
+        const val OURS_STAGE = 2
+        const val THEIRS_STAGE = 3
         const val CHECKOUT = "checkout"
         const val NETWORK_TIMEOUT_SECONDS = 180L
         const val MAX_CACHED_BLAMES = 32

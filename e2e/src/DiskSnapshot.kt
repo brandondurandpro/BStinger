@@ -148,17 +148,22 @@ private fun userAttributesOf(path: Path): Map<String, String> {
     }
 }
 
-// HEAD, the branches, what the index holds and the status; nothing when the project is not a repository.
+// HEAD, the branches, what the index holds (one line per entry) and the status; nothing when not a repository.
 private fun gitStateOf(project: SampleProject): List<String> {
     val repository = Files.isDirectory(project.root.resolve(".git/objects"))
     if (!repository) return emptyList()
     val head = project.git("rev-parse", "HEAD").trim()
     val branches = project.git("for-each-ref", "--format=%(refname) %(objectname)").trim()
-    val index = project.git("ls-files", "--stage").hashCode().toString()
+    val index = project.git("-c", "core.quotePath=false", "ls-files", "--stage").lines().filter { it.isNotBlank() }
     val porcelain = project.git("-c", "core.quotePath=false", "status", "--porcelain", "-uall")
     val status = porcelain.lines().filter { it.isNotBlank() }
-    return listOf("HEAD $head", "refs $branches", "index $index") + status.map { "status $it" }
+    return listOf("HEAD $head", "refs $branches") + index.map { "index $it" } + status.map { "status $it" }
 }
 
-// A status line of one of [paths] (`status XY path`).
-private fun String.excepted(paths: Set<String>): Boolean = startsWith("status ") && drop("status ".length + 3) in paths
+// A status line of one of [paths] (`status XY path`), or an index entry of one of them (`index mode hash stage<TAB>path`):
+// the files a feature is meant to change or to stage.
+private fun String.excepted(paths: Set<String>): Boolean {
+    val status = startsWith("status ") && drop("status ".length + 3) in paths
+    val staged = startsWith("index ") && substringAfter('\t') in paths
+    return status || staged
+}

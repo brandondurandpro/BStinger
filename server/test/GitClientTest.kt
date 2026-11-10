@@ -592,4 +592,128 @@ class GitClientTest {
             assertEquals("three\n", root.resolve("a.kt").readText())
             assertFalse(CliGitClient().status(root.toString()).containsKey("a.kt"))
         }
+
+    // A repository in the middle of a merge of `feature` that conflicts on [name].
+    private fun conflictOn(name: String, base: ByteArray, ours: ByteArray, theirs: ByteArray) {
+        root.resolve(name).toFile().writeBytes(base)
+        commitAll()
+        val current = git("rev-parse", "--abbrev-ref", "HEAD").trim()
+        git("checkout", "-q", "-b", "feature")
+        root.resolve(name).toFile().writeBytes(theirs)
+        git("commit", "-q", "-am", "theirs")
+        git("checkout", "-q", current)
+        root.resolve(name).toFile().writeBytes(ours)
+        git("commit", "-q", "-am", "ours")
+        assertFailsWith<IllegalStateException> { git("merge", "--no-edit", "feature") }
+    }
+
+    @Test
+    fun `a merge conflict is listed as conflicted and gives its three versions`() =
+        runBlocking {
+            conflictOn("a.txt", "1\n2\n3\n".toByteArray(), "1\nours\n3\n".toByteArray(), "1\ntheirs\n3\n".toByteArray())
+            val client = CliGitClient()
+
+            assertEquals(GitFileStatus.Conflicted, client.status(root.toString())["a.txt"])
+            val sides = client.mergeSides(root.toString(), "a.txt")
+
+            assertEquals(listOf("1", "2", "3", ""), sides.base?.lines)
+            assertEquals(listOf("1", "ours", "3", ""), sides.ours?.lines)
+            assertEquals(listOf("1", "theirs", "3", ""), sides.theirs?.lines)
+        }
+
+    @Test
+    fun `a file added on both sides has no base`() =
+        runBlocking {
+            root.resolve("keep.txt").writeText("keep\n")
+            commitAll()
+            val current = git("rev-parse", "--abbrev-ref", "HEAD").trim()
+            git("checkout", "-q", "-b", "feature")
+            root.resolve("new.txt").writeText("theirs\n")
+            git("add", "new.txt")
+            git("commit", "-q", "-m", "theirs")
+            git("checkout", "-q", current)
+            root.resolve("new.txt").writeText("ours\n")
+            git("add", "new.txt")
+            git("commit", "-q", "-m", "ours")
+            assertFailsWith<IllegalStateException> { git("merge", "--no-edit", "feature") }
+
+            val sides = CliGitClient().mergeSides(root.toString(), "new.txt")
+
+            assertEquals(null, sides.base)
+            assertEquals(listOf("ours", ""), sides.ours?.lines)
+            assertEquals(listOf("theirs", ""), sides.theirs?.lines)
+        }
+
+    @Test
+    fun `a file that is not in conflict has no versions to merge`() {
+        root.resolve("a.txt").writeText("1\n")
+        commitAll()
+
+        assertFailsWith<IOException> { runBlocking { CliGitClient().mergeSides(root.toString(), "a.txt") } }
+    }
+
+    @Test
+    fun `a conflict on a binary file cannot be merged line by line`() {
+        val base = byteArrayOf(0, 1, 2)
+        conflictOn("b.bin", base, byteArrayOf(0, 1, 3), byteArrayOf(0, 1, 4))
+
+        assertFailsWith<IOException> { runBlocking { CliGitClient().mergeSides(root.toString(), "b.bin") } }
+    }
+
+    @Test
+    fun `resolving writes the result, stages the file and ends the conflict`() =
+        runBlocking {
+            conflictOn("a.txt", "1\n2\n3\n".toByteArray(), "1\nours\n3\n".toByteArray(), "1\ntheirs\n3\n".toByteArray())
+            val client = CliGitClient()
+            val result =
+                org.example.kotlineditor.model.FileContent
+                    .Text(listOf("1", "ours", "theirs", "3", ""))
+
+            client.resolveConflict(root.toString(), "a.txt", result)
+
+            assertEquals("1\nours\ntheirs\n3\n", root.resolve("a.txt").readText())
+            assertEquals("", git("diff", "--name-only", "--diff-filter=U").trim())
+            assertEquals(null, client.status(root.toString())["a.txt"]?.takeIf { it == GitFileStatus.Conflicted })
+            assertFailsWith<IOException> { client.resolveConflict(root.toString(), "a.txt", result) }
+            Unit
+        }
+
+    @Test
+    fun `resolving keeps the encoding and the line endings of the file`() =
+        runBlocking {
+            val latin = { text: String -> text.replace("\n", "\r\n").toByteArray(Charsets.ISO_8859_1) }
+            conflictOn("l.txt", latin("a\nb\nc\n"), latin("a\nb é\nc\n"), latin("a\nb ü\nc\n"))
+            val client = CliGitClient()
+
+            val sides = client.mergeSides(root.toString(), "l.txt")
+            assertEquals("\r\n", sides.ours?.lineSeparator)
+            assertEquals(listOf("a", "b é", "c", ""), sides.ours?.lines)
+            val result =
+                org.example.kotlineditor.model.FileContent
+                    .Text(listOf("a", "b é", "c", ""), "\r\n")
+            client.resolveConflict(root.toString(), "l.txt", result)
+
+            val expected = latin("a\nb é\nc\n")
+            assertTrue(expected.contentEquals(root.resolve("l.txt").toFile().readBytes()))
+        }
+
+    @Test
+    fun `the merge history lists the commits of the file on each side since they diverged`() =
+        runBlocking {
+            conflictOn("a.txt", "1\n2\n".toByteArray(), "1\nours\n".toByteArray(), "1\ntheirs\n".toByteArray())
+            val client = CliGitClient()
+
+            val history = client.mergeHistory(root.toString(), "a.txt")
+
+            assertEquals(listOf("ours"), history.ours.map { it.subject })
+            assertEquals(listOf("theirs"), history.theirs.map { it.subject })
+        }
+
+    @Test
+    fun `without a merge in progress there is no merge history`() {
+        root.resolve("a.txt").writeText("1\n")
+        commitAll()
+
+        assertFailsWith<IOException> { runBlocking { CliGitClient().mergeHistory(root.toString(), "a.txt") } }
+    }
 }

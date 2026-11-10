@@ -249,7 +249,7 @@ private fun pressRow(project: GitHost, path: String, ordered: List<String>, even
 
         event.buttons.isPrimaryPressed -> {
             project.git.pickChange(path, ordered, toggle = ctrl, extend = shift)
-            if (!ctrl && !shift) project.openDiff(path)
+            if (!ctrl && !shift) openChange(project, path)
         }
     }
 }
@@ -280,6 +280,12 @@ private fun ChangesMenu(project: GitHost, onClose: () -> Unit) {
     }
 }
 
+// A conflicted file opens its three-way merge, any other change its diff.
+private fun openChange(project: GitHost, path: String) {
+    val conflicted = project.git.status[path] == GitFileStatus.Conflicted
+    if (conflicted) project.openMerge(path) else project.openDiff(path)
+}
+
 private fun vcsStatusLetter(status: GitFileStatus): String =
     when (status) {
         GitFileStatus.Modified -> "M"
@@ -287,4 +293,5 @@ private fun vcsStatusLetter(status: GitFileStatus): String =
         GitFileStatus.Untracked -> "U"
         GitFileStatus.Deleted -> "D"
         GitFileStatus.Renamed -> "R"
+        GitFileStatus.Conflicted -> "C"
     }

@@ -120,3 +120,38 @@ private fun daemon(read: () -> Unit): Thread =
         name = "git-output"
         start()
     }
+
+/**
+ * Runs Git in [root] and returns what it printed on its standard output, byte for byte, or `null` when it fails or
+ * times out: the content of a blob, whose encoding and line endings no line reader may touch. Stopped like [execGit].
+ */
+internal fun execGitBytes(root: String, args: List<String>, timeoutSeconds: Long): ByteArray? {
+    val builder = gitProcess(root, args).redirectError(ProcessBuilder.Redirect.DISCARD)
+    val child = startGit(builder)
+    val process = child.process
+    var finished = false
+    try {
+        val output = BytesDrain(process.inputStream)
+        val exited = process.waitFor(timeoutSeconds, TimeUnit.SECONDS)
+        if (!exited) throw IOException("git ${args.firstOrNull()} timed out after $timeoutSeconds s")
+        val complete = output.await(OUTPUT_JOIN_MILLIS)
+        if (!complete) throw IOException("git ${args.firstOrNull()} exited, but a process it started kept its output")
+        finished = true
+        return if (process.exitValue() == 0) output.bytes() else null
+    } finally {
+        if (!finished) child.destroyTree()
+    }
+}
+
+// Reads a stream of the process to its end on a daemon thread.
+private class BytesDrain(stream: InputStream) {
+    private var data = ByteArray(0)
+    private val thread = daemon { data = stream.readAllBytes() }
+
+    fun await(millis: Long): Boolean {
+        thread.join(millis)
+        return !thread.isAlive
+    }
+
+    fun bytes(): ByteArray = data
+}
