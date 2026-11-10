@@ -9,6 +9,7 @@ import org.example.kotlineditor.lsp.supervisor.SupervisorTimings
 import org.example.kotlineditor.model.CompletionResult
 import org.example.kotlineditor.model.DocumentPosition
 import org.example.kotlineditor.model.FeatureStatus
+import org.example.kotlineditor.model.LocationsResult
 import org.example.kotlineditor.model.NavigationKind
 import org.example.kotlineditor.model.UsageCountsResult
 import java.nio.file.Files
@@ -190,9 +191,10 @@ class WebFeaturesIntegrationTest {
             val at = DocumentPosition(path, 1, line, column)
             val found =
                 awaitAnswer({ service.intelligence.navigate(SESSION, at, NavigationKind.Definition) }) {
-                    it.status == FeatureStatus.Ready && it.locations.isNotEmpty()
+                    // Until the project is loaded, the server answers with the import itself.
+                    it.status == FeatureStatus.Ready && firstFileName(it) == "shared.ts"
                 }
-            val target = Paths.get(found.locations.first().path).fileName.toString()
+            val target = firstFileName(found)
             assertEquals("shared.ts", target, "definition from $path: $found")
         }
     }
@@ -213,5 +215,11 @@ class WebFeaturesIntegrationTest {
             }
         val messages = files.flatMap { it.diagnostics }.map { it.message }
         assertEquals(2, messages.count { it.contains("not assignable") }, "diagnostics: $messages")
+    }
+
+    private fun firstFileName(result: LocationsResult): String {
+        val first = result.locations.firstOrNull() ?: return ""
+        val fileName = Paths.get(first.path).fileName
+        return fileName.toString()
     }
 }

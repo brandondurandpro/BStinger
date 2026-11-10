@@ -156,13 +156,14 @@ class PhpDiskChangesE2eTest {
     fun `saving an open PHP file tells its language server`() =
         runComposeUiTest {
             val app = open()
+            // A save before the server runs is not sent to it: the file is opened with its saved text instead.
+            val server = awaitServer(app) { it.isRunning() }
             onNodeWithTag(EditorTags.EDITOR).performClick()
             typeCode("// edited\n")
             editorKeys { withKeyDown(Key.CtrlLeft) { pressKey(Key.S) } }
             awaitCondition {
                 "// edited" in diskText("src/index.php")
             }
-            val server = awaitServer(app) { it.isRunning() }
             awaitTag(LanguageServerTags.statusLanguageServer(server.id)).performClick()
             awaitTag(LanguageServerTags.languageServerLog(server.id)).performClick()
             awaitTag(LanguageServerTags.LANGUAGE_SERVERS_LOG)

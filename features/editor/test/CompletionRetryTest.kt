@@ -29,7 +29,7 @@ class CompletionRetryTest {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
             val asked = AtomicInteger()
             val state =
-                CompletionState(scope) { _, _ ->
+                CompletionState(scope, notReadyRetryMs = STEP_MS) { _, _ ->
                     if (asked.incrementAndGet() <= notReadyAnswers) CompletionResult.NotReady else answer
                 }
             val document = Document(listOf("va"), Language.Plain)
@@ -56,12 +56,12 @@ class CompletionRetryTest {
         typedIn(notReadyAnswers = Int.MAX_VALUE) { state, asked ->
             delay(NEVER_READY_WAIT_MS)
             assertNull(state.popup)
-            assertEquals(9, asked.get())
+            assertEquals(61, asked.get())
         }
 
     private companion object {
         const val AWAIT_STEPS = 200
         const val STEP_MS = 50L
-        const val NEVER_READY_WAIT_MS = 10_000L
+        const val NEVER_READY_WAIT_MS = 6_000L
     }
 }

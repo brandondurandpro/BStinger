@@ -32,19 +32,21 @@ private const val DETAILED_ROWS = 12
 
 // How long the list stays unchanged before the types of its rows are asked.
 private const val DETAILS_DELAY_MS = 100L
-private const val NOT_READY_RETRIES = 8
+
+// About 30 seconds: a language server restarting on a slow machine takes longer than a few seconds to be ready.
+private const val NOT_READY_RETRIES = 60
 private const val NOT_READY_RETRY_MS = 500L
 
 // How long an item stays selected before its documentation is asked: the arrows run through items without asking.
 internal const val DOCUMENTATION_DELAY_MS = 200L
 
 // A server that is still loading the project answers "not ready": ask again, as long as nothing changed.
-private suspend fun askUntilReady(ask: suspend () -> CompletionResult): CompletionResult {
+private suspend fun askUntilReady(retryMs: Long, ask: suspend () -> CompletionResult): CompletionResult {
     var result = ask()
     var attempts = 0
     while (!result.ready && attempts < NOT_READY_RETRIES) {
         attempts++
-        delay(NOT_READY_RETRY_MS)
+        delay(retryMs)
         result = ask()
     }
     return result
@@ -161,6 +163,8 @@ class CompletionState(
     private val scope: CoroutineScope,
     // The documentation of an item of a completion answer (token, resolve index).
     private val resolve: suspend (token: String, index: Int) -> String? = { _, _ -> null },
+    // The wait before asking again a server that is not ready.
+    private val notReadyRetryMs: Long = NOT_READY_RETRY_MS,
     // The server's proposals at the caret of a document.
     private val source: suspend (path: String, document: Document) -> CompletionResult,
 ) {
@@ -270,7 +274,7 @@ class CompletionState(
             scope.launch {
                 // From the keystroke to the frame that shows the items; a newer keystroke cancels it.
                 ClientTelemetry.measureToFrame(Operation.EditorCompletion, attributesOf = ::itemsOf) {
-                    val result = askUntilReady { source(path, document) }
+                    val result = askUntilReady(notReadyRetryMs) { source(path, document) }
                     // Typed or moved meanwhile: a newer request is on its way, or the popup was closed.
                     if (document.version == version && document.caret == caret) show(document, caret, result)
                     result
