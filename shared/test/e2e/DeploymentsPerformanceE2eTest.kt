@@ -58,7 +58,9 @@ class DeploymentsPerformanceE2eTest {
     @Test
     fun `two thousand changed files are deployed by an automatic deployment in a few batches`() =
         runComposeUiTest {
-            project.dir("big")
+            // The groups exist before the deployment: a file written at once in a directory the watch of the
+            // server has not registered yet is not what this test measures.
+            for (group in 0..(FILES - 1) / 100) project.dir("big/g$group")
             val app = launchWithProject(project)
             openDeployments()
             createDeployment("Big", "big", target.toString(), auto = true)
