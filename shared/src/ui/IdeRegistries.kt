@@ -28,12 +28,23 @@ internal object IdeRegistries {
 // Every context of the IDE is an IdeContext: the registry only knows the part a plugin sees.
 private fun KeyBinding<IdeContext>.asAction(): KeyBinding<ActionContext> = adapt { context -> context as IdeContext }
 
-// Run sits first of the bottom group, before the devtools and the language servers.
+// The buttons keep the order they always had: Project, Git and Branches on top; Run, devtools, language servers and
+// Terminal at the bottom.
 private fun allToolWindows(): List<ToolWindowContribution> {
-    val windows = builtInToolWindows().toMutableList()
-    val network = windows.indexOfFirst { it.window == ToolWindow.Network }
-    windows.add(if (network < 0) windows.size else network, runToolWindow())
-    return windows
+    val own = builtInToolWindows().associateBy { it.window }
+    val bundled = listOf(gitToolWindow(), branchesToolWindow(), runToolWindow(), terminalToolWindow())
+    val byWindow = own + bundled.associateBy { it.window }
+    val order =
+        listOf(
+            ToolWindow.Project,
+            ToolWindow.Git,
+            ToolWindow.Branches,
+            ToolWindow.Run,
+            ToolWindow.Network,
+            ToolWindow.LanguageServers,
+            ToolWindow.Terminal,
+        )
+    return order.mapNotNull { byWindow[it] }
 }
 
-private fun bundledShortcuts() = runShortcuts()
+private fun bundledShortcuts() = runShortcuts() + gitShortcuts() + terminalShortcuts()

@@ -5,6 +5,7 @@ product:
 
 dependencies:
   - //features/editor: exported
+  - //plugin-api: exported
 
 settings:
   compose: enabled

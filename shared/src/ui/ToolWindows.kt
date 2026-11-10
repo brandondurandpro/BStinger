@@ -185,18 +185,6 @@ internal fun builtInToolWindows(): List<ToolWindowContribution> =
             icon = { FolderIcon(Modifier.size(18.dp)) },
         ) { project, drag, modifier -> ProjectPanel(project, drag, modifier) },
         builtIn(
-            ToolWindow.Git,
-            StripGroup.Top,
-            AppTags.TOOL_GIT,
-            icon = { HistoryIcon(color = IdeColors.Text) },
-        ) { project, drag, modifier -> GitPanel(project, drag, modifier) },
-        builtIn(
-            ToolWindow.Branches,
-            StripGroup.Top,
-            AppTags.TOOL_BRANCHES,
-            icon = { BranchIcon(color = IdeColors.Text) },
-        ) { project, drag, modifier -> BranchesPanel(project, drag, modifier) },
-        builtIn(
             ToolWindow.Network,
             StripGroup.Bottom,
             AppTags.TOOL_NETWORK,
@@ -209,12 +197,6 @@ internal fun builtInToolWindows(): List<ToolWindowContribution> =
             AppTags.TOOL_LANGUAGE_SERVERS,
             icon = { Label("LS", color = IdeColors.Text, fontWeight = FontWeight.Bold, fontSize = 11.sp) },
         ) { project, drag, modifier -> LanguageServersPanel(project, drag, modifier) },
-        builtIn(
-            ToolWindow.Terminal,
-            StripGroup.Bottom,
-            AppTags.TOOL_TERMINAL,
-            icon = { Label(">_", color = IdeColors.Text, fontWeight = FontWeight.Bold) },
-        ) { project, drag, modifier -> TerminalPanel(project.terminal, project.toolWindows, drag, modifier) },
     )
 
 @Composable

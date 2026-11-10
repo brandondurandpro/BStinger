@@ -6,6 +6,8 @@ package org.example.kotlineditor.ui
  */
 @Suppress("TooManyFunctions")
 object GitTags {
+    const val TOOL_GIT = "tool.git"
+    const val TOOL_BRANCHES = "tool.branches"
     const val GIT_BRANCH = "git.branch"
     const val BRANCH_PICKER = "branch.picker"
     const val BRANCH_SEARCH = "branch.search"

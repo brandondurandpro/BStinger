@@ -42,9 +42,9 @@ object AppTags {
     const val SETTINGS_TELEMETRY_FORBIDDEN = "settings.telemetry.forbidden"
     const val SETTINGS_AGENT_COMMAND = "settings.agentCommand"
     const val TOOL_PROJECT = "tool.project"
-    const val TOOL_GIT = "tool.git"
-    const val TOOL_BRANCHES = "tool.branches"
-    const val TOOL_TERMINAL = "tool.terminal"
+    const val TOOL_GIT = GitTags.TOOL_GIT
+    const val TOOL_BRANCHES = GitTags.TOOL_BRANCHES
+    const val TOOL_TERMINAL = TerminalTags.TOOL_BUTTON
     const val TOOL_RUN = RunTags.TOOL_BUTTON
     const val TOOL_NETWORK = "tool.network"
     const val NETWORK = "network"

@@ -5,6 +5,7 @@ package org.example.kotlineditor.ui
  * Paths are relative to the project root.
  */
 object TerminalTags {
+    const val TOOL_BUTTON = "tool.terminal"
     const val TERMINAL = "terminal"
     const val TERMINAL_LOST = "terminal.lost"
     const val TERMINAL_INPUT = "terminal.input"
