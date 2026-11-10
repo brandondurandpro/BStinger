@@ -58,7 +58,9 @@ class DeployChaosE2eTest {
             submitDeploy(target.toString())
             awaitCondition { target.resolve("docs/guide.md").toFile().exists() }
             // What someone did to the destination meanwhile: a second run would overwrite it.
-            target.resolve("docs/guide.md").writeText("edited on the destination")
+            // On Windows the deployer may still hold the file it is copying: write once it lets go.
+            val deployed = target.resolve("docs/guide.md")
+            awaitCondition { runCatching { deployed.writeText("edited on the destination") }.isSuccess }
             app.network.cutAll()
             app.network.dropFromServer = false
             assertContains(awaitDeployResult(), "Deployed 1 file")
