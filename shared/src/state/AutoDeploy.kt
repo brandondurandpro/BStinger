@@ -31,12 +31,21 @@ internal class AutoDeploy(private val deployments: DeploymentsState, private val
     private val jobs = HashMap<String, Job>()
     private val firstQueued = HashMap<String, Long>()
     private val retries = HashMap<String, Int>()
+    private val everything = HashSet<String>()
 
     /** [paths] changed: queues them for each automatic deployment whose folders hold them. */
     fun changed(paths: List<String>) {
         for (profile in deployments.profiles.filter { it.auto }) {
             val matching = paths.flatMap { filesOf(profile, it) }
             if (matching.isNotEmpty()) queue(profile.name, matching)
+        }
+    }
+
+    /** The changes are unknown: each automatic deployment sends all its folders, once they stop to come. */
+    fun lostTrack() {
+        for (profile in deployments.profiles.filter { it.auto }) {
+            everything.add(profile.name)
+            queue(profile.name, emptyList())
         }
     }
 
@@ -71,18 +80,31 @@ internal class AutoDeploy(private val deployments: DeploymentsState, private val
     private suspend fun flush(name: String) {
         val files = pending.remove(name).orEmpty()
         val profile = deployments.profiles.firstOrNull { it.name == name && it.auto }
-        if (profile == null || files.isEmpty()) return
+        val all = name in everything
+        val nothing = files.isEmpty() && !all
+        if (profile != null && !nothing) send(profile, files, all)
+    }
+
+    private suspend fun send(profile: DeployProfile, files: Set<PendingFile>, all: Boolean) {
+        val name = profile.name
         // The previous run is not over: these files go with the next one.
         if (deployments.statuses[name] == DeployStatus.Running) {
             queue(name, files.toList())
-            return
+        } else if (all) {
+            everything.remove(name)
+            deployments.runAutomatically(profile)
+        } else {
+            sendFiles(profile, files)
         }
+    }
+
+    private suspend fun sendFiles(profile: DeployProfile, files: Set<PendingFile>) {
         val fs = project.services.fileSystem
         val items = files.mapNotNull { file -> existingEntry(fs, file.path)?.let { DeployItem(it, file.target) } }
         val destination = DeployDestination.parse(profile.destination)
         if (items.isNotEmpty() && destination != null) {
             deployments.deploy(profile, items, destination, true)
-            retryIfFailed(name, files)
+            retryIfFailed(profile.name, files)
         }
     }
 

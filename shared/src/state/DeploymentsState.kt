@@ -134,8 +134,17 @@ class DeploymentsState(internal val project: ProjectState) {
         project.scope.launch { deploy(profile, itemsOf(project, profile), destination, automatic = false) }
     }
 
+    /** Sends all the folders of the automatic [profile], as its changes are unknown. */
+    internal suspend fun runAutomatically(profile: DeployProfile) {
+        val destination = DeployDestination.parse(profile.destination) ?: return
+        deploy(profile, itemsOf(project, profile), destination, automatic = true)
+    }
+
     /** Files of the project changed on disk: the automatic deployments send those under their folders. */
     fun filesChanged(paths: List<String>) = auto.changed(paths)
+
+    /** The watch lost track of the changes (too many at once): the automatic deployments send all their folders. */
+    fun changesLost() = auto.lostTrack()
 
     /** Replaces the saved deployments with [list], then calls [done]; a failure is shown. */
     internal fun persist(list: List<DeployProfile>, done: () -> Unit) {

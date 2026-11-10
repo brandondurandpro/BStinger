@@ -53,6 +53,7 @@ private fun ProjectState.openPaths(): List<String> {
 
 private suspend fun ProjectState.applyDiskChanges(changes: DiskChanges) {
     if (!changes.complete) {
+        deployments.changesLost()
         synchronize()
         return
     }
