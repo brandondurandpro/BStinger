@@ -297,6 +297,7 @@ private fun withRecorders(
         remote.telemetry,
         remote.disk,
         remote.agents,
+        remote.runner,
     )
 
 /** Opens the Open Project dialog from the welcome screen and waits for it to list a directory. */

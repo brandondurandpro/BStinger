@@ -171,6 +171,12 @@ private val IDE_SHORTCUTS =
         bind(setOf(Key.DirectionRight), alt = true) { editor.selectNext() },
         bind(setOf(Key.One), alt = true) { project.toggleToolWindow(ToolWindow.Project) },
         bind(setOf(Key.Nine), alt = true) { project.toggleToolWindow(ToolWindow.Git) },
+        bind(setOf(Key.Four), alt = true) { project.toggleToolWindow(ToolWindow.Run) },
+        bind(setOf(Key.F10), shift = true) {
+            project.showToolWindow(ToolWindow.Run)
+            project.run.runSelected()
+        },
+        bind(setOf(Key.F2), ctrl = true) { project.run.stop() },
         bind(setOf(Key.F12), alt = true) { project.toggleToolWindow(ToolWindow.Terminal) },
         bind(setOf(Key.D), ctrl = true, shift = true, alt = true) {
             app.devtools = true

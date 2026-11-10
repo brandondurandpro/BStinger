@@ -130,9 +130,10 @@ private fun BranchSyncStatus(project: GitHost, sync: BranchSync) {
             else -> IdeColors.GitAdded
         }
     Row(verticalAlignment = Alignment.CenterVertically) {
+        // Shrinks (ellipsis) before the dismiss button, which is measured first and must stay clickable.
         Label(
             sync.text,
-            Modifier.widthIn(max = 360.dp).testTag(GitTags.BRANCH_SYNC_STATUS),
+            Modifier.weight(1f, fill = false).widthIn(max = 360.dp).testTag(GitTags.BRANCH_SYNC_STATUS),
             color = color,
             fontSize = 11.sp,
         )
