@@ -26,6 +26,15 @@ class OutputLinksTest {
     }
 
     @Test
+    fun `a Windows short name with a tilde stays in the path`() {
+        val line = "e: file:///C:/Users/RUNNER~1/AppData/p/App.kt:8:5 Unresolved reference: x"
+        val link = findOutputLinks(line).single()
+        assertEquals("C:/Users/RUNNER~1/AppData/p/App.kt", link.path)
+        assertEquals(8, link.line)
+        assertEquals(5, link.column)
+    }
+
+    @Test
     fun `a relative path with a line links to it`() {
         val link = findOutputLinks("src/main/kotlin/App.kt:3: error").single()
         assertEquals("src/main/kotlin/App.kt", link.path)

@@ -380,7 +380,8 @@ class RunE2eTest {
             pressRun()
             awaitCondition { app.project.run.session != null }
             // Composer may not be installed where the test runs: either way the run ends, in the project's directory.
-            awaitCondition {
+            // Without composer, the shell of a slow Windows runner takes its time to report that it is not found.
+            awaitCondition(60_000) {
                 app.project.run.session
                     ?.running == false
             }

@@ -11,8 +11,8 @@ import java.util.concurrent.ConcurrentHashMap
 /**
  * The server-pushed streams this client has open: the screens of terminals, the batches of streamed Finds in
  * Files and the chunks of runs. Each event carries the sequence number of what it holds, so duplicates are dropped
- * and a stream whose events arrive after a gap simply continues with the next one (`positions()` and `loseAll()`
- * drive the replay of what was missed).
+ * and a stream of terminals or searches whose events arrive after a gap simply continues with the next one, while the
+ * chunks of a run wait for the ones before them (`resumes()` and `loseAll()` drive the replay of what was missed).
  */
 @Suppress("TooManyFunctions")
 internal class StreamRegistry {
@@ -38,6 +38,10 @@ internal class StreamRegistry {
     }
 
     private class RunStream(val channel: Channel<RunChunk>) : Stream() {
+        // Chunks that arrived before the ones preceding them (a live chunk overtaking the replay after a
+        // reconnection), by seq: delivered once the gap is filled.
+        val waiting = java.util.TreeMap<Long, RunChunk>()
+
         override fun close() {
             channel.close()
         }
@@ -127,6 +131,8 @@ internal class StreamRegistry {
         val stream = streams[id] ?: return
         synchronized(stream) {
             stream.endSeq = payload.jsonObject.long("seq")
+            // The server sends the end after the replay: a chunk still missing was dropped by its buffer for good.
+            if (stream is RunStream) deliverWaiting(stream)
             endIfDone(id, stream)
         }
     }
@@ -155,12 +161,27 @@ internal class StreamRegistry {
 
     private fun onChunk(id: Long, stream: RunStream, seq: Long, chunk: RunChunk) {
         synchronized(stream) {
-            // The chunks build one output: letting an older one through would repeat (or lose) lines.
-            if (seq > stream.lastSeq) {
-                stream.lastSeq = seq
-                stream.channel.trySend(chunk)
-            }
+            // The chunks build one output: an older one would repeat lines, and one that overtook the replay of
+            // the chunks before it would make them be dropped (a gap): it waits for them.
+            if (seq > stream.lastSeq) stream.waiting[seq] = chunk
+            deliverContiguous(stream)
             endIfDone(id, stream)
+        }
+    }
+
+    private fun deliverContiguous(stream: RunStream) {
+        while (true) {
+            val next = stream.waiting.remove(stream.lastSeq + 1) ?: return
+            stream.lastSeq = next.seq
+            stream.channel.trySend(next)
+        }
+    }
+
+    private fun deliverWaiting(stream: RunStream) {
+        while (true) {
+            val next = stream.waiting.pollFirstEntry()?.value ?: return
+            stream.lastSeq = next.seq
+            stream.channel.trySend(next)
         }
     }
 

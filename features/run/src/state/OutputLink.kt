@@ -17,10 +17,11 @@ data class OutputLink(
 private const val SOURCE_EXTENSIONS =
     "kt|kts|java|scala|groovy|gradle|js|jsx|ts|tsx|py|rs|go|c|h|cc|cpp|hpp|cs|php|rb|swift|sh|yaml|yml|json|xml|toml"
 
-// `file:///home/me/p/A.kt:12:5` (Kotlin compiler), `/home/me/p/A.kt:12:5`, `src/A.kt:12`, `C:\p\A.kt:12`, and the
+// `file:///home/me/p/A.kt:12:5` (Kotlin compiler), `/home/me/p/A.kt:12:5`, `src/A.kt:12`, `C:\p\A.kt:12` (a short name
+// like `RUNNER~1` too), and the
 // `MyTest.kt:7` of a JVM stack frame (`at p.MyTest.run(MyTest.kt:7)`), which names only the file.
 private val FILE_POSITION =
-    Regex("""(?:file://)?((?:[A-Za-z]:)?[\w./\\$@+-]*[\w$-]\.(?:$SOURCE_EXTENSIONS)):(\d+)(?::(\d+))?""")
+    Regex("""(?:file://)?((?:[A-Za-z]:)?[\w./\\$@+~-]*[\w$-]\.(?:$SOURCE_EXTENSIONS)):(\d+)(?::(\d+))?""")
 
 private val ANSI = Regex("\u001B\\[[0-9;?]*[ -/]*[@-~]")
 
