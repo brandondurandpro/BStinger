@@ -36,13 +36,16 @@ internal class AutoDeploy(private val deployments: DeploymentsState, private val
     /** [paths] changed: queues them for each automatic deployment whose folders hold them. */
     internal var received = 0
     internal var batches = 0
-    internal val debug get() = "received=$received batches=$batches pending=${pending.mapValues { it.value.size }} jobs=${jobs.mapValues { it.value.isActive }}"
+    internal var matched = 0
+    internal var sent = ""
+    internal val debug get() = "received=$received matched=$matched sent=[$sent] batches=$batches pending=${pending.mapValues { it.value.size }} jobs=${jobs.mapValues { it.value.isActive }}"
 
     fun changed(paths: List<String>) {
         received += paths.size
         batches++
         for (profile in deployments.profiles.filter { it.auto }) {
             val matching = paths.flatMap { filesOf(profile, it) }
+            matched += matching.size
             if (matching.isNotEmpty()) queue(profile.name, matching)
         }
     }
@@ -108,6 +111,7 @@ internal class AutoDeploy(private val deployments: DeploymentsState, private val
         val fs = project.services.fileSystem
         val items = files.mapNotNull { file -> existingEntry(fs, file.path)?.let { DeployItem(it, file.target) } }
         val destination = DeployDestination.parse(profile.destination)
+        sent += "${files.size}>${items.size} "
         if (items.isNotEmpty() && destination != null) {
             deployments.deploy(profile, items, destination, true)
             retryIfFailed(profile.name, files)
