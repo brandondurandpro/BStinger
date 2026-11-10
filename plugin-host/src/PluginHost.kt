@@ -1,5 +1,11 @@
 package org.example.kotlineditor.plugin.host
 
+import org.example.kotlineditor.plugin.core.CLIENT_VISIBLE
+import org.example.kotlineditor.plugin.core.PluginClassLoader
+import org.example.kotlineditor.plugin.core.PluginManifest
+import org.example.kotlineditor.plugin.core.UnloadOutcome
+import org.example.kotlineditor.plugin.core.API_VERSION
+import org.example.kotlineditor.plugin.core.outcomeOf
 import org.example.kotlineditor.plugin.ClientContributions
 import org.example.kotlineditor.plugin.ClientPlugin
 import org.example.kotlineditor.plugin.IdePlugin
@@ -11,8 +17,6 @@ private const val CLIENT_JAR = "client.jar"
 private const val SHARED_JAR = "shared.jar"
 private const val LOADING_MARKER = ".loading"
 private const val DISABLED_MARKER = ".disabled"
-private const val COLLECTION_ATTEMPTS = 10
-private const val COLLECTION_PAUSE_MILLIS = 50L
 
 /** Why a plugin is not running. */
 sealed interface PluginProblem {
@@ -33,15 +37,6 @@ sealed interface PluginProblem {
 
     /** Its code failed while loading. */
     class Failed(val reason: String) : PluginProblem
-}
-
-/** What [PluginHost.unload] found once the plugin's class loader should be gone. */
-enum class UnloadOutcome {
-    /** The class loader was collected. */
-    Clean,
-
-    /** Something still holds the class loader: running two versions side by side is unsafe, restart the IDE. */
-    RestartRequired,
 }
 
 /** A plugin that is running. */
@@ -107,7 +102,7 @@ class PluginHost(
      */
     fun unload(id: String): UnloadOutcome {
         val reference = shutDown(id)
-        return if (collected(reference)) UnloadOutcome.Clean else UnloadOutcome.RestartRequired
+        return outcomeOf(reference, beforeCollect)
     }
 
     // Nothing of the plugin stays referenced by this frame once it returns, or its class loader could not be collected.
@@ -144,7 +139,7 @@ class PluginHost(
 
     private fun start(folder: File, manifest: PluginManifest): LoadResult {
         val jars = listOf(File(folder, CLIENT_JAR), File(folder, SHARED_JAR)).filter { it.isFile }
-        val loader = PluginClassLoader(jars, PluginHost::class.java.classLoader)
+        val loader = PluginClassLoader(jars, PluginHost::class.java.classLoader, CLIENT_VISIBLE)
         return try {
             val loaded = register(manifest, loader)
             running[manifest.id] = loaded
@@ -164,16 +159,5 @@ class PluginHost(
         val plugin = contributions.toPlugin(manifest.id)
         val registration = install(plugin)
         return LoadedPlugin(manifest, plugin, registration, contributions.cleanups(), loader)
-    }
-
-    // Collection is not immediate: ask for it a few times before concluding that something holds the class loader.
-    private fun collected(reference: WeakReference<PluginClassLoader>): Boolean {
-        repeat(COLLECTION_ATTEMPTS) {
-            beforeCollect()
-            System.gc()
-            if (reference.get() == null) return true
-            Thread.sleep(COLLECTION_PAUSE_MILLIS)
-        }
-        return reference.get() == null
     }
 }

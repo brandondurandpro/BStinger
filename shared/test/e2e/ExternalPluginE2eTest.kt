@@ -3,9 +3,9 @@ package org.example.kotlineditor.e2e
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.v2.runComposeUiTest
-import org.example.kotlineditor.plugin.host.API_VERSION
+import org.example.kotlineditor.plugin.core.API_VERSION
+import org.example.kotlineditor.plugin.core.UnloadOutcome
 import org.example.kotlineditor.plugin.host.PluginProblem
-import org.example.kotlineditor.plugin.host.UnloadOutcome
 import org.example.kotlineditor.state.ToolWindow
 import org.example.kotlineditor.testkit.PluginFixture
 import java.io.File

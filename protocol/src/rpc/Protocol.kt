@@ -47,7 +47,7 @@ import java.io.OutputStream
  */
 object Protocol {
     /** Version announced in the handshake; client and server must speak the same one. */
-    const val VERSION = 12
+    const val VERSION = 13
 
     /** Version of the application, shown in the welcome screen and used to identify remote server bundles. */
     const val APP_VERSION = "2026.1"
@@ -578,6 +578,15 @@ enum class Method(
      * installation (`instanceId`). The server measures and exports only after the client said so.
      */
     TelemetryConfig("telemetry/config", mutating = false),
+
+    /** The plugins installed on the server, with their versions and the SHA-256 of their `server.jar`. */
+    PluginList("plugin/list", mutating = false),
+
+    /** Installs (or replaces) the server half of a plugin: its manifest, its jar, and the SHA-256 to check. */
+    PluginInstall("plugin/install", mutating = true),
+
+    /** Unloads the server half of a plugin and deletes it. */
+    PluginUnload("plugin/unload", mutating = true),
 
     /** Inlay hints of a document. */
     LspInlayHints("lsp/inlayHints", mutating = false),

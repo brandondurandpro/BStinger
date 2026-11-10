@@ -1,4 +1,4 @@
-package org.example.kotlineditor.plugin.host
+package org.example.kotlineditor.plugin.core
 
 /** The version of the plugin API this IDE offers; a plugin built for another one does not load. */
 const val API_VERSION = 1

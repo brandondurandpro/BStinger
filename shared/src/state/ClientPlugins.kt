@@ -1,9 +1,9 @@
 package org.example.kotlineditor.state
 
+import org.example.kotlineditor.plugin.core.UnloadOutcome
 import org.example.kotlineditor.plugin.host.LoadResult
 import org.example.kotlineditor.plugin.host.PluginHost
 import org.example.kotlineditor.plugin.host.PluginProblem
-import org.example.kotlineditor.plugin.host.UnloadOutcome
 import org.example.kotlineditor.ui.loadPlugin
 import java.io.File
 

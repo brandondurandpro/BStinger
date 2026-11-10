@@ -11,6 +11,11 @@ class PluginMethod(
 ) : MethodSpec {
     override val rpcName: String = "$PLUGIN_PREFIX$pluginId/$name"
 
+    // Two declarations of the same name are the same method: a client and a plugin's jar each make their own.
+    override fun equals(other: Any?): Boolean = other is PluginMethod && other.rpcName == rpcName
+
+    override fun hashCode(): Int = rpcName.hashCode()
+
     override fun toString(): String = rpcName
 }
 

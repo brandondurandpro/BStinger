@@ -1,6 +1,9 @@
 package org.example.kotlineditor.plugin.host
 
 import org.example.kotlineditor.plugin.IdePlugin
+import org.example.kotlineditor.plugin.core.API_VERSION
+import org.example.kotlineditor.plugin.core.PluginManifest
+import org.example.kotlineditor.plugin.core.UnloadOutcome
 import org.example.kotlineditor.testkit.PluginFixture
 import java.io.File
 import java.nio.file.Files
