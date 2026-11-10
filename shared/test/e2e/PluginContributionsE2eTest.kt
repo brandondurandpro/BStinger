@@ -16,6 +16,7 @@ import org.example.kotlineditor.state.ToolWindow
 import org.example.kotlineditor.state.ToolWindowDefaults
 import org.example.kotlineditor.ui.ActionRegistry
 import org.example.kotlineditor.ui.ActionScope
+import org.example.kotlineditor.ui.IdeContext
 import org.example.kotlineditor.ui.StripGroup
 import org.example.kotlineditor.ui.ToolWindowContribution
 import org.example.kotlineditor.ui.ToolWindowRegistry
@@ -66,7 +67,12 @@ class PluginContributionsE2eTest {
     fun `a shortcut registered by a plugin runs its action, and stops with the plugin`() =
         runComposeUiTest {
             var runs = 0
-            val shortcut = binding<org.example.kotlineditor.ui.IdeContext>(setOf(Key.J), ctrl = true, alt = true) { runs++ }
+            val shortcut =
+                binding<IdeContext>(
+                    setOf(Key.J),
+                    ctrl = true,
+                    alt = true,
+                ) { runs++ }
             val registration = ActionRegistry.default.register(ActionScope.Ide, listOf(shortcut))
             registrations += registration
             launchWithProject(project)
