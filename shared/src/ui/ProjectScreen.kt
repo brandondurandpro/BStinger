@@ -259,6 +259,18 @@ private fun TabContent(
             ReadyEditor(app, project, pane, tab, status.document, findFocus)
         }
 
+        is TabStatus.Merge -> {
+            MergeView(
+                status.state,
+                tab.splitListState,
+                onApply = { project.applyMerge(tab, status.state) },
+                onCancel = { project.editor.close(tab) },
+                loadHistory = { project.mergeHistoryOf(tab) },
+                onOpenCommit = { commit -> project.openMergeCommit(tab, commit) },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+
         is TabStatus.Diff -> {
             // The grammar may download: the lexer colors the diff until the tree-sitter colors arrive.
             val spans by produceState<List<LineSpans?>?>(null, status.lines) {

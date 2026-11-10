@@ -86,7 +86,18 @@ class GitParsersTest {
                 "new.kt" to GitFileStatus.Renamed,
                 "line\nbreak.kt" to GitFileStatus.Untracked,
                 "é à.kt" to GitFileStatus.Modified,
+                "conflict.kt" to GitFileStatus.Conflicted,
             )
         assertEquals(expected, statuses)
+    }
+
+    @Test
+    fun `every unmerged pair of letters is a conflict, other pairs are not`() {
+        val unmerged = listOf("UU", "AA", "DD", "AU", "UA", "DU", "UD")
+        unmerged.forEach { code ->
+            assertEquals(GitFileStatus.Conflicted, statusOf(StatusEntry(code, "f.kt", null))?.second, code)
+        }
+        assertEquals(GitFileStatus.Added, statusOf(StatusEntry("A ", "f.kt", null))?.second)
+        assertEquals(GitFileStatus.Deleted, statusOf(StatusEntry(" D", "f.kt", null))?.second)
     }
 }

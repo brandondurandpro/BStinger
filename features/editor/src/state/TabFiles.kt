@@ -20,6 +20,7 @@ import org.example.kotlineditor.model.FileContent
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.FileVersion
 import org.example.kotlineditor.model.GitLineChange
+import org.example.kotlineditor.model.MergeSides
 import org.example.kotlineditor.model.OutcomeUnknownException
 import org.example.kotlineditor.model.ProjectFileSystem
 import org.example.kotlineditor.syntax.Language
@@ -40,6 +41,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 private const val RECOMPUTE_DELAY_MS = 150L
 private const val CHANGES_DELAY_MS = 150L
 private const val MEGABYTE = 1024 * 1024
+private const val OURS_LABEL = "Ours (current branch)"
+private const val THEIRS_LABEL = "Theirs (incoming)"
 
 /** A file whose edits could not be saved, and why (shown to the user, who may try again). */
 data class UnsavedFile(val entry: FileEntry, val relativePath: String, val reason: String)
@@ -63,6 +66,7 @@ internal class TabFiles(
     private val headLines: suspend (FileEntry) -> List<String>?,
     private val blames: suspend (FileEntry) -> List<BlameLine>,
     private val commitDiffs: suspend (FileEntry, CommitDiffTarget) -> List<DiffLine>,
+    private val merges: suspend (FileEntry) -> MergeSides,
     private val grammars: GrammarStore?,
 ) {
     // By document: the two panes may show one document, through two tabs.
@@ -73,10 +77,38 @@ internal class TabFiles(
             // A compare tab carries its lines: [EditorState.compareWithDisk] computed and put them there.
             tab.isCompare -> Unit
 
+            tab.isMerge -> loadMerge(tab)
+
             tab.isDiff -> loadDiff(tab)
 
             else -> loadText(tab)
         }
+    }
+
+    /** Reads the three versions of a conflicted file and merges them: what both sides left alone is resolved. */
+    fun loadMerge(tab: EditorTab) {
+        tab.job?.cancel()
+        tab.job =
+            scope.launch {
+                tab.status =
+                    try {
+                        mergeStatus(merges(tab.entry))
+                    } catch (e: IOException) {
+                        TabStatus.Unsupported("Cannot merge the file: ${e.message}")
+                    }
+            }
+    }
+
+    // A file deleted on one side has nothing to merge line by line: the user keeps or removes it in a terminal.
+    private suspend fun mergeStatus(sides: MergeSides): TabStatus {
+        val ours = sides.ours
+        val theirs = sides.theirs
+        if (ours == null || theirs == null) {
+            return TabStatus.Unsupported("The file was deleted on one side: resolve it with git rm or git add")
+        }
+        val base = sides.base?.lines.orEmpty()
+        val chunks = withContext(Dispatchers.Default) { ThreeWayMerge.chunks(base, ours.lines, theirs.lines) }
+        return TabStatus.Merge(MergeState(chunks, ours.lineSeparator, OURS_LABEL, THEIRS_LABEL))
     }
 
     /** Recomputes a diff tab (after a save, a commit, a change on disk). */

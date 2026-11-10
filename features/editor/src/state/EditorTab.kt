@@ -25,6 +25,9 @@ sealed interface TabStatus {
 
     /** A diff tab: the changes of the file since the last commit. */
     class Diff(val lines: List<DiffLine>) : TabStatus
+
+    /** A merge tab: the three versions of a conflicted file and what the user decided so far. */
+    class Merge(val state: MergeState) : TabStatus
 }
 
 /** Horizontal offset shared by every line of an editor; read in the layout phase so scrolling never recomposes. */
@@ -54,15 +57,22 @@ class HorizontalScroll {
 }
 
 /**
- * Identity of a tab showing [entry] as text, as its uncommitted diff, as the diff of [commit], or as the Compare of
- * a conflict (its editor content against what the disk holds). The path is taken with `/` separators: on Windows
- * the tree lists `C:\p\a.kt` while a path rebuilt from Git (a diff, a commit) is `C:\p/a.kt`, and both must open
- * the same tab.
+ * Identity of a tab showing [entry] as text, as its uncommitted diff, as the diff of [commit], as the Compare of
+ * a conflict (its editor content against what the disk holds), or as the three-way merge of a conflicted file. The
+ * path is taken with `/` separators: on Windows the tree lists `C:\p\a.kt` while a path rebuilt from Git (a diff, a
+ * commit) is `C:\p/a.kt`, and both must open the same tab.
  */
-fun tabKey(entry: FileEntry, isDiff: Boolean, commit: CommitDiffTarget?, isCompare: Boolean = false): String {
+fun tabKey(
+    entry: FileEntry,
+    isDiff: Boolean,
+    commit: CommitDiffTarget?,
+    isCompare: Boolean = false,
+    isMerge: Boolean = false,
+): String {
     val path = slashed(entry.path)
     return when {
         commit != null -> "diff@${commit.hash}:$path"
+        isMerge -> "merge:$path"
         isCompare -> "compare:$path"
         isDiff -> "diff:$path"
         else -> path
@@ -90,14 +100,17 @@ class EditorTab(
     val commit: CommitDiffTarget? = null,
     /** A compare tab: the conflict banner's diff between the editor's content and what the disk holds. */
     val isCompare: Boolean = false,
+    /** A merge tab: the three columns resolving a conflicted file (also a diff tab: it holds no document). */
+    val isMerge: Boolean = false,
 ) {
-    /** Identity of the tab: a file open as text, as its diff, as the diff of a commit, or compared. */
-    val key: String get() = tabKey(entry, isDiff, commit, isCompare)
+    /** Identity of the tab: a file open as text, as its diff, as the diff of a commit, compared, or merged. */
+    val key: String get() = tabKey(entry, isDiff, commit, isCompare, isMerge)
 
     val title: String
         get() =
             when {
                 commit != null -> "${entry.name} @ ${commit.shortHash}"
+                isMerge -> "Merge: ${entry.name}"
                 isCompare -> "Compare: ${entry.name}"
                 isDiff -> "Diff: ${entry.name}"
                 else -> entry.name

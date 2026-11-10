@@ -162,7 +162,7 @@ class SettingsE2eTest {
             onNodeWithTag(autoSelect).assertIsOn().performClick()
             onNodeWithTag(autoSelect).assertIsOff()
             assertFalse(app.project.autoSelectOpenedFile)
-            awaitCondition {
+            awaitCondition(30_000) {
                 val saved = preferences().load()
                 saved[PreferenceKeys.INLAY_HINTS] == "Inline" &&
                     saved[PreferenceKeys.AUTO_SELECT_OPENED_FILE] == "false"

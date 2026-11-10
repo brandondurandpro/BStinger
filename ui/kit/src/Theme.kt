@@ -106,6 +106,10 @@ object IdeColors {
     val DiffAddedBackground = Color(0xFF294436)
     val DiffRemovedBackground = Color(0xFF4A2E30)
     val DiffHunkBackground = Color(0xFF252A33)
+
+    /** A conflict nobody resolved yet in the three-way merge, and the stretch of the result once resolved. */
+    val MergeConflictBackground = Color(0xFF4D3F1E)
+    val MergeResolvedBackground = Color(0xFF263B4F)
     val KindClass = Color(0xFF3D8BD1)
     val KindInterface = Color(0xFF5FB2A7)
     val KindObject = Color(0xFF8F6CF5)
@@ -186,4 +190,5 @@ fun gitColor(status: GitFileStatus): Color =
         GitFileStatus.Added -> IdeColors.GitAdded
         GitFileStatus.Untracked -> IdeColors.GitUntracked
         GitFileStatus.Deleted -> IdeColors.TextSecondary
+        GitFileStatus.Conflicted -> IdeColors.Error
     }
