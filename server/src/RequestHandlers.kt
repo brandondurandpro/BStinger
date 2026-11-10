@@ -47,6 +47,7 @@ internal fun requestHandlers(services: LocalServices): Map<Method, Handler> =
         searchHandlers(services) +
         gitHandlers(services.git) +
         terminalHandlers() +
+        runHandlers() +
         languageServerHandlers(services) +
         agentHandlers(services)
 
@@ -205,7 +206,7 @@ private fun terminalHandlers(): Map<Method, Handler> =
     )
 
 // A method that returns nothing answers with a null result.
-private inline fun nothing(block: () -> Unit): JsonElement {
+internal inline fun nothing(block: () -> Unit): JsonElement {
     block()
     return JsonNull
 }

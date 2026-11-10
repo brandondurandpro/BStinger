@@ -70,6 +70,12 @@ object PreferenceKeys {
     /** Branches pinned in the toolbar, per project: the key ends with the project's path (`GitState`). */
     const val PINNED_BRANCHES_PREFIX = "git.pinnedBranches."
 
+    /** Run configurations, per project: the key ends with the project's path (`RunState`). */
+    const val RUN_CONFIGURATIONS_PREFIX = "run.configurations."
+
+    /** The run configuration last selected, per project: the key ends with the project's path. */
+    const val RUN_SELECTED_PREFIX = "run.selected."
+
     /** Whether the user agreed to share anonymous performance measures; absent until asked, which means no. */
     const val TELEMETRY_ENABLED = "telemetry.enabled"
 

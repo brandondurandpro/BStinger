@@ -56,6 +56,9 @@ private fun ColumnScope.ToolButtons(project: ProjectState, devtools: Boolean) {
     ToolButton(project, ToolWindow.Git, AppTags.TOOL_GIT) { HistoryIcon(color = IdeColors.Text) }
     ToolButton(project, ToolWindow.Branches, AppTags.TOOL_BRANCHES) { BranchIcon(color = IdeColors.Text) }
     Spacer(Modifier.weight(1f))
+    ToolButton(project, ToolWindow.Run, AppTags.TOOL_RUN) {
+        Label("▶", color = IdeColors.Text, fontWeight = FontWeight.Bold)
+    }
     // Bottom tool windows sit at the bottom of the strip, like in IntelliJ's New UI.
     if (devtools) {
         ToolButton(project, ToolWindow.Network, AppTags.TOOL_NETWORK) {
@@ -152,6 +155,7 @@ private fun ToolWindowContent(project: ProjectState, window: ToolWindow, drag: T
         ToolWindow.Project -> ProjectPanel(project, drag, modifier)
         ToolWindow.Git -> GitPanel(project, drag, modifier)
         ToolWindow.Branches -> BranchesPanel(project, drag, modifier)
+        ToolWindow.Run -> RunPanel(project.run, project.toolWindows, drag, modifier)
         ToolWindow.Terminal -> TerminalPanel(project.terminal, project.toolWindows, drag, modifier)
         ToolWindow.Network -> NetworkPanel(project, drag, modifier)
         ToolWindow.LanguageServers -> LanguageServersPanel(project, drag, modifier)
