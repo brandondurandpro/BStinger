@@ -24,6 +24,7 @@ import org.example.kotlineditor.model.GitCommitFile
 import org.example.kotlineditor.model.GitFileStatus
 import org.example.kotlineditor.model.MergeHistory
 import org.example.kotlineditor.model.PluginServer
+import org.example.kotlineditor.model.pathName
 import org.example.kotlineditor.model.slashed
 import org.example.kotlineditor.syntax.treesitter.GrammarStore
 import org.example.kotlineditor.ui.IdeRegistries
@@ -54,7 +55,8 @@ class ProjectState(
 ) : GitHost,
     TreeHost,
     LanguageServersHost,
-    AgentHost {
+    AgentHost,
+    DeployHost {
     /** Cancelled when the project is closed, so no background work outlives it. */
     override val scope = CoroutineScope(parentScope.coroutineContext + SupervisorJob(parentScope.coroutineContext[Job]))
     val name: String get() = root.name
@@ -149,11 +151,13 @@ class ProjectState(
     var popup: PopupKind? by mutableStateOf(null)
     override var fileDialog: FileDialog? by mutableStateOf(null)
 
+    override val selectedPath: String? get() = tree.selectedPath
+
     /** The deployments saved for this project (which folders go where), and their popup. */
     val deployments = DeploymentsState(this)
 
     /** The destination of the last deployment, offered again by the next one. */
-    var deployDestination: String by mutableStateOf("")
+    override var deployDestination: String by mutableStateOf("")
 
     /** "Always Select Opened File" (IntelliJ): the active file is selected and revealed in the project tree. */
     override var autoSelectOpenedFile by mutableStateOf(autoSelectOf(preferences))
@@ -188,6 +192,13 @@ class ProjectState(
         followActiveFile()
         followInsight()
     }
+
+    override fun entryAt(relativePath: String): FileEntry =
+        FileEntry(
+            path = root.path.trimEnd('/', '\\') + "/" + relativePath,
+            name = pathName(relativePath),
+            isDirectory = false,
+        )
 
     /** What to save of agent mode; nothing while it was never used in this project (the saved values stay). */
     fun agentPreferences(): Map<String, String> = if (agentState.isInitialized()) agent.toPreferences() else emptyMap()

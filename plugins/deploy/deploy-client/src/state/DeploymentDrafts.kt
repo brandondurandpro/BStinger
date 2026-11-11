@@ -6,7 +6,7 @@ import org.example.kotlineditor.model.relativeToRoot
 
 // The entry selected in the project view, relative to the project; null when none.
 private fun DeploymentsState.selectedRelative(): String? =
-    project.tree.selectedPath?.let { relativeToRoot(it, project.root.path) }
+    project.selectedPath?.let { relativeToRoot(it, project.root.path) }
 
 /** Starts a new deployment, with the entry selected in the project view as its first folder when there is one. */
 fun DeploymentsState.startNew() {

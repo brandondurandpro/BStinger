@@ -19,6 +19,7 @@ modules:
   - plugin-core
   - plugin-host
   - plugins/agent/agent-server
+  - plugins/deploy/deploy-client
   - plugins/deploy/deploy-server
   - plugins/git/git-server
   - plugins/language-servers/language-servers-server

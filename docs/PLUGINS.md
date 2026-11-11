@@ -73,7 +73,7 @@ module name is the last directory (`run-client`, `run-server`):
 - `plugins/run/{run-client,run-server}`, `plugins/terminal/{terminal-client,terminal-server}`,
   `plugins/git/{git-client,git-server}`, `plugins/tree/tree-client`,
   `plugins/language-servers/{language-servers-client,language-servers-server}`, `plugins/agent/{agent-client,agent-server}`,
-  `plugins/deploy/deploy-server`: the client
+  `plugins/deploy/{deploy-client,deploy-server}`: the client
   half contributes its tool window and shortcuts (`runToolWindow()`, `runShortcuts()`...) to the registries of
   `shared`. The Network (devtools) window is contributed the same way by `shared/src/ui/NetworkPlugin.kt`.
 - A server half implements `ServerContribution` (public in `server`) and is listed in
@@ -95,4 +95,4 @@ files, search, the recent projects and sessions, the disk watches.
 
 Signing and compatibility ranges (for third parties) and a declarative tier for untrusted contributions. There are no
 `plugins/<id>/shared` modules: the types the two halves share are in `protocol`, and no feature has code of its own to
-share yet. The Deploy client is still in `shared` (its state is part of the project state).
+share yet. The end-to-end tests of Deploy stay in `shared`, because they span the tree's dialogs and the toolbar.

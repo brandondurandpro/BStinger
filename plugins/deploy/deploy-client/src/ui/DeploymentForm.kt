@@ -48,7 +48,7 @@ internal fun DeploymentForm(deployments: DeploymentsState, draft: DeployDraft) {
             IdeTextField(
                 draft.name,
                 { deployments.draft = draft.copy(name = it, error = null) },
-                Modifier.fillMaxWidth().testTag(AppTags.DEPLOYMENT_NAME),
+                Modifier.fillMaxWidth().testTag(DeployTags.DEPLOYMENT_NAME),
                 placeholder = "e.g. Production site",
             )
             // The destination comes first: each folder then shows where it will land.
@@ -59,7 +59,7 @@ internal fun DeploymentForm(deployments: DeploymentsState, draft: DeployDraft) {
                     "Enter the destination first: each folder then shows where it will land.",
                     color = IdeColors.TextSecondary,
                     fontSize = 12.sp,
-                    modifier = Modifier.testTag(AppTags.DEPLOYMENT_FOLDERS_HINT),
+                    modifier = Modifier.testTag(DeployTags.DEPLOYMENT_FOLDERS_HINT),
                 )
             } else {
                 FolderTable(deployments, draft)
@@ -71,7 +71,7 @@ internal fun DeploymentForm(deployments: DeploymentsState, draft: DeployDraft) {
                     color = IdeColors.Error,
                     fontSize = 12.sp,
                     maxLines = 3,
-                    modifier = Modifier.padding(top = 10.dp).testTag(AppTags.DEPLOYMENT_DRAFT_ERROR),
+                    modifier = Modifier.padding(top = 10.dp).testTag(DeployTags.DEPLOYMENT_DRAFT_ERROR),
                 )
             }
         }
@@ -85,11 +85,11 @@ private fun FormButtons(deployments: DeploymentsState) {
         Modifier.fillMaxWidth().padding(top = 18.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
     ) {
-        DeployButton("Cancel", { deployments.draft = null }, Modifier.testTag(AppTags.DEPLOYMENT_CANCEL))
+        DeployButton("Cancel", { deployments.draft = null }, Modifier.testTag(DeployTags.DEPLOYMENT_CANCEL))
         DeployButton(
             "Save",
             deployments::saveDraft,
-            Modifier.testTag(AppTags.DEPLOYMENT_SAVE),
+            Modifier.testTag(DeployTags.DEPLOYMENT_SAVE),
             variant = DeployButtonVariant.Primary,
         )
     }
@@ -102,10 +102,10 @@ private fun TriggerChoice(deployments: DeploymentsState, draft: DeployDraft) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Segmented(
             listOf(
-                Segment("Manual", AppTags.DEPLOYMENT_MODE_MANUAL, !draft.auto) {
+                Segment("Manual", DeployTags.DEPLOYMENT_MODE_MANUAL, !draft.auto) {
                     deployments.draft = draft.copy(auto = false, error = null)
                 },
-                Segment("Automatic", AppTags.DEPLOYMENT_MODE, draft.auto) {
+                Segment("Automatic", DeployTags.DEPLOYMENT_MODE, draft.auto) {
                     deployments.draft = draft.copy(auto = true, error = null)
                 },
             ),
@@ -138,13 +138,13 @@ private fun FolderTable(deployments: DeploymentsState, draft: DeployDraft) {
             DeployButton(
                 "+  Add folder",
                 deployments::addFolder,
-                Modifier.testTag(AppTags.DEPLOYMENT_ADD_FOLDER),
+                Modifier.testTag(DeployTags.DEPLOYMENT_ADD_FOLDER),
                 DeployButtonVariant.Ghost,
             )
             DeployButton(
                 "Add selected in project view",
                 deployments::addSelected,
-                Modifier.testTag(AppTags.DEPLOYMENT_ADD_SELECTED),
+                Modifier.testTag(DeployTags.DEPLOYMENT_ADD_SELECTED),
                 DeployButtonVariant.Ghost,
             )
         }
@@ -167,7 +167,7 @@ private fun FolderRow(deployments: DeploymentsState, draft: DeployDraft, index: 
             IdeTextField(
                 row.source,
                 { deployments.setSource(index, it) },
-                Modifier.weight(1f).testTag(AppTags.deploymentSource(index)),
+                Modifier.weight(1f).testTag(DeployTags.deploymentSource(index)),
                 placeholder = "src or docs/api (empty: whole project)",
                 monospace = true,
             )
@@ -175,7 +175,7 @@ private fun FolderRow(deployments: DeploymentsState, draft: DeployDraft, index: 
             Box(Modifier.width(REMOVE_WIDTH), contentAlignment = Alignment.Center) {
                 IconButton(
                     { deployments.removeFolder(index) },
-                    Modifier.testTag(AppTags.deploymentRemoveFolder(index)),
+                    Modifier.testTag(DeployTags.deploymentRemoveFolder(index)),
                 ) {
                     CloseIcon(Modifier.size(10.dp))
                 }
@@ -186,7 +186,7 @@ private fun FolderRow(deployments: DeploymentsState, draft: DeployDraft, index: 
         val text = if (invalid) "Not a path inside the project and the destination" else "→  $landing"
         MonoLabel(
             text,
-            Modifier.padding(top = 6.dp).testTag(AppTags.deploymentLanding(index)),
+            Modifier.padding(top = 6.dp).testTag(DeployTags.deploymentLanding(index)),
             color = if (invalid) IdeColors.Error else IdeColors.TextSecondary,
         )
     }
@@ -200,7 +200,7 @@ private fun TargetField(deployments: DeploymentsState, index: Int, row: DraftFol
     IdeTextField(
         shown,
         { deployments.setTarget(index, it) },
-        modifier.testTag(AppTags.deploymentTarget(index)),
+        modifier.testTag(DeployTags.deploymentTarget(index)),
         placeholder = "empty: the destination itself",
         monospace = true,
         trailing =
@@ -216,7 +216,7 @@ private fun TargetField(deployments: DeploymentsState, index: Int, row: DraftFol
                         Modifier
                             .clickable { deployments.setTarget(index, null) }
                             .pointerHoverIcon(PointerIcon.Hand)
-                            .testTag(AppTags.deploymentTargetReset(index)),
+                            .testTag(DeployTags.deploymentTargetReset(index)),
                     )
                 }
             }

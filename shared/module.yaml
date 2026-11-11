@@ -5,6 +5,7 @@ dependencies:
   - //plugin-host: exported
   - //plugins/agent/agent-client: exported
   - //features/editor: exported
+  - //plugins/deploy/deploy-client: exported
   - //plugins/git/git-client: exported
   - //plugins/language-servers/language-servers-client: exported
   - //features/remote: exported

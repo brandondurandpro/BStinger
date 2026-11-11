@@ -24,7 +24,7 @@ private const val POPUP_WIDTH = 780
 fun DeploymentsPopup(deployments: DeploymentsState) {
     // A click beside the popup closes the list, but not a form: what was typed in it would be lost.
     val closeOnBackdrop = { if (deployments.draft == null) deployments.close() }
-    PopupFrame(AppTags.DEPLOYMENTS, closeOnBackdrop, width = POPUP_WIDTH) {
+    PopupFrame(DeployTags.DEPLOYMENTS, closeOnBackdrop, width = POPUP_WIDTH) {
         Column(Modifier.padding(6.dp)) {
             val draft = deployments.draft
             if (draft == null) {
@@ -41,7 +41,7 @@ fun DeploymentsPopup(deployments: DeploymentsState) {
                     color = IdeColors.Error,
                     fontSize = 12.sp,
                     maxLines = 3,
-                    modifier = Modifier.padding(top = 8.dp).testTag(AppTags.DEPLOYMENTS_ERROR),
+                    modifier = Modifier.padding(top = 8.dp).testTag(DeployTags.DEPLOYMENTS_ERROR),
                 )
             }
         }
@@ -58,11 +58,11 @@ private fun ListHeader(deployments: DeploymentsState) {
         DeployButton(
             "+  New deployment",
             deployments::startNew,
-            Modifier.testTag(AppTags.DEPLOYMENTS_NEW),
+            Modifier.testTag(DeployTags.DEPLOYMENTS_NEW),
             variant = DeployButtonVariant.Primary,
         )
         Spacer(Modifier.width(8.dp))
-        IconButton(deployments::close, Modifier.size(28.dp).testTag(AppTags.DEPLOYMENTS_CLOSE)) {
+        IconButton(deployments::close, Modifier.size(28.dp).testTag(DeployTags.DEPLOYMENTS_CLOSE)) {
             CloseIcon(Modifier.size(12.dp))
         }
     }
