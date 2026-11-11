@@ -372,6 +372,11 @@ data class AgentTranscript(
     val title: String? = null,
     /** Whether the items start with the history of the session the agent replayed: they replace those shown. */
     val replayed: Boolean = false,
+    /**
+     * Whether the agent can replay all the conversation shows from its session: the IDE may then forget the items of
+     * a conversation it no longer shows, and ask for them again.
+     */
+    val replayable: Boolean = false,
     /** The settings of the session (its model…), as chosen; empty before the agent said which it offers. */
     val options: List<AgentOption> = emptyList(),
     /** The commands the agent offers in this session; empty before it said. */

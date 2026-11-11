@@ -56,6 +56,9 @@ private const val READ_LINES = 300
 private const val READS_BUDGET_MS = 30_000L
 private const val MAX_KEPT_OUTPUT = 4_000
 
+// Measured here: 24 ms to close the tab of a history of 2,000 prompts, 530 ms to replay it when it opens again.
+private const val RELEASE_BUDGET_MS = 2_000L
+
 /**
  * Agent mode on large inputs: an answer of 5,000 chunks, a transcript of 2,000 tool calls scrolled and jumped
  * through, and a prompt typed over it, within budgets that a cost per chunk or per item breaks.
@@ -183,6 +186,33 @@ class AgentPerformanceE2eTest {
             }
             assertEquals(TYPED, conversation.draft)
             assertTrue(onAllNodes(hasTestTag(AgentTags.AGENT_SEND)).fetchSemanticsNodes().isNotEmpty())
+        }
+
+    @Test
+    fun `a long conversation is released with its tab, and replays fast when it opens again`() =
+        runComposeUiTest {
+            val store = Files.createTempDirectory("agent-store")
+            val app = launchWithProject(project, agentPreferences("--store", "$store"))
+            val turns = List(HISTORY_TURNS) { "echo prompt $it" to "answer $it " }
+            val session = pastSession(store, app.project.root.path, turns)
+            val conversation = awaitHistory(app, session)
+            awaitTag(AgentTags.agentConversation(conversation.id)).performClick()
+            awaitCondition(AGENT_TIMEOUT) { conversation.items.size == 2 * HISTORY_TURNS }
+            awaitIdle(conversation)
+            measure("Tab of $HISTORY_TURNS prompts closed", RELEASE_BUDGET_MS, BUDGET_MB) {
+                awaitTag(AgentTags.agentTabClose(conversation.id)).performClick()
+                awaitNoTag(AgentTags.agentTab(conversation.id))
+                renderFrame()
+            }
+            // Nothing of it is held any more: the agent keeps it.
+            assertTrue(conversation.items.isEmpty(), "${conversation.items.size} items held")
+            measure("History of $HISTORY_TURNS prompts replayed again", HISTORY_BUDGET_MS, BUDGET_MB) {
+                awaitTag(AgentTags.agentConversation(conversation.id)).performClick()
+                awaitCondition(HISTORY_BUDGET_MS) { conversation.items.size == 2 * HISTORY_TURNS }
+                awaitIdle(conversation)
+                renderFrame()
+            }
+            store.toFile().deleteRecursively()
         }
 
     @Test

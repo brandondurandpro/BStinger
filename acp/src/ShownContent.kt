@@ -10,6 +10,9 @@ import org.example.kotlineditor.model.AgentDiff
 /** Characters kept of the output of a tool call: its beginning, more than the few lines a card shows. */
 internal const val MAX_TOOL_OUTPUT = 4_000
 
+/** Characters kept of a thought of the agent: its beginning, of which the conversation shows a few lines. */
+internal const val MAX_THOUGHT = 4_000
+
 /** Lines kept of what a change removes, and of what it adds. */
 internal const val MAX_DIFF_LINES = 40
 
@@ -27,6 +30,9 @@ internal fun shownOutput(texts: List<String>): String {
     }
     return shown.toString()
 }
+
+/** The thought [text] with [chunk] after it, as the transcript keeps it: its beginning. */
+internal fun shownThought(text: String, chunk: String): String = beginningOf(text + chunk, MAX_THOUGHT)
 
 /**
  * The change of the file at [path] from [oldText] (null for a new file) to [newText], as the transcript keeps it: the

@@ -150,6 +150,15 @@ class AgentServiceTest {
     }
 
     @Test
+    fun `a long thought keeps its beginning`() {
+        send("think " + "thought ".repeat(MAX_THOUGHT))
+        val items = turn { list -> list.any { it is AgentItem.AgentText } }
+        val thought = items.filterIsInstance<AgentItem.Thought>().firstOrNull()
+        assertEquals(MAX_THOUGHT, thought?.text?.length)
+        assertEquals(true, thought?.text?.startsWith("thought thought "))
+    }
+
+    @Test
     fun `a tool call keeps the beginning of a long output, never all of it`() {
         send("tools 2 2000")
         val items = turn { list -> list.any { it is AgentItem.AgentText } }

@@ -69,9 +69,13 @@ internal fun AgentHost.restore(conversation: Conversation, agent: AgentCommand) 
     val directory = conversation.sessionDirectory
     if (session == null || directory == null) return
     conversation.sessionDirectory = null
-    followTranscript(conversation)
     scope.launch {
         try {
+            // A conversation released when its tab closed: the server forgets it first, or its items would show twice.
+            conversation.releasing?.join()
+            if (!conversation.closedOnServer) services.agents.close(conversation.key)
+            conversation.closedOnServer = true
+            followTranscript(conversation)
             services.agents.open(conversation.key, agent, directory, session)
         } catch (failure: IOException) {
             conversation.note("The conversation could not be opened: ${failure.message}")

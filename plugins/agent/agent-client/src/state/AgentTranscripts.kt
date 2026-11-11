@@ -47,6 +47,7 @@ private fun AgentHost.apply(conversation: Conversation, transcript: AgentTranscr
     }
     val wasBusy = conversation.state != AgentTurnState.Idle
     transcript.session?.let { conversation.session = it }
+    conversation.replayable = transcript.replayable
     if (!conversation.renamed) transcript.title?.let { conversation.title = titleOf(it) }
     transcript.usage?.let { conversation.usage = it }
     if (transcript.commands.isNotEmpty()) conversation.commands = transcript.commands

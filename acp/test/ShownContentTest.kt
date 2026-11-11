@@ -31,6 +31,14 @@ class ShownContentTest {
     }
 
     @Test
+    fun `a thought grows chunk by chunk up to its beginning`() {
+        assertEquals("first second", shownThought("first ", "second"))
+        val full = shownThought("x".repeat(MAX_THOUGHT - 1), "yz")
+        assertEquals("x".repeat(MAX_THOUGHT - 1) + "y", full)
+        assertEquals(full, shownThought(full, "more"))
+    }
+
+    @Test
     fun `a change keeps the lines that differ, not the file around them`() {
         val before = (1..1_000).joinToString("\n") { "line $it" }
         val after = before.replace("line 500\n", "LINE 500\nand one more\n")
