@@ -7,8 +7,17 @@ package org.example.kotlineditor.ui
 @Suppress("TooManyFunctions")
 object LanguageServerTags {
     const val TOOL_BUTTON = "tool.languageServers"
+
+    /** Memory of the process of the UI, of the IDE server's, and of both, in the status bar. */
+    const val STATUS_UI_MEMORY = "status.uiMemory"
     const val STATUS_SERVER_MEMORY = "status.serverMemory"
-    const val STATUS_SERVER_MEMORY_TOOLTIP = "status.serverMemory.tooltip"
+    const val STATUS_TOTAL_MEMORY = "status.totalMemory"
+    const val STATUS_MEMORY_TOOLTIP = "status.memory.tooltip"
+
+    /** The same three numbers in the Language Servers window. */
+    const val MEMORY_UI = "languageServers.memory.ui"
+    const val MEMORY_SERVER = "languageServers.memory.server"
+    const val MEMORY_TOTAL = "languageServers.memory.total"
     const val LANGUAGE_SERVERS = "languageServers"
     const val LANGUAGE_SERVERS_HIDE = "languageServers.hide"
     const val LANGUAGE_SERVERS_EMPTY = "languageServers.empty"

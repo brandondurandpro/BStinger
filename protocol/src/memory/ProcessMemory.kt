@@ -1,4 +1,4 @@
-package org.example.kotlineditor.lsp.memory
+package org.example.kotlineditor.memory
 
 /**
  * The memory of one process, in bytes.

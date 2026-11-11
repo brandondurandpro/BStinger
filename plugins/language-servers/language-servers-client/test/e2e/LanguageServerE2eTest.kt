@@ -69,7 +69,8 @@ class LanguageServerE2eTest {
                     LanguageServerTags.statusLanguageServer(running.id),
                 ).matches(Regex("PHP · \\d+ MB"))
             }
-            awaitCondition { textOf(LanguageServerTags.STATUS_SERVER_MEMORY).matches(Regex("Server \\d+ MB")) }
+            // The IDE server of the tests runs in the process of the UI: one number for both.
+            awaitCondition { textOf(LanguageServerTags.STATUS_TOTAL_MEMORY).startsWith("UI + Server ") }
         }
 
     @Test
