@@ -79,6 +79,9 @@ object PreferenceKeys {
     /** The run configuration last selected, per project: the key ends with the project's path. */
     const val RUN_SELECTED_PREFIX = "run.selected."
 
+    /** The run configurations last run, most recent first, per project: the key ends with the project's path. */
+    const val RUN_RECENT_PREFIX = "run.recent."
+
     /** Whether the user agreed to share anonymous performance measures; absent until asked, which means no. */
     const val TELEMETRY_ENABLED = "telemetry.enabled"
 

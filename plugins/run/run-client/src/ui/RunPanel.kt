@@ -53,11 +53,15 @@ fun RunPanel(run: RunState, layout: ToolWindowLayout, drag: ToolWindowDrag, modi
         }
         val editing = run.editing
         val session = run.session
-        when {
-            editing != null -> ConfigurationEditor(run, editing)
-            session != null -> RunBody(run, session)
-            run.available.isEmpty() -> EmptyRun(run)
-            else -> Hint("Press ▶ to run ${run.selected?.name ?: "a configuration"}")
+        if (editing != null) {
+            ConfigurationEditor(run, editing)
+        } else if (session != null) {
+            SessionTabs(run, session)
+            RunBody(run, session)
+        } else if (run.available.isEmpty()) {
+            EmptyRun(run)
+        } else {
+            Hint("Press ▶ to run ${run.selected?.name ?: "a configuration"}")
         }
     }
 }

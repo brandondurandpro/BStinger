@@ -6,7 +6,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -20,6 +22,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.example.kotlineditor.state.RunConfiguration
 import org.example.kotlineditor.state.RunState
 
 private val WIDGET_NAME_WIDTH = 220.dp
@@ -34,7 +37,7 @@ fun RunWidget(run: RunState, showWindow: () -> Unit, modifier: Modifier = Modifi
     // The commands are looked for as soon as the project is open, not only once the Run window was.
     LaunchedEffect(run) { run.ensureLoaded() }
     var open by remember { mutableStateOf(false) }
-    val running = run.session?.running == true
+    val running = run.anyRunning
     Row(modifier.testTag(RunTags.WIDGET), verticalAlignment = Alignment.CenterVertically) {
         Box {
             Row(
@@ -55,6 +58,7 @@ fun RunWidget(run: RunState, showWindow: () -> Unit, modifier: Modifier = Modifi
                 RunMenu(run, showWindow) { open = false }
             }
         }
+        if (running) RunningBadge(Modifier.padding(start = 8.dp).testTag(RunTags.WIDGET_STATUS))
         IconButton(
             {
                 if (run.selected != null) {
@@ -72,29 +76,59 @@ fun RunWidget(run: RunState, showWindow: () -> Unit, modifier: Modifier = Modifi
     }
 }
 
-// The commands by folder, then the actions on the configurations.
+// The search field, the recent commands, the commands by folder, then the actions on the configurations.
 @Composable
 private fun RunMenu(run: RunState, showWindow: () -> Unit, close: () -> Unit) {
-    val folders = run.byFolder
+    var query by remember { mutableStateOf("") }
+    val searching = query.isNotBlank()
+    val start = { configuration: RunConfiguration ->
+        close()
+        run.select(configuration.id)
+        showWindow()
+        run.runSelected()
+    }
+    IdeTextField(
+        query,
+        { query = it },
+        Modifier.fillMaxWidth().padding(8.dp).testTag(RunTags.WIDGET_SEARCH),
+        placeholder = "Search commands",
+        onSubmit = { run.search(query).firstOrNull()?.let(start) },
+    )
+    val recent = if (searching) emptyList() else run.recent
+    if (recent.isNotEmpty()) {
+        SectionTitle("Recent", RunTags.widgetFolder(RECENT_SECTION))
+        recent.forEach { configuration ->
+            val tag = RunTags.widgetRecent(configuration.id)
+            MenuEntry(configuration.name, tag, indent = true, running = run.isRunning(configuration.id)) {
+                start(configuration)
+            }
+        }
+        HorizontalDivider(color = IdeColors.Separator)
+    }
+    val folders = run.byFolder(query)
+    if (searching && folders.isEmpty()) {
+        Label(
+            "No command matches",
+            Modifier.padding(12.dp).testTag(RunTags.WIDGET_NO_MATCH),
+            color = IdeColors.TextSecondary,
+        )
+    }
     folders.forEachIndexed { index, (folder, configurations) ->
         if (index > 0) HorizontalDivider(color = IdeColors.Separator)
-        Label(
-            folder.ifEmpty { "Project" },
-            Modifier.padding(horizontal = 12.dp, vertical = 4.dp).testTag(RunTags.widgetFolder(folder)),
-            color = IdeColors.TextSecondary,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold,
-        )
+        SectionTitle(folder.ifEmpty { "Project" }, RunTags.widgetFolder(folder))
         configurations.forEach { configuration ->
-            MenuEntry(configuration.name, RunTags.widgetItem(configuration.id), indent = true) {
-                close()
-                run.select(configuration.id)
-                showWindow()
-                run.runSelected()
+            val tag = RunTags.widgetItem(configuration.id)
+            MenuEntry(configuration.name, tag, indent = true, running = run.isRunning(configuration.id)) {
+                start(configuration)
             }
         }
     }
     if (folders.isNotEmpty()) HorizontalDivider(color = IdeColors.Separator)
+    ConfigurationActions(run, showWindow, close)
+}
+
+@Composable
+private fun ConfigurationActions(run: RunState, showWindow: () -> Unit, close: () -> Unit) {
     MenuEntry("New configuration…", RunTags.WIDGET_NEW) {
         close()
         showWindow()
@@ -113,15 +147,45 @@ private fun RunMenu(run: RunState, showWindow: () -> Unit, close: () -> Unit) {
     }
 }
 
+private const val RECENT_SECTION = "\u0000recent"
+
 @Composable
-private fun MenuEntry(text: String, tag: String, indent: Boolean = false, onClick: () -> Unit) {
-    Box(
+private fun SectionTitle(text: String, tag: String) {
+    Label(
+        text,
+        Modifier.padding(horizontal = 12.dp, vertical = 4.dp).testTag(tag),
+        color = IdeColors.TextSecondary,
+        fontSize = 11.sp,
+        fontWeight = FontWeight.SemiBold,
+    )
+}
+
+@Composable
+private fun MenuEntry(
+    text: String,
+    tag: String,
+    indent: Boolean = false,
+    running: Boolean = false,
+    onClick: () -> Unit,
+) {
+    Row(
         Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
             .padding(start = if (indent) 24.dp else 12.dp, end = 12.dp, top = 6.dp, bottom = 6.dp)
             .testTag(tag),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Label(text)
+        Label(text, Modifier.weight(1f, fill = false))
+        if (running) RunningBadge(Modifier.padding(start = 8.dp).testTag(RunTags.widgetRunning(tag)))
+    }
+}
+
+// The green dot and "Running" of a command in progress.
+@Composable
+private fun RunningBadge(modifier: Modifier = Modifier) {
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(8.dp).background(IdeColors.GitAdded, CircleShape))
+        Label("Running", Modifier.padding(start = 4.dp), color = IdeColors.GitAdded, fontSize = 11.sp)
     }
 }

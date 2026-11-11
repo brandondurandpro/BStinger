@@ -25,6 +25,8 @@ private const val MAX_LINE = 4000
 // Lines kept for a client that reconnects; the oldest chunks are dropped beyond.
 private const val MAX_KEPT_LINES = 200_000
 
+private val COLOR_ENVIRONMENT = mapOf("FORCE_COLOR" to "1", "CLICOLOR_FORCE" to "1")
+
 private const val NOT_RUNNING = "Nothing to run"
 
 /**
@@ -90,6 +92,8 @@ private class ServerRun(
 
     init {
         val builder = ProcessBuilder(command).directory(File(directory)).redirectErrorStream(true)
+        // The output is a pipe, where tools print no colors; these variables ask for them (the UI draws them).
+        COLOR_ENVIRONMENT.forEach { (name, value) -> builder.environment().putIfAbsent(name, value) }
         val started =
             try {
                 builder.start()

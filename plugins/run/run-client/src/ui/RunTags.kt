@@ -1,6 +1,7 @@
 package org.example.kotlineditor.ui
 
 /** Semantics test tags of the Run tool window, shared with the end-to-end tests. */
+@Suppress("TooManyFunctions")
 object RunTags {
     const val RUN = "run"
     const val TOOL_BUTTON = "tool.run"
@@ -41,8 +42,19 @@ object RunTags {
     const val WIDGET_NEW = "run.widget.new"
     const val WIDGET_EDIT = "run.widget.edit"
     const val WIDGET_SHOW = "run.widget.show"
+    const val WIDGET_SEARCH = "run.widget.search"
+    const val WIDGET_STATUS = "run.widget.status"
+    const val WIDGET_NO_MATCH = "run.widget.noMatch"
 
     fun widgetFolder(folder: String) = "run.widget.folder:$folder"
+
+    fun widgetRecent(id: String) = "run.widget.recent:$id"
+
+    fun widgetRunning(id: String) = "run.widget.running:$id"
+
+    fun session(id: String) = "run.session:$id"
+
+    fun sessionClose(id: String) = "run.session.close:$id"
 
     fun widgetItem(id: String) = "run.widget.item:$id"
 

@@ -22,7 +22,10 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.text
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -30,6 +33,7 @@ import androidx.compose.ui.unit.sp
 import org.example.kotlineditor.state.OutputLink
 import org.example.kotlineditor.state.RunSession
 import org.example.kotlineditor.state.RunState
+import org.example.kotlineditor.state.StyleSpan
 import org.example.kotlineditor.state.findOutputLinks
 
 // The output, one row per line; it follows the end while the user has not scrolled up.
@@ -54,7 +58,8 @@ internal fun OutputView(run: RunState, session: RunSession) {
         }
         LazyColumn(Modifier.fillMaxSize(), state) {
             itemsIndexed(session.lines) { index, line ->
-                OutputLine(line, RunTags.line(index), { number -> RunTags.link(index, number) }, run::open)
+                val spans = session.spans.getOrNull(index).orEmpty()
+                OutputLine(line, RunTags.line(index), { number -> RunTags.link(index, number) }, run::open, spans)
             }
         }
     }
@@ -62,7 +67,13 @@ internal fun OutputView(run: RunState, session: RunSession) {
 
 // A line of output: plain text, or text cut around the places it names, which open the file.
 @Composable
-internal fun OutputLine(text: String, tag: String, linkTag: (Int) -> String, onOpen: (OutputLink) -> Unit) {
+internal fun OutputLine(
+    text: String,
+    tag: String,
+    linkTag: (Int) -> String,
+    onOpen: (OutputLink) -> Unit,
+    spans: List<StyleSpan> = emptyList(),
+) {
     val links = remember(text) { findOutputLinks(text) }
     val style = codeStyle(lineColor(text))
     Row(
@@ -76,21 +87,21 @@ internal fun OutputLine(text: String, tag: String, linkTag: (Int) -> String, onO
     ) {
         var from = 0
         links.forEachIndexed { number, link ->
-            if (link.start > from) CodeText(text.substring(from, link.start), style)
+            if (link.start > from) CodeText(styledText(text, from, link.start, spans), style)
             val linkStyle = style.copy(color = IdeColors.Link, textDecoration = TextDecoration.Underline)
             CodeText(
-                text.substring(link.start, link.end),
+                AnnotatedString(text.substring(link.start, link.end)),
                 linkStyle,
                 Modifier.clickable { onOpen(link) }.testTag(linkTag(number)),
             )
             from = link.end
         }
-        if (from < text.length) CodeText(text.substring(from), style)
+        if (from < text.length) CodeText(styledText(text, from, text.length, spans), style)
     }
 }
 
 @Composable
-private fun CodeText(text: String, style: TextStyle, modifier: Modifier = Modifier) {
+private fun CodeText(text: AnnotatedString, style: TextStyle, modifier: Modifier = Modifier) {
     androidx.compose.foundation.text.BasicText(
         text,
         modifier,
@@ -109,4 +120,18 @@ private fun lineColor(text: String): Color =
         text.startsWith("e: ") || text.startsWith("ERROR") || text.startsWith("FAILED") -> IdeColors.Error
         text.startsWith("w: ") -> WARNING_COLOR
         else -> IdeColors.Code
+    }
+
+// The part [from, to) of a line with the colors that fall in it.
+private fun styledText(text: String, from: Int, to: Int, spans: List<StyleSpan>): AnnotatedString =
+    buildAnnotatedString {
+        append(text.substring(from, to))
+        for (span in spans) {
+            val start = maxOf(span.start, from)
+            val end = minOf(span.end, to)
+            if (start >= end) continue
+            val color = span.color?.let { Color(it) } ?: Color.Unspecified
+            val weight = if (span.bold) FontWeight.Bold else null
+            addStyle(SpanStyle(color = color, fontWeight = weight), start - from, end - from)
+        }
     }
