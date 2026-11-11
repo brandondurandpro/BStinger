@@ -1,6 +1,10 @@
 package org.example.kotlineditor.run.server
 
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
 import kotlinx.serialization.json.put
 import org.example.kotlineditor.lsp.supervisor.OrphanReaper
 import org.example.kotlineditor.model.RunChunk
@@ -9,6 +13,8 @@ import org.example.kotlineditor.rpc.FrameKind
 import org.example.kotlineditor.rpc.toJson
 import java.io.File
 import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.Path
 import java.util.TreeMap
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
@@ -27,6 +33,9 @@ private const val MAX_KEPT_LINES = 200_000
 
 private val COLOR_ENVIRONMENT = mapOf("FORCE_COLOR" to "1", "CLICOLOR_FORCE" to "1")
 
+// How long after its end the output of a run is moved from memory to a file.
+private const val SPILL_DELAY_MS = 60_000L
+
 // Finished runs the registry keeps for a reconnecting client.
 private const val MAX_FINISHED_RUNS = 3
 
@@ -37,8 +46,15 @@ private const val NOT_RUNNING = "Nothing to run"
  * one is a process next to the project's files, whose output is pushed as chunks and kept for [resume]. A run that
  * is gone (the server restarted, its sessions with it) answers nothing, and the client shows it as lost.
  */
-internal class RunRegistry(private val push: (Frame) -> Unit) : AutoCloseable {
+internal class RunRegistry(private val push: (Frame) -> Unit, private val spillDelayMs: Long = SPILL_DELAY_MS) :
+    AutoCloseable {
     private val runs = ConcurrentHashMap<Long, ServerRun>()
+
+    // One thread for all the runs: it moves the output of a finished run from memory to a file, a while after the end.
+    private val spiller: ScheduledExecutorService =
+        Executors.newSingleThreadScheduledExecutor { task ->
+            Thread(task, "editor-run-spill").apply { isDaemon = true }
+        }
 
     /** How many runs the registry holds, finished ones included. */
     val size: Int get() = runs.size
@@ -48,7 +64,11 @@ internal class RunRegistry(private val push: (Frame) -> Unit) : AutoCloseable {
         stop(id)
         require(command.isNotEmpty()) { NOT_RUNNING }
         forgetOldFinishedRuns()
-        runs[id] = ServerRun(id, directory, command, push)
+        runs[id] = ServerRun(id, directory, command, push, ::spillLater)
+    }
+
+    private fun spillLater(run: ServerRun) {
+        runCatching { spiller.schedule({ run.spill() }, spillDelayMs, TimeUnit.MILLISECONDS) }
     }
 
     // A finished run is kept only for a client that reconnects and asks for its output again; the oldest ones, whose
@@ -58,7 +78,9 @@ internal class RunRegistry(private val push: (Frame) -> Unit) : AutoCloseable {
         val finished = runs.entries.filter { it.value.finishedAt > 0L }.sortedBy { it.value.finishedAt }
         val surplus = finished.size - MAX_FINISHED_RUNS
         if (surplus <= 0) return
-        finished.take(surplus).forEach { runs.remove(it.key, it.value) }
+        finished.take(surplus).forEach { entry ->
+            if (runs.remove(entry.key, entry.value)) entry.value.discard()
+        }
     }
 
     fun stop(id: Long) {
@@ -66,11 +88,16 @@ internal class RunRegistry(private val push: (Frame) -> Unit) : AutoCloseable {
     }
 
     fun stopAll() {
-        runs.values.forEach { it.stop() }
+        val all = runs.values.toList()
+        all.forEach { it.stop() }
         runs.clear()
+        all.forEach { it.discard() }
     }
 
-    override fun close() = stopAll()
+    override fun close() {
+        stopAll()
+        spiller.shutdownNow()
+    }
 
     /** The chunks of the run [id] after [lastSeq], then its end; nothing when the run is already gone. */
     fun resume(id: Long, lastSeq: Long) {
@@ -85,13 +112,15 @@ private class KeptChunk(val lines: Int, val frame: Frame)
  * One run: a process whose output and error output are merged, read line by line and pushed as chunks at most
  * once per [CHUNK_INTERVAL_MS]. The last chunk says how it ended (exit code, or the reason it could not start).
  */
-private class ServerRun(
+internal class ServerRun(
     private val id: Long,
     directory: String,
     command: List<String>,
     private val push: (Frame) -> Unit,
+    private val onFinished: (ServerRun) -> Unit,
 ) {
     private val lock = Any()
+    private var spilled: Path? = null
     private val kept = TreeMap<Long, KeptChunk>()
     private val pending = ArrayList<String>()
     private var seq = 0L
@@ -145,10 +174,51 @@ private class ServerRun(
 
     /** Replays the chunks after [lastSeq], then the end frame; the client asks this after a reconnection. */
     fun resume(lastSeq: Long) {
-        val replay = synchronized(lock) { kept.tailMap(lastSeq, false).values.map { it.frame } }
+        val replay =
+            synchronized(lock) {
+                val keptFrames = kept.tailMap(lastSeq, false).values.map { it.frame }
+                spilledFrames(lastSeq) + keptFrames
+            }
         replay.forEach(push)
         val end = synchronized(lock) { endFrame }
         if (end != null) push(end)
+    }
+
+    /** Moves the output of the finished run to a temporary file, which frees its memory; [resume] reads it back. */
+    fun spill() {
+        synchronized(lock) {
+            val nothingToMove = endFrame == null || spilled != null
+            if (nothingToMove || kept.isEmpty()) return
+            val file = Files.createTempFile("kotlin-editor-run-$id-", ".frames")
+            val text = kept.values.joinToString("\n") { it.frame.payload.toString() }
+            val written = runCatching { Files.writeString(file, text, Charsets.UTF_8) }.isSuccess
+            if (!written) {
+                runCatching { Files.deleteIfExists(file) }
+                return
+            }
+            spilled = file
+            kept.clear()
+            keptLines = 0
+        }
+    }
+
+    /** Deletes what [spill] wrote; the run is forgotten. */
+    fun discard() {
+        val file = synchronized(lock) { spilled.also { spilled = null } }
+        if (file != null) runCatching { Files.deleteIfExists(file) }
+    }
+
+    // The chunks written by spill after [lastSeq]; called with the lock held.
+    private fun spilledFrames(lastSeq: Long): List<Frame> {
+        val file = spilled ?: return emptyList()
+        val lines = runCatching { Files.readAllLines(file, Charsets.UTF_8) }.getOrDefault(emptyList())
+        val frames = ArrayList<Frame>()
+        for (line in lines) {
+            val payload = Json.parseToJsonElement(line).jsonObject
+            val seq = payload.getValue("seq").jsonPrimitive.long
+            if (seq > lastSeq) frames += Frame(FrameKind.Event, id, payload)
+        }
+        return frames
     }
 
     private fun pump(started: Process) {
@@ -195,6 +265,7 @@ private class ServerRun(
             val end = Frame(FrameKind.End, id, buildJsonObject { put("seq", last) })
             endFrame = end
             push(end)
+            onFinished(this)
         }
     }
 
