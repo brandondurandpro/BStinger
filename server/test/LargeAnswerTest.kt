@@ -34,6 +34,11 @@ private const val WAIT_LARGE_MS = 30_000L
 // developer machine for 30 MB); now only for the write of the frame already on the socket.
 private const val HELD_BACK_BUDGET_MS = 150L
 
+// The waits are judged by their 90th percentile: held back, every small answer waits (half the preparation on
+// average), while a pause of a busy runner (155 ms seen on the Windows one, 34 to 80 ms otherwise) delays a few.
+private const val JUDGED_PERCENT = 90
+private const val PERCENT = 100
+
 /** A large answer (a file of 30 MB) does not hold back the small answers sent while it is being prepared. */
 class LargeAnswerTest {
     private val data = Files.createTempDirectory("large-answer-data")
@@ -134,10 +139,16 @@ class LargeAnswerTest {
         val largeAt = arrived.getValue(LARGE_ID)
         val heldBack = sent.filterValues { it < largeAt }.keys
         val waits = heldBack.mapNotNull { small -> arrived[small]?.let { it - sent.getValue(small) } }
-        val worstMs = TimeUnit.NANOSECONDS.toMillis(waits.maxOrNull() ?: 0L)
-        println("PERF small answer while a 30 MB one is prepared: worst ${worstMs}ms over ${waits.size} answers")
+        val sorted = waits.sorted()
+        val worstMs = TimeUnit.NANOSECONDS.toMillis(sorted.lastOrNull() ?: 0L)
+        val judged = sorted.getOrNull(sorted.size * JUDGED_PERCENT / PERCENT) ?: sorted.lastOrNull() ?: 0L
+        val judgedMs = TimeUnit.NANOSECONDS.toMillis(judged)
+        println(
+            "PERF small answer while a 30 MB one is prepared: worst ${worstMs}ms, " +
+                "${JUDGED_PERCENT}th percentile ${judgedMs}ms over ${waits.size} answers",
+        )
         assertTrue(waits.isNotEmpty(), "no small request was sent while the large answer was prepared")
-        assertTrue(worstMs < HELD_BACK_BUDGET_MS, "a small answer waited $worstMs ms for the large one")
+        assertTrue(judgedMs < HELD_BACK_BUDGET_MS, "small answers waited $judgedMs ms for the large one")
     }
 
     private companion object {

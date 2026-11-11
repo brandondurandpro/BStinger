@@ -6,9 +6,11 @@ import org.example.kotlineditor.model.DeployItem
 import org.example.kotlineditor.model.DeployResult
 import org.example.kotlineditor.model.FileEntry
 import java.io.IOException
+import java.nio.channels.FileChannel
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
+import java.nio.file.StandardOpenOption
 import java.nio.file.attribute.PosixFilePermission
 import kotlin.io.path.ExperimentalPathApi
 import kotlin.io.path.createDirectories
@@ -103,6 +105,32 @@ class LocalDeployerTest {
         deploy(listOf(project.resolve("web")), DeployDestination(target.toString()))
         assertEquals("new", target.resolve("web/index.html").readText())
         assertEquals("user data", target.resolve("web/uploaded.png").readText())
+    }
+
+    // Makes [file] impossible to copy, as a file another program holds or deletes while it is deployed: locked on
+    // Windows, unreadable elsewhere. Null when this machine cannot (root reads every file).
+    private fun uncopyable(file: Path): AutoCloseable? {
+        if (WINDOWS) {
+            val channel = FileChannel.open(file, StandardOpenOption.READ, StandardOpenOption.WRITE)
+            channel.lock()
+            return channel
+        }
+        Files.setPosixFilePermissions(file, emptySet())
+        return if (Files.isReadable(file)) null else AutoCloseable { }
+    }
+
+    @Test
+    fun `a file that cannot be copied keeps the copy already deployed, and leaves nothing behind`() {
+        val source = write("web/index.html", "new")
+        target.resolve("web").createDirectories()
+        target.resolve("web/index.html").writeText("old")
+        val held = uncopyable(source) ?: return
+        held.use {
+            assertFailsWith<IOException> { deploy(listOf(source), DeployDestination(target.toString())) }
+        }
+        assertEquals("old", target.resolve("web/index.html").readText())
+        val left = Files.list(target.resolve("web")).use { files -> files.map { it.name }.toList() }
+        assertEquals(listOf("index.html"), left)
     }
 
     @Test

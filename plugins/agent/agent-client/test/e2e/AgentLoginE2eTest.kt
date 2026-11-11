@@ -30,7 +30,7 @@ class AgentLoginE2eTest {
             onNodeWithText("Fake login").performClick()
             awaitShown(conversation, "Logged in with Fake login")
             sendPrompt("echo hi")
-            awaitShown(conversation, "hi")
+            awaitAnswer(conversation, "hi")
             awaitIdle(conversation)
         }
 }

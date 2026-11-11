@@ -25,7 +25,7 @@ class AgentUsageAndForkE2eTest {
             val app = launchWithProject(project, agentPreferences())
             val conversation = startConversation(app)
             sendPrompt("echo hello")
-            awaitShown(conversation, "hello")
+            awaitAnswer(conversation, "hello")
             awaitIdle(conversation)
             awaitCondition { conversation.usage != null }
             assertContains(textOf(AgentTags.AGENT_USAGE), "0% · 1k/200k · \$0.01")
@@ -52,7 +52,7 @@ class AgentUsageAndForkE2eTest {
             val app = launchWithProject(project, agentPreferences())
             val original = startConversation(app)
             sendPrompt("echo copied-words")
-            awaitShown(original, "copied-words")
+            awaitAnswer(original, "copied-words")
             awaitIdle(original)
             rightClickOn(AgentTags.agentConversation(original.id))
             awaitTag(AgentTags.AGENT_DUPLICATE).performClick()
