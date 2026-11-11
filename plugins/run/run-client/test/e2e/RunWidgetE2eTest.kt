@@ -250,4 +250,26 @@ class RunWidgetE2eTest {
             awaitNoTag(RunTags.widgetItem(last.id))
             awaitTag(RunTags.WIDGET_NEW).assertIsDisplayed()
         }
+
+    @Test
+    fun `the filter menu has a limited height and quick actions to check every folder or none`() =
+        runComposeUiTest {
+            repeat(60) { project.file("zpackages/pkg$it/composer.json", """{"scripts": {"test": "x"}}""") }
+            val app = launchWithProject(project)
+            awaitCondition { app.project.run.folders.size == 60 }
+            onNodeWithTag(RunTags.WIDGET_SELECTOR).performClick()
+            awaitTag(RunTags.WIDGET_FILTER).performClick()
+            // Only the rows that fit the menu are on screen, the actions stay reachable.
+            awaitTag(RunTags.WIDGET_FILTER_SEARCH).performTextInput("pkg1")
+            awaitTag(RunTags.WIDGET_FILTER_SELECT_ALL).performClick()
+            awaitCondition { app.project.run.folderFilter.size == 11 }
+            awaitTag(RunTags.WIDGET_FILTER_SEARCH).performTextReplacement("nothing like it")
+            awaitTag(RunTags.WIDGET_FILTER_NONE).assertIsDisplayed()
+            awaitTag(RunTags.WIDGET_FILTER_SEARCH).performTextReplacement("")
+            awaitTag(RunTags.WIDGET_FILTER_SELECT_ALL).performClick()
+            awaitCondition { app.project.run.folderFilter.size == 60 }
+            awaitTag(RunTags.WIDGET_FILTER_ALL).performClick()
+            val filter = app.project.run
+            awaitCondition { filter.folderFilter.isEmpty() }
+        }
 }

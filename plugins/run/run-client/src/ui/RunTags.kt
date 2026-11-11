@@ -46,7 +46,10 @@ object RunTags {
     const val WIDGET_STATUS = "run.widget.status"
     const val WIDGET_FILTER = "run.widget.filter"
     const val WIDGET_FILTER_MENU = "run.widget.filter.menu"
+    const val WIDGET_FILTER_SEARCH = "run.widget.filter.search"
+    const val WIDGET_FILTER_NONE = "run.widget.filter.none"
     const val WIDGET_FILTER_ALL = "run.widget.filter.all"
+    const val WIDGET_FILTER_SELECT_ALL = "run.widget.filter.selectAll"
     const val WIDGET_BY_FOLDER = "run.widget.byFolder"
     const val WIDGET_NO_MATCH = "run.widget.noMatch"
 

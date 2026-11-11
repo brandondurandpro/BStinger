@@ -487,10 +487,25 @@ class RunStateTest {
         assertEquals(listOf("web"), run.byFolder("").map { it.first })
         assertEquals(listOf("web"), run.recentByFolder.map { it.first })
         assertTrue(run.search("composer").isEmpty())
-        run.toggleFolder("api")
+        run.selectAllFolders()
+        assertEquals(setOf("web", "api"), run.folderFilter)
         assertEquals(2, run.search("").size)
         run.clearFolderFilter()
         assertEquals(2, run.search("").size)
         assertTrue(run.folderFilter.isEmpty())
+    }
+
+    @Test
+    fun `the folders can be searched, and select all checks the ones the search leaves`() {
+        val run = state()
+        listOf("web/app", "web/admin", "api", "").forEach { run.run(run.add("cmd", directory = it)) }
+        assertEquals(listOf("web/admin", "web/app"), run.searchFolders("WEB").sorted())
+        assertEquals(listOf("web/admin"), run.searchFolders("web adm"))
+        assertEquals(listOf(""), run.searchFolders("proj"))
+        assertEquals(4, run.searchFolders("  ").size)
+        run.selectAllFolders(run.searchFolders("web"))
+        assertEquals(setOf("web/app", "web/admin"), run.folderFilter)
+        run.selectAllFolders()
+        assertEquals(4, run.folderFilter.size)
     }
 }

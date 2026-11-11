@@ -110,41 +110,6 @@ private fun RunMenu(run: RunState, showWindow: () -> Unit, close: () -> Unit) {
     ConfigurationActions(run, showWindow, close)
 }
 
-// The filter icon: its menu lists the folders with a check box each, and the commands shown are those of the checked
-// ones (all of them when none is checked).
-@Composable
-private fun FolderFilter(run: RunState) {
-    var open by remember { mutableStateOf(false) }
-    val active = run.folderFilter.isNotEmpty()
-    Box(Modifier.padding(start = 4.dp)) {
-        IconButton({ open = true }, Modifier.testTag(RunTags.WIDGET_FILTER)) {
-            IdeIcon(Lucide.ListFilter, color = if (active) IdeColors.Link else IdeColors.TextSecondary)
-        }
-        IdeDropdownMenu(open, { open = false }, Modifier.testTag(RunTags.WIDGET_FILTER_MENU)) {
-            run.folders.forEach { folder ->
-                val checked = folder in run.folderFilter
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .clickable { run.toggleFolder(folder) }
-                        .padding(horizontal = 12.dp, vertical = 6.dp)
-                        .testTag(RunTags.widgetFilter(folder)),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Box(Modifier.size(16.dp)) {
-                        if (checked) IdeIcon(Lucide.Check, color = IdeColors.Link)
-                    }
-                    Label(folder.ifEmpty { "Project" }, Modifier.padding(start = 8.dp))
-                }
-            }
-            if (active) {
-                HorizontalDivider(color = IdeColors.Separator)
-                MenuEntry("Show all folders", RunTags.WIDGET_FILTER_ALL) { run.clearFolderFilter() }
-            }
-        }
-    }
-}
-
 @Composable
 private fun CommandList(
     run: RunState,
@@ -264,7 +229,7 @@ private fun ConfigurationEntry(
 }
 
 @Composable
-private fun MenuEntry(
+internal fun MenuEntry(
     text: String,
     tag: String,
     indent: Boolean = false,

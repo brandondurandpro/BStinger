@@ -211,7 +211,22 @@ class RunState(
         folderFilter = if (folder in current) current - folder else current + folder
     }
 
-    /** Lists the commands of every folder again. */
+    /** The folders whose name contains every word of [query] (any case); all of them when blank. */
+    fun searchFolders(query: String): List<String> {
+        val lowerQuery = query.trim().lowercase()
+        val words = lowerQuery.split(' ').filter { it.isNotEmpty() }
+        return folders.filter { folder ->
+            val name = folder.ifEmpty { PROJECT_FOLDER_NAME }.lowercase()
+            words.all { it in name }
+        }
+    }
+
+    /** Checks the folders [wanted] (every folder that holds commands by default), keeping the ones already checked. */
+    fun selectAllFolders(wanted: List<String> = folders) {
+        folderFilter = folderFilter + wanted
+    }
+
+    /** Lists the commands of every folder again (no folder checked). */
     fun clearFolderFilter() {
         folderFilter = emptySet()
     }
@@ -498,3 +513,6 @@ private fun decodeRecentIds(text: String?): List<String> = text.orEmpty().lines(
 
 // The folder a configuration runs in, relative to the project; blank for the project itself.
 private fun folderOf(configuration: RunConfiguration): String = configuration.workingDirectory.trim().trim('/', '\\')
+
+// How the folder of the project itself is called in the menus.
+private const val PROJECT_FOLDER_NAME = "Project"
