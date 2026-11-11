@@ -173,11 +173,17 @@ private fun readManifest(archive: File): PluginManifest? =
         }
     }.getOrNull()
 
-// Only the files at the root of the archive, never a path outside the plugin's folder.
-private fun extract(archive: File, folder: File) {
+/**
+ * Extracts the files at the root of [archive] into [folder], never a path outside of it: an entry that is nested, or
+ * whose name would leave the folder (`..`, an absolute path), is skipped.
+ */
+internal fun extract(archive: File, folder: File) {
+    val base = folder.canonicalFile
     ZipFile(archive).use { zip ->
         for (entry in zip.entries().asSequence().filter(::isRootFile)) {
-            File(folder, entry.name).outputStream().use { out -> zip.getInputStream(entry).copyTo(out) }
+            val target = File(base, entry.name).canonicalFile
+            if (target.parentFile != base) continue
+            target.outputStream().use { out -> zip.getInputStream(entry).copyTo(out) }
         }
     }
 }
@@ -185,7 +191,9 @@ private fun extract(archive: File, folder: File) {
 private fun isRootFile(entry: ZipEntry): Boolean {
     val name = entry.name
     val nested = '/' in name || '\\' in name
-    return !entry.isDirectory && !nested && !name.startsWith("..")
+    val climbs = name.startsWith("..")
+    val regular = !entry.isDirectory && name.isNotEmpty()
+    return regular && !nested && !climbs
 }
 
 private fun describe(problem: PluginProblem): String =
