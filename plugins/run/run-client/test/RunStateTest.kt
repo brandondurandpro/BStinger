@@ -210,6 +210,27 @@ class RunStateTest {
     }
 
     @Test
+    fun `a colored line keeps its colors while the lines before it are dropped, and loses them with it`() {
+        val run = state()
+        run.add("prog")
+        run.runSelected()
+        val chunks = runner.started[0].chunks
+        chunks.trySend(RunChunk(1, listOf("plain", "\u001B[31mred\u001B[0m")))
+        val session = assertNotNull(run.session)
+        val red = session.spansAt(1)
+        assertEquals(1, red.size)
+        assertTrue(session.spansAt(0).isEmpty())
+        chunks.trySend(RunChunk(2, (1..<KEPT_LINES).map { "line $it" }))
+        assertEquals(1, session.droppedLines)
+        assertEquals("red", session.lines[0])
+        assertEquals(red, session.spansAt(0))
+        chunks.trySend(RunChunk(3, listOf("last")))
+        assertEquals("line 1", session.lines[0])
+        assertTrue(session.spansAt(0).isEmpty())
+        assertTrue(session.spansAt(KEPT_LINES - 1).isEmpty())
+    }
+
+    @Test
     fun `only a test configuration reads the output into results`() {
         val run = state()
         run.add("tests", RunKind.Tests)

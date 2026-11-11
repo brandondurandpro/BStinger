@@ -15,6 +15,7 @@ import org.example.kotlineditor.model.ProjectRunner
 import org.example.kotlineditor.model.RunChunk
 import org.example.kotlineditor.model.RunStream
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 // Lines kept in the output: older ones are dropped, the pane says how many.
 private const val MAX_LINES = 50_000
@@ -63,8 +64,9 @@ class RunSession(
     /** The lines printed so far, without colors; the oldest are dropped past a limit. */
     val lines = mutableStateListOf<String>()
 
-    /** The colored parts of each line of [lines], at the same index. */
-    val spans = mutableStateListOf<List<StyleSpan>>()
+    // The colored parts of the lines, by line number counted from the start of the run (dropped lines included).
+    // Only colored lines have an entry: a second list as long as [lines] doubled the cost of a long output.
+    private val spansByNumber = ConcurrentHashMap<Long, List<StyleSpan>>()
 
     internal val ansi = AnsiParser()
 
@@ -98,6 +100,26 @@ class RunSession(
 
     /** Whether the command is still running. */
     val running: Boolean get() = status == RunStatus.Running
+
+    /** The colored parts of the line at [index] of [lines]; empty for a line without colors. */
+    fun spansAt(index: Int): List<StyleSpan> = spansByNumber[droppedLines.toLong() + index].orEmpty()
+
+    // Adds [styled] at the end of the output, dropping the oldest lines past [limit].
+    internal fun append(styled: List<StyledLine>, limit: Int) {
+        val firstNumber = droppedLines.toLong() + lines.size
+        styled.forEachIndexed { offset, line ->
+            if (line.spans.isNotEmpty()) spansByNumber[firstNumber + offset] = line.spans
+        }
+        lines.addAll(styled.map { it.text })
+        val excess = lines.size - limit
+        if (excess <= 0) return
+        lines.removeRange(0, excess)
+        val firstDropped = droppedLines.toLong()
+        for (number in firstDropped until firstDropped + excess) {
+            spansByNumber.remove(number)
+        }
+        droppedLines += excess
+    }
 }
 
 /**
@@ -450,17 +472,9 @@ class RunState(
 
     private fun append(shown: RunSession, received: List<String>) {
         val styled = received.map(shown.ansi::parse)
-        val clean = styled.map { it.text }
-        shown.lines.addAll(clean)
-        shown.spans.addAll(styled.map { it.spans })
-        val excess = shown.lines.size - MAX_LINES
-        if (excess > 0) {
-            shown.lines.removeRange(0, excess)
-            shown.spans.removeRange(0, excess)
-            shown.droppedLines += excess
-        }
+        shown.append(styled, MAX_LINES)
         if (shown.configuration.kind == RunKind.Tests) {
-            clean.forEach(shown.parser::accept)
+            styled.forEach { shown.parser.accept(it.text) }
             shown.results = shown.parser.results()
         }
     }

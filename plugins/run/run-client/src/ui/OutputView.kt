@@ -58,7 +58,7 @@ internal fun OutputView(run: RunState, session: RunSession) {
         }
         LazyColumn(Modifier.fillMaxSize(), state) {
             itemsIndexed(session.lines) { index, line ->
-                val spans = session.spans.getOrNull(index).orEmpty()
+                val spans = session.spansAt(index)
                 OutputLine(line, RunTags.line(index), { number -> RunTags.link(index, number) }, run::open, spans)
             }
         }
