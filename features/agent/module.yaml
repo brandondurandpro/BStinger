@@ -6,7 +6,7 @@ product:
 
 dependencies:
   - //features/editor: exported
-  - //features/tree
+  - //plugins/tree/tree-client
 
 settings:
   compose: enabled

@@ -220,7 +220,7 @@ internal class Outbox(private val pending: PendingRequests, private val heartbea
 }
 
 /** Whether the server runs this method in arrival order (terminals, documents, the files of a session). */
-internal fun Method.keepsOrder(): Boolean {
+internal fun MethodSpec.keepsOrder(): Boolean {
     val terminal = rpcName.startsWith("terminal/")
     val document = rpcName.startsWith("doc/")
     return terminal || document || this == Method.LspUse

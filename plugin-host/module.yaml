@@ -1,0 +1,14 @@
+# Loads plugins from disk: reads the manifest, gives each plugin a class loader of its own that only sees the plugin
+# API, unloads it again and checks that its class loader was dropped.
+product:
+  type: jvm/lib
+
+dependencies:
+  - //plugin-api: exported
+  - //plugin-core: exported
+
+settings:
+  compose: enabled
+
+test-dependencies:
+  - //testkit

@@ -166,7 +166,12 @@ private fun RowActions(deployments: DeploymentsState, profile: DeployProfile, ru
     )
     var open by remember { mutableStateOf(false) }
     Box(Modifier.padding(start = 4.dp)) {
-        DeployButton("⋯", { open = true }, Modifier.testTag(AppTags.deploymentMenu(profile.name)), ButtonVariant.Ghost)
+        DeployButton(
+            "⋯",
+            { open = true },
+            Modifier.testTag(AppTags.deploymentMenu(profile.name)),
+            DeployButtonVariant.Ghost,
+        )
         DropdownMenu(open, { open = false }) {
             MenuItem("Edit", AppTags.deploymentEdit(profile.name)) {
                 open = false

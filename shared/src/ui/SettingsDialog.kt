@@ -220,6 +220,10 @@ private fun SettingControl(app: AppState, settings: SettingsState, setting: Sett
             TelemetryControl(app)
         }
 
+        Setting.Plugins -> {
+            PluginsControl(app)
+        }
+
         Setting.AgentMode -> {
             SettingCheckBox(
                 setting,

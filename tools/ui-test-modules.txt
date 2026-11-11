@@ -2,10 +2,10 @@
 # a time, after the other modules.
 agent
 editor
-git
-language-servers
+git-client
+language-servers-client
 remote
-run
-terminal
-tree
+run-client
+terminal-client
+tree-client
 shared

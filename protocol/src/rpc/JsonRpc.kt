@@ -28,8 +28,6 @@ internal object JsonRpc {
     private const val STREAM = "stream"
     private const val TRACE = "trace"
 
-    private val methods = Method.entries.associateBy { it.rpcName }
-
     fun message(frame: Frame): JsonObject =
         buildJsonObject {
             put("jsonrpc", "2.0")
@@ -99,7 +97,7 @@ internal object JsonRpc {
     // An unknown method keeps a null method: the server answers it with METHOD_NOT_FOUND.
     private fun request(method: String, id: Long?, params: JsonElement, body: ByteArray, trace: String?): Frame {
         requireNotNull(id) { "Request without id" }
-        return Frame(FrameKind.Request, id, params, methods[method], encoded = body, trace = trace)
+        return Frame(FrameKind.Request, id, params, MethodRegistry.resolve(method), encoded = body, trace = trace)
     }
 
     // The handshake is the only request with HELLO_ID: its answer is a Welcome or a Reject.

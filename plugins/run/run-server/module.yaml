@@ -1,0 +1,13 @@
+# The server half of the Run tool window: commands run in a project, their output pushed as chunks. It is linked
+# statically and found by the server through `META-INF/services` (a bundled plugin).
+product:
+  type: jvm/lib
+
+dependencies:
+  - //server
+  - //protocol
+  - //lsp
+  - $libs.kotlinx.serialization.json
+
+test-dependencies:
+  - //testkit

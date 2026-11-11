@@ -15,10 +15,10 @@ private const val MAX_TRACKED = 10_000
  * long requests wait for their answer. Shared by the successive links of a client, as requests survive reconnections.
  */
 internal class NetworkTap(val inspector: NetworkInspector) {
-    private class Sent(val method: Method, val atNanos: Long)
+    private class Sent(val method: MethodSpec, val atNanos: Long)
 
     private val requests = ConcurrentHashMap<Long, Sent>()
-    private val streams = ConcurrentHashMap<Long, Method>()
+    private val streams = ConcurrentHashMap<Long, MethodSpec>()
 
     val active: Boolean get() = inspector.recording
 
@@ -44,7 +44,7 @@ internal class NetworkTap(val inspector: NetworkInspector) {
             Direction.Sent,
             frame.kind.name,
             frame.id,
-            method?.name ?: requests[frame.id]?.method?.name,
+            method?.label() ?: requests[frame.id]?.method?.label(),
             frame.body,
             wireSize,
             redacted = frame.kind == FrameKind.Hello, // carries the token
@@ -74,7 +74,8 @@ internal class NetworkTap(val inspector: NetworkInspector) {
                     null
                 }
             }
-        inspector.record(Direction.Received, frame.kind.name, frame.id, method?.name, frame.body, wireSize, latencyMs)
+        val label = method?.label()
+        inspector.record(Direction.Received, frame.kind.name, frame.id, label, frame.body, wireSize, latencyMs)
     }
 
     private companion object {
@@ -109,3 +110,6 @@ internal class CountingOutputStream(output: OutputStream) : FilterOutputStream(o
         count += len
     }
 }
+
+// The name the inspector shows: the enum constant of a built-in method, the wire name of a plugin's.
+private fun MethodSpec.label(): String = (this as? Method)?.name ?: rpcName

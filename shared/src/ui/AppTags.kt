@@ -42,11 +42,14 @@ object AppTags {
     const val SETTINGS_SERVERS_ERROR = "settings.servers.error"
     const val SETTINGS_TELEMETRY_FORBIDDEN = "settings.telemetry.forbidden"
     const val SETTINGS_AGENT_COMMAND = "settings.agentCommand"
-    const val TOOL_PROJECT = "tool.project"
-    const val TOOL_GIT = "tool.git"
-    const val TOOL_BRANCHES = "tool.branches"
-    const val TOOL_TERMINAL = "tool.terminal"
-    const val TOOL_RUN = "tool.run"
+    const val PLUGIN_PATH = "settings.plugins.path"
+    const val PLUGIN_INSTALL = "settings.plugins.install"
+    const val PLUGIN_ERROR = "settings.plugins.error"
+    const val TOOL_PROJECT = TreeTags.TOOL_BUTTON
+    const val TOOL_GIT = GitTags.TOOL_GIT
+    const val TOOL_BRANCHES = GitTags.TOOL_BRANCHES
+    const val TOOL_TERMINAL = TerminalTags.TOOL_BUTTON
+    const val TOOL_RUN = RunTags.TOOL_BUTTON
     const val TOOL_NETWORK = "tool.network"
     const val NETWORK = "network"
     const val NETWORK_RECORD = "network.record"
@@ -104,7 +107,7 @@ object AppTags {
     const val STATUS_CONNECTION = "status.connection"
     const val STATUS_OPENING = "status.opening"
     const val STATUS_ERROR = "status.error"
-    const val TOOL_LANGUAGE_SERVERS = "tool.languageServers"
+    const val TOOL_LANGUAGE_SERVERS = LanguageServerTags.TOOL_BUTTON
     const val GOTO_LINE = "gotoLine"
     const val GOTO_LINE_INPUT = "gotoLine.input"
 
@@ -135,6 +138,12 @@ object AppTags {
 
     /** A setting of the Settings dialog, by its enum name (`FontSize`). */
     fun setting(name: String) = "settings.setting:$name"
+
+    fun plugin(id: String) = "settings.plugins.plugin:$id"
+
+    fun pluginToggle(id: String) = "settings.plugins.toggle:$id"
+
+    fun pluginUpdate(id: String) = "settings.plugins.update:$id"
 
     /** The check box of an on/off setting, by its enum name (`AutoSelect`). */
     fun settingToggle(name: String) = "settings.toggle:$name"

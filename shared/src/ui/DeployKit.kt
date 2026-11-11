@@ -49,7 +49,7 @@ private const val MUTED_ALPHA = 0.5f
 private const val TOOLTIP_LINES = 30
 
 /** How strongly a [DeployButton] stands out. */
-enum class ButtonVariant {
+enum class DeployButtonVariant {
     /** The one action of the screen: filled with the text color. */
     Primary,
 
@@ -66,12 +66,12 @@ internal fun DeployButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    variant: ButtonVariant = ButtonVariant.Outline,
+    variant: DeployButtonVariant = DeployButtonVariant.Outline,
     enabled: Boolean = true,
 ) {
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
-    val primary = variant == ButtonVariant.Primary
+    val primary = variant == DeployButtonVariant.Primary
     val background =
         when {
             primary && hovered && enabled -> IdeColors.Text.copy(alpha = 0.9f)
@@ -80,7 +80,7 @@ internal fun DeployButton(
             else -> Color.Transparent
         }
     val outline =
-        if (variant == ButtonVariant.Outline) {
+        if (variant == DeployButtonVariant.Outline) {
             Modifier.border(
                 1.dp,
                 IdeColors.Separator,

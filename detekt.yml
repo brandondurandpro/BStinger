@@ -49,11 +49,11 @@ comments:
   # Documentation is required for the API modules other modules build on (`protocol`, `server`); the application
   # modules (`shared` and the client modules split from it, `desktopApp`) are not a library API.
   UndocumentedPublicClass:
-    excludes: ['**/shared/**', '**/ui/**', '**/core/**', '**/features/**', '**/e2e/**', '**/syntax/**', '**/desktopApp/**', '**/test/**', '**/test@jvm/**']
+    excludes: ['**/shared/**', '**/ui/**', '**/core/**', '**/features/**', '**/plugins/**/*-client/**', '**/e2e/**', '**/syntax/**', '**/desktopApp/**', '**/test/**', '**/test@jvm/**']
   UndocumentedPublicFunction:
-    excludes: ['**/shared/**', '**/ui/**', '**/core/**', '**/features/**', '**/e2e/**', '**/syntax/**', '**/desktopApp/**', '**/test/**', '**/test@jvm/**']
+    excludes: ['**/shared/**', '**/ui/**', '**/core/**', '**/features/**', '**/plugins/**/*-client/**', '**/e2e/**', '**/syntax/**', '**/desktopApp/**', '**/test/**', '**/test@jvm/**']
   UndocumentedPublicProperty:
-    excludes: ['**/shared/**', '**/ui/**', '**/core/**', '**/features/**', '**/e2e/**', '**/syntax/**', '**/desktopApp/**', '**/test/**', '**/test@jvm/**']
+    excludes: ['**/shared/**', '**/ui/**', '**/core/**', '**/features/**', '**/plugins/**/*-client/**', '**/e2e/**', '**/syntax/**', '**/desktopApp/**', '**/test/**', '**/test@jvm/**']
 
 # The project's own rules (module detekt-rules), see AGENTS.md, "Kotlin Coding Guidelines".
 kotlin-editor:

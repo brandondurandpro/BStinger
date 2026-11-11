@@ -75,7 +75,7 @@ jobs:
           fi
           all='[["20.04","x11"],["20.04","wayland"],["22.04","x11"],["22.04","wayland"],["24.04","x11"],["24.04","wayland"]]'
           combos=$all
-          platform='^(\.github/workflows/ci\.yml|tools/linux-vm/|run-tests$|kotlin$|features/terminal/|desktopApp/|packaging/)'
+          platform='^(\.github/workflows/ci\.yml|tools/linux-vm/|run-tests$|kotlin$|plugins/terminal/|desktopApp/|packaging/)'
           if [ "$GITHUB_EVENT_NAME" = pull_request ] && ! grep -qE "$platform" changed.txt; then
             combos='[["24.04","x11"],["20.04","wayland"]]'
           fi

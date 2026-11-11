@@ -33,6 +33,12 @@ class LocalServices(
     /** What the server measures with (the language servers' starts), set by the server that uses these services. */
     @Volatile var telemetry: Telemetry = Telemetry.Disabled
 
+    /**
+     * The worktrees of agent mode of a repository (directory to branch), none until the Git plugin sets how to read
+     * them: agents work in Git worktrees, which Git alone knows.
+     */
+    @Volatile var agentWorktrees: (String) -> Map<String, String> = { emptyMap() }
+
     /** Files of the projects. */
     val fileSystem = LocalFileSystem(maxFileSize)
 
@@ -44,9 +50,6 @@ class LocalServices(
 
     /** The deployments saved for each project. */
     val deployProfiles = FileDeployProfiles(File(dataDirectory, "deployments"))
-
-    /** Git information. */
-    val git = CliGitClient()
 
     /** What changes on the disk of the projects, whoever changes it; the language servers are told too. */
     val disk = ProjectWatches { changes -> if (languageServersStarted) languageServers.diskChanged(changes) }

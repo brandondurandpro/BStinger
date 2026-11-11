@@ -1,0 +1,9 @@
+# What the client and the server share to run plugins: the manifest, the class loader of a plugin that only sees the
+# plugin API, the check that an unloaded plugin's code is gone, and the API of a plugin's server half. No UI.
+product:
+  type: jvm/lib
+
+dependencies:
+  - //protocol: exported
+  - $libs.kotlinx.coroutines.core
+  - $libs.kotlinx.serialization.json: exported

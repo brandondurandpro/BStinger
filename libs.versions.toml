@@ -40,7 +40,7 @@ zstd-jni = { module = "com.github.luben:zstd-jni", version.ref = "zstd" }
 # libghostty-vt: FFM bindings and the native library, generated per platform by GhosttyFX (MIT).
 # Only the bindings package is used; the JavaFX classes of the same project are not needed.
 # Amper cannot pick a JVM dependency per OS and the per-platform bindings clash: the Linux x86_64 artifact is the
-# dependency, the other platforms are vendored as resources under server/resources/ghostty/ (Windows, Linux aarch64,
+# dependency, the other platforms are vendored as resources under plugins/terminal/terminal-server/resources/ghostty/ (Windows, Linux aarch64,
 # macOS x86_64 and aarch64), which also makes one server jar portable to every remote target (see TerminalEngines).
 # Update all of them with this version.
 ghostty-linux = { module = "io.github.vlaaad:ghosttyfx-linux-x86_64", version.ref = "ghostty" }

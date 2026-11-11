@@ -1,0 +1,22 @@
+# The server half of the Terminal tool window: shells in a pseudo-terminal parsed by libghostty-vt. Linked statically
+# and found by the server through `META-INF/services` (a bundled plugin).
+product:
+  type: jvm/lib
+
+dependencies:
+  - //server
+  - //protocol
+  - //lsp
+  - $libs.kotlinx.serialization.json
+  - $libs.pty4j21
+  - $libs.ghostty.linux
+
+test-dependencies:
+  - //testkit
+
+# libghostty-vt and pty4j21 both use the Foreign Function & Memory API.
+test-settings:
+  jvm:
+    test:
+      freeJvmArgs:
+        - --enable-native-access=ALL-UNNAMED

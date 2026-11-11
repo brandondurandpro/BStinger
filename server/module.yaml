@@ -3,6 +3,7 @@ product:
 
 dependencies:
   - //protocol: exported
+  - //plugin-core
   - //lsp
   - //acp
   # Measures its handlers (rpc.server) once a client says the user agreed, exported to OpenTelemetry.
@@ -10,8 +11,6 @@ dependencies:
   - $libs.kotlinx.coroutines.core
   # Only the JsonElement tree is used (ripgrep's --json output): no compiler plugin needed.
   - $libs.kotlinx.serialization.json
-  - $libs.pty4j21
-  - $libs.ghostty.linux
   - $libs.directory.watcher
 
 test-dependencies:

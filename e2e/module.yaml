@@ -6,6 +6,9 @@ product:
 dependencies:
   - //shared: exported
   - //server: exported
+  - //plugins/git/git-server
+  - //plugins/run/run-server
+  - //plugins/terminal/terminal-server
   # The real export of the measures, to a fake collector, for the telemetry chaos tests.
   - //telemetry-otel: exported
   - //lsp: exported

@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -24,6 +25,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import org.example.kotlineditor.plugin.StripGroup
+import org.example.kotlineditor.plugin.ToolWindowRegistry
 import org.example.kotlineditor.state.Dock
 import org.example.kotlineditor.state.ProjectState
 import org.example.kotlineditor.state.ToolWindow
@@ -35,7 +38,12 @@ private val BUTTON_GAP = 4.dp
  * (the conversation list of agent mode).
  */
 @Composable
-internal fun ToolStrip(project: ProjectState?, devtools: Boolean, top: @Composable ColumnScope.() -> Unit = {}) {
+internal fun ToolStrip(
+    project: ProjectState?,
+    devtools: Boolean,
+    registry: ToolWindowRegistry = IdeRegistries.toolWindows,
+    top: @Composable ColumnScope.() -> Unit = {},
+) {
     Column(
         Modifier.width(STRIP_WIDTH).fillMaxHeight().padding(vertical = 6.dp),
         // Apart, so that the backgrounds of several windows open at once never touch.
@@ -43,21 +51,20 @@ internal fun ToolStrip(project: ProjectState?, devtools: Boolean, top: @Composab
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         top()
-        if (project != null) ToolButtons(project, devtools)
+        if (project != null) ToolButtons(project, devtools, registry)
     }
 }
 
 @Composable
-private fun ColumnScope.ToolButtons(project: ProjectState, devtools: Boolean) {
-    ToolButton(project, ToolWindow.Project, AppTags.TOOL_PROJECT, Lucide.Folder)
-    ToolButton(project, ToolWindow.Git, AppTags.TOOL_GIT, Lucide.History)
-    ToolButton(project, ToolWindow.Branches, AppTags.TOOL_BRANCHES, Lucide.GitBranch)
+private fun ColumnScope.ToolButtons(project: ProjectState, devtools: Boolean, registry: ToolWindowRegistry) {
+    val contributions = registry.contributions
+    // A window a plugin just registered is unknown to the layout until it is added.
+    LaunchedEffect(contributions.toList()) { contributions.forEach { project.toolWindows.add(it.defaults) } }
+    val shown = contributions.filter { devtools || !it.devtools }
+    shown.filter { it.group == StripGroup.Top }.forEach { ToolButton(project, it.window, it.tag, it.icon) }
     Spacer(Modifier.weight(1f))
-    ToolButton(project, ToolWindow.Run, AppTags.TOOL_RUN, Lucide.Play)
     // Bottom tool windows sit at the bottom of the strip, like in IntelliJ's New UI.
-    if (devtools) ToolButton(project, ToolWindow.Network, AppTags.TOOL_NETWORK, Lucide.ArrowUpDown)
-    ToolButton(project, ToolWindow.LanguageServers, AppTags.TOOL_LANGUAGE_SERVERS, Lucide.Braces)
-    ToolButton(project, ToolWindow.Terminal, AppTags.TOOL_TERMINAL, Lucide.SquareTerminal)
+    shown.filter { it.group == StripGroup.Bottom }.forEach { ToolButton(project, it.window, it.tag, it.icon) }
 }
 
 // The button of a tool window: a muted icon, lit up on a filled background while its window is open.
@@ -141,16 +148,8 @@ private fun StackedWindows(
 
 @Composable
 private fun ToolWindowContent(project: ProjectState, window: ToolWindow, drag: ToolWindowDrag, modifier: Modifier) {
-    val island = modifier.island()
-    when (window) {
-        ToolWindow.Project -> ProjectPanel(project, drag, island)
-        ToolWindow.Git -> GitPanel(project, drag, island)
-        ToolWindow.Branches -> BranchesPanel(project, drag, island)
-        ToolWindow.Run -> RunPanel(project.run, project.toolWindows, drag, island)
-        ToolWindow.Terminal -> TerminalPanel(project.terminal, project.toolWindows, drag, island)
-        ToolWindow.Network -> NetworkPanel(project, drag, island)
-        ToolWindow.LanguageServers -> LanguageServersPanel(project, drag, island)
-    }
+    val contribution = IdeRegistries.toolWindows.find(window) ?: return
+    contribution.content(project, drag, modifier.island())
 }
 
 @Composable

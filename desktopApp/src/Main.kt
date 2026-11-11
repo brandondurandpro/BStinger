@@ -16,6 +16,7 @@ import org.example.kotlineditor.rpc.appServices
 import org.example.kotlineditor.server.LocalServer
 import org.example.kotlineditor.server.TokenFile
 import org.example.kotlineditor.state.AppState
+import org.example.kotlineditor.state.ClientPlugins
 import org.example.kotlineditor.state.FilePreferenceStore
 import org.example.kotlineditor.syntax.treesitter.GrammarStore
 import org.example.kotlineditor.telemetry.ClientTelemetry
@@ -54,6 +55,8 @@ fun main(args: Array<String>) {
     // Only a local server can be returned to when the remote session ends.
     val localServices = services.takeIf { local != null }
 
+    // The plugins installed by the user, in ~/.kotlin-editor/plugins; a plugin that fails stays off, the IDE starts.
+    val plugins = ClientPlugins().also(ClientPlugins::start)
     val exporter = DesktopExporter()
     application {
         val scope = rememberCoroutineScope()
@@ -67,12 +70,14 @@ fun main(args: Array<String>) {
                     localServices,
                     JvmRemoteFactory,
                     telemetryOf = exporter::telemetryOf,
-                )
+                ).also { it.plugins = plugins }
             }
         LaunchedEffect(Unit) { measureStartup() }
+        LaunchedEffect(Unit) { plugins.keepServerInSync(client) }
         Window(
             onCloseRequest = {
                 state.exit {
+                    plugins.stop()
                     client.close()
                     local?.close()
                     exporter.close()

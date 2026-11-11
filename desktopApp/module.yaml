@@ -3,6 +3,9 @@ product: jvm/app
 dependencies:
   - //shared
   - //server
+  - //plugins/git/git-server
+  - //plugins/run/run-server
+  - //plugins/terminal/terminal-server
   # Exports the measures the user agreed to share (OpenTelemetry).
   - //telemetry-otel
   - $compose.desktop.currentOs

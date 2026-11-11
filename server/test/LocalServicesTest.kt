@@ -8,7 +8,6 @@ import org.example.kotlineditor.model.FileContent
 import org.example.kotlineditor.model.ProjectSession
 import org.example.kotlineditor.model.SessionFile
 import org.example.kotlineditor.syntax.DeclarationKind
-import java.io.File
 import java.io.FileInputStream
 import java.nio.file.Files
 import java.nio.file.attribute.PosixFilePermissions
@@ -190,16 +189,5 @@ class LocalServicesTest {
             assertNull(services.sessions.load("/other"))
             services.recentProjects.save(listOf("/x", "/y"))
             assertEquals(listOf("/x", "/y"), LocalServices(root.toFile()).recentProjects.load())
-        }
-
-    @Test
-    fun `git branch is read from HEAD`() =
-        runBlocking {
-            File(root.toFile(), ".git").mkdirs()
-            File(root.toFile(), ".git/HEAD").writeText("ref: refs/heads/feature/x\n")
-            assertEquals("feature/x", CliGitClient().branch(root.toString()))
-            File(root.toFile(), ".git/HEAD").writeText("0123456789abcdef\n")
-            assertEquals("01234567", CliGitClient().branch(root.toString()))
-            assertNull(CliGitClient().branch(root.resolve("nowhere").toString()))
         }
 }

@@ -59,7 +59,7 @@ private fun ListHeader(deployments: DeploymentsState) {
             "+  New deployment",
             deployments::startNew,
             Modifier.testTag(AppTags.DEPLOYMENTS_NEW),
-            variant = ButtonVariant.Primary,
+            variant = DeployButtonVariant.Primary,
         )
         Spacer(Modifier.width(8.dp))
         IconButton(deployments::close, Modifier.size(28.dp).testTag(AppTags.DEPLOYMENTS_CLOSE)) {

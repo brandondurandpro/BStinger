@@ -1,0 +1,10 @@
+# What a feature contributes to the IDE client, without knowing the IDE: its tool windows, its shortcuts. Bundled
+# features (Run first) and, later, external plugins register through these types; the IDE reads the registries.
+product:
+  type: jvm/lib
+
+dependencies:
+  - //ui/kit: exported
+
+settings:
+  compose: enabled

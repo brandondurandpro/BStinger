@@ -47,7 +47,7 @@ import java.io.OutputStream
  */
 object Protocol {
     /** Version announced in the handshake; client and server must speak the same one. */
-    const val VERSION = 14
+    const val VERSION = 15
 
     /** Version of the application, shown in the welcome screen and used to identify remote server bundles. */
     const val APP_VERSION = "2026.1"
@@ -260,7 +260,7 @@ class Frame(
     /** Params of a request or notification, result of a response, error object of an error. */
     val payload: JsonElement = JsonNull,
     /** Method of a [FrameKind.Request]; null for an unknown method. */
-    val method: Method? = null,
+    val method: MethodSpec? = null,
     /**
      * Whether the message carries source code: a compression hint, not part of the payload.
      *
@@ -278,16 +278,29 @@ class Frame(
     val body: ByteArray get() = encoded ?: Protocol.encode(this).also { encoded = it }
 }
 
-/** Remote operations. [mutating] ones have their answer cached by the server so a retried request runs once. */
-enum class Method(
+/**
+ * A remote operation: its JSON-RPC name and whether it is [mutating]. The built-in operations are the [Method]
+ * enum; a plugin declares its own with [PluginMethod], named `plugin/<id>/<name>`, and registers them in the
+ * [MethodRegistry] so that the codec resolves their names.
+ */
+interface MethodSpec {
     /** Name of the JSON-RPC method. */
-    val rpcName: String,
+    val rpcName: String
+
     /**
      * Whether executing the method twice would have a different effect than executing it once. There is no default:
      * a method that changes something and is not marked runs again when the client replays it after a lost answer.
      */
-    val mutating: Boolean,
-) {
+    val mutating: Boolean
+}
+
+/** Remote operations. [mutating] ones have their answer cached by the server so a retried request runs once. */
+enum class Method(
+    /** Name of the JSON-RPC method. */
+    override val rpcName: String,
+    /** See [MethodSpec.mutating]. */
+    override val mutating: Boolean,
+) : MethodSpec {
     /** Path to directory entry, if it is a directory. */
     ResolveDirectory("fs/resolveDirectory", mutating = false),
 
@@ -577,6 +590,15 @@ enum class Method(
      * installation (`instanceId`). The server measures and exports only after the client said so.
      */
     TelemetryConfig("telemetry/config", mutating = false),
+
+    /** The plugins installed on the server, with their versions and the SHA-256 of their `server.jar`. */
+    PluginList("plugin/list", mutating = false),
+
+    /** Installs (or replaces) the server half of a plugin: its manifest, its jar, and the SHA-256 to check. */
+    PluginInstall("plugin/install", mutating = true),
+
+    /** Unloads the server half of a plugin and deletes it. */
+    PluginUnload("plugin/unload", mutating = true),
 
     /** Inlay hints of a document. */
     LspInlayHints("lsp/inlayHints", mutating = false),

@@ -4,6 +4,7 @@ import org.example.kotlineditor.state.Dock
 import org.example.kotlineditor.state.FilePreferenceStore
 import org.example.kotlineditor.state.Pane
 import org.example.kotlineditor.state.ToolWindow
+import org.example.kotlineditor.state.ToolWindowDefaults
 import org.example.kotlineditor.state.ToolWindowLayout
 import java.nio.file.Files
 import kotlin.test.Test
@@ -111,5 +112,33 @@ class ToolWindowLayoutPreferencesTest {
     fun `restoring from nothing changes nothing`() {
         val layout = ToolWindowLayout().apply { restore(emptyMap()) }
         assertEquals(ToolWindowLayout().toPreferences(), layout.toPreferences())
+    }
+}
+
+class ToolWindowLayoutContributionTest {
+    private val todo = ToolWindow("plugin.todo")
+
+    @Test
+    fun `a window added by a plugin is placed where it asks and removed with its traces`() {
+        val layout = ToolWindowLayout()
+        layout.add(ToolWindowDefaults(todo, Dock.Right, shown = true))
+
+        assertEquals(Dock.Right, layout.dockOf(todo))
+        assertEquals(listOf(todo), layout.visibleIn(Dock.Right))
+
+        layout.remove(todo)
+        assertEquals(emptyList(), layout.visibleIn(Dock.Right))
+        assertEquals(false, layout.windows.contains(todo))
+        assertEquals(false, layout.toPreferences().keys.any { todo.name in it })
+    }
+
+    @Test
+    fun `adding a window the layout already has keeps the arrangement of the user`() {
+        val layout = ToolWindowLayout()
+        layout.add(ToolWindowDefaults(todo, Dock.Right))
+        layout.move(todo, Dock.Left, first = true)
+        layout.add(ToolWindowDefaults(todo, Dock.Right))
+
+        assertEquals(Dock.Left, layout.dockOf(todo))
     }
 }

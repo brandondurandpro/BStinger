@@ -105,8 +105,9 @@ All the logic on files runs in a **server**; the IDE is a client that only displ
   - `core` – what every feature builds on: documents and their editing, folding, preferences, tool window layout,
     compiled without the Compose plugin and unit tested without the UI;
   - `ui/kit` – theme, fonts, components, popups, icons, tool window chrome, and the tags shared by several modules;
-  - `features/editor`, `features/git`, `features/terminal`, `features/language-servers`, `features/remote`,
-    `features/tree` – one module per feature, holding its state (`src/state`), its UI (`src/ui`, with its own test
+  - `features/editor`, `features/remote` and the client halves of the bundled plugins (`plugins/<id>/<id>-client`:
+    git, terminal, language servers, tree, run; their server halves, `<id>-server`, are found by the server through
+    `ServiceLoader`) – one module per feature, holding its state (`src/state`), its UI (`src/ui`, with its own test
     tags such as `GitTags`) and its tests (`test`, end-to-end tests in `test/e2e`). A feature's UI sees the project
     through a host interface (`GitHost`, `TreeHost`…) rather than through `ProjectState`;
   - `e2e` – the end-to-end test support (`launchApp`, `SampleProject`, fixtures) used by the tests of every module;

@@ -45,7 +45,7 @@ internal suspend fun writeFile(path: Path, bytes: ByteArray, sync: DiskSync = Du
 }
 
 /** [writeFile] for the callers that are not coroutines (the agents' requests), creating the missing directories. */
-internal fun writeFileNow(path: Path, bytes: ByteArray) {
+fun writeFileNow(path: Path, bytes: ByteArray) {
     path.parent?.let { Files.createDirectories(it) }
     runBlocking { withPathLock(path) { writeFile(path, bytes) } }
 }

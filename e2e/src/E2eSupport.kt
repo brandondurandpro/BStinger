@@ -20,20 +20,28 @@ import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.printToString
 import androidx.compose.ui.test.requestFocus
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.example.kotlineditor.App
 import org.example.kotlineditor.acp.AgentSettings
 import org.example.kotlineditor.lsp.LanguageServerSettings
 import org.example.kotlineditor.model.AppServices
+import org.example.kotlineditor.plugin.IdePlugin
 import org.example.kotlineditor.remote.JvmRemoteFactory
 import org.example.kotlineditor.rpc.ClientOptions
 import org.example.kotlineditor.rpc.RpcClient
 import org.example.kotlineditor.rpc.appServices
 import org.example.kotlineditor.server.EditorServer
 import org.example.kotlineditor.server.LocalServices
+import org.example.kotlineditor.server.ServerOptions
 import org.example.kotlineditor.server.ServerTelemetry
 import org.example.kotlineditor.server.ripgrep.RipgrepSettings
 import org.example.kotlineditor.state.AppState
+import org.example.kotlineditor.state.ClientPlugins
 import org.example.kotlineditor.state.InMemoryPreferenceStore
 import org.example.kotlineditor.state.PreferenceStore
 import org.example.kotlineditor.state.ProjectState
@@ -49,6 +57,8 @@ import org.example.kotlineditor.ui.EditorTags
 import org.example.kotlineditor.ui.RemoteTags
 import org.example.kotlineditor.ui.TextClipboard
 import org.example.kotlineditor.ui.TreeTags
+import org.example.kotlineditor.ui.loadPlugin
+import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
@@ -146,10 +156,16 @@ class ServerProcess(
     // The command that runs OpenSSH for deployments to another machine: null is the real `ssh`.
     private val ssh: List<String>? = null,
 ) : AutoCloseable {
-    var server: EditorServer = EditorServer(services(), telemetry = telemetry()).start()
+    var server: EditorServer = EditorServer(services(), options = options(), telemetry = telemetry()).start()
         private set
     val port: Int = server.port
     private var running = true
+
+    /** Where the server halves of plugins are installed on the server. */
+    val serverPlugins: java.io.File get() = java.io.File(data, "server-plugins")
+
+    // The server halves of plugins installed by a test live with the server's data, never in the user's home.
+    private fun options() = ServerOptions(pluginsDirectory = java.io.File(data, "server-plugins"))
 
     private fun telemetry() = ServerTelemetry(forbidden = false, hookOf = { telemetryHook })
 
@@ -171,7 +187,7 @@ class ServerProcess(
     /** Starts a new server on the same port and data, presenting [token] (the same one by default). */
     fun start(token: String = server.token) {
         check(!running) { "The server is already running" }
-        server = EditorServer(services(), token, telemetry = telemetry()).start(port = port)
+        server = EditorServer(services(), token, options(), telemetry()).start(port = port)
         running = true
     }
 
@@ -198,6 +214,8 @@ class E2eApp(
     val telemetry: TelemetryCapture?,
     /** What the UI declared and mirrored to the language servers of the app's own (local) server. */
     val localLanguageServers: LanguageServersRecorder,
+    /** The installed plugins of an app launched with a `pluginsDirectory`. */
+    val installedPlugins: ClientPlugins? = null,
 ) {
     val server: EditorServer get() = process.server
 
@@ -207,6 +225,30 @@ class E2eApp(
     val recentPaths: List<String> get() = runBlocking { recentStore.load() }
 
     val project: ProjectState get() = (state.session.screen as Screen.Project).project
+}
+
+@OptIn(ExperimentalTestApi::class)
+private fun ComposeUiTest.startPlugins(directory: File): ClientPlugins {
+    // Unloading from the settings runs off the test thread, while the test polls: the clock advances there.
+    val testThread = Thread.currentThread()
+    val plugins = ClientPlugins(directory, beforeCollect = { if (Thread.currentThread() === testThread) waitForIdle() })
+    plugins.start()
+    return plugins
+}
+
+/** The plugins of a launched app: those loaded from objects, the installed ones, and the sync with the server. */
+private class PluginSetup(private val loaded: List<AutoCloseable>, val installed: ClientPlugins?) : AutoCloseable {
+    private val syncing = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    fun keepInSync(client: RpcClient) {
+        installed?.let { syncing.launch { it.keepServerInSync(client) } }
+    }
+
+    override fun close() {
+        syncing.cancel()
+        installed?.stop()
+        loaded.forEach { it.close() }
+    }
 }
 
 /**
@@ -224,9 +266,14 @@ fun ComposeUiTest.launchApp(
     telemetry: TelemetryCapture? = null,
     agents: AgentSettings? = null,
     ripgrep: RipgrepSettings? = null,
+    /** Plugins loaded before the UI starts, unloaded when the test ends. */
+    plugins: List<IdePlugin> = emptyList(),
+    /** A folder of installed plugins (jars), loaded before the UI starts and unloaded when the test ends. */
+    pluginsDirectory: File? = null,
     ssh: List<String>? = null,
 ): E2eApp {
     TextClipboard.useSystem = false
+    val pluginSetup = PluginSetup(plugins.map(::loadPlugin), pluginsDirectory?.let { startPlugins(it) })
     val data = Files.createTempDirectory("kotlin-editor-server").toFile()
     val process = ServerProcess(data, languageServers, telemetry?.serverHook ?: InMemoryHook(), agents, ripgrep, ssh)
     val token = process.server.token
@@ -240,6 +287,7 @@ fun ComposeUiTest.launchApp(
         }
     Runtime.getRuntime().addShutdownHook(Thread { data.deleteRecursively() })
     runBlocking { client.awaitConnected() }
+    pluginSetup.keepInSync(client)
     val remote = client.appServices()
     if (recent.isNotEmpty()) runBlocking { remote.recentProjects.save(recent) }
     val terminalInput = TerminalInputRecorder(remote.terminal)
@@ -254,9 +302,11 @@ fun ComposeUiTest.launchApp(
                 AppState(services, scope, withoutRealAgent(preferences), grammars, services, JvmRemoteFactory, measured)
             }
         created = state
+        state.plugins = pluginSetup.installed
         DisposableEffect(Unit) {
             onDispose {
                 created?.dispose()
+                pluginSetup.close()
                 ClientTelemetry.switchTo(Telemetry.Disabled)
                 client.close()
                 proxy?.close()
@@ -276,6 +326,7 @@ fun ComposeUiTest.launchApp(
         terminalInput,
         telemetry,
         languageServerCalls,
+        pluginSetup.installed,
     )
 }
 
@@ -302,6 +353,7 @@ private fun withRecorders(
         remote.disk,
         remote.agents,
         remote.runner,
+        remote.plugins,
         remote.deployer,
         remote.deployProfiles,
     )
@@ -368,6 +420,8 @@ fun ComposeUiTest.launchWithProject(
     telemetry: TelemetryCapture? = null,
     agents: AgentSettings? = null,
     ripgrep: RipgrepSettings? = null,
+    plugins: List<IdePlugin> = emptyList(),
+    pluginsDirectory: File? = null,
     ssh: List<String>? = null,
 ): E2eApp {
     val app =
@@ -379,6 +433,8 @@ fun ComposeUiTest.launchWithProject(
             telemetry = telemetry,
             agents = agents,
             ripgrep = ripgrep,
+            plugins = plugins,
+            pluginsDirectory = pluginsDirectory,
             ssh = ssh,
         )
     openProjectDirectoryFromWelcome(project.path)

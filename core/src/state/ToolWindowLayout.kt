@@ -1,14 +1,60 @@
 package org.example.kotlineditor.state
 
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 
 /**
- * Panels around the editors; their buttons stay in the left strip wherever the panels are docked. Network is a
- * devtools panel: its button only appears once Ctrl+Alt+Shift+D has shown it.
+ * A panel around the editors; their buttons stay in the left strip wherever the panels are docked. Network is a
+ * devtools panel: its button only appears once Ctrl+Alt+Shift+D has shown it. The built-in windows are the constants
+ * of the companion; a plugin makes its own with an id of its own, and announces it with [ToolWindowDefaults].
  */
-enum class ToolWindow { Project, Git, Branches, Run, Terminal, Network, LanguageServers }
+@Immutable
+data class ToolWindow(
+    /** Stable id, saved in the layout preferences. */
+    val name: String,
+) {
+    /** The built-in windows. */
+    companion object {
+        /** Files of the project. */
+        val Project = ToolWindow("Project")
+
+        /** Local changes and commit. */
+        val Git = ToolWindow("Git")
+
+        /** Branches and history. */
+        val Branches = ToolWindow("Branches")
+
+        /** Run configurations and their output. */
+        val Run = ToolWindow("Run")
+
+        /** Terminal. */
+        val Terminal = ToolWindow("Terminal")
+
+        /** Devtools: the requests of the protocol. */
+        val Network = ToolWindow("Network")
+
+        /** Language servers. */
+        val LanguageServers = ToolWindow("LanguageServers")
+    }
+}
+
+/** Where a tool window sits until the user moves it, and whether it starts shown. */
+@Immutable
+data class ToolWindowDefaults(val window: ToolWindow, val dock: Dock, val shown: Boolean = false)
+
+/** The defaults of the built-in tool windows, in the order of their buttons. */
+val BUILT_IN_TOOL_WINDOWS: List<ToolWindowDefaults> =
+    listOf(
+        ToolWindowDefaults(ToolWindow.Project, Dock.Left, shown = true),
+        ToolWindowDefaults(ToolWindow.Git, Dock.Left),
+        ToolWindowDefaults(ToolWindow.Branches, Dock.Bottom),
+        ToolWindowDefaults(ToolWindow.Run, Dock.Bottom),
+        ToolWindowDefaults(ToolWindow.Terminal, Dock.Bottom),
+        ToolWindowDefaults(ToolWindow.Network, Dock.Bottom),
+        ToolWindowDefaults(ToolWindow.LanguageServers, Dock.Bottom),
+    )
 
 /** Where tool windows can be docked. */
 enum class Dock { Left, Right, Bottom }
@@ -36,40 +82,37 @@ enum class Pane(val defaultWidth: Float) {
  */
 @Stable
 @Suppress("TooManyFunctions")
-class ToolWindowLayout {
-    private val docks =
-        mutableStateMapOf(
-            ToolWindow.Project to Dock.Left,
-            ToolWindow.Git to Dock.Left,
-            ToolWindow.Branches to Dock.Bottom,
-            ToolWindow.Run to Dock.Bottom,
-            ToolWindow.Terminal to Dock.Bottom,
-            ToolWindow.Network to Dock.Bottom,
-            ToolWindow.LanguageServers to Dock.Bottom,
-        )
-    private val order =
-        mutableStateListOf(
-            ToolWindow.Project,
-            ToolWindow.Git,
-            ToolWindow.Branches,
-            ToolWindow.Run,
-            ToolWindow.Terminal,
-            ToolWindow.Network,
-            ToolWindow.LanguageServers,
-        )
-    private val shown =
-        mutableStateMapOf(
-            ToolWindow.Project to true,
-            ToolWindow.Git to false,
-            ToolWindow.Branches to false,
-            ToolWindow.Run to false,
-            ToolWindow.Terminal to false,
-            ToolWindow.Network to false,
-            ToolWindow.LanguageServers to false,
-        )
+class ToolWindowLayout(defaults: List<ToolWindowDefaults> = BUILT_IN_TOOL_WINDOWS) {
+    private val docks = mutableStateMapOf<ToolWindow, Dock>()
+    private val order = mutableStateListOf<ToolWindow>()
+    private val shown = mutableStateMapOf<ToolWindow, Boolean>()
     private val sizes = mutableStateMapOf(Dock.Left to 280f, Dock.Right to 280f, Dock.Bottom to 240f)
     private val weights = mutableStateMapOf<ToolWindow, Float>()
     private val panes = mutableStateMapOf<Pane, Float>()
+
+    init {
+        defaults.forEach(::add)
+    }
+
+    /** The windows the layout knows, in display order. */
+    val windows: List<ToolWindow> get() = order
+
+    /** Adds a window (a plugin's); one the layout already has is left as the user arranged it. */
+    fun add(defaults: ToolWindowDefaults) {
+        val window = defaults.window
+        if (window in order) return
+        docks[window] = defaults.dock
+        shown[window] = defaults.shown
+        order.add(window)
+    }
+
+    /** Removes a window (a plugin unloading), with its place and its size. */
+    fun remove(window: ToolWindow) {
+        order.remove(window)
+        docks.remove(window)
+        shown.remove(window)
+        weights.remove(window)
+    }
 
     /** Width of [pane] inside its tool window, in dp; the default until the user drags its splitter. */
     fun widthOf(pane: Pane): Float = panes[pane] ?: pane.defaultWidth
@@ -87,7 +130,7 @@ class ToolWindowLayout {
 
     fun toggle(window: ToolWindow) = setVisible(window, !isVisible(window))
 
-    fun dockOf(window: ToolWindow): Dock = docks.getValue(window)
+    fun dockOf(window: ToolWindow): Dock = docks[window] ?: Dock.Bottom
 
     /** Visible windows of [dock], in display order (top to bottom, or left to right at the bottom). */
     fun visibleIn(dock: Dock): List<ToolWindow> = order.filter { docks[it] == dock && isVisible(it) }
@@ -122,7 +165,7 @@ class ToolWindowLayout {
     fun toPreferences(): Map<String, String> =
         buildMap {
             put(ORDER_KEY, order.joinToString(",") { it.name })
-            ToolWindow.entries.forEach { window ->
+            order.toList().forEach { window ->
                 put("$DOCK_KEY.${window.name}", dockOf(window).name)
                 put("$VISIBLE_KEY.${window.name}", isVisible(window).toString())
                 weights[window]?.let { put("$WEIGHT_KEY.${window.name}", it.toString()) }
@@ -133,7 +176,7 @@ class ToolWindowLayout {
 
     /** Applies what [toPreferences] saved; absent or invalid entries keep the current value. */
     fun restore(preferences: Map<String, String>) {
-        ToolWindow.entries.forEach { window ->
+        order.toList().forEach { window ->
             val name = window.name
             Dock.entries.find { it.name == preferences["$DOCK_KEY.$name"] }?.let { docks[window] = it }
             preferences["$VISIBLE_KEY.$name"]?.toBooleanStrictOrNull()?.let { shown[window] = it }
@@ -149,7 +192,7 @@ class ToolWindowLayout {
             if (width != null && width.isFinite()) panes[pane] = width.coerceIn(MIN_PANE, MAX_PANE)
         }
         val names = preferences[ORDER_KEY].orEmpty().split(',')
-        val saved = names.mapNotNull { name -> ToolWindow.entries.find { it.name == name } }
+        val saved = names.mapNotNull { name -> windows.find { it.name == name } }
         val restored = (saved + order).distinct()
         order.clear()
         order.addAll(restored)

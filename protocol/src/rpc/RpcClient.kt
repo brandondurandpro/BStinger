@@ -181,7 +181,7 @@ class RpcClient(
 
     /** Sends [method] with the named params built by [params], and waits for its result, surviving reconnections. */
     suspend fun call(
-        method: Method,
+        method: MethodSpec,
         id: Long = newId(),
         timeoutMs: Long = options.callTimeoutMs,
         params: JsonObjectBuilder.() -> Unit = {},
@@ -223,7 +223,7 @@ class RpcClient(
     }
 
     private suspend fun exchange(
-        method: Method,
+        method: MethodSpec,
         id: Long,
         timeoutMs: Long,
         params: JsonObjectBuilder.() -> Unit,
@@ -261,12 +261,12 @@ class RpcClient(
         }
     }
 
-    private suspend fun awaitAnswer(call: PendingRequests.Pending, method: Method, timeoutMs: Long): Frame =
+    private suspend fun awaitAnswer(call: PendingRequests.Pending, method: MethodSpec, timeoutMs: Long): Frame =
         withTimeoutOrNull(timeoutMs) { call.result.await() }
             ?: throw IOException("No answer from the server for $method after ${timeoutMs}ms")
 
     // The rpc.client span of a call, child of the span of the calling coroutine; null when telemetry is off.
-    private suspend fun startSpan(method: Method): Span? {
+    private suspend fun startSpan(method: MethodSpec): Span? {
         if (!telemetry.isEnabled) return null
         val parent = CurrentSpan.ofCoroutine()?.context
         return telemetry.start(Operation.RpcClient, Attributes.of(Attribute.Method to method.rpcName), parent)

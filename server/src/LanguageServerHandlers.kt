@@ -10,6 +10,7 @@ import org.example.kotlineditor.model.HierarchyKind
 import org.example.kotlineditor.model.NavigationKind
 import org.example.kotlineditor.rpc.InvalidParamsException
 import org.example.kotlineditor.rpc.Method
+import org.example.kotlineditor.rpc.MethodSpec
 import org.example.kotlineditor.rpc.bool
 import org.example.kotlineditor.rpc.documentPosition
 import org.example.kotlineditor.rpc.fileOperationNamed
@@ -38,8 +39,8 @@ private const val TOKEN = "token"
 private const val INDEX = "index"
 
 /** The `lsp/` methods: the language servers of [LocalServices.languageServers]. */
-internal fun languageServerHandlers(services: LocalServices): Map<Method, Handler> =
-    mapOf<Method, Handler>(
+internal fun languageServerHandlers(services: LocalServices): Map<MethodSpec, Handler> =
+    mapOf<MethodSpec, Handler>(
         Method.LspStatus to { services.languageServers.status(params.long("since")).toJson() },
         Method.LspUse to {
             services.languageServers
@@ -97,9 +98,9 @@ internal fun languageServerHandlers(services: LocalServices): Map<Method, Handle
         structureHandlers(services)
 
 // The code intelligence methods: hover, navigation, usages, diagnostics, edits.
-private fun codeIntelligenceHandlers(services: LocalServices): Map<Method, Handler> {
+private fun codeIntelligenceHandlers(services: LocalServices): Map<MethodSpec, Handler> {
     val intelligence = { services.languageServers.intelligence }
-    return mapOf<Method, Handler>(
+    return mapOf<MethodSpec, Handler>(
         Method.LspHover to { intelligence().hover(session, params.documentPosition()).toJson() },
         Method.LspNavigate to {
             val kindName = params.string("kind")
@@ -128,9 +129,9 @@ private fun codeIntelligenceHandlers(services: LocalServices): Map<Method, Handl
 }
 
 // The code intelligence methods that edit or act: formatting, quick fixes, links, code lenses.
-private fun editingHandlers(services: LocalServices): Map<Method, Handler> {
+private fun editingHandlers(services: LocalServices): Map<MethodSpec, Handler> {
     val intelligence = { services.languageServers.intelligence }
-    return mapOf<Method, Handler>(
+    return mapOf<MethodSpec, Handler>(
         Method.LspFormat to {
             val range = params[RANGE]?.takeIf { it != JsonNull }?.let { params.read(RANGE) { it.textRange() } }
             val options = params.read("options") { it.formatOptions() }
@@ -174,9 +175,9 @@ private fun editingHandlers(services: LocalServices): Map<Method, Handler> {
 }
 
 // What the language server knows of the structure of the code: outline, hierarchies, hints, folding, selection.
-private fun structureHandlers(services: LocalServices): Map<Method, Handler> {
+private fun structureHandlers(services: LocalServices): Map<MethodSpec, Handler> {
     val intelligence = { services.languageServers.intelligence }
-    return mapOf<Method, Handler>(
+    return mapOf<MethodSpec, Handler>(
         Method.LspOutline to {
             intelligence().outline(session, params.string(PATH), params.int(VERSION)).toJson()
         },

@@ -12,6 +12,7 @@ import kotlinx.serialization.json.put
 import org.example.kotlineditor.rpc.Frame
 import org.example.kotlineditor.rpc.FrameKind
 import org.example.kotlineditor.rpc.InvalidMessageException
+import org.example.kotlineditor.rpc.MethodSpec
 import org.example.kotlineditor.rpc.Protocol
 import org.example.kotlineditor.rpc.ReadLimits
 import org.example.kotlineditor.rpc.int
@@ -19,6 +20,7 @@ import org.example.kotlineditor.rpc.params
 import org.example.kotlineditor.rpc.rpcError
 import org.example.kotlineditor.rpc.stringOrNull
 import java.io.Closeable
+import java.io.File
 import java.io.IOException
 import java.net.BindException
 import java.net.InetSocketAddress
@@ -47,6 +49,8 @@ class ServerOptions(
     val bindRetryMs: Long = 2_000,
     /** How long a new connection has to present its hello: an unauthenticated peer does not hold a thread longer. */
     val handshakeTimeoutMs: Long = 10_000,
+    /** Where the server halves of plugins are installed. */
+    val pluginsDirectory: File = File(System.getProperty("user.home"), ".kotlin-editor/server-plugins"),
 )
 
 /**
@@ -68,10 +72,15 @@ class EditorServer(
 
     // Every connection open, authenticated or not: closing the server closes them, those still in their handshake too.
     private val open = ConcurrentHashMap.newKeySet<ServerConnection>()
-    private val handlers = requestHandlers(services) + telemetryHandlers(telemetry)
+
+    // The map the sessions read: a plugin installed while the server runs adds its methods to it.
+    private val handlers = ConcurrentHashMap<MethodSpec, Handler>()
+    private val plugins = ServerPluginHost(options.pluginsDirectory, handlers)
     private var serverSocket: ServerSocket? = null
 
     init {
+        handlers.putAll(requestHandlers(services) + telemetryHandlers(telemetry) + pluginHandlers(plugins))
+        plugins.loadInstalled()
         services.telemetry = telemetry.telemetry
     }
 
@@ -121,6 +130,7 @@ class EditorServer(
         sessions.values.forEach { it.dispose() }
         sessions.clear()
         scope.cancel()
+        plugins.close()
         services.close()
         telemetry.close()
     }

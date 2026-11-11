@@ -15,6 +15,8 @@ import kotlinx.serialization.json.put
 import org.example.kotlineditor.rpc.Frame
 import org.example.kotlineditor.rpc.FrameKind
 import org.example.kotlineditor.rpc.Method
+import org.example.kotlineditor.rpc.MethodSpec
+import org.example.kotlineditor.rpc.PluginMethod
 import org.example.kotlineditor.rpc.Protocol
 import org.example.kotlineditor.rpc.int
 import org.example.kotlineditor.rpc.long
@@ -37,7 +39,7 @@ private const val ANSWER_TIMEOUT_MS = 5_000
 private const val SILENCE_MS = 500
 
 /** A [ServerSession] fed frames as the reading thread does, its answers read at the other end of a loopback socket. */
-private class SessionHarness(handlers: Map<Method, Handler>) : AutoCloseable {
+private class SessionHarness(handlers: Map<MethodSpec, Handler>) : AutoCloseable {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val listener = ServerSocket(0, 1, InetAddress.getLoopbackAddress())
     private val client = Socket(listener.inetAddress, listener.localPort)
@@ -50,7 +52,7 @@ private class SessionHarness(handlers: Map<Method, Handler>) : AutoCloseable {
         session.attach(connection)
     }
 
-    fun request(id: Long, method: Method, params: JsonObject = JsonObject(emptyMap())) =
+    fun request(id: Long, method: MethodSpec, params: JsonObject = JsonObject(emptyMap())) =
         session.onFrame(connection, Frame(FrameKind.Request, id, params, method))
 
     fun ping() = session.onFrame(connection, Frame(FrameKind.Ping, 0))
@@ -93,6 +95,23 @@ private fun document(path: String) =
 private fun Frame.errorCode(): Int = payload.jsonObject.int("code")
 
 class ServerSessionTest {
+    @Test
+    fun `a mutating plugin method runs once when its request is sent again`() {
+        val method = PluginMethod("probe", "resolve", mutating = true)
+        val runs = AtomicInteger()
+        val counting: Handler = {
+            runs.incrementAndGet()
+            JsonPrimitive("done")
+        }
+        SessionHarness(mapOf(method to counting)).use { harness ->
+            harness.request(1, method)
+            assertEquals(FrameKind.Response, harness.answer().kind)
+            harness.request(1, method)
+            assertEquals(FrameKind.Response, harness.answer().kind)
+            assertEquals(1, runs.get())
+        }
+    }
+
     @Test
     fun `a handler failing unexpectedly is answered with an internal error`() {
         val failing: Handler = { throw NullPointerException("boom") }
@@ -254,7 +273,7 @@ class ServerSessionTest {
             handler
         }
         val handlers =
-            mapOf(
+            mapOf<MethodSpec, Handler>(
                 Method.DocOpen to recording("open", true),
                 Method.DocChange to recording("change", false),
                 Method.DocClose to recording("close", false),

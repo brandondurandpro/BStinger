@@ -23,8 +23,12 @@ import org.example.kotlineditor.model.GitCommitDetails
 import org.example.kotlineditor.model.GitCommitFile
 import org.example.kotlineditor.model.GitFileStatus
 import org.example.kotlineditor.model.MergeHistory
+import org.example.kotlineditor.model.PluginServer
 import org.example.kotlineditor.model.slashed
 import org.example.kotlineditor.syntax.treesitter.GrammarStore
+import org.example.kotlineditor.ui.IdeRegistries
+import org.example.kotlineditor.ui.RUN_SERVICE
+import org.example.kotlineditor.ui.TERMINAL_SERVICE
 
 private val INDEXED_POPUPS = setOf(PopupKind.GotoFile, PopupKind.FindInFiles, PopupKind.GotoSymbol)
 private val DOCUMENT_POPUPS = setOf(PopupKind.GotoLine, PopupKind.FileStructure)
@@ -103,6 +107,8 @@ class ProjectState(
 
     /** Hover, navigation, usages, problems, rename, reformat and quick fixes, from the language servers. */
     val insight = CodeInsightState(scope, { insightBackend() }, ProjectInsightHost { this })
+    override val pluginServer: PluginServer get() = services.plugins
+
     val terminal = TerminalState(root.path, services.terminal, scope)
 
     /** Run configurations, the output of their commands and the tree of test results. */
@@ -250,26 +256,28 @@ class ProjectState(
         )
     }
 
+    /** The state the features keep in the project, by the key they publish it under (see [service]). */
+    override fun <T : Any> service(key: ServiceKey<T>): T {
+        val found =
+            when {
+                key === RUN_SERVICE -> run
+                key === TERMINAL_SERVICE -> terminal
+                else -> null
+            }
+        @Suppress("UNCHECKED_CAST")
+        return checkNotNull(found as T?) { "No ${key.name} in this project" }
+    }
+
     /** Shows or hides a tool window (Alt+1, Alt+9, Alt+F12, Ctrl+Alt+Shift+D or its button in the left strip). */
-    fun toggleToolWindow(window: ToolWindow) {
+    override fun toggleToolWindow(window: ToolWindow) {
         toolWindows.toggle(window)
-        if (window == ToolWindow.Terminal && toolWindows.isVisible(window)) terminal.ensureStarted()
-        if (window == ToolWindow.Run && toolWindows.isVisible(window)) run.ensureLoaded()
-        if (window == ToolWindow.Git && toolWindows.isVisible(window)) git.refreshStatus()
-        if (window == ToolWindow.Branches && toolWindows.isVisible(window)) openHistory()
+        if (toolWindows.isVisible(window)) IdeRegistries.toolWindows.find(window)?.onShown(this)
     }
 
     /** Opens the Branches tool window on the history of [ref], or of the current branch. */
     override fun showHistory(ref: String?) {
         showToolWindow(ToolWindow.Branches)
         if (ref != null && ref != git.history.selectedRef) git.history.select(ref)
-    }
-
-    // Shown again: the branches and the history may have changed meanwhile. The first time, the panel itself selects
-    // the current branch once it is known (`BranchesPanel`).
-    private fun openHistory() {
-        git.refreshBranches()
-        if (git.history.selectedRef != null) git.history.reload()
     }
 
     /** Shows [window] if it is hidden (a pinned branch's Show Changes opens the Git tool window). */

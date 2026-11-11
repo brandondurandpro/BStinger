@@ -15,7 +15,7 @@ import java.util.concurrent.LinkedBlockingQueue
 import kotlin.concurrent.thread
 
 /** A request as the fake server read it: on which connection (from 1), with which id and method. */
-class Received(val connection: Int, val id: Long, val method: Method?, val atNanos: Long = System.nanoTime())
+class Received(val connection: Int, val id: Long, val method: MethodSpec?, val atNanos: Long = System.nanoTime())
 
 /**
  * A server speaking the protocol just enough to test the client: it welcomes every connection, then [reads] the

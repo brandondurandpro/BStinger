@@ -7,6 +7,9 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
 import org.example.kotlineditor.model.HierarchyKind
+import org.example.kotlineditor.plugin.ActionContext
+import org.example.kotlineditor.plugin.ActionRegistry
+import org.example.kotlineditor.plugin.ActionScope
 import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.PopupKind
 import org.example.kotlineditor.state.ProjectState
@@ -29,7 +32,8 @@ import org.example.kotlineditor.state.withInsight
 private const val DOUBLE_SHIFT_MILLIS = 400L
 
 /** What IDE-wide shortcuts act on. */
-internal class IdeContext(val app: AppState, val project: ProjectState, val findFocus: FocusRequester) {
+internal class IdeContext(val app: AppState, override val project: ProjectState, val findFocus: FocusRequester) :
+    ActionContext {
     val editor get() = project.editor
 
     /** Focus target of the active pane's editor. */
@@ -88,7 +92,7 @@ private fun IdeContext.sendToAgent() {
 }
 
 // Agent mode hides the editors: only its own shortcuts apply, so nothing acts on a file the user cannot see.
-private val AGENT_SHORTCUTS =
+internal val BUILT_IN_AGENT_SHORTCUTS =
     listOf(
         TOGGLE_AGENT_MODE,
         SEND_TO_AGENT,
@@ -98,7 +102,7 @@ private val AGENT_SHORTCUTS =
     )
 
 // IntelliJ default keymap, first match wins. Alt+Shift+. / Alt+Shift+, change the font size (Ctrl+- / Ctrl+= fold).
-private val IDE_SHORTCUTS =
+internal val BUILT_IN_IDE_SHORTCUTS =
     listOf(
         TOGGLE_AGENT_MODE,
         SEND_TO_AGENT,
@@ -169,15 +173,6 @@ private val IDE_SHORTCUTS =
         bind(setOf(Key.Tab), ctrl = true) { if (it.shift) editor.selectPrevious() else editor.selectNext() },
         bind(setOf(Key.DirectionLeft), alt = true) { editor.selectPrevious() },
         bind(setOf(Key.DirectionRight), alt = true) { editor.selectNext() },
-        bind(setOf(Key.One), alt = true) { project.toggleToolWindow(ToolWindow.Project) },
-        bind(setOf(Key.Nine), alt = true) { project.toggleToolWindow(ToolWindow.Git) },
-        bind(setOf(Key.Four), alt = true) { project.toggleToolWindow(ToolWindow.Run) },
-        bind(setOf(Key.F10), shift = true) {
-            project.showToolWindow(ToolWindow.Run)
-            project.run.runSelected()
-        },
-        bind(setOf(Key.F2), ctrl = true) { project.run.stop() },
-        bind(setOf(Key.F12), alt = true) { project.toggleToolWindow(ToolWindow.Terminal) },
         bind(setOf(Key.D), ctrl = true, shift = true, alt = true) {
             app.devtools = true
             project.toggleToolWindow(ToolWindow.Network)
@@ -197,7 +192,11 @@ private val IDE_SHORTCUTS =
  * IDE-wide shortcuts, intercepted before the focused component sees them; [ideOnly] keeps the IDE ones in agent mode,
  * for the project the agent works on.
  */
-internal class GlobalShortcuts(private val context: IdeContext, private val ideOnly: Boolean = false) {
+internal class GlobalShortcuts(
+    private val context: IdeContext,
+    private val ideOnly: Boolean = false,
+    private val actions: ActionRegistry = IdeRegistries.actions,
+) {
     private val doubleShift = DoubleShift()
 
     fun handle(event: KeyEvent): Boolean {
@@ -207,7 +206,7 @@ internal class GlobalShortcuts(private val context: IdeContext, private val ideO
         val closesFindBar = event.key == Key.Escape && project.find.visible && project.popup == null
         return when {
             project.agentMode && !ideOnly -> {
-                event.type == KeyEventType.KeyDown && AGENT_SHORTCUTS.dispatch(event, context)
+                event.type == KeyEventType.KeyDown && actions.bindings(ActionScope.Agent).dispatch(event, context)
             }
 
             doubleShift.isDoubleShift(event) -> {
@@ -230,7 +229,7 @@ internal class GlobalShortcuts(private val context: IdeContext, private val ideO
             }
 
             else -> {
-                IDE_SHORTCUTS.dispatch(event, context)
+                actions.bindings(ActionScope.Ide).dispatch(event, context)
             }
         }
     }
