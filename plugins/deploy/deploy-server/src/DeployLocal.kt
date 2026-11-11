@@ -1,4 +1,4 @@
-package org.example.kotlineditor.server
+package org.example.kotlineditor.deploy.server
 
 import java.nio.file.FileVisitResult
 import java.nio.file.Files

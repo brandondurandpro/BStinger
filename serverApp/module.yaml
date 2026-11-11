@@ -2,7 +2,10 @@ product: jvm/app
 
 dependencies:
   - //server
+  - //plugins/agent/agent-server
+  - //plugins/deploy/deploy-server
   - //plugins/git/git-server
+  - //plugins/language-servers/language-servers-server
   - //plugins/run/run-server
   - //plugins/terminal/terminal-server
   - $libs.kotlinx.coroutines.core

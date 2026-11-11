@@ -6,7 +6,7 @@ modules:
   - desktopApp
   - detekt-rules
   - e2e
-  - features/agent
+  - plugins/agent/agent-client
   - features/editor
   - plugins/git/git-client
   - plugins/language-servers/language-servers-client
@@ -18,7 +18,10 @@ modules:
   - plugin-api
   - plugin-core
   - plugin-host
+  - plugins/agent/agent-server
+  - plugins/deploy/deploy-server
   - plugins/git/git-server
+  - plugins/language-servers/language-servers-server
   - plugins/run/run-server
   - plugins/terminal/terminal-server
   - packaging

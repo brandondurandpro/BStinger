@@ -223,7 +223,7 @@ class EditorServer(
                 handlers,
                 options,
                 telemetry.telemetry,
-                onDispose = { id -> if (services.languageServersStarted) services.languageServers.release(id) },
+                onDispose = services::sessionEnded,
             ).also { sessions[it.id] = it }
         session.attach(connection)
         val welcome =

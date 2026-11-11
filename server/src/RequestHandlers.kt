@@ -120,7 +120,8 @@ inline fun nothing(block: () -> Unit): JsonElement {
     return JsonNull
 }
 
-internal fun Request.entry(name: String) = params.read(name) { it.entry() }
+/** The file entry named by the param [name]. */
+fun Request.entry(name: String) = params.read(name) { it.entry() }
 
 // `fs/changes`: the open documents the client holds (an old client names none, and answers as today).
 private fun Request.open() = params.get("open")?.let { fields -> fields.strings() } ?: emptyList()

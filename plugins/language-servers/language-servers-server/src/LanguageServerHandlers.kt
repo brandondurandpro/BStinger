@@ -1,4 +1,4 @@
-package org.example.kotlineditor.server
+package org.example.kotlineditor.languageservers.server
 
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -27,6 +27,9 @@ import org.example.kotlineditor.rpc.strings
 import org.example.kotlineditor.rpc.textChanges
 import org.example.kotlineditor.rpc.textRange
 import org.example.kotlineditor.rpc.toJson
+import org.example.kotlineditor.server.Handler
+import org.example.kotlineditor.server.LocalServices
+import org.example.kotlineditor.server.ServerContribution
 
 private const val RANGE = "range"
 
@@ -38,68 +41,75 @@ private const val VERSION = "version"
 private const val TOKEN = "token"
 private const val INDEX = "index"
 
-/** The `lsp/` methods: the language servers of [LocalServices.languageServers]. */
-internal fun languageServerHandlers(services: LocalServices): Map<MethodSpec, Handler> =
-    mapOf<MethodSpec, Handler>(
-        Method.LspStatus to { services.languageServers.status(params.long("since")).toJson() },
+/** Found by the server through `META-INF/services`. */
+class LanguageServersServerContribution : ServerContribution {
+    override fun handlers(services: LocalServices) = languageServerHandlers(services)
+}
+
+/** The `lsp/` methods: the language servers of [LanguageServersComponent]. */
+internal fun languageServerHandlers(services: LocalServices): Map<MethodSpec, Handler> {
+    val component = services.languageServersComponent()
+    return mapOf<MethodSpec, Handler>(
+        Method.LspStatus to { component.service.status(params.long("since")).toJson() },
         Method.LspUse to {
-            services.languageServers
+            component.service
                 .use(session, params.string(PROJECT), params.read("files") { it.strings() })
                 .toJson()
         },
         Method.LspRestart to {
-            services.languageServers.restart(params.string(ID), params.long("generation"))
+            component.service.restart(params.string(ID), params.long("generation"))
             JsonNull
         },
         Method.LspStop to {
-            services.languageServers.stop(params.string(ID))
+            component.service.stop(params.string(ID))
             JsonNull
         },
         Method.LspStart to {
-            services.languageServers.start(params.string(ID))
+            component.service.start(params.string(ID))
             JsonNull
         },
-        Method.LspLog to { services.languageServers.log(params.string(ID)).toJson() },
+        Method.LspLog to { component.service.log(params.string(ID)).toJson() },
         Method.LspChoice to {
-            services.languageServers.choice(params.string(LANGUAGE), params.string(PROJECT)).languageServerChoiceJson()
+            component.service.choice(params.string(LANGUAGE), params.string(PROJECT)).languageServerChoiceJson()
         },
         Method.LspChoose to {
-            services.languageServers.choose(params.string(LANGUAGE), params.string(PROJECT), params.string("candidate"))
+            component.service.choose(params.string(LANGUAGE), params.string(PROJECT), params.string("candidate"))
             JsonNull
         },
         Method.DocOpen to {
             val path = params.string(PATH)
             val text = params.string("text")
-            services.languageServers.openDocument(session, params.string(PROJECT), path, params.int(VERSION), text)
+            component.service.openDocument(session, params.string(PROJECT), path, params.int(VERSION), text)
             JsonNull
         },
         Method.DocChange to {
             val changes = params.read("changes") { it.textChanges() }
-            services.languageServers.changeDocument(session, params.string(PATH), params.int(VERSION), changes)
+            component.service.changeDocument(session, params.string(PATH), params.int(VERSION), changes)
             JsonNull
         },
         Method.DocClose to {
-            services.languageServers.closeDocument(session, params.string(PATH))
+            component.service.closeDocument(session, params.string(PATH))
             JsonNull
         },
         Method.LspCompletion to {
-            services.languageServers
+            component.service
                 .complete(session, params.string(PATH), params.int(VERSION), params.int("line"), params.int("column"))
                 .toJson()
         },
         Method.LspResolveCompletion to {
             val documentation =
-                services.languageServers.resolveCompletion(session, params.string(TOKEN), params.int(INDEX))
+                component.service.resolveCompletion(session, params.string(TOKEN), params.int(INDEX))
             buildJsonObject { documentation?.let { put("documentation", it) } }
         },
     ) +
-        codeIntelligenceHandlers(services) +
-        editingHandlers(services) +
-        structureHandlers(services)
+        codeIntelligenceHandlers(component) +
+        editingHandlers(component) +
+        structureHandlers(component)
+}
 
 // The code intelligence methods: hover, navigation, usages, diagnostics, edits.
-private fun codeIntelligenceHandlers(services: LocalServices): Map<MethodSpec, Handler> {
-    val intelligence = { services.languageServers.intelligence }
+private fun codeIntelligenceHandlers(component: LanguageServersComponent): Map<MethodSpec, Handler> {
+    val intelligence = { component.service.intelligence }
     return mapOf<MethodSpec, Handler>(
         Method.LspHover to { intelligence().hover(session, params.documentPosition()).toJson() },
         Method.LspNavigate to {
@@ -119,7 +129,7 @@ private fun codeIntelligenceHandlers(services: LocalServices): Map<MethodSpec, H
             intelligence().usageCounts(session, params.string(PATH), params.int(VERSION)).toJson()
         },
         Method.LspWorkspaceSymbols to { intelligence().workspaceSymbols(session, params.string("query")).toJson() },
-        Method.LspCheckProject to { services.languageServers.checkProject(params.string("project")).toJson() },
+        Method.LspCheckProject to { component.service.checkProject(params.string("project")).toJson() },
         Method.LspDiagnostics to { intelligence().diagnostics(session, params.long("since")).toJson() },
         Method.LspPrepareRename to { intelligence().prepareRename(session, params.documentPosition()).toJson() },
         Method.LspRename to {
@@ -129,8 +139,8 @@ private fun codeIntelligenceHandlers(services: LocalServices): Map<MethodSpec, H
 }
 
 // The code intelligence methods that edit or act: formatting, quick fixes, links, code lenses.
-private fun editingHandlers(services: LocalServices): Map<MethodSpec, Handler> {
-    val intelligence = { services.languageServers.intelligence }
+private fun editingHandlers(component: LanguageServersComponent): Map<MethodSpec, Handler> {
+    val intelligence = { component.service.intelligence }
     return mapOf<MethodSpec, Handler>(
         Method.LspFormat to {
             val range = params[RANGE]?.takeIf { it != JsonNull }?.let { params.read(RANGE) { it.textRange() } }
@@ -167,7 +177,7 @@ private fun editingHandlers(services: LocalServices): Map<MethodSpec, Handler> {
             val operation = checkNotNull(fileOperationNamed(name)) { "Unknown file operation $name" }
             val files = params.read("files") { it.operatedFiles() }
             // No server runs before the first document with a language server opens: nothing to adapt.
-            val started = services.languageServersStarted
+            val started = component.started
             val edits = if (started) intelligence().willChangeFiles(session, operation, files) else EditResult.NotReady
             edits.toJson()
         },
@@ -175,8 +185,8 @@ private fun editingHandlers(services: LocalServices): Map<MethodSpec, Handler> {
 }
 
 // What the language server knows of the structure of the code: outline, hierarchies, hints, folding, selection.
-private fun structureHandlers(services: LocalServices): Map<MethodSpec, Handler> {
-    val intelligence = { services.languageServers.intelligence }
+private fun structureHandlers(component: LanguageServersComponent): Map<MethodSpec, Handler> {
+    val intelligence = { component.service.intelligence }
     return mapOf<MethodSpec, Handler>(
         Method.LspOutline to {
             intelligence().outline(session, params.string(PATH), params.int(VERSION)).toJson()
