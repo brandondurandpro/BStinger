@@ -13,10 +13,9 @@ import androidx.compose.ui.unit.dp
 import org.example.kotlineditor.state.RunSession
 import org.example.kotlineditor.state.RunState
 
-// One chip per run when several are in the window.
+// One tab per run, from the first one.
 @Composable
 internal fun SessionTabs(run: RunState, shown: RunSession) {
-    if (run.sessions.size < 2) return
     Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp)) {
         for (candidate in run.sessions.toList()) {
             SessionChip(run, candidate, active = candidate === shown)

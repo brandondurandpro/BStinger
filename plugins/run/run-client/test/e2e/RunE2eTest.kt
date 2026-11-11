@@ -173,6 +173,8 @@ class RunE2eTest {
             pressRun()
             awaitCondition { app.runOutput() == listOf("slow") }
             val slowRun = app.project.run.session
+            // A run has its tab as soon as it starts.
+            awaitTag(RunTags.session(slow.id))
             awaitTag(RunTags.SELECTOR).performClick()
             val quick =
                 app.project.run.configurations
