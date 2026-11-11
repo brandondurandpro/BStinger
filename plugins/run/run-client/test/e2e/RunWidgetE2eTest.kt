@@ -68,7 +68,8 @@ class RunWidgetE2eTest {
             val available = app.project.run.available
             val commands = available.map { it.commandLine }.toSet()
             // Windows runs the .cmd shims of the package managers.
-            val windows = !app.project.root.path.startsWith("/")
+            val rootPath = app.project.root.path
+            val windows = !rootPath.startsWith("/")
             val suffix = if (windows) ".cmd" else ""
             assertEquals(setOf("npm$suffix run dev", "pnpm$suffix run build"), commands)
             val build = available.firstOrNull { it.commandLine == "pnpm$suffix run build" }
