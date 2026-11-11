@@ -73,9 +73,10 @@ class AgentHistoryE2eTest {
             val app = launchWithProject(project, preferences("--new-after-list"))
             val conversation = startConversation(app)
             val conversations = app.project.agent.conversations
-            sendPrompt("echo only once")
-            // First the session that reads the settings, deleted at once; then the one of the conversation.
+            // First the session that reads the settings of the new conversation, deleted at once; the prompt is sent
+            // once it exists, or the session of the conversation may be made before it and take its number.
             awaitCondition(AGENT_TIMEOUT) { store.resolve("session-1.json").exists() }
+            sendPrompt("echo only once")
             listHistoryAgain()
             awaitCondition(AGENT_TIMEOUT) { store.resolve("session-2.json").exists() }
             listHistoryAgain()

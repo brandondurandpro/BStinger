@@ -103,6 +103,8 @@ class QuickPullPerformanceE2eTest {
 
 private const val MAX_COMPOSED_CHIPS = 100
 
-// About 30 times what a laptop measures (110 ms, 5 MB): a slow runner passes, a rebuild per pin does not.
-private const val PULL_BUDGET_MILLIS = 3_000L
-private const val PULL_BUDGET_MEGABYTES = 300L
+// A laptop measures 110 ms and 5 MB. The pull is a real `git` process, which the Windows runners take from 0.9 to
+// 3.6 s to run (38 to 185 MB of frames drawn while waiting): the budget is twice their worst, which a slow runner
+// passes and a rebuild per pin does not.
+private const val PULL_BUDGET_MILLIS = 8_000L
+private const val PULL_BUDGET_MEGABYTES = 600L
