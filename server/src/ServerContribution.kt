@@ -28,7 +28,6 @@ private fun coreContributions(): List<ServerContribution> =
         ServerContribution(::fileHandlers),
         ServerContribution(::deployHandlers),
         ServerContribution(::searchHandlers),
-        ServerContribution { gitHandlers(it.git) },
         ServerContribution(::languageServerHandlers),
         ServerContribution(::agentHandlers),
     )

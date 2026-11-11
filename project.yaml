@@ -18,6 +18,7 @@ modules:
   - plugin-api
   - plugin-core
   - plugin-host
+  - plugins/git/git-server
   - plugins/run/run-server
   - plugins/terminal/terminal-server
   - packaging

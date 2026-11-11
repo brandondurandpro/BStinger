@@ -1,0 +1,14 @@
+# The server half of the Git tool windows: status, diffs, history, branches, merges, through the `git` command line.
+# Linked statically and found by the server through `META-INF/services` (a bundled plugin).
+product:
+  type: jvm/lib
+
+dependencies:
+  - //server
+  - //protocol
+  - //lsp
+  - $libs.kotlinx.coroutines.core
+  - $libs.kotlinx.serialization.json
+
+test-dependencies:
+  - //testkit

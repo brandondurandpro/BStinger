@@ -1,4 +1,4 @@
-package org.example.kotlineditor.server
+package org.example.kotlineditor.git.server
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runInterruptible
@@ -13,6 +13,8 @@ import org.example.kotlineditor.model.GitFileStatus
 import org.example.kotlineditor.model.MergeHistory
 import org.example.kotlineditor.model.MergeSides
 import org.example.kotlineditor.model.WorktreeClient
+import org.example.kotlineditor.server.TextFiles
+import org.example.kotlineditor.server.writeFileNow
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files

@@ -123,7 +123,7 @@ private fun optionHandlers(services: LocalServices): Map<MethodSpec, Handler> =
 
 // The sessions of the project at [root] and of its worktrees of agent mode, each one with the branch it works on.
 private suspend fun sessions(services: LocalServices, agent: AgentCommand, root: String): AgentSessions {
-    val worktrees = withContext(Dispatchers.IO) { agentWorktrees(root) }
+    val worktrees = withContext(Dispatchers.IO) { services.agentWorktrees(root) }
     val listed = services.agents.processes.sessions(agent, listOf(root) + worktrees.keys)
     return listed.copy(sessions = listed.sessions.map { it.copy(branch = worktrees[it.directory]) })
 }

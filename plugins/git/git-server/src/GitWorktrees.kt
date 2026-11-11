@@ -1,4 +1,4 @@
-package org.example.kotlineditor.server
+package org.example.kotlineditor.git.server
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runInterruptible

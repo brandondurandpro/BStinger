@@ -1,4 +1,4 @@
-package org.example.kotlineditor.server
+package org.example.kotlineditor.git.server
 
 import org.example.kotlineditor.lsp.supervisor.OrphanReaper
 import java.io.IOException

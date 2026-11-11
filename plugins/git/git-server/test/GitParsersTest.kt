@@ -1,4 +1,4 @@
-package org.example.kotlineditor.server
+package org.example.kotlineditor.git.server
 
 import org.example.kotlineditor.model.GitBranchInfo
 import org.example.kotlineditor.model.GitCommitFile
