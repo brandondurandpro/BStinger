@@ -20,7 +20,7 @@ class ApiDumpTest {
         val actual = apiLines().joinToString("\n", postfix = "\n")
         val file = locateDump()
         if (System.getenv(UPDATE) != null) file.writeText(actual)
-        assertEquals(file.readText(), actual, "plugin-api changed: review it, then run with $UPDATE=1")
+        assertEquals(file.readText().replace("\r\n", "\n"), actual, "plugin-api changed: review it, then run with $UPDATE=1")
     }
 
     private fun locateDump(): File {

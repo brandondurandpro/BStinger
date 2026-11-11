@@ -37,7 +37,7 @@ internal object GhosttyNative {
                 GhosttyNative::class.java.getResourceAsStream(resource)
                     ?: error(
                         "No libghostty-vt for $platform: add ghosttyfx-$platform.jar " +
-                            "to server/resources/ghostty (see TerminalEngines)",
+                            "to terminal-server/resources/ghostty (see TerminalEngines)",
                     ),
             )
         val directory = Files.createTempDirectory("ghostty-vt")

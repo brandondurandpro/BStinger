@@ -128,7 +128,7 @@ private class GhosttyClassLoader(bindings: URL, parent: ClassLoader) : URLClassL
     }
 
     private companion object {
-        const val ENGINE_PACKAGE = "org.example.kotlineditor.server.ghostty."
+        const val ENGINE_PACKAGE = "org.example.kotlineditor.terminal.server.ghostty."
         const val BINDINGS_PACKAGE = "io.github.vlaaad.ghostty."
     }
 }
