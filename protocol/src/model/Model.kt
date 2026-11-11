@@ -481,6 +481,18 @@ interface WorktreeClient {
     suspend fun removeWorktree(root: String, path: String)
 }
 
+/** How `git reset` treats the index and the working tree. */
+enum class GitResetMode {
+    /** Moves the branch only: the changes stay staged. */
+    Soft,
+
+    /** Moves the branch and unstages the changes, keeping the files as they are. */
+    Mixed,
+
+    /** Moves the branch and throws away every uncommitted change. */
+    Hard,
+}
+
 /** Git information about a project. */
 @Suppress("ComplexInterface", "TooManyFunctions") // one function per Git operation the IDE offers
 interface GitClient : WorktreeClient {
@@ -568,6 +580,45 @@ interface GitClient : WorktreeClient {
      */
     suspend fun pullBranch(root: String, branch: String): String
 
+    /**
+     * Creates the branch [name] at [startPoint] (a branch or a commit hash) and checks it out when [switchTo]. Fails
+     * when [name] already exists, changing nothing.
+     */
+    suspend fun createBranch(root: String, name: String, startPoint: String, switchTo: Boolean)
+
+    /** Renames the local branch [oldName] to [newName]; fails when [newName] exists. */
+    suspend fun renameBranch(root: String, oldName: String, newName: String)
+
+    /**
+     * Checks out the remote-tracking branch [remoteBranch] (`origin/feature`) as a local branch of the same name
+     * without the remote (`feature`) that tracks it, or just switches to it when it exists; returns its name.
+     */
+    suspend fun checkoutRemote(root: String, remoteBranch: String): String
+
+    /** Checks out the commit [hash], leaving HEAD detached. */
+    suspend fun checkoutCommit(root: String, hash: String)
+
+    /** Creates the tag [name] on the commit [hash]; fails when it exists. */
+    suspend fun createTag(root: String, name: String, hash: String)
+
+    /**
+     * Merges [branch] into the current branch. Returns what Git printed; when the merge stops on conflicts it returns
+     * a message saying so and leaves the conflicted files for the merge editor, it does not fail.
+     */
+    suspend fun merge(root: String, branch: String): String
+
+    /** Rebases the current branch onto [onto]; stops on conflicts like [merge]. */
+    suspend fun rebase(root: String, onto: String): String
+
+    /** Applies the changes of the commit [hash] on the current branch; refused for a merge commit. */
+    suspend fun cherryPick(root: String, hash: String): String
+
+    /** Commits the inverse of the commit [hash] on the current branch; refused for a merge commit. */
+    suspend fun revertCommit(root: String, hash: String): String
+
+    /** Moves the current branch to the commit [hash], keeping or discarding the changes as [mode] says. */
+    suspend fun reset(root: String, hash: String, mode: GitResetMode): String
+
     /** Annotations (author and date) of each line of [path], empty when the file has no history. */
     suspend fun blame(root: String, path: String): List<BlameLine>
 
@@ -629,6 +680,26 @@ interface GitClient : WorktreeClient {
         override suspend fun pushBranch(root: String, branch: String): String = ""
 
         override suspend fun pullBranch(root: String, branch: String): String = ""
+
+        override suspend fun createBranch(root: String, name: String, startPoint: String, switchTo: Boolean) = Unit
+
+        override suspend fun renameBranch(root: String, oldName: String, newName: String) = Unit
+
+        override suspend fun checkoutRemote(root: String, remoteBranch: String): String = remoteBranch
+
+        override suspend fun checkoutCommit(root: String, hash: String) = Unit
+
+        override suspend fun createTag(root: String, name: String, hash: String) = Unit
+
+        override suspend fun merge(root: String, branch: String): String = ""
+
+        override suspend fun rebase(root: String, onto: String): String = ""
+
+        override suspend fun cherryPick(root: String, hash: String): String = ""
+
+        override suspend fun revertCommit(root: String, hash: String): String = ""
+
+        override suspend fun reset(root: String, hash: String, mode: GitResetMode): String = ""
 
         override suspend fun headLines(root: String, path: String): List<String>? = null
 

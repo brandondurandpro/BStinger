@@ -3,9 +3,11 @@ package org.example.kotlineditor.git.server
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import org.example.kotlineditor.model.GitClient
+import org.example.kotlineditor.model.GitResetMode
 import org.example.kotlineditor.rpc.Method
 import org.example.kotlineditor.rpc.MethodSpec
 import org.example.kotlineditor.rpc.blameJson
+import org.example.kotlineditor.rpc.bool
 import org.example.kotlineditor.rpc.branchesJson
 import org.example.kotlineditor.rpc.commitsJson
 import org.example.kotlineditor.rpc.diffJson
@@ -27,6 +29,7 @@ private const val ROOT = "root"
 private const val BRANCH = "branch"
 private const val LIMIT = "limit"
 private const val PATHS = "paths"
+private const val HASH = "hash"
 
 /** Found by the server through `META-INF/services`. */
 class GitServerContribution : ServerContribution {
@@ -85,6 +88,23 @@ internal fun gitHandlers(git: GitClient): Map<MethodSpec, Handler> =
         Method.GitFetch to { nothing { git.fetch(root()) } },
         Method.GitPushBranch to { JsonPrimitive(git.pushBranch(root(), params.string(BRANCH))) },
         Method.GitPullBranch to { JsonPrimitive(git.pullBranch(root(), params.string(BRANCH))) },
+        Method.GitCreateBranch to {
+            nothing {
+                git.createBranch(root(), params.string(BRANCH), params.string("startPoint"), params.bool("switch"))
+            }
+        },
+        Method.GitRenameBranch to { nothing { git.renameBranch(root(), params.string(BRANCH), params.string("newName")) } },
+        Method.GitCheckoutRemote to { JsonPrimitive(git.checkoutRemote(root(), params.string(BRANCH))) },
+        Method.GitCheckoutCommit to { nothing { git.checkoutCommit(root(), params.string(HASH)) } },
+        Method.GitCreateTag to { nothing { git.createTag(root(), params.string("name"), params.string(HASH)) } },
+        Method.GitMerge to { JsonPrimitive(git.merge(root(), params.string(BRANCH))) },
+        Method.GitRebase to { JsonPrimitive(git.rebase(root(), params.string(BRANCH))) },
+        Method.GitCherryPick to { JsonPrimitive(git.cherryPick(root(), params.string(HASH))) },
+        Method.GitRevertCommit to { JsonPrimitive(git.revertCommit(root(), params.string(HASH))) },
+        Method.GitReset to {
+            val mode = GitResetMode.valueOf(params.string("mode"))
+            JsonPrimitive(git.reset(root(), params.string(HASH), mode))
+        },
         Method.GitWorktree to { JsonPrimitive(git.worktree(root(), params.string("branch"))) },
         Method.GitRemoveWorktree to { nothing { git.removeWorktree(root(), params.string(PATH)) } },
     )

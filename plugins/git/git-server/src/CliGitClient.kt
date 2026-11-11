@@ -10,6 +10,7 @@ import org.example.kotlineditor.model.GitClient
 import org.example.kotlineditor.model.GitCommit
 import org.example.kotlineditor.model.GitCommitDetails
 import org.example.kotlineditor.model.GitFileStatus
+import org.example.kotlineditor.model.GitResetMode
 import org.example.kotlineditor.model.MergeHistory
 import org.example.kotlineditor.model.MergeSides
 import org.example.kotlineditor.model.WorktreeClient
@@ -304,6 +305,36 @@ class CliGitClient :
                 runGit(root, NETWORK_TIMEOUT_SECONDS, "fetch", upstream.remote, "${upstream.ref}:refs/heads/$branch")
             }
         }
+
+    override suspend fun createBranch(root: String, name: String, startPoint: String, switchTo: Boolean) =
+        runInterruptible(Dispatchers.IO) { createBranchNow(root, name, startPoint, switchTo) }
+
+    override suspend fun renameBranch(root: String, oldName: String, newName: String) =
+        runInterruptible(Dispatchers.IO) { renameBranchNow(root, oldName, newName) }
+
+    override suspend fun checkoutRemote(root: String, remoteBranch: String): String =
+        runInterruptible(Dispatchers.IO) { checkoutRemoteNow(root, remoteBranch) }
+
+    override suspend fun checkoutCommit(root: String, hash: String) =
+        runInterruptible(Dispatchers.IO) { checkoutCommitNow(root, hash) }
+
+    override suspend fun createTag(root: String, name: String, hash: String) =
+        runInterruptible(Dispatchers.IO) { createTagNow(root, name, hash) }
+
+    override suspend fun merge(root: String, branch: String): String =
+        runInterruptible(Dispatchers.IO) { mergeNow(root, branch) }
+
+    override suspend fun rebase(root: String, onto: String): String =
+        runInterruptible(Dispatchers.IO) { rebaseNow(root, onto) }
+
+    override suspend fun cherryPick(root: String, hash: String): String =
+        runInterruptible(Dispatchers.IO) { cherryPickNow(root, hash) }
+
+    override suspend fun revertCommit(root: String, hash: String): String =
+        runInterruptible(Dispatchers.IO) { revertCommitNow(root, hash) }
+
+    override suspend fun reset(root: String, hash: String, mode: GitResetMode): String =
+        runInterruptible(Dispatchers.IO) { resetNow(root, hash, mode) }
 
     override suspend fun remoteBranches(root: String): List<String> =
         runInterruptible(Dispatchers.IO) {
