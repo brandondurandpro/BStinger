@@ -267,12 +267,16 @@ class HistoryActionsE2eTest {
             onNodeWithTag(GitTags.historyBranch("side")).performClick()
             commitMenu(picked, "cherryPick").performClick()
             awaitCondition { project.root.resolve("side.txt").exists() }
+            // The file is there before its commit: HEAD is the picked commit only once the action is over.
+            awaitGitIdle()
             awaitTag(GitTags.historyBranch(default)).performClick()
             val applied = head()
             assertTrue(applied != picked)
             awaitTag(GitTags.historyCommit(applied))
             commitMenu(applied, "revert").performClick()
             awaitCondition { !project.root.resolve("side.txt").exists() }
+            // The file goes before the commit of the revert: Git run now would find it as a local change.
+            awaitGitIdle()
 
             project.git("merge", "-q", "--no-ff", "-m", "merge again", "side")
             val again = head()
@@ -292,6 +296,7 @@ class HistoryActionsE2eTest {
 
             commitMenu(first, "resetSoft").performClick()
             awaitCondition { head() == first }
+            awaitGitIdle()
             assertEquals("A  two.txt", project.git("status", "--porcelain").trim()) // soft: still staged
             project.git("reset", "-q", "--hard", second)
             onNodeWithTag(GitTags.HISTORY_REFRESH).performClick()
