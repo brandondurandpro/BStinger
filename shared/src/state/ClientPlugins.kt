@@ -181,8 +181,9 @@ internal fun extract(archive: File, folder: File) {
     val base = folder.canonicalFile
     ZipFile(archive).use { zip ->
         for (entry in zip.entries().asSequence().filter(::isRootFile)) {
-            val target = File(base, entry.name).canonicalFile
-            if (target.parentFile != base) continue
+            val target = File(base, entry.name)
+            val inside = target.canonicalPath.startsWith(base.path + File.separator)
+            if (!inside) continue
             target.outputStream().use { out -> zip.getInputStream(entry).copyTo(out) }
         }
     }
