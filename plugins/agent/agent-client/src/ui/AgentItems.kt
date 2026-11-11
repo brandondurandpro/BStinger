@@ -151,8 +151,15 @@ private fun statusText(status: AgentToolStatus) =
 // The lines a change removes and adds, between the lines it keeps at both ends.
 @Composable
 private fun DiffPreview(diff: AgentDiff) {
-    val lines = changedLines(diff.oldText, diff.newText)
-    Column(Modifier.fillMaxWidth().background(IdeColors.Input, IdeShapes.Medium).padding(6.dp)) {
+    val lines = diff.removed.map { '-' to it } + diff.added.map { '+' to it }
+    val more = lines.size - DIFF_LINES + diff.hiddenLines
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(IdeColors.Input, IdeShapes.Medium)
+            .padding(6.dp)
+            .testTag(AgentTags.AGENT_DIFF),
+    ) {
         Label(
             diff.path.substringAfterLast('/').substringAfterLast('\\'),
             fontWeight = FontWeight.SemiBold,
@@ -162,23 +169,15 @@ private fun DiffPreview(diff: AgentDiff) {
             val color = if (sign == '+') IdeColors.GitAdded else IdeColors.Error
             BasicText("$sign $line", style = LocalCodeStyleSmall().copy(color = color), maxLines = 1)
         }
-        if (lines.size > DIFF_LINES) {
-            Label("… ${lines.size - DIFF_LINES} more lines", color = IdeColors.TextSecondary, fontSize = 12.sp)
+        if (more > 0) {
+            Label(
+                "… $more more lines",
+                Modifier.testTag(AgentTags.AGENT_DIFF_MORE),
+                color = IdeColors.TextSecondary,
+                fontSize = 12.sp,
+            )
         }
     }
-}
-
-/** The removed (`-`) and added (`+`) lines of a change: what differs between the common first and last lines. */
-internal fun changedLines(oldText: String?, newText: String): List<Pair<Char, String>> {
-    val old = oldText?.lines().orEmpty()
-    val new = newText.lines()
-    val common = minOf(old.size, new.size)
-    val prefix = (0 until common).firstOrNull { old[it] != new[it] } ?: common
-    val maxSuffix = common - prefix
-    val suffix = (0 until maxSuffix).firstOrNull { old[old.size - 1 - it] != new[new.size - 1 - it] } ?: maxSuffix
-    val removed = old.subList(prefix, old.size - suffix).map { '-' to it }
-    val added = new.subList(prefix, new.size - suffix).map { '+' to it }
-    return removed + added
 }
 
 @Composable

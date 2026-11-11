@@ -119,14 +119,20 @@ data class AgentTerminalOutput(
     val truncated: Boolean = false,
 )
 
-/** A change of a file proposed or made by a tool call: the whole old text (null for a new file) and new text. */
+/**
+ * A change of a file proposed or made by a tool call: the lines it removes and adds, never the whole file. Only the
+ * first of them are kept, since a card shows a few: a transcript is held by the server and by every IDE that follows
+ * it, for as long as the conversation lasts.
+ */
 data class AgentDiff(
     /** Absolute path of the file. */
     val path: String,
-    /** Text before the change, null when the file is new. */
-    val oldText: String?,
-    /** Text after the change. */
-    val newText: String,
+    /** The first lines the change removes; empty for a new file. */
+    val removed: List<String>,
+    /** The first lines the change adds. */
+    val added: List<String>,
+    /** How many more lines the change removes and adds, left out of [removed] and [added]. */
+    val hiddenLines: Int = 0,
 )
 
 /** A step of the plan of the agent. */

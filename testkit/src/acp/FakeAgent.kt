@@ -37,10 +37,12 @@ private const val CLIENT_TIMEOUT_S = 60L
  * - `echo <text>`: answers `<text>` in chunks, one per word;
  * - `think <text>`: a thought, then the answer `Done thinking.`;
  * - `read <path>`: a read tool call, the file read through the client, then `Read <n> lines.`;
- * - `write <path> <text>`: an edit tool call, a permission request, then the file written through the client;
+ * - `write <path> <text>`: an edit tool call, a permission request, then the file written through the client
+ *   (`lines <n> <path>`: the same, the text being `n` lines);
  * - `plan`: a plan of two steps, updated as they complete;
  * - `slow`: chunks every 50 ms until it is cancelled (`stubborn`: the same, but it never stops);
- * - `stream <n>`: `n` chunks at once; `tools <n>`: `n` completed tool calls; `crash`: exits with code 3;
+ * - `stream <n>`: `n` chunks at once; `tools <n>`: `n` completed tool calls (`tools <n> <lines>`: each with an
+ *   output of `lines` more lines, as a file read); `crash`: exits with code 3;
  * - `count`: the number of prompts of its session;
  * - `model`: `Model: <model>.`, the model of its session (`mode`: `Mode: <mode>.`, `write` asks nothing in
  *   `accept-edits`; `effort`: `Effort: <effort>.`); `fallback`: it moves to `fake-fast` itself and says so;
@@ -329,11 +331,12 @@ class FakeAgent(
             "read" -> read(session, rest)
             "write" -> write(session, words.getOrNull(1).orEmpty(), rest.substringAfter(' ', ""))
             "rewrite" -> rewrite(session, rest)
+            "lines" -> write(session, words.getOrNull(2).orEmpty(), linesOf(words.getOrNull(1)?.toIntOrNull() ?: 1))
             "plan" -> plan(session)
             "slow" -> slow(session, stubborn = false)
             "stubborn" -> slow(session, stubborn = true)
             "stream" -> chunks(session, List(words.getOrNull(1)?.toIntOrNull() ?: 1) { "chunk $it " })
-            "tools" -> tools(session, words.getOrNull(1)?.toIntOrNull() ?: 1)
+            "tools" -> tools(session, words.getOrNull(1)?.toIntOrNull() ?: 1, words.getOrNull(2)?.toIntOrNull() ?: 0)
             "crash" -> crash()
             "count" -> chunks(session, listOf("Prompt $count of $session."))
             "usage" -> chunks(session, listOf("5-hour limit — ${count * QUOTA_STEP}% · Resets 11pm"))
@@ -416,6 +419,8 @@ class FakeAgent(
         return written(session, call, path, text)
     }
 
+    private fun linesOf(count: Int): String = (1..count).joinToString("\n") { "line $it" }
+
     private fun written(session: String, call: String, path: String, text: String): String {
         val write =
             runCatching {
@@ -479,10 +484,12 @@ class FakeAgent(
         return END_TURN
     }
 
-    private fun tools(session: String, count: Int): String {
+    // [count] tool calls, each with an output of [outputLines] more lines (a file read, the output of a command).
+    private fun tools(session: String, count: Int, outputLines: Int = 0): String {
+        val body = (1..outputLines).joinToString("") { "\nline $it of the output of the tool, as long as a line of code" }
         repeat(count) { index ->
             tool(session, "tool-$index", "Search step $index", "search", "pending", "/step/$index")
-            toolUpdate(session, "tool-$index", "completed", "$index matches")
+            toolUpdate(session, "tool-$index", "completed", "$index matches$body")
         }
         message(session, "Searched $count times.")
         return END_TURN
