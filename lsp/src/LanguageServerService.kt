@@ -13,7 +13,6 @@ import org.example.kotlineditor.lsp.intelligence.CodeIntelligenceService
 import org.example.kotlineditor.lsp.intelligence.IntelligenceSettings
 import org.example.kotlineditor.lsp.intelligence.fileOperationParams
 import org.example.kotlineditor.lsp.intelligence.filesMatching
-import org.example.kotlineditor.lsp.memory.ProcessMemoryReader
 import org.example.kotlineditor.lsp.memory.ProcessMemorySampler
 import org.example.kotlineditor.lsp.provision.CandidateRegistry
 import org.example.kotlineditor.lsp.supervisor.LanguageServerHooks
@@ -21,6 +20,7 @@ import org.example.kotlineditor.lsp.supervisor.LanguageServerSupervisor
 import org.example.kotlineditor.lsp.supervisor.ManagedServer
 import org.example.kotlineditor.lsp.supervisor.OrphanReaper
 import org.example.kotlineditor.lsp.supervisor.SupervisorTimings
+import org.example.kotlineditor.memory.ProcessMemoryReader
 import org.example.kotlineditor.model.CompletionResult
 import org.example.kotlineditor.model.FileOperation
 import org.example.kotlineditor.model.LanguageServerChoice

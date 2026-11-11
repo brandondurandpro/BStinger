@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
@@ -15,6 +16,8 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
+import kotlinx.coroutines.withContext
+import org.example.kotlineditor.memory.ProcessMemory
 import org.example.kotlineditor.model.CodeIntelligence
 import org.example.kotlineditor.model.CompletionResult
 import org.example.kotlineditor.model.DiagnosticsSnapshot
@@ -26,8 +29,10 @@ import org.example.kotlineditor.model.LanguageServers
 import org.example.kotlineditor.model.LanguageServersStatus
 import org.example.kotlineditor.model.ProjectCheckResult
 import java.io.IOException
+import java.util.Locale
 
 private const val RETRY_MS = 1_000L
+private const val UI_MEMORY_SAMPLE_MS = 2_000L
 
 // Declared when no project is open: the server then knows the project left.
 private const val NO_PROJECT = ""
@@ -64,6 +69,18 @@ class LanguageServersState(
     /** Last status received from the server. */
     var status by mutableStateOf(LanguageServersStatus.Empty)
         private set
+
+    /**
+     * The process of the UI. Replaced by the tests of a server in another process: theirs runs in the process of
+     * the UI.
+     */
+    var uiProcess: UiProcess by mutableStateOf(UiProcess.current())
+
+    // Last memory read of the process of the UI, null before the first and where it cannot be read.
+    private var uiMemory: ProcessMemory? by mutableStateOf(null)
+
+    /** Memory of the UI and of the IDE server, as last measured. */
+    val memory: IdeMemory get() = ideMemory(uiProcess.identity, uiMemory, status.server)
 
     /** Whether a language server runs: before that, nothing can adapt the code to a file operation. */
     val anyRunning: Boolean get() = status.servers.any { it.state == LanguageServerState.Running }
@@ -117,6 +134,7 @@ class LanguageServersState(
     init {
         scope.launch { poll() }
         scope.launch { pollDiagnostics() }
+        scope.launch { sampleUiMemory() }
         // One at a time, in order: each declaration replaces the previous one on the server.
         scope.launch { declarations.filterNotNull().collect(::send) }
         // A restarted server lost the sessions and what they declared: declared again at each reconnection.
@@ -350,6 +368,19 @@ class LanguageServersState(
         }
     }
 
+    // Reads the memory of the UI every few seconds, away from the UI thread (and from the virtual time of the tests).
+    // A read that would show the same text is dropped: an idle IDE draws no frame for it.
+    private suspend fun sampleUiMemory() {
+        while (true) {
+            val process = uiProcess
+            val read = withContext(Dispatchers.Default) { process.memory() }
+            val shown = uiMemory?.residentBytes?.let(::memoryText)
+            val next = read?.residentBytes?.let(::memoryText)
+            if (next != shown) uiMemory = read
+            withContext(Dispatchers.Default) { delay(UI_MEMORY_SAMPLE_MS) }
+        }
+    }
+
     // Long poll, like the status: a server that restarted answers its own (lower) version at once.
     @Suppress("TooGenericExceptionCaught")
     private suspend fun pollDiagnostics() {
@@ -373,10 +404,10 @@ class LanguageServersState(
     }
 }
 
-/** A byte count for the status bar: `312 MB`, `1.4 GB`. */
+/** A byte count for the status bar: `312 MB`, `1.4 GB`, written the same in every locale. */
 fun memoryText(bytes: Long): String {
     val mb = bytes / BYTES_PER_MB
-    return if (mb >= MB_PER_GB) "%.1f GB".format(mb / MB_PER_GB) else "${mb.toLong()} MB"
+    return if (mb >= MB_PER_GB) "%.1f GB".format(Locale.ROOT, mb / MB_PER_GB) else "${mb.toLong()} MB"
 }
 
 /** The server offered first: the first one that can run on the server machine. */

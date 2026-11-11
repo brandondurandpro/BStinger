@@ -40,7 +40,6 @@ import org.example.kotlineditor.model.FeatureStatus
 import org.example.kotlineditor.model.LanguageServerInfo
 import org.example.kotlineditor.model.LanguageServerState
 import org.example.kotlineditor.model.ProjectCheckResult
-import org.example.kotlineditor.model.ServerMemory
 import org.example.kotlineditor.state.InlayHintsMode
 import org.example.kotlineditor.state.LanguageServersHost
 import org.example.kotlineditor.state.LanguageServersState
@@ -65,21 +64,12 @@ fun LanguageServerStatusItems(project: LanguageServersHost) {
             tooltipTag = LanguageServerTags.statusLanguageServerTooltip(server.id),
         ) { project.showToolWindow(ToolWindow.LanguageServers) }
     }
-    val server = state.status.server
-    if (server.heapMaxBytes > 0) {
-        StatusItem(
-            text = "Server ${memoryText(server.heapUsedBytes)}",
-            color = IdeColors.TextSecondary,
-            tooltip = serverTooltip(server),
-            tag = LanguageServerTags.STATUS_SERVER_MEMORY,
-            tooltipTag = LanguageServerTags.STATUS_SERVER_MEMORY_TOOLTIP,
-        ) { project.showToolWindow(ToolWindow.LanguageServers) }
-    }
+    IdeMemoryStatusItems(project, state)
 }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun StatusItem(
+internal fun StatusItem(
     text: String,
     color: Color,
     tooltip: String,
@@ -187,7 +177,7 @@ private fun SettingsSections(
         ProjectCheckSection(project, state)
     }
     SectionDivider()
-    IdeServerRow(state.status.server)
+    IdeMemorySection(state)
 }
 
 // A card per running language server, or why there is none.
@@ -213,7 +203,7 @@ private fun ServersSection(
 }
 
 // Padding of a section of the window, between two dividers.
-private val SECTION = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp)
+internal val SECTION = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp)
 
 @Composable
 private fun SectionDivider() {
@@ -310,28 +300,12 @@ private fun SetupNote(servers: List<LanguageServerInfo>) {
     )
 }
 
-@Composable
-private fun IdeServerRow(server: ServerMemory) {
-    Column(
-        SECTION.testTag(LanguageServerTags.LANGUAGE_SERVERS_IDE),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        if (server.heapMaxBytes <= 0) {
-            MemoryLine("IDE server", "Kotlin Editor's own server process")
-        } else {
-            MemoryLine("IDE server · heap", "${memoryText(server.heapUsedBytes)} / ${memoryText(server.heapMaxBytes)}")
-            ProgressBar(server.heapUsedBytes.toFloat() / server.heapMaxBytes, Modifier.fillMaxWidth())
-            if (server.residentBytes > 0) MemoryLine("Whole process (UI included)", memoryText(server.residentBytes))
-        }
-    }
-}
-
 // A muted name on the left, its value on the right in the code font.
 @Composable
-private fun MemoryLine(name: String, value: String) {
+internal fun MemoryLine(name: String, value: String, valueTag: String? = null) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Label(name, Modifier.weight(1f), color = IdeColors.TextSecondary, fontSize = 12.sp)
-        MonoValue(value)
+        MonoValue(value, if (valueTag != null) Modifier.testTag(valueTag) else Modifier)
     }
 }
 
@@ -495,11 +469,3 @@ private fun tooltipOf(server: LanguageServerInfo): String =
         server.message?.let(::add)
         add("Click to open the Language Servers window")
     }.joinToString("\n")
-
-// The heap, not the process: in the desktop app the server runs in the UI's process, whose resident memory also
-// holds Compose, Skia and (in development) the hot reload agent.
-private fun serverTooltip(server: ServerMemory): String {
-    val heap = "IDE server: heap ${memoryText(server.heapUsedBytes)} of ${memoryText(server.heapMaxBytes)}"
-    val process = "\nWhole process ${memoryText(server.residentBytes)} (the UI too, in the desktop app)"
-    return if (server.residentBytes > 0) heap + process else heap
-}

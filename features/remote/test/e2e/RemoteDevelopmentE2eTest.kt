@@ -85,7 +85,10 @@ class RemoteDevelopmentE2eTest {
             // A new state polls the remote server; the local one stopped.
             awaitCondition { app.state.session.languageServers !== local }
             awaitCondition { app.state.session.languageServers.status.server.heapMaxBytes > 0 }
+            // The remote server is another process, on another machine: its memory is shown beside the UI's.
             awaitTag(LanguageServerTags.STATUS_SERVER_MEMORY)
+            awaitTag(LanguageServerTags.STATUS_UI_MEMORY)
+            awaitTag(LanguageServerTags.STATUS_TOTAL_MEMORY)
         }
 
     @Test

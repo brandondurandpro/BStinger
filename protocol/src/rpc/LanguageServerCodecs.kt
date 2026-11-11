@@ -26,6 +26,8 @@ import org.example.kotlineditor.model.TextChange
 
 private const val PRIVATE = "private"
 private const val RESIDENT = "resident"
+private const val PID = "pid"
+private const val STARTED_AT = "startedAt"
 private const val LANGUAGE = "language"
 private const val MESSAGE = "message"
 private const val ID = "id"
@@ -41,6 +43,8 @@ fun LanguageServersStatus.toJson(): JsonObject =
                 put("heapUsed", server.heapUsedBytes)
                 put("heapMax", server.heapMaxBytes)
                 put(RESIDENT, server.residentBytes)
+                put(PID, server.pid)
+                put(STARTED_AT, server.startedAtMillis)
             },
         )
         put("servers", JsonArray(servers.map { it.toJson() }))
@@ -52,7 +56,15 @@ fun JsonElement.languageServersStatus(): LanguageServersStatus {
     val server = status.getValue("server").jsonObject
     return LanguageServersStatus(
         version = status.long("version"),
-        server = ServerMemory(server.long("heapUsed"), server.long("heapMax"), server.long(RESIDENT)),
+        server =
+        ServerMemory(
+            heapUsedBytes = server.long("heapUsed"),
+            heapMaxBytes = server.long("heapMax"),
+            residentBytes = server.long(RESIDENT),
+            // An older server names neither: its memory is then counted as another process's.
+            pid = server.longOrZero(PID),
+            startedAtMillis = server.longOrZero(STARTED_AT),
+        ),
         servers = status.getValue("servers").jsonArray.map { it.jsonObject.languageServerInfo() },
     )
 }
@@ -191,3 +203,6 @@ fun JsonElement.textChanges(): List<TextChange> =
     }
 
 private const val CHANGE_FIELDS = 5
+
+// The long field [key], 0 when missing: a field a previous version of the protocol did not have.
+private fun JsonObject.longOrZero(key: String): Long = if (key in this) long(key) else 0L

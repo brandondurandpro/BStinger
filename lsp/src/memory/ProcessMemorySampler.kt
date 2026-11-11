@@ -7,6 +7,8 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
+import org.example.kotlineditor.memory.ProcessMemory
+import org.example.kotlineditor.memory.ProcessMemoryReader
 import java.io.Closeable
 import java.io.IOException
 import java.time.Instant
