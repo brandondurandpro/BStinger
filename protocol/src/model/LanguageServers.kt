@@ -24,7 +24,7 @@ enum class LanguageServerState {
     Unavailable,
 }
 
-/** Memory of a process tree, in bytes; see `ProcessMemory` in the `lsp` module for what private means. */
+/** Memory of a process tree, in bytes; see `ProcessMemory` for what private means. */
 data class MemoryUsage(
     /** Memory no other process shares, summed over the tree: the number shown and watched for leaks. */
     val privateBytes: Long,
@@ -87,6 +87,13 @@ data class ServerMemory(
     val heapMaxBytes: Long,
     /** Resident memory of the whole server process (0 when not measurable). */
     val residentBytes: Long,
+    /** Process id of the server (0 when an older server does not say). */
+    val pid: Long = 0,
+    /**
+     * When the server process started, in milliseconds since the epoch (0 when unknown): with [pid], it tells a
+     * client whether the server runs in its own process, whose memory must then be counted once.
+     */
+    val startedAtMillis: Long = 0,
 )
 
 /** Every language server and the IDE server's memory, as one snapshot: a newer one replaces an older one. */

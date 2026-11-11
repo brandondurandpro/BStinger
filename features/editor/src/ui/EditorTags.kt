@@ -21,6 +21,7 @@ object EditorTags {
     const val MENU_SPLIT_RIGHT = "menu.splitRight"
     const val MENU_UNSPLIT = "menu.unsplit"
     const val MENU_COPY_TAB_PATH = "menu.copyTabPath"
+    const val MENU_COPY_TAB_RELATIVE_PATH = "menu.copyTabRelativePath"
     const val EDITOR = "editor"
     const val EDITOR_TEXT = "editor.text"
     const val EDITOR_VERTICAL_SCROLLBAR = "editor.vscroll"

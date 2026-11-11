@@ -97,6 +97,8 @@ internal class Journal(private val epoch: String) {
         val title: String? = null,
         /** Whether the items start with the history the agent replayed. */
         val replayed: Boolean = false,
+        /** Whether the agent can replay all the items from its session. */
+        val replayable: Boolean = false,
         /** The settings of the session (its model…), as the agent last said, or as the user chose since. */
         val options: List<AgentOption> = emptyList(),
         /** The commands the agent offers in the session. */

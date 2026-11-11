@@ -1,4 +1,4 @@
-package org.example.kotlineditor.lsp.memory
+package org.example.kotlineditor.memory
 
 import java.time.Instant
 

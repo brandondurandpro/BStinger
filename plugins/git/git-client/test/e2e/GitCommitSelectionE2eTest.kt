@@ -166,4 +166,29 @@ class GitCommitSelectionE2eTest {
             awaitCondition { app.project.git.selectedForCommit == setOf("README.md") }
             assertEquals("Update the readme", app.project.git.commitMessage)
         }
+
+    @Test
+    fun `Revert checked throws away every checked change at once and keeps the others`() =
+        runComposeUiTest {
+            project.commitAll()
+            project.file("README.md", "# Changed\n")
+            project.file("build.gradle.kts", "moved\n")
+            project.file("notes.txt", "new\n")
+            val app = openGit()
+            awaitTag(GitTags.gitChangeCheck("README.md")).performClick()
+            awaitTag(GitTags.gitChangeCheck("notes.txt")).performClick()
+            awaitCondition { app.project.git.selectedForCommit == setOf("README.md", "notes.txt") }
+            // The first click asks, the second confirms.
+            awaitTag(GitTags.GIT_REVERT_CHECKED).performClick()
+            awaitTag(GitTags.GIT_REVERT_CHECKED).performClick()
+            awaitCondition { !app.project.git.busy && app.project.git.status.keys == setOf("build.gradle.kts") }
+            assertEquals("Reverted 2 files", app.project.git.message)
+            assertEquals(
+                "moved\n",
+                project.root
+                    .resolve("build.gradle.kts")
+                    .toFile()
+                    .readText(),
+            )
+        }
 }

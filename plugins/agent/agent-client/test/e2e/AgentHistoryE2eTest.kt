@@ -1,5 +1,6 @@
 package org.example.kotlineditor.e2e
 
+import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.v2.runComposeUiTest
@@ -59,6 +60,33 @@ class AgentHistoryE2eTest {
             assertEquals(3, conversation.itemsOf<AgentItem.UserText>().size)
         }
 
+    // Shows agent mode again, which lists the sessions of the agent.
+    private fun ComposeUiTest.listHistoryAgain() {
+        awaitTag(AgentTags.MODE_IDE).performClick()
+        awaitTag(AgentTags.MODE_AGENT).performClick()
+    }
+
+    @Test
+    fun `a session the agent lists before the IDE knows it shows once, one made to read the settings never`() =
+        runComposeUiTest {
+            // The agent answers `session/new` only once it listed the new session.
+            val app = launchWithProject(project, preferences("--new-after-list"))
+            val conversation = startConversation(app)
+            val conversations = app.project.agent.conversations
+            // First the session that reads the settings of the new conversation, deleted at once; the prompt is sent
+            // once it exists, or the session of the conversation may be made before it and take its number.
+            awaitCondition(AGENT_TIMEOUT) { store.resolve("session-1.json").exists() }
+            sendPrompt("echo only once")
+            listHistoryAgain()
+            awaitCondition(AGENT_TIMEOUT) { store.resolve("session-2.json").exists() }
+            listHistoryAgain()
+            awaitAnswer(conversation, "only once")
+            awaitIdle(conversation)
+            awaitCondition(AGENT_TIMEOUT) { conversations.size == 1 }
+            assertEquals(listOf(conversation), conversations.toList())
+            assertEquals("session-2", conversation.session)
+        }
+
     @Test
     fun `deleting a conversation of the history deletes the session in the agent`() =
         runComposeUiTest {
@@ -79,7 +107,7 @@ class AgentHistoryE2eTest {
             pastSession(store, app.project.root.path, listOf("echo hidden" to "hidden "))
             val conversation = startConversation(app)
             sendPrompt("echo visible")
-            awaitShown(conversation, "visible")
+            awaitAnswer(conversation, "visible")
             awaitIdle(conversation)
             val conversations = app.project.agent.conversations
             assertEquals(listOf(conversation), conversations.toList())

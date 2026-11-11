@@ -75,13 +75,16 @@ internal fun JsonObject.permission(id: String, version: Long) =
 internal fun AgentDiff.toJson() =
     buildJsonObject {
         put(PATH, path)
-        put("oldText", oldText?.let(::JsonPrimitive) ?: JsonNull)
-        put("newText", newText)
+        put("removed", JsonArray(removed.map(::JsonPrimitive)))
+        put("added", JsonArray(added.map(::JsonPrimitive)))
+        put("hiddenLines", hiddenLines)
     }
 
 internal fun JsonElement.diff(): AgentDiff {
     val json = jsonObject
-    return AgentDiff(json.string(PATH), json.stringOrNull("oldText"), json.string("newText"))
+    val removed = json.field("removed").jsonArray.map { it.jsonPrimitive.content }
+    val added = json.field("added").jsonArray.map { it.jsonPrimitive.content }
+    return AgentDiff(json.string(PATH), removed, added, json.int("hiddenLines"))
 }
 
 internal fun AgentPlanEntry.toJson() =

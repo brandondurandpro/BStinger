@@ -4,8 +4,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import org.example.kotlineditor.lsp.memory.ProcessMemoryReader
 import org.example.kotlineditor.lsp.memory.ProcessMemorySampler
+import org.example.kotlineditor.memory.ProcessMemoryReader
 import org.example.kotlineditor.model.LanguageServerInfo
 import org.example.kotlineditor.model.LanguageServerState
 import org.example.kotlineditor.testkit.lsp.FakeLanguageServerCommand

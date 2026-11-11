@@ -43,7 +43,7 @@ class AgentRegistryE2eTest {
             onNodeWithTag(AppTags.SETTINGS_CLOSE).performClick()
             val conversation = startConversation(app)
             sendPrompt("echo from the registry")
-            awaitShown(conversation, "from the registry")
+            awaitAnswer(conversation, "from the registry")
             awaitIdle(conversation)
             assertEquals(1, registry.downloads.get())
         }

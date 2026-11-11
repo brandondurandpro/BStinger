@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withTimeoutOrNull
 import org.example.kotlineditor.lsp.memory.ProcessMemorySampler
+import org.example.kotlineditor.memory.ProcessIdentity
 import org.example.kotlineditor.model.LanguageServerInfo
 import org.example.kotlineditor.model.LanguageServersStatus
 import org.example.kotlineditor.model.ServerMemory
@@ -28,6 +29,9 @@ internal class StatusPublisher(
 ) {
     private val changes = Channel<Unit>(Channel.CONFLATED)
     private val published = MutableStateFlow(LanguageServersStatus.Empty.copy(version = 1))
+
+    // This process, which a client compares with its own: the IDE server may run in the process of the UI.
+    private val process = ProcessIdentity.current()
 
     // When the last status was published, in milliseconds since the epoch.
     private var publishedAt = 0L
@@ -58,7 +62,14 @@ internal class StatusPublisher(
         val self = sampler.sampleSelf()
         val runtime = Runtime.getRuntime()
         val heapUsed = runtime.totalMemory() - runtime.freeMemory()
-        val server = ServerMemory(heapUsed, runtime.maxMemory(), self.residentBytes)
+        val server =
+            ServerMemory(
+                heapUsedBytes = heapUsed,
+                heapMaxBytes = runtime.maxMemory(),
+                residentBytes = self.residentBytes,
+                pid = process.pid,
+                startedAtMillis = process.startedAtMillis,
+            )
         val serversChanged = servers.map(::withoutMemory) != last.servers.map(::withoutMemory)
         val serverMemoryMoved = servers.any { now -> moved(privateOf(last, now.id), now.memory?.privateBytes) }
         val residentMoved = moved(last.server.residentBytes, server.residentBytes)

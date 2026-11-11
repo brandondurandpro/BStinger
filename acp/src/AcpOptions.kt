@@ -100,6 +100,10 @@ internal suspend fun AgentProcess.offeredOptions(
 ): List<AgentOption> {
     val known = offered.takeIf { choices.isEmpty() }
     if (known != null) return known
+    return probes.probing { probedOptions(directory, choices) }
+}
+
+private suspend fun AgentProcess.probedOptions(directory: String, choices: Map<String, String>): List<AgentOption> {
     val probe = newSession(directory, Unheard)
     try {
         var options = probe.options.orEmpty()
@@ -110,7 +114,10 @@ internal suspend fun AgentProcess.offeredOptions(
         return options
     } finally {
         val deleted = runCatching { deleteSession(probe.id) }.getOrDefault(false)
-        if (!deleted) closeSession(probe.id)
+        if (!deleted) {
+            probes.keep(probe.id)
+            closeSession(probe.id)
+        }
     }
 }
 

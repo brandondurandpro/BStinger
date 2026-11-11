@@ -34,8 +34,9 @@ The CI can run on your machine, on the current working tree (uncommitted files i
   that only happens on one version or session.
 - `./windows-vm test [args]`: the Windows job in a local Windows Server VM (`./windows-vm start` first; the first
   start installs Windows, 20 to 60 minutes).
-- They need Docker, and KVM for Windows. Run `./ci` before opening a pull request that touches platform-specific
-  code (processes, shells, terminal, file paths, display), and to reproduce a red CI job.
+- They need Docker, and KVM for Windows. Do not run them systematically (they are slow): run `./ci` only before
+  opening a pull request that touches platform-specific code (processes, shells, terminal, file paths, display), and
+  to reproduce a red CI job. Any other change is checked by `./lint` and `./run-tests`; the GitHub CI does the rest.
 - One run at a time: the Linux runs share their snapshot and build directories (`./linux-vm` refuses a second
   one), and the Windows VM has one runner.
 
@@ -141,7 +142,7 @@ shows it.
 
 - `./lint` (detekt + ktlint) passes.
 - `./run-tests` passes; `./kotlin test -m <module>` runs a single module while iterating.
-- `./ci` passes when the change can behave differently on another platform (see above).
+- `./ci` passes, only when the change can behave differently on another platform (see above); skip it otherwise.
 - `main` only accepts squash or rebase merges, once the Lint, Linux and Windows CI checks are green.
 
 ## Kotlin Coding Guidelines & Best Practices

@@ -34,6 +34,7 @@ import org.example.kotlineditor.model.GitClient
 import org.example.kotlineditor.model.GitCommit
 import org.example.kotlineditor.model.GitCommitDetails
 import org.example.kotlineditor.model.GitFileStatus
+import org.example.kotlineditor.model.GitResetMode
 import org.example.kotlineditor.model.MergeHistory
 import org.example.kotlineditor.model.MergeSides
 import org.example.kotlineditor.model.PluginServer
@@ -373,6 +374,93 @@ class RemoteGit(private val client: RpcClient) :
             client.call(Method.GitPullBranch) {
                 put(ROOT, root)
                 put(BRANCH, branch)
+            }
+        return output.string()
+    }
+
+    override suspend fun createBranch(root: String, name: String, startPoint: String, switchTo: Boolean) {
+        client.call(Method.GitCreateBranch) {
+            put(ROOT, root)
+            put(BRANCH, name)
+            put("startPoint", startPoint)
+            put("switch", switchTo)
+        }
+    }
+
+    override suspend fun renameBranch(root: String, oldName: String, newName: String) {
+        client.call(Method.GitRenameBranch) {
+            put(ROOT, root)
+            put(BRANCH, oldName)
+            put("newName", newName)
+        }
+    }
+
+    override suspend fun checkoutRemote(root: String, remoteBranch: String): String {
+        val output =
+            client.call(Method.GitCheckoutRemote) {
+                put(ROOT, root)
+                put(BRANCH, remoteBranch)
+            }
+        return output.string()
+    }
+
+    override suspend fun checkoutCommit(root: String, hash: String) {
+        client.call(Method.GitCheckoutCommit) {
+            put(ROOT, root)
+            put("hash", hash)
+        }
+    }
+
+    override suspend fun createTag(root: String, name: String, hash: String) {
+        client.call(Method.GitCreateTag) {
+            put(ROOT, root)
+            put("name", name)
+            put("hash", hash)
+        }
+    }
+
+    override suspend fun merge(root: String, branch: String): String {
+        val output =
+            client.call(Method.GitMerge) {
+                put(ROOT, root)
+                put(BRANCH, branch)
+            }
+        return output.string()
+    }
+
+    override suspend fun rebase(root: String, onto: String): String {
+        val output =
+            client.call(Method.GitRebase) {
+                put(ROOT, root)
+                put(BRANCH, onto)
+            }
+        return output.string()
+    }
+
+    override suspend fun cherryPick(root: String, hash: String): String {
+        val output =
+            client.call(Method.GitCherryPick) {
+                put(ROOT, root)
+                put("hash", hash)
+            }
+        return output.string()
+    }
+
+    override suspend fun revertCommit(root: String, hash: String): String {
+        val output =
+            client.call(Method.GitRevertCommit) {
+                put(ROOT, root)
+                put("hash", hash)
+            }
+        return output.string()
+    }
+
+    override suspend fun reset(root: String, hash: String, mode: GitResetMode): String {
+        val output =
+            client.call(Method.GitReset) {
+                put(ROOT, root)
+                put("hash", hash)
+                put("mode", mode.name)
             }
         return output.string()
     }

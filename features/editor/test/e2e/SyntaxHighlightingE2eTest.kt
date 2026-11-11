@@ -64,8 +64,10 @@ class SyntaxHighlightingE2eTest {
             onNodeWithTag(EditorTags.EDITOR).performClick()
             pressInEditor(Key.MoveEnd, ctrl = true)
             typeInEditor("\nval answer = greeting.length - 42")
+            // The last token typed first: a parse of the line while it was being typed colors `length` already, and
+            // not yet `42`.
+            awaitColor(10, "42", IdeColors.Number)
             awaitColor(10, "length", IdeColors.Property)
-            assertEquals(IdeColors.Number, colorOf(10, "42"))
             assertEquals(IdeColors.Keyword, colorOf(10, "val"))
             assertEquals(IdeColors.FunctionDeclaration, colorOf(8, "println"), "the lines around keep their colors")
         }

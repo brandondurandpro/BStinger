@@ -107,12 +107,15 @@ internal class TranscriptWriter(
         val sameMessage = message == null || message == messageId
         messageId = message
         val continued = journal.last()?.takeIf { sameMessage && kind.continues(it) }
+        // A thought that already holds all it shows does not change: nothing to send again.
+        val full = continued is AgentItem.Thought && continued.text.length >= MAX_THOUGHT
         if (continued != null) {
-            journal.update(continued.id) { item, version -> appended(item, chunk, version, context) }
+            if (!full) journal.update(continued.id) { item, version -> appended(item, chunk, version, context) }
             return
         }
         val id = journal.newId()
-        journal.add { version -> kind.item(id, version, chunk, context) }
+        val text = if (kind == Text.Thought) shownThought("", chunk) else chunk
+        journal.add { version -> kind.item(id, version, text, context) }
     }
 
     // The agent titled the session (`title` absent: unchanged; null: cleared).
@@ -201,7 +204,7 @@ private fun AgentItem.ToolCall.isRunning() = status == AgentToolStatus.Pending |
 private fun appended(item: AgentItem, chunk: String, version: Long, context: List<String>): AgentItem =
     when (item) {
         is AgentItem.UserText -> item.continued(chunk, version, context)
-        is AgentItem.Thought -> item.copy(version = version, text = item.text + chunk)
+        is AgentItem.Thought -> item.copy(version = version, text = shownThought(item.text, chunk))
         is AgentItem.AgentText -> item.copy(version = version, text = item.text + chunk)
         else -> item
     }

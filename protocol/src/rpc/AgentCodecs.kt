@@ -32,6 +32,7 @@ private const val AGENT_NAME = "agentName"
 private const val SESSION = "session"
 private const val TITLE = "title"
 private const val REPLAYED = "replayed"
+private const val REPLAYABLE = "replayable"
 private const val OPTIONS = "options"
 private const val COMMANDS = "commands"
 private const val USAGE = "usage"
@@ -64,6 +65,7 @@ fun AgentTranscript.toJson(): JsonObject =
         put(SESSION, session.orNull())
         put(TITLE, title.orNull())
         put(REPLAYED, replayed)
+        put(REPLAYABLE, replayable)
         put(OPTIONS, options.toJson())
         put(COMMANDS, commands.commandsToJson())
         put(USAGE, usage?.toJson() ?: JsonNull)
@@ -85,6 +87,7 @@ fun JsonElement.agentTranscript(): AgentTranscript {
         session = json.stringOrNull(SESSION),
         title = json.stringOrNull(TITLE),
         replayed = json[REPLAYED]?.let { json.bool(REPLAYED) } ?: false,
+        replayable = json[REPLAYABLE]?.let { json.bool(REPLAYABLE) } ?: false,
         options = json[OPTIONS]?.agentOptions().orEmpty(),
         commands = json[COMMANDS]?.agentSlashCommands().orEmpty(),
         usage = json[USAGE]?.takeIf { it !is JsonNull }?.agentUsage(),

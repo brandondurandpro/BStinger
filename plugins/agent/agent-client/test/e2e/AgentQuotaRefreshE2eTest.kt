@@ -30,7 +30,7 @@ class AgentQuotaRefreshE2eTest {
             awaitCondition(AGENT_TIMEOUT) { conversation.quota.isNotEmpty() }
             awaitIdle(conversation)
             sendPrompt("echo hello")
-            awaitShown(conversation, "hello")
+            awaitAnswer(conversation, "hello")
             awaitIdle(conversation)
             // The first answer may be read again too (turn 2): the echo is the third turn, or the fourth with that one.
             awaitCondition(AGENT_TIMEOUT) { (conversation.quota.firstOrNull()?.percent ?: 0) >= THIRD_TURN_PERCENT }

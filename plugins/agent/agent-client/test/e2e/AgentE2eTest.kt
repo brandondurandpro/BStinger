@@ -66,7 +66,7 @@ class AgentE2eTest {
             val app = launchWithProject(project, agentPreferences())
             val conversation = startConversation(app)
             sendPrompt("echo hello from the agent")
-            awaitShown(conversation, "hello from the agent")
+            awaitAnswer(conversation, "hello from the agent")
             awaitIdle(conversation)
             // The name comes with an update of the transcript, which may land after the answer.
             awaitCondition(AGENT_TIMEOUT) { textOf(AgentTags.AGENT_NAME) == "Fake Agent 1.0" }

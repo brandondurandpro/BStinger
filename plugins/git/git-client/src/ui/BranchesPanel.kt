@@ -27,7 +27,10 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -81,7 +84,15 @@ fun BranchesPanel(project: GitHost, drag: ToolWindowDrag, modifier: Modifier = M
     val history = project.git.history
     // The first time, the history opens on the current branch, as soon as it is known.
     LaunchedEffect(project.git.currentBranch) { history.selectIfNone(project.git.currentBranch) }
-    Column(modifier.fillMaxSize().background(IdeColors.Editor).testTag(GitTags.BRANCHES_PANEL)) {
+    Box(modifier.fillMaxSize().background(IdeColors.Editor).testTag(GitTags.BRANCHES_PANEL)) {
+        BranchesWindow(project, drag, history)
+        history.dialog?.let { dialog -> HistoryDialogView(project, dialog) { history.dialog = null } }
+    }
+}
+
+@Composable
+private fun BranchesWindow(project: GitHost, drag: ToolWindowDrag, history: BranchHistoryState) {
+    Column(Modifier.fillMaxSize()) {
         ToolWindowHeader("Branches", ToolWindow.Branches, project.toolWindows, drag) {
             IconButton(
                 {
@@ -130,7 +141,7 @@ private fun HistoryColumns(project: GitHost, history: BranchHistoryState) {
             SplitterBox(horizontalBar = false, tag = GitTags.HISTORY_BRANCHES_SPLITTER) { delta ->
                 layout.resizePane(Pane.HistoryBranches, with(density) { delta.toDp().value })
             }
-            CommitColumn(history, Modifier.weight(1f).fillMaxHeight())
+            CommitColumn(project, history, Modifier.weight(1f).fillMaxHeight())
             if (commit != null) {
                 // Dragging this splitter to the left widens the details, on its right.
                 SplitterBox(horizontalBar = false, tag = GitTags.HISTORY_DETAILS_SPLITTER) { delta ->
@@ -171,7 +182,7 @@ private fun BranchColumn(project: GitHost, history: BranchHistoryState, modifier
             branchHeader(history, BranchSection.Local, shownLocals.size, sticky = hasLocals)
             if (localOpen) {
                 items(shownLocals, key = { "local:${it.name}" }) { branch ->
-                    HistoryBranchRow(branch.name, history.selectedRef == branch.name, local = branch) {
+                    HistoryBranchRow(project, branch.name, history.selectedRef == branch.name, local = branch) {
                         history.select(branch.name)
                     }
                 }
@@ -179,7 +190,7 @@ private fun BranchColumn(project: GitHost, history: BranchHistoryState, modifier
             branchHeader(history, BranchSection.Remote, shownRemotes.size, sticky = hasRemotes)
             if (remoteOpen) {
                 items(shownRemotes, key = { "remote:$it" }) { name ->
-                    HistoryBranchRow(name, history.selectedRef == name, local = null) { history.select(name) }
+                    HistoryBranchRow(project, name, history.selectedRef == name, local = null) { history.select(name) }
                 }
             }
         }
@@ -221,25 +232,50 @@ private fun SectionTitle(history: BranchHistoryState, section: BranchSection, co
     }
 }
 
+// Selected rows are highlighted; the current branch keeps a light accent tint even when it is not selected.
+private fun rowBackground(selected: Boolean, current: Boolean): Color =
+    when {
+        selected -> IdeColors.Selection
+        current -> IdeColors.Accent.copy(alpha = 0.12f)
+        else -> Color.Transparent
+    }
+
 @Composable
-private fun HistoryBranchRow(name: String, selected: Boolean, local: GitBranchInfo?, onClick: () -> Unit) {
+private fun HistoryBranchRow(
+    project: GitHost,
+    name: String,
+    selected: Boolean,
+    local: GitBranchInfo?,
+    onClick: () -> Unit,
+) {
+    var menu by remember { mutableStateOf(false) }
     Row(
         Modifier
             .fillMaxWidth()
-            .background(if (selected) IdeColors.Selection else Color.Transparent, IdeShapes.Medium)
+            .background(rowBackground(selected, local?.current == true), IdeShapes.Medium)
+            .onSecondaryPress { menu = true }
             .clickable(onClick = onClick)
             .testTag(GitTags.historyBranch(name))
             .padding(horizontal = 6.dp, vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         BranchIcon(color = if (local?.current == true) IdeColors.Accent else IdeColors.TextSecondary)
-        Label(name, Modifier.weight(1f).padding(start = 6.dp), fontSize = 12.sp)
+        // The checked-out branch stands out: accent color and bold name.
+        val current = local?.current == true
+        Label(
+            name,
+            Modifier.weight(1f).padding(start = 6.dp),
+            color = if (current) IdeColors.Accent else IdeColors.Text,
+            fontSize = 12.sp,
+            fontWeight = if (current) FontWeight.Bold else FontWeight.Normal,
+        )
         local?.let { BranchSyncBadge(it, compact = true, modifier = Modifier.padding(start = 4.dp)) }
+        if (menu) BranchContextMenu(project, name, local) { menu = false }
     }
 }
 
 @Composable
-private fun CommitColumn(history: BranchHistoryState, modifier: Modifier) {
+private fun CommitColumn(project: GitHost, history: BranchHistoryState, modifier: Modifier) {
     val listState = rememberLazyListState()
     LaunchedEffect(history.selectedRef, history.appliedQuery) { listState.scrollToItem(0) }
     LoadMoreWhenNearEnd(history, listState)
@@ -260,7 +296,7 @@ private fun CommitColumn(history: BranchHistoryState, modifier: Modifier) {
         }
         LazyColumn(Modifier.fillMaxSize(), state = listState) {
             items(commits, key = { it.hash }) { commit ->
-                CommitRow(commit, highlight, history.selectedCommit?.hash == commit.hash) {
+                CommitRow(project, commit, highlight, history.selectedCommit?.hash == commit.hash) {
                     history.selectCommit(commit)
                 }
             }
@@ -353,12 +389,14 @@ private fun FooterText(text: String, tag: String, color: Color) {
 }
 
 @Composable
-private fun CommitRow(commit: GitCommit, highlight: String, selected: Boolean, onClick: () -> Unit) {
+private fun CommitRow(project: GitHost, commit: GitCommit, highlight: String, selected: Boolean, onClick: () -> Unit) {
+    var menu by remember { mutableStateOf(false) }
     Row(
         Modifier
             .fillMaxWidth()
             .heightIn(min = 24.dp)
             .background(if (selected) IdeColors.Selection else Color.Transparent)
+            .onSecondaryPress { menu = true }
             .clickable(onClick = onClick)
             .testTag(GitTags.historyCommit(commit.hash))
             .padding(horizontal = 10.dp, vertical = 3.dp),
@@ -373,6 +411,7 @@ private fun CommitRow(commit: GitCommit, highlight: String, selected: Boolean, o
         HighlightedText(commit.author, highlight, IdeColors.TextSecondary, 11.sp, Modifier.width(120.dp))
         Label(commitDate(commit.time), Modifier.width(110.dp), color = IdeColors.TextSecondary, fontSize = 11.sp)
         HighlightedText(commit.shortHash, highlight, IdeColors.LineNumber, 11.sp, Modifier.width(64.dp))
+        if (menu) CommitContextMenu(project, commit) { menu = false }
     }
 }
 

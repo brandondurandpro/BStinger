@@ -486,6 +486,36 @@ enum class Method(
     /** Fast-forwards a local branch, current or not, to the remote branch it tracks. */
     GitPullBranch("git/pullBranch", mutating = true),
 
+    /** Creates a branch at a branch or a commit, and checks it out when asked. */
+    GitCreateBranch("git/createBranch", mutating = true),
+
+    /** Renames a local branch. */
+    GitRenameBranch("git/renameBranch", mutating = true),
+
+    /** Checks out a remote-tracking branch as a local branch that tracks it. */
+    GitCheckoutRemote("git/checkoutRemote", mutating = true),
+
+    /** Checks out a commit, leaving HEAD detached. */
+    GitCheckoutCommit("git/checkoutCommit", mutating = true),
+
+    /** Creates a tag on a commit. */
+    GitCreateTag("git/createTag", mutating = true),
+
+    /** Merges a branch into the current one. */
+    GitMerge("git/merge", mutating = true),
+
+    /** Rebases the current branch onto another one. */
+    GitRebase("git/rebase", mutating = true),
+
+    /** Applies a commit on the current branch. */
+    GitCherryPick("git/cherryPick", mutating = true),
+
+    /** Commits the inverse of a commit on the current branch. */
+    GitRevertCommit("git/revertCommit", mutating = true),
+
+    /** Moves the current branch to a commit (soft, mixed or hard). */
+    GitReset("git/reset", mutating = true),
+
     /** Worktree of a branch, created on first use; asking again returns the same one. */
     GitWorktree("git/worktree", mutating = true),
 
