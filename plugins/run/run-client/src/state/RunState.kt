@@ -191,8 +191,9 @@ class RunState(
             return recentIds.mapNotNull { id -> all.firstOrNull { it.id == id } }
         }
 
-    /** The folder the menu is limited to (blank for the project itself), or `null` for every folder. */
-    var folderFilter by mutableStateOf<String?>(null)
+    /** The folders the menu is limited to (blank for the project itself); empty for every folder. */
+    var folderFilter by mutableStateOf<Set<String>>(emptySet())
+        private set
 
     /** The folders that hold commands, the project first: what [folderFilter] can be set to. */
     val folders: List<String> get() = byFolder.map { it.first }
@@ -204,12 +205,23 @@ class RunState(
     val recentByFolder: List<Pair<String, List<RunConfiguration>>>
         get() = recent.filter(::inFilter).groupBy(::folderOf).toList()
 
+    /** Checks or unchecks [folder] in [folderFilter]. */
+    fun toggleFolder(folder: String) {
+        val current = folderFilter
+        folderFilter = if (folder in current) current - folder else current + folder
+    }
+
+    /** Lists the commands of every folder again. */
+    fun clearFolderFilter() {
+        folderFilter = emptySet()
+    }
+
     /** Whether the configuration [id] is being run. */
     fun isRunning(id: String): Boolean = sessions.any { it.running && it.configuration.id == id }
 
     private fun inFilter(configuration: RunConfiguration): Boolean {
-        val wanted = folderFilter ?: return true
-        return folderOf(configuration) == wanted
+        val wanted = folderFilter
+        return wanted.isEmpty() || folderOf(configuration) in wanted
     }
 
     private fun groupByFolder(list: List<RunConfiguration>): List<Pair<String, List<RunConfiguration>>> {
@@ -218,7 +230,7 @@ class RunState(
     }
 
     /**
-     * The configurations (of [folderFilter] if set) whose name, command or folder contains every word of [query]
+     * The configurations (of the folders of [folderFilter] if any) whose name, command or folder contains every word of [query]
      * (any case); all of them when blank.
      */
     fun search(query: String): List<RunConfiguration> {

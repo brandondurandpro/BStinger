@@ -2,7 +2,6 @@ package org.example.kotlineditor.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -12,7 +11,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
@@ -97,29 +95,51 @@ private fun RunMenu(run: RunState, showWindow: () -> Unit, close: () -> Unit) {
         showWindow()
         run.runSelected()
     }
-    IdeTextField(
-        query,
-        { query = it },
-        Modifier.width(MENU_WIDTH).padding(8.dp).testTag(RunTags.WIDGET_SEARCH),
-        placeholder = "Search commands",
-        onSubmit = { run.search(query).firstOrNull()?.let(start) },
-    )
-    FolderFilter(run)
+    Row(Modifier.width(MENU_WIDTH).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        IdeTextField(
+            query,
+            { query = it },
+            Modifier.weight(1f).testTag(RunTags.WIDGET_SEARCH),
+            placeholder = "Search commands",
+            onSubmit = { run.search(query).firstOrNull()?.let(start) },
+        )
+        FolderFilter(run)
+    }
     CommandList(run, query, showWindow, close, start)
     HorizontalDivider(color = IdeColors.Separator)
     ConfigurationActions(run, showWindow, close)
 }
 
-// "All" and one chip per folder: the menu then lists the commands of that folder only.
+// The filter icon: its menu lists the folders with a check box each, and the commands shown are those of the checked
+// ones (all of them when none is checked).
 @Composable
 private fun FolderFilter(run: RunState) {
-    val folders = run.folders
-    if (folders.size < 2) return
-    Row(Modifier.width(MENU_WIDTH).horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp)) {
-        TabChip("All", run.folderFilter == null, RunTags.WIDGET_FILTER_ALL) { run.folderFilter = null }
-        folders.forEach { folder ->
-            TabChip(folder.ifEmpty { "Project" }, run.folderFilter == folder, RunTags.widgetFilter(folder)) {
-                run.folderFilter = folder
+    var open by remember { mutableStateOf(false) }
+    val active = run.folderFilter.isNotEmpty()
+    Box(Modifier.padding(start = 4.dp)) {
+        IconButton({ open = true }, Modifier.testTag(RunTags.WIDGET_FILTER)) {
+            IdeIcon(Lucide.ListFilter, color = if (active) IdeColors.Link else IdeColors.TextSecondary)
+        }
+        IdeDropdownMenu(open, { open = false }, Modifier.testTag(RunTags.WIDGET_FILTER_MENU)) {
+            run.folders.forEach { folder ->
+                val checked = folder in run.folderFilter
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { run.toggleFolder(folder) }
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                        .testTag(RunTags.widgetFilter(folder)),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(Modifier.size(16.dp)) {
+                        if (checked) IdeIcon(Lucide.Check, color = IdeColors.Link)
+                    }
+                    Label(folder.ifEmpty { "Project" }, Modifier.padding(start = 8.dp))
+                }
+            }
+            if (active) {
+                HorizontalDivider(color = IdeColors.Separator)
+                MenuEntry("Show all folders", RunTags.WIDGET_FILTER_ALL) { run.clearFolderFilter() }
             }
         }
     }
@@ -144,7 +164,7 @@ private fun CommandList(
     }
     // A lazy list cannot be measured by its content inside a menu: it gets a fixed height, the one its rows need
     // up to a maximum, so that a project with hundreds of commands does not fill the screen.
-    val sections = recent.size + folders.size
+    val sections = recent.size + folders.size + (if (recent.isEmpty()) 0 else 1) + if (folders.isEmpty()) 0 else 1
     val rows = recent.sumOf { it.second.size } + folders.sumOf { it.second.size }
     val wanted = MENU_ROW_HEIGHT * rows + MENU_HEADER_HEIGHT * sections
     val height = minOf(MENU_LIST_HEIGHT, wanted)
@@ -160,8 +180,9 @@ private fun CommandList(
             }
             item { HorizontalDivider(color = IdeColors.Separator) }
         }
+        if (folders.isNotEmpty()) item { SectionTitle("By folder", RunTags.WIDGET_BY_FOLDER) }
         folders.forEach { (folder, configurations) ->
-            stickyHeader { FolderTitle(folder, RunTags.widgetFolder(folder), indent = false) }
+            stickyHeader { FolderTitle(folder, RunTags.widgetFolder(folder), indent = true) }
             items(configurations, key = { it.id }) { configuration ->
                 ConfigurationEntry(run, configuration, RunTags.widgetItem(configuration.id), showWindow, close, start)
             }

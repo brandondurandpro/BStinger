@@ -216,17 +216,20 @@ class RunWidgetE2eTest {
         }
 
     @Test
-    fun `the folder chips limit the menu to one folder`() =
+    fun `the filter icon lists the folders and keeps only the checked ones`() =
         runComposeUiTest {
             composerProjects()
             val app = launchWithProject(project)
             awaitCondition { app.project.run.available.size == 4 }
             onNodeWithTag(RunTags.WIDGET_SELECTOR).performClick()
+            awaitTag(RunTags.WIDGET_BY_FOLDER).assertIsDisplayed()
             awaitTag(RunTags.widgetFolder("services/web")).assertIsDisplayed()
+            awaitTag(RunTags.WIDGET_FILTER).performClick()
             awaitTag(RunTags.widgetFilter("services/api")).performClick()
+            awaitTag(RunTags.widgetFilter("")).performClick()
             awaitNoTag(RunTags.widgetFolder("services/web"))
-            awaitNoTag(RunTags.widgetFolder(""))
             awaitTag(RunTags.widgetFolder("services/api")).assertIsDisplayed()
+            awaitTag(RunTags.widgetFolder("")).assertIsDisplayed()
             awaitTag(RunTags.WIDGET_FILTER_ALL).performClick()
             awaitTag(RunTags.widgetFolder("services/web")).assertIsDisplayed()
         }

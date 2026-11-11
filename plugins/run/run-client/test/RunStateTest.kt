@@ -482,12 +482,15 @@ class RunStateTest {
         run.run(web)
         run.run(api)
         assertEquals(listOf("api", "web"), run.folders.sorted())
-        run.folderFilter = "web"
+        run.toggleFolder("web")
         assertEquals(listOf(web.id), run.search("").map { it.id })
         assertEquals(listOf("web"), run.byFolder("").map { it.first })
         assertEquals(listOf("web"), run.recentByFolder.map { it.first })
         assertTrue(run.search("composer").isEmpty())
-        run.folderFilter = null
+        run.toggleFolder("api")
         assertEquals(2, run.search("").size)
+        run.clearFolderFilter()
+        assertEquals(2, run.search("").size)
+        assertTrue(run.folderFilter.isEmpty())
     }
 }
