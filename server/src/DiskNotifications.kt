@@ -30,7 +30,7 @@ internal class DiskNotifications(private val services: LocalServices) {
     /** The files under [entry] (or [entry] itself), before it is renamed or deleted. */
     fun filesOf(entry: FileEntry): List<String> =
         when {
-            !services.languageServersStarted -> emptyList()
+            !services.observed -> emptyList()
             !entry.isDirectory -> listOf(entry.path)
             else -> filesUnder(entry)
         }
@@ -66,10 +66,10 @@ internal class DiskNotifications(private val services: LocalServices) {
     }
 
     private fun operated(operation: FileOperation, file: OperatedFile) {
-        if (services.languageServersStarted) services.languageServers.filesOperated(operation, listOf(file))
+        services.filesOperated(operation, listOf(file))
     }
 
     private fun notify(changes: List<Pair<String, DiskChange>>) {
-        if (services.languageServersStarted && changes.isNotEmpty()) services.languageServers.diskChanged(changes)
+        services.diskChanged(changes)
     }
 }

@@ -26,10 +26,7 @@ private fun bundledContributions(): List<ServerContribution> {
 private fun coreContributions(): List<ServerContribution> =
     listOf(
         ServerContribution(::fileHandlers),
-        ServerContribution(::deployHandlers),
         ServerContribution(::searchHandlers),
-        ServerContribution(::languageServerHandlers),
-        ServerContribution(::agentHandlers),
     )
 
 /**

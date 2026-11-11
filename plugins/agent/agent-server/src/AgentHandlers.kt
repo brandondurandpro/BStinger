@@ -1,4 +1,4 @@
-package org.example.kotlineditor.server
+package org.example.kotlineditor.agent.server
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -20,6 +20,9 @@ import org.example.kotlineditor.rpc.read
 import org.example.kotlineditor.rpc.string
 import org.example.kotlineditor.rpc.stringOrNull
 import org.example.kotlineditor.rpc.toJson
+import org.example.kotlineditor.server.Handler
+import org.example.kotlineditor.server.LocalServices
+import org.example.kotlineditor.server.ServerContribution
 
 private const val CONVERSATION = "conversation"
 private const val ITEM = "item"
@@ -27,15 +30,22 @@ private const val AGENT = "agent"
 private const val DIRECTORY = "directory"
 private const val SESSION = "session"
 
-/** Agent mode: conversations with the agents, run by [LocalServices.agents]. */
-internal fun agentHandlers(services: LocalServices): Map<MethodSpec, Handler> =
-    conversationHandlers(services) + optionHandlers(services)
+/** Found by the server through `META-INF/services`. */
+class AgentServerContribution : ServerContribution {
+    override fun handlers(services: LocalServices) = agentHandlers(services)
+}
+
+/** Agent mode: conversations with the agents, run by [AgentsComponent]. */
+internal fun agentHandlers(services: LocalServices): Map<MethodSpec, Handler> {
+    val component = services.agentsComponent()
+    return conversationHandlers(component) + optionHandlers(component)
+}
 
 // The conversations: prompts, answers, transcripts, history.
-private fun conversationHandlers(services: LocalServices): Map<MethodSpec, Handler> =
+private fun conversationHandlers(component: AgentsComponent): Map<MethodSpec, Handler> =
     mapOf(
         Method.AgentPrompt to {
-            services.agents.prompt(
+            component.agents.prompt(
                 params.string(CONVERSATION),
                 params.read(AGENT) { it.agentCommand() },
                 params.string(DIRECTORY),
@@ -47,7 +57,7 @@ private fun conversationHandlers(services: LocalServices): Map<MethodSpec, Handl
             JsonNull
         },
         Method.AgentOpen to {
-            services.agents.open(
+            component.agents.open(
                 params.string(CONVERSATION),
                 params.read(AGENT) { it.agentCommand() },
                 params.string(DIRECTORY),
@@ -56,74 +66,74 @@ private fun conversationHandlers(services: LocalServices): Map<MethodSpec, Handl
             JsonNull
         },
         Method.AgentSessions to {
-            sessions(services, params.read(AGENT) { it.agentCommand() }, params.string("root")).toJson()
+            sessions(component, params.read(AGENT) { it.agentCommand() }, params.string("root")).toJson()
         },
         Method.AgentRegistry to {
-            withContext(Dispatchers.IO) { services.agents.processes.registry() }.toJson()
+            withContext(Dispatchers.IO) { component.agents.processes.registry() }.toJson()
         },
         Method.AgentDelete to {
             val agent = params.read(AGENT) { it.agentCommand() }
-            val deleted = services.agents.processes.delete(agent, params.string(SESSION))
+            val deleted = component.agents.processes.delete(agent, params.string(SESSION))
             JsonPrimitive(deleted)
         },
         Method.AgentCancel to {
-            services.agents.cancel(params.string(CONVERSATION))
+            component.agents.cancel(params.string(CONVERSATION))
             JsonNull
         },
         Method.AgentAnswer to {
-            services.agents.answer(params.string(CONVERSATION), params.string(ITEM), params.string("option"))
+            component.agents.answer(params.string(CONVERSATION), params.string(ITEM), params.string("option"))
             JsonNull
         },
         Method.AgentTranscript to {
-            services.agents
+            component.agents
                 .transcript(params.string(CONVERSATION), params.string("epoch"), params.long("since"))
                 .toJson()
         },
         Method.AgentClose to {
-            services.agents.close(params.string(CONVERSATION))
+            component.agents.close(params.string(CONVERSATION))
             JsonNull
         },
     )
 
 // The settings of the sessions (the model…).
-private fun optionHandlers(services: LocalServices): Map<MethodSpec, Handler> =
+private fun optionHandlers(component: AgentsComponent): Map<MethodSpec, Handler> =
     mapOf(
         Method.AgentOptions to {
             val agent = params.read(AGENT) { it.agentCommand() }
-            val options = services.agents.processes.options(agent, params.string(DIRECTORY))
+            val options = component.agents.processes.options(agent, params.string(DIRECTORY))
             options.toJson()
         },
         Method.AgentSetOption to {
             val agent = params.read(AGENT) { it.agentCommand() }
             val conversation = params.string(CONVERSATION)
-            services.agents.setOption(conversation, agent, params.string("option"), params.string("value"))
+            component.agents.setOption(conversation, agent, params.string("option"), params.string("value"))
             JsonNull
         },
         Method.AgentAuthMethods to {
             val agent = params.read(AGENT) { it.agentCommand() }
-            val methods = services.agents.processes.authMethods(agent)
+            val methods = component.agents.processes.authMethods(agent)
             methods.authMethodsToJson()
         },
         Method.AgentFork to {
             val agent = params.read(AGENT) { it.agentCommand() }
-            val forked = services.agents.processes.fork(agent, params.string("session"), params.string(DIRECTORY))
+            val forked = component.agents.processes.fork(agent, params.string("session"), params.string(DIRECTORY))
             JsonPrimitive(forked)
         },
         Method.AgentAuthenticate to {
             val agent = params.read(AGENT) { it.agentCommand() }
-            services.agents.processes.authenticate(agent, params.string("method"))
+            component.agents.processes.authenticate(agent, params.string("method"))
             JsonNull
         },
         Method.AgentCommands to {
             val agent = params.read(AGENT) { it.agentCommand() }
-            val commands = services.agents.processes.knownCommands(agent)
+            val commands = component.agents.processes.knownCommands(agent)
             commands.commandsToJson()
         },
     )
 
 // The sessions of the project at [root] and of its worktrees of agent mode, each one with the branch it works on.
-private suspend fun sessions(services: LocalServices, agent: AgentCommand, root: String): AgentSessions {
-    val worktrees = withContext(Dispatchers.IO) { services.agentWorktrees(root) }
-    val listed = services.agents.processes.sessions(agent, listOf(root) + worktrees.keys)
+private suspend fun sessions(component: AgentsComponent, agent: AgentCommand, root: String): AgentSessions {
+    val worktrees = withContext(Dispatchers.IO) { component.services.agentWorktrees(root) }
+    val listed = component.agents.processes.sessions(agent, listOf(root) + worktrees.keys)
     return listed.copy(sessions = listed.sessions.map { it.copy(branch = worktrees[it.directory]) })
 }

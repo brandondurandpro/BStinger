@@ -1,0 +1,14 @@
+# The server half of the Language Servers tool window. Linked statically and found by the server through `META-INF/services` (a bundled
+# plugin).
+product:
+  type: jvm/lib
+
+dependencies:
+  - //server
+  - //protocol
+  - $libs.kotlinx.coroutines.core
+  - $libs.kotlinx.serialization.json
+  - //lsp
+
+test-dependencies:
+  - //testkit

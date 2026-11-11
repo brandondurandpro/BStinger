@@ -71,7 +71,9 @@ The features that ship with the IDE live in `plugins/<id>/`, one module per half
 module name is the last directory (`run-client`, `run-server`):
 
 - `plugins/run/{run-client,run-server}`, `plugins/terminal/{terminal-client,terminal-server}`,
-  `plugins/git/{git-client,git-server}`, `plugins/tree/tree-client`, `plugins/language-servers/language-servers-client`: the client
+  `plugins/git/{git-client,git-server}`, `plugins/tree/tree-client`,
+  `plugins/language-servers/{language-servers-client,language-servers-server}`, `plugins/agent/{agent-client,agent-server}`,
+  `plugins/deploy/deploy-server`: the client
   half contributes its tool window and shortcuts (`runToolWindow()`, `runShortcuts()`...) to the registries of
   `shared`. The Network (devtools) window is contributed the same way by `shared/src/ui/NetworkPlugin.kt`.
 - A server half implements `ServerContribution` (public in `server`) and is listed in
@@ -83,9 +85,14 @@ module name is the last directory (`run-client`, `run-server`):
 These are linked statically, with no class loader and no jar: only the plugins installed in
 `~/.kotlin-editor/plugins/` go through `PluginHost`.
 
+A server half that follows the files (the language servers) implements `DiskObserver` and registers it with
+`LocalServices.observe`: it is told the changes of the disk and the IDE's operations on files, and the end of the
+sessions. `LocalServices.component(name) { ... }` gives the one instance of a plugin's state when a server restarts on
+the same services, and `closeWith` stops what it started. What stays in `server/` is the core every plugin needs:
+files, search, the recent projects and sessions, the disk watches.
+
 ## Not done yet
 
-Signing and compatibility ranges (for third parties) and a declarative tier for untrusted contributions. The server
-code of files, search, deployments, language servers and agents is still in `server/`: it is coupled to
-`LocalServices` (the file watches tell the language servers, writes notify them, sessions release them), which would
-first have to be split.
+Signing and compatibility ranges (for third parties) and a declarative tier for untrusted contributions. There are no
+`plugins/<id>/shared` modules: the types the two halves share are in `protocol`, and no feature has code of its own to
+share yet. The Deploy client is still in `shared` (its state is part of the project state).

@@ -1,4 +1,4 @@
-package org.example.kotlineditor.server
+package org.example.kotlineditor.deploy.server
 
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json

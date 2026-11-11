@@ -6,7 +6,10 @@ product:
 dependencies:
   - //shared: exported
   - //server: exported
+  - //plugins/agent/agent-server
+  - //plugins/deploy/deploy-server
   - //plugins/git/git-server
+  - //plugins/language-servers/language-servers-server
   - //plugins/run/run-server
   - //plugins/terminal/terminal-server
   # The real export of the measures, to a fake collector, for the telemetry chaos tests.
