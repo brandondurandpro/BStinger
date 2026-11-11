@@ -14,7 +14,6 @@ import io.github.vlaaad.ghostty.bindings.GhosttyTerminalScrollViewport
 import io.github.vlaaad.ghostty.bindings.GhosttyTerminalScrollViewportValue
 import io.github.vlaaad.ghostty.bindings.GhosttyTerminalScrollbar
 import io.github.vlaaad.ghostty.bindings.GhosttyTerminalSizeFn
-import io.github.vlaaad.ghostty.bindings.GhosttyTerminalTitleChangedFn
 import io.github.vlaaad.ghostty.bindings.GhosttyTerminalWritePtyFn
 import io.github.vlaaad.ghostty.bindings.GhosttyWriter
 import io.github.vlaaad.ghostty.bindings.GhosttyWriterFn
@@ -325,10 +324,11 @@ internal class GhosttyEngine(
                 },
                 arena,
             )
-        val title = GhosttyTerminalTitleChangedFn.allocate(GhosttyTerminalTitleChangedFn.Function { _, _ -> }, arena)
         setOption(ghostty_vt_h.GHOSTTY_TERMINAL_OPT_WRITE_PTY(), write)
         setOption(ghostty_vt_h.GHOSTTY_TERMINAL_OPT_SIZE(), size)
-        setOption(ghostty_vt_h.GHOSTTY_TERMINAL_OPT_TITLE_CHANGED(), title)
+        // No TITLE_CHANGED callback: the title is read with every snapshot. A callback that did nothing was installed
+        // here, and on Windows, where cmd.exe renames its window at every command, it crashed the server now and
+        // then (access violation or heap corruption in the JVM, without a crash report).
     }
 
     private fun limitScrollback(lines: Int) {
