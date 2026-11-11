@@ -7,6 +7,7 @@ import kotlinx.coroutines.launch
 import org.example.kotlineditor.model.DeployDestination
 import org.example.kotlineditor.model.DeployItem
 import org.example.kotlineditor.model.DeployProfile
+import org.example.kotlineditor.model.DeployResult
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.remote.SshConfigHost
 import java.io.IOException
@@ -46,7 +47,7 @@ data class DeployDraft(
  * The deployments saved for the project (which folders go where), kept by the server, and the popup that lists and
  * runs them. Editing is in `DeploymentDrafts.kt`, the automatic mode in [AutoDeploy].
  */
-class DeploymentsState(internal val project: ProjectState) {
+class DeploymentsState(internal val project: DeployHost) {
     private val auto = AutoDeploy(this, project)
 
     /** Whether the popup is shown. */
@@ -182,11 +183,17 @@ class DeploymentsState(internal val project: ProjectState) {
     }
 }
 
-private fun itemsOf(project: ProjectState, profile: DeployProfile): List<DeployItem> {
+private fun itemsOf(project: DeployHost, profile: DeployProfile): List<DeployItem> {
     if (profile.folders.isEmpty()) return listOf(DeployItem(project.root, ""))
     return profile.folders.map { DeployItem(entryOf(project, it.source), it.target) }
 }
 
 // The project itself for the empty path.
-private fun entryOf(project: ProjectState, source: String): FileEntry =
+private fun entryOf(project: DeployHost, source: String): FileEntry =
     if (source.isEmpty()) project.root else project.entryAt(source)
+
+/** What a finished deployment says: how many files and bytes went where. */
+fun deploySummary(result: DeployResult, destination: DeployDestination): String {
+    val noun = if (result.files == 1) "file" else "files"
+    return "Deployed ${result.files} $noun (${formatBytes(result.bytes)}) to $destination"
+}

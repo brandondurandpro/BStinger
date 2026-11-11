@@ -48,12 +48,12 @@ private val NAME_COLUMN_WIDTH = 300.dp
 @Composable
 internal fun DestinationPicker(deployments: DeploymentsState, draft: DeployDraft) {
     FieldHeading("Destination", "A folder of this machine, or a folder of a server reached over SSH.") {
-        DestinationBadge(DeployDestination.parse(draft.destination), AppTags.DEPLOYMENT_KIND)
+        DestinationBadge(DeployDestination.parse(draft.destination), DeployTags.DEPLOYMENT_KIND)
     }
     Segmented(
         listOf(
-            Segment("Local folder", AppTags.DEPLOYMENT_KIND_LOCAL, !draft.remote) { deployments.setRemote(false) },
-            Segment("SSH server", AppTags.DEPLOYMENT_KIND_SSH, draft.remote) { deployments.setRemote(true) },
+            Segment("Local folder", DeployTags.DEPLOYMENT_KIND_LOCAL, !draft.remote) { deployments.setRemote(false) },
+            Segment("SSH server", DeployTags.DEPLOYMENT_KIND_SSH, draft.remote) { deployments.setRemote(true) },
         ),
     )
     if (draft.remote) SshDestination(deployments, draft) else LocalDestination(deployments, draft)
@@ -64,7 +64,7 @@ private fun LocalDestination(deployments: DeploymentsState, draft: DeployDraft) 
     IdeTextField(
         draft.destination,
         { deployments.draft = draft.copy(destination = it, error = null) },
-        Modifier.fillMaxWidth().padding(top = 8.dp).testTag(AppTags.DEPLOYMENT_DESTINATION),
+        Modifier.fillMaxWidth().padding(top = 8.dp).testTag(DeployTags.DEPLOYMENT_DESTINATION),
         placeholder = "/var/www",
         monospace = true,
     )
@@ -80,14 +80,14 @@ private fun SshDestination(deployments: DeploymentsState, draft: DeployDraft) {
     IdeTextField(
         host,
         { deployments.setSshHost(it) },
-        Modifier.fillMaxWidth().padding(top = 8.dp).testTag(AppTags.DEPLOYMENT_SSH_HOST),
+        Modifier.fillMaxWidth().padding(top = 8.dp).testTag(DeployTags.DEPLOYMENT_SSH_HOST),
         placeholder = if (hosts.isEmpty()) "user@host" else "Or type another server, e.g. user@host",
     )
     if (host.isNotEmpty()) {
         IdeTextField(
             sshFolderOf(draft.destination),
             { deployments.setSshFolder(it) },
-            Modifier.fillMaxWidth().padding(top = 8.dp).testTag(AppTags.DEPLOYMENT_DESTINATION),
+            Modifier.fillMaxWidth().padding(top = 8.dp).testTag(DeployTags.DEPLOYMENT_DESTINATION),
             placeholder = "Folder on the server, e.g. /var/www (empty: its home folder)",
             monospace = true,
         )
@@ -110,7 +110,7 @@ private fun SshServerPicker(hosts: List<SshConfigHost>, selected: String, onPick
             "${current.alias}   ${current.summary}"
         }
     Box(Modifier.padding(top = 8.dp)) {
-        SelectBox(shown, current != null, Modifier.testTag(AppTags.DEPLOYMENT_SSH_PICKER)) {
+        SelectBox(shown, current != null, Modifier.testTag(DeployTags.DEPLOYMENT_SSH_PICKER)) {
             query = ""
             open = true
         }
@@ -139,7 +139,7 @@ private fun SshServerList(
             .fillMaxWidth()
             .padding(horizontal = 8.dp, vertical = 4.dp)
             .focusRequester(focus)
-            .testTag(AppTags.DEPLOYMENT_SSH_SEARCH),
+            .testTag(DeployTags.DEPLOYMENT_SSH_SEARCH),
         placeholder = "Search a server",
     )
     val matching = hosts.filter { it.searchText.contains(query.trim(), ignoreCase = true) }
@@ -149,7 +149,7 @@ private fun SshServerList(
             Label(
                 "No server matches",
                 color = IdeColors.TextSecondary,
-                modifier = Modifier.padding(8.dp).testTag(AppTags.DEPLOYMENT_SSH_NONE),
+                modifier = Modifier.padding(8.dp).testTag(DeployTags.DEPLOYMENT_SSH_NONE),
             )
         }
     }
@@ -163,7 +163,7 @@ private fun SshHostRow(host: SshConfigHost, onPick: (SshConfigHost) -> Unit) {
             .fillMaxWidth()
             .clickable { onPick(host) }
             .padding(horizontal = 8.dp, vertical = 6.dp)
-            .testTag(AppTags.deploymentSshHost(host.alias)),
+            .testTag(DeployTags.deploymentSshHost(host.alias)),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Label(host.alias, Modifier.width(NAME_COLUMN_WIDTH).padding(end = 12.dp))

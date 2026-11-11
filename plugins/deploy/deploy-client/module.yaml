@@ -1,0 +1,11 @@
+# The deployments of a project: the saved ones (which folders go where), their popup, and the automatic mode that
+# deploys the files as they change. State in src/state, UI in src/ui.
+product:
+  type: jvm/lib
+
+dependencies:
+  - //core: exported
+  - //ui/kit: exported
+
+settings:
+  compose: enabled

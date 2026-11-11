@@ -61,7 +61,7 @@ internal fun DeploymentList(deployments: DeploymentsState) {
                 color = IdeColors.TextSecondary,
                 fontSize = 13.sp,
                 maxLines = 2,
-                modifier = Modifier.padding(16.dp).testTag(AppTags.DEPLOYMENTS_EMPTY),
+                modifier = Modifier.padding(16.dp).testTag(DeployTags.DEPLOYMENTS_EMPTY),
             )
         }
         Column(Modifier.heightIn(max = LIST_MAX_HEIGHT).verticalScroll(rememberScrollState())) {
@@ -76,7 +76,7 @@ internal fun DeploymentList(deployments: DeploymentsState) {
             "${kindsSummary(profiles)} Hover a file name to see its full path.",
             color = IdeColors.TextSecondary,
             fontSize = 12.sp,
-            modifier = Modifier.padding(top = 12.dp).testTag(AppTags.DEPLOYMENTS_SUMMARY),
+            modifier = Modifier.padding(top = 12.dp).testTag(DeployTags.DEPLOYMENTS_SUMMARY),
         )
     }
 }
@@ -96,7 +96,10 @@ internal fun kindsSummary(profiles: List<DeployProfile>): String {
 private fun DeploymentRow(deployments: DeploymentsState, profile: DeployProfile) {
     val status = deployments.statuses[profile.name]
     Column(
-        Modifier.fillMaxWidth().testTag(AppTags.deployment(profile.name)).padding(horizontal = 12.dp, vertical = 10.dp),
+        Modifier
+            .fillMaxWidth()
+            .testTag(DeployTags.deployment(profile.name))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Label(profile.name, Modifier.weight(NAME_WEIGHT), fontWeight = FontWeight.SemiBold)
@@ -126,7 +129,7 @@ private fun TargetCell(profile: DeployProfile, modifier: Modifier) {
             DotBadge(
                 "SSH",
                 IdeColors.Accent,
-                Modifier.padding(end = 6.dp).testTag(AppTags.deploymentKind(profile.name)),
+                Modifier.padding(end = 6.dp).testTag(DeployTags.deploymentKind(profile.name)),
             )
         }
         MonoLabel(profile.destination)
@@ -144,12 +147,12 @@ private fun FilesCell(profile: DeployProfile, modifier: Modifier) {
         }
     HoverHint(paths, modifier) {
         Column(
-            Modifier.testTag(AppTags.deploymentFiles(profile.name)),
+            Modifier.testTag(DeployTags.deploymentFiles(profile.name)),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             folders.forEachIndexed { index, folder ->
                 val name = folder.source.substringAfterLast('/').ifEmpty { WHOLE_PROJECT }
-                MonoLabel(name, Modifier.testTag(AppTags.deploymentFile(profile.name, index)))
+                MonoLabel(name, Modifier.testTag(DeployTags.deploymentFile(profile.name, index)))
             }
         }
     }
@@ -161,7 +164,7 @@ private fun RowActions(deployments: DeploymentsState, profile: DeployProfile, ru
     DeployButton(
         if (running) "Deploying…" else "Deploy",
         { deployments.run(profile) },
-        Modifier.testTag(AppTags.deploymentRun(profile.name)),
+        Modifier.testTag(DeployTags.deploymentRun(profile.name)),
         enabled = !running,
     )
     var open by remember { mutableStateOf(false) }
@@ -169,19 +172,19 @@ private fun RowActions(deployments: DeploymentsState, profile: DeployProfile, ru
         DeployButton(
             "⋯",
             { open = true },
-            Modifier.testTag(AppTags.deploymentMenu(profile.name)),
+            Modifier.testTag(DeployTags.deploymentMenu(profile.name)),
             DeployButtonVariant.Ghost,
         )
         DropdownMenu(open, { open = false }) {
-            MenuItem("Edit", AppTags.deploymentEdit(profile.name)) {
+            MenuItem("Edit", DeployTags.deploymentEdit(profile.name)) {
                 open = false
                 deployments.edit(profile)
             }
-            MenuItem("Duplicate", AppTags.deploymentDuplicate(profile.name)) {
+            MenuItem("Duplicate", DeployTags.deploymentDuplicate(profile.name)) {
                 open = false
                 deployments.duplicate(profile)
             }
-            MenuItem("Delete", AppTags.deploymentDelete(profile.name), IdeColors.Error) {
+            MenuItem("Delete", DeployTags.deploymentDelete(profile.name), IdeColors.Error) {
                 open = false
                 deployments.delete(profile)
             }
@@ -215,6 +218,6 @@ private fun StatusLine(name: String, status: DeployStatus?) {
         color = color,
         fontSize = 12.sp,
         maxLines = 3,
-        modifier = Modifier.padding(top = 6.dp).testTag(AppTags.deploymentStatus(name)),
+        modifier = Modifier.padding(top = 6.dp).testTag(DeployTags.deploymentStatus(name)),
     )
 }

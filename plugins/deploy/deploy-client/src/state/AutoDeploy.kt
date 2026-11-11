@@ -27,7 +27,7 @@ private const val GIT = ".git"
  * The automatic deployments: the files of the project that change on disk (by the IDE or any other program), under
  * the folders of a deployment in automatic mode, are deployed alone, once the changes stop for a moment.
  */
-internal class AutoDeploy(private val deployments: DeploymentsState, private val project: ProjectState) {
+internal class AutoDeploy(private val deployments: DeploymentsState, private val project: DeployHost) {
     private val pending = HashMap<String, MutableSet<PendingFile>>()
     private val jobs = HashMap<String, Job>()
     private val inFlight = HashMap<String, Job?>()

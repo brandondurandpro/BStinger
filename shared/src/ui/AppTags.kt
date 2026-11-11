@@ -69,29 +69,29 @@ object AppTags {
     const val FILE_DIALOG_RESULT = "fileDialog.result"
     const val DEPLOY_REMEMBER = "fileDialog.deployRemember"
     const val DEPLOY_BUTTON = "toolbar.deploy"
-    const val DEPLOYMENTS = "deployments"
-    const val DEPLOYMENTS_NEW = "deployments.new"
-    const val DEPLOYMENTS_CLOSE = "deployments.close"
-    const val DEPLOYMENTS_ERROR = "deployments.error"
-    const val DEPLOYMENTS_EMPTY = "deployments.empty"
-    const val DEPLOYMENTS_SUMMARY = "deployments.summary"
-    const val DEPLOYMENT_NAME = "deployments.name"
-    const val DEPLOYMENT_KIND = "deployments.kind"
-    const val DEPLOYMENT_KIND_LOCAL = "deployments.kind.local"
-    const val DEPLOYMENT_KIND_SSH = "deployments.kind.ssh"
-    const val DEPLOYMENT_SSH_HOST = "deployments.sshHost"
-    const val DEPLOYMENT_SSH_PICKER = "deployments.sshPicker"
-    const val DEPLOYMENT_SSH_SEARCH = "deployments.sshSearch"
-    const val DEPLOYMENT_SSH_NONE = "deployments.sshNone"
-    const val DEPLOYMENT_ADD_FOLDER = "deployments.addFolder"
-    const val DEPLOYMENT_FOLDERS_HINT = "deployments.foldersHint"
-    const val DEPLOYMENT_DESTINATION = "deployments.destination"
-    const val DEPLOYMENT_ADD_SELECTED = "deployments.addSelected"
-    const val DEPLOYMENT_MODE = "deployments.mode"
-    const val DEPLOYMENT_MODE_MANUAL = "deployments.mode.manual"
-    const val DEPLOYMENT_SAVE = "deployments.save"
-    const val DEPLOYMENT_CANCEL = "deployments.cancel"
-    const val DEPLOYMENT_DRAFT_ERROR = "deployments.draftError"
+    const val DEPLOYMENTS = DeployTags.DEPLOYMENTS
+    const val DEPLOYMENTS_NEW = DeployTags.DEPLOYMENTS_NEW
+    const val DEPLOYMENTS_CLOSE = DeployTags.DEPLOYMENTS_CLOSE
+    const val DEPLOYMENTS_ERROR = DeployTags.DEPLOYMENTS_ERROR
+    const val DEPLOYMENTS_EMPTY = DeployTags.DEPLOYMENTS_EMPTY
+    const val DEPLOYMENTS_SUMMARY = DeployTags.DEPLOYMENTS_SUMMARY
+    const val DEPLOYMENT_NAME = DeployTags.DEPLOYMENT_NAME
+    const val DEPLOYMENT_KIND = DeployTags.DEPLOYMENT_KIND
+    const val DEPLOYMENT_KIND_LOCAL = DeployTags.DEPLOYMENT_KIND_LOCAL
+    const val DEPLOYMENT_KIND_SSH = DeployTags.DEPLOYMENT_KIND_SSH
+    const val DEPLOYMENT_SSH_HOST = DeployTags.DEPLOYMENT_SSH_HOST
+    const val DEPLOYMENT_SSH_PICKER = DeployTags.DEPLOYMENT_SSH_PICKER
+    const val DEPLOYMENT_SSH_SEARCH = DeployTags.DEPLOYMENT_SSH_SEARCH
+    const val DEPLOYMENT_SSH_NONE = DeployTags.DEPLOYMENT_SSH_NONE
+    const val DEPLOYMENT_ADD_FOLDER = DeployTags.DEPLOYMENT_ADD_FOLDER
+    const val DEPLOYMENT_FOLDERS_HINT = DeployTags.DEPLOYMENT_FOLDERS_HINT
+    const val DEPLOYMENT_DESTINATION = DeployTags.DEPLOYMENT_DESTINATION
+    const val DEPLOYMENT_ADD_SELECTED = DeployTags.DEPLOYMENT_ADD_SELECTED
+    const val DEPLOYMENT_MODE = DeployTags.DEPLOYMENT_MODE
+    const val DEPLOYMENT_MODE_MANUAL = DeployTags.DEPLOYMENT_MODE_MANUAL
+    const val DEPLOYMENT_SAVE = DeployTags.DEPLOYMENT_SAVE
+    const val DEPLOYMENT_CANCEL = DeployTags.DEPLOYMENT_CANCEL
+    const val DEPLOYMENT_DRAFT_ERROR = DeployTags.DEPLOYMENT_DRAFT_ERROR
 
     const val UNSAVED_DIALOG = "unsaved"
     const val UNSAVED_SAVING = "unsaved.saving"
@@ -161,35 +161,35 @@ object AppTags {
     /** The button that switches to a language server, by its id. */
     fun settingsServerUse(id: String) = "settings.server.use:$id"
 
-    fun deployment(name: String) = "deployment:$name"
+    fun deployment(name: String) = DeployTags.deployment(name)
 
-    fun deploymentRun(name: String) = "deployment.run:$name"
+    fun deploymentRun(name: String) = DeployTags.deploymentRun(name)
 
-    fun deploymentEdit(name: String) = "deployment.edit:$name"
+    fun deploymentEdit(name: String) = DeployTags.deploymentEdit(name)
 
-    fun deploymentDelete(name: String) = "deployment.delete:$name"
+    fun deploymentDelete(name: String) = DeployTags.deploymentDelete(name)
 
-    fun deploymentStatus(name: String) = "deployment.status:$name"
+    fun deploymentStatus(name: String) = DeployTags.deploymentStatus(name)
 
-    fun deploymentDuplicate(name: String) = "deployment.duplicate:$name"
+    fun deploymentDuplicate(name: String) = DeployTags.deploymentDuplicate(name)
 
-    fun deploymentMenu(name: String) = "deployment.menu:$name"
+    fun deploymentMenu(name: String) = DeployTags.deploymentMenu(name)
 
-    fun deploymentFiles(name: String) = "deployment.files:$name"
+    fun deploymentFiles(name: String) = DeployTags.deploymentFiles(name)
 
-    fun deploymentFile(name: String, index: Int) = "deployment.file:$name:$index"
+    fun deploymentFile(name: String, index: Int) = DeployTags.deploymentFile(name, index)
 
-    fun deploymentKind(name: String) = "deployment.kind:$name"
+    fun deploymentKind(name: String) = DeployTags.deploymentKind(name)
 
-    fun deploymentSshHost(alias: String) = "deployments.sshHost:$alias"
+    fun deploymentSshHost(alias: String) = DeployTags.deploymentSshHost(alias)
 
-    fun deploymentSource(index: Int) = "deployments.source:$index"
+    fun deploymentSource(index: Int) = DeployTags.deploymentSource(index)
 
-    fun deploymentLanding(index: Int) = "deployments.landing:$index"
+    fun deploymentLanding(index: Int) = DeployTags.deploymentLanding(index)
 
-    fun deploymentRemoveFolder(index: Int) = "deployments.removeFolder:$index"
+    fun deploymentRemoveFolder(index: Int) = DeployTags.deploymentRemoveFolder(index)
 
-    fun deploymentTarget(index: Int) = "deployments.target:$index"
+    fun deploymentTarget(index: Int) = DeployTags.deploymentTarget(index)
 
-    fun deploymentTargetReset(index: Int) = "deployments.targetReset:$index"
+    fun deploymentTargetReset(index: Int) = DeployTags.deploymentTargetReset(index)
 }

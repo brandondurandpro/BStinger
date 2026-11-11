@@ -52,14 +52,6 @@ class NetworkView(val inspector: NetworkInspector?) {
     }
 }
 
-/** `1.5 KB`-style size. */
-fun formatBytes(bytes: Long): String =
-    when {
-        bytes < KILO -> "$bytes B"
-        bytes < KILO * KILO -> String.format(Locale.ROOT, "%.1f KB", bytes / KILO)
-        else -> String.format(Locale.ROOT, "%.1f MB", bytes / KILO / KILO)
-    }
-
 /** Sizes, latency and what was not kept of a frame, for its details. */
 fun NetworkRecord.summary(): String {
     val ratio =

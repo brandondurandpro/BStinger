@@ -9,7 +9,6 @@ import org.example.kotlineditor.model.DeployDestination
 import org.example.kotlineditor.model.DeployFolder
 import org.example.kotlineditor.model.DeployItem
 import org.example.kotlineditor.model.DeployProfile
-import org.example.kotlineditor.model.DeployResult
 import org.example.kotlineditor.model.DiffKind
 import org.example.kotlineditor.model.DiffLine
 import org.example.kotlineditor.model.FileContent
@@ -18,7 +17,6 @@ import org.example.kotlineditor.model.FileOperation
 import org.example.kotlineditor.model.FileVersion
 import org.example.kotlineditor.model.OperatedFile
 import org.example.kotlineditor.model.OutcomeUnknownException
-import org.example.kotlineditor.model.pathName
 import org.example.kotlineditor.model.relativeToRoot
 import org.example.kotlineditor.syntax.Structure
 import org.example.kotlineditor.telemetry.ClientTelemetry
@@ -29,14 +27,6 @@ import java.nio.file.FileAlreadyExistsException
 import java.nio.file.NoSuchFileException
 
 internal const val MAX_BACK_STEPS = 100
-
-/** Entry of the file at [relativePath] (Git paths are relative to the project root, with `/` separators). */
-fun ProjectState.entryAt(relativePath: String): FileEntry =
-    FileEntry(
-        path = root.path.trimEnd('/', '\\') + "/" + relativePath,
-        name = pathName(relativePath),
-        isDirectory = false,
-    )
 
 /**
  * Opens the file of the diff [tab] (its Open File button, F4), at the first line the diff changed. The line numbers
@@ -198,11 +188,6 @@ fun ProjectState.rememberDeployment(dialog: FileDialog.Deploy) {
     val sources = relatives.filter { it.isNotEmpty() }
     val name = if (sources.size < relatives.size) name else sources.joinToString(", ")
     deployments.remember(DeployProfile(name, sources.map { DeployFolder(it, it) }, destination))
-}
-
-internal fun deploySummary(result: DeployResult, destination: DeployDestination): String {
-    val noun = if (result.files == 1) "file" else "files"
-    return "Deployed ${result.files} $noun (${formatBytes(result.bytes)}) to $destination"
 }
 
 // A server that restarted before answering a change may or may not have made it; it is not asked again (it could
