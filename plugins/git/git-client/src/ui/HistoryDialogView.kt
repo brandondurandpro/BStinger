@@ -27,15 +27,29 @@ import org.example.kotlineditor.state.HistoryDialog
 
 private const val DIALOG_WIDTH = 420
 
+// What the user typed, and whether the action is running or failed: the dialog stays open on a failure.
+private class DialogProgress(dialog: HistoryDialog) {
+    var text by mutableStateOf(dialog.input.orEmpty())
+    var running by mutableStateOf(false)
+    var failure by mutableStateOf<String?>(null)
+
+    fun submit(project: GitHost, dialog: HistoryDialog, onClose: () -> Unit) {
+        running = true
+        failure = null
+        dialog.submit(text.trim()) { worked ->
+            running = false
+            if (worked) onClose() else failure = project.git.message ?: "Git command failed"
+        }
+    }
+}
+
 /**
  * The dialog of a context menu of the Branches window: an optional name to type, a confirmation. Enter confirms and
  * Escape (or the backdrop) cancels; a failure stays here with Git's reason, so that the user can fix the name.
  */
 @Composable
 internal fun HistoryDialogView(project: GitHost, dialog: HistoryDialog, onClose: () -> Unit) {
-    var text by remember(dialog) { mutableStateOf(dialog.input.orEmpty()) }
-    var running by remember(dialog) { mutableStateOf(false) }
-    var failure by remember(dialog) { mutableStateOf<String?>(null) }
+    val progress = remember(dialog) { DialogProgress(dialog) }
     val focus = remember { FocusRequester() }
     // The name is selected when the dialog opens, so that typing replaces it (a rename) or fills it (a new name).
     var selectRequest by remember(dialog) { mutableIntStateOf(0) }
@@ -43,71 +57,72 @@ internal fun HistoryDialogView(project: GitHost, dialog: HistoryDialog, onClose:
         runCatching { focus.requestFocus() }
         selectRequest++
     }
-    val needsName = dialog.input != null
-    val ready = !running && !project.git.busy && (!needsName || text.isNotBlank())
-    val confirm = {
-        if (ready) {
-            running = true
-            failure = null
-            dialog.submit(text.trim()) { worked ->
-                running = false
-                if (worked) onClose() else failure = project.git.message ?: "Git command failed"
-            }
+    val nameMissing = dialog.input != null && progress.text.isBlank()
+    val ready = !progress.running && !project.git.busy && !nameMissing
+    val confirm = { if (ready) progress.submit(project, dialog, onClose) }
+    val cancel = { if (!progress.running) onClose() }
+    PopupFrame(GitTags.HISTORY_DIALOG, onClose = cancel, width = DIALOG_WIDTH) {
+        Column(Modifier.padding(4.dp).popupKeys(onEnter = confirm, onClose = cancel)) {
+            DialogTexts(dialog, progress, focus, selectRequest, confirm)
+            DialogButtons(dialog, progress.running, ready, confirm, cancel)
         }
     }
-    PopupFrame(GitTags.HISTORY_DIALOG, onClose = { if (!running) onClose() }, width = DIALOG_WIDTH) {
-        Column(
+}
+
+@Composable
+private fun DialogTexts(
+    dialog: HistoryDialog,
+    progress: DialogProgress,
+    focus: FocusRequester,
+    selectRequest: Int,
+    confirm: () -> Unit,
+) {
+    // Without a field, the title takes the focus, so that Enter and Escape reach the dialog.
+    val titleModifier = if (dialog.input == null) Modifier.focusRequester(focus).focusable() else Modifier
+    Label(dialog.title, titleModifier, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+    dialog.message?.let { Label(it, Modifier.padding(top = 4.dp), color = IdeColors.TextSecondary, fontSize = 11.sp) }
+    if (dialog.input != null) {
+        IdeTextField(
+            progress.text,
+            { progress.text = it },
             Modifier
-                .padding(4.dp)
-                .popupKeys(onEnter = confirm, onClose = { if (!running) onClose() }),
-        ) {
-            val titleModifier = if (needsName) Modifier else Modifier.focusRequester(focus).focusable()
-            Label(dialog.title, titleModifier, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-            dialog.message?.let {
-                Label(it, Modifier.padding(top = 4.dp), color = IdeColors.TextSecondary, fontSize = 11.sp)
-            }
-            if (needsName) {
-                IdeTextField(
-                    text,
-                    { text = it },
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp)
-                        .focusRequester(focus)
-                        .testTag(GitTags.HISTORY_DIALOG_INPUT),
-                    placeholder = "Name",
-                    onSubmit = confirm,
-                    selectAllRequest = selectRequest,
-                )
-            }
-            failure?.let {
-                Label(
-                    it,
-                    Modifier.padding(top = 6.dp).testTag(GitTags.HISTORY_DIALOG_ERROR),
-                    color = IdeColors.Error,
-                    fontSize = 11.sp,
-                )
-            }
-            Row(
-                Modifier.fillMaxWidth().padding(top = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Spacer(Modifier.weight(1f))
-                IdeButton(
-                    "Cancel",
-                    { if (!running) onClose() },
-                    Modifier.testTag(GitTags.HISTORY_DIALOG_CANCEL),
-                    enabled = !running,
-                )
-                IdeButton(
-                    dialog.confirmLabel,
-                    { confirm() },
-                    Modifier.testTag(GitTags.HISTORY_DIALOG_CONFIRM),
-                    variant = if (dialog.danger) ButtonVariant.Destructive else ButtonVariant.Default,
-                    enabled = ready,
-                )
-            }
-        }
+                .fillMaxWidth()
+                .padding(top = 8.dp)
+                .focusRequester(focus)
+                .testTag(GitTags.HISTORY_DIALOG_INPUT),
+            placeholder = "Name",
+            onSubmit = confirm,
+            selectAllRequest = selectRequest,
+        )
+    }
+    progress.failure?.let {
+        val modifier = Modifier.padding(top = 6.dp).testTag(GitTags.HISTORY_DIALOG_ERROR)
+        Label(it, modifier, color = IdeColors.Error, fontSize = 11.sp)
+    }
+}
+
+@Composable
+private fun DialogButtons(
+    dialog: HistoryDialog,
+    running: Boolean,
+    ready: Boolean,
+    confirm: () -> Unit,
+    cancel: () -> Unit,
+) {
+    val variant = if (dialog.danger) ButtonVariant.Destructive else ButtonVariant.Default
+    Row(
+        Modifier.fillMaxWidth().padding(top = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Spacer(Modifier.weight(1f))
+        IdeButton("Cancel", cancel, Modifier.testTag(GitTags.HISTORY_DIALOG_CANCEL), enabled = !running)
+        IdeButton(
+            dialog.confirmLabel,
+            confirm,
+            Modifier.testTag(GitTags.HISTORY_DIALOG_CONFIRM),
+            variant = variant,
+            enabled = ready,
+        )
     }
 }

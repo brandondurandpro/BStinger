@@ -177,7 +177,10 @@ class HistoryActionsE2eTest {
             awaitCondition { "side" in app.project.git.branches }
 
             branchMenu("side", "merge").performClick()
-            awaitCondition { app.project.git.message?.contains("conflicts") == true }
+            awaitCondition {
+                app.project.git.message
+                    ?.contains("conflicts") == true
+            }
             assertFalse(app.project.git.messageIsError)
             assertTrue(project.git("diff", "--name-only", "--diff-filter=U").contains("c.txt"))
         }
@@ -291,6 +294,10 @@ class HistoryActionsE2eTest {
             confirmDialog()
             awaitCondition { head() == first }
             assertFalse(project.root.resolve("two.txt").exists())
-            awaitCondition { app.project.git.history.commits.firstOrNull()?.hash == first }
+            awaitCondition {
+                app.project.git.history.commits
+                    .firstOrNull()
+                    ?.hash == first
+            }
         }
 }

@@ -395,12 +395,14 @@ class RemoteGit(private val client: RpcClient) :
         }
     }
 
-    override suspend fun checkoutRemote(root: String, remoteBranch: String): String =
-        client
-            .call(Method.GitCheckoutRemote) {
+    override suspend fun checkoutRemote(root: String, remoteBranch: String): String {
+        val output =
+            client.call(Method.GitCheckoutRemote) {
                 put(ROOT, root)
                 put(BRANCH, remoteBranch)
-            }.string()
+            }
+        return output.string()
+    }
 
     override suspend fun checkoutCommit(root: String, hash: String) {
         client.call(Method.GitCheckoutCommit) {
@@ -417,41 +419,51 @@ class RemoteGit(private val client: RpcClient) :
         }
     }
 
-    override suspend fun merge(root: String, branch: String): String =
-        client
-            .call(Method.GitMerge) {
+    override suspend fun merge(root: String, branch: String): String {
+        val output =
+            client.call(Method.GitMerge) {
                 put(ROOT, root)
                 put(BRANCH, branch)
-            }.string()
+            }
+        return output.string()
+    }
 
-    override suspend fun rebase(root: String, onto: String): String =
-        client
-            .call(Method.GitRebase) {
+    override suspend fun rebase(root: String, onto: String): String {
+        val output =
+            client.call(Method.GitRebase) {
                 put(ROOT, root)
                 put(BRANCH, onto)
-            }.string()
+            }
+        return output.string()
+    }
 
-    override suspend fun cherryPick(root: String, hash: String): String =
-        client
-            .call(Method.GitCherryPick) {
+    override suspend fun cherryPick(root: String, hash: String): String {
+        val output =
+            client.call(Method.GitCherryPick) {
                 put(ROOT, root)
                 put("hash", hash)
-            }.string()
+            }
+        return output.string()
+    }
 
-    override suspend fun revertCommit(root: String, hash: String): String =
-        client
-            .call(Method.GitRevertCommit) {
+    override suspend fun revertCommit(root: String, hash: String): String {
+        val output =
+            client.call(Method.GitRevertCommit) {
                 put(ROOT, root)
                 put("hash", hash)
-            }.string()
+            }
+        return output.string()
+    }
 
-    override suspend fun reset(root: String, hash: String, mode: GitResetMode): String =
-        client
-            .call(Method.GitReset) {
+    override suspend fun reset(root: String, hash: String, mode: GitResetMode): String {
+        val output =
+            client.call(Method.GitReset) {
                 put(ROOT, root)
                 put("hash", hash)
                 put("mode", mode.name)
-            }.string()
+            }
+        return output.string()
+    }
 
     override suspend fun headLines(root: String, path: String): List<String>? {
         val answer = client.call(Method.GitHeadLines) { file(root, path) }

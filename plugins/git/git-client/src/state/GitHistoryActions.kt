@@ -2,19 +2,6 @@ package org.example.kotlineditor.state
 
 import org.example.kotlineditor.model.GitResetMode
 
-/**
- * A dialog opened by a context menu of the Branches window. With an [input] (the initial text) the user types a name;
- * [submit] gets it and tells through its callback whether the action worked, so that a failure stays in the dialog.
- */
-class HistoryDialog(
-    val title: String,
-    val message: String?,
-    val input: String?,
-    val confirmLabel: String,
-    val danger: Boolean = false,
-    val submit: (text: String, onDone: (Boolean) -> Unit) -> Unit,
-)
-
 /** Creates [name] at [startPoint] (a branch or a commit hash) and checks it out. */
 fun GitState.createBranchAt(startPoint: String, name: String, onDone: (Boolean) -> Unit) =
     operate(reloadFiles = true, onDone) { git, root ->

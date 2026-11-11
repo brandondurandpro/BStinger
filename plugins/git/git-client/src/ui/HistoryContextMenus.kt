@@ -17,18 +17,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.example.kotlineditor.model.GitBranchInfo
 import org.example.kotlineditor.model.GitCommit
-import org.example.kotlineditor.state.BranchSync
 import org.example.kotlineditor.model.GitResetMode
+import org.example.kotlineditor.state.BranchSync
 import org.example.kotlineditor.state.GitHost
-import org.example.kotlineditor.state.HistoryDialog
-import org.example.kotlineditor.state.cherryPickCommit
 import org.example.kotlineditor.state.checkoutCommit
 import org.example.kotlineditor.state.checkoutRemoteBranch
-import org.example.kotlineditor.state.createBranchAt
-import org.example.kotlineditor.state.createTag
+import org.example.kotlineditor.state.cherryPickCommit
 import org.example.kotlineditor.state.mergeBranch
-import org.example.kotlineditor.state.rebaseOnto
-import org.example.kotlineditor.state.renameBranch
 import org.example.kotlineditor.state.resetTo
 import org.example.kotlineditor.state.revertCommit
 
@@ -135,11 +130,19 @@ internal fun CommitContextMenu(project: GitHost, commit: GitCommit, onClose: () 
     ) {
         MenuEntry("Copy commit hash", "copyHash") { run { TextClipboard.set(commit.hash) } }
         MenuEntry("Show changes", "showChanges") { run { git.history.selectCommit(commit) } }
-        MenuEntry("Checkout (detached HEAD)", "checkoutCommit", enabled = idle) { run { git.checkoutCommit(commit.hash) } }
+        MenuEntry(
+            "Checkout (detached HEAD)",
+            "checkoutCommit",
+            enabled = idle,
+        ) { run { git.checkoutCommit(commit.hash) } }
         MenuEntry("New branch from here…", "newBranch", enabled = idle) {
             run { git.history.dialog = newBranchDialog(project, commit.hash) }
         }
-        MenuEntry("New tag here…", "newTag", enabled = idle) { run { git.history.dialog = newTagDialog(project, commit) } }
+        MenuEntry(
+            "New tag here…",
+            "newTag",
+            enabled = idle,
+        ) { run { git.history.dialog = newTagDialog(project, commit) } }
         // A merge commit needs the parent to follow, which this menu cannot ask for.
         MenuEntry("Cherry-pick", "cherryPick", enabled = idle && !isMerge) { run { git.cherryPickCommit(commit.hash) } }
         MenuEntry("Revert", "revert", enabled = idle && !isMerge) { run { git.revertCommit(commit.hash) } }
@@ -160,37 +163,6 @@ private fun ResetItems(project: GitHost, commit: GitCommit, run: (() -> Unit) ->
         run { project.git.history.dialog = hardResetDialog(project, commit) }
     }
 }
-
-private fun newBranchDialog(project: GitHost, startPoint: String) =
-    HistoryDialog("New branch", "Created at ${startPoint.take(SHORT)} and checked out.", "", "Create") { name, done ->
-        project.git.createBranchAt(startPoint, name, done)
-    }
-
-private fun renameDialog(project: GitHost, name: String) =
-    HistoryDialog("Rename branch", null, name, "Rename") { newName, done ->
-        project.git.renameBranch(name, newName, done)
-    }
-
-private fun newTagDialog(project: GitHost, commit: GitCommit) =
-    HistoryDialog("New tag", "On ${commit.shortHash}: ${commit.subject}", "", "Create") { name, done ->
-        project.git.createTag(name, commit.hash, done)
-    }
-
-private fun rebaseDialog(project: GitHost, onto: String) =
-    HistoryDialog("Rebase onto $onto", "Rewrites the commits of the current branch.", null, "Rebase") { _, done ->
-        project.git.rebaseOnto(onto, done)
-    }
-
-private fun hardResetDialog(project: GitHost, commit: GitCommit) =
-    HistoryDialog(
-        "Hard reset to ${commit.shortHash}",
-        "Moves the current branch there and discards every uncommitted change.",
-        null,
-        "Reset",
-        danger = true,
-    ) { _, done -> project.git.resetTo(commit.hash, GitResetMode.Hard, done) }
-
-private const val SHORT = 8
 
 @Composable
 private fun MenuEntry(

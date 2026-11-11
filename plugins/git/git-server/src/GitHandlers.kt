@@ -41,7 +41,9 @@ class GitServerContribution : ServerContribution {
 
 private fun Request.root() = params.string(ROOT)
 
-internal fun gitHandlers(git: GitClient): Map<MethodSpec, Handler> =
+internal fun gitHandlers(git: GitClient): Map<MethodSpec, Handler> = readHandlers(git) + historyHandlers(git)
+
+private fun readHandlers(git: GitClient): Map<MethodSpec, Handler> =
     mapOf(
         Method.GitStatus to { git.status(root()).toJson() },
         Method.GitBranch to { JsonPrimitive(git.branch(root())) },
@@ -88,12 +90,21 @@ internal fun gitHandlers(git: GitClient): Map<MethodSpec, Handler> =
         Method.GitFetch to { nothing { git.fetch(root()) } },
         Method.GitPushBranch to { JsonPrimitive(git.pushBranch(root(), params.string(BRANCH))) },
         Method.GitPullBranch to { JsonPrimitive(git.pullBranch(root(), params.string(BRANCH))) },
+        Method.GitWorktree to { JsonPrimitive(git.worktree(root(), params.string("branch"))) },
+        Method.GitRemoveWorktree to { nothing { git.removeWorktree(root(), params.string(PATH)) } },
+    )
+
+// The operations of the menus of the Branches window.
+private fun historyHandlers(git: GitClient): Map<MethodSpec, Handler> =
+    mapOf(
         Method.GitCreateBranch to {
             nothing {
                 git.createBranch(root(), params.string(BRANCH), params.string("startPoint"), params.bool("switch"))
             }
         },
-        Method.GitRenameBranch to { nothing { git.renameBranch(root(), params.string(BRANCH), params.string("newName")) } },
+        Method.GitRenameBranch to {
+            nothing { git.renameBranch(root(), params.string(BRANCH), params.string("newName")) }
+        },
         Method.GitCheckoutRemote to { JsonPrimitive(git.checkoutRemote(root(), params.string(BRANCH))) },
         Method.GitCheckoutCommit to { nothing { git.checkoutCommit(root(), params.string(HASH)) } },
         Method.GitCreateTag to { nothing { git.createTag(root(), params.string("name"), params.string(HASH)) } },
@@ -105,6 +116,4 @@ internal fun gitHandlers(git: GitClient): Map<MethodSpec, Handler> =
             val mode = GitResetMode.valueOf(params.string("mode"))
             JsonPrimitive(git.reset(root(), params.string(HASH), mode))
         },
-        Method.GitWorktree to { JsonPrimitive(git.worktree(root(), params.string("branch"))) },
-        Method.GitRemoveWorktree to { nothing { git.removeWorktree(root(), params.string(PATH)) } },
     )
