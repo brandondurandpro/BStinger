@@ -169,7 +169,7 @@ private sealed interface StripItem {
     fun close()
 
     class Chat(val agent: AgentState, val conversation: Conversation) : StripItem {
-        override fun close() = agent.tabs.close(conversation)
+        override fun close() = agent.closeTab(conversation)
 
         override val key = "chat:${conversation.id}"
 
@@ -256,7 +256,7 @@ private fun AgentTabView(
                 conversation.showsChat = true
                 agent.open(conversation)
             }
-            onTabPress(event, select, { agent.tabs.close(conversation) }, onContextMenu)
+            onTabPress(event, select, { agent.closeTab(conversation) }, onContextMenu)
         }
     // The menu is a sibling of the tab, anchored on the whole tab rather than at the end of its content.
     Box(Modifier.fillMaxHeight()) {
@@ -281,7 +281,7 @@ private fun AgentTabView(
             Box(Modifier.size(22.dp), contentAlignment = Alignment.Center) {
                 if (hovered || active) {
                     IconButton(
-                        { agent.tabs.close(conversation) },
+                        { agent.closeTab(conversation) },
                         Modifier.testTag(AgentTags.agentTabClose(conversation.id)),
                     ) { CloseIcon() }
                 }

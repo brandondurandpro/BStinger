@@ -99,7 +99,7 @@ class AgentModelE2eTest {
             val app = launchWithProject(project, preferences("--no-config"))
             val conversation = startConversation(app)
             sendPrompt("echo no models")
-            awaitShown(conversation, "no models")
+            awaitAnswer(conversation, "no models")
             awaitIdle(conversation)
             assertFalse(isShown(AgentTags.AGENT_MODEL))
         }

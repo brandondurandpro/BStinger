@@ -29,6 +29,22 @@ internal fun AgentState.followHistory(project: AgentHost, agent: () -> AgentComm
     }
 }
 
+/**
+ * A session shows once. The agent may list the session of a conversation the IDE just started, or of a copy it just
+ * made, before the IDE knows its id: that entry of the history goes once the conversation has the id.
+ */
+internal fun AgentState.dropHistoryTwins(project: AgentHost) {
+    project.scope.launch {
+        snapshotFlow { conversations.map { it.session } }.collect {
+            val opened = conversations.filter { !it.isHistoryEntry }.mapNotNull { it.session }.toSet()
+            conversations.removeAll { it.isHistoryEntry && it.session in opened }
+        }
+    }
+}
+
+// A session of the history nobody opened yet: [restore] has not run.
+private val Conversation.isHistoryEntry: Boolean get() = sessionDirectory != null
+
 // The agent of the settings first, then those of the registry the user chose.
 private fun AgentState.historyAgents(settings: AgentCommand): List<AgentCommand> {
     val chosen = usedAgentIds().map { AgentCommand(emptyList(), registry = it) }
@@ -69,9 +85,13 @@ internal fun AgentHost.restore(conversation: Conversation, agent: AgentCommand) 
     val directory = conversation.sessionDirectory
     if (session == null || directory == null) return
     conversation.sessionDirectory = null
-    followTranscript(conversation)
     scope.launch {
         try {
+            // A conversation released when its tab closed: the server forgets it first, or its items would show twice.
+            conversation.releasing?.join()
+            if (!conversation.closedOnServer) services.agents.close(conversation.key)
+            conversation.closedOnServer = true
+            followTranscript(conversation)
             services.agents.open(conversation.key, agent, directory, session)
         } catch (failure: IOException) {
             conversation.note("The conversation could not be opened: ${failure.message}")

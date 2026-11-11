@@ -30,6 +30,8 @@ class HistoryActionsE2eTest {
     private val project = SampleProject.standard()
     private val extras = ArrayList<Path>()
 
+    private var launched: E2eApp? = null
+
     @AfterTest
     fun cleanup() {
         project.delete()
@@ -49,18 +51,26 @@ class HistoryActionsE2eTest {
 
     private fun rightClick(node: SemanticsNodeInteraction) = node.performMouseInput { rightClick() }
 
+    // The items of the menus are disabled while a Git action runs: a menu opened before its end would click nothing.
+    private fun ComposeUiTest.awaitGitIdle() {
+        val app = launched ?: return
+        awaitCondition { !app.project.git.busy }
+    }
+
     private fun ComposeUiTest.openBranches() {
         onNodeWithTag(AppTags.TOOL_BRANCHES).performClick()
         awaitTag(GitTags.BRANCHES_PANEL)
     }
 
     private fun ComposeUiTest.branchMenu(name: String, action: String): SemanticsNodeInteraction {
+        awaitGitIdle()
         rightClick(awaitTag(GitTags.historyBranch(name)))
         awaitTag(GitTags.BRANCH_CONTEXT_MENU)
         return awaitTag(GitTags.historyMenuItem(action))
     }
 
     private fun ComposeUiTest.commitMenu(hash: String, action: String): SemanticsNodeInteraction {
+        awaitGitIdle()
         rightClick(awaitTag(GitTags.historyCommit(hash)))
         awaitTag(GitTags.COMMIT_CONTEXT_MENU)
         return awaitTag(GitTags.historyMenuItem(action))
@@ -71,6 +81,7 @@ class HistoryActionsE2eTest {
     private fun ComposeUiTest.launchOnHistory(): E2eApp {
         val default = currentBranch()
         val app = launchWithProject(project)
+        launched = app
         awaitCondition { app.project.git.currentBranch == default }
         openBranches()
         awaitTag(GitTags.historyCommit(head()))
@@ -207,7 +218,8 @@ class HistoryActionsE2eTest {
 
             branchMenu(default, "rebase").performClick()
             confirmDialog()
-            awaitCondition { head() != before }
+            // HEAD moves first to the default branch, then to the replayed commit: only the end of the action counts.
+            awaitCondition { !app.project.git.busy && head() != before }
             assertTrue(project.root.resolve("main.txt").exists() && project.root.resolve("side.txt").exists())
             // Rebased onto the default branch: it is now the parent of the branch's commit.
             assertEquals(project.git("rev-parse", default).trim(), project.git("rev-parse", "HEAD~1").trim())
@@ -255,12 +267,16 @@ class HistoryActionsE2eTest {
             onNodeWithTag(GitTags.historyBranch("side")).performClick()
             commitMenu(picked, "cherryPick").performClick()
             awaitCondition { project.root.resolve("side.txt").exists() }
+            // The file is there before its commit: HEAD is the picked commit only once the action is over.
+            awaitGitIdle()
             awaitTag(GitTags.historyBranch(default)).performClick()
             val applied = head()
             assertTrue(applied != picked)
             awaitTag(GitTags.historyCommit(applied))
             commitMenu(applied, "revert").performClick()
             awaitCondition { !project.root.resolve("side.txt").exists() }
+            // The file goes before the commit of the revert: Git run now would find it as a local change.
+            awaitGitIdle()
 
             project.git("merge", "-q", "--no-ff", "-m", "merge again", "side")
             val again = head()
@@ -280,6 +296,7 @@ class HistoryActionsE2eTest {
 
             commitMenu(first, "resetSoft").performClick()
             awaitCondition { head() == first }
+            awaitGitIdle()
             assertEquals("A  two.txt", project.git("status", "--porcelain").trim()) // soft: still staged
             project.git("reset", "-q", "--hard", second)
             onNodeWithTag(GitTags.HISTORY_REFRESH).performClick()

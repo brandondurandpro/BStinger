@@ -71,8 +71,10 @@ class DiskChangesPerformanceE2eTest {
             launchWithProject(project)
             onNodeWithTag(TreeTags.treeChevron("src")).performClick()
             awaitTag(TreeTags.treeRow("src/main"))
+            // Writing the outputs is the disk's time, not the IDE's (2 to 5 s on the Windows runner, 0.2 s on Linux):
+            // what is measured is the source showing while the tree still digests them.
+            repeat(FILES) { project.file("build/classes/c${it % 50}/C$it.class", "") }
             measure("$FILES build outputs, then a source shows", budgetMillis = 5_000) {
-                repeat(FILES) { project.file("build/classes/c${it % 50}/C$it.class", "") }
                 project.file("src/Witness.kt", "class Witness\n")
                 awaitTag(TreeTags.treeRow("src/Witness.kt"))
                 renderFrame()

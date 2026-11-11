@@ -25,7 +25,7 @@ class AgentStatsE2eTest {
             val app = launchWithProject(project, agentPreferences())
             val conversation = startConversation(app)
             sendPrompt("echo hello")
-            awaitShown(conversation, "hello")
+            awaitAnswer(conversation, "hello")
             awaitIdle(conversation)
             awaitCondition { conversation.usage != null && conversation.timedTurns >= 1 }
             awaitTag(AgentTags.AGENT_STATS).performClick()

@@ -33,15 +33,39 @@ private class Copy(private val source: Path, private val landing: Path) : Simple
     override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
         val destination = destinationOf(file)
         Files.createDirectories(destination.parent)
-        Files.copy(
-            file,
-            destination,
-            StandardCopyOption.REPLACE_EXISTING,
-            StandardCopyOption.COPY_ATTRIBUTES,
-            LinkOption.NOFOLLOW_LINKS,
-        )
+        // A directory where the file lands is replaced as before; a file is never left missing (see [replaceFile]).
+        if (Files.isDirectory(destination, LinkOption.NOFOLLOW_LINKS)) {
+            copy(file, destination)
+        } else {
+            replaceFile(file, destination)
+        }
         return FileVisitResult.CONTINUE
     }
 
     private fun destinationOf(path: Path): Path = landing.resolve(source.relativize(path).toString())
 }
+
+private fun copy(file: Path, destination: Path) {
+    Files.copy(
+        file,
+        destination,
+        StandardCopyOption.REPLACE_EXISTING,
+        StandardCopyOption.COPY_ATTRIBUTES,
+        LinkOption.NOFOLLOW_LINKS,
+    )
+}
+
+// Copies [file] beside [destination], then moves the copy into place. A copy over the file deletes it first on
+// Windows: a source deleted or held by another program meanwhile (a build, an editor) would leave the destination
+// without the file it had.
+private fun replaceFile(file: Path, destination: Path) {
+    val partial = Files.createTempFile(destination.parent, ".${destination.fileName}.", PARTIAL_SUFFIX)
+    try {
+        copy(file, partial)
+        Files.move(partial, destination, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+    } finally {
+        Files.deleteIfExists(partial)
+    }
+}
+
+private const val PARTIAL_SUFFIX = ".deploying"

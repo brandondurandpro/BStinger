@@ -29,6 +29,7 @@ private const val LINES = 20_000
 private const val GAP_BUDGET_MS = 1_000L
 private const val GAP_BUDGET_MB = 64L
 private const val RUN_BUDGET_MS = 30_000L
+private const val RUNS = 3
 
 /**
  * The cost of measuring: the same work through the UI (a 20,000-line file opened, Find in Files over 2,000 files, the
@@ -65,6 +66,15 @@ class TelemetryPerformanceE2eTest {
         renderFrame()
     }
 
+    // The cheapest of a few runs, time and memory apart. The memory is what every thread allocates, and the same work
+    // allocates 59 MB or about 140 MB from one run to the next, telemetry on or off (what runs in the background
+    // when the tab closes): one run of each made the gap 0 MB or 75 to 85 MB on the Windows runner.
+    private fun ComposeUiTest.cheapest(label: String): Cost {
+        val runs = (1..RUNS).map { costOf { work() } }
+        val cost = Cost(runs.minOf { it.nanos }, runs.minOf { it.bytes })
+        return report(label, cost, RUN_BUDGET_MS)
+    }
+
     @Test
     fun `measuring a large project's work costs little next to the work`() =
         runComposeUiTest {
@@ -72,13 +82,13 @@ class TelemetryPerformanceE2eTest {
             val app = launchWithProject(project, preferences = TelemetryCapture.refused(), telemetry = capture)
             // Warms the JIT and the server's caches, so that both runs below find them warm.
             work()
-            val off = measure("Large project, telemetry off", RUN_BUDGET_MS) { work() }
+            val off = cheapest("Large project, telemetry off")
             runOnUiThread {
                 app.state.settings.telemetry
                     .choose(true)
             }
             awaitCondition { app.server.telemetry.telemetry.isEnabled }
-            val on = measure("Large project, telemetry on", RUN_BUDGET_MS) { work() }
+            val on = cheapest("Large project, telemetry on")
             report("Telemetry gap (on - off)", on - off, GAP_BUDGET_MS, GAP_BUDGET_MB)
             awaitCondition { capture.clientSpansOf(Operation.SearchFindInFiles).isNotEmpty() }
             assertTrue(capture.clientSpansOf(Operation.EditorOpenFile).isNotEmpty())

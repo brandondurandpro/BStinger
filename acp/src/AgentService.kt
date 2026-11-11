@@ -146,6 +146,7 @@ class AgentService(
             session = header.session,
             title = header.title,
             replayed = header.replayed,
+            replayable = header.replayable,
             options = header.options,
             commands = header.commands,
             usage = header.usage,

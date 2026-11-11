@@ -180,6 +180,12 @@ class Conversation(val id: Int, title: String, val branch: String) {
     internal var sessionDirectory: String? = null
     internal var replayedEpoch = ""
 
+    // Whether the agent can replay all the items; what [forget] left to do: the server told, and its last line.
+    internal var replayable = false
+    internal var releasing: Job? = null
+    internal var closedOnServer = true
+    private var forgottenPreview: String? = null
+
     /** Direct by default; the agent moves to a worktree of [branch] on request, before the first prompt. */
     var mode by mutableStateOf(WorkMode.Direct)
         internal set
@@ -283,8 +289,25 @@ class Conversation(val id: Int, title: String, val branch: String) {
                 is AgentItem.Plan -> "Plan"
                 is AgentItem.Permission -> "Asks: ${last.title}"
                 is AgentItem.Notice -> last.text
-                null -> if (session != null) "From the history of the agent" else "No messages yet"
+                null -> forgottenPreview ?: if (session != null) "From the history of the agent" else "No messages yet"
             }.lineSequence().firstOrNull().orEmpty()
+
+    /**
+     * Forgets the items: the session of the agent, which works in [directory], replays them when the conversation
+     * opens again, as a conversation of the history. What is not an item stays (title, draft, cost, time worked).
+     */
+    internal fun forget(directory: String) {
+        forgottenPreview = preview
+        savedCost = costKnown
+        items.clear()
+        positions.clear()
+        hidden.clear()
+        epoch = ""
+        since = 0L
+        replayedEpoch = ""
+        sessionDirectory = directory
+        closedOnServer = false
+    }
 
     /**
      * Adds [item], or replaces the item with its id: a newer version of it, or the prompt the server echoed, which
@@ -430,6 +453,7 @@ class AgentState(
         followChanges()
         followQuota()
         followHistory(project, agentCommand)
+        dropHistoryTwins(project)
     }
 
     /** Opens [conversation] in a tab, or selects its tab, and prepares its worktree. */
@@ -452,11 +476,20 @@ class AgentState(
         val editor = conversation.workspace?.editor
         val tab = editor?.activeTab
         if (conversation.showsChat || tab == null) {
-            tabs.close(conversation)
+            closeTab(conversation)
         } else {
             editor.close(tab)
             if (editor.allTabs.isEmpty()) conversation.showsChat = true
         }
+    }
+
+    /**
+     * Closes the tab of [conversation], which stays in the list. What it held in memory, here and on the server, is
+     * released when its agent can replay it: it opens again as a conversation of the history does.
+     */
+    fun closeTab(conversation: Conversation) {
+        tabs.close(conversation)
+        release(conversation)
     }
 
     /** Starts a conversation on a branch of its own. */

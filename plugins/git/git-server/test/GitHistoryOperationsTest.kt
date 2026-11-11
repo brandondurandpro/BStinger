@@ -32,7 +32,9 @@ class GitHistoryOperationsTest {
     }
 
     private fun init() {
-        git("init", "-q", "-b", "main")
+        // Not `git init -b main`: Git 2.25 (Ubuntu 20.04) does not know it.
+        git("init", "-q")
+        git("symbolic-ref", "HEAD", "refs/heads/main")
         git("config", "user.name", "Test")
         git("config", "user.email", "test@example.com")
         git("config", "core.autocrlf", "false")

@@ -3,6 +3,7 @@ package org.example.kotlineditor.e2e
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performMouseInput
@@ -22,6 +23,8 @@ import kotlin.test.Test
 class HistoryActionsSideEffectsE2eTest {
     private val project = SampleProject.withUnusualFiles().apply { commitAll() }
 
+    private var launched: E2eApp? = null
+
     @AfterTest
     fun cleanup() {
         project.unlockUnusualFiles()
@@ -34,9 +37,16 @@ class HistoryActionsSideEffectsE2eTest {
 
     private fun rightClick(node: SemanticsNodeInteraction) = node.performMouseInput { rightClick() }
 
+    // The items of the menus are disabled while a Git action runs: a menu opened before its end would click nothing.
+    private fun ComposeUiTest.awaitGitIdle() {
+        val app = launched ?: return
+        awaitCondition { !app.project.git.busy }
+    }
+
     private fun ComposeUiTest.launchOnHistory(): E2eApp {
         val default = currentBranch()
         val app = launchWithProject(project)
+        launched = app
         awaitCondition { app.project.git.currentBranch == default }
         onNodeWithTag(AppTags.TOOL_BRANCHES).performClick()
         awaitTag(GitTags.BRANCHES_PANEL)
@@ -45,15 +55,22 @@ class HistoryActionsSideEffectsE2eTest {
     }
 
     private fun ComposeUiTest.commitMenu(hash: String, action: String): SemanticsNodeInteraction {
+        awaitGitIdle()
         rightClick(awaitTag(GitTags.historyCommit(hash)))
         awaitTag(GitTags.COMMIT_CONTEXT_MENU)
         return awaitTag(GitTags.historyMenuItem(action))
     }
 
     private fun ComposeUiTest.branchMenu(name: String, action: String): SemanticsNodeInteraction {
+        awaitGitIdle()
         rightClick(awaitTag(GitTags.historyBranch(name)))
         awaitTag(GitTags.BRANCH_CONTEXT_MENU)
         return awaitTag(GitTags.historyMenuItem(action))
+    }
+
+    private fun ComposeUiTest.awaitEnabled(tag: String): SemanticsNodeInteraction {
+        awaitCondition { runCatching { onNodeWithTag(tag).assertIsEnabled() }.isSuccess }
+        return onNodeWithTag(tag)
     }
 
     private fun ComposeUiTest.typeName(name: String) {
@@ -108,8 +125,11 @@ class HistoryActionsSideEffectsE2eTest {
 
             app.project.git.checkoutBranch(default)
             awaitCondition { app.project.git.currentBranch == default }
-            branchMenu("fresh", "delete").performClick()
-            awaitTag(GitTags.historyMenuItem("delete")).performClick()
+            // Delete stays disabled until the checkout is over and the branches are read again: a click before
+            // that does nothing, and the menu stays open on a branch that is never deleted.
+            branchMenu("fresh", "delete")
+            awaitEnabled(GitTags.historyMenuItem("delete")).performClick()
+            awaitEnabled(GitTags.historyMenuItem("delete")).performClick()
             awaitNoTag(GitTags.historyBranch("fresh"))
             before.assertUnchanged(project)
         }

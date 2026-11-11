@@ -37,10 +37,12 @@ private const val CLIENT_TIMEOUT_S = 60L
  * - `echo <text>`: answers `<text>` in chunks, one per word;
  * - `think <text>`: a thought, then the answer `Done thinking.`;
  * - `read <path>`: a read tool call, the file read through the client, then `Read <n> lines.`;
- * - `write <path> <text>`: an edit tool call, a permission request, then the file written through the client;
+ * - `write <path> <text>`: an edit tool call, a permission request, then the file written through the client
+ *   (`lines <n> <path>`: the same, the text being `n` lines);
  * - `plan`: a plan of two steps, updated as they complete;
  * - `slow`: chunks every 50 ms until it is cancelled (`stubborn`: the same, but it never stops);
- * - `stream <n>`: `n` chunks at once; `tools <n>`: `n` completed tool calls; `crash`: exits with code 3;
+ * - `stream <n>`: `n` chunks at once; `tools <n>`: `n` completed tool calls (`tools <n> <lines>`: each with an
+ *   output of `lines` more lines, as a file read); `crash`: exits with code 3;
  * - `count`: the number of prompts of its session;
  * - `model`: `Model: <model>.`, the model of its session (`mode`: `Mode: <mode>.`, `write` asks nothing in
  *   `accept-edits`; `effort`: `Effort: <effort>.`); `fallback`: it moves to `fake-fast` itself and says so;
@@ -59,7 +61,8 @@ private const val CLIENT_TIMEOUT_S = 60L
  * so that they outlive the process; `--no-load` does not replay sessions (it still resumes them); `--no-history`
  * neither lists nor reopens them; `--no-config` offers no settings (no model to choose, [FakeConfig]); `--models <n>`
  * offers `n` more models; it lists its commands ([COMMANDS], typed `/echo hi`), but none with `--no-commands`, and
- * `n` more with `--commands <n>`.
+ * `n` more with `--commands <n>`; `--new-after-list` answers `session/new` only once a
+ * `session/list` listed the new session (for half a minute at most).
  */
 // ACP speaks UTF-8; System.out writes the console's charset (Windows-1252 on Windows), which would mangle accents.
 class FakeAgent(
@@ -67,6 +70,9 @@ class FakeAgent(
     private val out: PrintStream = PrintStream(System.out, true, Charsets.UTF_8),
 ) {
     private val loginRequired = options.loginRequired
+
+    // The `session/list` answered so far.
+    private val lists = java.util.concurrent.atomic.AtomicInteger()
 
     // True once the user logged in (`authenticate`): a session starts then.
     @Volatile private var loggedIn = false
@@ -177,7 +183,16 @@ class FakeAgent(
     private fun newSession(id: JsonElement, params: JsonObject): JsonObject {
         if (loginRequired && !loggedIn) return failure(id, AUTH_REQUIRED, "Authentication required")
         val session = store.create(params.text("cwd").orEmpty())
+        awaitListed()
         return success(id, sessionAnswer(session, buildJsonObject { put("sessionId", session.id) }))
+    }
+
+    // `--new-after-list`: the new session is listed (`session/list`) before the client is told its id.
+    private fun awaitListed() {
+        if (!options.newAfterList) return
+        val listedBefore = lists.get()
+        val deadline = System.nanoTime() + LISTED_WAIT_NANOS
+        while (lists.get() == listedBefore && System.nanoTime() < deadline) Thread.sleep(LISTED_POLL_MS)
     }
 
     // `session/load` replays the history before it answers; `session/resume` does not.
@@ -214,7 +229,13 @@ class FakeAgent(
         }
     }
 
-    private fun listed(params: JsonObject) =
+    private fun listed(params: JsonObject): JsonObject {
+        val answer = sessionList(params)
+        lists.incrementAndGet()
+        return answer
+    }
+
+    private fun sessionList(params: JsonObject) =
         buildJsonObject {
             putJsonArray("sessions") {
                 store.list(params.text("cwd")).forEach { session ->
@@ -329,11 +350,12 @@ class FakeAgent(
             "read" -> read(session, rest)
             "write" -> write(session, words.getOrNull(1).orEmpty(), rest.substringAfter(' ', ""))
             "rewrite" -> rewrite(session, rest)
+            "lines" -> write(session, words.getOrNull(2).orEmpty(), linesOf(words.getOrNull(1)?.toIntOrNull() ?: 1))
             "plan" -> plan(session)
             "slow" -> slow(session, stubborn = false)
             "stubborn" -> slow(session, stubborn = true)
             "stream" -> chunks(session, List(words.getOrNull(1)?.toIntOrNull() ?: 1) { "chunk $it " })
-            "tools" -> tools(session, words.getOrNull(1)?.toIntOrNull() ?: 1)
+            "tools" -> tools(session, words.getOrNull(1)?.toIntOrNull() ?: 1, words.getOrNull(2)?.toIntOrNull() ?: 0)
             "crash" -> crash()
             "count" -> chunks(session, listOf("Prompt $count of $session."))
             "usage" -> chunks(session, listOf("5-hour limit — ${count * QUOTA_STEP}% · Resets 11pm"))
@@ -416,6 +438,8 @@ class FakeAgent(
         return written(session, call, path, text)
     }
 
+    private fun linesOf(count: Int): String = (1..count).joinToString("\n") { "line $it" }
+
     private fun written(session: String, call: String, path: String, text: String): String {
         val write =
             runCatching {
@@ -479,10 +503,12 @@ class FakeAgent(
         return END_TURN
     }
 
-    private fun tools(session: String, count: Int): String {
+    // [count] tool calls, each with an output of [outputLines] more lines (a file read, the output of a command).
+    private fun tools(session: String, count: Int, outputLines: Int = 0): String {
+        val body = (1..outputLines).joinToString("") { "\nline $it of the output of the tool, as long as a line of code" }
         repeat(count) { index ->
             tool(session, "tool-$index", "Search step $index", "search", "pending", "/step/$index")
-            toolUpdate(session, "tool-$index", "completed", "$index matches")
+            toolUpdate(session, "tool-$index", "completed", "$index matches$body")
         }
         message(session, "Searched $count times.")
         return END_TURN
@@ -581,6 +607,8 @@ class FakeAgent(
         const val TITLE_LENGTH = 30
         const val MARKDOWN_PIECE = 7
         const val QUOTA_STEP = 10
+        const val LISTED_POLL_MS = 20L
+        const val LISTED_WAIT_NANOS = 30_000_000_000L
         val OPENING = setOf("session/new", "session/load", "session/resume")
 
         // Its commands: name, description, hint of what to type after it.
@@ -669,11 +697,12 @@ data class FakeAgentOptions(
     val extraCommands: Int = 0,
     val images: Boolean = true,
     val embedded: Boolean = true,
+    val newAfterList: Boolean = false,
 ) {
     companion object {
         /**
          * Reads `--login`, `--store <dir>`, `--no-load`, `--no-history`, `--no-config`, `--models <n>`,
-         * `--no-commands`, `--commands <n>`, `--no-images` and `--no-embedded`.
+         * `--no-commands`, `--commands <n>`, `--no-images`, `--no-embedded` and `--new-after-list`.
          */
         fun parse(args: List<String>): FakeAgentOptions {
             val store = valueOf(args, "--store")
@@ -690,6 +719,7 @@ data class FakeAgentOptions(
                 extraCommands = commands,
                 images = "--no-images" !in args,
                 embedded = "--no-embedded" !in args,
+                newAfterList = "--new-after-list" in args,
             )
         }
 

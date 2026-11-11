@@ -91,7 +91,7 @@ class AgentPermissionsE2eTest {
             val app = launchWithProject(project, preferences("--no-config"))
             val conversation = startConversation(app)
             sendPrompt("echo no modes")
-            awaitShown(conversation, "no modes")
+            awaitAnswer(conversation, "no modes")
             awaitIdle(conversation)
             assertFalse(isShown(AgentTags.AGENT_PERMISSIONS))
         }

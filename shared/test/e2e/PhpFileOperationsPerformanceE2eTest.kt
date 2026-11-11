@@ -29,6 +29,13 @@ private const val LINUX_BUDGET_MB = 600L
 private const val WINDOWS_BUDGET_MB = 1_500L
 private val BUDGET_MB = if (WINDOWS) WINDOWS_BUDGET_MB else LINUX_BUDGET_MB
 
+// Rewriting 500 files: 0.9 to 1.9 s on the Linux runners and 2.2 s on a local Windows VM, but 4.5 to 26.9 s on the
+// Windows runner, whose disk is that slow on some runs (8 runs of 2026-11-11, three of them over 18 s). 15 s, and
+// 45 s on Windows, still fail a change that scans or rewrites files per use (2,000) instead of per file (500).
+private const val LINUX_BUDGET_MS = 15_000L
+private const val WINDOWS_BUDGET_MS = 45_000L
+private val BUDGET_MS = if (WINDOWS) WINDOWS_BUDGET_MS else LINUX_BUDGET_MS
+
 /** Renaming a class file whose class is used in 500 closed files and 2,000 times in the open one. */
 @OptIn(ExperimentalTestApi::class)
 class PhpFileOperationsPerformanceE2eTest {
@@ -70,10 +77,7 @@ class PhpFileOperationsPerformanceE2eTest {
             onNodeWithTag(AppTags.FILE_DIALOG_INPUT).performTextInput("Gadget.php")
             measure(
                 "rename of a class used in $USING_FILES files and $OPEN_USES times",
-                // Rewriting 500 files: 1.5 to 1.9 s on the Linux runners, but 0.9 to 3.1 s on the Windows one, and
-                // 9.2 s when its disk was slow (run 42096833220). 15 s still fails a change that scans or rewrites
-                // files per use instead of per file.
-                budgetMillis = 15_000,
+                budgetMillis = BUDGET_MS,
                 budgetMegabytes = BUDGET_MB,
             ) {
                 onNodeWithTag(AppTags.FILE_DIALOG_OK).performClick()

@@ -87,6 +87,20 @@ fun ComposeUiTest.awaitShown(conversation: Conversation, text: String, timeout: 
     }
 }
 
+/**
+ * Waits until the agent answered [text] in [conversation]. Not [awaitShown] after `echo <text>`: the prompt shows the
+ * text too, at once, and the agent is not busy yet between the prompt sent and the first news of its turn, so
+ * [awaitIdle] would end before the answer.
+ */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.awaitAnswer(conversation: Conversation, text: String, timeout: Long = AGENT_TIMEOUT) {
+    try {
+        awaitCondition(timeout) { conversation.itemsOf<AgentItem.AgentText>().any { text in it.text } }
+    } catch (e: androidx.compose.ui.test.ComposeTimeoutException) {
+        throw AssertionError("'$text' not answered; the conversation shows:\n${shownConversation(conversation)}", e)
+    }
+}
+
 /** Waits until the agent of [conversation] is done and the Send button is back. */
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.awaitIdle(conversation: Conversation, timeout: Long = AGENT_TIMEOUT) {

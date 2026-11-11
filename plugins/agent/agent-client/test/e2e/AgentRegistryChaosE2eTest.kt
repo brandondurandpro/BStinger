@@ -59,7 +59,7 @@ class AgentRegistryChaosE2eTest {
             assertContains(conversation.itemsOf<AgentItem.Notice>().joinToString { it.text }, "503")
             registry.down = false
             sendPrompt("echo second")
-            awaitShown(conversation, "second")
+            awaitAnswer(conversation, "second")
             awaitIdle(conversation)
             assertEquals(1, registry.downloads.get())
         }
