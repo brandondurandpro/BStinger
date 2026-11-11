@@ -328,8 +328,8 @@ class RunState(
         stopSession(target)
         val position = sessions.indexOf(target)
         if (position < 0) return
+        // The stopped run still ends by itself, which releases its stream: its collector is not cancelled.
         sessions.removeAt(position)
-        target.collecting?.cancel()
         if (session === target) session = sessions.getOrNull(minOf(position, sessions.lastIndex))
     }
 

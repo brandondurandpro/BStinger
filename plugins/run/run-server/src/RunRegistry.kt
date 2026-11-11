@@ -27,6 +27,9 @@ private const val MAX_KEPT_LINES = 200_000
 
 private val COLOR_ENVIRONMENT = mapOf("FORCE_COLOR" to "1", "CLICOLOR_FORCE" to "1")
 
+// Finished runs the registry keeps for a reconnecting client.
+private const val MAX_FINISHED_RUNS = 3
+
 private const val NOT_RUNNING = "Nothing to run"
 
 /**
@@ -37,11 +40,25 @@ private const val NOT_RUNNING = "Nothing to run"
 internal class RunRegistry(private val push: (Frame) -> Unit) : AutoCloseable {
     private val runs = ConcurrentHashMap<Long, ServerRun>()
 
+    /** How many runs the registry holds, finished ones included. */
+    val size: Int get() = runs.size
+
     /** Starts [command] in [directory] as the run [id]; the one this id had before (never in practice) stops. */
     fun start(id: Long, directory: String, command: List<String>) {
         stop(id)
         require(command.isNotEmpty()) { NOT_RUNNING }
+        forgetOldFinishedRuns()
         runs[id] = ServerRun(id, directory, command, push)
+    }
+
+    // A finished run is kept only for a client that reconnects and asks for its output again; the oldest ones, whose
+    // output (up to MAX_KEPT_LINES lines each) nobody asks for any more, are dropped so that the memory does not grow
+    // with every run.
+    private fun forgetOldFinishedRuns() {
+        val finished = runs.entries.filter { it.value.finishedAt > 0L }.sortedBy { it.value.finishedAt }
+        val surplus = finished.size - MAX_FINISHED_RUNS
+        if (surplus <= 0) return
+        finished.take(surplus).forEach { runs.remove(it.key, it.value) }
     }
 
     fun stop(id: Long) {
@@ -84,6 +101,11 @@ private class ServerRun(
     private var flushScheduled = false
     private var process: Process? = null
     private var processStart = 0L
+
+    /** When the run ended (nanoseconds of the JVM clock), 0 while it runs. */
+    @Volatile
+    var finishedAt = 0L
+        private set
 
     private val scheduler: ScheduledExecutorService =
         Executors.newSingleThreadScheduledExecutor { task ->
@@ -168,6 +190,7 @@ private class ServerRun(
         scheduler.shutdown()
         synchronized(lock) {
             if (endFrame != null) return
+            finishedAt = System.nanoTime()
             val last = publish(finished = true, exitCode = exitCode, error = error)
             val end = Frame(FrameKind.End, id, buildJsonObject { put("seq", last) })
             endFrame = end
