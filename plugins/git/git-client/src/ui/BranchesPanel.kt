@@ -232,6 +232,14 @@ private fun SectionTitle(history: BranchHistoryState, section: BranchSection, co
     }
 }
 
+// Selected rows are highlighted; the current branch keeps a light accent tint even when it is not selected.
+private fun rowBackground(selected: Boolean, current: Boolean): Color =
+    when {
+        selected -> IdeColors.Selection
+        current -> IdeColors.Accent.copy(alpha = 0.12f)
+        else -> Color.Transparent
+    }
+
 @Composable
 private fun HistoryBranchRow(
     project: GitHost,
@@ -244,7 +252,7 @@ private fun HistoryBranchRow(
     Row(
         Modifier
             .fillMaxWidth()
-            .background(if (selected) IdeColors.Selection else Color.Transparent, IdeShapes.Medium)
+            .background(rowBackground(selected, local?.current == true), IdeShapes.Medium)
             .onSecondaryPress { menu = true }
             .clickable(onClick = onClick)
             .testTag(GitTags.historyBranch(name))
@@ -252,7 +260,15 @@ private fun HistoryBranchRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         BranchIcon(color = if (local?.current == true) IdeColors.Accent else IdeColors.TextSecondary)
-        Label(name, Modifier.weight(1f).padding(start = 6.dp), fontSize = 12.sp)
+        // The checked-out branch stands out: accent color and bold name.
+        val current = local?.current == true
+        Label(
+            name,
+            Modifier.weight(1f).padding(start = 6.dp),
+            color = if (current) IdeColors.Accent else IdeColors.Text,
+            fontSize = 12.sp,
+            fontWeight = if (current) FontWeight.Bold else FontWeight.Normal,
+        )
         local?.let { BranchSyncBadge(it, compact = true, modifier = Modifier.padding(start = 4.dp)) }
         if (menu) BranchContextMenu(project, name, local) { menu = false }
     }
