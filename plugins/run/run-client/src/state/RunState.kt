@@ -299,6 +299,7 @@ class RunState(
     fun show(target: RunSession) {
         if (target !in sessions) return
         session = target
+        select(target.configuration.id)
         tab = if (target.configuration.kind == RunKind.Tests) RunTab.Tests else RunTab.Output
         selectedTest = null
     }

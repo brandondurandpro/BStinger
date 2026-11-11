@@ -172,6 +172,8 @@ class RunStateTest {
         assertEquals(listOf("from second"), run.session?.lines?.toList())
         run.show(run.sessions[0])
         assertEquals(listOf("from first"), run.session?.lines?.toList())
+        // The tab shown is the selected command: Start and Stop then act on it.
+        assertEquals(first.id, run.selectedId)
     }
 
     @Test

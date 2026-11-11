@@ -2,9 +2,10 @@ package org.example.kotlineditor.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -15,8 +16,8 @@ import org.example.kotlineditor.state.RunState
 
 // One tab per run, from the first one.
 @Composable
-internal fun SessionTabs(run: RunState, shown: RunSession) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp)) {
+internal fun SessionTabs(run: RunState, shown: RunSession?, modifier: Modifier = Modifier) {
+    Row(modifier.horizontalScroll(rememberScrollState())) {
         for (candidate in run.sessions.toList()) {
             SessionChip(run, candidate, active = candidate === shown)
         }
