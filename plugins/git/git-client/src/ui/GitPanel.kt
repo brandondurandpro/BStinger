@@ -191,6 +191,8 @@ private fun ChangeRow(
             pressRow(project, path, ordered, event) { menu = true }
         }
     val background = if (picked) IdeColors.Selection else Color.Transparent
+    // The border of an unchecked box has the colour of the highlight, so on a highlighted row it takes a stronger one.
+    val uncheckedBorder = if (picked) IdeColors.TextSecondary else IdeColors.InputBorder
     Row(
         Modifier.fillMaxWidth().height(24.dp).background(background),
         verticalAlignment = Alignment.CenterVertically,
@@ -200,6 +202,7 @@ private fun ChangeRow(
             checked,
             Modifier.padding(start = 9.dp).testTag(GitTags.gitChangeCheck(path)),
             size = 14.dp,
+            uncheckedBorder = uncheckedBorder,
         ) { project.git.toggleCommitSelection(path) }
         Row(
             Modifier
