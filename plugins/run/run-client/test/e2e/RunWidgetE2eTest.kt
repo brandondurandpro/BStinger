@@ -67,8 +67,11 @@ class RunWidgetE2eTest {
             awaitCondition { app.project.run.available.size == 2 }
             val available = app.project.run.available
             val commands = available.map { it.commandLine }.toSet()
-            assertEquals(setOf("npm run dev", "pnpm run build"), commands)
-            val build = available.firstOrNull { it.commandLine == "pnpm run build" }
+            // Windows runs the .cmd shims of the package managers.
+            val windows = !app.project.root.path.startsWith("/")
+            val suffix = if (windows) ".cmd" else ""
+            assertEquals(setOf("npm$suffix run dev", "pnpm$suffix run build"), commands)
+            val build = available.firstOrNull { it.commandLine == "pnpm$suffix run build" }
             assertNotNull(build)
             onNodeWithTag(RunTags.WIDGET_SELECTOR).performClick()
             awaitTag(RunTags.widgetFolder("web")).assertIsDisplayed()
