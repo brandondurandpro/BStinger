@@ -191,27 +191,42 @@ class RunState(
             return recentIds.mapNotNull { id -> all.firstOrNull { it.id == id } }
         }
 
+    /** The folder the menu is limited to (blank for the project itself), or `null` for every folder. */
+    var folderFilter by mutableStateOf<String?>(null)
+
+    /** The folders that hold commands, the project first: what [folderFilter] can be set to. */
+    val folders: List<String> get() = byFolder.map { it.first }
+
     /**
      * [recent] grouped by the folder they run in (blank for the project): the folder of the most recent command
      * first, and the commands of a folder from the most recent.
      */
     val recentByFolder: List<Pair<String, List<RunConfiguration>>>
-        get() = recent.groupBy { it.workingDirectory.trim().trim('/', '\\') }.toList()
+        get() = recent.filter(::inFilter).groupBy(::folderOf).toList()
 
     /** Whether the configuration [id] is being run. */
     fun isRunning(id: String): Boolean = sessions.any { it.running && it.configuration.id == id }
 
+    private fun inFilter(configuration: RunConfiguration): Boolean {
+        val wanted = folderFilter ?: return true
+        return folderOf(configuration) == wanted
+    }
+
     private fun groupByFolder(list: List<RunConfiguration>): List<Pair<String, List<RunConfiguration>>> {
-        val folders = list.groupBy { it.workingDirectory.trim().trim('/', '\\') }
+        val folders = list.groupBy(::folderOf)
         return folders.toList().sortedWith(compareBy({ it.first.isNotEmpty() }, { it.first }))
     }
 
-    /** The configurations whose name, command or folder contains every word of [query] (any case); all when blank. */
+    /**
+     * The configurations (of [folderFilter] if set) whose name, command or folder contains every word of [query]
+     * (any case); all of them when blank.
+     */
     fun search(query: String): List<RunConfiguration> {
         val lowerQuery = query.trim().lowercase()
         val words = lowerQuery.split(' ').filter { it.isNotEmpty() }
-        if (words.isEmpty()) return available
-        return available.filter { configuration ->
+        val candidates = available.filter(::inFilter)
+        if (words.isEmpty()) return candidates
+        return candidates.filter { configuration ->
             val haystack = "${configuration.name} ${configuration.commandLine} ${configuration.workingDirectory}"
             val lowered = haystack.lowercase()
             words.all { it in lowered }
@@ -468,3 +483,6 @@ object PreferenceKeysRun {
 private const val MAX_RECENT = 6
 
 private fun decodeRecentIds(text: String?): List<String> = text.orEmpty().lines().filter { it.isNotEmpty() }
+
+// The folder a configuration runs in, relative to the project; blank for the project itself.
+private fun folderOf(configuration: RunConfiguration): String = configuration.workingDirectory.trim().trim('/', '\\')

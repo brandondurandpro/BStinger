@@ -214,4 +214,37 @@ class RunWidgetE2eTest {
             assertEquals(lint.id, editing?.id)
             awaitNoTag(RunTags.WIDGET_MENU)
         }
+
+    @Test
+    fun `the folder chips limit the menu to one folder`() =
+        runComposeUiTest {
+            composerProjects()
+            val app = launchWithProject(project)
+            awaitCondition { app.project.run.available.size == 4 }
+            onNodeWithTag(RunTags.WIDGET_SELECTOR).performClick()
+            awaitTag(RunTags.widgetFolder("services/web")).assertIsDisplayed()
+            awaitTag(RunTags.widgetFilter("services/api")).performClick()
+            awaitNoTag(RunTags.widgetFolder("services/web"))
+            awaitNoTag(RunTags.widgetFolder(""))
+            awaitTag(RunTags.widgetFolder("services/api")).assertIsDisplayed()
+            awaitTag(RunTags.WIDGET_FILTER_ALL).performClick()
+            awaitTag(RunTags.widgetFolder("services/web")).assertIsDisplayed()
+        }
+
+    @Test
+    fun `a project with hundreds of commands gets a menu of limited height`() =
+        runComposeUiTest {
+            val scripts = (1..300).joinToString(", ") { """"task$it": "echo $it"""" }
+            project.file("package.json", "{\"scripts\": {$scripts}}")
+            val app = launchWithProject(project)
+            awaitCondition { app.project.run.available.size == 300 }
+            onNodeWithTag(RunTags.WIDGET_SELECTOR).performClick()
+            awaitTag(RunTags.widgetFolder("")).assertIsDisplayed()
+            val available = app.project.run.available
+            val last = available.lastOrNull()
+            assertNotNull(last)
+            // Only the rows that fit the menu are composed; the others are scrolled to.
+            awaitNoTag(RunTags.widgetItem(last.id))
+            awaitTag(RunTags.WIDGET_NEW).assertIsDisplayed()
+        }
 }

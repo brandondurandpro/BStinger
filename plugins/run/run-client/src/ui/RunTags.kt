@@ -44,9 +44,12 @@ object RunTags {
     const val WIDGET_SHOW = "run.widget.show"
     const val WIDGET_SEARCH = "run.widget.search"
     const val WIDGET_STATUS = "run.widget.status"
+    const val WIDGET_FILTER_ALL = "run.widget.filter.all"
     const val WIDGET_NO_MATCH = "run.widget.noMatch"
 
     fun widgetFolder(folder: String) = "run.widget.folder:$folder"
+
+    fun widgetFilter(folder: String) = "run.widget.filter:$folder"
 
     fun widgetRecentFolder(folder: String) = "run.widget.recentFolder:$folder"
 

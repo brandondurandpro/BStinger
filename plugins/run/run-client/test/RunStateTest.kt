@@ -473,4 +473,21 @@ class RunStateTest {
         run.save(found.copy(name = "Dev server"))
         assertEquals(listOf("Dev server"), run.available.map { it.name })
     }
+
+    @Test
+    fun `the folder filter limits the search and the recent commands to one folder`() {
+        val run = state()
+        val web = run.add("npm run dev", directory = "web")
+        val api = run.add("composer run-script test", directory = "api")
+        run.run(web)
+        run.run(api)
+        assertEquals(listOf("api", "web"), run.folders.sorted())
+        run.folderFilter = "web"
+        assertEquals(listOf(web.id), run.search("").map { it.id })
+        assertEquals(listOf("web"), run.byFolder("").map { it.first })
+        assertEquals(listOf("web"), run.recentByFolder.map { it.first })
+        assertTrue(run.search("composer").isEmpty())
+        run.folderFilter = null
+        assertEquals(2, run.search("").size)
+    }
 }

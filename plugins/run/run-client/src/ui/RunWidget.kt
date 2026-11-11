@@ -2,12 +2,17 @@ package org.example.kotlineditor.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
@@ -76,11 +81,16 @@ fun RunWidget(run: RunState, showWindow: () -> Unit, modifier: Modifier = Modifi
     }
 }
 
-// The search field, the recent commands, the commands by folder, then the actions on the configurations.
+private val MENU_WIDTH = 340.dp
+private val MENU_LIST_HEIGHT = 380.dp
+private val MENU_ROW_HEIGHT = 32.dp
+private val MENU_HEADER_HEIGHT = 24.dp
+
+// The search field and the folder filter stay on top, the commands scroll with the name of their folder sticking to
+// the top, then the actions on the configurations.
 @Composable
 private fun RunMenu(run: RunState, showWindow: () -> Unit, close: () -> Unit) {
     var query by remember { mutableStateOf("") }
-    val searching = query.isNotBlank()
     val start = { configuration: RunConfiguration ->
         close()
         run.select(configuration.id)
@@ -90,44 +100,87 @@ private fun RunMenu(run: RunState, showWindow: () -> Unit, close: () -> Unit) {
     IdeTextField(
         query,
         { query = it },
-        Modifier.fillMaxWidth().padding(8.dp).testTag(RunTags.WIDGET_SEARCH),
+        Modifier.width(MENU_WIDTH).padding(8.dp).testTag(RunTags.WIDGET_SEARCH),
         placeholder = "Search commands",
         onSubmit = { run.search(query).firstOrNull()?.let(start) },
     )
-    val recent = if (searching) emptyList() else run.recentByFolder
-    if (recent.isNotEmpty()) {
-        SectionTitle("Recent", RunTags.widgetFolder(RECENT_SECTION))
-        recent.forEach { (folder, configurations) ->
-            val title = folder.ifEmpty { "Project" }
-            Label(
-                title,
-                Modifier.padding(start = 20.dp, top = 2.dp).testTag(RunTags.widgetRecentFolder(folder)),
-                color = IdeColors.TextSecondary,
-                fontSize = 11.sp,
-            )
-            configurations.forEach { configuration ->
-                ConfigurationEntry(run, configuration, RunTags.widgetRecent(configuration.id), showWindow, close, start)
+    FolderFilter(run)
+    CommandList(run, query, showWindow, close, start)
+    HorizontalDivider(color = IdeColors.Separator)
+    ConfigurationActions(run, showWindow, close)
+}
+
+// "All" and one chip per folder: the menu then lists the commands of that folder only.
+@Composable
+private fun FolderFilter(run: RunState) {
+    val folders = run.folders
+    if (folders.size < 2) return
+    Row(Modifier.width(MENU_WIDTH).horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp)) {
+        TabChip("All", run.folderFilter == null, RunTags.WIDGET_FILTER_ALL) { run.folderFilter = null }
+        folders.forEach { folder ->
+            TabChip(folder.ifEmpty { "Project" }, run.folderFilter == folder, RunTags.widgetFilter(folder)) {
+                run.folderFilter = folder
             }
         }
-        HorizontalDivider(color = IdeColors.Separator)
     }
+}
+
+@Composable
+private fun CommandList(
+    run: RunState,
+    query: String,
+    showWindow: () -> Unit,
+    close: () -> Unit,
+    start: (RunConfiguration) -> Unit,
+) {
+    val recent = if (query.isBlank()) run.recentByFolder else emptyList()
     val folders = run.byFolder(query)
-    if (searching && folders.isEmpty()) {
+    if (query.isNotBlank() && folders.isEmpty()) {
         Label(
             "No command matches",
             Modifier.padding(12.dp).testTag(RunTags.WIDGET_NO_MATCH),
             color = IdeColors.TextSecondary,
         )
     }
-    folders.forEachIndexed { index, (folder, configurations) ->
-        if (index > 0) HorizontalDivider(color = IdeColors.Separator)
-        SectionTitle(folder.ifEmpty { "Project" }, RunTags.widgetFolder(folder))
-        configurations.forEach { configuration ->
-            ConfigurationEntry(run, configuration, RunTags.widgetItem(configuration.id), showWindow, close, start)
+    // A lazy list cannot be measured by its content inside a menu: it gets a fixed height, the one its rows need
+    // up to a maximum, so that a project with hundreds of commands does not fill the screen.
+    val sections = recent.size + folders.size
+    val rows = recent.sumOf { it.second.size } + folders.sumOf { it.second.size }
+    val wanted = MENU_ROW_HEIGHT * rows + MENU_HEADER_HEIGHT * sections
+    val height = minOf(MENU_LIST_HEIGHT, wanted)
+    LazyColumn(Modifier.size(MENU_WIDTH, height)) {
+        if (recent.isNotEmpty()) {
+            item { SectionTitle("Recent", RunTags.widgetFolder(RECENT_SECTION)) }
+            recent.forEach { (folder, configurations) ->
+                stickyHeader { FolderTitle(folder, RunTags.widgetRecentFolder(folder), indent = true) }
+                items(configurations, key = { "recent:${it.id}" }) { configuration ->
+                    val tag = RunTags.widgetRecent(configuration.id)
+                    ConfigurationEntry(run, configuration, tag, showWindow, close, start)
+                }
+            }
+            item { HorizontalDivider(color = IdeColors.Separator) }
+        }
+        folders.forEach { (folder, configurations) ->
+            stickyHeader { FolderTitle(folder, RunTags.widgetFolder(folder), indent = false) }
+            items(configurations, key = { it.id }) { configuration ->
+                ConfigurationEntry(run, configuration, RunTags.widgetItem(configuration.id), showWindow, close, start)
+            }
         }
     }
-    if (folders.isNotEmpty()) HorizontalDivider(color = IdeColors.Separator)
-    ConfigurationActions(run, showWindow, close)
+}
+
+// The name of a folder: opaque, so that it hides the commands that scroll under it.
+@Composable
+private fun FolderTitle(folder: String, tag: String, indent: Boolean) {
+    Box(Modifier.fillMaxWidth().background(IdeColors.Popup)) {
+        Label(
+            folder.ifEmpty { "Project" },
+            Modifier.padding(start = if (indent) 20.dp else 12.dp, top = 4.dp, bottom = 4.dp).testTag(tag),
+            color = IdeColors.TextSecondary,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+    }
 }
 
 @Composable
