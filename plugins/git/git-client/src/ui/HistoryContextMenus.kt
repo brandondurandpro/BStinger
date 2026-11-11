@@ -9,6 +9,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerButton
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
@@ -173,7 +174,7 @@ private fun MenuEntry(
     onClick: () -> Unit,
 ) {
     IdeMenuItem(
-        text = { Text(text, fontSize = 13.sp, color = if (danger) IdeColors.Error else IdeColors.Text) },
+        text = { Text(text, fontSize = 13.sp, color = if (danger) IdeColors.Error else Color.Unspecified) },
         onClick = onClick,
         enabled = enabled,
         modifier = Modifier.height(30.dp).testTag(GitTags.historyMenuItem(action)),

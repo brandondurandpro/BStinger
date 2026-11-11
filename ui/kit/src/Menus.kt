@@ -36,7 +36,7 @@ private val MENU_PADDING = 4.dp
 // Height of a menu item of one line (shadcn/ui's `py-1.5` around a 13 sp line).
 private val ITEM_HEIGHT = 30.dp
 
-private const val DISABLED_ALPHA = 0.6f
+private const val DISABLED_ALPHA = 0.4f
 
 /** shadcn/ui's dropdown menu: a bordered popover with a soft shadow and inset, rounded items. */
 @Composable
