@@ -433,6 +433,15 @@ class GitState(
         }
     }
 
+    /** Fetches every remote now (the branch menu of the Branches window), then reloads the branches. */
+    fun fetchNow() =
+        scope.launch {
+            gitOperation {
+                remoteLock.withLock { git.fetch(root.path) }
+                "Fetched"
+            }
+        }
+
     /** Pulls the current branch (Git panel's Pull button). */
     fun pull() =
         scope.launch {
