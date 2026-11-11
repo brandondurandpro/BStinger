@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
@@ -47,10 +47,16 @@ internal fun FolderFilter(run: RunState) {
 private fun FolderFilterMenu(run: RunState) {
     var query by remember { mutableStateOf("") }
     val shown = run.searchFolders(query)
+    val field =
+        Modifier
+            .fillMaxWidth()
+            .widthIn(min = FILTER_WIDTH)
+            .padding(8.dp)
+            .testTag(RunTags.WIDGET_FILTER_SEARCH)
     IdeTextField(
         query,
         { query = it },
-        Modifier.width(FILTER_WIDTH).padding(8.dp).testTag(RunTags.WIDGET_FILTER_SEARCH),
+        field,
         placeholder = "Search folders",
     )
     MenuEntry("Select all", RunTags.WIDGET_FILTER_SELECT_ALL) { run.selectAllFolders(shown) }
