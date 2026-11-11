@@ -18,7 +18,19 @@ import androidx.compose.ui.unit.sp
 import org.example.kotlineditor.model.GitBranchInfo
 import org.example.kotlineditor.model.GitCommit
 import org.example.kotlineditor.state.BranchSync
+import org.example.kotlineditor.model.GitResetMode
 import org.example.kotlineditor.state.GitHost
+import org.example.kotlineditor.state.HistoryDialog
+import org.example.kotlineditor.state.cherryPickCommit
+import org.example.kotlineditor.state.checkoutCommit
+import org.example.kotlineditor.state.checkoutRemoteBranch
+import org.example.kotlineditor.state.createBranchAt
+import org.example.kotlineditor.state.createTag
+import org.example.kotlineditor.state.mergeBranch
+import org.example.kotlineditor.state.rebaseOnto
+import org.example.kotlineditor.state.renameBranch
+import org.example.kotlineditor.state.resetTo
+import org.example.kotlineditor.state.revertCommit
 
 /** Calls [onPress] on a right click, without consuming it, so the row keeps its own click handling. */
 @OptIn(ExperimentalComposeUiApi::class)
@@ -29,13 +41,11 @@ internal fun Modifier.onSecondaryPress(onPress: () -> Unit): Modifier =
 
 /**
  * Right-click menu of a branch of the Branches window. [local] is null for a remote-tracking branch. Items that make
- * no sense now are disabled rather than hidden: the current branch cannot be deleted or checked out again.
+ * no sense now are disabled rather than hidden: the current branch cannot be deleted, merged into itself or checked
+ * out again.
  */
 @Composable
 internal fun BranchContextMenu(project: GitHost, name: String, local: GitBranchInfo?, onClose: () -> Unit) {
-    val git = project.git
-    val isLocal = local != null
-    val idle = !git.busy
     val run = { block: () -> Unit ->
         onClose()
         block()
@@ -45,15 +55,54 @@ internal fun BranchContextMenu(project: GitHost, name: String, local: GitBranchI
         onDismissRequest = onClose,
         modifier = Modifier.testTag(GitTags.BRANCH_CONTEXT_MENU),
     ) {
-        MenuEntry("Checkout", "checkout", enabled = canCheckout(local) && idle) { run { git.checkoutBranch(name) } }
-        MenuEntry("Push", "push", enabled = isLocal && idle) { run { git.syncBranch(name, BranchSync.Action.Push) } }
-        MenuEntry("Pull", "pull", enabled = local?.upstream != null && idle) {
-            run { git.syncBranch(name, BranchSync.Action.Pull) }
+        BranchSwitchItems(project, name, local, run)
+        BranchIntegrateItems(project, name, local, run)
+        BranchRemoteItems(project, name, local, run)
+        DeleteEntry(name, enabled = canCheckout(local) && !project.git.busy) {
+            run { project.git.deleteBranches(listOf(name)) }
         }
-        MenuEntry("Fetch", "fetch", enabled = idle) { run { git.fetchNow() } }
-        DeleteEntry(name, enabled = canCheckout(local) && idle) { run { git.deleteBranches(listOf(name)) } }
         MenuEntry("Copy branch name", "copyName") { run { TextClipboard.set(name) } }
     }
+}
+
+@Composable
+private fun BranchSwitchItems(project: GitHost, name: String, local: GitBranchInfo?, run: (() -> Unit) -> Unit) {
+    val git = project.git
+    val idle = !git.busy
+    if (local == null) {
+        MenuEntry("Checkout as local branch", "checkoutRemote", enabled = idle) {
+            run { git.checkoutRemoteBranch(name) }
+        }
+    } else {
+        MenuEntry("Checkout", "checkout", enabled = canCheckout(local) && idle) { run { git.checkoutBranch(name) } }
+    }
+    MenuEntry("New branch from here…", "newBranch", enabled = idle) {
+        run { project.git.history.dialog = newBranchDialog(project, name) }
+    }
+    if (local != null) {
+        MenuEntry("Rename…", "rename", enabled = idle) { run { git.history.dialog = renameDialog(project, name) } }
+    }
+}
+
+@Composable
+private fun BranchIntegrateItems(project: GitHost, name: String, local: GitBranchInfo?, run: (() -> Unit) -> Unit) {
+    val git = project.git
+    val canIntegrate = local?.current != true && !git.busy
+    MenuEntry("Merge into current", "merge", enabled = canIntegrate) { run { git.mergeBranch(name) } }
+    MenuEntry("Rebase current onto this…", "rebase", enabled = canIntegrate) {
+        run { git.history.dialog = rebaseDialog(project, name) }
+    }
+}
+
+@Composable
+private fun BranchRemoteItems(project: GitHost, name: String, local: GitBranchInfo?, run: (() -> Unit) -> Unit) {
+    val git = project.git
+    val idle = !git.busy
+    MenuEntry("Push", "push", enabled = local != null && idle) { run { git.syncBranch(name, BranchSync.Action.Push) } }
+    MenuEntry("Pull", "pull", enabled = local?.upstream != null && idle) {
+        run { git.syncBranch(name, BranchSync.Action.Pull) }
+    }
+    MenuEntry("Fetch", "fetch", enabled = idle) { run { git.fetchNow() } }
 }
 
 // A local branch other than the checked-out one: what can be checked out, and what can be deleted.
@@ -72,6 +121,9 @@ private fun DeleteEntry(name: String, enabled: Boolean, onDelete: () -> Unit) {
 /** Right-click menu of a commit of the Branches window. */
 @Composable
 internal fun CommitContextMenu(project: GitHost, commit: GitCommit, onClose: () -> Unit) {
+    val git = project.git
+    val idle = !git.busy
+    val isMerge = commit.parents.size > 1
     val run = { block: () -> Unit ->
         onClose()
         block()
@@ -82,9 +134,63 @@ internal fun CommitContextMenu(project: GitHost, commit: GitCommit, onClose: () 
         modifier = Modifier.testTag(GitTags.COMMIT_CONTEXT_MENU),
     ) {
         MenuEntry("Copy commit hash", "copyHash") { run { TextClipboard.set(commit.hash) } }
-        MenuEntry("Show changes", "showChanges") { run { project.git.history.selectCommit(commit) } }
+        MenuEntry("Show changes", "showChanges") { run { git.history.selectCommit(commit) } }
+        MenuEntry("Checkout (detached HEAD)", "checkoutCommit", enabled = idle) { run { git.checkoutCommit(commit.hash) } }
+        MenuEntry("New branch from here…", "newBranch", enabled = idle) {
+            run { git.history.dialog = newBranchDialog(project, commit.hash) }
+        }
+        MenuEntry("New tag here…", "newTag", enabled = idle) { run { git.history.dialog = newTagDialog(project, commit) } }
+        // A merge commit needs the parent to follow, which this menu cannot ask for.
+        MenuEntry("Cherry-pick", "cherryPick", enabled = idle && !isMerge) { run { git.cherryPickCommit(commit.hash) } }
+        MenuEntry("Revert", "revert", enabled = idle && !isMerge) { run { git.revertCommit(commit.hash) } }
+        ResetItems(project, commit, run)
     }
 }
+
+@Composable
+private fun ResetItems(project: GitHost, commit: GitCommit, run: (() -> Unit) -> Unit) {
+    val idle = !project.git.busy
+    MenuEntry("Reset current branch to here (soft)", "resetSoft", enabled = idle) {
+        run { project.git.resetTo(commit.hash, GitResetMode.Soft) }
+    }
+    MenuEntry("Reset current branch to here (mixed)", "resetMixed", enabled = idle) {
+        run { project.git.resetTo(commit.hash, GitResetMode.Mixed) }
+    }
+    MenuEntry("Reset current branch to here (hard)…", "resetHard", enabled = idle) {
+        run { project.git.history.dialog = hardResetDialog(project, commit) }
+    }
+}
+
+private fun newBranchDialog(project: GitHost, startPoint: String) =
+    HistoryDialog("New branch", "Created at ${startPoint.take(SHORT)} and checked out.", "", "Create") { name, done ->
+        project.git.createBranchAt(startPoint, name, done)
+    }
+
+private fun renameDialog(project: GitHost, name: String) =
+    HistoryDialog("Rename branch", null, name, "Rename") { newName, done ->
+        project.git.renameBranch(name, newName, done)
+    }
+
+private fun newTagDialog(project: GitHost, commit: GitCommit) =
+    HistoryDialog("New tag", "On ${commit.shortHash}: ${commit.subject}", "", "Create") { name, done ->
+        project.git.createTag(name, commit.hash, done)
+    }
+
+private fun rebaseDialog(project: GitHost, onto: String) =
+    HistoryDialog("Rebase onto $onto", "Rewrites the commits of the current branch.", null, "Rebase") { _, done ->
+        project.git.rebaseOnto(onto, done)
+    }
+
+private fun hardResetDialog(project: GitHost, commit: GitCommit) =
+    HistoryDialog(
+        "Hard reset to ${commit.shortHash}",
+        "Moves the current branch there and discards every uncommitted change.",
+        null,
+        "Reset",
+        danger = true,
+    ) { _, done -> project.git.resetTo(commit.hash, GitResetMode.Hard, done) }
+
+private const val SHORT = 8
 
 @Composable
 private fun MenuEntry(

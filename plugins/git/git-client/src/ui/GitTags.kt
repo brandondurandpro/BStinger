@@ -68,6 +68,11 @@ object GitTags {
 
     const val BRANCH_CONTEXT_MENU = "history.branchMenu"
     const val COMMIT_CONTEXT_MENU = "history.commitMenu"
+    const val HISTORY_DIALOG = "history.dialog"
+    const val HISTORY_DIALOG_INPUT = "history.dialog.input"
+    const val HISTORY_DIALOG_ERROR = "history.dialog.error"
+    const val HISTORY_DIALOG_CONFIRM = "history.dialog.confirm"
+    const val HISTORY_DIALOG_CANCEL = "history.dialog.cancel"
 
     fun gitChange(relativePath: String) = "git.change:$relativePath"
 

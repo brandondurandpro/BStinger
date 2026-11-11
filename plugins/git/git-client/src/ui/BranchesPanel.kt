@@ -84,7 +84,15 @@ fun BranchesPanel(project: GitHost, drag: ToolWindowDrag, modifier: Modifier = M
     val history = project.git.history
     // The first time, the history opens on the current branch, as soon as it is known.
     LaunchedEffect(project.git.currentBranch) { history.selectIfNone(project.git.currentBranch) }
-    Column(modifier.fillMaxSize().background(IdeColors.Editor).testTag(GitTags.BRANCHES_PANEL)) {
+    Box(modifier.fillMaxSize().background(IdeColors.Editor).testTag(GitTags.BRANCHES_PANEL)) {
+        BranchesWindow(project, drag, history)
+        history.dialog?.let { dialog -> HistoryDialogView(project, dialog) { history.dialog = null } }
+    }
+}
+
+@Composable
+private fun BranchesWindow(project: GitHost, drag: ToolWindowDrag, history: BranchHistoryState) {
+    Column(Modifier.fillMaxSize()) {
         ToolWindowHeader("Branches", ToolWindow.Branches, project.toolWindows, drag) {
             IconButton(
                 {

@@ -442,6 +442,19 @@ class GitState(
             }
         }
 
+    /**
+     * Runs the Git action [block] (given the client and the root of the project) once at a time, as the actions of the
+     * Branches window's menus do: files are reloaded when [reloadFiles] (HEAD moved), the history is read again, and
+     * [onDone] tells whether it worked; a failure leaves Git's reason in [message].
+     */
+    fun operate(reloadFiles: Boolean, onDone: (Boolean) -> Unit = {}, block: suspend (GitClient, String) -> String) {
+        scope.launch {
+            val done = gitOperation(reloadFiles) { block(git, root.path) }
+            if (done) history.reload()
+            onDone(done)
+        }
+    }
+
     /** Pulls the current branch (Git panel's Pull button). */
     fun pull() =
         scope.launch {

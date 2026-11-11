@@ -34,6 +34,9 @@ class BranchHistoryState(private val root: String, private val git: GitClient, p
     var remoteBranches: List<String> by mutableStateOf(emptyList())
         private set
 
+    /** The dialog a context menu opened (a name to type, a confirmation), or null. */
+    var dialog: HistoryDialog? by mutableStateOf(null)
+
     /** Branch whose history is shown; null until the window first picks the current branch. */
     var selectedRef: String? by mutableStateOf(null)
         private set
