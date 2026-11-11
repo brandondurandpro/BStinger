@@ -79,6 +79,9 @@ object PreferenceKeys {
     /** The run configuration last selected, per project: the key ends with the project's path. */
     const val RUN_SELECTED_PREFIX = "run.selected."
 
+    /** Ids of the discovered run configurations the user deleted, per project: the key ends with the project's path. */
+    const val RUN_HIDDEN_PREFIX = "run.hidden."
+
     /** The run configurations last run, most recent first, per project: the key ends with the project's path. */
     const val RUN_RECENT_PREFIX = "run.recent."
 

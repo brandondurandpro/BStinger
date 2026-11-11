@@ -446,4 +446,31 @@ class RunStateTest {
         val grouped = run.recentByFolder.map { (folder, list) -> folder to list.map { it.id } }
         assertEquals(listOf("web" to listOf(build.id, web.id), "api" to listOf(api.id)), grouped)
     }
+
+    @Test
+    fun `a discovered configuration that is deleted stays hidden, saved in the preferences`() {
+        val found = RunConfiguration("package:web:dev", "npm: dev", RunKind.Run, "npm run dev", "web")
+        val other = RunConfiguration("package:web:build", "npm: build", RunKind.Run, "npm run build", "web")
+        val run = state(found = listOf(found, other))
+        run.ensureLoaded()
+        assertEquals(2, run.available.size)
+        run.delete(found.id)
+        assertEquals(listOf(other.id), run.available.map { it.id })
+        val reopened = state(preferences = run.toPreferences(), found = listOf(found, other))
+        reopened.ensureLoaded()
+        assertEquals(listOf(other.id), reopened.available.map { it.id })
+    }
+
+    @Test
+    fun `any command of the list can be edited, and saving it brings a hidden one back`() {
+        val found = RunConfiguration("package:dev", "npm: dev", RunKind.Run, "npm run dev")
+        val run = state(found = listOf(found))
+        run.ensureLoaded()
+        run.edit(found.id)
+        assertEquals(found.id, run.editing?.id)
+        run.delete(found.id)
+        assertTrue(run.available.isEmpty())
+        run.save(found.copy(name = "Dev server"))
+        assertEquals(listOf("Dev server"), run.available.map { it.name })
+    }
 }

@@ -192,4 +192,26 @@ class RunWidgetE2eTest {
             awaitRunStatus(app, RunStatus.Stopped)
             awaitNoTag(RunTags.WIDGET_STATUS)
         }
+
+    @Test
+    fun `each command of the menu has a pencil that edits it and a bin that deletes it`() =
+        runComposeUiTest {
+            composerProjects()
+            val app = launchWithProject(project)
+            awaitCondition { app.project.run.available.size == 4 }
+            val available = app.project.run.available
+            val lint = available.firstOrNull { it.name.startsWith("Composer: lint") }
+            val serve = available.firstOrNull { it.name.startsWith("Composer: serve") }
+            assertNotNull(lint)
+            assertNotNull(serve)
+            onNodeWithTag(RunTags.WIDGET_SELECTOR).performClick()
+            awaitTag(RunTags.deleteOf(RunTags.widgetItem(serve.id))).performClick()
+            awaitNoTag(RunTags.widgetItem(serve.id))
+            assertEquals(3, app.project.run.available.size)
+            awaitTag(RunTags.editOf(RunTags.widgetItem(lint.id))).performClick()
+            awaitTag(RunTags.EDITOR).assertIsDisplayed()
+            val editing = app.project.run.editing
+            assertEquals(lint.id, editing?.id)
+            awaitNoTag(RunTags.WIDGET_MENU)
+        }
 }

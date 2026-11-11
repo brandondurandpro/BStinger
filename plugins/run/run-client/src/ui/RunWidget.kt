@@ -106,10 +106,7 @@ private fun RunMenu(run: RunState, showWindow: () -> Unit, close: () -> Unit) {
                 fontSize = 11.sp,
             )
             configurations.forEach { configuration ->
-                val tag = RunTags.widgetRecent(configuration.id)
-                MenuEntry(configuration.name, tag, indent = true, running = run.isRunning(configuration.id)) {
-                    start(configuration)
-                }
+                ConfigurationEntry(run, configuration, RunTags.widgetRecent(configuration.id), showWindow, close, start)
             }
         }
         HorizontalDivider(color = IdeColors.Separator)
@@ -126,10 +123,7 @@ private fun RunMenu(run: RunState, showWindow: () -> Unit, close: () -> Unit) {
         if (index > 0) HorizontalDivider(color = IdeColors.Separator)
         SectionTitle(folder.ifEmpty { "Project" }, RunTags.widgetFolder(folder))
         configurations.forEach { configuration ->
-            val tag = RunTags.widgetItem(configuration.id)
-            MenuEntry(configuration.name, tag, indent = true, running = run.isRunning(configuration.id)) {
-                start(configuration)
-            }
+            ConfigurationEntry(run, configuration, RunTags.widgetItem(configuration.id), showWindow, close, start)
         }
     }
     if (folders.isNotEmpty()) HorizontalDivider(color = IdeColors.Separator)
@@ -169,24 +163,60 @@ private fun SectionTitle(text: String, tag: String) {
     )
 }
 
+// A command of the menu: click to run it, the pencil edits it and the bin deletes it.
+@Composable
+private fun ConfigurationEntry(
+    run: RunState,
+    configuration: RunConfiguration,
+    tag: String,
+    showWindow: () -> Unit,
+    close: () -> Unit,
+    start: (RunConfiguration) -> Unit,
+) {
+    MenuEntry(
+        configuration.name,
+        tag,
+        indent = true,
+        running = run.isRunning(configuration.id),
+        onEdit = {
+            close()
+            showWindow()
+            run.edit(configuration.id)
+        },
+        onDelete = { run.delete(configuration.id) },
+    ) {
+        start(configuration)
+    }
+}
+
 @Composable
 private fun MenuEntry(
     text: String,
     tag: String,
     indent: Boolean = false,
     running: Boolean = false,
+    onEdit: (() -> Unit)? = null,
+    onDelete: (() -> Unit)? = null,
     onClick: () -> Unit,
 ) {
     Row(
-        Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(start = if (indent) 24.dp else 12.dp, end = 12.dp, top = 6.dp, bottom = 6.dp)
-            .testTag(tag),
+        Modifier.fillMaxWidth().padding(start = if (indent) 24.dp else 12.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Label(text, Modifier.weight(1f, fill = false))
-        if (running) RunningBadge(Modifier.padding(start = 8.dp).testTag(RunTags.widgetRunning(tag)))
+        val label =
+            Modifier
+                .weight(1f)
+                .clickable(onClick = onClick)
+                .padding(vertical = 6.dp)
+                .testTag(tag)
+        Box(label) { Label(text) }
+        if (running) RunningBadge(Modifier.padding(horizontal = 8.dp).testTag(RunTags.widgetRunning(tag)))
+        if (onEdit != null) {
+            IconButton(onEdit, Modifier.testTag(RunTags.editOf(tag))) { IdeIcon(Lucide.Pencil, size = 14.dp) }
+        }
+        if (onDelete != null) {
+            IconButton(onDelete, Modifier.testTag(RunTags.deleteOf(tag))) { IdeIcon(Lucide.Trash2, size = 14.dp) }
+        }
     }
 }
 

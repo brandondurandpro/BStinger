@@ -132,6 +132,10 @@ class RunState(
     val recentIds: SnapshotStateList<String> =
         mutableStateListOf<String>().apply { addAll(decodeRecentIds(preferences[PreferenceKeysRun.recent(rootPath)])) }
 
+    /** Ids of the discovered configurations the user deleted: they are not listed again. */
+    val hiddenIds: SnapshotStateList<String> =
+        mutableStateListOf<String>().apply { addAll(decodeRecentIds(preferences[PreferenceKeysRun.hidden(rootPath)])) }
+
     /** The configuration being edited, or `null` when the editor is closed; a new one has an id not in the list. */
     var editing by mutableStateOf<RunConfiguration?>(null)
         private set
@@ -166,7 +170,8 @@ class RunState(
     val available: List<RunConfiguration>
         get() {
             val savedIds = configurations.map { it.id }.toSet()
-            return configurations.toList() + discovered.filter { it.id !in savedIds }
+            val shown = discovered.filter { it.id !in savedIds && it.id !in hiddenIds }
+            return configurations.toList() + shown
         }
 
     /**
@@ -234,6 +239,11 @@ class RunState(
         editing = RunConfiguration(UUID.randomUUID().toString(), "", RunKind.Run, "")
     }
 
+    /** Opens the editor on the configuration [id]. */
+    fun edit(id: String) {
+        editing = available.firstOrNull { it.id == id }
+    }
+
     /** Opens the editor on the selected configuration. */
     fun editSelected() {
         editing = selected
@@ -249,6 +259,7 @@ class RunState(
         val named = configuration.copy(name = configuration.name.trim().ifEmpty { configuration.commandLine.trim() })
         val index = configurations.indexOfFirst { it.id == named.id }
         if (index >= 0) configurations[index] = named else configurations += named
+        hiddenIds.remove(named.id)
         loaded = true
         selectedId = named.id
         editing = null
@@ -257,6 +268,8 @@ class RunState(
     /** Deletes the configuration [id]; the selection moves to the first one left. */
     fun delete(id: String) {
         configurations.removeAll { it.id == id }
+        // A discovered configuration comes back with every discovery: it is hidden instead.
+        if (discovered.any { it.id == id } && id !in hiddenIds) hiddenIds += id
         loaded = true
         if (selectedId == id) selectedId = available.firstOrNull()?.id
         editing = null
@@ -363,10 +376,11 @@ class RunState(
     /** The preferences of this project: its configurations and the selected one. */
     fun toPreferences(): Map<String, String> {
         val recent = PreferenceKeysRun.recent(rootPath) to recentIds.joinToString("\n")
+        val hidden = PreferenceKeysRun.hidden(rootPath) to hiddenIds.joinToString("\n")
         if (!loaded) return if (recentIds.isEmpty()) emptyMap() else mapOf(recent)
         val saved = PreferenceKeysRun.configurations(rootPath) to encodeConfigurations(configurations.toList())
         val chosen = PreferenceKeysRun.selected(rootPath) to selectedId.orEmpty()
-        return mapOf(saved, chosen, recent)
+        return mapOf(saved, chosen, recent, hidden)
     }
 
     private suspend fun collect(opened: RunStream, shown: RunSession) {
@@ -439,6 +453,9 @@ class RunState(
 object PreferenceKeysRun {
     /** Key of the configurations of the project at [root]. */
     fun configurations(root: String): String = PreferenceKeys.RUN_CONFIGURATIONS_PREFIX + root
+
+    /** Key of the deleted discovered configurations of the project at [root]. */
+    fun hidden(root: String): String = PreferenceKeys.RUN_HIDDEN_PREFIX + root
 
     /** Key of the recently run configurations of the project at [root]. */
     fun recent(root: String): String = PreferenceKeys.RUN_RECENT_PREFIX + root

@@ -58,6 +58,10 @@ object RunTags {
 
     fun sessionClose(id: String) = "run.session.close:$id"
 
+    fun editOf(entryTag: String) = "$entryTag:edit"
+
+    fun deleteOf(entryTag: String) = "$entryTag:delete"
+
     fun widgetItem(id: String) = "run.widget.item:$id"
 
     fun configuration(id: String) = "run.configuration:$id"
