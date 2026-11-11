@@ -37,13 +37,22 @@ private data class FileState(
  * feature changed only what it was meant to ([assertUnchanged]); a failure lists every difference.
  */
 class DiskSnapshot private constructor(private val files: Map<String, FileState>, private val git: List<String>) {
-    /** Fails, listing the differences, unless the project is as when [take] took this snapshot, but for [except]. */
-    fun assertUnchanged(project: SampleProject, except: Set<String> = emptySet()) {
+    /**
+     * Fails, listing the differences, unless the project is as when [take] took this snapshot, but for [except] (files
+     * the feature is meant to change or stage), [exceptRefs] (full names such as `refs/tags/v1`, created, moved or
+     * deleted on purpose) and [headMoves] (HEAD is meant to switch branch or commit).
+     */
+    fun assertUnchanged(
+        project: SampleProject,
+        except: Set<String> = emptySet(),
+        exceptRefs: Set<String> = emptySet(),
+        headMoves: Boolean = false,
+    ) {
         val now = take(project)
         val paths = (files.keys + now.files.keys).filterNot { it in except }.toSortedSet()
         val differences = paths.mapNotNull { difference(it, files[it], now.files[it]) }.toMutableList()
-        val gitBefore = git.filterNot { it.excepted(except) }
-        val gitNow = now.git.filterNot { it.excepted(except) }
+        val gitBefore = git.filterNot { it.excepted(except, exceptRefs, headMoves) }
+        val gitNow = now.git.filterNot { it.excepted(except, exceptRefs, headMoves) }
         if (gitBefore != gitNow) differences += "git: ${gitBefore.joinToString(" | ")} -> ${gitNow.joinToString(" | ")}"
         if (differences.isNotEmpty()) fail("The disk changed:\n" + differences.joinToString("\n"))
     }
@@ -153,17 +162,22 @@ private fun gitStateOf(project: SampleProject): List<String> {
     val repository = Files.isDirectory(project.root.resolve(".git/objects"))
     if (!repository) return emptyList()
     val head = project.git("rev-parse", "HEAD").trim()
-    val branches = project.git("for-each-ref", "--format=%(refname) %(objectname)").trim()
+    val checkedOut = project.git("rev-parse", "--symbolic-full-name", "HEAD").trim()
+    val refs = project.git("for-each-ref", "--format=%(refname) %(objectname)").lines().filter { it.isNotBlank() }
     val index = project.git("-c", "core.quotePath=false", "ls-files", "--stage").lines().filter { it.isNotBlank() }
     val porcelain = project.git("-c", "core.quotePath=false", "status", "--porcelain", "-uall")
     val status = porcelain.lines().filter { it.isNotBlank() }
-    return listOf("HEAD $head", "refs $branches") + index.map { "index $it" } + status.map { "status $it" }
+    val heads = listOf("HEAD $head", "HEAD-ref $checkedOut")
+    return heads + refs.map { "ref $it" } + index.map { "index $it" } + status.map { "status $it" }
 }
 
 // A status line of one of [paths] (`status XY path`), or an index entry of one of them
 // (`index mode hash stage<TAB>path`): the files a feature is meant to change or to stage.
-private fun String.excepted(paths: Set<String>): Boolean {
+private fun String.excepted(paths: Set<String>, refs: Set<String>, headMoves: Boolean): Boolean {
     val status = startsWith("status ") && drop("status ".length + 3) in paths
     val staged = startsWith("index ") && substringAfter('\t') in paths
-    return status || staged
+    val ref = startsWith("ref ") && substringAfter("ref ").substringBefore(' ') in refs
+    val head = headMoves && startsWith("HEAD")
+    val moved = ref || head
+    return status || staged || moved
 }

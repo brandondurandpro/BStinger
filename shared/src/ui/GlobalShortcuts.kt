@@ -44,7 +44,7 @@ internal class IdeContext(val app: AppState, override val project: ProjectState,
         document.selectedText().takeIf { it.isNotEmpty() && '\n' !in it }?.let { project.find.query = it }
         project.find.visible = true
         project.find.replaceVisible = replace
-        runCatching { findFocus.requestFocus() }
+        project.find.requestFocus()
     }
 
     fun closeFindBar() {

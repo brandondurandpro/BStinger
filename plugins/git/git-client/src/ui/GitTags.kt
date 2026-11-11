@@ -66,6 +66,14 @@ object GitTags {
     const val HISTORY_BRANCHES_SPLITTER = "history.branchesSplitter"
     const val HISTORY_DETAILS_SPLITTER = "history.detailsSplitter"
 
+    const val BRANCH_CONTEXT_MENU = "history.branchMenu"
+    const val COMMIT_CONTEXT_MENU = "history.commitMenu"
+    const val HISTORY_DIALOG = "history.dialog"
+    const val HISTORY_DIALOG_INPUT = "history.dialog.input"
+    const val HISTORY_DIALOG_ERROR = "history.dialog.error"
+    const val HISTORY_DIALOG_CONFIRM = "history.dialog.confirm"
+    const val HISTORY_DIALOG_CANCEL = "history.dialog.cancel"
+
     fun gitChange(relativePath: String) = "git.change:$relativePath"
 
     fun gitChangeRevert(relativePath: String) = "git.change.revert:$relativePath"
@@ -115,4 +123,7 @@ object GitTags {
     fun pinnedBranch(name: String) = "branch.pinned:$name"
 
     fun unpinnedBranch(name: String) = "branch.unpinned:$name"
+
+    /** Item [action] of the right-click menu of a branch or a commit of the Branches window. */
+    fun historyMenuItem(action: String) = "history.menu:$action"
 }

@@ -22,7 +22,10 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -38,9 +41,11 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -111,9 +116,18 @@ fun IdeTextField(
     trailing: (@Composable RowScope.() -> Unit)? = null,
     onSubmit: () -> Unit = {},
     monospace: Boolean = false,
+    selectAllRequest: Int = 0,
 ) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
+    var field by remember { mutableStateOf(TextFieldValue(value, TextRange(value.length))) }
+    if (field.text != value) field = TextFieldValue(value, TextRange(value.length))
+    // Each new request selects the whole text (but not the request the field was created with).
+    var handledRequest by remember { mutableIntStateOf(selectAllRequest) }
+    if (handledRequest != selectAllRequest) {
+        handledRequest = selectAllRequest
+        field = field.copy(selection = TextRange(0, value.length))
+    }
     val textStyle =
         if (monospace) {
             LocalCodeStyle.current.copy(color = IdeColors.Text)
@@ -122,8 +136,11 @@ fun IdeTextField(
         }
     val borderColor = if (focused) IdeColors.Ring else IdeColors.InputBorder
     BasicTextField(
-        value = value,
-        onValueChange = onValueChange,
+        value = field,
+        onValueChange = {
+            field = it
+            if (it.text != value) onValueChange(it.text)
+        },
         modifier = modifier,
         singleLine = true,
         cursorBrush = SolidColor(IdeColors.Caret),

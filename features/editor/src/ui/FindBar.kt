@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -39,6 +40,8 @@ fun FindBar(find: FindState, document: Document, focus: FocusRequester, onClose:
 
 @Composable
 private fun FindRow(find: FindState, document: Document, focus: FocusRequester, onClose: () -> Unit) {
+    // The bar is composed after the request is made: focus once the field is attached, each time it is asked.
+    LaunchedEffect(find.focusRequest) { runCatching { focus.requestFocus() } }
     Row(
         Modifier.fillMaxWidth().height(40.dp).padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -55,6 +58,7 @@ private fun FindRow(find: FindState, document: Document, focus: FocusRequester, 
                     onClose = onClose,
                 ),
             placeholder = "Find",
+            selectAllRequest = find.focusRequest,
             leading = { SearchIcon() },
             trailing = { ToggleChip("Cc", find.matchCase) { find.matchCase = !find.matchCase } },
         )

@@ -21,6 +21,14 @@ class FindState {
 
     var pendingSelectNext = false
 
+    /** Bumped each time the find field must take the keyboard focus (and select its text). */
+    var focusRequest by mutableIntStateOf(0)
+        private set
+
+    fun requestFocus() {
+        focusRequest++
+    }
+
     /** Installs freshly computed [found] occurrences and makes the first one at/after [caret] current. */
     fun setMatches(found: List<TextPos>, caret: TextPos) {
         matches = found
