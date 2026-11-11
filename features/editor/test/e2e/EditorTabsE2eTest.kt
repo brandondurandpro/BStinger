@@ -202,6 +202,9 @@ class EditorTabsE2eTest {
             awaitTag(EditorTags.MENU_COPY_TAB_PATH).performClick()
             assertTrue(TextClipboard.get()!!.endsWith("README.md"))
             rightClick(EditorTags.tab("README.md"))
+            awaitTag(EditorTags.MENU_COPY_TAB_RELATIVE_PATH).performClick()
+            assertEquals("README.md", TextClipboard.get())
+            rightClick(EditorTags.tab("README.md"))
             awaitTag(Tags.MENU_CLOSE_ALL_TABS).performClick()
             awaitTag(AppTags.EDITOR_EMPTY).assertIsDisplayed()
         }

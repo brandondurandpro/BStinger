@@ -241,7 +241,12 @@ private fun TabContextMenu(
             }
         }
         MenuSeparator()
-        TabMenuItem("Copy Path", EditorTags.MENU_COPY_TAB_PATH) { action { TextClipboard.set(tab.entry.path) } }
+        TabMenuItem("Copy Absolute Path", EditorTags.MENU_COPY_TAB_PATH) {
+            action { TextClipboard.set(tab.entry.path) }
+        }
+        TabMenuItem("Copy Relative Path", EditorTags.MENU_COPY_TAB_RELATIVE_PATH) {
+            action { TextClipboard.set(tab.relativePath) }
+        }
     }
 }
 
