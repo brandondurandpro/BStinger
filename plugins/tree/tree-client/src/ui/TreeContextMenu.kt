@@ -9,6 +9,7 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.example.kotlineditor.model.FileEntry
+import org.example.kotlineditor.model.relativeToRoot
 import org.example.kotlineditor.state.FileDialog
 import org.example.kotlineditor.state.TreeHost
 
@@ -17,6 +18,8 @@ internal fun TreeContextMenu(project: TreeHost, entry: FileEntry, offset: DpOffs
     val tree = project.tree
     val directory = if (entry.isDirectory) entry else tree.parentOf(entry) ?: tree.root
     val isRoot = entry.path == tree.root.path
+    val rootRelative = relativeToRoot(entry.path, tree.root.path)
+    val relative = rootRelative.ifEmpty { "." }
     val action = { block: () -> Unit ->
         onDismiss()
         block()
@@ -42,7 +45,9 @@ internal fun TreeContextMenu(project: TreeHost, entry: FileEntry, offset: DpOffs
         MenuItem("Deploy to…", TreeTags.MENU_DEPLOY) {
             action { project.fileDialog = FileDialog.Deploy(listOf(entry)) }
         }
-        MenuItem("Copy Path", TreeTags.MENU_COPY_PATH) { action { TextClipboard.set(entry.path) } }
+        MenuItem("Copy Absolute Path", TreeTags.MENU_COPY_PATH) { action { TextClipboard.set(entry.path) } }
+        MenuItem("Copy Relative Path", TreeTags.MENU_COPY_RELATIVE_PATH) { action { TextClipboard.set(relative) } }
+        MenuItem("Copy Name", TreeTags.MENU_COPY_NAME) { action { TextClipboard.set(entry.name) } }
         MenuItem("Reload from Disk", TreeTags.MENU_RELOAD) { action { tree.refresh() } }
     }
 }
