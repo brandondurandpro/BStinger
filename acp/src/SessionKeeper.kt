@@ -55,6 +55,9 @@ internal class SessionKeeper(
     private var replay = false
     private var hadSession = false
 
+    // Whether the journal shows more than the session holds: what a session lost, or another agent, was told.
+    private var outlivedSession = false
+
     // The agent the current (or resumable) session belongs to: a prompt of another agent starts over.
     @Volatile
     private var served: AgentCommand? = null
@@ -135,7 +138,12 @@ internal class SessionKeeper(
         }
         val forgot = hadSession || taken.replaced != null
         val lost = reopened == null
-        if (lost && forgot) writer.notice(if (taken.switched) AGENT_CHANGED else NEW_SESSION)
+        if (lost && forgot) {
+            outlivedSession = true
+            writer.notice(if (taken.switched) AGENT_CHANGED else NEW_SESSION)
+        }
+        val replayable = info.sessions.load && !outlivedSession
+        journal.describe { it.copy(replayable = replayable) }
     }
 
     /**

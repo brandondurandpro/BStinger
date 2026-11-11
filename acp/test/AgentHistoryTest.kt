@@ -87,6 +87,7 @@ class AgentHistoryTest {
             listOf("user: echo hello there", "agent: hello there ", "user: echo second prompt", "agent: second prompt ")
         assertEquals(expected, texts)
         assertTrue(followed.last.replayed)
+        assertTrue(followed.last.replayable)
         assertEquals(session, followed.last.session)
         assertEquals("echo hello there", followed.last.title)
     }
@@ -110,6 +111,7 @@ class AgentHistoryTest {
         val opened = server.idle("c1") { it.isNotEmpty() }
         assertContains(opened.items.filterIsInstance<AgentItem.Notice>().joinToString { it.text }, "does not replay")
         assertFalse(opened.last.replayed)
+        assertFalse(opened.last.replayable)
         server.send("count", agent = agent("--no-load"))
         val followed = server.idle("c1") { it.answers().isNotEmpty() }
         assertEquals(listOf("Prompt 3 of $session."), followed.items.answers())

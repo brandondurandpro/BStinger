@@ -150,6 +150,43 @@ class AgentServiceTest {
     }
 
     @Test
+    fun `a long thought keeps its beginning`() {
+        send("think " + "thought ".repeat(MAX_THOUGHT))
+        val items = turn { list -> list.any { it is AgentItem.AgentText } }
+        val thought = items.filterIsInstance<AgentItem.Thought>().firstOrNull()
+        assertEquals(MAX_THOUGHT, thought?.text?.length)
+        assertEquals(true, thought?.text?.startsWith("thought thought "))
+    }
+
+    @Test
+    fun `a tool call keeps the beginning of a long output, never all of it`() {
+        send("tools 2 2000")
+        val items = turn { list -> list.any { it is AgentItem.AgentText } }
+        val calls = items.filterIsInstance<AgentItem.ToolCall>()
+        assertEquals(2, calls.size)
+        for (call in calls) {
+            assertEquals(MAX_TOOL_OUTPUT, call.output.length)
+            assertContains(call.output, "matches\nline 1 of the output")
+        }
+    }
+
+    @Test
+    fun `a file written keeps its first lines in the transcript, all of them on disk`() {
+        val file = directory.resolve("long.txt")
+        send("lines 500 $file")
+        val asked = waitFor { list -> list.any { it is AgentItem.Permission } }
+        val permission = asked.filterIsInstance<AgentItem.Permission>().firstOrNull()
+        service.answer("c1", permission?.id.orEmpty(), "allow")
+        val items = turn { list -> list.any { (it as? AgentItem.AgentText)?.text?.startsWith("Wrote") == true } }
+        assertEquals(500, file.readText().lines().size)
+        val call = items.filterIsInstance<AgentItem.ToolCall>().firstOrNull()
+        val diff = call?.diffs?.firstOrNull()
+        assertEquals(emptyList(), diff?.removed)
+        assertEquals((1..MAX_DIFF_LINES).map { "line $it" }, diff?.added)
+        assertEquals(500 - MAX_DIFF_LINES, diff?.hiddenLines)
+    }
+
+    @Test
     fun `cancelling stops the agent and its permission requests`() {
         send("slow")
         waitFor { list -> list.any { it is AgentItem.AgentText } }

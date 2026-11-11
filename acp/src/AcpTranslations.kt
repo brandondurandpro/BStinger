@@ -75,12 +75,12 @@ internal fun JsonObject.toolContent(): ToolContent? {
             "terminal" -> entry.text("terminalId")?.let(terminals::add)
         }
     }
-    return ToolContent(texts.filter { it.isNotEmpty() }.joinToString("\n"), diffs, terminals)
+    return ToolContent(shownOutput(texts), diffs, terminals)
 }
 
 private fun JsonObject.diff(): AgentDiff? {
     val path = text("path") ?: return null
-    return AgentDiff(path, text("oldText"), text("newText").orEmpty())
+    return shownDiff(path, text("oldText"), text("newText").orEmpty())
 }
 
 /** The paths of the `locations` of a tool call, null when the update does not change them. */

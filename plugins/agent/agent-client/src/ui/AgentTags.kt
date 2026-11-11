@@ -98,6 +98,12 @@ object AgentTags {
     const val AGENT_EFFORT = "agent.effort"
     const val AGENT_COMPLETION = "agent.completion"
     const val AGENT_TERMINAL = "agent.terminal"
+
+    /** The change a tool call makes to a file: its first lines. */
+    const val AGENT_DIFF = "agent.diff"
+
+    /** How many more lines the change has than its card shows. */
+    const val AGENT_DIFF_MORE = "agent.diff.more"
     const val AGENT_STRIP_CONVERSATIONS = "agent.strip.conversations"
     const val AGENT_DETAILS = "agent.details"
     const val AGENT_DETAIL_CONVERSATION = "agent.detail.conversation"

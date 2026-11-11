@@ -49,6 +49,16 @@ private const val BUDGET_MB = 800L
 private const val MAX_COMPOSED_ROWS = 80
 private const val MAX_SHOWN_OUTPUT = 16_000
 
+// Conversations of tool calls that each read a file of hundreds of lines; measured here: 840 ms, 316 MB.
+private const val READING_CONVERSATIONS = 3
+private const val READS = 300
+private const val READ_LINES = 300
+private const val READS_BUDGET_MS = 30_000L
+private const val MAX_KEPT_OUTPUT = 4_000
+
+// Measured here: 24 ms to close the tab of a history of 2,000 prompts, 530 ms to replay it when it opens again.
+private const val RELEASE_BUDGET_MS = 2_000L
+
 /**
  * Agent mode on large inputs: an answer of 5,000 chunks, a transcript of 2,000 tool calls scrolled and jumped
  * through, and a prompt typed over it, within budgets that a cost per chunk or per item breaks.
@@ -176,6 +186,59 @@ class AgentPerformanceE2eTest {
             }
             assertEquals(TYPED, conversation.draft)
             assertTrue(onAllNodes(hasTestTag(AgentTags.AGENT_SEND)).fetchSemanticsNodes().isNotEmpty())
+        }
+
+    @Test
+    fun `a long conversation is released with its tab, and replays fast when it opens again`() =
+        runComposeUiTest {
+            val store = Files.createTempDirectory("agent-store")
+            val app = launchWithProject(project, agentPreferences("--store", "$store"))
+            val turns = List(HISTORY_TURNS) { "echo prompt $it" to "answer $it " }
+            val session = pastSession(store, app.project.root.path, turns)
+            val conversation = awaitHistory(app, session)
+            awaitTag(AgentTags.agentConversation(conversation.id)).performClick()
+            awaitCondition(AGENT_TIMEOUT) { conversation.items.size == 2 * HISTORY_TURNS }
+            awaitIdle(conversation)
+            measure("Tab of $HISTORY_TURNS prompts closed", RELEASE_BUDGET_MS, BUDGET_MB) {
+                awaitTag(AgentTags.agentTabClose(conversation.id)).performClick()
+                awaitNoTag(AgentTags.agentTab(conversation.id))
+                renderFrame()
+            }
+            // Nothing of it is held any more: the agent keeps it.
+            assertTrue(conversation.items.isEmpty(), "${conversation.items.size} items held")
+            measure("History of $HISTORY_TURNS prompts replayed again", HISTORY_BUDGET_MS, BUDGET_MB) {
+                awaitTag(AgentTags.agentConversation(conversation.id)).performClick()
+                awaitCondition(HISTORY_BUDGET_MS) { conversation.items.size == 2 * HISTORY_TURNS }
+                awaitIdle(conversation)
+                renderFrame()
+            }
+            store.toFile().deleteRecursively()
+        }
+
+    @Test
+    fun `conversations of tool calls with long outputs keep what they show, not megabytes`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, agentPreferences())
+            val first = startConversation(app)
+            // The agent process starts outside the measure.
+            sendPrompt("echo ready")
+            awaitIdle(first)
+            measure("$READING_CONVERSATIONS conversations of $READS long outputs", READS_BUDGET_MS, BUDGET_MB) {
+                repeat(READING_CONVERSATIONS) {
+                    awaitTag(AgentTags.AGENT_NEW).performClick()
+                    awaitCondition { app.project.agent.current?.items?.isEmpty() == true }
+                    val conversation = checkNotNull(app.project.agent.current)
+                    sendPrompt("tools $READS $READ_LINES")
+                    awaitCondition(READS_BUDGET_MS) { conversation.itemsOf<AgentItem.ToolCall>().size == READS }
+                    awaitIdle(conversation)
+                    renderFrame()
+                }
+            }
+            // What the IDE holds for as long as the conversations last: the beginning of each output.
+            val calls = app.project.agent.conversations.flatMap { it.itemsOf<AgentItem.ToolCall>() }
+            assertEquals(READING_CONVERSATIONS * READS, calls.size)
+            val longest = calls.maxOf { it.output.length }
+            assertTrue(longest <= MAX_KEPT_OUTPUT, "an output of $longest characters is kept")
         }
 
     private fun lastAnswer(conversation: org.example.kotlineditor.state.Conversation): String =
