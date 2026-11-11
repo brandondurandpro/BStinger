@@ -1,4 +1,4 @@
-package org.example.kotlineditor.server
+package org.example.kotlineditor.run.server
 
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -28,11 +28,11 @@ private const val MAX_KEPT_LINES = 200_000
 private const val NOT_RUNNING = "Nothing to run"
 
 /**
- * Runs of a session, keyed by the id of the request that started them (like [TerminalRegistry]'s terminals): each
+ * Runs of a session, keyed by the id of the request that started them (like the terminals of a session): each
  * one is a process next to the project's files, whose output is pushed as chunks and kept for [resume]. A run that
  * is gone (the server restarted, its sessions with it) answers nothing, and the client shows it as lost.
  */
-internal class RunRegistry(private val push: (Frame) -> Unit) {
+internal class RunRegistry(private val push: (Frame) -> Unit) : AutoCloseable {
     private val runs = ConcurrentHashMap<Long, ServerRun>()
 
     /** Starts [command] in [directory] as the run [id]; the one this id had before (never in practice) stops. */
@@ -50,6 +50,8 @@ internal class RunRegistry(private val push: (Frame) -> Unit) {
         runs.values.forEach { it.stop() }
         runs.clear()
     }
+
+    override fun close() = stopAll()
 
     /** The chunks of the run [id] after [lastSeq], then its end; nothing when the run is already gone. */
     fun resume(id: Long, lastSeq: Long) {

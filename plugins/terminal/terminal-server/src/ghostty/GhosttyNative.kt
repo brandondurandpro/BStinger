@@ -1,6 +1,6 @@
-package org.example.kotlineditor.server.ghostty
+package org.example.kotlineditor.terminal.server.ghostty
 
-import org.example.kotlineditor.server.ghosttyPlatform
+import org.example.kotlineditor.terminal.server.ghosttyPlatform
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicBoolean

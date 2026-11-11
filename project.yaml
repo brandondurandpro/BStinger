@@ -8,16 +8,18 @@ modules:
   - e2e
   - features/agent
   - features/editor
-  - features/git
-  - features/language-servers
+  - plugins/git/git-client
+  - plugins/language-servers/language-servers-client
   - features/remote
-  - features/run
-  - features/terminal
-  - features/tree
+  - plugins/run/run-client
+  - plugins/terminal/terminal-client
+  - plugins/tree/tree-client
   - lsp
   - plugin-api
   - plugin-core
   - plugin-host
+  - plugins/run/run-server
+  - plugins/terminal/terminal-server
   - packaging
   - protocol
   - server

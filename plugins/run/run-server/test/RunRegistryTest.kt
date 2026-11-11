@@ -1,4 +1,4 @@
-package org.example.kotlineditor.server
+package org.example.kotlineditor.run.server
 
 import kotlinx.serialization.json.jsonObject
 import org.example.kotlineditor.model.RunChunk

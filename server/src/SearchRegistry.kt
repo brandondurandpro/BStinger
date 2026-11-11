@@ -19,7 +19,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Find in Files streams of a session, keyed by the id of the request that started them (like
- * [TerminalRegistry]'s terminals). Each one launches a search next to the files, pushes its batches as they are
+ * the terminals of a session). Each one launches a search next to the files, pushes its batches as they are
  * found and keeps them: a client that reconnects asks for [resume], which receives the batches after the last
  * sequence number it got, and the end of the stream when the search already ended. A stream that is gone (the
  * server restarted, its sessions with it) answers nothing, and the client runs its search again.

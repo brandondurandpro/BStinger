@@ -16,7 +16,6 @@ import org.example.kotlineditor.rpc.entry
 import org.example.kotlineditor.rpc.fileVersion
 import org.example.kotlineditor.rpc.findOptions
 import org.example.kotlineditor.rpc.int
-import org.example.kotlineditor.rpc.keyEvent
 import org.example.kotlineditor.rpc.long
 import org.example.kotlineditor.rpc.matchesJson
 import org.example.kotlineditor.rpc.read
@@ -25,12 +24,11 @@ import org.example.kotlineditor.rpc.string
 import org.example.kotlineditor.rpc.stringOrNull
 import org.example.kotlineditor.rpc.strings
 import org.example.kotlineditor.rpc.symbolsJson
-import org.example.kotlineditor.rpc.terminalInput
 import org.example.kotlineditor.rpc.textContent
 import org.example.kotlineditor.rpc.toJson
 import org.example.kotlineditor.rpc.toJsonOrNull
 
-internal typealias Handler = suspend Request.() -> JsonElement
+typealias Handler = suspend Request.() -> JsonElement
 
 private const val PATH = "path"
 private const val PROJECT = "project"
@@ -173,42 +171,8 @@ internal fun gitHandlers(git: GitClient): Map<MethodSpec, Handler> =
         Method.GitRemoveWorktree to { nothing { git.removeWorktree(root(), params.string(PATH)) } },
     )
 
-internal fun terminalHandlers(): Map<MethodSpec, Handler> =
-    mapOf(
-        Method.TerminalStart to {
-            nothing {
-                terminals.start(
-                    id,
-                    params.string(DIRECTORY),
-                    params.int("columns"),
-                    params.int("rows"),
-                    params.int("cellWidthPx"),
-                    params.int("cellHeightPx"),
-                )
-            }
-        },
-        Method.TerminalWrite to { nothing { terminalOrFail().write(params.terminalInput()) } },
-        Method.TerminalKey to { nothing { terminalOrFail().sendKey(params.read("event") { it.keyEvent() }) } },
-        Method.TerminalPaste to { nothing { terminalOrFail().paste(params.string("text")) } },
-        Method.TerminalResize to {
-            val terminal = terminalOrFail()
-            nothing {
-                terminal.resize(
-                    params.int("columns"),
-                    params.int("rows"),
-                    params.int("cellWidthPx"),
-                    params.int("cellHeightPx"),
-                )
-            }
-        },
-        Method.TerminalScroll to { nothing { terminalOrFail().scroll(params.int("delta")) } },
-        Method.TerminalClear to { nothing { terminalOrFail().clear() } },
-        Method.TerminalResume to { nothing { terminals[params.long(TERMINAL)]?.resume(params.long("lastSeq")) } },
-        Method.TerminalDestroy to { nothing { terminals.stop(params.long(TERMINAL)) } },
-    )
-
-// A method that returns nothing answers with a null result.
-internal inline fun nothing(block: () -> Unit): JsonElement {
+/** Runs [block] for a method that returns nothing: it answers with a null result. */
+inline fun nothing(block: () -> Unit): JsonElement {
     block()
     return JsonNull
 }
@@ -219,9 +183,6 @@ internal fun Request.entry(name: String) = params.read(name) { it.entry() }
 private fun Request.open() = params.get("open")?.let { fields -> fields.strings() } ?: emptyList()
 
 private fun Request.root() = params.string(ROOT)
-
-private fun Request.terminalOrFail(): ServerTerminal =
-    checkNotNull(terminals[params.long(TERMINAL)]) { "This terminal has ended" }
 
 /** `telemetry/config`: the client says whether the user agreed to share performance measures. */
 internal fun telemetryHandlers(telemetry: ServerTelemetry): Map<MethodSpec, Handler> =

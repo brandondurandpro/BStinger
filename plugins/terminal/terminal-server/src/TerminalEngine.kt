@@ -1,4 +1,4 @@
-package org.example.kotlineditor.server
+package org.example.kotlineditor.terminal.server
 
 import org.example.kotlineditor.model.TerminalKeyEvent
 import org.example.kotlineditor.model.TerminalSnapshot
@@ -75,7 +75,7 @@ internal fun ghosttyPlatform(): String {
  * the engine is then loaded with those bindings in a class loader of its own.
  */
 internal object TerminalEngines {
-    private const val FACTORY = "org.example.kotlineditor.server.ghostty.GhosttyEngineFactory"
+    private const val FACTORY = "org.example.kotlineditor.terminal.server.ghostty.GhosttyEngineFactory"
 
     private val factory: TerminalEngineFactory by lazy { loadFactory() }
 

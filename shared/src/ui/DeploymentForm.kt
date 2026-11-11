@@ -90,7 +90,7 @@ private fun FormButtons(deployments: DeploymentsState) {
             "Save",
             deployments::saveDraft,
             Modifier.testTag(AppTags.DEPLOYMENT_SAVE),
-            variant = DeployDeployButtonVariant.Primary,
+            variant = DeployButtonVariant.Primary,
         )
     }
 }
@@ -139,13 +139,13 @@ private fun FolderTable(deployments: DeploymentsState, draft: DeployDraft) {
                 "+  Add folder",
                 deployments::addFolder,
                 Modifier.testTag(AppTags.DEPLOYMENT_ADD_FOLDER),
-                DeployDeployButtonVariant.Ghost,
+                DeployButtonVariant.Ghost,
             )
             DeployButton(
                 "Add selected in project view",
                 deployments::addSelected,
                 Modifier.testTag(AppTags.DEPLOYMENT_ADD_SELECTED),
-                DeployDeployButtonVariant.Ghost,
+                DeployButtonVariant.Ghost,
             )
         }
     }

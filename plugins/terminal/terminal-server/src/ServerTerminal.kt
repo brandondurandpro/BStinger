@@ -1,4 +1,4 @@
-package org.example.kotlineditor.server
+package org.example.kotlineditor.terminal.server
 
 import com.pty4j.PtyProcess
 import com.pty4j.PtyProcessBuilder

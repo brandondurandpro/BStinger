@@ -56,7 +56,7 @@ class ServerPluginHostTest {
     private fun call(): String {
         val handler = assertNotNull(handlers[SCAN], "plugin/srvprobe/scan has no handler")
         val searches = SearchRegistry(CoroutineScope(Dispatchers.Default)) {}
-        val request = Request(1, JsonObject(emptyMap()), TerminalRegistry {}, searches, RunRegistry {})
+        val request = Request(1, JsonObject(emptyMap()), searches, SessionStates {})
         return runBlocking { handler(request) }.jsonPrimitive.content
     }
 

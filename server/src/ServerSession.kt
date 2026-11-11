@@ -92,39 +92,24 @@ private fun ConcurrentHashMap<Long, Running>.release(id: Long, self: Job) {
     computeIfPresent(id) { _, running -> running.takeIf { it.job !== self } }
 }
 
-/** One request being executed: its id, its named params, the session's terminals and searches, and the session's id. */
-internal class Request(
+/**
+ * One request being executed: its id, its named params, the session's searches, the state a feature keeps for the
+ * session ([session]) and the session's id.
+ */
+class Request internal constructor(
+    /** The id of the request, which the feature's streams are named after. */
     val id: Long,
+    /** The named params of the request. */
     val params: JsonObject,
-    val terminals: TerminalRegistry,
-    val streams: SearchRegistry,
-    val runs: RunRegistry,
+    internal val streams: SearchRegistry,
+    private val states: SessionStates,
     val session: String = "",
 ) {
     /** Set by a handler whose answer is source code, so the codec may use the code dictionary. */
     var code = false
-}
 
-/** Terminals of a session, keyed by the id of their snapshot stream. */
-internal class TerminalRegistry(private val push: (Frame) -> Unit) {
-    private val terminals = ConcurrentHashMap<Long, ServerTerminal>()
-
-    fun start(id: Long, directory: String, columns: Int, rows: Int, cellWidthPx: Int, cellHeightPx: Int) {
-        terminals.remove(id)?.destroy()
-        terminals[id] =
-            ServerTerminal(id, directory, columns, rows, cellWidthPx, cellHeightPx, push)
-    }
-
-    operator fun get(id: Long): ServerTerminal? = terminals[id]
-
-    fun stop(id: Long) {
-        terminals.remove(id)?.destroy()
-    }
-
-    fun stopAll() {
-        terminals.values.forEach { it.destroy() }
-        terminals.clear()
-    }
+    /** The state of [key] for this session, created by the first request that asks for it. */
+    fun <T : AutoCloseable> state(key: SessionKey<T>): T = states.stateOf(key)
 }
 
 /** A client across reconnections: in-flight requests, cached answers of mutations, running terminals. */
@@ -154,9 +139,8 @@ internal class ServerSession(
             override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Long, Frame>?) =
                 size > options.responseCacheSize
         }
-    private val terminals = TerminalRegistry(::send)
+    private val states = SessionStates(::send)
     private val streams = SearchRegistry(scope, ::send)
-    private val runs = RunRegistry(::send)
 
     fun attach(new: ServerConnection) {
         val old = connection
@@ -182,9 +166,8 @@ internal class ServerSession(
 
     fun dispose() {
         inFlight.values.forEach { it.job.cancel() }
-        terminals.stopAll()
+        states.closeAll()
         streams.stopAll()
-        runs.stopAll()
         connection?.close()
         onDispose(id)
     }
@@ -276,7 +259,7 @@ internal class ServerSession(
 
     private suspend fun execute(id: Long, method: MethodSpec, params: JsonElement): Frame =
         try {
-            val request = Request(id, params.params(), terminals, streams, runs, this.id)
+            val request = Request(id, params.params(), streams, states, this.id)
             val result = checkNotNull(handlers[method]) { "No handler for $method" }.invoke(request)
             Frame(FrameKind.Response, id, result, code = request.code)
         } catch (e: IOException) {

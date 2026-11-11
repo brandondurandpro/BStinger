@@ -1,4 +1,4 @@
-package org.example.kotlineditor.server.ghostty
+package org.example.kotlineditor.terminal.server.ghostty
 
 import io.github.vlaaad.ghostty.bindings.GhosttyBuffer
 import io.github.vlaaad.ghostty.bindings.GhosttyColorRgb
@@ -23,8 +23,8 @@ import org.example.kotlineditor.model.TerminalAttributes
 import org.example.kotlineditor.model.TerminalCell
 import org.example.kotlineditor.model.TerminalKeyEvent
 import org.example.kotlineditor.model.TerminalSnapshot
-import org.example.kotlineditor.server.TerminalEngine
-import org.example.kotlineditor.server.TerminalEngineFactory
+import org.example.kotlineditor.terminal.server.TerminalEngine
+import org.example.kotlineditor.terminal.server.TerminalEngineFactory
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 import java.lang.foreign.ValueLayout.ADDRESS

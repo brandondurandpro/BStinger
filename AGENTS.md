@@ -17,7 +17,7 @@ Use `./kotlin` (`kotlin.bat` on Windows); it downloads the toolchain on first us
 - Desktop app: `./kotlin run -m desktopApp` (embeds a server on loopback).
 - All tests: `./run-tests` (`run-tests.bat`), which runs the UI modules one at a time, as the CI does (see the
   script); `./kotlin test` runs them all at once. One module: `./kotlin test -m shared`. One Linux CI job:
-  `./run-tests --only shared,terminal` (its line of `tools/ci/linux-test-groups.txt`).
+  `./run-tests --only shared,terminal-client` (its line of `tools/ci/linux-test-groups.txt`).
 - One test class: `./kotlin test -m shared --include-classes='*EditorTabsE2eTest'`; one test: `--include-test=<fqn>.method`.
 - Lint: `./lint`.
 
@@ -55,12 +55,12 @@ A feature, or a fix of user-visible behavior, is not done until an e2e test exer
 
 ### Writing e2e tests
 
-- They live in the `test/e2e` directory of the feature's module (`features/git/test/e2e`…), or in `shared/test/e2e`
+- They live in the `test/e2e` directory of the feature's module (`plugins/git/git-client/test/e2e`…), or in `shared/test/e2e`
   when they span several features, one `*E2eTest` class per area, with the Compose UI test API.
 - Start the app with `launchApp` or `launchWithProject` from `E2eSupport.kt`: it runs a real `EditorServer` and the
   UI talks to it over the network, so every test also goes through the protocol. Use `SampleProject` for files.
 - Drive the app like a user: clicks, keys and shortcuts on nodes found by test tags. Each UI module has its own tags
-  object (`features/git/src/ui/GitTags.kt`, `shared/src/ui/AppTags.kt`…); add a tag to the module of the element that needs it.
+  object (`plugins/git/git-client/src/ui/GitTags.kt`, `shared/src/ui/AppTags.kt`…); add a tag to the module of the element that needs it.
   Wait with `awaitTag`, `awaitNoTag` and `awaitCondition`, never with `sleep`.
 - Use `androidx.compose.ui.test.v2.runComposeUiTest`, not the v1 API.
 - Tests must pass on every CI platform: Linux (X11 and Wayland, where `/bin/sh` may be dash) and Windows (`cmd.exe`

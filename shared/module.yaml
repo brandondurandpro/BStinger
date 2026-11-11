@@ -5,12 +5,12 @@ dependencies:
   - //plugin-host: exported
   - //features/agent: exported
   - //features/editor: exported
-  - //features/git: exported
-  - //features/language-servers: exported
+  - //plugins/git/git-client: exported
+  - //plugins/language-servers/language-servers-client: exported
   - //features/remote: exported
-  - //features/run: exported
-  - //features/terminal: exported
-  - //features/tree: exported
+  - //plugins/run/run-client: exported
+  - //plugins/terminal/terminal-client: exported
+  - //plugins/tree/tree-client: exported
   - $libs.androidx.lifecycle.viewmodel.compose
   - $libs.androidx.lifecycle.runtime.compose
 

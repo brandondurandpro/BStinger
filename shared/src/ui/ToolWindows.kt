@@ -26,9 +26,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import org.example.kotlineditor.plugin.StripGroup
-import org.example.kotlineditor.plugin.ToolWindowContribution
 import org.example.kotlineditor.plugin.ToolWindowRegistry
-import org.example.kotlineditor.state.BUILT_IN_TOOL_WINDOWS
 import org.example.kotlineditor.state.Dock
 import org.example.kotlineditor.state.ProjectState
 import org.example.kotlineditor.state.ToolWindow
@@ -153,39 +151,6 @@ private fun ToolWindowContent(project: ProjectState, window: ToolWindow, drag: T
     val contribution = IdeRegistries.toolWindows.find(window) ?: return
     contribution.content(project, drag, modifier.island())
 }
-
-private fun builtIn(
-    window: ToolWindow,
-    group: StripGroup,
-    tag: String,
-    devtools: Boolean = false,
-    icon: LucideIcon,
-    content: @Composable (ProjectState, ToolWindowDrag, Modifier) -> Unit,
-): ToolWindowContribution {
-    val found = BUILT_IN_TOOL_WINDOWS.firstOrNull { it.window == window }
-    val defaults = checkNotNull(found) { "No defaults for $window" }
-    return ToolWindowContribution(
-        defaults = defaults,
-        tag = tag,
-        group = group,
-        devtools = devtools,
-        icon = icon,
-        // Every project of the IDE is a ProjectState.
-        content = { host, drag, modifier -> content(host as ProjectState, drag, modifier) },
-    )
-}
-
-/** The tool windows of the IDE itself, in the order of their buttons; Run comes from its own feature. */
-internal fun builtInToolWindows(): List<ToolWindowContribution> =
-    listOf(
-        builtIn(
-            ToolWindow.Network,
-            StripGroup.Bottom,
-            AppTags.TOOL_NETWORK,
-            devtools = true,
-            icon = Lucide.ArrowUpDown,
-        ) { project, drag, modifier -> NetworkPanel(project, drag, modifier) },
-    )
 
 @Composable
 private fun stackedWindowSplitter(project: ProjectState, dock: Dock, before: ToolWindow, after: ToolWindow) {

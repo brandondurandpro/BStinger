@@ -65,8 +65,26 @@ the change, then run the test with `UPDATE_API_DUMP=1`. `apiVersion` in the mani
 so a plugin gets the e2e, performance, chaos and side-effect tests required by `AGENTS.md` like a built-in feature.
 `PluginFixture` (in `testkit`) builds plugin jars from Java source at test time.
 
+## Bundled plugins
+
+The features that ship with the IDE live in `plugins/<id>/`, one module per half, named after the half because the
+module name is the last directory (`run-client`, `run-server`):
+
+- `plugins/run/{run-client,run-server}`, `plugins/terminal/{terminal-client,terminal-server}`,
+  `plugins/git/git-client`, `plugins/tree/tree-client`, `plugins/language-servers/language-servers-client`: the client
+  half contributes its tool window and shortcuts (`runToolWindow()`, `runShortcuts()`...) to the registries of
+  `shared`. The Network (devtools) window is contributed the same way by `shared/src/ui/NetworkPlugin.kt`.
+- A server half implements `ServerContribution` (public in `server`) and is listed in
+  `META-INF/services/org.example.kotlineditor.server.ServerContribution`; the server finds it with `ServiceLoader`,
+  next to the contributions that stay in `server/`. The state it keeps for a session (the runs, the terminals) is a
+  `SessionKey` read with `Request.state(key)`, closed with the session. `desktopApp`, `serverApp` and `e2e` depend on
+  the server modules, which is what bundles them.
+
+These are linked statically, with no class loader and no jar: only the plugins installed in
+`~/.kotlin-editor/plugins/` go through `PluginHost`.
+
 ## Not done yet
 
-Signing and compatibility ranges (for third parties), a declarative tier for untrusted contributions, and the physical
-move of the bundled features into `plugins/<id>/{shared,client,server}`: Run, Git and Terminal contribute through the
-registries, but their server code is still in `server/`.
+Signing and compatibility ranges (for third parties) and a declarative tier for untrusted contributions. The server
+code of Git, search, files, deployments, language servers and agents is still in `server/`: it is coupled to
+`LocalServices` (the file watches, the language server supervisor), which would first have to be split.

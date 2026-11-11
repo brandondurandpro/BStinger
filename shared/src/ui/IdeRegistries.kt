@@ -32,17 +32,17 @@ private fun KeyBinding<IdeContext>.asAction(): KeyBinding<ActionContext> = adapt
 // The buttons keep the order they always had: Project, Git and Branches on top; Run, devtools, language servers and
 // Terminal at the bottom.
 private fun allToolWindows(): List<ToolWindowContribution> {
-    val own = builtInToolWindows().associateBy { it.window }
     val bundled =
         listOf(
             projectToolWindow(),
             gitToolWindow(),
             branchesToolWindow(),
             runToolWindow(),
+            networkToolWindow(),
             languageServersToolWindow(),
             terminalToolWindow(),
         )
-    val byWindow = own + bundled.associateBy { it.window }
+    val byWindow = bundled.associateBy { it.window }
     val order =
         listOf(
             ToolWindow.Project,

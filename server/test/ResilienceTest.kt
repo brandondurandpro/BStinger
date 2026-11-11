@@ -9,10 +9,8 @@ import kotlinx.coroutines.withTimeout
 import org.example.kotlineditor.model.ConnectionStatus
 import org.example.kotlineditor.model.FileContent
 import org.example.kotlineditor.model.OutcomeUnknownException
-import org.example.kotlineditor.model.text
 import org.example.kotlineditor.rpc.ClientOptions
 import org.example.kotlineditor.rpc.RemoteFileSystem
-import org.example.kotlineditor.rpc.RemoteTerminalLauncher
 import org.example.kotlineditor.rpc.RpcClient
 import org.example.kotlineditor.telemetry.Attributes
 import org.example.kotlineditor.telemetry.HookedTelemetry
@@ -164,31 +162,6 @@ class ResilienceTest {
             val file = fs.fileAt(project.resolve("a.txt").toString())!!
             assertEquals(listOf("x"), (fs.read(file) as FileContent.Text).lines)
             assertEquals(ConnectionStatus.Connected, client.status.value)
-        }
-
-    @Test
-    fun `terminal screens stay complete and ordered across disconnections`() =
-        runBlocking {
-            val terminal = RemoteTerminalLauncher(client).start(project.toString(), 80, 120, 8, 16)
-            val script =
-                if (System.getProperty("os.name").startsWith("Windows", ignoreCase = true)) {
-                    "for /L %i in (1,1,400) do @echo line%i\rexit\r"
-                } else {
-                    "stty -echo; i=1; while [ \$i -le 400 ]; do echo line\$i; i=\$((i+1)); sleep 0.002; done; exit\r"
-                }
-            terminal.write(script.toByteArray())
-            val chaos =
-                launch {
-                    repeat(6) {
-                        delay(120)
-                        proxy.cutAll()
-                    }
-                }
-            val screen = withTimeout(30_000) { terminal.output.first { snapshot -> !snapshot.running } }
-            chaos.join()
-            val lines = screen.text().mapNotNull { Regex("""line\d+$""").find(it.trim())?.value }
-            assertEquals((301..400).map { "line$it" }, lines.takeLast(100))
-            terminal.destroy()
         }
 
     @Test

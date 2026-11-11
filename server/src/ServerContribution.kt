@@ -6,20 +6,29 @@ import org.example.kotlineditor.rpc.MethodSpec
  * What a feature (a built-in one, later a plugin) adds to the server: the handlers of its methods. Nothing else
  * assembles the handlers, so a feature is added or removed by the list it is in.
  */
-internal fun interface ServerContribution {
+fun interface ServerContribution {
     /** The handler of each method of the feature. */
     fun handlers(services: LocalServices): Map<MethodSpec, Handler>
 }
 
-/** The built-in features, in the order of the protocol. */
-internal fun builtInContributions(): List<ServerContribution> =
+/**
+ * The built-in features, in the order of the protocol, then the bundled plugins that declare a [ServerContribution]
+ * service (`META-INF/services`), which are linked statically but add their handlers through the same list.
+ */
+internal fun builtInContributions(): List<ServerContribution> = coreContributions() + bundledContributions()
+
+private fun bundledContributions(): List<ServerContribution> {
+    val loader = ServerContribution::class.java.classLoader
+    val services = java.util.ServiceLoader.load(ServerContribution::class.java, loader)
+    return services.toList()
+}
+
+private fun coreContributions(): List<ServerContribution> =
     listOf(
         ServerContribution(::fileHandlers),
         ServerContribution(::deployHandlers),
         ServerContribution(::searchHandlers),
         ServerContribution { gitHandlers(it.git) },
-        ServerContribution { terminalHandlers() },
-        ServerContribution { runHandlers() },
         ServerContribution(::languageServerHandlers),
         ServerContribution(::agentHandlers),
     )
