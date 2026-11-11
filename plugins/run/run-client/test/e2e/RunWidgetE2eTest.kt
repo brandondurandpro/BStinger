@@ -85,7 +85,14 @@ class RunWidgetE2eTest {
                 app.project.run.available
                     .first { it.name.startsWith("Composer: lint") }
             onNodeWithTag(RunTags.WIDGET_SELECTOR).performClick()
+            // Clicking a command only selects it: nothing runs.
             awaitTag(RunTags.widgetItem(lint.id)).performClick()
+            awaitNoTag(RunTags.WIDGET_MENU)
+            assertEquals(lint.id, app.project.run.selectedId)
+            val sessions = app.project.run.sessions
+            assertTrue(sessions.isEmpty())
+            onNodeWithTag(RunTags.WIDGET_SELECTOR).performClick()
+            awaitTag(RunTags.runOf(RunTags.widgetItem(lint.id))).performClick()
             awaitTag(RunTags.RUN)
             awaitCondition { app.project.run.session != null }
             assertEquals(
@@ -169,7 +176,7 @@ class RunWidgetE2eTest {
             awaitTag(RunTags.WIDGET_SEARCH).performTextReplacement("zzz")
             awaitTag(RunTags.WIDGET_NO_MATCH).assertIsDisplayed()
             awaitTag(RunTags.WIDGET_SEARCH).performTextReplacement("lint")
-            awaitTag(RunTags.widgetItem(lint.id)).performClick()
+            awaitTag(RunTags.runOf(RunTags.widgetItem(lint.id))).performClick()
             val recentIds = app.project.run.recentIds
             awaitCondition { recentIds.toList() == listOf(lint.id) }
             onNodeWithTag(RunTags.WIDGET_SELECTOR).performClick()

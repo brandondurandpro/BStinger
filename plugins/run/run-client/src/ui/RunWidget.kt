@@ -21,6 +21,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -89,11 +90,9 @@ private val MENU_HEADER_HEIGHT = 24.dp
 @Composable
 private fun RunMenu(run: RunState, showWindow: () -> Unit, close: () -> Unit) {
     var query by remember { mutableStateOf("") }
-    val start = { configuration: RunConfiguration ->
-        close()
+    val choose = { configuration: RunConfiguration ->
         run.select(configuration.id)
-        showWindow()
-        run.runSelected()
+        close()
     }
     Row(Modifier.width(MENU_WIDTH).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
         IdeTextField(
@@ -101,23 +100,17 @@ private fun RunMenu(run: RunState, showWindow: () -> Unit, close: () -> Unit) {
             { query = it },
             Modifier.weight(1f).testTag(RunTags.WIDGET_SEARCH),
             placeholder = "Search commands",
-            onSubmit = { run.search(query).firstOrNull()?.let(start) },
+            onSubmit = { run.search(query).firstOrNull()?.let(choose) },
         )
         FolderFilter(run)
     }
-    CommandList(run, query, showWindow, close, start)
+    CommandList(run, query, showWindow, close)
     HorizontalDivider(color = IdeColors.Separator)
     ConfigurationActions(run, showWindow, close)
 }
 
 @Composable
-private fun CommandList(
-    run: RunState,
-    query: String,
-    showWindow: () -> Unit,
-    close: () -> Unit,
-    start: (RunConfiguration) -> Unit,
-) {
+private fun CommandList(run: RunState, query: String, showWindow: () -> Unit, close: () -> Unit) {
     val recent = if (query.isBlank()) run.recentByFolder else emptyList()
     val folders = run.byFolder(query)
     if (query.isNotBlank() && folders.isEmpty()) {
@@ -140,7 +133,7 @@ private fun CommandList(
                 stickyHeader { FolderTitle(folder, RunTags.widgetRecentFolder(folder), indent = true) }
                 items(configurations, key = { "recent:${it.id}" }) { configuration ->
                     val tag = RunTags.widgetRecent(configuration.id)
-                    ConfigurationEntry(run, configuration, tag, showWindow, close, start)
+                    ConfigurationEntry(run, configuration, tag, showWindow, close)
                 }
             }
             item { HorizontalDivider(color = IdeColors.Separator) }
@@ -149,7 +142,7 @@ private fun CommandList(
         folders.forEach { (folder, configurations) ->
             stickyHeader { FolderTitle(folder, RunTags.widgetFolder(folder), indent = true) }
             items(configurations, key = { it.id }) { configuration ->
-                ConfigurationEntry(run, configuration, RunTags.widgetItem(configuration.id), showWindow, close, start)
+                ConfigurationEntry(run, configuration, RunTags.widgetItem(configuration.id), showWindow, close)
             }
         }
     }
@@ -202,7 +195,7 @@ private fun SectionTitle(text: String, tag: String) {
     )
 }
 
-// A command of the menu: click to run it, the pencil edits it and the bin deletes it.
+// A command of the menu: click to select it, the play button runs it, the pencil edits it, the bin deletes it.
 @Composable
 private fun ConfigurationEntry(
     run: RunState,
@@ -210,13 +203,19 @@ private fun ConfigurationEntry(
     tag: String,
     showWindow: () -> Unit,
     close: () -> Unit,
-    start: (RunConfiguration) -> Unit,
 ) {
     MenuEntry(
         configuration.name,
         tag,
         indent = true,
         running = run.isRunning(configuration.id),
+        selected = run.selectedId == configuration.id,
+        onRun = {
+            close()
+            run.select(configuration.id)
+            showWindow()
+            run.runSelected()
+        },
         onEdit = {
             close()
             showWindow()
@@ -224,7 +223,8 @@ private fun ConfigurationEntry(
         },
         onDelete = { run.delete(configuration.id) },
     ) {
-        start(configuration)
+        run.select(configuration.id)
+        close()
     }
 }
 
@@ -234,12 +234,15 @@ internal fun MenuEntry(
     tag: String,
     indent: Boolean = false,
     running: Boolean = false,
+    selected: Boolean = false,
+    onRun: (() -> Unit)? = null,
     onEdit: (() -> Unit)? = null,
     onDelete: (() -> Unit)? = null,
     onClick: () -> Unit,
 ) {
+    val background = if (selected) IdeColors.Selection else Color.Transparent
     Row(
-        Modifier.fillMaxWidth().padding(start = if (indent) 24.dp else 12.dp, end = 4.dp),
+        Modifier.fillMaxWidth().background(background).padding(start = if (indent) 24.dp else 12.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         val label =
@@ -250,6 +253,9 @@ internal fun MenuEntry(
                 .testTag(tag)
         Box(label) { Label(text) }
         if (running) RunningBadge(Modifier.padding(horizontal = 8.dp).testTag(RunTags.widgetRunning(tag)))
+        if (onRun != null) {
+            IconButton(onRun, Modifier.testTag(RunTags.runOf(tag))) { PlayIcon(color = IdeColors.GitAdded) }
+        }
         if (onEdit != null) {
             IconButton(onEdit, Modifier.testTag(RunTags.editOf(tag))) { IdeIcon(Lucide.Pencil, size = 14.dp) }
         }
