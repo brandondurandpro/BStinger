@@ -94,13 +94,22 @@ private fun RunMenu(run: RunState, showWindow: () -> Unit, close: () -> Unit) {
         placeholder = "Search commands",
         onSubmit = { run.search(query).firstOrNull()?.let(start) },
     )
-    val recent = if (searching) emptyList() else run.recent
+    val recent = if (searching) emptyList() else run.recentByFolder
     if (recent.isNotEmpty()) {
         SectionTitle("Recent", RunTags.widgetFolder(RECENT_SECTION))
-        recent.forEach { configuration ->
-            val tag = RunTags.widgetRecent(configuration.id)
-            MenuEntry(configuration.name, tag, indent = true, running = run.isRunning(configuration.id)) {
-                start(configuration)
+        recent.forEach { (folder, configurations) ->
+            val title = folder.ifEmpty { "Project" }
+            Label(
+                title,
+                Modifier.padding(start = 20.dp, top = 2.dp).testTag(RunTags.widgetRecentFolder(folder)),
+                color = IdeColors.TextSecondary,
+                fontSize = 11.sp,
+            )
+            configurations.forEach { configuration ->
+                val tag = RunTags.widgetRecent(configuration.id)
+                MenuEntry(configuration.name, tag, indent = true, running = run.isRunning(configuration.id)) {
+                    start(configuration)
+                }
             }
         }
         HorizontalDivider(color = IdeColors.Separator)

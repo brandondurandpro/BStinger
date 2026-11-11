@@ -433,4 +433,17 @@ class RunStateTest {
         runner.started[0].chunks.trySend(RunChunk(1, emptyList(), finished = true, exitCode = 0))
         assertFalse(run.isRunning(configuration.id))
     }
+
+    @Test
+    fun `the recent commands are grouped by folder, the most recent folder first`() {
+        val run = state()
+        val web = run.add("npm run dev", directory = "web")
+        val api = run.add("composer run-script test", directory = "api")
+        val build = run.add("npm run build", directory = "web")
+        run.run(web)
+        run.run(api)
+        run.run(build)
+        val grouped = run.recentByFolder.map { (folder, list) -> folder to list.map { it.id } }
+        assertEquals(listOf("web" to listOf(build.id, web.id), "api" to listOf(api.id)), grouped)
+    }
 }

@@ -48,6 +48,8 @@ object RunTags {
 
     fun widgetFolder(folder: String) = "run.widget.folder:$folder"
 
+    fun widgetRecentFolder(folder: String) = "run.widget.recentFolder:$folder"
+
     fun widgetRecent(id: String) = "run.widget.recent:$id"
 
     fun widgetRunning(id: String) = "run.widget.running:$id"

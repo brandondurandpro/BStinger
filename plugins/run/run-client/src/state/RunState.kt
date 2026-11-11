@@ -186,6 +186,13 @@ class RunState(
             return recentIds.mapNotNull { id -> all.firstOrNull { it.id == id } }
         }
 
+    /**
+     * [recent] grouped by the folder they run in (blank for the project): the folder of the most recent command
+     * first, and the commands of a folder from the most recent.
+     */
+    val recentByFolder: List<Pair<String, List<RunConfiguration>>>
+        get() = recent.groupBy { it.workingDirectory.trim().trim('/', '\\') }.toList()
+
     /** Whether the configuration [id] is being run. */
     fun isRunning(id: String): Boolean = sessions.any { it.running && it.configuration.id == id }
 

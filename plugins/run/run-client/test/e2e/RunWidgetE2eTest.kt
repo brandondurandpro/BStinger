@@ -174,6 +174,7 @@ class RunWidgetE2eTest {
             awaitCondition { recentIds.toList() == listOf(lint.id) }
             onNodeWithTag(RunTags.WIDGET_SELECTOR).performClick()
             awaitTag(RunTags.widgetRecent(lint.id)).assertIsDisplayed()
+            awaitTag(RunTags.widgetRecentFolder("services/api")).assertIsDisplayed()
         }
 
     @Test
