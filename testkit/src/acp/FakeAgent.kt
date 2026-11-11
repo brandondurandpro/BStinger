@@ -59,7 +59,8 @@ private const val CLIENT_TIMEOUT_S = 60L
  * so that they outlive the process; `--no-load` does not replay sessions (it still resumes them); `--no-history`
  * neither lists nor reopens them; `--no-config` offers no settings (no model to choose, [FakeConfig]); `--models <n>`
  * offers `n` more models; it lists its commands ([COMMANDS], typed `/echo hi`), but none with `--no-commands`, and
- * `n` more with `--commands <n>`.
+ * `n` more with `--commands <n>`; `--new-after-list` answers `session/new` only once a
+ * `session/list` listed the new session (for half a minute at most).
  */
 // ACP speaks UTF-8; System.out writes the console's charset (Windows-1252 on Windows), which would mangle accents.
 class FakeAgent(
@@ -67,6 +68,9 @@ class FakeAgent(
     private val out: PrintStream = PrintStream(System.out, true, Charsets.UTF_8),
 ) {
     private val loginRequired = options.loginRequired
+
+    // The `session/list` answered so far.
+    private val lists = java.util.concurrent.atomic.AtomicInteger()
 
     // True once the user logged in (`authenticate`): a session starts then.
     @Volatile private var loggedIn = false
@@ -177,7 +181,16 @@ class FakeAgent(
     private fun newSession(id: JsonElement, params: JsonObject): JsonObject {
         if (loginRequired && !loggedIn) return failure(id, AUTH_REQUIRED, "Authentication required")
         val session = store.create(params.text("cwd").orEmpty())
+        awaitListed()
         return success(id, sessionAnswer(session, buildJsonObject { put("sessionId", session.id) }))
+    }
+
+    // `--new-after-list`: the new session is listed (`session/list`) before the client is told its id.
+    private fun awaitListed() {
+        if (!options.newAfterList) return
+        val listedBefore = lists.get()
+        val deadline = System.nanoTime() + LISTED_WAIT_NANOS
+        while (lists.get() == listedBefore && System.nanoTime() < deadline) Thread.sleep(LISTED_POLL_MS)
     }
 
     // `session/load` replays the history before it answers; `session/resume` does not.
@@ -214,7 +227,13 @@ class FakeAgent(
         }
     }
 
-    private fun listed(params: JsonObject) =
+    private fun listed(params: JsonObject): JsonObject {
+        val answer = sessionList(params)
+        lists.incrementAndGet()
+        return answer
+    }
+
+    private fun sessionList(params: JsonObject) =
         buildJsonObject {
             putJsonArray("sessions") {
                 store.list(params.text("cwd")).forEach { session ->
@@ -581,6 +600,8 @@ class FakeAgent(
         const val TITLE_LENGTH = 30
         const val MARKDOWN_PIECE = 7
         const val QUOTA_STEP = 10
+        const val LISTED_POLL_MS = 20L
+        const val LISTED_WAIT_NANOS = 30_000_000_000L
         val OPENING = setOf("session/new", "session/load", "session/resume")
 
         // Its commands: name, description, hint of what to type after it.
@@ -669,11 +690,12 @@ data class FakeAgentOptions(
     val extraCommands: Int = 0,
     val images: Boolean = true,
     val embedded: Boolean = true,
+    val newAfterList: Boolean = false,
 ) {
     companion object {
         /**
          * Reads `--login`, `--store <dir>`, `--no-load`, `--no-history`, `--no-config`, `--models <n>`,
-         * `--no-commands`, `--commands <n>`, `--no-images` and `--no-embedded`.
+         * `--no-commands`, `--commands <n>`, `--no-images`, `--no-embedded` and `--new-after-list`.
          */
         fun parse(args: List<String>): FakeAgentOptions {
             val store = valueOf(args, "--store")
@@ -690,6 +712,7 @@ data class FakeAgentOptions(
                 extraCommands = commands,
                 images = "--no-images" !in args,
                 embedded = "--no-embedded" !in args,
+                newAfterList = "--new-after-list" in args,
             )
         }
 

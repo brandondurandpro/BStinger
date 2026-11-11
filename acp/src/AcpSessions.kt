@@ -12,6 +12,9 @@ import java.io.IOException
 // Pages of `session/list` read at most, in case an agent sends the same cursor again and again.
 private const val MAX_PAGES = 50
 
+// A list taken while a session only read the settings is taken again, a few times at most.
+private const val MAX_LISTS = 3
+
 // What an agent answers to a request about a session it does not know (any more).
 private const val RESOURCE_NOT_FOUND = -32_002
 
@@ -71,6 +74,18 @@ internal suspend fun AgentProcess.reopenSession(
 /** The sessions the agent keeps that work in [directory]; empty when it does not list them. */
 internal suspend fun AgentProcess.listSessions(directory: String): List<AgentSession> {
     if (!ready().sessions.list) return emptyList()
+    var found = emptyList<AgentSession>()
+    for (attempt in 1..MAX_LISTS) {
+        val mark = probes.mark()
+        found = listedSessions(directory)
+        // A session started to read the settings was alive meanwhile: the list may hold it, and is taken again.
+        if (!probes.overlapped(mark)) break
+        probes.awaitNone()
+    }
+    return found.filter { !probes.isKept(it.id) }
+}
+
+private suspend fun AgentProcess.listedSessions(directory: String): List<AgentSession> {
     val found = mutableListOf<AgentSession>()
     var cursor: String? = null
     for (page in 1..MAX_PAGES) {

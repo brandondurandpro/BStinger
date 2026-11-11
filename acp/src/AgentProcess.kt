@@ -53,6 +53,9 @@ internal class AgentProcess(val command: AgentCommand, scope: CoroutineScope, fi
     private val start = Mutex()
     private var info: AgentInfo? = null
 
+    /** The sessions started only to read settings, which the history does not list. */
+    val probes = ProbeSessions()
+
     /** The settings (model…) the latest new session offered; null before one started. */
     @Volatile
     var offered: List<AgentOption>? = null

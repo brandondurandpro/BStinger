@@ -26,10 +26,10 @@ class AgentPromptHistoryE2eTest {
             val app = launchWithProject(project, agentPreferences())
             val conversation = startConversation(app)
             sendPrompt("echo first-prompt")
-            awaitShown(conversation, "first-prompt")
+            awaitAnswer(conversation, "first-prompt")
             awaitIdle(conversation)
             sendPrompt("echo second-prompt")
-            awaitShown(conversation, "second-prompt")
+            awaitAnswer(conversation, "second-prompt")
             awaitIdle(conversation)
             val prompt = awaitTag(AgentTags.AGENT_PROMPT)
             prompt.performKeyInput { pressKey(Key.DirectionUp) }

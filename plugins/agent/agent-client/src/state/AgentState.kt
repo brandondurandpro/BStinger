@@ -430,6 +430,7 @@ class AgentState(
         followChanges()
         followQuota()
         followHistory(project, agentCommand)
+        dropHistoryTwins(project)
     }
 
     /** Opens [conversation] in a tab, or selects its tab, and prepares its worktree. */
