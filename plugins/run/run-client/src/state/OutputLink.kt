@@ -12,6 +12,8 @@ data class OutputLink(
     val line: Int,
     /** The column, counted from 1, or 1 when the output names none. */
     val column: Int,
+    /** The address, for a link to a web page (`http://localhost:5173/`); then [path] is blank. */
+    val url: String? = null,
 )
 
 private const val SOURCE_EXTENSIONS =
@@ -28,14 +30,33 @@ private val ANSI = Regex("\u001B\\[[0-9;?]*[ -/]*[@-~]")
 /** [text] without the colors and cursor moves some tools print even when their output is not a terminal. */
 fun stripAnsi(text: String): String = if (text.indexOf('\u001B') < 0) text else ANSI.replace(text, "")
 
-/** The places [text] names, left to right. */
+private val WEB_ADDRESS = Regex("""https?://[^\s"'<>`]+""")
+private const val TRAILING_PUNCTUATION = ".,;:!?)]}"
+
+// The web addresses of [text]; the punctuation that ends a sentence is not part of the address.
+private fun findWebLinks(text: String): List<OutputLink> {
+    val links = ArrayList<OutputLink>()
+    for (match in WEB_ADDRESS.findAll(text)) {
+        val address = match.value.trimEnd { it in TRAILING_PUNCTUATION }
+        if (address.length <= "https://".length - 1) continue
+        val start = match.range.first
+        links += OutputLink(start, start + address.length, "", 1, 1, address)
+    }
+    return links
+}
+
+/** The places and web pages [text] names, left to right. */
 fun findOutputLinks(text: String): List<OutputLink> {
     if (text.indexOf(':') < 0 && text.indexOf('(') < 0) return emptyList()
-    val links = ArrayList<OutputLink>()
+    val web = findWebLinks(text)
+    val links = ArrayList<OutputLink>(web)
     for (match in FILE_POSITION.findAll(text)) {
-        val line = match.groupValues[2].toIntOrNull() ?: continue
+        val overlapsWeb = web.any { match.range.first < it.end && it.start <= match.range.last }
+        val line = match.groupValues[2].toIntOrNull()
         val column = match.groupValues[3].toIntOrNull() ?: 1
-        links += OutputLink(match.range.first, match.range.last + 1, match.groupValues[1], line, column)
+        if (!overlapsWeb && line != null) {
+            links += OutputLink(match.range.first, match.range.last + 1, match.groupValues[1], line, column)
+        }
     }
     return links.sortedBy { it.start }
 }

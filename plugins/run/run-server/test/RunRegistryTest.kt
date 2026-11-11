@@ -30,7 +30,7 @@ private const val HANG_SOURCE =
 
 class RunRegistryTest {
     private val frames = CopyOnWriteArrayList<Frame>()
-    private val registry = RunRegistry { frames += it }
+    private val registry = RunRegistry(push = { frames += it })
     private val directory = Files.createTempDirectory("kotlin-editor-run")
 
     @AfterTest
@@ -149,5 +149,33 @@ class RunRegistryTest {
     fun `an empty command is refused`() {
         val failure = runCatching { registry.start(RUN_ID, directory.toString(), emptyList()) }.exceptionOrNull()
         assertTrue(failure is IllegalArgumentException)
+    }
+
+    @Test
+    fun `finished runs are not all kept forever`() {
+        repeat(10) { index ->
+            registry.start(100L + index, directory.toString(), listOf(JAVA, "-version"))
+            await { frames.count { it.kind == FrameKind.End && it.id == 100L + index } == 1 }
+        }
+        registry.start(200L, directory.toString(), listOf(JAVA, "-version"))
+        assertTrue(registry.size <= 5, "runs kept: ${registry.size}")
+    }
+
+    @Test
+    fun `the output of a finished run moves to a file and is still replayed`() {
+        val spilling = RunRegistry(push = { frames += it }, spillDelayMs = 50L)
+        try {
+            spilling.start(RUN_ID, directory.toString(), listOf(JAVA, "-version"))
+            await(::ended)
+            val before = chunks().flatMap { it.lines }
+            Thread.sleep(500L)
+            frames.clear()
+            spilling.resume(RUN_ID, 0L)
+            val replayed = chunks().flatMap { it.lines }
+            assertEquals(before, replayed)
+            assertTrue(ended())
+        } finally {
+            spilling.close()
+        }
     }
 }

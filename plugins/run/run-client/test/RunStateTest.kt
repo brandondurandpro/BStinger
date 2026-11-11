@@ -13,6 +13,7 @@ import org.example.kotlineditor.model.RunStream
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -141,18 +142,56 @@ class RunStateTest {
     }
 
     @Test
-    fun `a new run stops the previous one, and the old run's late output is not mixed in`() {
+    fun `running a configuration again restarts it, and the old run's late output is not mixed in`() {
         val run = state()
-        run.add("first")
-        run.runSelected()
+        val configuration = run.add("prog")
+        run.run(configuration)
         val first = run.session
-        run.add("second")
-        run.runSelected()
+        run.run(configuration)
         assertEquals(listOf(runner.started[0].stream), runner.stopped)
         runner.started[0].chunks.trySend(RunChunk(1, listOf("late line from the first")))
         runner.started[1].chunks.trySend(RunChunk(1, listOf("line of the second")))
         assertEquals(listOf("line of the second"), run.session?.lines?.toList())
         assertEquals(listOf("late line from the first"), first?.lines?.toList())
+        assertEquals(1, run.sessions.size)
+    }
+
+    @Test
+    fun `several commands run at the same time, each with its own output`() {
+        val run = state()
+        val first = run.add("first")
+        val second = run.add("second")
+        run.run(first)
+        run.run(second)
+        assertTrue(runner.stopped.isEmpty())
+        assertEquals(2, run.sessions.size)
+        assertTrue(run.isRunning(first.id))
+        assertTrue(run.isRunning(second.id))
+        runner.started[0].chunks.trySend(RunChunk(1, listOf("from first")))
+        runner.started[1].chunks.trySend(RunChunk(1, listOf("from second")))
+        assertEquals(listOf("from second"), run.session?.lines?.toList())
+        run.show(run.sessions[0])
+        assertEquals(listOf("from first"), run.session?.lines?.toList())
+        // The tab shown is the selected command: Start and Stop then act on it.
+        assertEquals(first.id, run.selectedId)
+    }
+
+    @Test
+    fun `stop ends the run shown, stopAll all of them, and closing a run removes it`() {
+        val run = state()
+        val first = run.add("first")
+        val second = run.add("second")
+        run.run(first)
+        run.run(second)
+        run.stop()
+        assertEquals(listOf(runner.started[1].stream), runner.stopped)
+        run.show(run.sessions[0])
+        run.stopAll()
+        assertEquals(2, runner.stopped.size)
+        val shown = assertNotNull(run.session)
+        run.close(shown)
+        assertEquals(1, run.sessions.size)
+        assertEquals(run.sessions[0], run.session)
     }
 
     @Test
@@ -168,6 +207,27 @@ class RunStateTest {
         assertEquals(KEPT_LINES, session.lines.size)
         assertEquals(50, session.droppedLines)
         assertEquals("line ${KEPT_LINES + 49}", session.lines.last())
+    }
+
+    @Test
+    fun `a colored line keeps its colors while the lines before it are dropped, and loses them with it`() {
+        val run = state()
+        run.add("prog")
+        run.runSelected()
+        val chunks = runner.started[0].chunks
+        chunks.trySend(RunChunk(1, listOf("plain", "\u001B[31mred\u001B[0m")))
+        val session = assertNotNull(run.session)
+        val red = session.spansAt(1)
+        assertEquals(1, red.size)
+        assertTrue(session.spansAt(0).isEmpty())
+        chunks.trySend(RunChunk(2, (1..<KEPT_LINES).map { "line $it" }))
+        assertEquals(1, session.droppedLines)
+        assertEquals("red", session.lines[0])
+        assertEquals(red, session.spansAt(0))
+        chunks.trySend(RunChunk(3, listOf("last")))
+        assertEquals("line 1", session.lines[0])
+        assertTrue(session.spansAt(0).isEmpty())
+        assertTrue(session.spansAt(KEPT_LINES - 1).isEmpty())
     }
 
     @Test
@@ -277,7 +337,7 @@ class RunStateTest {
     fun `configurations found in the project are listed after the saved ones, and are not saved`() {
         val found =
             listOf(
-                RunConfiguration("composer:api:test", "Composer: test (api)", RunKind.Run, "composer run-script test"),
+                RunConfiguration("composer:api:test", "Composer: test", RunKind.Run, "composer run-script test"),
             )
         val run = state(found = found)
         val own = run.add("mine")
@@ -285,7 +345,7 @@ class RunStateTest {
         assertEquals(listOf(own.id, "composer:api:test"), run.available.map { it.id })
         assertEquals(listOf(own.id), run.configurations.map { it.id })
         run.select("composer:api:test")
-        assertEquals("Composer: test (api)", run.selected?.name)
+        assertEquals("Composer: test", run.selected?.name)
         assertEquals(listOf(own.id), state(preferences = run.toPreferences()).configurations.map { it.id })
     }
 
@@ -343,5 +403,130 @@ class RunStateTest {
         val run = state(located = null)
         run.open(OutputLink(0, 1, "Nowhere.kt", 8, 5))
         assertTrue(opened.isEmpty())
+    }
+
+    @Test
+    fun `the commands run last come first, once each, and are kept in the preferences`() {
+        val run = state()
+        val first = run.add("one")
+        val second = run.add("two")
+        run.run(first)
+        run.run(second)
+        run.run(first)
+        assertEquals(listOf(first.id, second.id), run.recent.map { it.id })
+        val saved = run.toPreferences()
+        val reopened = state(preferences = saved)
+        assertEquals(listOf(first.id, second.id), reopened.recent.map { it.id })
+    }
+
+    @Test
+    fun `only a few recent commands are kept, and a deleted one is not listed`() {
+        val run = state()
+        val all = (1..8).map { run.add("cmd$it") }
+        all.forEach { run.run(it) }
+        assertEquals(6, run.recent.size)
+        assertEquals(all.last().id, run.recent.firstOrNull()?.id)
+        run.delete(all.last().id)
+        assertEquals(5, run.recent.size)
+    }
+
+    @Test
+    fun `the search matches every word in the name, command or folder`() {
+        val run = state()
+        run.add("npm run dev", directory = "web")
+        run.add("composer run-script test", directory = "api")
+        assertEquals(2, run.search("  ").size)
+        assertEquals(listOf("npm run dev"), run.search("WEB dev").map { it.commandLine })
+        assertEquals(listOf("composer run-script test"), run.search("script").map { it.commandLine })
+        assertTrue(run.search("nothing like it").isEmpty())
+        assertEquals(listOf("api"), run.byFolder("composer").map { it.first })
+    }
+
+    @Test
+    fun `a command is running while its session is`() {
+        val run = state()
+        val configuration = run.add("prog")
+        val other = run.add("other")
+        assertFalse(run.isRunning(configuration.id))
+        run.run(configuration)
+        assertTrue(run.isRunning(configuration.id))
+        assertFalse(run.isRunning(other.id))
+        runner.started[0].chunks.trySend(RunChunk(1, emptyList(), finished = true, exitCode = 0))
+        assertFalse(run.isRunning(configuration.id))
+    }
+
+    @Test
+    fun `the recent commands are grouped by folder, the most recent folder first`() {
+        val run = state()
+        val web = run.add("npm run dev", directory = "web")
+        val api = run.add("composer run-script test", directory = "api")
+        val build = run.add("npm run build", directory = "web")
+        run.run(web)
+        run.run(api)
+        run.run(build)
+        val grouped = run.recentByFolder.map { (folder, list) -> folder to list.map { it.id } }
+        assertEquals(listOf("web" to listOf(build.id, web.id), "api" to listOf(api.id)), grouped)
+    }
+
+    @Test
+    fun `a discovered configuration that is deleted stays hidden, saved in the preferences`() {
+        val found = RunConfiguration("package:web:dev", "npm: dev", RunKind.Run, "npm run dev", "web")
+        val other = RunConfiguration("package:web:build", "npm: build", RunKind.Run, "npm run build", "web")
+        val run = state(found = listOf(found, other))
+        run.ensureLoaded()
+        assertEquals(2, run.available.size)
+        run.delete(found.id)
+        assertEquals(listOf(other.id), run.available.map { it.id })
+        val reopened = state(preferences = run.toPreferences(), found = listOf(found, other))
+        reopened.ensureLoaded()
+        assertEquals(listOf(other.id), reopened.available.map { it.id })
+    }
+
+    @Test
+    fun `any command of the list can be edited, and saving it brings a hidden one back`() {
+        val found = RunConfiguration("package:dev", "npm: dev", RunKind.Run, "npm run dev")
+        val run = state(found = listOf(found))
+        run.ensureLoaded()
+        run.edit(found.id)
+        assertEquals(found.id, run.editing?.id)
+        run.delete(found.id)
+        assertTrue(run.available.isEmpty())
+        run.save(found.copy(name = "Dev server"))
+        assertEquals(listOf("Dev server"), run.available.map { it.name })
+    }
+
+    @Test
+    fun `the folder filter limits the search and the recent commands to one folder`() {
+        val run = state()
+        val web = run.add("npm run dev", directory = "web")
+        val api = run.add("composer run-script test", directory = "api")
+        run.run(web)
+        run.run(api)
+        assertEquals(listOf("api", "web"), run.folders.sorted())
+        run.toggleFolder("web")
+        assertEquals(listOf(web.id), run.search("").map { it.id })
+        assertEquals(listOf("web"), run.byFolder("").map { it.first })
+        assertEquals(listOf("web"), run.recentByFolder.map { it.first })
+        assertTrue(run.search("composer").isEmpty())
+        run.selectAllFolders()
+        assertEquals(setOf("web", "api"), run.folderFilter)
+        assertEquals(2, run.search("").size)
+        run.clearFolderFilter()
+        assertEquals(2, run.search("").size)
+        assertTrue(run.folderFilter.isEmpty())
+    }
+
+    @Test
+    fun `the folders can be searched, and select all checks the ones the search leaves`() {
+        val run = state()
+        listOf("web/app", "web/admin", "api", "").forEach { run.run(run.add("cmd", directory = it)) }
+        assertEquals(listOf("web/admin", "web/app"), run.searchFolders("WEB").sorted())
+        assertEquals(listOf("web/admin"), run.searchFolders("web adm"))
+        assertEquals(listOf(""), run.searchFolders("proj"))
+        assertEquals(4, run.searchFolders("  ").size)
+        run.selectAllFolders(run.searchFolders("web"))
+        assertEquals(setOf("web/app", "web/admin"), run.folderFilter)
+        run.selectAllFolders()
+        assertEquals(4, run.folderFilter.size)
     }
 }

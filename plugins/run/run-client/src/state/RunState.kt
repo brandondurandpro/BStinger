@@ -15,6 +15,7 @@ import org.example.kotlineditor.model.ProjectRunner
 import org.example.kotlineditor.model.RunChunk
 import org.example.kotlineditor.model.RunStream
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 // Lines kept in the output: older ones are dropped, the pane says how many.
 private const val MAX_LINES = 50_000
@@ -63,6 +64,12 @@ class RunSession(
     /** The lines printed so far, without colors; the oldest are dropped past a limit. */
     val lines = mutableStateListOf<String>()
 
+    // The colored parts of the lines, by line number counted from the start of the run (dropped lines included).
+    // Only colored lines have an entry: a second list as long as [lines] doubled the cost of a long output.
+    private val spansByNumber = ConcurrentHashMap<Long, List<StyleSpan>>()
+
+    internal val ansi = AnsiParser()
+
     /** How many lines were dropped from the start of [lines]. */
     var droppedLines by mutableIntStateOf(0)
         internal set
@@ -85,11 +92,34 @@ class RunSession(
 
     internal val parser = TestOutputParser()
 
+    internal var stream: RunStream? = null
+    internal var collecting: Job? = null
+
     /** Whether the user asked to stop this run: its end then counts as stopped, not failed. */
     internal var stopRequested = false
 
     /** Whether the command is still running. */
     val running: Boolean get() = status == RunStatus.Running
+
+    /** The colored parts of the line at [index] of [lines]; empty for a line without colors. */
+    fun spansAt(index: Int): List<StyleSpan> = spansByNumber[droppedLines.toLong() + index].orEmpty()
+
+    // Adds [styled] at the end of the output, dropping the oldest lines past [limit].
+    internal fun append(styled: List<StyledLine>, limit: Int) {
+        val firstNumber = droppedLines.toLong() + lines.size
+        styled.forEachIndexed { offset, line ->
+            if (line.spans.isNotEmpty()) spansByNumber[firstNumber + offset] = line.spans
+        }
+        lines.addAll(styled.map { it.text })
+        val excess = lines.size - limit
+        if (excess <= 0) return
+        lines.removeRange(0, excess)
+        val firstDropped = droppedLines.toLong()
+        for (number in firstDropped until firstDropped + excess) {
+            spansByNumber.remove(number)
+        }
+        droppedLines += excess
+    }
 }
 
 /**
@@ -108,6 +138,7 @@ class RunState(
     private val discover: suspend () -> List<RunConfiguration>,
     private val locate: suspend (String) -> FileEntry?,
     private val openAt: (FileEntry, Int, Int) -> Unit,
+    private val openUrl: (String) -> Unit = {},
 ) {
     private val savedConfigurations: String? = preferences[PreferenceKeysRun.configurations(rootPath)]
 
@@ -119,13 +150,27 @@ class RunState(
     var selectedId by mutableStateOf(preferences[PreferenceKeysRun.selected(rootPath)])
         private set
 
+    /** Ids of the configurations run last, the most recent first, as the menu of the Run widget lists them. */
+    val recentIds: SnapshotStateList<String> =
+        mutableStateListOf<String>().apply { addAll(decodeRecentIds(preferences[PreferenceKeysRun.recent(rootPath)])) }
+
+    /** Ids of the discovered configurations the user deleted: they are not listed again. */
+    val hiddenIds: SnapshotStateList<String> =
+        mutableStateListOf<String>().apply { addAll(decodeRecentIds(preferences[PreferenceKeysRun.hidden(rootPath)])) }
+
     /** The configuration being edited, or `null` when the editor is closed; a new one has an id not in the list. */
     var editing by mutableStateOf<RunConfiguration?>(null)
         private set
 
-    /** The run shown, the last one started. */
+    /** The run shown: the last one started, or the one the user picked among [sessions]. */
     var session by mutableStateOf<RunSession?>(null)
         private set
+
+    /** Every run of the window, in the order they were started: one per configuration, several may be running. */
+    val sessions: SnapshotStateList<RunSession> = mutableStateListOf()
+
+    /** Whether any command is running. */
+    val anyRunning: Boolean get() = sessions.any { it.running }
 
     /** The tab shown. */
     var tab by mutableStateOf(RunTab.Output)
@@ -143,14 +188,12 @@ class RunState(
     // Whether the user changed the saved configurations, or some were saved: only then are they written back.
     private var loaded = savedConfigurations != null
 
-    private var stream: RunStream? = null
-    private var collecting: Job? = null
-
     /** The saved configurations, then the ones discovered in the project, as the selector lists them. */
     val available: List<RunConfiguration>
         get() {
             val savedIds = configurations.map { it.id }.toSet()
-            return configurations.toList() + discovered.filter { it.id !in savedIds }
+            val shown = discovered.filter { it.id !in savedIds && it.id !in hiddenIds }
+            return configurations.toList() + shown
         }
 
     /**
@@ -158,13 +201,89 @@ class RunState(
      * project first, then the folders by name; the configurations of a folder keep their order.
      */
     val byFolder: List<Pair<String, List<RunConfiguration>>>
-        get() {
-            val folders = available.groupBy { it.workingDirectory.trim().trim('/', '\\') }
-            return folders.toList().sortedWith(compareBy({ it.first.isNotEmpty() }, { it.first }))
-        }
+        get() = groupByFolder(available)
 
     /** The selected configuration, if the selection names one that exists. */
     val selected: RunConfiguration? get() = available.firstOrNull { it.id == selectedId }
+
+    /** The configurations run last (the ones that still exist), the most recent first. */
+    val recent: List<RunConfiguration>
+        get() {
+            val all = available
+            return recentIds.mapNotNull { id -> all.firstOrNull { it.id == id } }
+        }
+
+    /** The folders the menu is limited to (blank for the project itself); empty for every folder. */
+    var folderFilter by mutableStateOf<Set<String>>(emptySet())
+        private set
+
+    /** The folders that hold commands, the project first: what [folderFilter] can be set to. */
+    val folders: List<String> get() = byFolder.map { it.first }
+
+    /**
+     * [recent] grouped by the folder they run in (blank for the project): the folder of the most recent command
+     * first, and the commands of a folder from the most recent.
+     */
+    val recentByFolder: List<Pair<String, List<RunConfiguration>>>
+        get() = recent.filter(::inFilter).groupBy(::folderOf).toList()
+
+    /** Checks or unchecks [folder] in [folderFilter]. */
+    fun toggleFolder(folder: String) {
+        val current = folderFilter
+        folderFilter = if (folder in current) current - folder else current + folder
+    }
+
+    /** The folders whose name contains every word of [query] (any case); all of them when blank. */
+    fun searchFolders(query: String): List<String> {
+        val lowerQuery = query.trim().lowercase()
+        val words = lowerQuery.split(' ').filter { it.isNotEmpty() }
+        return folders.filter { folder ->
+            val name = folder.ifEmpty { PROJECT_FOLDER_NAME }.lowercase()
+            words.all { it in name }
+        }
+    }
+
+    /** Checks the folders [wanted] (every folder that holds commands by default), keeping the ones already checked. */
+    fun selectAllFolders(wanted: List<String> = folders) {
+        folderFilter = folderFilter + wanted
+    }
+
+    /** Lists the commands of every folder again (no folder checked). */
+    fun clearFolderFilter() {
+        folderFilter = emptySet()
+    }
+
+    /** Whether the configuration [id] is being run. */
+    fun isRunning(id: String): Boolean = sessions.any { it.running && it.configuration.id == id }
+
+    private fun inFilter(configuration: RunConfiguration): Boolean {
+        val wanted = folderFilter
+        return wanted.isEmpty() || folderOf(configuration) in wanted
+    }
+
+    private fun groupByFolder(list: List<RunConfiguration>): List<Pair<String, List<RunConfiguration>>> {
+        val folders = list.groupBy(::folderOf)
+        return folders.toList().sortedWith(compareBy({ it.first.isNotEmpty() }, { it.first }))
+    }
+
+    /**
+     * The configurations (of the folders of [folderFilter] if any) whose name, command or folder contains every word of [query]
+     * (any case); all of them when blank.
+     */
+    fun search(query: String): List<RunConfiguration> {
+        val lowerQuery = query.trim().lowercase()
+        val words = lowerQuery.split(' ').filter { it.isNotEmpty() }
+        val candidates = available.filter(::inFilter)
+        if (words.isEmpty()) return candidates
+        return candidates.filter { configuration ->
+            val haystack = "${configuration.name} ${configuration.commandLine} ${configuration.workingDirectory}"
+            val lowered = haystack.lowercase()
+            words.all { it in lowered }
+        }
+    }
+
+    /** [search] grouped by folder, like [byFolder]. */
+    fun byFolder(query: String): List<Pair<String, List<RunConfiguration>>> = groupByFolder(search(query))
 
     /** Looks in the project for configurations (again, the project may have changed since the window last opened). */
     fun ensureLoaded() {
@@ -184,6 +303,11 @@ class RunState(
         editing = RunConfiguration(UUID.randomUUID().toString(), "", RunKind.Run, "")
     }
 
+    /** Opens the editor on the configuration [id]. */
+    fun edit(id: String) {
+        editing = available.firstOrNull { it.id == id }
+    }
+
     /** Opens the editor on the selected configuration. */
     fun editSelected() {
         editing = selected
@@ -199,6 +323,7 @@ class RunState(
         val named = configuration.copy(name = configuration.name.trim().ifEmpty { configuration.commandLine.trim() })
         val index = configurations.indexOfFirst { it.id == named.id }
         if (index >= 0) configurations[index] = named else configurations += named
+        hiddenIds.remove(named.id)
         loaded = true
         selectedId = named.id
         editing = null
@@ -207,22 +332,31 @@ class RunState(
     /** Deletes the configuration [id]; the selection moves to the first one left. */
     fun delete(id: String) {
         configurations.removeAll { it.id == id }
+        // A discovered configuration comes back with every discovery: it is hidden instead.
+        if (discovered.any { it.id == id } && id !in hiddenIds) hiddenIds += id
         loaded = true
         if (selectedId == id) selectedId = available.firstOrNull()?.id
         editing = null
     }
 
-    /** Runs the selected configuration (stopping the run in progress first). */
+    /** Runs the selected configuration (restarting it if it is already running). */
     fun runSelected() {
         val configuration = selected ?: return
         run(configuration)
     }
 
-    /** Runs [configuration], stopping the run in progress first. */
+    /**
+     * Runs [configuration] next to the other runs; the run it already had (if any) is stopped and replaced, so that
+     * pressing Run again restarts it.
+     */
     fun run(configuration: RunConfiguration) {
-        stop()
+        val previous = sessions.firstOrNull { it.configuration.id == configuration.id }
+        if (previous != null) stopSession(previous)
+        remember(configuration.id)
         val command = commandOf(configuration)
         val started = RunSession(configuration, command)
+        val position = sessions.indexOf(previous)
+        if (position >= 0) sessions[position] = started else sessions.add(started)
         session = started
         tab = if (configuration.kind == RunKind.Tests) RunTab.Tests else RunTab.Output
         selectedTest = null
@@ -235,26 +369,68 @@ class RunState(
             started.fail(NO_RUNNER)
             return
         }
-        stream = opened
-        collecting = scope.launch { collect(opened, started) }
+        started.stream = opened
+        started.collecting = scope.launch { collect(opened, started) }
     }
 
-    /** Stops the command in progress, if any; its last output still comes. */
+    private fun remember(id: String) {
+        recentIds.remove(id)
+        recentIds.add(0, id)
+        while (recentIds.size > MAX_RECENT) recentIds.removeAt(recentIds.lastIndex)
+    }
+
+    /** Shows the run [target] (one of [sessions]). */
+    fun show(target: RunSession) {
+        if (target !in sessions) return
+        session = target
+        select(target.configuration.id)
+        tab = if (target.configuration.kind == RunKind.Tests) RunTab.Tests else RunTab.Output
+        selectedTest = null
+    }
+
+    /** Stops the run shown, or the last one started that still runs; its last output still comes. */
     fun stop() {
-        val current = session?.takeIf { it.running } ?: return
-        val running = stream ?: return
-        current.stopRequested = true
+        val shown = session?.takeIf { it.running }
+        val target = shown ?: sessions.lastOrNull { it.running }
+        if (target != null) stopSession(target)
+    }
+
+    /** Stops every run in progress. */
+    fun stopAll() {
+        sessions.filter { it.running }.forEach(::stopSession)
+    }
+
+    /** Removes the run [target] from the window, stopping it first if it runs. */
+    fun close(target: RunSession) {
+        stopSession(target)
+        val position = sessions.indexOf(target)
+        if (position < 0) return
+        // The stopped run still ends by itself, which releases its stream: its collector is not cancelled.
+        sessions.removeAt(position)
+        if (session === target) session = sessions.getOrNull(minOf(position, sessions.lastIndex))
+    }
+
+    private fun stopSession(target: RunSession) {
+        val running = target.stream ?: return
+        val stoppable = target.running && !target.stopRequested
+        if (!stoppable) return
+        target.stopRequested = true
         runner.stop(running)
     }
 
     /** Stops everything when the project closes. */
     fun dispose() {
-        stop()
-        collecting?.cancel()
+        stopAll()
+        sessions.forEach { it.collecting?.cancel() }
     }
 
     /** Opens the file named by [link], if the project has it. */
     fun open(link: OutputLink) {
+        val url = link.url
+        if (url != null) {
+            openUrl(url)
+            return
+        }
         scope.launch {
             val entry = locate(link.path)
             if (entry != null) openAt(entry, link.line, link.column)
@@ -263,10 +439,12 @@ class RunState(
 
     /** The preferences of this project: its configurations and the selected one. */
     fun toPreferences(): Map<String, String> {
-        if (!loaded) return emptyMap()
+        val recent = PreferenceKeysRun.recent(rootPath) to recentIds.joinToString("\n")
+        val hidden = PreferenceKeysRun.hidden(rootPath) to hiddenIds.joinToString("\n")
+        if (!loaded) return if (recentIds.isEmpty()) emptyMap() else mapOf(recent)
         val saved = PreferenceKeysRun.configurations(rootPath) to encodeConfigurations(configurations.toList())
         val chosen = PreferenceKeysRun.selected(rootPath) to selectedId.orEmpty()
-        return mapOf(saved, chosen)
+        return mapOf(saved, chosen, recent, hidden)
     }
 
     private suspend fun collect(opened: RunStream, shown: RunSession) {
@@ -293,15 +471,10 @@ class RunState(
     }
 
     private fun append(shown: RunSession, received: List<String>) {
-        val clean = received.map(::stripAnsi)
-        shown.lines.addAll(clean)
-        val excess = shown.lines.size - MAX_LINES
-        if (excess > 0) {
-            shown.lines.removeRange(0, excess)
-            shown.droppedLines += excess
-        }
+        val styled = received.map(shown.ansi::parse)
+        shown.append(styled, MAX_LINES)
         if (shown.configuration.kind == RunKind.Tests) {
-            clean.forEach(shown.parser::accept)
+            styled.forEach { shown.parser.accept(it.text) }
             shown.results = shown.parser.results()
         }
     }
@@ -337,6 +510,23 @@ object PreferenceKeysRun {
     /** Key of the configurations of the project at [root]. */
     fun configurations(root: String): String = PreferenceKeys.RUN_CONFIGURATIONS_PREFIX + root
 
+    /** Key of the deleted discovered configurations of the project at [root]. */
+    fun hidden(root: String): String = PreferenceKeys.RUN_HIDDEN_PREFIX + root
+
+    /** Key of the recently run configurations of the project at [root]. */
+    fun recent(root: String): String = PreferenceKeys.RUN_RECENT_PREFIX + root
+
     /** Key of the selected configuration of the project at [root]. */
     fun selected(root: String): String = PreferenceKeys.RUN_SELECTED_PREFIX + root
 }
+
+// Configurations remembered as recent.
+private const val MAX_RECENT = 6
+
+private fun decodeRecentIds(text: String?): List<String> = text.orEmpty().lines().filter { it.isNotEmpty() }
+
+// The folder a configuration runs in, relative to the project; blank for the project itself.
+private fun folderOf(configuration: RunConfiguration): String = configuration.workingDirectory.trim().trim('/', '\\')
+
+// How the folder of the project itself is called in the menus.
+private const val PROJECT_FOLDER_NAME = "Project"

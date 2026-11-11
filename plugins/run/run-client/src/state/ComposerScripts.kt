@@ -23,12 +23,11 @@ fun composerScriptNames(json: String): List<String> {
  */
 fun composerConfigurations(directory: String, scripts: List<String>, windows: Boolean): List<RunConfiguration> {
     val program = if (windows) "composer.bat" else "composer"
-    val where = if (directory.isBlank()) "" else " ($directory)"
     return scripts.map { script ->
         val argument = if (script.any { it.isWhitespace() }) "\"$script\"" else script
         RunConfiguration(
             id = "composer:$directory:$script",
-            name = "Composer: $script$where",
+            name = "Composer: $script",
             kind = RunKind.Run,
             commandLine = "$program run-script $argument",
             workingDirectory = directory,

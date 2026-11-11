@@ -39,33 +39,43 @@ internal val WARNING_COLOR get() = IdeColors.ProblemWarning
 fun RunPanel(run: RunState, layout: ToolWindowLayout, drag: ToolWindowDrag, modifier: Modifier = Modifier) {
     LaunchedEffect(Unit) { run.ensureLoaded() }
     Column(modifier.fillMaxSize().background(IdeColors.Editor).testTag(RunTags.RUN)) {
-        ToolWindowHeader(
-            "Run",
-            ToolWindow.Run,
-            layout,
-            drag,
-            middle = { ConfigurationSelector(run) },
-        ) {
-            RunActions(run)
+        ToolWindowHeader("Run", ToolWindow.Run, layout, drag) {
             IconButton({ layout.setVisible(ToolWindow.Run, false) }, Modifier.testTag(RunTags.HIDE)) {
                 MinimizeIcon()
             }
         }
+        RunToolbar(run)
         val editing = run.editing
         val session = run.session
-        when {
-            editing != null -> ConfigurationEditor(run, editing)
-            session != null -> RunBody(run, session)
-            run.available.isEmpty() -> EmptyRun(run)
-            else -> Hint("Press ▶ to run ${run.selected?.name ?: "a configuration"}")
+        if (editing != null) {
+            ConfigurationEditor(run, editing)
+        } else if (session != null) {
+            RunBody(run, session)
+        } else if (run.available.isEmpty()) {
+            EmptyRun(run)
+        } else {
+            Hint("Press ▶ to run ${run.selected?.name ?: "a configuration"}")
         }
+    }
+}
+
+// The tab of each run, then what starts and stops commands: the selector, the status of the run shown, start, stop.
+@Composable
+private fun RunToolbar(run: RunState) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SessionTabs(run, run.session, Modifier.weight(1f))
+        ConfigurationSelector(run)
+        RunActions(run)
     }
 }
 
 @Composable
 private fun ConfigurationSelector(run: RunState) {
     var open by remember { mutableStateOf(false) }
-    Box(Modifier.padding(end = 8.dp)) {
+    Box(Modifier.padding(start = 8.dp, end = 8.dp)) {
         Row(
             Modifier
                 .background(IdeColors.Hover, IdeShapes.Medium)

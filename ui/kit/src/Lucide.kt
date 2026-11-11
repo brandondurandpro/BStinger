@@ -202,6 +202,13 @@ object Lucide {
             "M9 12A3 3 0 1 0 15 12A3 3 0 1 0 9 12Z",
         )
 
+    val ListFilter =
+        LucideIcon(
+            "M3 6h18",
+            "M7 12h10",
+            "M10 18h4",
+        )
+
     val MessageSquare =
         LucideIcon(
             "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z",
@@ -210,6 +217,12 @@ object Lucide {
     val Minus =
         LucideIcon(
             "M5 12h14",
+        )
+
+    val Pencil =
+        LucideIcon(
+            "M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z",
+            "m15 5 4 4",
         )
 
     val Pin =

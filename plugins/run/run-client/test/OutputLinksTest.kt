@@ -58,7 +58,7 @@ class OutputLinksTest {
 
     @Test
     fun `a web address with a port is not a place in a file`() {
-        assertTrue(findOutputLinks("listening on http://example.com:8080/index.html").isEmpty())
+        assertTrue(findOutputLinks("see src/index.html:8080 not a position").isEmpty())
         assertTrue(findOutputLinks("Server started at localhost:8080").isEmpty())
     }
 
@@ -72,5 +72,19 @@ class OutputLinksTest {
     fun `colors are removed from a line`() {
         assertEquals("e: bad", stripAnsi("\u001B[31me: bad\u001B[0m"))
         assertEquals("plain", stripAnsi("plain"))
+    }
+
+    @Test
+    fun `a web address is a link, without the punctuation that ends the sentence`() {
+        val line = "  Local:   http://localhost:5173/, ready"
+        val link = findOutputLinks(line).single()
+        assertEquals("http://localhost:5173/", link.url)
+        assertEquals("http://localhost:5173/", line.substring(link.start, link.end))
+    }
+
+    @Test
+    fun `a web address with a file name in it is one link`() {
+        val links = findOutputLinks("see https://example.com/src/App.kt:12 and A.kt:3")
+        assertEquals(listOf("https://example.com/src/App.kt:12", null), links.map { it.url })
     }
 }

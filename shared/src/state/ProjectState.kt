@@ -123,6 +123,7 @@ class ProjectState(
             discover = ::discoverRunConfigurations,
             locate = ::locateOutputFile,
             openAt = ::openOutputFile,
+            openUrl = { url -> openUrl(url) },
         )
 
     /** Git: branch, status, commit, branches of the toolbar, and the Branches tool window's history. */
@@ -204,12 +205,12 @@ class ProjectState(
     fun agentPreferences(): Map<String, String> = if (agentState.isInitialized()) agent.toPreferences() else emptyMap()
 
     // What the project offers to run: the wrappers of Amper and Gradle at its root, and the scripts of each of its
-    // composer.json files (a project may hold several PHP projects).
+    // composer.json files (a project may hold several PHP projects), and of each of its package.json files.
     private suspend fun discoverRunConfigurations(): List<RunConfiguration> {
         val entries = runCatching { services.fileSystem.list(root) }.getOrDefault(emptyList())
         val windows = !root.path.startsWith("/")
         val wrappers = suggestedConfigurations(entries.map { it.name }.toSet(), windows)
-        return wrappers + discoverComposerScripts(windows)
+        return wrappers + discoverComposerScripts(windows) + discoverPackageScripts(windows)
     }
 
     private suspend fun discoverComposerScripts(windows: Boolean): List<RunConfiguration> {
@@ -223,6 +224,27 @@ class ProjectState(
             val content = runCatching { services.fileSystem.read(manifest) }.getOrNull()
             val text = (content as? FileContent.Text)?.lines?.joinToString("\n").orEmpty()
             composerConfigurations(directory, composerScriptNames(text), windows)
+        }
+    }
+
+    private suspend fun discoverPackageScripts(windows: Boolean): List<RunConfiguration> {
+        fileIndex.ensureLoaded()
+        val files = snapshotFlow { fileIndex.files }.filterNotNull().first()
+        val rootPrefix = slashed(root.path).trimEnd('/') + "/"
+        val relativePaths = files.map { slashed(it.path, root.path).removePrefix(rootPrefix) }
+        val manifests = files.filter { isProjectPackageFile(slashed(it.path, root.path).removePrefix(rootPrefix)) }
+        return manifests.flatMap { manifest ->
+            val relative = slashed(manifest.path, root.path).removePrefix(rootPrefix)
+            val directory = relative.substringBeforeLast('/', "")
+            val prefix = if (directory.isEmpty()) "" else "$directory/"
+            val siblings =
+                relativePaths
+                    .filter { it.startsWith(prefix) && !it.removePrefix(prefix).contains('/') }
+                    .map { it.removePrefix(prefix) }
+                    .toSet()
+            val content = runCatching { services.fileSystem.read(manifest) }.getOrNull()
+            val text = (content as? FileContent.Text)?.lines?.joinToString("\n").orEmpty()
+            packageConfigurations(directory, packageScriptNames(text), packageManagerOf(siblings), windows)
         }
     }
 

@@ -156,7 +156,7 @@ class RunE2eTest {
         }
 
     @Test
-    fun `starting a run while another one runs stops the first`() =
+    fun `several commands run at the same time and the tabs switch between their outputs`() =
         runComposeUiTest {
             project.file("slow.txt", "slow\n")
             project.file("quick.txt", "quick\n")
@@ -173,6 +173,8 @@ class RunE2eTest {
             pressRun()
             awaitCondition { app.runOutput() == listOf("slow") }
             val slowRun = app.project.run.session
+            // A run has its tab as soon as it starts.
+            awaitTag(RunTags.session(slow.id))
             awaitTag(RunTags.SELECTOR).performClick()
             val quick =
                 app.project.run.configurations
@@ -183,8 +185,31 @@ class RunE2eTest {
                 app.project.run.session
                     ?.status == RunStatus.Succeeded
             }
-            awaitCondition { slowRun?.status == RunStatus.Stopped }
+            // The slow one keeps running next to the quick one, which is shown.
+            assertEquals(RunStatus.Running, slowRun?.status)
             assertEquals(listOf("quick"), app.runOutput())
+            awaitTag(RunTags.session(slow.id)).performClick()
+            awaitCondition { app.runOutput() == listOf("slow") }
+            awaitTag(RunTags.sessionClose(quick.id)).performClick()
+            awaitNoTag(RunTags.session(quick.id))
+            assertEquals(RunStatus.Running, slowRun?.status)
+        }
+
+    @Test
+    fun `running a command again restarts it instead of adding a second run`() =
+        runComposeUiTest {
+            project.file("slow.txt", "slow\n")
+            val app = launchWithProject(project)
+            openRunWindow()
+            addConfiguration("Slow", emit("slow.txt", mode = "hang"))
+            pressRun()
+            awaitCondition { app.runOutput() == listOf("slow") }
+            val firstRun = app.project.run.session
+            pressRun()
+            awaitCondition { firstRun?.status == RunStatus.Stopped }
+            val run = app.project.run
+            awaitCondition { run.session?.status == RunStatus.Running }
+            assertEquals(1, run.sessions.size)
         }
 
     @Test
@@ -355,10 +380,10 @@ class RunE2eTest {
                 app.project.run.available
                     .associate { it.name to (it.commandLine to it.workingDirectory) }
             assertEquals("$composer run-script test" to "", found["Composer: test"])
-            assertEquals("$composer run-script lint" to "services/api", found["Composer: lint (services/api)"])
+            assertEquals("$composer run-script lint" to "services/api", found["Composer: lint"])
             assertEquals(
                 "$composer run-script \"fix style\"" to "services/api",
-                found["Composer: fix style (services/api)"],
+                found["Composer: fix style"],
             )
             awaitTag(RunTags.SELECTOR).performClick()
             val lint =
