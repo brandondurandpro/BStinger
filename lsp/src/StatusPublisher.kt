@@ -20,7 +20,10 @@ private const val MIN_MOVE_BYTES = 5L * 1024 * 1024
 private const val MIN_MOVE_RATIO = 0.02
 
 // A CPU use that moved by this many points or less is not worth a status: an idle IDE reads 0 or 1.
-private const val CPU_NOISE_POINTS = 1
+private const val CPU_NOISE_POINTS = 2
+
+// The processor use is measured over a few seconds: over one second the OS's 10 to 15 ms counting steps would show.
+private const val CPU_WINDOW_NANOS = 3_000_000_000L
 
 /**
  * The status of the language servers as versioned snapshots: the servers and their memory, and the memory of the IDE
@@ -37,8 +40,8 @@ internal class StatusPublisher(
     // This process, which a client compares with its own: the IDE server may run in the process of the UI.
     private val process = ProcessIdentity.current()
 
-    // The processor use of this process, measured at every tick (never twice within a second).
-    private val cpu = CpuMeter.ofCurrentProcess()
+    // The processor use of this process, measured at the ticks, each time over the last few seconds.
+    private val cpu = CpuMeter.ofCurrentProcess(CPU_WINDOW_NANOS)
 
     // When the last status was published, in milliseconds since the epoch.
     private var publishedAt = 0L

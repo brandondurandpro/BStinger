@@ -85,8 +85,12 @@ class CpuMeter(
     companion object {
         private const val NO_REFERENCE = -1L
 
-        /** The meter of the running process: its CPU time comes from the JVM, whatever the OS. */
-        fun ofCurrentProcess(): CpuMeter = CpuMeter(::currentProcessCpuNanos)
+        /**
+         * The meter of the running process: its CPU time comes from the JVM, whatever the OS. A longer
+         * [minWindowNanos] smooths the rate: Windows counts CPU time in steps of 15.6 ms.
+         */
+        fun ofCurrentProcess(minWindowNanos: Long = NANOS_PER_SECOND): CpuMeter =
+            CpuMeter(::currentProcessCpuNanos, minWindowNanos = minWindowNanos)
 
         // The CPU time of this process, or null when the OS does not tell it.
         private fun currentProcessCpuNanos(): Long? {
