@@ -19,3 +19,11 @@ tasks:
       aot: ${pluginSettings.aot}
       aotTrainingSeconds: ${pluginSettings.aotTrainingSeconds}
       compress: ${pluginSettings.compress}
+  # ./kotlin task :serverApp:nativeImage@packaging (through ./native-server build, which provides GraalVM)
+  nativeImage:
+    action: !org.example.packaging.nativeImage
+      appJar: ${module.jar}
+      runtimeClasspath: ${module.runtimeClasspath}
+      distDir: ${taskOutputDir}
+      name: ${pluginSettings.name}
+      mainClass: ${pluginSettings.mainClass}

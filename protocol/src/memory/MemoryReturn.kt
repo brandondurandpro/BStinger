@@ -35,6 +35,9 @@ class MemoryReturn(
 
     @Volatile private var watcher: Thread? = null
 
+    // Compiled by GraalVM: its serial collector only runs when an allocation finds the young generation full.
+    private val isNativeImage = System.getProperty(NATIVE_IMAGE_PROPERTY) != null
+
     /** Whether this C library can give freed memory back (glibc). */
     val canTrim: Boolean get() = mallocTrim != null
 
@@ -63,15 +66,29 @@ class MemoryReturn(
     }
 
     private fun watch() {
+        var usedAfterCollection = usedHeap()
         try {
             while (!Thread.currentThread().isInterrupted) {
                 Thread.sleep(trimIntervalMs)
+                val grown = usedHeap() - usedAfterCollection >= NATIVE_GARBAGE_BYTES
+                if (isNativeImage && grown) {
+                    collectNativeImageHeap()
+                    usedAfterCollection = usedHeap()
+                }
                 trimNow()
             }
         } catch (_: InterruptedException) {
             // Closed.
         }
     }
+
+    private fun usedHeap(): Long = Runtime.getRuntime().let { it.totalMemory() - it.freeMemory() }
+
+    // A native binary has no collector that works while the server is idle, and no periodic collection: what a
+    // burst left in its heap stayed resident for good. A full collection of a few dozen megabytes alive takes
+    // milliseconds, and is only asked for after the heap has grown.
+    @Suppress("ExplicitGarbageCollectionCall")
+    private fun collectNativeImageHeap() = System.gc()
 
     // Leaves alone an interval given on the command line.
     private fun collectWhenIdle() {
@@ -102,6 +119,10 @@ class MemoryReturn(
 
     private companion object {
         const val PERIODIC_GC = "G1PeriodicGCInterval"
+        const val NATIVE_IMAGE_PROPERTY = "org.graalvm.nativeimage.imagecode"
+
+        // Less than this since the last collection is not worth one.
+        const val NATIVE_GARBAGE_BYTES = 8L * 1024 * 1024
 
         // `int malloc_trim(size_t pad)`.
         val TRIM_SIGNATURE: FunctionDescriptor = FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG)
