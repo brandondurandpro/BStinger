@@ -74,6 +74,9 @@ class AgentModelChaosE2eTest {
             awaitIdle(conversation)
             chooseModel("fake-smart")
             awaitModel("Smart")
+            // Shown at once: the server has set it in the session before it restarts (a restart before its answer
+            // leaves the choice unknown, and the conversation says so).
+            awaitCondition { conversation.settingOptions == 0 }
             app.process.restart()
             awaitReconnected()
             sendPrompt("model")
