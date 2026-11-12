@@ -30,4 +30,9 @@ plugins:
     description: Kotlin Editor
     vendor: Kotlin Editor
     appImage: true
+    # G1 sizes its threads and their queues for the machine (15 threads on 20 cores): 95 MB of resident memory for
+    # a heap of a few dozen megabytes, that two threads collect in milliseconds.
+    javaOptions:
+      - -XX:ParallelGCThreads=2
+      - -XX:ConcGCThreads=1
     aot: true
