@@ -60,6 +60,9 @@ class AgentUsageAndForkE2eTest {
             val copy = checkNotNull(app.project.agent.current)
             assertContains(copy.title, "(copy)")
             awaitShown(copy, "copied-words")
-            assertEquals(2, app.project.agent.conversations.size)
+            // The agent may list the session of the copy before the IDE knows its id: that entry goes once it does.
+            val conversations = app.project.agent.conversations
+            awaitCondition(AGENT_TIMEOUT) { conversations.size == 2 }
+            assertEquals(listOf(copy, original).toSet(), conversations.toSet())
         }
 }
