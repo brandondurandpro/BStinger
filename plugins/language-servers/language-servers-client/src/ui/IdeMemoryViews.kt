@@ -8,10 +8,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import org.example.kotlineditor.model.ServerMemory
+import org.example.kotlineditor.state.IdeCpu
 import org.example.kotlineditor.state.IdeMemory
 import org.example.kotlineditor.state.LanguageServersHost
 import org.example.kotlineditor.state.LanguageServersState
 import org.example.kotlineditor.state.ToolWindow
+import org.example.kotlineditor.state.cpuText
 import org.example.kotlineditor.state.memoryText
 
 private const val ONE_PROCESS = "UI + Server"
@@ -38,6 +40,25 @@ internal fun IdeMemoryStatusItems(project: LanguageServersHost, state: LanguageS
     }
 }
 
+/**
+ * The processor use of the IDE in the status bar, beside its memory: the UI and the IDE server, or one number when the
+ * server runs in the process of the UI. Nothing while neither is measured (a first sample, an OS that does not tell).
+ */
+@Composable
+internal fun IdeCpuStatusItem(project: LanguageServersHost, state: LanguageServersState) {
+    // Nothing before the first status, like the memory.
+    if (state.status.server.heapMaxBytes <= 0) return
+    val cpu = state.cpu
+    val text = cpuStatusText(cpu) ?: return
+    StatusItem(
+        text = text,
+        color = IdeColors.TextSecondary,
+        tooltip = cpuTooltip(cpu),
+        tag = LanguageServerTags.STATUS_CPU,
+        tooltipTag = LanguageServerTags.STATUS_CPU_TOOLTIP,
+    ) { project.showToolWindow(ToolWindow.LanguageServers) }
+}
+
 /** The same numbers in the Language Servers window, with the heap of the server's JVM. */
 @Composable
 internal fun IdeMemorySection(state: LanguageServersState) {
@@ -54,6 +75,7 @@ internal fun IdeMemorySection(state: LanguageServersState) {
             MemoryLine("IDE server process", textOf(memory.serverBytes), LanguageServerTags.MEMORY_SERVER)
             MemoryLine("Total", textOf(memory.totalBytes), LanguageServerTags.MEMORY_TOTAL)
         }
+        CpuLines(state.cpu)
         if (server.heapMaxBytes > 0) {
             MemoryLine("IDE server · heap", "${memoryText(server.heapUsedBytes)} / ${memoryText(server.heapMaxBytes)}")
             ProgressBar(server.heapUsedBytes.toFloat() / server.heapMaxBytes, Modifier.fillMaxWidth())
@@ -108,3 +130,51 @@ private fun memoryTooltip(memory: IdeMemory, server: ServerMemory): String {
 
 // A number of bytes, or that it cannot be measured on this OS.
 private fun textOf(bytes: Long?): String = bytes?.let(::memoryText) ?: "n/a"
+
+@Composable
+private fun CpuLines(cpu: IdeCpu) {
+    if (cpu.sameProcess) {
+        MemoryLine("UI and IDE server · CPU", cpuOf(cpu.totalPercent), LanguageServerTags.CPU_TOTAL)
+    } else {
+        MemoryLine("UI process · CPU", cpuOf(cpu.uiPercent), LanguageServerTags.CPU_UI)
+        MemoryLine("IDE server process · CPU", cpuOf(cpu.serverPercent), LanguageServerTags.CPU_SERVER)
+        MemoryLine("Total · CPU", cpuOf(cpu.totalPercent), LanguageServerTags.CPU_TOTAL)
+    }
+}
+
+// What the status bar says: one number for one process, else the parts that are known.
+private fun cpuStatusText(cpu: IdeCpu): String? {
+    val parts =
+        if (cpu.sameProcess) {
+            listOfNotNull(cpu.totalPercent?.let(::cpuText))
+        } else {
+            listOfNotNull(
+                cpu.uiPercent?.let { "UI ${cpuText(it)}" },
+                cpu.serverPercent?.let { "Server ${cpuText(it)}" },
+            )
+        }
+    return if (parts.isEmpty()) null else "CPU ${parts.joinToString(" · ")}"
+}
+
+private fun cpuTooltip(cpu: IdeCpu): String {
+    val processes =
+        if (cpu.sameProcess) {
+            listOf("UI and IDE server, in one process: ${cpuOf(cpu.totalPercent)}")
+        } else {
+            listOf(
+                "UI process: ${cpuOf(cpu.uiPercent)}",
+                "IDE server process: ${cpuOf(cpu.serverPercent)}",
+                "Total: ${cpuOf(cpu.totalPercent)}",
+            )
+        }
+    val notes =
+        listOf(
+            "Processor use over the last few seconds, in percent of one core: 100% is one core busy, 200% two",
+            "The language servers are other processes, shown apart",
+            "Click to open the Language Servers window",
+        )
+    return (processes + notes).joinToString("\n")
+}
+
+// A processor use, or that it cannot be measured (yet, or on this OS).
+private fun cpuOf(percent: Int?): String = percent?.let(::cpuText) ?: "n/a"

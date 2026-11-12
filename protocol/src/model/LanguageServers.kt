@@ -94,7 +94,18 @@ data class ServerMemory(
      * client whether the server runs in its own process, whose memory must then be counted once.
      */
     val startedAtMillis: Long = 0,
-)
+    /**
+     * Processor use of the server process, in percent of one core (200 when two cores are busy); [NOT_MEASURED] when
+     * the OS does not tell it, before the first measure, or when an older server does not say.
+     */
+    val cpuPercent: Int = NOT_MEASURED,
+) {
+    /** What [cpuPercent] holds when there is no measure. */
+    companion object {
+        /** No measure. */
+        const val NOT_MEASURED = -1
+    }
+}
 
 /** Every language server and the IDE server's memory, as one snapshot: a newer one replaces an older one. */
 data class LanguageServersStatus(

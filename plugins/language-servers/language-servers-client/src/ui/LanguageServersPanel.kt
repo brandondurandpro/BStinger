@@ -65,6 +65,7 @@ fun LanguageServerStatusItems(project: LanguageServersHost) {
         ) { project.showToolWindow(ToolWindow.LanguageServers) }
     }
     IdeMemoryStatusItems(project, state)
+    IdeCpuStatusItem(project, state)
 }
 
 @OptIn(ExperimentalFoundationApi::class)

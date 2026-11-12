@@ -1,5 +1,6 @@
 package org.example.kotlineditor.state
 
+import org.example.kotlineditor.memory.CpuMeter
 import org.example.kotlineditor.memory.ProcessIdentity
 import org.example.kotlineditor.memory.ProcessMemory
 import org.example.kotlineditor.memory.ProcessMemoryReader
@@ -8,13 +9,16 @@ import java.io.IOException
 
 /**
  * The process of the UI: which one it is, to tell whether the IDE server runs in it, and how its memory is read
- * ([memory] answers null when the OS does not let it be read).
+ * ([memory] answers null when the OS does not let it be read), and how much processor it uses ([cpuPercent], null
+ * while unknown).
  */
 class UiProcess(
     /** The process the UI runs in. */
     val identity: ProcessIdentity,
     /** Its memory now, read from the OS. */
     val memory: () -> ProcessMemory?,
+    /** Its processor use since the previous call, in percent of one core; null before the first measure. */
+    val cpuPercent: () -> Int? = { null },
 ) {
     /** The process of the running UI. */
     companion object {
@@ -22,7 +26,8 @@ class UiProcess(
         fun current(): UiProcess {
             val identity = ProcessIdentity.current()
             val reader = ProcessMemoryReader.forCurrentOs()
-            return UiProcess(identity) { readOrNull(reader, identity.pid) }
+            val cpu = CpuMeter.ofCurrentProcess()
+            return UiProcess(identity, { readOrNull(reader, identity.pid) }, cpu::percent)
         }
 
         // No identity check: this pid is this process as long as it lives.
