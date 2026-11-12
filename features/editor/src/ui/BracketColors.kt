@@ -7,17 +7,22 @@ import org.example.kotlineditor.syntax.treesitter.LineSpans
 
 // [text] (the displayed line) with its brackets colored by depth, from [startDepth] open where the line starts, like
 // VS Code; a closing bracket nothing opened is red. Brackets inside a string or a comment of [spans] keep its color.
+// Only the first [limit] characters are looked at: the ones of a long line that are colored.
 internal fun withBracketColors(
     text: AnnotatedString,
     spans: LineSpans,
     columns: IntArray?,
     startDepth: Int,
+    limit: Int = text.length,
 ): AnnotatedString {
-    if (startDepth < 0 || text.none { it in BRACKETS }) return text
-    val quoted = quotedColumns(text.length, spans, columns)
+    val length = minOf(limit, text.length)
+    val hasBrackets = (0 until length).any { text[it] in BRACKETS }
+    if (startDepth < 0 || !hasBrackets) return text
+    val quoted = quotedColumns(length, spans, columns)
     val builder = AnnotatedString.Builder(text)
     var depth = startDepth
-    text.forEachIndexed { column, c ->
+    for (column in 0 until length) {
+        val c = text[column]
         val counted = !quoted[column]
         if (counted && c in OPENING_BRACKETS) {
             builder.addStyle(bracketStyle(depth), column, column + 1)

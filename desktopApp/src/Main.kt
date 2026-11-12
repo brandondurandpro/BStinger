@@ -9,6 +9,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
+import org.example.kotlineditor.memory.MemoryReturn
 import org.example.kotlineditor.remote.JvmRemoteFactory
 import org.example.kotlineditor.rpc.Protocol
 import org.example.kotlineditor.rpc.RpcClient
@@ -41,6 +42,8 @@ import kotlin.system.exitProcess
 fun main(args: Array<String>) {
     fun option(name: String) = args.indexOf("--$name").takeIf { it >= 0 }?.let { args.getOrNull(it + 1) }
 
+    // The memory of the peaks (a large diff colored, a burst of frames) goes back to the system.
+    MemoryReturn().start()
     val remote = option("server") ?: System.getenv("KOTLIN_EDITOR_SERVER")
     val local = if (remote == null) LocalServer.start(LocalServer.Settings(warn = localServerLog::warn)) else null
     val client =

@@ -1,11 +1,13 @@
 package org.example.kotlineditor.rpc
 
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.encodeToStream
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
@@ -152,8 +154,16 @@ object Protocol {
         if (compressed && !limits.compression) throw IOException("Compressed message refused")
     }
 
-    /** The JSON-RPC message of [frame], UTF-8 encoded. */
-    fun encode(frame: Frame): ByteArray = JsonRpc.message(frame).toString().encodeToByteArray()
+    /**
+     * The JSON-RPC message of [frame], UTF-8 encoded. Written as bytes while the JSON is printed: through a
+     * `String`, a large answer (a diff, a file) was held three more times, twice as UTF-16 when not all Latin-1.
+     */
+    @OptIn(ExperimentalSerializationApi::class)
+    fun encode(frame: Frame): ByteArray {
+        val bytes = EncodedBytes()
+        Json.encodeToStream(JsonElement.serializer(), JsonRpc.message(frame), bytes)
+        return bytes.toByteArray()
+    }
 
     /** The frame of a JSON-RPC message; throws [InvalidMessageException] when it is not one this protocol knows. */
     fun decode(body: ByteArray): Frame {

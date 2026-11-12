@@ -68,16 +68,23 @@ fun Document.columnOfVisual(line: Int, visual: Int): Int = columnForVisual(lines
 
 /** A line as the editor draws it: its [text] and the [inlays] between its characters, in screen cells. */
 class ScreenLine(val text: String, val inlays: LineInlays? = null) {
+    // Whether a column is its cell: no tab, no hint. Looked for once, however many columns are asked for (the
+    // thousands of occurrences of a name on a minified line, each of which searched the line from its start).
+    private val plain by lazy(LazyThreadSafetyMode.NONE) { inlays == null && '\t' !in text }
+
     /** Cell after the text and all its hints. */
-    val end: Int get() = visualColumn(text, text.length, inlays)
+    val end: Int get() = startOf(text.length)
 
     /** Cell where the character at [column] starts (after the hints drawn before it). */
-    fun startOf(column: Int): Int = visualColumn(text, column.coerceIn(0, text.length), inlays)
+    fun startOf(column: Int): Int {
+        val clamped = column.coerceIn(0, text.length)
+        return if (plain) clamped else visualColumn(text, clamped, inlays)
+    }
 
     /** Cell where a range ending before [column] ends: the hints drawn before that character are not in it. */
     fun endOf(column: Int): Int {
         val clamped = column.coerceIn(0, text.length)
-        return visualColumn(text, clamped, inlays) - (inlays?.cellsAt(clamped) ?: 0)
+        return startOf(clamped) - (inlays?.cellsAt(clamped) ?: 0)
     }
 }
 

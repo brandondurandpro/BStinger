@@ -106,6 +106,12 @@ internal fun EditorLineSemantics(
     }
 }
 
+// Compose packs a width and a height in 64 bits: beside a line height, a width holds 18 bits (262,143 px).
+private const val MAX_NODE_WIDTH_PX = 200_000f
+
+// The columns of a node on a line (a problem, a hint), within the same limit whatever the font size.
+private const val MAX_NODE_COLUMNS = 4_096
+
 @Composable
 private fun LineNode(
     row: Int,
@@ -125,7 +131,9 @@ private fun LineNode(
     val text by rememberLineText(document, index, line, placeholder, insight.semantic)
     val density = LocalDensity.current
     val gutter = with(density) { metrics.gutterPx.toDp() }
-    val textWidth = with(density) { (text.length * metrics.charWidth).toDp() }
+    // A minified line is wider than a layout can be: its node ends at the widest one.
+    val textWidthPx = minOf(text.length * metrics.charWidth, MAX_NODE_WIDTH_PX)
+    val textWidth = with(density) { textWidthPx.toDp() }
     Box(
         Modifier
             .offset { IntOffset(0, rowTop(row, scroll, metrics)) }
@@ -202,7 +210,7 @@ private fun InsightNodes(index: Int, line: ScreenLine, tab: EditorTab, metrics: 
         Box(
             Modifier
                 .offset { IntOffset(textLeft(metrics, tab.horizontalScroll.offset) + left, 0) }
-                .size(cell * columns.coerceAtLeast(1), metrics.lineHeight)
+                .size(cell * columns.coerceIn(1, MAX_NODE_COLUMNS), metrics.lineHeight)
                 .then(labelled)
                 .testTag(tag),
         )

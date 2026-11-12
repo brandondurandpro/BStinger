@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -15,9 +16,8 @@ import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.text.TextLayoutResult
-import androidx.compose.ui.text.drawText
-import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFontFamilyResolver
 import androidx.compose.ui.unit.dp
 import org.example.kotlineditor.model.BlameLine
 import org.example.kotlineditor.model.GitChangeKind
@@ -33,6 +33,7 @@ import org.example.kotlineditor.state.screenLine
 import org.example.kotlineditor.state.visualColumn
 import org.example.kotlineditor.state.visualColumnOf
 import kotlin.math.ceil
+import kotlin.math.floor
 import kotlin.math.roundToInt
 
 private val CHANGE_BAR_WIDTH = 3.dp
@@ -66,9 +67,15 @@ internal fun EditorCanvas(
     caretOn: State<Boolean>,
     insight: InsightMarks = InsightMarks.None,
 ) {
-    val measurer = rememberTextMeasurer(cacheSize = 0)
+    val density = LocalDensity.current
+    val resolver = LocalFontFamilyResolver.current
     val cache =
-        remember(measurer, metrics.codeStyle) { LineRenderCache(measurer, metrics.codeStyle, metrics.blameStyle) }
+        remember(density, resolver, metrics.codeStyle, metrics.blameStyle) {
+            val code = LineLayouter(metrics.codeStyle, density, resolver)
+            LineRenderCache(code, LineLayouter(metrics.blameStyle, density, resolver))
+        }
+    // The layouts own native memory: freed when the editor leaves the screen or its font changes.
+    DisposableEffect(cache) { onDispose { cache.close() } }
     val marks = remember(tab.lineChanges, tab.blame) { GutterMarks(tab.lineChanges, tab.blame) }
     Box(Modifier.fillMaxSize()) {
         Spacer(
@@ -165,7 +172,7 @@ private fun DrawScope.drawRow(
             drawDecorations(decorations, 0f, metrics.charWidth, lineHeight)
         }
         val textX = textLeft + TEXT_PADDING.roundToPx() - horizontalOffset.roundToInt()
-        drawText(cache.line(source), topLeft = Offset(textX, 0f))
+        drawLineText(cache, source, textX, metrics.charWidth)
         translate(left = origin) {
             drawProblems(insight.problems[index], screenLine, metrics.charWidth, lineHeight)
             drawLink(insight.link, index, screenLine, metrics.charWidth, lineHeight)
@@ -183,6 +190,21 @@ private fun DrawScope.drawRow(
     }
 }
 
+// The text of a line, which starts at [textX]: of a long line, the slices on screen, each where its first
+// character goes.
+private fun DrawScope.drawLineText(cache: LineRenderCache, source: LineSource, textX: Float, charWidth: Float) {
+    if (!cache.isLong(source)) {
+        cache.line(source).draw(this, Offset(textX, 0f))
+        return
+    }
+    val firstVisible = floor(-textX / charWidth).toInt()
+    val lastVisible = ceil((size.width - textX) / charWidth).toInt()
+    for (slice in cache.slices(source, firstVisible, lastVisible + 1)) {
+        val left = textX + (slice.start * charWidth).roundToInt()
+        slice.layout.draw(this, Offset(left, 0f))
+    }
+}
+
 private fun DrawScope.drawGutter(
     index: Int,
     decorations: LineDecorations,
@@ -194,10 +216,10 @@ private fun DrawScope.drawGutter(
     val lineHeight = metrics.lineHeightPx
     decorations.change?.let { drawRect(changeColor(it), Offset.Zero, Size(CHANGE_BAR_WIDTH.toPx(), lineHeight)) }
     if (decorations.deleted) drawDeletionMarker(DELETION_MARKER_SIZE.toPx())
-    val number = cache.number(index + 1)
-    val numberRight = metrics.gutterPx - (LINE_NUMBER_END + FOLD_ZONE + metrics.blameWidth).toPx()
     val numberColor = if (decorations.isCaretLine) IdeColors.LineNumberCurrent else IdeColors.LineNumber
-    drawText(number, color = numberColor, topLeft = Offset(numberRight - number.size.width, 0f))
+    val number = cache.number(index + 1, numberColor)
+    val numberRight = metrics.gutterPx - (LINE_NUMBER_END + FOLD_ZONE + metrics.blameWidth).toPx()
+    number.draw(this, Offset(numberRight - number.width, 0f))
     decorations.blame?.let { drawBlameAnnotation(cache.blame(it), metrics) }
     if (foldable) {
         val side = CHEVRON_SIZE.toPx()
@@ -209,12 +231,12 @@ private fun DrawScope.drawGutter(
     }
 }
 
-private fun DrawScope.drawBlameAnnotation(layout: TextLayoutResult, metrics: EditorMetrics) {
+private fun DrawScope.drawBlameAnnotation(layout: LineLayout, metrics: EditorMetrics) {
     val left = (metrics.gutterPx - metrics.blameWidth.toPx()).roundToInt() + BLAME_START.roundToPx().toFloat()
     val right = metrics.gutterPx - (FOLD_ZONE + BLAME_END).toPx()
     if (right <= left) return
     clipRect(left = left, top = 0f, right = right, bottom = metrics.lineHeightPx) {
-        drawText(layout, topLeft = Offset(left, (metrics.lineHeightPx - layout.size.height) / 2))
+        layout.draw(this, Offset(left, (metrics.lineHeightPx - layout.height) / 2))
     }
 }
 
@@ -237,8 +259,8 @@ private fun DrawScope.drawCaretAt(tab: EditorTab, document: Document, metrics: E
     }
 }
 
-private fun DrawScope.drawUsageHint(layout: TextLayoutResult, x: Float, lineHeight: Float) {
-    drawText(layout, topLeft = Offset(x, (lineHeight - layout.size.height) / 2))
+private fun DrawScope.drawUsageHint(layout: LineLayout, x: Float, lineHeight: Float) {
+    layout.draw(this, Offset(x, (lineHeight - layout.height) / 2))
 }
 
 // The selections of the other carets on line [index], as pairs of screen cells; null when there are none.
