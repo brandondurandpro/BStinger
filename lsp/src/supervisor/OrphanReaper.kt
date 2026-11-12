@@ -83,14 +83,43 @@ class OrphanReaper(private val directory: Path) {
          * [ProcessHandle.descendants] goes by parent pid. Once a process exited, the JDK no longer finds its start
          * time and stops comparing start times, and Windows still names a parent pid that has since been reused:
          * the descendants of an exited process are then every process whose long dead parent had the same pid, a
-         * CI runner for instance. Only the processes started after it are its own, and none once its pid belongs to
-         * another process.
+         * CI runner for instance, and everything those started since, the Git of another program included. The
+         * tree is walked here instead (see [ownTree]): a process is taken only when the one that leads to it is,
+         * and none once the pid belongs to another process.
          */
         fun ownDescendants(process: ProcessHandle, start: Long): List<ProcessHandle> {
-            if (start == 0L) return emptyList()
-            val listed = runCatching { process.descendants().use { it.toList() } }.getOrDefault(emptyList())
             val reused = ProcessHandle.of(process.pid()).map { startOf(it) != start }.orElse(false)
-            return if (reused) emptyList() else listed.filter { startOf(it) >= start }
+            if (start == 0L || reused) return emptyList()
+            return ownTree(process, start, ::childrenOf, ::startOf)
+        }
+
+        private fun childrenOf(process: ProcessHandle): List<ProcessHandle> =
+            runCatching { process.children().use { it.toList() } }.getOrDefault(emptyList())
+    }
+}
+
+/**
+ * The processes below [root], which started at [rootStart], [childrenOf] naming the processes whose parent pid is
+ * the pid of a process and [startOf] their start time (0: unknown).
+ *
+ * A process is its parent's only when it started after it: one that started before was started by a dead process
+ * that had the same pid. Such a process is left out with everything below it, however recent: a process started a
+ * moment ago by a stranger is not ours because it is young.
+ */
+internal fun <P> ownTree(root: P, rootStart: Long, childrenOf: (P) -> List<P>, startOf: (P) -> Long): List<P> {
+    val own = LinkedHashSet<P>()
+    val parents = ArrayDeque<Pair<P, Long>>()
+    parents.addLast(root to rootStart)
+    while (parents.isNotEmpty()) {
+        val (parent, parentStart) = parents.removeFirst()
+        for (child in childrenOf(parent)) {
+            val childStart = startOf(child)
+            val startedByParent = childStart != 0L && childStart >= parentStart
+            val isNew = child != root && child !in own
+            if (!startedByParent || !isNew) continue
+            own += child
+            parents.addLast(child to childStart)
         }
     }
+    return own.toList()
 }

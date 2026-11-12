@@ -240,10 +240,11 @@ class CodeIntelligenceService internal constructor(
     // The usages of the declaration at [at] when they were found with its count, for the version of the document the
     // click is about: they are shown at once, without asking the server again.
     private suspend fun countedUsagesAt(session: String, at: DocumentPosition): LocationsResult? {
-        val document = requests.awaitDocument(session, at.path, at.version)
-        val lspVersion = document?.let { documents.locked { it.lspVersion } }
-        val indexed = document?.let { serversOf(it).map { server -> server.indexingEndedAt } }
-        val cached = usageCache[document?.uri]?.takeIf { it.lspVersion == lspVersion && it.indexed == indexed }
+        // No document (closed, or the server restarted): nothing was counted for it.
+        val document = requests.awaitDocument(session, at.path, at.version) ?: return null
+        val lspVersion = documents.locked { document.lspVersion }
+        val indexed = serversOf(document).map { server -> server.indexingEndedAt }
+        val cached = usageCache[document.uri]?.takeIf { it.lspVersion == lspVersion && it.indexed == indexed }
         val caret = TextRange(at.line, at.column, at.line, at.column)
         val declaration = cached?.usages?.keys?.firstOrNull { contains(it, caret) }
         val found = declaration?.let { cached.usages[it] }
