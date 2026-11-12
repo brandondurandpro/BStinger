@@ -7,6 +7,9 @@ package org.example.kotlineditor.ui
 @Suppress("TooManyFunctions")
 object EditorTags {
     const val DIFF = "diff"
+
+    /** In the diff once the grammar of its file colored it (the line lexer colors it until then). */
+    const val DIFF_SYNTAX = "diff.syntax"
     const val DIFF_TOOLBAR = "diff.toolbar"
     const val DIFF_SIDES = "diff.sides"
     const val DIFF_COMMIT = "diff.commit"

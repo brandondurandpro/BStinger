@@ -16,8 +16,15 @@ const val TAB_SIZE = 4
  * before it (those at [column] included: the caret goes after a hint, before the character it precedes).
  */
 fun visualColumn(line: String, column: Int, inlays: LineInlays? = null): Int {
-    val cells = (0 until minOf(column, line.length)).sumOf { if (line[it] == '\t') TAB_SIZE else 1 }
-    return cells + (inlays?.cellsBefore(column) ?: 0)
+    val end = minOf(column, line.length)
+    // From one tab to the next: a minified line has a million characters and no tab.
+    var tabs = 0
+    var at = line.indexOf('\t')
+    while (at in 0 until end) {
+        tabs++
+        at = line.indexOf('\t', at + 1)
+    }
+    return end + tabs * (TAB_SIZE - 1) + (inlays?.cellsBefore(column) ?: 0)
 }
 
 /** Inverse of [visualColumn]: the character column closest to the [visual] cell; a cell of a hint is its column. */

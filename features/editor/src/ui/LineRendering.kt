@@ -85,16 +85,28 @@ internal fun changeColor(kind: GitChangeKind): Color =
         GitChangeKind.Deleted -> IdeColors.GitDeleted
     }
 
+/**
+ * Characters colored of a line: beyond, a minified line keeps the color of the text, as its grammar leaves it
+ * (`MAX_COLORED_COLUMNS`). Coloring a line of megabytes whole, again after each character typed in it, took a
+ * tenth of a second and a hundred megabytes.
+ */
+internal const val MAX_COLORED_CHARACTERS = 10_000
+
 internal fun highlighted(source: LineSource): AnnotatedString {
     val text = displayText(source.text)
+    val colored = minOf(text.length, MAX_COLORED_CHARACTERS)
+    val wholeLine = colored == text.length
     val treeSitterSpans = source.spans
     // The lexer colors the displayed text; tree-sitter counts the characters of the line, which tabs widen.
     val columns = if (treeSitterSpans != null && '\t' in source.text) displayColumns(source.text) else null
-    val spans = treeSitterSpans ?: SyntaxHighlighter.highlight(text, source.language, source.startsInComment)
+    val lexed = if (wholeLine) text else text.substring(0, colored)
+    val spans = treeSitterSpans ?: SyntaxHighlighter.highlight(lexed, source.language, source.startsInComment)
+    // The tokens of the language server are placed by counting the characters before each: not on a long line.
+    val semantic = if (wholeLine) source.semantic else null
     val highlighted =
         styled(text, spans, columns)
-            .let { withSemantic(it, source.text, source.semantic) }
-            .let { withBracketColors(it, spans, columns, source.bracketDepth) }
+            .let { withSemantic(it, source.text, semantic) }
+            .let { withBracketColors(it, spans, columns, source.bracketDepth, colored) }
             .let { withInlays(it, source.text, source.inlays) }
     val placeholder = source.placeholder ?: return highlighted
     return buildAnnotatedString {

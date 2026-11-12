@@ -66,11 +66,26 @@ internal fun diffCode(text: String, spans: LineSpans?, language: Language): Anno
     return highlighted(source)
 }
 
+/** Characters shown of a line of a diff: more than the widest screen holds. */
+internal const val MAX_DIFF_LINE_CHARACTERS = 2_048
+
 /** How the code of a diff is colored: by the tree-sitter [spans] of its lines when known, else by the lexer. */
 internal class DiffCode(private val language: Language, private val spans: List<LineSpans?>?) {
     fun colored(text: String, index: Int, kind: DiffKind): AnnotatedString {
         if (kind == DiffKind.Hunk) return AnnotatedString(text)
-        return diffCode(text, spans?.getOrNull(index), language)
+        val lineSpans = spans?.getOrNull(index)
+        // A minified line: a row is not scrolled sideways, so what is beyond the widest screen is never seen, and
+        // laid out whole a line of megabytes takes minutes and gigabytes.
+        val tooLong = text.length > MAX_DIFF_LINE_CHARACTERS
+        val shown = if (tooLong) text.substring(0, shownLength(text)) else text
+        val shownSpans = if (tooLong) lineSpans?.clippedTo(shown.length) else lineSpans
+        return diffCode(shown, shownSpans, language)
+    }
+
+    // The characters shown of a line too long, cut after a whole character.
+    private fun shownLength(text: String): Int {
+        val splitsPair = Character.isHighSurrogate(text[MAX_DIFF_LINE_CHARACTERS - 1])
+        return if (splitsPair) MAX_DIFF_LINE_CHARACTERS - 1 else MAX_DIFF_LINE_CHARACTERS
     }
 }
 

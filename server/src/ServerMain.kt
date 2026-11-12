@@ -1,6 +1,7 @@
 package org.example.kotlineditor.server
 
 import kotlinx.coroutines.runBlocking
+import org.example.kotlineditor.memory.MemoryReturn
 import org.example.kotlineditor.rpc.Protocol
 import org.example.kotlineditor.server.ripgrep.RipgrepSettings
 import java.io.File
@@ -35,6 +36,8 @@ object ServerMain {
             println(Protocol.APP_VERSION)
             return
         }
+        // The memory of the peaks (a large file read, a large answer encoded) goes back to the system.
+        MemoryReturn().start()
         val fromFile = options.tokenFile?.let(::readToken)
         val given = fromFile ?: options.token ?: System.getenv("KOTLIN_EDITOR_TOKEN")
         val token = given ?: EditorServer.newToken()

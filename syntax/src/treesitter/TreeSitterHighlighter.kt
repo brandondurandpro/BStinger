@@ -5,7 +5,10 @@ import io.github.treesitter.jtreesitter.InputEncoding
 import io.github.treesitter.jtreesitter.Parser
 import io.github.treesitter.jtreesitter.Point
 import io.github.treesitter.jtreesitter.QueryCursor
+import io.github.treesitter.jtreesitter.QueryMatch
 import io.github.treesitter.jtreesitter.Tree
+import java.util.AbstractMap
+import java.util.stream.Stream
 
 /**
  * The syntax tree of one document, parsed again incrementally after each change ([update]), and the colors of the
@@ -61,21 +64,35 @@ internal class TreeSitterHighlighter(private val grammar: LoadedGrammar) : AutoC
         val last = to.coerceIn(first, lines.size)
         if (tree == null || first == last) return emptyMap()
         val builders = Array(last - first) { LineSpanBuilder(minOf(lines[first + it].length, MAX_COLORED_COLUMNS)) }
-        val startChar = lineStarts[first]
-        val endChar = lineStarts[last - 1] + lines[last - 1].length
-        QueryCursor(grammar.query).use { cursor ->
-            cursor.setByteRange(startChar * 2, endChar * 2)
-            cursor.findCaptures(tree.rootNode).forEach { entry ->
-                val match = entry.value
-                val capture = match.captures()[entry.key]
-                val style = grammar.styleOf(capture.name())
-                if (style != CaptureStyles.IGNORED && grammar.predicates.hold(match, ::textOf)) {
-                    val node = capture.node()
-                    addCapture(builders, first, node.startByte / 2, node.endByte / 2, match.patternIndex(), style)
+        CaptureMemory().use { memory ->
+            QueryCursor(grammar.query).use { cursor ->
+                for (stretch in coloredStretches(lines, lineStarts, first, last)) {
+                    cursor.setByteRange(stretch.first * 2, stretch.last * 2)
+                    color(cursor.findCaptures(tree.rootNode, memory, QueryCursor.Options()), memory, builders, first)
                 }
             }
         }
         return builders.withIndex().associate { (offset, builder) -> first + offset to builder.build() }
+    }
+
+    // Adds the colors of [captures] to the [builders] of the lines from [first]. Each capture is read before the
+    // next one is asked for: its native memory is used again.
+    private fun color(
+        captures: Stream<AbstractMap.SimpleImmutableEntry<Int, QueryMatch>>,
+        memory: CaptureMemory,
+        builders: Array<LineSpanBuilder>,
+        first: Int,
+    ) {
+        captures.forEach { entry ->
+            val match = entry.value
+            val capture = match.captures()[entry.key]
+            val style = grammar.styleOf(capture.name())
+            if (style != CaptureStyles.IGNORED && grammar.predicates.hold(match, ::textOf)) {
+                val node = capture.node()
+                addCapture(builders, first, node.startByte / 2, node.endByte / 2, match.patternIndex(), style)
+            }
+            memory.recycle()
+        }
     }
 
     private fun addCapture(
@@ -139,9 +156,6 @@ internal class TreeSitterHighlighter(private val grammar: LoadedGrammar) : AutoC
         return InputEdit(start * 2, oldEnd * 2, newEnd * 2, startPoint, oldEndPoint, newEndPoint)
     }
 
-    private fun endPoint(text: List<String>): Point =
-        if (text.isEmpty()) Point(0, 0) else Point(text.size - 1, text.last().length * 2)
-
     /**
      * The code of another language inside the document, by character offsets: what a `.vue` file holds besides its
      * markup (see [Injection]). Empty for a grammar that has none.
@@ -186,13 +200,35 @@ internal class TreeSitterHighlighter(private val grammar: LoadedGrammar) : AutoC
     private companion object {
         const val VUE = "vue"
 
-        // Colors stop there on very long lines (minified files): nobody reads that far, and it bounds the work.
-        const val MAX_COLORED_COLUMNS = 10_000
-
         // Characters given to tree-sitter at once: lines are short, and each read crosses into native code.
         const val CHUNK_CHARACTERS = 4_096
     }
 }
+
+private fun endPoint(text: List<String>): Point =
+    if (text.isEmpty()) Point(0, 0) else Point(text.size - 1, text.last().length * 2)
+
+// The characters of lines [first] until [last] of [lines] the query runs over, as `start..end` offsets ([starts]:
+// where each line starts): all of them, but for a minified line only the ones that are colored. Run over its
+// million characters, the query made hundreds of thousands of captures (seconds, gigabytes allocated) for each
+// screen scrolled to.
+private fun coloredStretches(lines: List<String>, starts: IntArray, first: Int, last: Int): List<IntRange> {
+    val stretches = ArrayList<IntRange>()
+    var start = starts[first]
+    for (line in first until last) {
+        val length = lines[line].length
+        if (length > MAX_COLORED_COLUMNS) {
+            stretches += start..starts[line] + MAX_COLORED_COLUMNS
+            start = starts[line] + length
+        }
+    }
+    val end = starts[last - 1] + lines[last - 1].length
+    if (end > start || stretches.isEmpty()) stretches += start..end
+    return stretches
+}
+
+// Colors stop there on very long lines (minified files): nobody reads that far, and it bounds the work.
+private const val MAX_COLORED_COLUMNS = 10_000
 
 // The line holding character `offset`, given the offset where each line starts.
 private fun lineAt(starts: IntArray, offset: Int): Int {

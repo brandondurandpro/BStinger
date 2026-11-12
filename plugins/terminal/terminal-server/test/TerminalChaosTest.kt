@@ -54,10 +54,16 @@ class TerminalChaosTest {
                         proxy.cutAll()
                     }
                 }
-            val screen = withTimeout(30_000) { terminal.output.first { snapshot -> !snapshot.running } }
+            val screen = withTimeout(SHELL_TIMEOUT_MS) { terminal.output.first { snapshot -> !snapshot.running } }
             chaos.join()
             val lines = screen.text().mapNotNull { Regex("""line\d+$""").find(it.trim())?.value }
             assertEquals((301..400).map { "line$it" }, lines.takeLast(100))
             terminal.destroy()
         }
+
+    private companion object {
+        // The shell prints its lines and exits in 0.2 s on an idle machine, but in 4 to 9 s on Windows while the
+        // other modules' tests run beside it, as in the CI, where 30 s were not always enough.
+        const val SHELL_TIMEOUT_MS = 120_000L
+    }
 }

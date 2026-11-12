@@ -64,6 +64,7 @@ fun DiffView(
         if (tab.isCompare) SideLabels()
         tab.commit?.let { commit -> commit.header?.let { CommitHeaderView(commit, it) } }
         Box(Modifier.weight(1f).fillMaxWidth()) {
+            if (spans != null) Box(Modifier.testTag(EditorTags.DIFF_SYNTAX))
             if (sideBySide) {
                 SideBySideDiff(tab.splitListState, lines, style, code)
             } else {

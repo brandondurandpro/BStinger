@@ -52,6 +52,8 @@ import org.example.kotlineditor.state.DEFAULT_EDITOR_FONT_SIZE
 import org.example.kotlineditor.state.Document
 import org.example.kotlineditor.state.EditorTab
 import org.example.kotlineditor.state.HorizontalScroll
+import org.example.kotlineditor.state.LineInlays
+import org.example.kotlineditor.state.ScreenLine
 import org.example.kotlineditor.state.TextPos
 import org.example.kotlineditor.state.VerticalScroll
 import org.example.kotlineditor.state.closesTags
@@ -222,56 +224,53 @@ internal fun decorations(
 ): LineDecorations {
     val caret = document.caret
     val inlays = document.inlays[index]
+    val cells = LineCells(line, inlays)
     val selection = document.selectionRange()?.takeIf { index in it.first.line..it.second.line }
-    val selectionStart =
-        selection?.let {
-            if (index == it.first.line) {
-                visualColumn(
-                    line,
-                    it.first.column,
-                    inlays,
-                )
-            } else {
-                0
-            }
-        } ?: -1
-    val selectionEnd =
-        selection?.let {
-            if (index == it.second.line) {
-                visualColumn(line, it.second.column, inlays)
-            } else {
-                visualColumn(line, line.length, inlays) + 1
-            }
-        } ?: -1
-    val extraSelections = document.extraCarets.extraSelectionsOn(index, line, inlays)
     val word = hints.identifier.takeUnless { serverHighlights }
-    val bracketColumns =
-        hints.brackets
-            ?.toList()
-            ?.filter { it.line == index }
-            ?.map { visualColumn(line, it.column, inlays) }
     return LineDecorations(
-        caretColumn = if (caret.line == index) visualColumn(line, caret.column, inlays) else -1,
-        selectionStart = selectionStart,
-        selectionEnd = selectionEnd,
+        caretColumn = if (caret.line == index) cells.cellOf(caret.column) else -1,
+        selectionStart = selection?.let { cells.selectionStart(index, it.first) } ?: -1,
+        selectionEnd = selection?.let { cells.selectionEnd(index, it.second) } ?: -1,
         matches = highlights?.byLine?.get(index),
         matchLength = highlights?.length ?: 0,
-        currentMatch =
-        highlights?.current?.takeIf { it.line == index }?.let {
-            visualColumn(
-                line,
-                it.column,
-                inlays,
-            )
-        } ?: -1,
-        brackets = bracketColumns?.takeIf { it.isNotEmpty() }?.toIntArray(),
-        usages = word?.let { wordOccurrences(line, it) }?.map { visualColumn(line, it, inlays) }?.toIntArray(),
+        currentMatch = highlights?.current?.takeIf { it.line == index }?.let { cells.cellOf(it.column) } ?: -1,
+        brackets = cells.ofBrackets(hints, index),
+        usages = word?.let { cells.ofAll(wordOccurrences(line, it)) },
         usageLength = word?.length ?: 0,
         change = change,
         deleted = deleted,
         blame = blame,
-        extraSelections = extraSelections,
+        extraSelections = document.extraCarets.extraSelectionsOn(index, line, inlays),
     )
+}
+
+/**
+ * The cells of the columns of one line. What they depend on (tabs, hints) is looked for once: counted from the
+ * start of the line for each of the thousands of occurrences of a name on a minified line, in each frame, they
+ * froze the scroll.
+ */
+private class LineCells(private val line: String, private val inlays: LineInlays?) {
+    private val screenLine = ScreenLine(line, inlays)
+
+    // A caret keeps a column beyond the end of a shorter line.
+    fun cellOf(column: Int): Int {
+        val onLine = column <= line.length
+        return if (onLine) screenLine.startOf(column) else visualColumn(line, column, inlays)
+    }
+
+    fun ofAll(columns: IntArray?): IntArray? = columns?.let { all -> IntArray(all.size) { cellOf(all[it]) } }
+
+    fun ofBrackets(hints: CaretHints, index: Int): IntArray? {
+        val brackets = hints.brackets?.toList().orEmpty()
+        val onLine = brackets.filter { it.line == index }
+        if (onLine.isEmpty()) return null
+        return IntArray(onLine.size) { cellOf(onLine[it].column) }
+    }
+
+    fun selectionStart(index: Int, start: TextPos): Int = if (index == start.line) cellOf(start.column) else 0
+
+    // A selection that goes on covers the end of the line too.
+    fun selectionEnd(index: Int, end: TextPos): Int = if (index == end.line) cellOf(end.column) else screenLine.end + 1
 }
 
 // Ctrl+wheel zooms, intercepted before the list scrolls.
