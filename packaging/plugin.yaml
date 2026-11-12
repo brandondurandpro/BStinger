@@ -13,6 +13,7 @@ tasks:
       vendor: ${pluginSettings.vendor}
       version: ${pluginSettings.version}
       modules: ${pluginSettings.modules}
+      javaOptions: ${pluginSettings.javaOptions}
       console: ${pluginSettings.console}
       installer: ${pluginSettings.installer}
       appImage: ${pluginSettings.appImage}
