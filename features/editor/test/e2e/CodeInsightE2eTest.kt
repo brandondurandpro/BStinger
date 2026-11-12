@@ -19,6 +19,7 @@ import org.example.kotlineditor.ui.EditorTags
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
@@ -236,7 +237,10 @@ class CodeInsightE2eTest {
             editorKeys { withKeyDown(Key.CtrlLeft) { withKeyDown(Key.AltLeft) { pressKey(Key.B) } } }
             awaitTag(EditorTags.LOCATIONS, timeout = SERVER_START_MS)
             assertEquals("Choose implementation of Polite", textOf(EditorTags.LOCATIONS_TITLE))
-            onNodeWithTag(EditorTags.location(1)).performClick()
+            // The server lists the implementations in the order it likes: the row of Shy is looked for, not the second.
+            val shyRow = (0..1).firstOrNull { textOf(EditorTags.locationFile(it)).startsWith("Shy.php") }
+            assertNotNull(shyRow, "Shy is among the implementations")
+            onNodeWithTag(EditorTags.location(shyRow)).performClick()
             awaitCondition { app.activePath() == "src/Shy.php" }
         }
 

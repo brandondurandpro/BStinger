@@ -191,6 +191,8 @@ internal class FakePhpCode(
                     .onEnter { it.name != ".git" }
                     .filter { it.isFile && it.extension == "php" }
                     .take(MAX_DISK_FILES)
+                    // The order of the directory listing depends on the file system: a server lists in a stable order.
+                    .sortedBy { it.path }
             // Named like the client names them: Path.toUri, as the IDE server does.
             // A file deleted while the directory is read is left out, as a real server would.
             val read = files.mapNotNull { file -> runCatching { file.toPath().toUri().toString() to readShared(file) }.getOrNull() }
