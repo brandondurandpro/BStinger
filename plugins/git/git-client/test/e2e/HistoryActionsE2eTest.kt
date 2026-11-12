@@ -169,7 +169,9 @@ class HistoryActionsE2eTest {
             branchMenu(default, "merge").assertIsNotEnabled()
             onNodeWithTag(GitTags.HISTORY_TITLE).performClick()
             branchMenu("side", "merge").assertIsEnabled().performClick()
+            // Git creates the file, then writes it: the merge is over once the action is, not once the file exists.
             awaitCondition { project.root.resolve("side.txt").exists() }
+            awaitGitIdle()
             assertEquals("side\n", project.root.resolve("side.txt").readText())
             assertEquals(default, currentBranch())
         }
