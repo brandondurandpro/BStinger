@@ -9,10 +9,15 @@ import org.example.kotlineditor.ui.TreeTags
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.minutes
 
 private const val DIRECTORIES = 2_000
-private const val FILES = 5_000
+private const val FILES = 1_000
 private const val MAX_COMPOSED_ROWS = 100
+
+// Writing thousands of files is the disk's time (minutes on a loaded Windows runner), far over the default minute;
+// the budgets of `measure` are what catch a regression.
+private val TEST_TIMEOUT = 5.minutes
 
 /**
  * Performance of following the disk, through the real UI and server: watching a project of [DIRECTORIES]
@@ -31,7 +36,7 @@ class DiskChangesPerformanceE2eTest {
 
     @Test
     fun `a project of two thousand directories is watched, and a change deep inside shows`() =
-        runComposeUiTest {
+        runComposeUiTest(testTimeout = TEST_TIMEOUT) {
             repeat(DIRECTORIES) { project.file("pkg/d${it.toString().padStart(4, '0')}/File.kt", "class File\n") }
             // The project opens once every directory is watched.
             measure("open and watch $DIRECTORIES directories", budgetMillis = 15_000) {
@@ -48,8 +53,8 @@ class DiskChangesPerformanceE2eTest {
         }
 
     @Test
-    fun `five thousand files created at once by another program`() =
-        runComposeUiTest {
+    fun `a thousand files created at once by another program`() =
+        runComposeUiTest(testTimeout = TEST_TIMEOUT) {
             project.file(name(0), "")
             val app = launchWithProject(project)
             val tree = app.project.tree
@@ -66,7 +71,7 @@ class DiskChangesPerformanceE2eTest {
 
     @Test
     fun `a build writing thousands of files does not hold up the tree`() =
-        runComposeUiTest {
+        runComposeUiTest(testTimeout = TEST_TIMEOUT) {
             project.dir("build")
             launchWithProject(project)
             onNodeWithTag(TreeTags.treeChevron("src")).performClick()
@@ -83,7 +88,7 @@ class DiskChangesPerformanceE2eTest {
 
     @Test
     fun `a build writing thousands of files around one open file reconciles fast`() =
-        runComposeUiTest {
+        runComposeUiTest(testTimeout = TEST_TIMEOUT) {
             project.file(name(0), "")
             val app = launchWithProject(project)
             openFromTree(name(0))

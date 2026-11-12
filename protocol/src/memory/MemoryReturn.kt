@@ -19,6 +19,9 @@ import kotlin.concurrent.thread
  *   while running). The same cycle frees the native memory of garbage: a paragraph of Skia is a few bytes of
  *   Java and kilobytes of native memory, freed when collected, and scrolling a diff makes megabytes of them a
  *   second without filling a heap whose limit is a quarter of the machine's memory.
+ * - **the free heap**: after a collection G1 keeps up to 70 % of the heap free, 150 MB committed for 45 MB of
+ *   objects in the UI. [start] lowers it to [maxHeapFreePercent] (`MaxHeapFreeRatio`, which can be set while
+ *   running): 120 MB less resident memory measured, for collections that stay milliseconds on such a heap.
  * - **the native memory**: what tree-sitter, Skia or a codec free goes back to the allocator of the C library,
  *   which keeps it, in each of its per-thread arenas (4 GB measured in the UI after diffs of large files). A
  *   thread calls `malloc_trim` every [trimIntervalMs], as `-XX:TrimNativeHeapInterval` does, which neither a
@@ -30,10 +33,15 @@ import kotlin.concurrent.thread
 class MemoryReturn(
     private val trimIntervalMs: Long = TRIM_INTERVAL_MS,
     private val idleGcIntervalMs: Long = IDLE_GC_INTERVAL_MS,
+    private val maxHeapFreePercent: Long = MAX_HEAP_FREE_PERCENT,
 ) : Closeable {
     private val mallocTrim: MethodHandle? = find("malloc_trim", TRIM_SIGNATURE)
 
     @Volatile private var watcher: Thread? = null
+
+    // The options of HotSpot that can be read and set while running; `null` in another JVM.
+    private val diagnostics: HotSpotDiagnosticMXBean? =
+        ManagementFactory.getPlatformMXBean(HotSpotDiagnosticMXBean::class.java)
 
     /** Whether this C library can give freed memory back (glibc). */
     val canTrim: Boolean get() = mallocTrim != null
@@ -41,6 +49,7 @@ class MemoryReturn(
     /** Starts giving memory back, until [close]. */
     fun start(): MemoryReturn {
         collectWhenIdle()
+        keepLittleFreeHeap()
         if (canTrim && watcher == null) {
             watcher = thread(name = "memory-return", isDaemon = true) { watch() }
         }
@@ -56,6 +65,9 @@ class MemoryReturn(
 
     /** The interval of the collections of an idle JVM, in milliseconds; `null` when this JVM has none. */
     fun idleGcInterval(): Long? = vmOption(PERIODIC_GC)?.toLongOrNull()
+
+    /** The share of the heap a collection may leave free, in percent; `null` when this JVM has no such limit. */
+    fun maxHeapFree(): Long? = vmOption(MAX_HEAP_FREE)?.toLongOrNull()
 
     override fun close() {
         watcher?.interrupt()
@@ -76,8 +88,21 @@ class MemoryReturn(
     // Leaves alone an interval given on the command line.
     private fun collectWhenIdle() {
         if (idleGcInterval() != 0L) return
+        setVmOption(PERIODIC_GC, idleGcIntervalMs)
+    }
+
+    // Leaves alone ratios given on the command line. The minimum first: it may not exceed the maximum.
+    private fun keepLittleFreeHeap() {
+        val isDefault = maxHeapFree() == DEFAULT_MAX_HEAP_FREE_PERCENT
+        if (!isDefault) return
+        val minHeapFreePercent = minOf(MIN_HEAP_FREE_PERCENT, maxHeapFreePercent)
+        setVmOption(MIN_HEAP_FREE, minHeapFreePercent)
+        setVmOption(MAX_HEAP_FREE, maxHeapFreePercent)
+    }
+
+    private fun setVmOption(name: String, value: Long) {
         try {
-            diagnostics()?.setVMOption(PERIODIC_GC, idleGcIntervalMs.toString())
+            diagnostics?.setVMOption(name, value.toString())
         } catch (_: IllegalArgumentException) {
             // Not a flag this JVM lets change: it keeps its heap as before.
         }
@@ -85,13 +110,10 @@ class MemoryReturn(
 
     private fun vmOption(name: String): String? =
         try {
-            diagnostics()?.getVMOption(name)?.value
+            diagnostics?.getVMOption(name)?.value
         } catch (_: IllegalArgumentException) {
             null // Another collector than G1, another JVM than HotSpot.
         }
-
-    private fun diagnostics(): HotSpotDiagnosticMXBean? =
-        ManagementFactory.getPlatformMXBean(HotSpotDiagnosticMXBean::class.java)
 
     // A function of glibc, `null` in another C library.
     private fun find(name: String, signature: FunctionDescriptor): MethodHandle? {
@@ -102,6 +124,16 @@ class MemoryReturn(
 
     private companion object {
         const val PERIODIC_GC = "G1PeriodicGCInterval"
+        const val MIN_HEAP_FREE = "MinHeapFreeRatio"
+        const val MAX_HEAP_FREE = "MaxHeapFreeRatio"
+
+        // What HotSpot keeps free when nothing was asked.
+        const val DEFAULT_MAX_HEAP_FREE_PERCENT = 70L
+
+        // Enough room for the garbage of a few seconds of typing or scrolling between two collections, and the heap
+        // grows again as soon as more is needed.
+        const val MIN_HEAP_FREE_PERCENT = 10L
+        const val MAX_HEAP_FREE_PERCENT = 30L
 
         // `int malloc_trim(size_t pad)`.
         val TRIM_SIGNATURE: FunctionDescriptor = FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG)

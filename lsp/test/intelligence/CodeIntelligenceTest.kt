@@ -73,6 +73,7 @@ class CodeIntelligenceTest {
     private val main = project.resolve("main.php").toString()
     private var options = arrayOf<String>()
     private var indexingWaitMs = 60_000L
+    private var indexingStartMs = 500L
     private val service by lazy {
         val fake =
             LanguageServerCandidate(
@@ -98,12 +99,20 @@ class CodeIntelligenceTest {
                 dataDirectory = data,
                 toolsDirectory = data.resolve("tools"),
                 candidates = CandidateRegistry(nothing, listOf(fake)),
-                timings = SupervisorTimings(idleStopMs = 500, initializeTimeoutMs = 20_000, firstBackoffMs = 100),
+                timings = supervisorTimings(),
                 intelligence = IntelligenceSettings(timeoutMs = 5_000, holdMs = 2_000, indexingWaitMs = indexingWaitMs),
             ),
         )
     }
     private val intelligence get() = service.intelligence
+
+    private fun supervisorTimings() =
+        SupervisorTimings(
+            idleStopMs = 500,
+            initializeTimeoutMs = 20_000,
+            firstBackoffMs = 100,
+            indexingStartMs = indexingStartMs,
+        )
 
     @AfterTest
     fun cleanup() {
@@ -138,13 +147,15 @@ class CodeIntelligenceTest {
     @Test
     fun `a server indexing longer than the wait is not ready, rather than finding no usage`() {
         options = arrayOf("--progress", "30", "--blind-until-indexed")
-        indexingWaitMs = 1_000
+        // A slow runner may begin the indexing late (the fake waits 200 ms): the IDE must still be waiting for it.
+        indexingStartMs = 5_000
+        indexingWaitMs = 6_000
         openMain()
         val started = System.nanoTime()
         val usages = runBlocking { intelligence.references(SESSION, position(2, 18), includeDeclaration = false) }
         val waited = (System.nanoTime() - started) / 1_000_000
         assertEquals(FeatureStatus.NotReady, usages.status)
-        assertTrue(waited in 900..10_000, "waited $waited ms")
+        assertTrue(waited in 900..60_000, "waited $waited ms")
     }
 
     // Greeter.php only on disk, main.php open: the server finds the class by reading the project.

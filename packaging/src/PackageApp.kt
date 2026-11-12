@@ -46,6 +46,7 @@ fun packageApp(
     vendor: String,
     version: String,
     modules: List<String>,
+    javaOptions: List<String>,
     console: Boolean,
     installer: Boolean,
     appImage: Boolean,
@@ -69,7 +70,8 @@ fun packageApp(
     if (app.dist.exists()) app.dist.deleteRecursively()
     val jars = (listOf(appJar.artifact) + runtimeClasspath.resolvedFiles).map { it.absolute() }.distinct()
     val jdk = Jdk.find()
-    val image = buildAppImageDirectory(jdk, app, jars, mainClass, modules, compress)
+    val launch = Launch(mainClass, modules, javaOptions, compress)
+    val image = buildAppImageDirectory(jdk, app, jars, launch)
 
     if (Os.current == Os.LINUX) stripNativeLibraries(image.resolve("lib/runtime"))
     if (aot) addAotCache(app, image, aotTrainingSeconds)
@@ -126,17 +128,21 @@ internal class App(
         deliverables.resolve("$name-$versionLabel-${Os.current.label}-$arch.$extension")
 }
 
+/** How the packaged application runs: its entry point and its JVM. */
+internal class Launch(
+    /** Fully qualified name of the main class. */
+    val mainClass: String,
+    /** Java modules of the runtime; empty for every module. */
+    val modules: List<String>,
+    /** Options of the JVM, one per entry. */
+    val javaOptions: List<String>,
+    /** Whether the runtime is compressed. */
+    val compress: Boolean,
+)
+
 // jpackage app-image: the application with its runtime, from the jars copied with a numbered name, since names
 // repeat and the classpath order matters.
-@Suppress("LongParameterList")
-private fun buildAppImageDirectory(
-    jdk: Jdk,
-    app: App,
-    jars: List<Path>,
-    mainClass: String,
-    modules: List<String>,
-    compress: Boolean,
-): Path {
+private fun buildAppImageDirectory(jdk: Jdk, app: App, jars: List<Path>, launch: Launch): Path {
     val input = app.dist.resolve("input").createDirectories()
     val files = jars.filter { !it.isDirectory() }
     files.forEachIndexed { i, jar -> jar.copyTo(input.resolve("%03d-%s".format(i, jar.name))) }
@@ -144,17 +150,19 @@ private fun buildAppImageDirectory(
 
     val jlinkOptions =
         listOf("--strip-native-commands", "--strip-debug", "--no-man-pages", "--no-header-files") +
-            if (compress) listOf("--compress", "zip-6") else emptyList()
+            if (launch.compress) listOf("--compress", "zip-6") else emptyList()
     val options =
         buildList {
             addAll(listOf("--type", "app-image", "--dest", app.dist, "--name", app.appName))
             addAll(listOf("--app-version", app.version, "--vendor", app.vendor, "--description", app.description))
-            addAll(listOf("--input", input, "--main-jar", "000-${files.first().name}", "--main-class", mainClass))
+            addAll(listOf("--input", input, "--main-jar", "000-${files.first().name}"))
+            addAll(listOf("--main-class", launch.mainClass))
             addAll(listOf("--jlink-options", jlinkOptions.joinToString(" ")))
             // libghostty-vt and pty4j use the Foreign Function & Memory API.
             addAll(listOf("--java-options", "--enable-native-access=ALL-UNNAMED"))
+            launch.javaOptions.forEach { addAll(listOf("--java-options", it)) }
             if (Files.exists(app.icon)) addAll(listOf("--icon", app.icon))
-            if (modules.isNotEmpty()) addAll(listOf("--add-modules", modules.joinToString(",")))
+            if (launch.modules.isNotEmpty()) addAll(listOf("--add-modules", launch.modules.joinToString(",")))
             if (app.console && Os.current == Os.WINDOWS) add("--win-console")
             if (Os.current == Os.MAC) addAll(listOf("--mac-package-identifier", "org.example.${app.name}"))
         }
