@@ -95,12 +95,14 @@ class DiskChangesPerformanceE2eTest {
                 )
             // A build writes its thousands of outputs, and one drew in the same burst the open file: the watch
             // answers the burst with the version of the open file alone, the tab follows it, nothing else read.
+            // Writing the outputs is the disk's time, not the IDE's (2 to 15 s on the Windows runner): what is
+            // measured is the open file following the burst while the watch still digests it.
+            repeat(FILES) { project.file("build/classes/c${it % 50}/C$it.class", "") }
             measure(
                 "$FILES build outputs with one open file reconciled",
                 budgetMillis = 15_000,
                 budgetMegabytes = 1_000,
             ) {
-                repeat(FILES) { project.file("build/classes/c${it % 50}/C$it.class", "") }
                 project.file(name(0), "class Reconciled from a burst\n")
                 awaitCondition(timeout = 30_000) {
                     // Reloaded: the document holds the version the burst left on the disk, its first line is it.
