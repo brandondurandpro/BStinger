@@ -185,17 +185,26 @@ internal class FakePhpCode(
         /** The PHP files under [rootUri], by URI, as an indexing server reads them. */
         fun readDisk(rootUri: String?): Map<String, List<String>> {
             val root = rootUri?.let { runCatching { File(URI(it)) }.getOrNull() } ?: return emptyMap()
-            val files =
-                root
-                    .walkTopDown()
-                    .onEnter { it.name != ".git" }
-                    .filter { it.isFile && it.extension == "php" }
-                    .take(MAX_DISK_FILES)
+            val files = phpFilesUnder(root).take(MAX_DISK_FILES)
             // Named like the client names them: Path.toUri, as the IDE server does.
             // A file deleted while the directory is read is left out, as a real server would.
             val read = files.mapNotNull { file -> runCatching { file.toPath().toUri().toString() to readShared(file) }.getOrNull() }
             return read.toMap()
         }
+
+        // The PHP files under [directory], each directory read in the order of its names whatever their case, as NTFS
+        // lists them: the order of a directory is otherwise the file system's (the hash of the names on ext4, which
+        // changes with the disk), and so would be the order of the declarations and of the usages answered.
+        private fun phpFilesUnder(directory: File): Sequence<File> =
+            sequence {
+                val children = directory.listFiles().orEmpty().sortedBy { it.name.uppercase() }
+                for (child in children) {
+                    val isPhpFile = child.isFile && child.extension == "php"
+                    val isSearchedDirectory = child.isDirectory && child.name != ".git"
+                    if (isPhpFile) yield(child)
+                    if (isSearchedDirectory) yieldAll(phpFilesUnder(child))
+                }
+            }
 
         /** The lines of the file at [uri], null when it cannot be read (deleted meanwhile). */
         fun readFile(uri: String): List<String>? = runCatching { readShared(File(URI(uri))) }.getOrNull()
