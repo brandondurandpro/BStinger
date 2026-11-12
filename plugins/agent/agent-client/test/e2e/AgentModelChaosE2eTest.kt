@@ -57,6 +57,9 @@ class AgentModelChaosE2eTest {
             val conversation = startConversation(app)
             chooseModel("fake-max")
             awaitModel("Max")
+            // Shown at once; restarting while the server has not answered would fail the choice ("whether it was
+            // applied is unknown") and show the model before it. The restart is what the choice must survive.
+            awaitCondition(AGENT_TIMEOUT) { conversation.settingOptions == 0 }
             app.process.restart()
             awaitReconnected()
             sendPrompt("model")
