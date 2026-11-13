@@ -32,6 +32,7 @@ import org.example.kotlineditor.model.LanguageServerChoice
 import org.example.kotlineditor.model.Languages
 import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.InlayHintsMode
+import org.example.kotlineditor.state.LspLevel
 import org.example.kotlineditor.state.SERVER_LANGUAGES
 import org.example.kotlineditor.state.Setting
 import org.example.kotlineditor.state.SettingsState
@@ -97,6 +98,30 @@ internal fun InlayHintsControl(app: AppState) {
                     .pointerHoverIcon(PointerIcon.Hand)
                     .semantics { selected = chosen }
                     .testTag(AppTags.settingsInlayHints(mode.name))
+                    .padding(horizontal = 10.dp, vertical = 3.dp),
+            )
+        }
+    }
+}
+
+/** Off, Basic or Full, the default level of the language servers, the one chosen highlighted. */
+@Composable
+internal fun LspLevelControl(app: AppState) {
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        for (level in LspLevel.entries) {
+            val chosen = app.settings.lspLevel == level
+            Label(
+                level.title,
+                Modifier
+                    .background(if (chosen) IdeColors.Selection else Color.Transparent, ChipShape)
+                    .border(1.dp, IdeColors.Separator, ChipShape)
+                    .clickable(
+                        remember { MutableInteractionSource() },
+                        indication = null,
+                    ) { app.settings.lspLevel = level }
+                    .pointerHoverIcon(PointerIcon.Hand)
+                    .semantics { selected = chosen }
+                    .testTag(AppTags.settingsLspLevel(level.name))
                     .padding(horizontal = 10.dp, vertical = 3.dp),
             )
         }

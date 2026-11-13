@@ -26,7 +26,7 @@ internal class DocumentInsights(
     private val scope: CoroutineScope,
     private val requests: InsightRequests,
     private val onEdit: (DocumentInsight, TextChange) -> Unit,
-    private val askMore: suspend (DocumentInsight) -> Unit,
+    private val askMore: suspend (DocumentInsight, decorated: Boolean) -> Unit,
 ) {
     private val insights = HashMap<Document, DocumentInsight>()
     private var lastDiagnostics: DiagnosticsSnapshot = DiagnosticsSnapshot.Empty
@@ -40,6 +40,25 @@ internal class DocumentInsights(
         }
 
     private var mode by mutableStateOf(InlayHintsMode.Popup)
+
+    /**
+     * Whether the decorations of the servers (inlay hints, semantic colors, code lenses, links) are asked and shown;
+     * off, those already known go, and on again everything is asked again.
+     */
+    var decorated: Boolean = true
+        set(value) {
+            if (field == value) return
+            field = value
+            if (value) refreshAll() else insights.values.forEach(::dropDecorations)
+        }
+
+    private fun dropDecorations(insight: DocumentInsight) {
+        insight.inlayHints = emptyList()
+        insight.semanticTokens = emptyList()
+        insight.codeLenses = emptyList()
+        insight.links = emptyList()
+        insight.document.inlays = emptyMap()
+    }
 
     /** What the language server said about [document], null when it has none. */
     fun insightOf(document: Document): DocumentInsight? = insights[document]
@@ -102,8 +121,9 @@ internal class DocumentInsights(
 
     private suspend fun askEverything(insight: DocumentInsight) {
         countUsages(insight)
-        askMore(insight)
+        askMore(insight, decorated)
         foldingFromServer(insight)
+        if (!decorated) return
         inlayHintsFromServer(insight)
         semanticTokensFromServer(insight)
     }

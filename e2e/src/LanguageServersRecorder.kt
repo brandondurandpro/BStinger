@@ -5,7 +5,7 @@ import org.example.kotlineditor.model.TextChange
 import java.util.concurrent.CopyOnWriteArrayList
 
 /** A request the UI sent to the language servers of one server, with the project or file it names. */
-data class LanguageServerCall(val method: String, val target: String)
+data class LanguageServerCall(val method: String, val target: String, val files: List<String> = emptyList())
 
 /**
  * Sits between the UI and the language servers of the app's own server (the requests still go to it) and records
@@ -18,7 +18,7 @@ class LanguageServersRecorder(private val servers: LanguageServers) : LanguageSe
     val calls: List<LanguageServerCall> get() = recorded.toList()
 
     override suspend fun use(project: String, files: List<String>): List<String> {
-        recorded += LanguageServerCall("use", project)
+        recorded += LanguageServerCall("use", project, files)
         return servers.use(project, files)
     }
 

@@ -47,6 +47,8 @@ class ServerContext(
     private val agentCommand: () -> AgentCommand,
     /** Whether a project opens in agent mode (the user's default mode, when agent mode is on). */
     private val startsInAgentMode: () -> Boolean = { false },
+    /** The level of the language servers chosen for every project (see [LspLevel]). */
+    private val globalLspLevel: () -> LspLevel = { LspLevel.Full },
     /** What the server is told about the telemetry. */
     private val consent: () -> SharedConsent,
     /** A project was opened on this remote server (never called for a local one). */
@@ -178,6 +180,7 @@ class ServerContext(
                 grammars = grammars,
                 languageServers = languageServers,
                 agentCommand = agentCommand,
+                globalLspLevel = globalLspLevel,
             )
         // "Opening…" stays shown meanwhile: the project then appears with its tabs and tree as they were left.
         opened.restoreSession(RESTORE_WAIT_MILLIS)
@@ -252,13 +255,14 @@ class ServerContext(
         val shown = project ?: return emptyMap()
         val autoSelect = PreferenceKeys.AUTO_SELECT_OPENED_FILE to shown.autoSelectOpenedFile.toString()
         val inlayHints = PreferenceKeys.INLAY_HINTS to shown.inlayHintsMode.name
+        val lspLevel = PreferenceKeys.LSP_LEVEL_PREFIX + shown.root.path to shown.projectLspLevel?.name.orEmpty()
         val pins = shown.git.pinnedBranchesPreference()
         val windows = shown.toolWindows.toPreferences()
         val agent = shown.agentPreferences()
         val diffs = shown.diffLayout.toPreferences()
         val runs = shown.run.toPreferences()
         val indicators = shown.statusIndicators.toPreferences()
-        return windows + autoSelect + inlayHints + pins + agent + diffs + runs + indicators
+        return windows + autoSelect + inlayHints + lspLevel + pins + agent + diffs + runs + indicators
     }
 
     /** Saves the open project's session and files, then disposes it; it stays shown until [leave]. */
@@ -296,17 +300,18 @@ class ServerContext(
         project.dispose()
     }
 
+    // The tabs the language servers work for: none when the level in force (conversation, project or global) is Off.
+    private fun serverTabs(shown: ProjectState?): List<EditorTab> {
+        val tabs = shown?.editor?.allTabs.orEmpty()
+        val stopped = shown?.lspLevel == LspLevel.Off
+        return if (stopped) emptyList() else tabs.filterNot { it.isDiff }
+    }
+
     // The server starts the language servers the open files need, and stops them when they are closed.
     private suspend fun declareOpenFiles() {
         snapshotFlow {
             val shown = project
-            val files =
-                shown
-                    ?.editor
-                    ?.allTabs
-                    ?.filterNot { it.isDiff }
-                    ?.map { it.entry.path }
-                    .orEmpty()
+            val files = serverTabs(shown).map { it.entry.path }
             shown?.root?.path to files
         }.collect { (projectPath, files) -> languageServers.declare(projectPath, files) }
     }
@@ -316,13 +321,9 @@ class ServerContext(
         snapshotFlow {
             val shown = project
             val documents =
-                shown
-                    ?.editor
-                    ?.allTabs
-                    ?.filterNot { it.isDiff }
-                    ?.mapNotNull { tab -> tab.document?.let { tab.entry.path to it } }
-                    ?.toMap()
-                    .orEmpty()
+                serverTabs(shown)
+                    .mapNotNull { tab -> tab.document?.let { tab.entry.path to it } }
+                    .toMap()
             shown?.root?.path to documents
         }.collect { (projectPath, documents) -> languageServers.syncDocuments(projectPath, documents) }
     }

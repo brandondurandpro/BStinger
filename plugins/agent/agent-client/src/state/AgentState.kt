@@ -56,6 +56,9 @@ class Conversation(val id: Int, title: String, val branch: String) {
     var archived by mutableStateOf(false)
         internal set
 
+    /** The level of the language servers chosen for this conversation; null to follow the project's. */
+    var lspLevel: LspLevel? by mutableStateOf(null)
+
     /** True while the conversation is pinned to the top of the list. */
     var pinned by mutableStateOf(false)
         internal set

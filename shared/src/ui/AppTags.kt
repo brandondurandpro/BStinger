@@ -69,6 +69,9 @@ object AppTags {
     const val FILE_DIALOG_RESULT = "fileDialog.result"
     const val DEPLOY_REMEMBER = "fileDialog.deployRemember"
     const val DEPLOY_BUTTON = "toolbar.deploy"
+
+    /** The level of the language servers in force, in the top bar: a click opens the menu of levels. */
+    const val LSP_LEVEL_BUTTON = "toolbar.lspLevel"
     const val DEPLOYMENTS = DeployTags.DEPLOYMENTS
     const val DEPLOYMENTS_NEW = DeployTags.DEPLOYMENTS_NEW
     const val DEPLOYMENTS_CLOSE = DeployTags.DEPLOYMENTS_CLOSE
@@ -162,6 +165,18 @@ object AppTags {
     fun settingsTheme(name: String) = "settings.theme:$name"
 
     fun settingsInlayHints(mode: String) = "settings.inlayHints:$mode"
+
+    /** The button of a language server level (`Basic`) of the default level in the Settings dialog. */
+    fun settingsLspLevel(level: String) = "settings.lspLevel:$level"
+
+    /** A level (`Off`) in the menu of the top bar. */
+    fun lspLevel(level: String) = "toolbar.lspLevel:$level"
+
+    /** Where the level chosen applies (`Conversation`, `Project` or `Global`). */
+    fun lspScope(scope: String) = "toolbar.lspScope:$scope"
+
+    /** Removes the choice made for the `Conversation` or the `Project`: the next one in line applies again. */
+    fun lspInherit(scope: String) = "toolbar.lspInherit:$scope"
 
     /** A language server offered in the Settings dialog, by its id (`phpactor`). */
     fun settingsServerLanguage(language: String) = "settings.server.language:$language"

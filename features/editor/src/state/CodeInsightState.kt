@@ -80,6 +80,13 @@ class CodeInsightState(
             documents.inlayMode = value
         }
 
+    /** Whether the inlay hints, semantic colors, code lenses and links of the servers are shown (not at Basic). */
+    var decorated: Boolean
+        get() = documents.decorated
+        set(value) {
+            documents.decorated = value
+        }
+
     /** The document whose "3 usages" hint is under the mouse (the pointer is a hand over it), null when none. */
     var hintUnderMouse: Document? by mutableStateOf(null)
 
@@ -126,9 +133,11 @@ class CodeInsightState(
     }
 
     // What the other files of the code intelligence ask about a document, after its usage counts.
-    private suspend fun askMore(insight: DocumentInsight) {
-        codeLensesFromServer(insight)
-        documentLinksFromServer(insight)
+    private suspend fun askMore(insight: DocumentInsight, decorated: Boolean) {
+        if (decorated) {
+            codeLensesFromServer(insight)
+            documentLinksFromServer(insight)
+        }
         formatTriggersFromServer(insight)
     }
 

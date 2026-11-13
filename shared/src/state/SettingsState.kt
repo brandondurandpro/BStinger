@@ -48,6 +48,12 @@ enum class Setting(val category: SettingsCategory, val title: String, val descri
         "The parameter names and the types the language server adds to the code.",
         "parameter names types variables lsp",
     ),
+    LspLevelDefault(
+        SettingsCategory.LanguageServers,
+        "Default level",
+        "How much the language servers do where no level was chosen (the top bar chooses per conversation or project).",
+        "lsp off basic full intelligence memory cpu agent",
+    ),
     LanguageServers(
         SettingsCategory.LanguageServers,
         "Language servers",

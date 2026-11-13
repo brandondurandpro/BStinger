@@ -54,6 +54,8 @@ class ProjectState(
     internal val diffLayout: DiffLayout = DiffLayout(preferences),
     /** The indicators of the status bar that are shown, saved; a worktree of agent mode shares its project's. */
     val statusIndicators: StatusIndicators = StatusIndicators(preferences),
+    /** The level of the language servers chosen for every project (a conversation or this project may choose). */
+    private val globalLspLevel: () -> LspLevel = { LspLevel.Full },
 ) : GitHost,
     TreeHost,
     LanguageServersHost,
@@ -175,6 +177,25 @@ class ProjectState(
         insight.inlayHintsMode = InlayHintsMode.fromSaved(preferences[PreferenceKeys.INLAY_HINTS])
     }
 
+    /** The level chosen for this project, null to follow the global one. */
+    var projectLspLevel: LspLevel? by mutableStateOf(savedLspLevel(preferences, root.path))
+
+    // The conversation shown in agent mode, whose own level may apply; the agent state is not created outside it.
+    private val shownConversation: Conversation? get() = if (agentMode) agent.current else null
+
+    /** Where the level of the language servers in force was chosen: the most precise choice wins. */
+    val lspLevelSource: LspLevelSource
+        get() =
+            when {
+                shownConversation?.lspLevel != null -> LspLevelSource.Conversation
+                projectLspLevel != null -> LspLevelSource.Project
+                else -> LspLevelSource.Global
+            }
+
+    /** The level of the language servers in force now: the conversation's, else the project's, else the global one. */
+    val lspLevel: LspLevel
+        get() = shownConversation?.lspLevel ?: projectLspLevel ?: globalLspLevel()
+
     /** True once the server watches the disk of the project for this window (see `followDisk`). */
     var diskWatched by mutableStateOf(false)
         internal set
@@ -194,6 +215,11 @@ class ProjectState(
         scope.launch { followDisk() }
         followActiveFile()
         followInsight()
+    }
+
+    /** Chooses [level] for the conversation shown, null to follow the project's again. */
+    fun chooseConversationLspLevel(level: LspLevel?) {
+        shownConversation?.lspLevel = level
     }
 
     override fun entryAt(relativePath: String): FileEntry =
@@ -453,3 +479,6 @@ private fun localDate(seconds: Long): String {
 /** "Always Select Opened File" as saved in [preferences]: on when it was never changed. */
 internal fun autoSelectOf(preferences: Map<String, String>): Boolean =
     preferences[PreferenceKeys.AUTO_SELECT_OPENED_FILE]?.toBooleanStrictOrNull() ?: true
+
+private fun savedLspLevel(preferences: Map<String, String>, root: String): LspLevel? =
+    LspLevel.fromSaved(preferences[PreferenceKeys.LSP_LEVEL_PREFIX + root])
