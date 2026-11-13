@@ -12,7 +12,9 @@ suspend fun GrammarStore.highlightChunks(fileName: String, chunks: List<List<Str
     val spec = GrammarSpec.forFileName(fileName)
     val grammar = spec?.let { await(it) } ?: return null
     return withContext(Dispatchers.Default) {
-        TreeSitterHighlighter(grammar).use { highlighter -> chunks.map { chunk -> colorsOf(highlighter, chunk) } }
+        // A highlighter for each chunk: the chunks are unrelated texts, and parsing one incrementally from the tree
+        // of the previous one gives wrong or empty colors.
+        chunks.map { chunk -> TreeSitterHighlighter(grammar).use { highlighter -> colorsOf(highlighter, chunk) } }
     }
 }
 
