@@ -50,11 +50,20 @@ private val Warning get() = IdeColors.GitBehind
 private val Good get() = IdeColors.GitAdded
 private val LEAKS = setOf("SuspectedLeak", "OverLimit")
 
-/** One status bar item per language server of the project, then the IDE server's own memory. */
+/**
+ * One status bar item per language server of the project, then the memory and the processor use of the IDE: each
+ * group only when the user keeps it shown.
+ */
 @Composable
-fun LanguageServerStatusItems(project: LanguageServersHost) {
+fun LanguageServerStatusItems(
+    project: LanguageServersHost,
+    showServers: Boolean = true,
+    showMemory: Boolean = true,
+    showCpu: Boolean = true,
+) {
     val state = project.languageServers ?: return
-    for (server in state.serversOf(project.root.path)) {
+    val servers = if (showServers) state.serversOf(project.root.path) else emptyList()
+    for (server in servers) {
         StatusItem(
             text = statusText(server),
             color = colorOf(server),
@@ -64,8 +73,8 @@ fun LanguageServerStatusItems(project: LanguageServersHost) {
             tooltipTag = LanguageServerTags.statusLanguageServerTooltip(server.id),
         ) { project.showToolWindow(ToolWindow.LanguageServers) }
     }
-    IdeMemoryStatusItems(project, state)
-    IdeCpuStatusItem(project, state)
+    if (showMemory) IdeMemoryStatusItems(project, state)
+    if (showCpu) IdeCpuStatusItem(project, state)
 }
 
 @OptIn(ExperimentalFoundationApi::class)

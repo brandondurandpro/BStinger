@@ -52,6 +52,8 @@ class ProjectState(
     private val agentCommand: () -> AgentCommand = { agentCommandOf("") },
     /** The layout of the diffs, saved; a worktree of agent mode shares the one of its project. */
     internal val diffLayout: DiffLayout = DiffLayout(preferences),
+    /** The indicators of the status bar that are shown, saved; a worktree of agent mode shares its project's. */
+    val statusIndicators: StatusIndicators = StatusIndicators(preferences),
 ) : GitHost,
     TreeHost,
     LanguageServersHost,

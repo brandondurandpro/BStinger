@@ -107,9 +107,17 @@ object AppTags {
     const val STATUS_CONNECTION = "status.connection"
     const val STATUS_OPENING = "status.opening"
     const val STATUS_ERROR = "status.error"
+
+    /** The button at the right of the status bar that opens the menu of its indicators. */
+    const val STATUS_INDICATORS = "status.indicators"
+    const val STATUS_LINE_SEPARATOR = "status.lineSeparator"
+    const val STATUS_ENCODING = "status.encoding"
+
     const val TOOL_LANGUAGE_SERVERS = LanguageServerTags.TOOL_BUTTON
     const val GOTO_LINE = "gotoLine"
     const val GOTO_LINE_INPUT = "gotoLine.input"
+
+    fun statusIndicator(name: String) = "status.indicators.item:$name"
 
     fun pane(index: Int) = "editor.pane:$index"
 
