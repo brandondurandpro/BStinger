@@ -14,10 +14,11 @@ import kotlin.concurrent.thread
 /**
  * The server of the IDE on its own machine, on loopback, with a random token.
  *
- * It runs in a child JVM ([ServerMain], from the classes the IDE already has), so that its memory spikes, GC pauses
- * and failures (an `OutOfMemoryError`) do not reach the UI. When the child dies it is started again on the same port
- * with the same token: the client reconnects by itself, as to a remote daemon that restarted. The child exits with
- * the IDE, even when the IDE is killed (`--parent-pid`).
+ * It runs in a child process, so that its memory spikes, GC pauses and failures (an `OutOfMemoryError`) do not
+ * reach the UI: the server compiled to a native binary when there is one ([Settings.binary]: less memory, no
+ * warm-up), a child JVM otherwise ([ServerMain], from the classes the IDE already has). When the child dies it is
+ * started again on the same port with the same token: the client reconnects by itself, as to a remote daemon that
+ * restarted. The child exits with the IDE, even when the IDE is killed (`--parent-pid`).
  *
  * Where no `java` launcher can be found (a packaged application image: jpackage ships the runtime without its
  * commands), or when the child never manages to start, the server runs in the IDE's JVM instead, after a warning.
@@ -32,6 +33,11 @@ class LocalServer private constructor(
     /** How to start the child; a null [java] runs the server in this JVM. */
     class Settings(
         val java: String? = javaLauncher(),
+        /**
+         * The server compiled to a native binary (`./native-server build`), started rather than a JVM. It cannot
+         * load the jar of a plugin: null as soon as a server plugin is installed.
+         */
+        val binary: String? = nativeBinary(),
         /** Class path of the child: the IDE's own, which holds the server. */
         val classpath: String = System.getProperty("java.class.path"),
         /** More options of [ServerMain] (`--data-dir`, `--ripgrep`…). */
@@ -49,6 +55,14 @@ class LocalServer private constructor(
     private val tokenFile: Path get() = directory.resolve("token")
     private val stateFile: Path get() = directory.resolve("state.properties")
     private val argumentFile: Path get() = directory.resolve("server.args")
+
+    // The options of the server, the same for a native binary and for a JVM.
+    private val serverArguments: List<String> by lazy {
+        listOf("--host", LOOPBACK, "--port", port.toString()) +
+            listOf("--token-file", tokenFile.toString(), "--state-file", stateFile.toString()) +
+            listOf("--parent-pid", ProcessHandle.current().pid().toString()) +
+            settings.serverArguments
+    }
 
     @Volatile private var closed = false
 
@@ -85,15 +99,14 @@ class LocalServer private constructor(
         if (directoryHolder.isInitialized()) directory.toFile().deleteRecursively()
     }
 
-    private fun startChild(java: String) {
+    private fun startChild(command: List<String>) {
         TokenFile.write(tokenFile, token)
-        writeArguments()
-        val first = launchOrFallBack(java) ?: return
-        supervisor = thread(name = "local-server-supervisor", isDaemon = true) { supervise(java, first) }
+        val first = launchOrFallBack(command) ?: return
+        supervisor = thread(name = "local-server-supervisor", isDaemon = true) { supervise(command, first) }
     }
 
     // Starts the child again whenever it dies, until the IDE closes; gives up after starts that never listened.
-    private fun supervise(java: String, first: Process) {
+    private fun supervise(command: List<String>, first: Process) {
         var process: Process? = first
         var failedStarts = 0
         var backoff = MIN_RESTART_DELAY_MS
@@ -105,27 +118,27 @@ class LocalServer private constructor(
             val gaveUp = failedStarts >= settings.maxFailedStarts
             if (gaveUp) fallBack("the server process stopped $failedStarts times while starting")
             val restart = exit != null && !closed && !gaveUp
-            process = if (restart) restartAfter(backoff, exit, java) else null
+            process = if (restart) restartAfter(backoff, exit, command) else null
             backoff = minOf(backoff * 2, MAX_RESTART_DELAY_MS)
         }
     }
 
-    private fun restartAfter(delayMs: Long, exit: Int?, java: String): Process? {
+    private fun restartAfter(delayMs: Long, exit: Int?, command: List<String>): Process? {
         settings.warn("the server process stopped (exit code $exit): starting it again")
         val waited = sleepInterruptibly(delayMs) && !closed
-        return if (waited) launchOrFallBack(java) else null
+        return if (waited) launchOrFallBack(command) else null
     }
 
-    private fun launchOrFallBack(java: String): Process? {
+    private fun launchOrFallBack(command: List<String>): Process? {
         val started =
             try {
-                ProcessBuilder(java, "@$argumentFile")
+                ProcessBuilder(command)
                     .redirectInput(ProcessBuilder.Redirect.from(nullFile()))
                     .redirectOutput(ProcessBuilder.Redirect.INHERIT)
                     .redirectError(ProcessBuilder.Redirect.INHERIT)
                     .start()
             } catch (e: IOException) {
-                fallBack("cannot start $java (${e.message})")
+                fallBack("cannot start ${command.firstOrNull()} (${e.message})")
                 null
             }
         if (started != null) child = started
@@ -157,14 +170,20 @@ class LocalServer private constructor(
             ?.getProperty("pid")
             ?.toLongOrNull()
 
+    // The command of the child: the native binary with the options of the server, or `java @file`.
+    private fun childCommand(java: String?): List<String>? {
+        val binary = settings.binary
+        if (binary != null) return listOf(binary) + serverArguments
+        return java?.let {
+            writeArguments()
+            listOf(it, "@$argumentFile")
+        }
+    }
+
     // In a file rather than on the command line: a long class path does not fit a Windows command line.
     private fun writeArguments() {
         val jvm = listOf("--enable-native-access=ALL-UNNAMED", "-cp", settings.classpath, ServerMain::class.java.name)
-        val server =
-            listOf("--host", LOOPBACK, "--port", port.toString()) +
-                listOf("--token-file", tokenFile.toString(), "--state-file", stateFile.toString()) +
-                listOf("--parent-pid", ProcessHandle.current().pid().toString())
-        val arguments = jvm + server + settings.serverArguments
+        val arguments = jvm + serverArguments
         Files.writeString(argumentFile, arguments.joinToString("\n", postfix = "\n") { quoted(it) })
     }
 
@@ -176,21 +195,24 @@ class LocalServer private constructor(
         private const val MIN_RESTART_DELAY_MS = 200L
         private const val MAX_RESTART_DELAY_MS = 5_000L
         private const val MAX_FAILED_STARTS = 3
+        private const val BINARY_PROPERTY = "kotlin.editor.server.binary"
+        private const val BINARY_VARIABLE = "KOTLIN_EDITOR_SERVER_BINARY"
 
         /**
-         * Starts the server: a child process when [Settings.java] is known, in this JVM otherwise. Returns without
+         * Starts the server: a child process when [Settings.binary] or [Settings.java] is known, in this JVM
+         * otherwise. Returns without
          * waiting for the child: the client connects (and retries) while it starts.
          */
         fun start(settings: Settings = Settings()): LocalServer {
             val token = EditorServer.newToken()
-            val java = settings.java
-            if (java == null) {
+            val hasLauncher = settings.binary != null || settings.java != null
+            if (!hasLauncher) {
                 settings.warn("no java launcher in the IDE's runtime: the server runs in the IDE's JVM")
                 val embedded = EditorServer(settings.services(), token).start(LOOPBACK, 0)
                 return LocalServer(embedded.port, token, settings).also { it.embedded = embedded }
             }
             val server = LocalServer(freePort(), token, settings)
-            server.startChild(java)
+            server.childCommand(settings.java)?.let(server::startChild)
             return server
         }
 
@@ -214,6 +236,21 @@ class LocalServer private constructor(
                 commandIsJava -> command.path
                 else -> null
             }
+        }
+
+        /**
+         * The native server to start: the file named by the `kotlin.editor.server.binary` system property or the
+         * `KOTLIN_EDITOR_SERVER_BINARY` environment variable, when it can be executed and no server plugin is
+         * installed in [pluginsDirectory] (a native binary cannot load their jars).
+         */
+        fun nativeBinary(
+            configured: String? = System.getProperty(BINARY_PROPERTY) ?: System.getenv(BINARY_VARIABLE),
+            pluginsDirectory: File = File(System.getProperty("user.home"), ".kotlin-editor/server-plugins"),
+        ): String? {
+            val binary = configured?.takeIf { it.isNotBlank() }?.let(::File) ?: return null
+            val installed = pluginsDirectory.listFiles { file -> file.isDirectory }.orEmpty()
+            val usable = binary.isFile && binary.canExecute() && installed.isEmpty()
+            return binary.path.takeIf { usable }
         }
 
         private fun isWindows(): Boolean = System.getProperty("os.name").lowercase().contains("win")

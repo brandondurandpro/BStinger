@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# The server of the IDE compiled to a native binary with GraalVM (see docs/NATIVE_SERVER.md).
+#
+#   ./native-server build   downloads GraalVM (once, checked against its SHA-256) and compiles the server
+#   ./native-server test    builds, then runs the tests of the server against the binary
+#   ./native-server path    prints where the binary is
+#
+# The IDE starts the binary named by KOTLIN_EDITOR_SERVER_BINARY instead of a child JVM:
+#   KOTLIN_EDITOR_SERVER_BINARY="$(./native-server path)" ./kotlin run -m desktopApp
+set -euo pipefail
+cd "$(dirname "$0")"
+
+GRAALVM_VERSION="25.0.5.0.3"
+GRAALVM_RELEASE="graal-25.5.5.0.3"
+GRAALVM_ARCHIVE="graalvm-community-jdk-25i5-${GRAALVM_VERSION}_linux-x64_bin.tar.gz"
+GRAALVM_SHA256="c6438dee6c3ade2220d40b7ccdcad24b512d30e233e61bb4fc70519522de34ef"
+CACHE="${KOTLIN_EDITOR_CACHE:-$HOME/.cache/kotlin-editor}/graalvm/$GRAALVM_VERSION"
+BINARY="build/tasks/_serverApp_nativeImage@packaging/kotlin-editor-server"
+
+graalvm_home() {
+  if [ -n "${GRAALVM_HOME:-}" ]; then
+    echo "$GRAALVM_HOME"
+    return
+  fi
+  if [ "$(uname -s)-$(uname -m)" != "Linux-x86_64" ]; then
+    echo "Only Linux x86_64 is downloaded: install GraalVM $GRAALVM_VERSION and set GRAALVM_HOME" >&2
+    exit 1
+  fi
+  if [ ! -x "$CACHE/home/bin/native-image" ]; then
+    mkdir -p "$CACHE"
+    echo "Downloading GraalVM $GRAALVM_VERSION" >&2
+    curl -fsSL -o "$CACHE/$GRAALVM_ARCHIVE" \
+      "https://github.com/graalvm/graalvm-ce-builds/releases/download/$GRAALVM_RELEASE/$GRAALVM_ARCHIVE"
+    echo "$GRAALVM_SHA256  $CACHE/$GRAALVM_ARCHIVE" | sha256sum --check --quiet
+    rm -rf "$CACHE/unpacked" "$CACHE/home"
+    mkdir -p "$CACHE/unpacked"
+    tar -xzf "$CACHE/$GRAALVM_ARCHIVE" -C "$CACHE/unpacked" --strip-components=1
+    mv "$CACHE/unpacked" "$CACHE/home"
+    rm -f "$CACHE/$GRAALVM_ARCHIVE"
+  fi
+  echo "$CACHE/home"
+}
+
+build() {
+  GRAALVM_HOME="$(graalvm_home)" ./kotlin task :serverApp:nativeImage@packaging
+}
+
+case "${1:-build}" in
+  build) build ;;
+  path) echo "$PWD/$BINARY" ;;
+  test)
+    build
+    KOTLIN_EDITOR_SERVER_BINARY="$PWD/$BINARY" ./kotlin test -m server --include-classes='*NativeServerTest'
+    ;;
+  *)
+    echo "Usage: ./native-server [build|test|path]" >&2
+    exit 2
+    ;;
+esac
