@@ -33,6 +33,12 @@ prebuilt runtime of bonede/tree-sitter-ng cannot be used: its Windows DLL only e
 - `SyntaxSession` parses a document again after each change, incrementally and off the UI thread, and colors the
   lines around the visible ones only. `CaptureStyles` maps capture names (`keyword`, `function.method`...) to colors.
 
+`tools/tree-sitter/queries/<id>.scm` holds the patterns this repository adds to a grammar's query (keys of YAML
+mappings, names in a Dockerfile): the generator appends them after the others, so that they win, and fails if one does
+not compile. Code of another language inside a document (shell in a Dockerfile or in a `run:` of YAML, TypeScript in
+Vue) is found by the `*Injections` objects of `syntax/src/treesitter`; its grammar is loaded in the background, without
+holding the document's own colors back.
+
 ## Updating the grammars
 
 ```sh

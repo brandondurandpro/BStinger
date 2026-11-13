@@ -855,7 +855,7 @@ internal val GRAMMAR_CATALOG: List<GrammarSpec> =
             symbol = "tree_sitter_yaml",
             platforms = ALL_PLATFORMS,
             extensions = setOf("yaml", "yml"),
-            fileNames = setOf(".clang-format", ".clangd"),
+            fileNames = setOf(".clang-format", ".clangd", ".clang-tidy", ".yamllint", ".gemrc", "CITATION.cff"),
         ),
         GrammarSpec(
             id = "zig",

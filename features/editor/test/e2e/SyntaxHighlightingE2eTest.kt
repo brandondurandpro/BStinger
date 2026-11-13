@@ -132,6 +132,54 @@ class SyntaxHighlightingE2eTest {
         }
 
     @Test
+    fun `a Dockerfile is colored with its shell commands, and a compose file with its keys apart from its values`() =
+        runComposeUiTest {
+            project.file(
+                "Dockerfile.dev",
+                textOf("FROM golang:1.22 AS builder", "RUN apt-get update \\", "    && rm -rf /var/lib/apt"),
+            )
+            project.file(
+                "compose.yaml",
+                textOf(
+                    "services:",
+                    "  web:",
+                    "    image: nginx",
+                    "    command: npm run dev",
+                    "x-ci:",
+                    "  - run: |",
+                    "      echo \"hi\" | grep h",
+                ),
+            )
+            launchWithProject(project, grammars = TestGrammars.store(repository))
+            openFromTree("Dockerfile.dev")
+            awaitColor(0, "builder", IdeColors.Label)
+            awaitColor(1, "apt-get", IdeColors.FunctionDeclaration)
+            assertEquals(IdeColors.FunctionDeclaration, colorOf(2, "rm"))
+            onNodeWithTag(AppTags.STATUS_LANGUAGE).assertTextEquals("Dockerfile")
+            openFromTree("compose.yaml")
+            awaitColor(1, "web", IdeColors.Property)
+            assertEquals(IdeColors.Property, colorOf(2, "image"))
+            assertEquals(IdeColors.StringLiteral, colorOf(2, "nginx"), "a value is not colored like a key")
+            awaitColor(3, "npm", IdeColors.FunctionDeclaration)
+            awaitColor(6, "grep", IdeColors.FunctionDeclaration)
+            onNodeWithTag(AppTags.STATUS_LANGUAGE).assertTextEquals("YAML")
+        }
+
+    @Test
+    fun `typing a command in a Dockerfile colors it as shell`() =
+        runComposeUiTest {
+            project.file("Dockerfile", textOf("FROM alpine", ""))
+            launchWithProject(project, grammars = TestGrammars.store(repository))
+            openFromTree("Dockerfile")
+            awaitColor(0, "FROM", IdeColors.Keyword)
+            onNodeWithTag(EditorTags.EDITOR).performClick()
+            pressInEditor(Key.MoveEnd, ctrl = true)
+            typeInEditor("RUN apk add curl")
+            awaitColor(1, "apk", IdeColors.FunctionDeclaration)
+            assertEquals(IdeColors.Keyword, colorOf(1, "RUN"))
+        }
+
+    @Test
     fun `a language without grammar keeps the line lexer`() =
         runComposeUiTest {
             project.file("build.groovy", textOf("def x = \"a\" // note", "println(x)"))

@@ -70,6 +70,25 @@ class SyntaxHighlightingChaosE2eTest {
         }
 
     @Test
+    fun `a Dockerfile keeps its own colors while the shell grammar cannot be downloaded, then gets the shell's`() =
+        runComposeUiTest {
+            project.file("Dockerfile", textOf("FROM golang:1.22 AS builder", "RUN apt-get update"))
+            repository.unavailable += "bash"
+            launchWithProject(project, grammars = TestGrammars.store(repository))
+            openFromTree("Dockerfile")
+            awaitColor(0, "builder", IdeColors.Label)
+            assertEquals(IdeColors.Keyword, colorOf(1, "RUN"))
+            assertEquals(IdeColors.Code, colorOf(1, "apt-get"), "no shell grammar yet")
+            onNodeWithTag(EditorTags.EDITOR).performClick()
+            pressInEditor(Key.MoveEnd, ctrl = true)
+            typeInEditor("\nRUN rm")
+            assertEquals("RUN rm", textOfLine(2))
+            repository.unavailable -= "bash"
+            awaitColor(1, "apt-get", IdeColors.FunctionDeclaration)
+            awaitColor(2, "rm", IdeColors.FunctionDeclaration)
+        }
+
+    @Test
     fun `a page answered instead of the grammar is never loaded`() =
         runComposeUiTest {
             repository.captivePortal = true
