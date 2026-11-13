@@ -67,6 +67,9 @@ object PreferenceKeys {
     const val AGENT_COMMAND = "agent.command"
     const val AGENT_REGISTRY = "agent.registry"
     const val INLAY_HINTS = "editor.inlayHints"
+
+    /** The indicators of the status bar the user hid, by name, separated by commas; absent means all are shown. */
+    const val STATUS_HIDDEN = "status.hiddenIndicators"
     const val DIFF_SIDE_BY_SIDE = "editor.diffSideBySide"
     const val LAYOUT_PREFIX = "layout."
 

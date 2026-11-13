@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withTimeoutOrNull
 import org.example.kotlineditor.lsp.memory.ProcessMemorySampler
+import org.example.kotlineditor.memory.CpuMeter
 import org.example.kotlineditor.memory.ProcessIdentity
 import org.example.kotlineditor.model.LanguageServerInfo
 import org.example.kotlineditor.model.LanguageServersStatus
@@ -17,6 +18,12 @@ private const val PUBLISH_TICK_MS = 1_000L
 private const val MEMORY_PUBLISH_MS = 5_000L
 private const val MIN_MOVE_BYTES = 5L * 1024 * 1024
 private const val MIN_MOVE_RATIO = 0.02
+
+// A CPU use that moved by this many points or less is not worth a status: an idle IDE reads 0 or 1.
+private const val CPU_NOISE_POINTS = 2
+
+// The processor use is measured over a few seconds: over one second the OS's 10 to 15 ms counting steps would show.
+private const val CPU_WINDOW_NANOS = 3_000_000_000L
 
 /**
  * The status of the language servers as versioned snapshots: the servers and their memory, and the memory of the IDE
@@ -32,6 +39,9 @@ internal class StatusPublisher(
 
     // This process, which a client compares with its own: the IDE server may run in the process of the UI.
     private val process = ProcessIdentity.current()
+
+    // The processor use of this process, measured at the ticks, each time over the last few seconds.
+    private val cpu = CpuMeter.ofCurrentProcess(CPU_WINDOW_NANOS)
 
     // When the last status was published, in milliseconds since the epoch.
     private var publishedAt = 0L
@@ -69,12 +79,14 @@ internal class StatusPublisher(
                 residentBytes = self.residentBytes,
                 pid = process.pid,
                 startedAtMillis = process.startedAtMillis,
+                cpuPercent = cpu.percent() ?: ServerMemory.NOT_MEASURED,
             )
         val serversChanged = servers.map(::withoutMemory) != last.servers.map(::withoutMemory)
         val serverMemoryMoved = servers.any { now -> moved(privateOf(last, now.id), now.memory?.privateBytes) }
         val residentMoved = moved(last.server.residentBytes, server.residentBytes)
         val heapMoved = moved(last.server.heapUsedBytes, server.heapUsedBytes)
-        val ownMemoryMoved = residentMoved || heapMoved
+        val cpuMoved = cpuMoved(last.server.cpuPercent, server.cpuPercent)
+        val ownMemoryMoved = residentMoved || heapMoved || cpuMoved
         val memoryMoved = serverMemoryMoved || ownMemoryMoved
         val now = System.currentTimeMillis()
         if (shouldPublish(last, servers, serversChanged, memoryMoved, now)) {
@@ -106,6 +118,13 @@ internal class StatusPublisher(
     }
 
     private fun withoutMemory(info: LanguageServerInfo) = info.copy(memory = null, peakPrivateBytes = 0)
+
+    // A processor use that appeared, vanished or moved by more than the noise.
+    private fun cpuMoved(before: Int, after: Int): Boolean {
+        val measured = before != ServerMemory.NOT_MEASURED && after != ServerMemory.NOT_MEASURED
+        if (!measured) return before != after
+        return abs(after - before) > CPU_NOISE_POINTS
+    }
 
     // A change worth sending: more than 5 MB and more than 2 %, so that the status bar does not flicker.
     private fun moved(before: Long?, after: Long?): Boolean {

@@ -14,6 +14,15 @@ object LanguageServerTags {
     const val STATUS_TOTAL_MEMORY = "status.totalMemory"
     const val STATUS_MEMORY_TOOLTIP = "status.memory.tooltip"
 
+    /** Processor use of the UI and of the IDE server, in the status bar, and the tooltip that explains it. */
+    const val STATUS_CPU = "status.cpu"
+    const val STATUS_CPU_TOOLTIP = "status.cpu.tooltip"
+
+    /** The same numbers in the Language Servers window. */
+    const val CPU_UI = "languageServers.cpu.ui"
+    const val CPU_SERVER = "languageServers.cpu.server"
+    const val CPU_TOTAL = "languageServers.cpu.total"
+
     /** The same three numbers in the Language Servers window. */
     const val MEMORY_UI = "languageServers.memory.ui"
     const val MEMORY_SERVER = "languageServers.memory.server"

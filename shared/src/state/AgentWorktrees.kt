@@ -23,6 +23,7 @@ internal suspend fun ProjectState.openWorktreeProject(branch: String, base: Stri
             toolWindows = toolWindows,
             grammars = grammars,
             diffLayout = diffLayout,
+            statusIndicators = statusIndicators,
         )
     withTimeoutOrNull(WORKTREE_LOAD_MILLIS) {
         snapshotFlow { worktree.tree.rows.size > 1 && worktree.git.currentBranch != null }.first { it }

@@ -28,6 +28,7 @@ private const val PRIVATE = "private"
 private const val RESIDENT = "resident"
 private const val PID = "pid"
 private const val STARTED_AT = "startedAt"
+private const val CPU = "cpuPercent"
 private const val LANGUAGE = "language"
 private const val MESSAGE = "message"
 private const val ID = "id"
@@ -45,6 +46,7 @@ fun LanguageServersStatus.toJson(): JsonObject =
                 put(RESIDENT, server.residentBytes)
                 put(PID, server.pid)
                 put(STARTED_AT, server.startedAtMillis)
+                put(CPU, server.cpuPercent)
             },
         )
         put("servers", JsonArray(servers.map { it.toJson() }))
@@ -64,6 +66,8 @@ fun JsonElement.languageServersStatus(): LanguageServersStatus {
             // An older server names neither: its memory is then counted as another process's.
             pid = server.longOrZero(PID),
             startedAtMillis = server.longOrZero(STARTED_AT),
+            // An older server does not measure it.
+            cpuPercent = if (CPU in server) server.int(CPU) else ServerMemory.NOT_MEASURED,
         ),
         servers = status.getValue("servers").jsonArray.map { it.jsonObject.languageServerInfo() },
     )

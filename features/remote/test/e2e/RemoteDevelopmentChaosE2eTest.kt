@@ -21,6 +21,10 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 
+// How long the session may take to be back once the SSH server is: while the server is down the session spaces its
+// attempts up to ten seconds apart, and each one opens an SSH connection and checks the daemon.
+private const val SSH_RECOVERY_MS = 60_000L
+
 /** What the user sees when the SSH link to a remote server breaks. */
 @OptIn(ExperimentalTestApi::class)
 class RemoteDevelopmentChaosE2eTest {
@@ -48,7 +52,7 @@ class RemoteDevelopmentChaosE2eTest {
             RemoteTestEnvironment.ssh.stop()
             awaitReconnecting()
             RemoteTestEnvironment.ssh.start()
-            awaitReconnected()
+            awaitReconnected(SSH_RECOVERY_MS)
 
             openFromTree("docs/guide.md")
             onNodeWithTag(EditorTags.EDITOR).performClick()
@@ -170,7 +174,7 @@ class RemoteDevelopmentChaosE2eTest {
                 onNodeWithTag(RemoteTags.pickerDirectory(folder.toString())).performDoubleClick()
                 RemoteTestEnvironment.ssh.start()
 
-                awaitTag(RemoteTags.OPEN_PROJECT_EMPTY, timeout = 30_000)
+                awaitTag(RemoteTags.OPEN_PROJECT_EMPTY, timeout = SSH_RECOVERY_MS)
                 awaitCondition { shownDirectoryInProjectPicker() == folder.toString() }
                 awaitNoTag(RemoteTags.OPEN_PROJECT_ERROR)
             }
@@ -195,7 +199,7 @@ class RemoteDevelopmentChaosE2eTest {
                 typeFolderPathInChunks(path.dropLast(4), path.takeLast(4))
                 RemoteTestEnvironment.ssh.start()
 
-                awaitTag(RemoteTags.OPEN_PROJECT_EMPTY, timeout = 30_000)
+                awaitTag(RemoteTags.OPEN_PROJECT_EMPTY, timeout = SSH_RECOVERY_MS)
                 assertEquals(path, shownDirectoryInProjectPicker())
                 awaitCondition {
                     runCatching { onNodeWithTag(RemoteTags.OPEN_PROJECT_OPEN).assertIsEnabled() }.isSuccess
