@@ -163,6 +163,7 @@ class AppState(
             grammars,
             agentCommand = settings::agentCommandLine,
             startsInAgentMode = { settings.startsInAgentMode },
+            globalLspLevel = { settings.lspLevel },
             consent = { settings.telemetry.shared },
             onRemoteProjectOpened = remote::recordWorkspace,
         )

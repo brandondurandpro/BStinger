@@ -77,6 +77,8 @@ internal fun Toolbar(app: AppState, project: ProjectState) {
             ModeSwitch(project.agentMode) { project.agentMode = it }
             Spacer(Modifier.width(10.dp))
         }
+        LspLevelWidget(app, project)
+        Spacer(Modifier.width(10.dp))
         RunWidget(project.run, { project.showToolWindow(ToolWindow.Run) })
         Spacer(Modifier.width(10.dp))
         IdeButton("Deploy", { project.deployments.show() }, Modifier.testTag(AppTags.DEPLOY_BUTTON))

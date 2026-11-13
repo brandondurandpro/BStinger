@@ -64,6 +64,15 @@ object PreferenceKeys {
     /** Per project: the sessions of the conversations the user archived (hidden from the list), one per line. */
     const val AGENT_ARCHIVED_PREFIX = "agent.archived."
 
+    /** The level of the language servers chosen for every project (see [LspLevel]); Full when unset. */
+    const val LSP_LEVEL = "lsp.level"
+
+    /** Per project (the key ends with its path): the level chosen for it, blank to follow the global one. */
+    const val LSP_LEVEL_PREFIX = "lsp.level."
+
+    /** Per project: `session` and the level chosen for that conversation, one per line. */
+    const val AGENT_LSP_PREFIX = "agent.lsp."
+
     const val AGENT_COMMAND = "agent.command"
     const val AGENT_REGISTRY = "agent.registry"
     const val INLAY_HINTS = "editor.inlayHints"

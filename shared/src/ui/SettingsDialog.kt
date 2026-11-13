@@ -238,6 +238,10 @@ private fun SettingControl(app: AppState, settings: SettingsState, setting: Sett
             ) { app.settings.agentModeByDefault = it }
         }
 
+        Setting.LspLevelDefault -> {
+            LspLevelControl(app)
+        }
+
         Setting.Agent -> {
             RegistryAgentChoice(app)
         }

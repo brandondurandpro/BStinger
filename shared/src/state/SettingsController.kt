@@ -39,6 +39,9 @@ class SettingsController(
     /** Whether a project opens in agent mode: agent mode is on and is the user's default. */
     val startsInAgentMode: Boolean get() = agentModeEnabled && agentModeByDefault
 
+    /** The level of the language servers for every project that chose none (and no conversation chose). */
+    var lspLevel by mutableStateOf(LspLevel.fromSaved(preferences[PreferenceKeys.LSP_LEVEL]) ?: LspLevel.Full)
+
     /** Command line of the agent of agent mode (any ACP agent); blank for the agent of the registry. */
     var agentCommand by mutableStateOf(preferences[PreferenceKeys.AGENT_COMMAND].orEmpty())
 
@@ -119,10 +122,11 @@ class SettingsController(
         val fontSize = PreferenceKeys.EDITOR_FONT_SIZE to editorFontSize.toString()
         val agentMode = PreferenceKeys.AGENT_MODE to agentModeEnabled.toString()
         val byDefault = PreferenceKeys.AGENT_MODE_BY_DEFAULT to agentModeByDefault.toString()
+        val globalLevel = PreferenceKeys.LSP_LEVEL to lspLevel.name
         val agentCommandLine = PreferenceKeys.AGENT_COMMAND to agentCommand
         val agentOfRegistry = PreferenceKeys.AGENT_REGISTRY to agentRegistry
         val themeName = PreferenceKeys.THEME to theme.name
-        val values = mapOf(fontSize, themeName, agentMode, byDefault, agentCommandLine, agentOfRegistry)
+        val values = mapOf(fontSize, themeName, agentMode, byDefault, globalLevel, agentCommandLine, agentOfRegistry)
         return values + telemetry.toPreferences()
     }
 

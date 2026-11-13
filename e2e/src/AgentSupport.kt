@@ -14,6 +14,7 @@ import org.example.kotlineditor.acp.AgentSettings
 import org.example.kotlineditor.model.AgentItem
 import org.example.kotlineditor.state.Conversation
 import org.example.kotlineditor.state.InMemoryPreferenceStore
+import org.example.kotlineditor.state.LspLevel
 import org.example.kotlineditor.state.PreferenceKeys
 import org.example.kotlineditor.state.PreferenceStore
 import org.example.kotlineditor.testkit.acp.FakeAgentCommand
@@ -35,6 +36,16 @@ fun agentPreferences(vararg options: String) =
             PreferenceKeys.AGENT_MODE to "true",
             PreferenceKeys.AGENT_COMMAND to fakeAgentLine(*options),
         ),
+    )
+
+/** Preferences with agent mode on, no real agent, and [level] as the global level of the language servers. */
+fun agentLanguageServerPreferences(level: LspLevel? = null) =
+    InMemoryPreferenceStore(
+        listOfNotNull(
+            PreferenceKeys.AGENT_MODE to "true",
+            PreferenceKeys.AGENT_COMMAND to NO_AGENT,
+            level?.let { PreferenceKeys.LSP_LEVEL to it.name },
+        ).toMap(),
     )
 
 /** The agent of the tests that choose none: a program that does not exist, never the real agent (npx). */

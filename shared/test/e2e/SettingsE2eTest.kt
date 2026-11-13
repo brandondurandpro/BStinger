@@ -20,6 +20,7 @@ import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.test.withKeyDown
 import org.example.kotlineditor.state.FilePreferenceStore
 import org.example.kotlineditor.state.InlayHintsMode
+import org.example.kotlineditor.state.LspLevel
 import org.example.kotlineditor.state.PreferenceKeys
 import org.example.kotlineditor.state.Setting
 import org.example.kotlineditor.state.SettingsCategory
@@ -330,5 +331,18 @@ class SettingsE2eTest {
                 web.delete()
                 servers.delete()
             }
+        }
+
+    @Test
+    fun `the default level of the language servers is chosen in the settings and kept`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, preferences())
+            openSettingsFromMenu()
+            category(SettingsCategory.LanguageServers)
+            awaitTag(AppTags.settingsLspLevel(LspLevel.Basic.name)).performClick()
+            onNodeWithTag(AppTags.settingsLspLevel(LspLevel.Basic.name)).assertIsSelected()
+            assertEquals(LspLevel.Basic, app.state.settings.lspLevel)
+            assertEquals(LspLevel.Basic, app.project.lspLevel)
+            awaitCondition(30_000) { preferences().load()[PreferenceKeys.LSP_LEVEL] == "Basic" }
         }
 }

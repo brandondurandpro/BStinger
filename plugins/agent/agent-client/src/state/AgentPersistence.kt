@@ -34,6 +34,11 @@ internal fun AgentState.restoreSaved(root: String) {
     conversations.filter { it.session in pinned }.forEach { it.pinned = true }
     val archived = linesOf(preferences[PreferenceKeys.AGENT_ARCHIVED_PREFIX + root]).toSet()
     conversations.filter { it.session in archived }.forEach { it.archived = true }
+    for (line in linesOf(preferences[PreferenceKeys.AGENT_LSP_PREFIX + root])) {
+        val session = line.substringBefore('\t')
+        val level = LspLevel.fromSaved(line.substringAfter('\t', ""))
+        conversations.firstOrNull { it.session == session }?.lspLevel = level
+    }
     for (line in linesOf(preferences[PreferenceKeys.AGENT_STATS_PREFIX + root])) {
         val fields = line.split('\t')
         val kept = conversations.firstOrNull { it.session == fields.firstOrNull() }
@@ -72,7 +77,12 @@ fun AgentState.toPreferences(): Map<String, String> {
             .filter { it.workedMillis > 0 || it.costKnown != null }
             .mapNotNull { c -> c.session?.let { "$it\t${c.workedMillis}\t${c.costKnown ?: ""}" } }
             .joinToString("\n")
+    val levels =
+        conversations
+            .mapNotNull { c -> c.session?.let { session -> c.lspLevel?.let { level -> "$session\t${level.name}" } } }
+            .joinToString("\n")
     return mapOf(
+        PreferenceKeys.AGENT_LSP_PREFIX + root to levels,
         PreferenceKeys.AGENT_STATS_PREFIX + root to stats,
         width,
         last,

@@ -100,6 +100,8 @@ internal fun ProjectState.followInsight() {
                 .toMap()
         }.distinctUntilChanged().collect { insight.track(it) }
     }
+    // Basic keeps the servers but not their decorations (inlay hints, semantic colors, code lenses, links).
+    scope.launch { snapshotFlow { lspLevel == LspLevel.Full }.collect { insight.decorated = it } }
     scope.launch { snapshotFlow { servers.diagnostics }.collect { insight.applyDiagnostics(it) } }
     // A new process (a restart, another server chosen) knows nothing of the previous counts. After a restart of the IDE
     // server its language servers start again at the same generation: their pid tells the new processes apart. Once a
