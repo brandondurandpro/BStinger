@@ -35,6 +35,7 @@ object GitTags {
     const val BRANCH_SYNC_DISMISS = "branch.syncDismiss"
     const val QUICK_PULL = "branch.quickPull"
     const val GIT_PANEL = "git.panel"
+    const val GIT_SCROLLBAR = "git.scrollbar"
     const val GIT_EMPTY = "git.empty"
     const val GIT_NOT_A_REPOSITORY = "git.notRepository"
     const val GIT_REFRESH = "git.refresh"

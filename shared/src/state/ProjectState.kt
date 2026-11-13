@@ -420,7 +420,9 @@ class ProjectState(
         }
     }
 
-    override suspend fun openWorktree(branch: String): AgentWorkspace = openWorktreeProject(branch)
+    override suspend fun openWorktree(branch: String, base: String?): AgentWorkspace = openWorktreeProject(branch, base)
+
+    override suspend fun branchChoices(fetch: Boolean): BranchChoices? = branchChoicesOf(fetch)
 
     override fun agentAsking(title: String, question: String) {
         askingListener?.invoke(title, question)

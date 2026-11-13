@@ -96,7 +96,7 @@ internal val BUILT_IN_AGENT_SHORTCUTS =
     listOf(
         TOGGLE_AGENT_MODE,
         SEND_TO_AGENT,
-        bind(setOf(Key.N), ctrl = true, alt = true) { project.agent.newConversation() },
+        bind(setOf(Key.N), ctrl = true, alt = true) { project.agent.requestNewConversation() },
         bind(setOf(Key.F4), ctrl = true) { project.agent.closeActive() },
         bind(setOf(Key.Tab), ctrl = true) { project.agent.tabs.selectNext(if (it.shift) -1 else 1) },
     )

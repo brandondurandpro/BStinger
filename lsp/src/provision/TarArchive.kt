@@ -14,6 +14,9 @@ import java.nio.file.Path
 object TarArchive {
     private const val BLOCK = 512
     private const val NAME_LENGTH = 100
+    private const val MODE_OFFSET = 100
+    private const val MODE_LENGTH = 8
+    private const val EXECUTE_BITS = 0b001_001_001
     private const val SIZE_OFFSET = 124
     private const val SIZE_LENGTH = 12
     private const val TYPE_OFFSET = 156
@@ -21,7 +24,9 @@ object TarArchive {
     private const val PREFIX_OFFSET = 345
     private const val PREFIX_LENGTH = 155
     private const val OCTAL = 8
-    private const val MAX_ENTRY_SIZE = 256L * 1024 * 1024
+
+    // The native binary of Claude Code, which its ACP agent ships, is already 340 MB: room for it to grow.
+    private const val MAX_ENTRY_SIZE = 2L * 1024 * 1024 * 1024
     private const val MAX_HEADER_RECORD = 1024 * 1024
 
     private const val REGULAR = '0'.code.toByte()
@@ -42,7 +47,7 @@ object TarArchive {
             val name = longName ?: headerName(header)
             longName = null
             when (header[TYPE_OFFSET]) {
-                REGULAR, REGULAR_OLD -> copyEntry(tar, size, target(root, name))
+                REGULAR, REGULAR_OLD -> copyEntry(tar, size, target(root, name), isExecutable(header))
                 DIRECTORY -> Files.createDirectories(target(root, name)).also { skipPadded(tar, size) }
                 PAX_ENTRY -> longName = paxPath(readRecord(tar, size))
                 GNU_LONG_NAME -> longName = String(readRecord(tar, size), Charsets.UTF_8).trimEnd('\u0000')
@@ -59,6 +64,12 @@ object TarArchive {
         return if (prefix.isEmpty()) name else "$prefix/$name"
     }
 
+    // A program of the archive (the native binary an agent ships next to its own) must stay runnable once extracted.
+    private fun isExecutable(header: ByteArray): Boolean {
+        val mode = text(header, MODE_OFFSET, MODE_LENGTH).trim().toIntOrNull(OCTAL) ?: 0
+        return mode and EXECUTE_BITS != 0
+    }
+
     private fun entrySize(header: ByteArray): Long {
         val size = text(header, SIZE_OFFSET, SIZE_LENGTH).trim().toLongOrNull(OCTAL)
         if (size == null || size !in 0..MAX_ENTRY_SIZE) throw IOException("Invalid tar entry size")
@@ -72,7 +83,7 @@ object TarArchive {
         return path
     }
 
-    private fun copyEntry(tar: InputStream, size: Long, target: Path) {
+    private fun copyEntry(tar: InputStream, size: Long, target: Path, executable: Boolean) {
         Files.createDirectories(target.parent)
         Files.newOutputStream(target).use { output ->
             var remaining = size
@@ -84,6 +95,7 @@ object TarArchive {
                 remaining -= read
             }
         }
+        if (executable) target.toFile().setExecutable(true)
         tar.skipNBytes(padding(size))
     }
 

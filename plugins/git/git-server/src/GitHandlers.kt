@@ -2,6 +2,8 @@ package org.example.kotlineditor.git.server
 
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.example.kotlineditor.model.GitClient
 import org.example.kotlineditor.model.GitResetMode
 import org.example.kotlineditor.rpc.Method
@@ -57,6 +59,13 @@ private fun readHandlers(git: GitClient): Map<MethodSpec, Handler> =
         Method.GitLog to {
             git.log(root(), params.string("ref"), params.int("skip"), params.int(LIMIT)).commitsJson()
         },
+        Method.GitAheadBehind to {
+            val counts = git.aheadBehind(root(), params.string("base"))
+            buildJsonObject {
+                put("ahead", counts.ahead)
+                put("behind", counts.behind)
+            }
+        },
         Method.GitSearchLog to {
             git
                 .searchLog(root(), params.string("ref"), params.string("query"), params.int("skip"), params.int(LIMIT))
@@ -90,7 +99,9 @@ private fun readHandlers(git: GitClient): Map<MethodSpec, Handler> =
         Method.GitFetch to { nothing { git.fetch(root()) } },
         Method.GitPushBranch to { JsonPrimitive(git.pushBranch(root(), params.string(BRANCH))) },
         Method.GitPullBranch to { JsonPrimitive(git.pullBranch(root(), params.string(BRANCH))) },
-        Method.GitWorktree to { JsonPrimitive(git.worktree(root(), params.string("branch"))) },
+        Method.GitWorktree to {
+            JsonPrimitive(git.worktree(root(), params.string("branch"), params.stringOrNull("base")))
+        },
         Method.GitRemoveWorktree to { nothing { git.removeWorktree(root(), params.string(PATH)) } },
     )
 

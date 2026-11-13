@@ -41,7 +41,8 @@ internal fun WorkspaceStatus(agent: AgentState, conversation: Conversation, modi
         ) {
             WorkspaceText(conversation)
         }
-        WorkModeSwitch(agent, conversation)
+        // The place is chosen before the first prompt: the session of the agent works in one directory.
+        if (!conversation.started) WorkModeSwitch(agent, conversation)
     }
 }
 
@@ -69,14 +70,14 @@ private fun WorkspaceText(conversation: Conversation) {
                 if (conversation.mode == WorkMode.Direct) {
                     "Works directly on this branch"
                 } else {
-                    "Works in a worktree: ${workspace.root.path}"
+                    "Works in a worktree"
                 }
             Label(text, color = IdeColors.TextSecondary, fontSize = 12.sp)
         }
     }
 }
 
-// Current branch | Worktree, like the IDE | Agent switch of the toolbar; locked while the agent answers.
+// Current branch | Worktree, like the IDE | Agent switch of the toolbar; only before the conversation starts.
 @Composable
 private fun WorkModeSwitch(agent: AgentState, conversation: Conversation) {
     Row(
