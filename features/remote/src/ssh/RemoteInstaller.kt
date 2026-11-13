@@ -1,6 +1,7 @@
 package org.example.kotlineditor.remote
 
 import org.example.kotlineditor.rpc.Protocol
+import org.example.kotlineditor.state.RemoteBundleSource
 import java.io.File
 import java.util.Properties
 import java.util.UUID
@@ -24,7 +25,11 @@ data class RemoteHost(val target: RemoteTarget, val home: String)
  * The token is created and the daemon started by the remote shell, so nothing secret travels on a command line.
  */
 @Suppress("StringShouldBeRawString") // the SSH commands mix $HOME, quotes and Kotlin interpolation
-class RemoteInstaller(private val ssh: SshClient, private val version: String = Protocol.APP_VERSION) {
+class RemoteInstaller(
+    private val ssh: SshClient,
+    private val version: String = Protocol.APP_VERSION,
+    private val source: RemoteBundleSource = RemoteBundleSource.Local,
+) {
     /** Operating system, CPU and SSH home directory of the remote host. */
     suspend fun detectHost(): RemoteHost {
         val unix =
@@ -92,7 +97,11 @@ class RemoteInstaller(private val ssh: SshClient, private val version: String = 
                     "Use a Linux or macOS host for now.",
             )
         }
-        val bundle = RemoteBundles.find(target)
+        val bundle =
+            when (source) {
+                RemoteBundleSource.Local -> RemoteBundles.find(target)
+                RemoteBundleSource.GitHub -> RemoteBundleDownload.fetch(target, onProgress)
+            }
         val build = RemoteBundles.buildId(bundle)
         if (installedBuild(target, build) != build) {
             onProgress("Installing the server on ${target.id}")

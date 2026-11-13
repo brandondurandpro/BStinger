@@ -24,6 +24,7 @@ enum class SettingsCategory(val title: String) {
     LanguageServers("Language Servers"),
     ProjectView("Project View"),
     Privacy("Privacy"),
+    RemoteDevelopment("Remote Development"),
     Plugins("Plugins"),
     Experimental("Experimental"),
 }
@@ -65,6 +66,12 @@ enum class Setting(val category: SettingsCategory, val title: String, val descri
         "Share anonymous performance measures",
         "How long operations take, never a path, a name or a content (see docs/telemetry.md).",
         "telemetry statistics",
+    ),
+    RemoteServer(
+        SettingsCategory.RemoteDevelopment,
+        "Server on remote hosts",
+        "Where the server installed on a host comes from: a local bundle, or the GitHub release of this version.",
+        "ssh bundle download github release install remote",
     ),
     Plugins(
         SettingsCategory.Plugins,

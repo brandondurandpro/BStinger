@@ -65,6 +65,10 @@ object PreferenceKeys {
     const val AGENT_ARCHIVED_PREFIX = "agent.archived."
 
     const val AGENT_COMMAND = "agent.command"
+
+    /** Where the server installed on a remote host comes from: `Local` or `GitHub`. */
+    const val REMOTE_BUNDLE_SOURCE = "remote.bundleSource"
+
     const val AGENT_REGISTRY = "agent.registry"
     const val INLAY_HINTS = "editor.inlayHints"
 
