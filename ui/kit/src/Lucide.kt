@@ -72,6 +72,8 @@ fun IdeIcon(
 
 private const val FULL_CIRCLE = "M2 12A10 10 0 1 0 22 12A10 10 0 1 0 2 12Z"
 
+private const val SMALL_CIRCLE = "M9 12A3 3 0 1 0 15 12A3 3 0 1 0 9 12Z"
+
 private const val ROUNDED_SQUARE = "M5 3H19A2 2 0 0 1 21 5V19A2 2 0 0 1 19 21H5A2 2 0 0 1 3 19V5A2 2 0 0 1 5 3Z"
 
 /** The Lucide icons the IDE uses. Generated from lucide-static 0.460.0 (ISC license, see the README). */
@@ -109,9 +111,22 @@ object Lucide {
             "M16 21h1a2 2 0 0 0 2-2v-5c0-1.1.9-2 2-2a2 2 0 0 1-2-2V5a2 2 0 0 0-2-2h-1",
         )
 
+    val CaseSensitive =
+        LucideIcon(
+            "m3 15 4-8 4 8",
+            "M4 13h6",
+            "M15 12A3 3 0 1 0 21 12A3 3 0 1 0 15 12Z",
+            "M21 9v6",
+        )
+
     val Check =
         LucideIcon(
             "M20 6 9 17l-5-5",
+        )
+
+    val ChevronDown =
+        LucideIcon(
+            "m6 9 6 6 6-6",
         )
 
     val ChevronRight =
@@ -143,6 +158,12 @@ object Lucide {
             "M4 12A1 1 0 1 0 6 12A1 1 0 1 0 4 12Z",
         )
 
+    val Eye =
+        LucideIcon(
+            "M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0",
+            SMALL_CIRCLE,
+        )
+
     val File =
         LucideIcon(
             "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z",
@@ -162,6 +183,12 @@ object Lucide {
         LucideIcon(
             "M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 " +
                 "2 0 0 0-2 2v13a2 2 0 0 0 2 2Z",
+        )
+
+    val FolderOpen =
+        LucideIcon(
+            "m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4" +
+                "a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2",
         )
 
     val GitBranch =
@@ -199,7 +226,7 @@ object Lucide {
             "M12 2L12 5",
             "M12 19L12 22",
             "M5 12A7 7 0 1 0 19 12A7 7 0 1 0 5 12Z",
-            "M9 12A3 3 0 1 0 15 12A3 3 0 1 0 9 12Z",
+            SMALL_CIRCLE,
         )
 
     val ListFilter =
@@ -252,6 +279,14 @@ object Lucide {
             "M8 16H3v5",
         )
 
+    val Regex =
+        LucideIcon(
+            "M17 3v10",
+            "m12.67 5.5 8.66 5",
+            "m12.67 10.5 8.66-5",
+            "M9 17a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-2z",
+        )
+
     val Search =
         LucideIcon(
             "M3 11A8 8 0 1 0 19 11A8 8 0 1 0 3 11Z",
@@ -275,7 +310,7 @@ object Lucide {
                 "0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 " +
                 "0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 " +
                 "0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z",
-            "M9 12A3 3 0 1 0 15 12A3 3 0 1 0 9 12Z",
+            SMALL_CIRCLE,
         )
 
     val Square =
@@ -297,6 +332,15 @@ object Lucide {
             "M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2",
             "M10 11L10 17",
             "M14 11L14 17",
+        )
+
+    val WholeWord =
+        LucideIcon(
+            "M4 12A3 3 0 1 0 10 12A3 3 0 1 0 4 12Z",
+            "M10 9v6",
+            "M14 7v8",
+            "M14 12A3 3 0 1 0 20 12A3 3 0 1 0 14 12Z",
+            "M22 17v1c0 .5-.5 1-1 1H3c-.5 0-1-.5-1-1v-1",
         )
 
     val X =

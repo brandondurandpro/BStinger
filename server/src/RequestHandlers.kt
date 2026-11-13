@@ -97,6 +97,7 @@ internal fun searchHandlers(services: LocalServices): Map<MethodSpec, Handler> {
     val search = services.search
     return mapOf(
         Method.WalkFiles to { search.walkFiles(entry(ROOT), params.int(LIMIT)).toJson() },
+        Method.Facets to { search.facets(entry(ROOT)).toJson() },
         Method.FindInFiles to {
             val root = entry(ROOT)
             search

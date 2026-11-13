@@ -20,12 +20,13 @@ private val RUNS = SessionKey("run") { RunRegistry(it.push) }
 
 /** Found by the server through `META-INF/services`. */
 class RunServerContribution : ServerContribution {
-    override fun handlers(services: LocalServices) = runHandlers()
+    override fun handlers(services: LocalServices) = runHandlers(services)
 }
 
 /** Commands run in a project (the Run tool window): start, stop, and replay after a reconnection. */
-internal fun runHandlers(): Map<MethodSpec, Handler> =
+internal fun runHandlers(services: LocalServices): Map<MethodSpec, Handler> =
     mapOf(
+        Method.RunManifests to { findRunManifests(services, params.string("root")).manifestsJson() },
         Method.RunStart to {
             val directory = params.string(DIRECTORY)
             val command = params.read("command") { it.strings() }

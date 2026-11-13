@@ -58,7 +58,7 @@ class GrammarCatalogTest {
     @Test
     fun `the test fixtures are the jars of the catalog`() {
         // libs.versions.toml must keep the versions of the catalog for the grammars the tests download.
-        for (id in listOf("kotlin", "json", "php")) {
+        for (id in listOf("kotlin", "json", "php", "html")) {
             val spec = GrammarSpec.all.single { it.id == id }
             val jar = assertNotNull(LocalGrammarRepository.jarOf(spec), "$spec is not on the test classpath")
             val sha =

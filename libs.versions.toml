@@ -15,6 +15,7 @@ tree-sitter-php = "0.24.2"
 tree-sitter-vue = "0.2.1a"
 tree-sitter-typescript = "0.23.2"
 tree-sitter-css = "0.25.0"
+tree-sitter-html = "0.23.2"
 sshd = "2.20.1"
 directory-watcher = "0.19.1"
 # The Compose version the Kotlin Toolchain uses (`./kotlin show dependencies -m shared`): modules without the Compose
@@ -55,6 +56,7 @@ tree-sitter-php = { module = "io.github.bonede:tree-sitter-php", version.ref = "
 tree-sitter-vue = { module = "io.github.bonede:tree-sitter-vue", version.ref = "tree-sitter-vue" }
 tree-sitter-typescript = { module = "io.github.bonede:tree-sitter-typescript", version.ref = "tree-sitter-typescript" }
 tree-sitter-css = { module = "io.github.bonede:tree-sitter-css", version.ref = "tree-sitter-css" }
+tree-sitter-html = { module = "io.github.bonede:tree-sitter-html", version.ref = "tree-sitter-html" }
 # Watches the projects: inotify on Linux, a recursive watch on Windows, FSEvents on macOS (the JDK polls there).
 directory-watcher = { module = "io.methvin:directory-watcher", version.ref = "directory-watcher" }
 # Test-only SSH server: the end-to-end tests connect the real OpenSSH client to it.

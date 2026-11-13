@@ -159,7 +159,27 @@ sealed class LanguageSupport(
     object Json : LanguageSupport("JSON", setOf("json"), LanguageIcon("{}", JSON_YELLOW))
 
     /** XML: an icon, no language server. */
-    object Xml : LanguageSupport("XML", setOf("xml"), LanguageIcon("<>", ORANGE))
+    object Xml : LanguageSupport(
+        "XML",
+        setOf(
+            "xml",
+            "xsd",
+            "xsl",
+            "xslt",
+            "svg",
+            "plist",
+            "wsdl",
+            "rss",
+            "atom",
+            "xaml",
+            "fxml",
+            "csproj",
+            "props",
+            "targets",
+            "resx",
+        ),
+        LanguageIcon("<>", ORANGE),
+    )
 
     /** YAML: an icon, no language server. */
     object Yaml : LanguageSupport("YAML", setOf("yaml", "yml"), LanguageIcon("Y", YAML_RED))

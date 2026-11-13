@@ -19,9 +19,9 @@ private fun query(
     wholeWord: Boolean = false,
     regex: Boolean = false,
     filePattern: String? = null,
-    scope: String? = null,
+    scopes: List<String> = emptyList(),
     includeIgnored: Boolean = false,
-) = RipgrepQuery(ROOT, text, ignoreCase, wholeWord, regex, filePattern, scope, includeIgnored)
+) = RipgrepQuery(ROOT, text, ignoreCase, wholeWord, regex, filePattern, scopes, includeIgnored)
 
 /** The command line [RipgrepRunner.arguments] builds for every Find in Files option. */
 class RipgrepRunnerTest {
@@ -75,12 +75,35 @@ class RipgrepRunnerTest {
     }
 
     @Test
+    fun `several patterns and exclusions are one glob each, in the order written`() {
+        val arguments = runner.arguments(query(filePattern = "*.kt, *.java, !*.xml"))
+        val globs = arguments.windowed(2).filter { it[0] == "--glob" }.map { it[1] }
+        assertEquals(listOf("*.kt", "*.java", "!*.xml"), globs.takeLast(3))
+    }
+
+    @Test
     fun `a scope searches the directory inside the root, normalized like the root is`() {
-        val arguments = runner.arguments(query(scope = "src/../docs"))
+        val arguments = runner.arguments(query(scopes = listOf("src/../docs")))
         // What the search takes: the scope resolved under the root, made absolute and normalized (a Windows
         // absolute path carries its drive: the expectation is computed with the same calls).
         val searched = ROOT.resolve("src/../docs").toAbsolutePath().normalize()
         assertEquals(searched.toString(), arguments.last())
+    }
+
+    private fun absolute(scope: String): String {
+        val resolved = ROOT.resolve(scope)
+        return resolved
+            .toAbsolutePath()
+            .normalize()
+            .toString()
+    }
+
+    @Test
+    fun `several scopes are searched together, a scope inside another or repeated only once`() {
+        val arguments = runner.arguments(query(scopes = listOf("src", "docs", "src/main", "docs")))
+        val searched = listOf("src", "docs").map { absolute(it) }
+        assertEquals(searched, arguments.takeLast(2))
+        assertEquals("--", arguments[arguments.size - 3])
     }
 
     @Test

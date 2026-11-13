@@ -103,6 +103,29 @@ class NativeServerTest {
         }
 
     @Test
+    fun `ripgrep is found by the native binary, which searches the files of a project with it`() {
+        val native = binary ?: return
+        val settings =
+            LocalServer.Settings(
+                binary = native,
+                serverArguments = listOf("--data-dir", data.toString()),
+                services = { LocalServices(data.toFile()) },
+                warn = { warnings += it },
+            )
+        val server = LocalServer.start(settings).also { opened += it }
+        assertTrue(server.awaitListening(TIMEOUT_MS), "the native server should listen: $warnings")
+        val client = RpcClient("127.0.0.1", server.port, server.token).also { opened += it }
+        runBlocking {
+            client.awaitConnected(TIMEOUT_MS)
+            val services = client.appServices()
+            project.resolve("a.kt").toFile().writeText("val needle = 2\n")
+            val root = assertNotNull(services.fileSystem.resolveDirectory(project.toString()))
+            val matches = services.search.findInFiles(root, "needle", ignoreCase = false, limit = 10)
+            assertEquals(listOf("a.kt"), matches.map { it.entry.name })
+        }
+    }
+
+    @Test
     fun `a shell runs in a pseudo-terminal and its commands reach the disk`() =
         withNativeServer { _, _, services ->
             val terminal = services.terminal.start(project.toString(), COLUMNS, ROWS, CELL_WIDTH, CELL_HEIGHT)

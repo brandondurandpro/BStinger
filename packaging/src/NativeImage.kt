@@ -53,12 +53,14 @@ private fun nativeImageCompiler(): Path {
 }
 
 // The terminal (pty4j, libghostty-vt) and the return of memory to the system call C functions through the Foreign
-// Function & Memory API; `-Ob` halves the build time for a server whose work is input and output.
+// Function & Memory API; `-Ob` halves the build time for a server whose work is input and output. The tools the server
+// downloads (ripgrep, language servers) come from https addresses, a protocol a native image only has when told so.
 private val NATIVE_IMAGE_OPTIONS =
     listOf(
         "--enable-native-access=ALL-UNNAMED",
         "-H:+UnlockExperimentalVMOptions",
         "-H:+ForeignAPISupport",
         "-H:-UnlockExperimentalVMOptions",
+        "--enable-url-protocols=https",
         "-Ob",
     )

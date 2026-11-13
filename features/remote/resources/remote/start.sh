@@ -140,33 +140,41 @@ if [ "$(locale charmap 2>/dev/null)" != "UTF-8" ]; then
     done
 fi
 
-JAVA="$D/runtime/bin/java"
-if [ ! -x "$JAVA" ]; then
-    JAVA=java
-fi
-if [ -f "$D/serverApp.jar" ]; then
-    set -- -jar "$D/serverApp.jar"
-elif [ -f "$D/classpath" ]; then
-    # Development and end-to-end test bundle: the classes are already on this machine.
-    set -- -cp "$(cat "$D/classpath")" org.example.kotlineditor.server.ServerMain
+# The server is either a native binary (a bundle built with GraalVM: no Java on the machine, less memory) or a jar
+# run by the runtime of the bundle.
+if [ -x "$D/kotlin-editor-server" ]; then
+    SERVER="$D/kotlin-editor-server"
+    set --
 else
-    echo "No serverApp.jar or classpath in $D" >&2
-    exit 1
+    SERVER="$D/runtime/bin/java"
+    if [ ! -x "$SERVER" ]; then
+        SERVER=java
+    fi
+    if [ -f "$D/serverApp.jar" ]; then
+        set -- -jar "$D/serverApp.jar"
+    elif [ -f "$D/classpath" ]; then
+        # Development and end-to-end test bundle: the classes are already on this machine.
+        set -- -cp "$(cat "$D/classpath")" org.example.kotlineditor.server.ServerMain
+    else
+        echo "No kotlin-editor-server, serverApp.jar or classpath in $D" >&2
+        exit 1
+    fi
+    set -- --enable-native-access=ALL-UNNAMED "$@"
 fi
-set -- --enable-native-access=ALL-UNNAMED "$@" --host 127.0.0.1 --port 0 --data-dir "$H/.kotlin-editor" \
+set -- "$@" --host 127.0.0.1 --port 0 --data-dir "$H/.kotlin-editor" \
     --session-grace 1800 --token-file "$TOKEN" --state-file "$STATE"
 if [ -n "$BUILD" ]; then
     set -- "$@" --build "$BUILD"
 fi
 
 if [ "${KOTLIN_EDITOR_SERVER_FOREGROUND:-0}" = "1" ]; then
-    exec "$JAVA" "$@" >> "$LOG" 2>&1
+    exec "$SERVER" "$@" >> "$LOG" 2>&1
 fi
 
 if command -v setsid >/dev/null 2>&1; then
-    nohup setsid "$JAVA" "$@" >> "$LOG" 2>&1 < /dev/null &
+    nohup setsid "$SERVER" "$@" >> "$LOG" 2>&1 < /dev/null &
 else
-    nohup "$JAVA" "$@" >> "$LOG" 2>&1 < /dev/null &
+    nohup "$SERVER" "$@" >> "$LOG" 2>&1 < /dev/null &
 fi
 STARTED=$!
 
@@ -178,7 +186,7 @@ while [ ! -s "$STATE" ]; do
         tail -n 20 "$LOG" >&2 || true
         exit 1
     fi
-    # The JVM died before listening (a missing library, a broken runtime): say so now rather than in 30 s.
+    # The server died before listening (a missing library, a broken runtime): say so now rather than in 30 s.
     if [ "$i" -ge 10 ] && ! kill -0 "$STARTED" 2>/dev/null && [ ! -s "$STATE" ]; then
         echo "The server stopped while starting; the end of $LOG says:" >&2
         tail -n 20 "$LOG" >&2 || true

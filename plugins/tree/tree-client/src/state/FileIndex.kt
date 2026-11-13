@@ -13,6 +13,7 @@ import kotlinx.coroutines.withContext
 import org.example.kotlineditor.model.FileEntry
 import org.example.kotlineditor.model.FindOptions
 import org.example.kotlineditor.model.ProjectSearch
+import org.example.kotlineditor.model.SearchFacets
 import org.example.kotlineditor.model.relativeToRoot
 import org.example.kotlineditor.syntax.Declaration
 import org.example.kotlineditor.telemetry.ClientTelemetry
@@ -58,6 +59,7 @@ class FileIndex(private val root: FileEntry, private val search: ProjectSearch, 
 
     private var job: Job? = null
     private var symbols: List<Pair<FileEntry, Declaration>>? = null
+    private var facets: SearchFacets? = null
 
     fun ensureLoaded() {
         if (files == null && job?.isActive != true) {
@@ -84,7 +86,11 @@ class FileIndex(private val root: FileEntry, private val search: ProjectSearch, 
         job = null
         files = null
         symbols = null
+        facets = null
     }
+
+    /** The directories and common extensions of the project, found by the server and cached until invalidated. */
+    suspend fun facets(): SearchFacets = facets ?: search.facets(root).also { facets = it }
 
     /** Declarations of every Kotlin/Java file, computed by the server and cached until invalidated. */
     suspend fun allSymbols(): List<Pair<FileEntry, Declaration>> =

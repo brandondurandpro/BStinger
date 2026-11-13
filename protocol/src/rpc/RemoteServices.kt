@@ -9,6 +9,7 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import org.example.kotlineditor.model.AheadBehind
@@ -45,7 +46,9 @@ import org.example.kotlineditor.model.ProjectRunner
 import org.example.kotlineditor.model.ProjectSearch
 import org.example.kotlineditor.model.ProjectSession
 import org.example.kotlineditor.model.RecentProjectsStore
+import org.example.kotlineditor.model.RunManifest
 import org.example.kotlineditor.model.RunStream
+import org.example.kotlineditor.model.SearchFacets
 import org.example.kotlineditor.model.SearchStream
 import org.example.kotlineditor.model.ServerPlaces
 import org.example.kotlineditor.model.SessionStore
@@ -232,6 +235,9 @@ class RemoteSearch(private val client: RpcClient) : ProjectSearch {
             }
         return result.entries()
     }
+
+    override suspend fun facets(root: FileEntry): SearchFacets =
+        client.call(Method.Facets) { put(ROOT, root.toJson()) }.searchFacets()
 
     override suspend fun findInFiles(root: FileEntry, query: String, ignoreCase: Boolean, limit: Int): List<TextMatch> =
         findInFiles(root, FindOptions(query, ignoreCase), limit)
@@ -541,6 +547,19 @@ class RemoteGit(private val client: RpcClient) :
  * the request is sent so no chunk can arrive unlistened; the stream resumes by itself after a reconnection.
  */
 class RemoteRunner(private val client: RpcClient) : ProjectRunner {
+    override suspend fun manifests(root: String): List<RunManifest> {
+        val result = client.call(Method.RunManifests) { put(ROOT, root) }
+        return result.jsonArray.map { element ->
+            val fields = element.jsonObject
+            RunManifest(
+                fileName = fields.string("fileName"),
+                directory = fields.string("directory"),
+                content = fields.string("content"),
+                siblings = fields.read("siblings") { it.strings() }.toSet(),
+            )
+        }
+    }
+
     override fun start(directory: String, command: List<String>): RunStream {
         val id = client.newId()
         val chunks = client.openRunStream(id)

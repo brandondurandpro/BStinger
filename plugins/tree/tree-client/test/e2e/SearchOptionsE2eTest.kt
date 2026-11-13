@@ -138,6 +138,187 @@ class SearchOptionsE2eTest {
         }
 
     @Test
+    fun `several globs and an exclusion keep the files of some extensions and drop the others`() =
+        runComposeUiTest {
+            write("src/One.kt", "needle\n")
+            write("src/Two.java", "needle\n")
+            write("src/config.xml", "needle\n")
+            write("docs/Three.md", "needle\n")
+            launchWithProject(project)
+            openFindInFiles()
+            type("needle")
+            countIs { onNodeWithTag(TreeTags.FIND_IN_FILES_COUNT).assertTextContains("4 matches in 4 files") }
+            awaitTag(TreeTags.FIND_IN_FILES_GLOB_BUTTON).performClick()
+            // Extensions, comma separated.
+            awaitTag(TreeTags.FIND_IN_FILES_GLOB_INPUT).performTextInput("*.kt, *.java")
+            countIs { onNodeWithTag(TreeTags.FIND_IN_FILES_COUNT).assertTextContains("2 matches in 2 files") }
+            awaitNoTag(TreeTags.findInFilesItem("src/config.xml", 0))
+            // Only an exclusion: everything but the XML files.
+            onNodeWithTag(TreeTags.FIND_IN_FILES_GLOB_INPUT).performTextClearance()
+            onNodeWithTag(TreeTags.FIND_IN_FILES_GLOB_INPUT).performTextInput("!*.xml")
+            countIs { onNodeWithTag(TreeTags.FIND_IN_FILES_COUNT).assertTextContains("3 matches in 3 files") }
+            awaitNoTag(TreeTags.findInFilesItem("src/config.xml", 0))
+            awaitTag(TreeTags.findInFilesItem("docs/Three.md", 0))
+            // A directory excluded as well.
+            onNodeWithTag(TreeTags.FIND_IN_FILES_GLOB_INPUT).performTextClearance()
+            onNodeWithTag(TreeTags.FIND_IN_FILES_GLOB_INPUT).performTextInput("!*.xml, !docs/")
+            countIs { onNodeWithTag(TreeTags.FIND_IN_FILES_COUNT).assertTextContains("2 matches in 2 files") }
+            awaitNoTag(TreeTags.findInFilesItem("docs/Three.md", 0))
+        }
+
+    @Test
+    fun `the built-in engine follows the same globs and exclusions`() =
+        runComposeUiTest {
+            write("src/One.kt", "needle\n")
+            write("src/config.xml", "needle\n")
+            write("docs/Three.md", "needle\n")
+            val without =
+                RipgrepSettings(executable = Files.createTempDirectory("no-rg").resolve("rg").toString())
+            launchWithProject(project, ripgrep = without)
+            openFindInFiles()
+            type("needle")
+            countIs { onNodeWithTag(TreeTags.FIND_IN_FILES_COUNT).assertTextContains("3 matches in 3 files") }
+            awaitTag(TreeTags.FIND_IN_FILES_GLOB_BUTTON).performClick()
+            awaitTag(TreeTags.FIND_IN_FILES_GLOB_INPUT).performTextInput("!*.xml, !docs/")
+            countIs { onNodeWithTag(TreeTags.FIND_IN_FILES_COUNT).assertTextContains("1 match in 1 file") }
+            awaitTag(TreeTags.findInFilesItem("src/One.kt", 0))
+        }
+
+    @Test
+    fun `a nested directory is chosen from the filtered list of the scope menu`() =
+        runComposeUiTest {
+            write("src/main/One.kt", "needle\n")
+            write("src/test/Two.kt", "needle\n")
+            launchWithProject(project)
+            openFindInFiles()
+            type("needle")
+            countIs { onNodeWithTag(TreeTags.FIND_IN_FILES_COUNT).assertTextContains("2 matches in 2 files") }
+            awaitTag(TreeTags.FIND_IN_FILES_SCOPE_BUTTON).performClick()
+            awaitTag(TreeTags.FIND_IN_FILES_SCOPE_FILTER).performTextInput("test")
+            awaitNoTag(TreeTags.findInFilesScopeRow("src/main"))
+            awaitTag(TreeTags.findInFilesScopeRow("src/test")).performClick()
+            countIs { onNodeWithTag(TreeTags.FIND_IN_FILES_COUNT).assertTextContains("1 match in 1 file") }
+            awaitTag(TreeTags.findInFilesItem("src/test/Two.kt", 0))
+        }
+
+    @Test
+    fun `several directories are searched together, and unticking one takes it out`() =
+        runComposeUiTest {
+            write("src/One.kt", "needle\n")
+            write("docs/Two.md", "needle\n")
+            write("lib/Three.kt", "needle\n")
+            launchWithProject(project)
+            openFindInFiles()
+            type("needle")
+            countIs { onNodeWithTag(TreeTags.FIND_IN_FILES_COUNT).assertTextContains("3 matches in 3 files") }
+            awaitTag(TreeTags.FIND_IN_FILES_SCOPE_BUTTON).performClick()
+            awaitTag(TreeTags.findInFilesScopeRow("src")).performClick()
+            awaitTag(TreeTags.findInFilesScopeRow("docs")).performClick()
+            countIs { onNodeWithTag(TreeTags.FIND_IN_FILES_COUNT).assertTextContains("2 matches in 2 files") }
+            awaitNoTag(TreeTags.findInFilesItem("lib/Three.kt", 0))
+            awaitTag(TreeTags.FIND_IN_FILES_SCOPE_MENU)
+            awaitTag(TreeTags.FIND_IN_FILES_SCOPE_BUTTON).assertTextContains("2 directories")
+            awaitTag(TreeTags.findInFilesScopeRow("docs")).performClick()
+            countIs { onNodeWithTag(TreeTags.FIND_IN_FILES_COUNT).assertTextContains("1 match in 1 file") }
+            awaitTag(TreeTags.findInFilesScopeRow(".")).performClick()
+            countIs { onNodeWithTag(TreeTags.FIND_IN_FILES_COUNT).assertTextContains("3 matches in 3 files") }
+        }
+
+    @Test
+    fun `suggested globs fill the field and filter the results, a second click takes them back`() =
+        runComposeUiTest {
+            write("src/One.kt", "needle\n")
+            write("src/Two.xml", "needle\n")
+            write("src/Three.java", "needle\n")
+            launchWithProject(project)
+            openFindInFiles()
+            type("needle")
+            countIs { onNodeWithTag(TreeTags.FIND_IN_FILES_COUNT).assertTextContains("3 matches in 3 files") }
+            awaitTag(TreeTags.FIND_IN_FILES_GLOB_BUTTON).performClick()
+            awaitTag(TreeTags.findInFilesGlobSuggestion("!*.xml")).performClick()
+            countIs { onNodeWithTag(TreeTags.FIND_IN_FILES_COUNT).assertTextContains("2 matches in 2 files") }
+            awaitNoTag(TreeTags.findInFilesItem("src/Two.xml", 0))
+            awaitTag(TreeTags.FIND_IN_FILES_GLOB_INPUT).assertTextContains("!*.xml")
+            awaitTag(TreeTags.findInFilesGlobSuggestion("*.kt")).performClick()
+            countIs { onNodeWithTag(TreeTags.FIND_IN_FILES_COUNT).assertTextContains("1 match in 1 file") }
+            awaitTag(TreeTags.findInFilesGlobSuggestion("*.kt")).performClick()
+            awaitTag(TreeTags.findInFilesGlobSuggestion("!*.xml")).performClick()
+            countIs { onNodeWithTag(TreeTags.FIND_IN_FILES_COUNT).assertTextContains("3 matches in 3 files") }
+        }
+
+    @Test
+    fun `the cross of the glob field empties it`() =
+        runComposeUiTest {
+            write("src/One.kt", "needle\n")
+            write("src/Two.xml", "needle\n")
+            launchWithProject(project)
+            openFindInFiles()
+            type("needle")
+            awaitTag(TreeTags.FIND_IN_FILES_GLOB_BUTTON).performClick()
+            awaitTag(TreeTags.findInFilesGlobSuggestion("!*.xml")).performClick()
+            countIs { onNodeWithTag(TreeTags.FIND_IN_FILES_COUNT).assertTextContains("1 match in 1 file") }
+            awaitTag(TreeTags.FIND_IN_FILES_GLOB_CLEAR).performClick()
+            countIs { onNodeWithTag(TreeTags.FIND_IN_FILES_COUNT).assertTextContains("2 matches in 2 files") }
+            awaitNoTag(TreeTags.FIND_IN_FILES_GLOB_CLEAR)
+        }
+
+    @Test
+    fun `select all ticks the directories the filter leaves, clear unticks them`() =
+        runComposeUiTest {
+            write("src/main/One.kt", "needle\n")
+            write("src/test/Two.kt", "needle\n")
+            write("docs/Three.md", "needle\n")
+            launchWithProject(project)
+            openFindInFiles()
+            type("needle")
+            countIs { onNodeWithTag(TreeTags.FIND_IN_FILES_COUNT).assertTextContains("3 matches in 3 files") }
+            awaitTag(TreeTags.FIND_IN_FILES_SCOPE_BUTTON).performClick()
+            awaitTag(TreeTags.FIND_IN_FILES_SCOPE_FILTER).performTextInput("src")
+            awaitTag(TreeTags.FIND_IN_FILES_SCOPE_ALL).performClick()
+            countIs { onNodeWithTag(TreeTags.FIND_IN_FILES_COUNT).assertTextContains("2 matches in 2 files") }
+            awaitNoTag(TreeTags.findInFilesItem("docs/Three.md", 0))
+            awaitTag(TreeTags.FIND_IN_FILES_SCOPE_NONE).performClick()
+            countIs { onNodeWithTag(TreeTags.FIND_IN_FILES_COUNT).assertTextContains("3 matches in 3 files") }
+        }
+
+    @Test
+    fun `the cross of the scope chip takes every ticked directory out at once`() =
+        runComposeUiTest {
+            write("src/One.kt", "needle\n")
+            write("docs/Two.md", "needle\n")
+            write("lib/Three.kt", "needle\n")
+            launchWithProject(project)
+            openFindInFiles()
+            type("needle")
+            awaitTag(TreeTags.FIND_IN_FILES_SCOPE_BUTTON).performClick()
+            awaitTag(TreeTags.findInFilesScopeRow("src")).performClick()
+            awaitTag(TreeTags.findInFilesScopeRow("docs")).performClick()
+            countIs { onNodeWithTag(TreeTags.FIND_IN_FILES_COUNT).assertTextContains("2 matches in 2 files") }
+            awaitTag(TreeTags.FIND_IN_FILES_SCOPE_CLEAR).performClick()
+            countIs { onNodeWithTag(TreeTags.FIND_IN_FILES_COUNT).assertTextContains("3 matches in 3 files") }
+            awaitNoTag(TreeTags.FIND_IN_FILES_SCOPE_CLEAR)
+        }
+
+    @Test
+    fun `the crosses of the query and of the directory filter empty their field`() =
+        runComposeUiTest {
+            write("src/One.kt", "needle\n")
+            launchWithProject(project)
+            openFindInFiles()
+            awaitNoTag(TreeTags.FIND_IN_FILES_CLEAR)
+            type("needle")
+            awaitTag(TreeTags.findInFilesItem("src/One.kt", 0))
+            awaitTag(TreeTags.FIND_IN_FILES_SCOPE_BUTTON).performClick()
+            awaitTag(TreeTags.FIND_IN_FILES_SCOPE_FILTER).performTextInput("zzz")
+            awaitNoTag(TreeTags.findInFilesScopeRow("src"))
+            awaitTag(TreeTags.FIND_IN_FILES_SCOPE_FILTER_CLEAR).performClick()
+            awaitTag(TreeTags.findInFilesScopeRow("src"))
+            awaitTag(TreeTags.FIND_IN_FILES_CLEAR).performClick()
+            awaitNoTag(TreeTags.findInFilesItem("src/One.kt", 0))
+            awaitNoTag(TreeTags.FIND_IN_FILES_CLEAR)
+        }
+
+    @Test
     fun `ignored files are searched only when the option is on`() =
         runComposeUiTest {
             write("src/One.kt", "needle\n")
@@ -167,7 +348,7 @@ class SearchOptionsE2eTest {
             countIs { onNodeWithTag(TreeTags.FIND_IN_FILES_COUNT).assertTextContains("1 match in 1 file") }
             awaitNoTag(TreeTags.findInFilesItem("docs/Two.md", 0))
             // The whole project comes back with the root row of the menu (the ".").
-            awaitTag(TreeTags.FIND_IN_FILES_SCOPE_BUTTON).performClick()
+            // The menu stays open, to tick several directories: the root row clears them.
             awaitTag(TreeTags.FIND_IN_FILES_SCOPE_MENU)
             awaitTag(TreeTags.findInFilesScopeRow(".")).performClick()
             countIs { onNodeWithTag(TreeTags.FIND_IN_FILES_COUNT).assertTextContains("2 matches in 2 files") }

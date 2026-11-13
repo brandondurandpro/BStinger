@@ -45,6 +45,7 @@ private val BUTTON_GAP = 4.dp
 internal fun ToolStrip(
     project: ProjectState?,
     devtools: Boolean,
+    onSettings: () -> Unit,
     registry: ToolWindowRegistry = IdeRegistries.toolWindows,
     top: @Composable ColumnScope.() -> Unit = {},
 ) {
@@ -55,7 +56,8 @@ internal fun ToolStrip(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         top()
-        if (project != null) ToolButtons(project, devtools, registry)
+        if (project != null) ToolButtons(project, devtools, registry) else Spacer(Modifier.weight(1f))
+        SettingsButton(onSettings)
     }
 }
 

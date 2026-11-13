@@ -125,7 +125,7 @@ private fun ProjectBody(app: AppState, project: ProjectState, findFocus: FocusRe
             .onGloballyPositioned { drag.workspace = it.boundsInRoot() },
     ) {
         Row(Modifier.fillMaxSize()) {
-            ToolStrip(project, app.devtools)
+            ToolStrip(project, app.devtools, onSettings = app.settings::open)
             Column(Modifier.weight(1f).fillMaxHeight().padding(end = ISLAND_GAP, bottom = ISLAND_GAP)) {
                 Row(Modifier.weight(1f).fillMaxWidth()) {
                     ToolDock(project, Dock.Left, drag)

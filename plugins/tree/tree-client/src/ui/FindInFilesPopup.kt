@@ -21,13 +21,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import org.example.kotlineditor.model.FindOptions
+import org.example.kotlineditor.model.SearchFacets
 import org.example.kotlineditor.state.FindInFilesSearch
 import org.example.kotlineditor.state.SearchHit
 import org.example.kotlineditor.state.TextPos
 import org.example.kotlineditor.state.TreeHost
 import org.example.kotlineditor.state.selectedText
 
-private const val DEBOUNCE_MS = 150L
+// The search waits for a pause in the typing; a change of option does not wait.
+private const val DEBOUNCE_MS = 250L
 
 /** Find in Files (Ctrl+Shift+F): searched by the server, its results arriving in batches, as they are found. */
 @Composable
@@ -41,6 +43,9 @@ fun FindInFilesPopup(project: TreeHost, search: FindInFilesSearch, onClose: () -
     val options = remember { FindChips() }
     var query by remember { mutableStateOf(initial) }
     val cursor = remember { ListCursor() }
+    val searched = remember { SearchedQuery() }
+    // The directories and extensions the filters offer are the server's: asked once, when the popup opens.
+    LaunchedEffect(Unit) { options.facets = runCatching { project.fileIndex.facets() }.getOrDefault(options.facets) }
     // Whatever changed, of the text or of an option: the same debounced search, restarted with its whole state.
     LaunchedEffect(
         query,
@@ -50,9 +55,11 @@ fun FindInFilesPopup(project: TreeHost, search: FindInFilesSearch, onClose: () -
         options.globOn,
         options.globText,
         options.includeIgnored,
-        options.scope,
+        options.scopes,
     ) {
-        if (query.isNotEmpty()) delay(DEBOUNCE_MS) // restarted on every keystroke, like on every option change
+        val typing = query != searched.text
+        if (typing && query.isNotEmpty()) delay(DEBOUNCE_MS) // restarted on every keystroke
+        searched.text = query
         search.start(optionsOf(query, options))
         cursor.selected = 0
     }
@@ -78,8 +85,8 @@ fun FindInFilesPopup(project: TreeHost, search: FindInFilesSearch, onClose: () -
                 )
                 engineLabel(search)
             }
-            FindField(query, { query = it }, results, cursor, open, onClose)
-            OptionsSection(project, options)
+            FindField(query, { query = it }, options, results, cursor, open, onClose)
+            OptionsSection(options)
             ResultsSection(search, results, query, options, cursor, open)
         }
     }
@@ -90,6 +97,7 @@ fun FindInFilesPopup(project: TreeHost, search: FindInFilesSearch, onClose: () -
 private fun FindField(
     query: String,
     onQuery: (String) -> Unit,
+    options: FindChips,
     results: List<SearchHit>,
     cursor: ListCursor,
     open: (SearchHit?) -> Unit,
@@ -108,6 +116,10 @@ private fun FindField(
             .popupKeys({ open(results.getOrNull(cursor.selected)) }, onClose) { cursor.move(it, results.size) },
         placeholder = "Text to find",
         leading = { SearchIcon() },
+        trailing = {
+            if (query.isNotEmpty()) ClearButton(TreeTags.FIND_IN_FILES_CLEAR) { onQuery("") }
+            QueryToggles(options)
+        },
     )
 }
 
@@ -119,7 +131,7 @@ internal fun optionsOf(query: String, options: FindChips): FindOptions =
         wholeWord = options.wholeWord,
         regex = options.regex,
         filePattern = options.globText.takeIf { options.globOn && it.isNotBlank() },
-        scope = options.scope.takeIf { it != "." },
+        scopes = options.scopes,
         includeIgnored = options.includeIgnored,
     )
 
@@ -132,6 +144,13 @@ internal class FindChips {
     var globOn by mutableStateOf(false)
     var globText by mutableStateOf("")
     var includeIgnored by mutableStateOf(false)
-    var scope by mutableStateOf(".")
+    var scopes by mutableStateOf(emptyList<String>())
     var scopeMenuOpen by mutableStateOf(false)
+    var scopeFilter by mutableStateOf("")
+    var facets by mutableStateOf(SearchFacets())
+}
+
+/** The text of the last search that started: tells typing (debounced) from a change of option (immediate). */
+private class SearchedQuery {
+    var text: String? = null
 }
