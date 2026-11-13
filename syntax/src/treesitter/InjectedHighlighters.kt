@@ -6,8 +6,9 @@ package org.example.kotlineditor.syntax.treesitter
  * lines and columns are those of the document and its colors are painted straight over the document's own.
  * Not thread-safe: used from the worker of its [SyntaxSession].
  */
-internal class InjectedHighlighters(private val store: GrammarStore) : AutoCloseable {
-    private val highlighters = HashMap<String, TreeSitterHighlighter?>()
+internal class InjectedHighlighters(private val store: GrammarStore, private val onGrammarLoaded: () -> Unit = {}) :
+    AutoCloseable {
+    private val highlighters = HashMap<String, TreeSitterHighlighter>()
 
     /** [spans] of the lines [window] of [lines], with the colors of the [injections] painted over them. */
     suspend fun overlay(
@@ -33,12 +34,16 @@ internal class InjectedHighlighters(private val store: GrammarStore) : AutoClose
         return result
     }
 
-    private suspend fun highlighterOf(language: String): TreeSitterHighlighter? =
-        highlighters.getOrPut(language) {
-            val spec = GRAMMAR_CATALOG.firstOrNull { it.id == language }
-            val grammar = spec?.let { store.await(it) }
-            grammar?.let { TreeSitterHighlighter(it) }
-        }
+    // The grammar is never waited for: the document keeps its own colors, without the injected code's, until the
+    // grammar is downloaded (offline, it never is); [onGrammarLoaded] then asks for the colors again.
+    private fun highlighterOf(language: String): TreeSitterHighlighter? {
+        val known = highlighters[language]
+        if (known != null) return known
+        val spec = GRAMMAR_CATALOG.firstOrNull { it.id == language }
+        val grammar = spec?.let(store::loaded)
+        if (spec != null && grammar == null) store.prefetch(spec, onGrammarLoaded)
+        return grammar?.let { TreeSitterHighlighter(it) }?.also { highlighters[language] = it }
+    }
 
     private fun lineStarts(lines: List<String>): IntArray {
         val starts = IntArray(lines.size)
@@ -61,7 +66,8 @@ internal class InjectedHighlighters(private val store: GrammarStore) : AutoClose
                 val to = minOf(part.end, lineStart + line.length)
                 for (offset in from until to) chars[offset - lineStart] = line[offset - lineStart]
                 val after = part.end - lineStart
-                if (after in chars.indices && part.end < lineStart + line.length + 1) chars[after] = ';'
+                val separator = part.separator
+                if (separator != null && after in chars.indices) chars[after] = separator
             }
             String(chars)
         }
@@ -77,7 +83,7 @@ internal class InjectedHighlighters(private val store: GrammarStore) : AutoClose
     }
 
     override fun close() {
-        highlighters.values.forEach { it?.close() }
+        highlighters.values.forEach { it.close() }
         highlighters.clear()
     }
 }

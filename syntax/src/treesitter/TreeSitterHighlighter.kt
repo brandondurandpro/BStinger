@@ -158,11 +158,16 @@ internal class TreeSitterHighlighter(private val grammar: LoadedGrammar) : AutoC
 
     /**
      * The code of another language inside the document, by character offsets: what a `.vue` file holds besides its
-     * markup (see [Injection]). Empty for a grammar that has none.
+     * markup, shell code in a Dockerfile or a YAML file (see [Injection]). Empty for a grammar that has none.
      */
     fun injections(): List<Injection> {
-        val root = tree?.rootNode
-        return if (grammar.spec.id == VUE && root != null) VueInjections.find(root, ::textOf) else emptyList()
+        val root = tree?.rootNode ?: return emptyList()
+        return when (grammar.spec.id) {
+            VUE -> VueInjections.find(root, ::textOf)
+            DOCKERFILE -> DockerfileInjections.find(root)
+            YAML -> YamlInjections.find(root, ::textOf)
+            else -> emptyList()
+        }
     }
 
     /** Frees the tree; the next [update] parses the whole text again. */
@@ -199,6 +204,8 @@ internal class TreeSitterHighlighter(private val grammar: LoadedGrammar) : AutoC
 
     private companion object {
         const val VUE = "vue"
+        const val DOCKERFILE = "dockerfile"
+        const val YAML = "yaml"
 
         // Characters given to tree-sitter at once: lines are short, and each read crosses into native code.
         const val CHUNK_CHARACTERS = 4_096

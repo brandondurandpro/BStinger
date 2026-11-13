@@ -25,6 +25,9 @@ dependencies:
   - $libs.tree.sitter.kotlin: exported
   - $libs.tree.sitter.json: exported
   - $libs.tree.sitter.php: exported
+  - $libs.tree.sitter.dockerfile: exported
+  - $libs.tree.sitter.yaml: exported
+  - $libs.tree.sitter.bash: exported
   # A real SSH server for the remote development end-to-end tests; the client is the system OpenSSH.
   - $libs.sshd.core: exported
   - $libs.sshd.sftp: exported
