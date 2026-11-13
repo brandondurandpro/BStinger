@@ -12,8 +12,10 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import org.example.kotlineditor.model.AheadBehind
 import org.example.kotlineditor.model.DiffKind
 import org.example.kotlineditor.model.FileEntry
+import org.example.kotlineditor.model.GitCommit
 import org.example.kotlineditor.model.GitFileStatus
 import java.io.IOException
 
@@ -36,8 +38,23 @@ class ChangesState {
     var files: List<ChangedFile> by mutableStateOf(emptyList())
         internal set
 
+    /** Whether the changes were read at least once: before, an empty list does not mean a clean directory. */
+    var loaded by mutableStateOf(false)
+        internal set
+
     /** Whether the list is open under the conversation. */
     var expanded by mutableStateOf(false)
+
+    /**
+     * How far the branch of the worktree is from the one it started from; null in the project itself, when the
+     * starting branch is not known, and before the first reading.
+     */
+    var aheadBehind: AheadBehind? by mutableStateOf(null)
+        internal set
+
+    /** The last commit of the worktree when it has commits of its own (ahead of its base), else null. */
+    var lastCommit: GitCommit? by mutableStateOf(null)
+        internal set
 
     /** Why the changes could not be read or reverted, null when nothing failed. */
     var failure: String? by mutableStateOf(null)
@@ -50,7 +67,8 @@ class ChangesState {
 /** Reads the changes of [conversation] again whenever it is shown, and when its agent finishes its turn. */
 internal fun AgentState.followChanges() {
     project.scope.launch {
-        snapshotFlow { current?.let { it to it.busy } }
+        // The place counts too: a worktree that just opened has changes (and a distance from its base) to read.
+        snapshotFlow { current?.let { Triple(it, it.busy, it.workspace) } }
             .distinctUntilChanged()
             .collect { shown -> if (shown != null && !shown.second) refreshChanges(shown.first) }
     }
@@ -74,10 +92,27 @@ fun AgentState.refreshChanges(conversation: Conversation) {
                     }.awaitAll()
                 }
             conversation.changes.failure = null
+            conversation.changes.loaded = true
+            readDistanceFromBase(conversation, root)
         } catch (failed: IOException) {
             conversation.changes.failure = "Cannot read the changes: ${failed.message}"
         }
     }
+}
+
+// How far a worktree is from the branch it started from, and its last commit once it has some of its own.
+private suspend fun AgentState.readDistanceFromBase(conversation: Conversation, root: String) {
+    val base = conversation.base
+    if (conversation.mode != WorkMode.Worktree || base == null) {
+        conversation.changes.aheadBehind = null
+        conversation.changes.lastCommit = null
+        return
+    }
+    val git = project.services.git
+    val distance = git.aheadBehind(root, base)
+    val last = if (distance.ahead > 0) git.log(root, "HEAD", 0, 1).firstOrNull() else null
+    conversation.changes.aheadBehind = distance
+    conversation.changes.lastCommit = last
 }
 
 private suspend fun AgentState.changedFile(root: String, path: String, status: GitFileStatus, count: Boolean): ChangedFile {

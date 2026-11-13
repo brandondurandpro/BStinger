@@ -68,8 +68,9 @@ class AgentE2eTest {
             sendPrompt("echo hello from the agent")
             awaitAnswer(conversation, "hello from the agent")
             awaitIdle(conversation)
-            // The name comes with an update of the transcript, which may land after the answer.
-            awaitCondition(AGENT_TIMEOUT) { textOf(AgentTags.AGENT_NAME) == "Fake Agent 1.0" }
+            // The name comes with an update of the transcript, which may land after the answer; it is no label of the view.
+            awaitCondition(AGENT_TIMEOUT) { conversation.agentName == "Fake Agent 1.0" }
+            awaitNoTag(AgentTags.AGENT_NAME)
             assertEquals(1, conversation.itemsOf<AgentItem.AgentText>().size)
             assertEquals(
                 listOf("echo hello from the agent"),
@@ -229,8 +230,9 @@ class AgentE2eTest {
             val conversation = startConversation(app)
             sendPrompt("echo here")
             awaitIdle(conversation)
-            awaitTag(AgentTags.AGENT_MODE_WORKTREE).performClick()
-            waitForIdle()
+            // Before the first prompt the switch is there; after it, it is gone and the place stays.
+            awaitNoTag(AgentTags.AGENT_MODE_WORKTREE)
+            awaitNoTag(AgentTags.AGENT_MODE_DIRECT)
             assertEquals(WorkMode.Direct, conversation.mode)
         }
 

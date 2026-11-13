@@ -1,6 +1,7 @@
 package org.example.kotlineditor.git.server
 
 import kotlinx.coroutines.runBlocking
+import org.example.kotlineditor.model.AheadBehind
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.readText
@@ -81,6 +82,7 @@ class GitRefsTest {
                     { client.pushBranch(root, "--all") },
                     { client.pullBranch(root, "--all") },
                     { client.worktree(root, "-f") },
+                    { client.worktree(root, "agent/x", "-f") },
                 )
             for (refusal in refusals) assertFailsWith<IllegalArgumentException> { refusal() }
             assertEquals(before, repositoryState())
@@ -101,6 +103,51 @@ class GitRefsTest {
             assertEquals("agent/task-1", client.branch(worktree))
             client.removeWorktree(repository.path, worktree)
             assertFalse(Path.of(worktree).toFile().exists())
+        }
+
+    @Test
+    fun `a worktree starts from the local or remote-tracking branch asked, and does not follow it`() =
+        runBlocking {
+            repository.write("a.kt", "one\n")
+            repository.commitAll()
+            repository.git("checkout", "-q", "-b", "other")
+            repository.write("b.kt", "two\n")
+            repository.commitAll()
+            val other = repository.git("rev-parse", "HEAD").trim()
+            repository.git("checkout", "-q", "-")
+            // A remote-tracking branch, as a fetch leaves it.
+            repository.git("update-ref", "refs/remotes/origin/feature", other)
+            val client = CliGitClient()
+            val root = repository.path
+            val fromLocal = client.worktree(root, "agent/local", "other")
+            val fromRemote = client.worktree(root, "agent/remote", "origin/feature")
+            val fromHead = client.worktree(root, "agent/head")
+            assertEquals(other, repository.git("-C", fromLocal, "rev-parse", "HEAD").trim())
+            assertEquals(other, repository.git("-C", fromRemote, "rev-parse", "HEAD").trim())
+            assertTrue(other != repository.git("-C", fromHead, "rev-parse", "HEAD").trim())
+            assertFalse(repository.gitSucceeds("config", "--get", "branch.agent/remote.remote"))
+            // Asking again returns the worktree as it is, whatever the base.
+            assertEquals(fromLocal, client.worktree(root, "agent/local", "origin/feature"))
+        }
+
+    @Test
+    fun `a worktree knows how far it is ahead of and behind its base`() =
+        runBlocking<Unit> {
+            repository.write("a.kt", "one\n")
+            repository.commitAll()
+            val client = CliGitClient()
+            val root = repository.path
+            val base = client.branch(root).orEmpty()
+            val worktree = client.worktree(root, "agent/count", base)
+            assertEquals(AheadBehind(0, 0), client.aheadBehind(worktree, base))
+            val inWorktree = Path.of(worktree)
+            inWorktree.resolve("b.kt").toFile().writeText("two\n")
+            repository.git("add", "-A", directory = inWorktree)
+            repository.git("commit", "-q", "-m", "in the worktree", directory = inWorktree)
+            repository.write("c.kt", "three\n")
+            repository.commitAll()
+            assertEquals(AheadBehind(ahead = 1, behind = 1), client.aheadBehind(worktree, base))
+            assertFailsWith<IllegalArgumentException> { client.aheadBehind(worktree, "--all") }
         }
 
     @Test

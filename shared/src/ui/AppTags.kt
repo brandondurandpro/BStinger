@@ -115,6 +115,8 @@ object AppTags {
 
     fun dockSplitter(dock: String) = "dock.splitter:$dock"
 
+    fun dockCardBar(window: String) = "dock.cardBar:$window"
+
     fun recentProject(path: String) = "recent:$path"
 
     /** A file listed by the dialog of the files that could not be saved on exit, by its path in the project. */

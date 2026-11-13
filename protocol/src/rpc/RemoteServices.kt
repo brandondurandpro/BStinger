@@ -9,7 +9,9 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
+import org.example.kotlineditor.model.AheadBehind
 import org.example.kotlineditor.model.AppServices
 import org.example.kotlineditor.model.BlameLine
 import org.example.kotlineditor.model.DeployDestination
@@ -487,6 +489,15 @@ class RemoteGit(private val client: RpcClient) :
         return page.commits()
     }
 
+    override suspend fun aheadBehind(root: String, base: String): AheadBehind {
+        val answer =
+            client.call(Method.GitAheadBehind) {
+                put(ROOT, root)
+                put("base", base)
+            }
+        return AheadBehind(answer.jsonObject.int("ahead"), answer.jsonObject.int("behind"))
+    }
+
     override suspend fun searchLog(root: String, ref: String, query: String, skip: Int, limit: Int): List<GitCommit> {
         val page =
             client.call(Method.GitSearchLog) {
@@ -657,11 +668,12 @@ private fun JsonObjectBuilder.size(columns: Int, rows: Int, cellWidthPx: Int, ce
 
 /** [WorktreeClient] of the server. */
 class RemoteWorktrees(private val client: RpcClient) : WorktreeClient {
-    override suspend fun worktree(root: String, branch: String): String {
+    override suspend fun worktree(root: String, branch: String, base: String?): String {
         val result =
             client.call(Method.GitWorktree) {
                 put(ROOT, root)
                 put("branch", branch)
+                if (base != null) put("base", base)
             }
         return result.string()
     }

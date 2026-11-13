@@ -407,6 +407,9 @@ data class BlameLine(
     val date: String,
 )
 
+/** The commits HEAD has that a base branch lacks ([ahead]), and those the base has that HEAD lacks ([behind]). */
+data class AheadBehind(val ahead: Int, val behind: Int)
+
 /** A commit of the history of a branch (the Branches tool window). */
 data class GitCommit(
     /** Full hash. */
@@ -473,9 +476,11 @@ data class GitBranchInfo(
 interface WorktreeClient {
     /**
      * Path of a worktree of the repository of [root] with [branch] checked out: the existing one, or a new one kept
-     * in the Git directory of the repository (the branch is created from HEAD when it does not exist).
+     * in the Git directory of the repository. A branch that does not exist is created from [base] (a local branch or a
+     * remote-tracking one like `origin/main`, which it does not follow), from HEAD when there is none; an existing
+     * branch keeps its commits, and so does an existing worktree.
      */
-    suspend fun worktree(root: String, branch: String): String
+    suspend fun worktree(root: String, branch: String, base: String? = null): String
 
     /** Removes the worktree at [path]; fails, keeping it, when it has uncommitted changes. */
     suspend fun removeWorktree(root: String, path: String)
@@ -628,6 +633,9 @@ interface GitClient : WorktreeClient {
     /** Commits reachable from [ref], newest first: [limit] of them after skipping [skip]; empty past the end. */
     suspend fun log(root: String, ref: String, skip: Int, limit: Int): List<GitCommit>
 
+    /** How far HEAD is from the branch [base] (local, or remote-tracking like `origin/main`): see [AheadBehind]. */
+    suspend fun aheadBehind(root: String, base: String): AheadBehind
+
     /**
      * Commits reachable from [ref] whose message or author contains [query] (ignoring case), or whose hash starts
      * with it, newest first: [limit] of them after skipping the first [skip] matches; empty past the last one.
@@ -703,6 +711,8 @@ interface GitClient : WorktreeClient {
 
         override suspend fun headLines(root: String, path: String): List<String>? = null
 
+        override suspend fun aheadBehind(root: String, base: String) = AheadBehind(0, 0)
+
         override suspend fun blame(root: String, path: String): List<BlameLine> = emptyList()
 
         override suspend fun remoteBranches(root: String): List<String> = emptyList()
@@ -717,7 +727,7 @@ interface GitClient : WorktreeClient {
         override suspend fun commitDiff(root: String, hash: String, path: String, oldPath: String?) =
             emptyList<DiffLine>()
 
-        override suspend fun worktree(root: String, branch: String): String =
+        override suspend fun worktree(root: String, branch: String, base: String?): String =
             throw UnsupportedOperationException("Git is not available")
 
         override suspend fun removeWorktree(root: String, path: String) = Unit

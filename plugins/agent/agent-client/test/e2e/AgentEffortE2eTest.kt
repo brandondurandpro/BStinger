@@ -80,7 +80,7 @@ class AgentEffortE2eTest {
             sendPrompt("effort")
             awaitShown(first, "Effort: low.")
             awaitIdle(first)
-            awaitTag(AgentTags.AGENT_NEW).performClick()
+            startAnotherConversation(app)
             awaitModel("Fast")
             assertFalse(isShown(AgentTags.AGENT_EFFORT))
             awaitTag(AgentTags.agentTab(first.id)).performClick()

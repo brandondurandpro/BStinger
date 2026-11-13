@@ -8,6 +8,8 @@
 # With --only, runs only the steps listed, separated by commas: `non-ui` (the modules without UI tests) and UI
 # modules (e.g. ./run-tests --only non-ui,agent). Each Linux CI job runs a group of tools/ci/linux-test-groups.txt.
 #
+# The failures of the steps are listed again at the end, where the log of a CI job is read first.
+#
 # With other arguments, runs `./kotlin test` with them as they are (e.g. ./run-tests -m server).
 set -u
 cd "$(dirname "$0")"
@@ -43,17 +45,47 @@ excludes=()
 for module in "${modules[@]}"; do excludes+=(--exclude-module "$module"); done
 
 failed=()
+summary=$(mktemp)
+trap 'rm -f "$summary"' EXIT
+
+# What failed in the output of a step: the tests, their messages and the lines of the tests in the stack traces.
+# The traces and the UI trees of the failures are thousands of lines long; this is what is read first.
+failures_of() {
+    awk '
+        /JUnit Jupiter:/ || /^ *=> / || /Test\.kt:[0-9]+\)/ || /^ERROR: / { print substr($0, 1, 300) }
+    ' "$1" | awk '!seen[$0]++' | head -n 120
+}
+
+# Runs `./kotlin test` with the arguments after the name of the step, and keeps what failed for the summary.
+step() {
+    local name=$1
+    shift
+    local log
+    log=$(mktemp)
+    ./kotlin test "$@" 2>&1 | tee "$log"
+    local status=${PIPESTATUS[0]}
+    if [ "$status" -ne 0 ]; then
+        failed+=("$name")
+        {
+            echo "run-tests: failures of $name"
+            failures_of "$log"
+        } >> "$summary"
+    fi
+    rm -f "$log"
+}
+
 if selected non-ui; then
     echo "run-tests: modules without UI tests"
-    ./kotlin test "${excludes[@]}" || failed+=("modules without UI tests")
+    step "modules without UI tests" "${excludes[@]}"
 fi
 for module in "${modules[@]}"; do
     selected "$module" || continue
     echo "run-tests: $module"
-    ./kotlin test -m "$module" || failed+=("$module")
+    step "$module" -m "$module"
 done
 
 if [ ${#failed[@]} -gt 0 ]; then
+    cat "$summary" >&2
     echo "run-tests: failed: ${failed[*]}" >&2
     exit 1
 fi

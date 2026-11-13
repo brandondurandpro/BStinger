@@ -186,6 +186,9 @@ class Conversation(val id: Int, title: String, val branch: String) {
     internal var closedOnServer = true
     private var forgottenPreview: String? = null
 
+    /** The branch the worktree of [branch] is created from when it does not exist yet; HEAD of the project if null. */
+    var base: String? = null
+
     /** Direct by default; the agent moves to a worktree of [branch] on request, before the first prompt. */
     var mode by mutableStateOf(WorkMode.Direct)
         internal set
@@ -492,6 +495,60 @@ class AgentState(
         release(conversation)
     }
 
+    /** The question "from which branch?" of a new conversation, null while none is asked. */
+    var basePicker: BasePicker? by mutableStateOf(null)
+        private set
+
+    /**
+     * What the user does to start a conversation: in a Git repository the picker asks which branch the agent works
+     * from (the project's own, or a worktree of a local or remote branch); elsewhere the conversation just starts.
+     */
+    fun requestNewConversation() {
+        if (basePicker != null) return
+        val picker = BasePicker()
+        basePicker = picker
+        picker.loading =
+            project.scope.launch {
+                val choices = runCatching { project.branchChoices(fetch = false) }
+                choices.onFailure { picker.failure = it.message ?: "The branches could not be read" }
+                choices.onSuccess { shown ->
+                    if (shown == null) startWithoutAsking(picker) else picker.choices = shown
+                }
+                // Then the remote branches fetched, which may take a while, or fail offline: the list stays usable.
+                if (picker.choices != null && basePicker === picker) refreshRemotes(picker)
+            }
+    }
+
+    private suspend fun refreshRemotes(picker: BasePicker) {
+        picker.fetching = true
+        runCatching { project.branchChoices(fetch = true) }.onSuccess { fetched ->
+            if (basePicker === picker && fetched != null) picker.choices = fetched
+        }
+        picker.fetching = false
+    }
+
+    private fun startWithoutAsking(picker: BasePicker) {
+        if (basePicker === picker) basePicker = null
+        newConversation()
+    }
+
+    /** The user answered the picker: [base] is the branch to start from, null for the project's own branch. */
+    fun chooseBase(base: String?) {
+        val picker = basePicker ?: return
+        picker.loading?.cancel()
+        basePicker = null
+        val conversation = newConversation()
+        if (base == null) return
+        conversation.base = base
+        setMode(conversation, WorkMode.Worktree)
+    }
+
+    /** The user closed the picker: no conversation starts. */
+    fun cancelBasePicker() {
+        basePicker?.loading?.cancel()
+        basePicker = null
+    }
+
     /** Starts a conversation on a branch of its own. */
     fun newConversation(): Conversation {
         val id = nextId++
@@ -566,7 +623,7 @@ class AgentState(
         conversation.preparingWorktree = true
         conversation.preparing =
             project.scope.launch {
-                runCatching { project.openWorktree(conversation.branch) }
+                runCatching { project.openWorktree(conversation.branch, conversation.base) }
                     .onSuccess { conversation.show(it, project) }
                     .onFailure {
                         conversation.mode = previous
@@ -780,3 +837,21 @@ internal fun titleOf(text: String): String {
 private const val DEFAULT_CONVERSATIONS_WIDTH = 260f
 private const val MIN_CONVERSATIONS_WIDTH = 160f
 private const val MAX_CONVERSATIONS_WIDTH = 640f
+
+/** The state of the question "from which branch?" asked before a conversation starts. */
+@Stable
+class BasePicker {
+    /** The branches to choose from, null while they are read. */
+    var choices: BranchChoices? by mutableStateOf(null)
+        internal set
+
+    /** Why the branches could not be read, null when they could. */
+    var failure: String? by mutableStateOf(null)
+        internal set
+
+    /** True while the remote branches are being fetched. */
+    var fetching by mutableStateOf(false)
+        internal set
+
+    internal var loading: Job? = null
+}

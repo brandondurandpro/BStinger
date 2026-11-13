@@ -225,9 +225,7 @@ class AgentPerformanceE2eTest {
             awaitIdle(first)
             measure("$READING_CONVERSATIONS conversations of $READS long outputs", READS_BUDGET_MS, BUDGET_MB) {
                 repeat(READING_CONVERSATIONS) {
-                    awaitTag(AgentTags.AGENT_NEW).performClick()
-                    awaitCondition { app.project.agent.current?.items?.isEmpty() == true }
-                    val conversation = checkNotNull(app.project.agent.current)
+                    val conversation = startAnotherConversation(app)
                     sendPrompt("tools $READS $READ_LINES")
                     awaitCondition(READS_BUDGET_MS) { conversation.itemsOf<AgentItem.ToolCall>().size == READS }
                     awaitIdle(conversation)
