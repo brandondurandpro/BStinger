@@ -7,6 +7,7 @@ import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class TarArchiveTest {
@@ -77,7 +78,9 @@ class TarArchiveTest {
         try {
             TarArchive.extract(ByteArrayInputStream(tar.toByteArray()), directory)
             assertTrue(Files.isExecutable(directory.resolve("run")))
-            assertTrue(!Files.isExecutable(directory.resolve("data.txt")))
+            // Windows has no executable bit: every file it can read is executable there.
+            val hasExecutableBit = "posix" in directory.fileSystem.supportedFileAttributeViews()
+            if (hasExecutableBit) assertFalse(Files.isExecutable(directory.resolve("data.txt")))
         } finally {
             directory.toFile().deleteRecursively()
         }

@@ -1,9 +1,11 @@
 package org.example.kotlineditor.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -24,6 +26,7 @@ import org.example.kotlineditor.state.BasePicker
 import org.example.kotlineditor.state.BranchChoices
 
 private const val PICKER_WIDTH = 520
+private val STATUS_HEIGHT = 18.dp
 
 // One line of the picker: the branch to start from (null: the project's own), and where it comes from.
 private class BaseChoice(val base: String?, val label: String, val kind: String)
@@ -66,27 +69,31 @@ fun BasePickerPopup(agent: AgentState, picker: BasePicker) {
     }
 }
 
+// The status of the list keeps its line whether it says something or not: the remote branches are fetched while the
+// list is shown, and a line coming and going would move the branches under the pointer, between a press and its click.
 @Composable
 private fun PickerStatus(agent: AgentState, picker: BasePicker) {
     val failure = picker.failure
-    val fetchError = picker.choices?.fetchError
-    when {
-        failure != null -> {
-            Label(failure, Modifier.padding(top = 8.dp).testTag(AgentTags.AGENT_BASE_ERROR), color = IdeColors.Error, fontSize = 12.sp)
-            IdeButton("Start in the project", { agent.chooseBase(null) }, Modifier.padding(top = 8.dp).testTag(AgentTags.AGENT_BASE_PROJECT))
-        }
+    if (failure != null) {
+        Label(failure, Modifier.padding(top = 8.dp).testTag(AgentTags.AGENT_BASE_ERROR), color = IdeColors.Error, fontSize = 12.sp)
+        IdeButton("Start in the project", { agent.chooseBase(null) }, Modifier.padding(top = 8.dp).testTag(AgentTags.AGENT_BASE_PROJECT))
+        return
+    }
+    Box(Modifier.fillMaxWidth().padding(top = 8.dp).height(STATUS_HEIGHT), contentAlignment = Alignment.CenterStart) {
+        val fetchError = picker.choices?.fetchError
+        when {
+            fetchError != null -> {
+                val text = "The remote branches could not be fetched, the known ones are listed: $fetchError"
+                Label(text, Modifier.testTag(AgentTags.AGENT_BASE_FETCH_ERROR), color = IdeColors.TextSecondary, fontSize = 12.sp)
+            }
 
-        fetchError != null -> {
-            val text = "The remote branches could not be fetched, the known ones are listed: $fetchError"
-            Label(text, Modifier.padding(top = 8.dp).testTag(AgentTags.AGENT_BASE_FETCH_ERROR), color = IdeColors.TextSecondary, fontSize = 12.sp)
-        }
+            picker.choices == null -> {
+                Label("Reading the branches…", color = IdeColors.TextSecondary, fontSize = 12.sp)
+            }
 
-        picker.choices == null -> {
-            Label("Reading the branches…", Modifier.padding(top = 8.dp), color = IdeColors.TextSecondary, fontSize = 12.sp)
-        }
-
-        picker.fetching -> {
-            Label("Fetching the remote branches…", Modifier.padding(top = 8.dp).testTag(AgentTags.AGENT_BASE_FETCHING), color = IdeColors.TextSecondary, fontSize = 12.sp)
+            picker.fetching -> {
+                Label("Fetching the remote branches…", Modifier.testTag(AgentTags.AGENT_BASE_FETCHING), color = IdeColors.TextSecondary, fontSize = 12.sp)
+            }
         }
     }
 }
