@@ -15,6 +15,9 @@ Every new task, feature or fix starts on its own branch, in its own git worktree
 Use `./kotlin` (`kotlin.bat` on Windows); it downloads the toolchain on first use.
 
 - Desktop app: `./kotlin run -m desktopApp` (embeds a server on loopback).
+  The packaged app limits G1 to two threads (`javaOptions` in `desktopApp/module.yaml`, about 95 MB less resident
+  memory); a development run has no such setting, add `--jvm-args="-XX:ParallelGCThreads=2 -XX:ConcGCThreads=1"`
+  to measure memory as released.
 - All tests: `./run-tests` (`run-tests.bat`), which runs the UI modules one at a time, as the CI does (see the
   script); `./kotlin test` runs them all at once. One module: `./kotlin test -m shared`. One Linux CI job:
   `./run-tests --only shared,terminal-client` (its line of `tools/ci/linux-test-groups.txt`).

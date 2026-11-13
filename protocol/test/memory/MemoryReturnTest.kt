@@ -47,7 +47,19 @@ class MemoryReturnTest {
         }
     }
 
+    @Test
+    fun `a collection leaves little free heap, unless the JVM was told otherwise`() {
+        val memory = MemoryReturn(maxHeapFreePercent = 35)
+        val before = memory.maxHeapFree() ?: return // Another JVM than HotSpot.
+        memory.start().use {
+            val expected = if (before == HOTSPOT_MAX_HEAP_FREE) 35L else before
+            assertEquals(expected, memory.maxHeapFree())
+        }
+    }
+
     private companion object {
+        const val HOTSPOT_MAX_HEAP_FREE = 70L
+
         const val BYTES_PER_MB = 1_048_576L
         const val BLOCK_BYTES = 256L
         const val BLOCKS = 600_000

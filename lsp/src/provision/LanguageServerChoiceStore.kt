@@ -1,6 +1,7 @@
 package org.example.kotlineditor.lsp.provision
 
 import java.io.IOException
+import java.nio.file.AccessDeniedException
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.Path
@@ -62,17 +63,40 @@ class LanguageServerChoiceStore(
         val part = Files.createTempFile(file.toAbsolutePath().parent, "language-servers-", ".part")
         try {
             Files.newBufferedWriter(part).use { properties.store(it, "Language server chosen for each language") }
-            try {
-                Files.move(part, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
-            } catch (_: AtomicMoveNotSupportedException) {
-                Files.move(part, file, StandardCopyOption.REPLACE_EXISTING)
-            }
+            replace(part)
         } finally {
             Files.deleteIfExists(part)
         }
     }
 
+    // Windows refuses to replace a file while a program has it open, even to read it (an antivirus, a backup, an
+    // editor): the reader is gone a moment later, so the move is tried again instead of losing the choice.
+    private fun replace(part: Path) {
+        var attempt = 1
+        while (true) {
+            try {
+                move(part)
+                return
+            } catch (denied: AccessDeniedException) {
+                if (!WINDOWS || attempt == REPLACE_ATTEMPTS) throw denied
+                attempt++
+                Thread.sleep(REPLACE_RETRY_MS)
+            }
+        }
+    }
+
+    private fun move(part: Path) {
+        try {
+            Files.move(part, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+        } catch (_: AtomicMoveNotSupportedException) {
+            Files.move(part, file, StandardCopyOption.REPLACE_EXISTING)
+        }
+    }
+
     private companion object {
         const val FILE_NAME = "language-servers.properties"
+        const val REPLACE_ATTEMPTS = 40
+        const val REPLACE_RETRY_MS = 50L
+        val WINDOWS = System.getProperty("os.name").startsWith("Windows", ignoreCase = true)
     }
 }

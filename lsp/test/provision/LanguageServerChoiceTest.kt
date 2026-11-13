@@ -2,6 +2,7 @@ package org.example.kotlineditor.lsp.provision
 
 import java.nio.file.Files
 import java.nio.file.Path
+import kotlin.concurrent.thread
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -116,5 +117,26 @@ class LanguageServerChoiceTest {
         assertNull(store.choice("php"))
         store.choose("php", "phpactor")
         assertEquals("phpactor", store.choice("php"))
+    }
+
+    @Test
+    fun `a choice made while another program reads the file is saved once it is done`() {
+        val file = directory.resolve("choices.properties")
+        val store = LanguageServerChoiceStore(file)
+        store.choose("php", "phpactor")
+        // Windows refuses to replace a file that is open, even for reading: the reader lets go a moment later.
+        val reading = Files.newInputStream(file)
+        val reader =
+            thread {
+                Thread.sleep(READ_MS)
+                reading.close()
+            }
+        store.choose("php", "intelephense")
+        reader.join()
+        assertEquals("intelephense", LanguageServerChoiceStore(file).choice("php"))
+    }
+
+    private companion object {
+        const val READ_MS = 300L
     }
 }

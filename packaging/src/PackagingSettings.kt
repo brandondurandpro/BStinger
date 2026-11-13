@@ -29,6 +29,9 @@ interface PackagingSettings {
     /** Java modules of the runtime; empty for the default set of jpackage (every module). */
     val modules: List<String> get() = emptyList()
 
+    /** Options of the JVM of the installed application (`-XX:ParallelGCThreads=2`), one per entry. */
+    val javaOptions: List<String> get() = emptyList()
+
     /** Command-line application: a console launcher on Windows, no menu entry nor installer. */
     val console: Boolean get() = false
 
