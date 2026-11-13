@@ -32,11 +32,13 @@ interface RemoteFactory {
      * Installs the server on [target] if needed, starts its daemon, opens the tunnel and waits for the protocol
      * handshake. Blocking work happens on the caller's IO dispatcher. A running daemon of another protocol that
      * still has sessions is replaced only with [replaceServer] (the user agreed); otherwise this throws
-     * [org.example.kotlineditor.remote.RemoteServerInUseException].
+     * [org.example.kotlineditor.remote.RemoteServerInUseException]. [bundleSource] says where the server to install
+     * comes from.
      */
     suspend fun connect(
         target: SshTarget,
         replaceServer: Boolean = false,
+        bundleSource: RemoteBundleSource = RemoteBundleSource.Local,
         onProgress: (String) -> Unit = {},
     ): RemoteConnection
 

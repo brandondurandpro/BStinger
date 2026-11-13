@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CoroutineScope
 import org.example.kotlineditor.model.AgentCommand
+import org.example.kotlineditor.state.RemoteBundleSource
 import org.example.kotlineditor.telemetry.Telemetry
 import org.example.kotlineditor.ui.ThemeChoice
 
@@ -44,6 +45,11 @@ class SettingsController(
 
     /** Id of the agent of the ACP registry for agent mode, blank for [DEFAULT_AGENT]; a command line wins over it. */
     var agentRegistry by mutableStateOf(preferences[PreferenceKeys.AGENT_REGISTRY].orEmpty())
+
+    /** Where the server installed on a remote host comes from: a local bundle, or the GitHub release. */
+    var remoteBundleSource by mutableStateOf(
+        RemoteBundleSource.fromSaved(preferences[PreferenceKeys.REMOTE_BUNDLE_SOURCE]),
+    )
 
     /** Whether the user shares anonymous performance measures: asked on the welcome screen, changed in the menu. */
     val telemetry = TelemetryConsent(preferences.known, telemetryOf)
@@ -122,7 +128,8 @@ class SettingsController(
         val agentCommandLine = PreferenceKeys.AGENT_COMMAND to agentCommand
         val agentOfRegistry = PreferenceKeys.AGENT_REGISTRY to agentRegistry
         val themeName = PreferenceKeys.THEME to theme.name
-        val values = mapOf(fontSize, themeName, agentMode, byDefault, agentCommandLine, agentOfRegistry)
+        val bundleSource = PreferenceKeys.REMOTE_BUNDLE_SOURCE to remoteBundleSource.name
+        val values = mapOf(fontSize, themeName, agentMode, byDefault, agentCommandLine, agentOfRegistry, bundleSource)
         return values + telemetry.toPreferences()
     }
 

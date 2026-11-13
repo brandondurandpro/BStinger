@@ -32,6 +32,8 @@ class RemoteController(
     private val remoteFactory: RemoteFactory?,
     /** Shows the server of a connection just established; it owns the connection from then on. */
     private val onConnected: suspend (RemoteConnection, SshTarget) -> Unit,
+    /** Where the server to install on a host comes from, read at each connection (a Settings choice). */
+    private val bundleSource: () -> RemoteBundleSource = { RemoteBundleSource.Local },
 ) : RemoteHost {
     /** The "Remote Development" dialog, when open. */
     var dialog: RemoteDialogState? by mutableStateOf(null)
@@ -219,7 +221,7 @@ class RemoteController(
             ClientTelemetry.measureToFrame(Operation.RemoteConnect) {
                 withContext(Dispatchers.IO) {
                     connected =
-                        factory.connect(target, dialog.replaceServer) { step ->
+                        factory.connect(target, dialog.replaceServer, bundleSource()) { step ->
                             scope.launch { remoteStatus = step }
                         }
                 }

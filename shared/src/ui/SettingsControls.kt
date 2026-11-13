@@ -25,6 +25,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.example.kotlineditor.model.LanguageServerCandidateInfo
@@ -32,6 +33,8 @@ import org.example.kotlineditor.model.LanguageServerChoice
 import org.example.kotlineditor.model.Languages
 import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.InlayHintsMode
+import org.example.kotlineditor.state.RemoteBundleLocations
+import org.example.kotlineditor.state.RemoteBundleSource
 import org.example.kotlineditor.state.SERVER_LANGUAGES
 import org.example.kotlineditor.state.Setting
 import org.example.kotlineditor.state.SettingsState
@@ -74,6 +77,54 @@ internal fun ThemeControl(app: AppState) {
                     .semantics { selected = chosen }
                     .testTag(AppTags.settingsTheme(choice.name))
                     .padding(horizontal = 10.dp, vertical = 3.dp),
+            )
+        }
+    }
+}
+
+/** Local file or GitHub, the one chosen highlighted, and what it means below. */
+@Composable
+internal fun RemoteServerControl(app: AppState) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            for (source in RemoteBundleSource.entries) {
+                val chosen = app.settings.remoteBundleSource == source
+                Label(
+                    source.title,
+                    Modifier
+                        .background(if (chosen) IdeColors.Selection else Color.Transparent, ChipShape)
+                        .border(1.dp, IdeColors.Separator, ChipShape)
+                        .clickable(
+                            remember { MutableInteractionSource() },
+                            indication = null,
+                        ) { app.settings.remoteBundleSource = source }
+                        .pointerHoverIcon(PointerIcon.Hand)
+                        .semantics { selected = chosen }
+                        .testTag(AppTags.settingsRemoteSource(source.name))
+                        .padding(horizontal = 10.dp, vertical = 3.dp),
+                )
+            }
+        }
+        Label(
+            app.settings.remoteBundleSource.description,
+            color = IdeColors.TextSecondary,
+            fontSize = 12.sp,
+            maxLines = Int.MAX_VALUE,
+            overflow = TextOverflow.Clip,
+        )
+        val locations =
+            listOf(
+                RemoteBundleLocations.origin(app.settings.remoteBundleSource) to AppTags.SETTINGS_REMOTE_ORIGIN,
+                RemoteBundleLocations.destination() to AppTags.SETTINGS_REMOTE_DESTINATION,
+            )
+        for ((text, tag) in locations) {
+            Label(
+                text,
+                Modifier.testTag(tag),
+                color = IdeColors.TextSecondary,
+                fontSize = 12.sp,
+                maxLines = Int.MAX_VALUE,
+                overflow = TextOverflow.Clip,
             )
         }
     }

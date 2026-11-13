@@ -8,6 +8,7 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onNodeWithTag
@@ -21,6 +22,7 @@ import androidx.compose.ui.test.withKeyDown
 import org.example.kotlineditor.state.FilePreferenceStore
 import org.example.kotlineditor.state.InlayHintsMode
 import org.example.kotlineditor.state.PreferenceKeys
+import org.example.kotlineditor.state.RemoteBundleSource
 import org.example.kotlineditor.state.Setting
 import org.example.kotlineditor.state.SettingsCategory
 import org.example.kotlineditor.syntax.SyntaxColor
@@ -183,6 +185,34 @@ class SettingsE2eTest {
             onNodeWithTag(AppTags.settingsTheme(ThemeChoice.Dark.name)).performClick()
             awaitCondition { dialogColor() == DarkPalette.panel }
             awaitCondition { preferences().load()[PreferenceKeys.THEME] == "Dark" }
+        }
+    }
+
+    @Test
+    fun `the server of remote hosts comes from a local bundle at first, then from GitHub once chosen, and is kept`() {
+        runComposeUiTest {
+            val app = launchWithProject(project, preferences())
+            openSettingsFromMenu()
+            category(SettingsCategory.RemoteDevelopment)
+            onNodeWithTag(AppTags.settingsRemoteSource(RemoteBundleSource.Local.name)).assertIsSelected()
+            onNodeWithTag(AppTags.SETTINGS_REMOTE_ORIGIN).assertTextContains("Searched in:", substring = true)
+            onNodeWithTag(AppTags.settingsRemoteSource(RemoteBundleSource.GitHub.name)).performClick()
+            onNodeWithTag(AppTags.settingsRemoteSource(RemoteBundleSource.GitHub.name)).assertIsSelected()
+            assertEquals(RemoteBundleSource.GitHub, app.state.settings.remoteBundleSource)
+            onNodeWithTag(AppTags.SETTINGS_REMOTE_ORIGIN).assertTextContains("Downloaded to:", substring = true)
+            val destination = onNodeWithTag(AppTags.SETTINGS_REMOTE_DESTINATION)
+            destination.assertTextContains("~/.kotlin-editor/server", substring = true)
+            awaitCondition { preferences().load()[PreferenceKeys.REMOTE_BUNDLE_SOURCE] == "GitHub" }
+        }
+        runComposeUiTest {
+            val app = launchApp(preferences = preferences())
+            assertEquals(RemoteBundleSource.GitHub, app.state.settings.remoteBundleSource)
+            onNodeWithTag(AppTags.WELCOME_SETTINGS).performClick()
+            awaitTag(AppTags.SETTINGS)
+            category(SettingsCategory.RemoteDevelopment)
+            onNodeWithTag(AppTags.settingsRemoteSource(RemoteBundleSource.GitHub.name)).assertIsSelected()
+            onNodeWithTag(AppTags.settingsRemoteSource(RemoteBundleSource.Local.name)).performClick()
+            awaitCondition { preferences().load()[PreferenceKeys.REMOTE_BUNDLE_SOURCE] == "Local" }
         }
     }
 
