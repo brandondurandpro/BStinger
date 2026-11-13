@@ -62,9 +62,11 @@ private fun commonGitDirectory(root: String): File? {
 
 /** Worktrees of the branches the agent works on, kept in the Git directory so they never show in the project. */
 internal class CliWorktrees : WorktreeClient {
-    override suspend fun worktree(root: String, branch: String): String {
+    override suspend fun worktree(root: String, branch: String, base: String?): String {
         requireBranchName(branch)
-        return runInterruptible(Dispatchers.IO) { existing(root, branch) ?: create(root, branch) }
+        // The base is a branch too (`origin/main` is a valid name): never an option for `git worktree add`.
+        if (base != null) requireBranchName(base)
+        return runInterruptible(Dispatchers.IO) { existing(root, branch) ?: create(root, branch, base) }
     }
 
     // `--`: a path starting with '-' is still a path, never an option.
@@ -73,14 +75,16 @@ internal class CliWorktrees : WorktreeClient {
         runInterruptible(Dispatchers.IO) { runGit(root, WORKTREE, "remove", "--", path) }
     }
 
-    private fun create(root: String, branch: String): String {
+    private fun create(root: String, branch: String, base: String?): String {
         val common = commonGitDirectory(root) ?: throw IOException("Not in a Git repository: $root")
         val directory = File(common, "$AGENT_WORKTREES/${branch.replace(UNSAFE, "-")}")
         val known = gitOutput(root, "show-ref", "--verify", "--quiet", "refs/heads/$branch") != null
         if (known) {
             runGit(root, WORKTREE, "add", "--", directory.path, branch)
         } else {
-            runGit(root, WORKTREE, "add", "-b", branch, "--", directory.path)
+            // `--no-track`: the branch is the agent's own, its Pull and Push never target the branch it started from.
+            val start = listOfNotNull(base)
+            runGit(root, WORKTREE, "add", "--no-track", "-b", branch, "--", directory.path, *start.toTypedArray())
         }
         return directory.path
     }

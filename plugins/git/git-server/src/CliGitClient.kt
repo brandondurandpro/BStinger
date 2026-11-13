@@ -2,6 +2,7 @@ package org.example.kotlineditor.git.server
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runInterruptible
+import org.example.kotlineditor.model.AheadBehind
 import org.example.kotlineditor.model.BlameLine
 import org.example.kotlineditor.model.DiffLine
 import org.example.kotlineditor.model.FileContent
@@ -345,6 +346,16 @@ class CliGitClient :
                 .filter { it.size == 2 && it[1].isEmpty() && it[0].isNotBlank() }
                 .map { it[0] }
                 .sorted()
+        }
+
+    // `left...right` with `--left-right --count` prints "<commits only in base>\t<commits only in HEAD>".
+    override suspend fun aheadBehind(root: String, base: String): AheadBehind =
+        runInterruptible(Dispatchers.IO) {
+            requireBranchName(base)
+            val output = runGit(root, "rev-list", "--left-right", "--count", "$base...HEAD", "--")
+            val counts = output.trim().split(Regex("\\s+")).mapNotNull { it.toIntOrNull() }
+            if (counts.size != 2) throw IOException("Unexpected rev-list output: ${output.trim()}")
+            AheadBehind(ahead = counts[1], behind = counts[0])
         }
 
     // One record per commit (see parseCommit). `--` keeps a ref named like a file from being read as a path.

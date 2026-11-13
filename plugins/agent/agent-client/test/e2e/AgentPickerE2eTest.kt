@@ -93,8 +93,7 @@ class AgentPickerE2eTest {
             // The choice before the first prompt: the agent of the registry answers right away, without a notice.
             awaitShown(first, "Prompt 1 of")
             awaitIdle(first)
-            awaitTag(AgentTags.AGENT_NEW).performClick()
-            val second = checkNotNull(app.project.agent.current)
+            val second = startAnotherConversation(app)
             // The new conversation starts with the agent last chosen, and counts on its own session.
             assertEquals(first.agent, second.agent)
             awaitAgent("Fake Agent")

@@ -309,7 +309,7 @@ fun NoTab(agent: AgentState) {
     ) {
         Label("No conversation open", color = IdeColors.TextSecondary, fontSize = 14.sp)
         Spacer(Modifier.height(12.dp))
-        IdeButton("New conversation", { agent.newConversation() }, primary = true)
+        IdeButton("New conversation", { agent.requestNewConversation() }, primary = true)
         Spacer(Modifier.height(16.dp))
         Label("Ctrl+Alt+N  new conversation   ·   Ctrl+Alt+A  back to the editors", color = IdeColors.TextSecondary)
     }

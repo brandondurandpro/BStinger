@@ -1,5 +1,6 @@
 package org.example.kotlineditor.ui
 
+import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -7,6 +8,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -15,6 +17,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -163,11 +167,18 @@ private fun SelectAll(project: GitHost, changes: Int) {
 @Composable
 private fun ChangeList(project: GitHost, changes: List<Map.Entry<String, GitFileStatus>>) {
     val ordered = changes.map { it.key }
-    LazyColumn(Modifier.fillMaxSize()) {
-        items(changes, key = { it.key }) { (path, status) ->
-            val checked = path in project.git.selectedForCommit
-            ChangeRow(project, path, status, checked, picked = path in project.git.pickedChanges, ordered)
+    val state = rememberLazyListState()
+    Box(Modifier.fillMaxSize()) {
+        LazyColumn(Modifier.fillMaxSize(), state) {
+            items(changes, key = { it.key }) { (path, status) ->
+                val checked = path in project.git.selectedForCommit
+                ChangeRow(project, path, status, checked, picked = path in project.git.pickedChanges, ordered)
+            }
         }
+        VerticalScrollbar(
+            rememberScrollbarAdapter(state),
+            Modifier.align(Alignment.CenterEnd).fillMaxHeight().testTag(GitTags.GIT_SCROLLBAR),
+        )
     }
 }
 

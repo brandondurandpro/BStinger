@@ -1,17 +1,19 @@
 package org.example.kotlineditor.e2e
 
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.state.WorkMode
-import org.example.kotlineditor.state.groupByFolder
 import org.example.kotlineditor.ui.AgentTags
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-/** The list of conversations in two levels: the project, then the folder each conversation works in. */
+/** The list of conversations under their project, without a sub-group by folder or branch. */
 @OptIn(ExperimentalTestApi::class)
 class AgentFoldersE2eTest {
     private val project = SampleProject.standard()
@@ -22,7 +24,7 @@ class AgentFoldersE2eTest {
     }
 
     @Test
-    fun `the conversations are grouped by project and folder, and a group folds`() =
+    fun `the conversations are listed flat under the project, and the group folds`() =
         runComposeUiTest {
             project.commitAll()
             val app = launchWithProject(project, agentPreferences())
@@ -37,9 +39,11 @@ class AgentFoldersE2eTest {
                 val workspace = second.workspace
                 second.mode == WorkMode.Worktree && !second.preparingWorktree && workspace != null && workspace !== app.project
             }
-            val groups = app.project.agent.groupByFolder(app.project.agent.conversations.toList())
-            assertEquals(2, groups.size, "the project folder and the worktree: ${groups.map { it.label }}")
-            assertTrue(groups.first().label.startsWith("Project folder"), "the project itself comes first")
+            // One header only: the project; none for the folder or the branch of the worktree.
+            assertEquals(1, onAllNodes(hasTestTag(AgentTags.AGENT_PROJECT_GROUP)).fetchSemanticsNodes().size)
+            val headers = onAllNodes(SemanticsMatcher("a group header") { it.config.contains(SemanticsProperties.TestTag) })
+            val tags = headers.fetchSemanticsNodes().map { it.config[SemanticsProperties.TestTag] }
+            assertTrue(tags.none { it.startsWith("agent.group.folder.") }, "no folder header: $tags")
             awaitTag(AgentTags.agentConversation(first.id))
             awaitTag(AgentTags.agentConversation(second.id))
             // Folding the project hides all its conversations; unfolding brings them back.

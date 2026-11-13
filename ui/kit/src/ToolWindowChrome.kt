@@ -2,6 +2,7 @@ package org.example.kotlineditor.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -101,6 +103,30 @@ class ToolWindowDrag {
     }
 }
 
+/** The fold state of the card a header belongs to, when the card can be folded (agent mode's left column). */
+class CardFold(val folded: Boolean, val tag: String, val toggle: () -> Unit)
+
+val LocalCardFold = compositionLocalOf<CardFold?> { null }
+
+/** The chevron at the start of a header that folds or unfolds its card; nothing when the card cannot fold. */
+@Composable
+fun FoldChevron() {
+    val fold = LocalCardFold.current ?: return
+    Box(
+        Modifier.size(HEADER_HEIGHT - 10.dp).clickable(onClick = fold.toggle).testTag(fold.tag),
+        contentAlignment = Alignment.Center,
+    ) {
+        Chevron(expanded = !fold.folded)
+    }
+}
+
+/** Makes the title it is applied to fold or unfold its card on a click; unchanged when the card cannot fold. */
+@Composable
+fun Modifier.foldOnClick(): Modifier {
+    val fold = LocalCardFold.current ?: return this
+    return clickable(onClick = fold.toggle)
+}
+
 /** Header of a tool window: its title, actions, and the drag that moves the panel to another dock. */
 @Composable
 fun ToolWindowHeader(
@@ -149,10 +175,11 @@ fun ToolWindowHeader(
         header.testTag(Tags.toolHeader(window.name)).padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        FoldChevron()
         if (middle == null) {
-            Label(title, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            Label(title, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f).foldOnClick())
         } else {
-            Label(title, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(end = 8.dp))
+            Label(title, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(end = 8.dp).foldOnClick())
             middle()
         }
         trailing()

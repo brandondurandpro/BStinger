@@ -60,8 +60,29 @@ fun withoutRealAgent(preferences: PreferenceStore): PreferenceStore =
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.startConversation(app: E2eApp): Conversation {
     awaitTag(AgentTags.MODE_AGENT).performClick()
-    awaitTag(AgentTags.AGENT_NEW).performClick()
+    clickNewConversation(app)
     awaitTag(AgentTags.AGENT_PROMPT)
+    return checkNotNull(app.project.agent.current) { "No conversation open" }
+}
+
+/** Clicks + and, in a repository, answers the question "from which branch?" with the project's own branch. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.clickNewConversation(app: E2eApp) {
+    val known = app.project.agent.conversations.size
+    awaitTag(AgentTags.AGENT_NEW).performClick()
+    awaitCondition { app.project.agent.conversations.size > known || isShown(AgentTags.AGENT_BASE_PICKER) }
+    if (isShown(AgentTags.AGENT_BASE_PICKER)) awaitTag(AgentTags.AGENT_BASE_PROJECT).performClick()
+}
+
+/**
+ * Starts another conversation with the + button, and returns it once it is open. The conversation starts after the
+ * server said whether the project is a repository (a repository first asks the branch: [AgentTags.AGENT_BASE_PICKER]).
+ */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.startAnotherConversation(app: E2eApp): Conversation {
+    val known = app.project.agent.conversations.size
+    clickNewConversation(app)
+    awaitCondition { app.project.agent.conversations.size > known }
     return checkNotNull(app.project.agent.current) { "No conversation open" }
 }
 

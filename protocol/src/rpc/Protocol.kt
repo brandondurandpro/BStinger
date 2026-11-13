@@ -445,6 +445,9 @@ enum class Method(
     /** A page of the commits of a branch. */
     GitLog("git/log", mutating = false),
 
+    /** How many commits HEAD is ahead of and behind a branch. */
+    GitAheadBehind("git/aheadBehind", mutating = false),
+
     /** A page of the commits of a branch that match a search. */
     GitSearchLog("git/searchLog", mutating = false),
 
