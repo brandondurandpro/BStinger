@@ -125,6 +125,23 @@ object EditorTags {
 
     fun commitDiffTabClose(hash: String, relativePath: String) = "tab.commitDiff.close:$hash:$relativePath"
 
+    /** The review tab, led by hand. */
+    const val REVIEW = "review"
+    const val REVIEW_LIST = "review.list"
+    const val REVIEW_PROGRESS = "review.progress"
+    const val REVIEW_DIFF_AREA = "review.diffArea"
+    const val REVIEW_EMPTY = "review.empty"
+    const val REVIEW_LOADING = "review.loading"
+    const val REVIEW_ERROR = "review.error"
+    const val REVIEW_TAB = "tab.review"
+    const val REVIEW_TAB_CLOSE = "tab.review.close"
+
+    /** The row of the file at [relativePath] in the review list: a click shows its diff. */
+    fun reviewFile(relativePath: String) = "review.file:$relativePath"
+
+    /** The OK checkbox of the file at [relativePath] in the review list. */
+    fun reviewCheck(relativePath: String) = "review.check:$relativePath"
+
     fun diffLine(index: Int) = "diff.line:$index"
 
     fun diffLineKind(index: Int, kind: String) = "diff.line:$index:$kind"

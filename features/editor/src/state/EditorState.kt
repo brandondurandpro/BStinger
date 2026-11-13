@@ -17,6 +17,9 @@ import java.io.IOException
 
 private const val MAX_RECENT_FILES = 50
 
+// A review belongs to no file: its tab is told apart by its mode, this entry only gives it a name.
+private val REVIEW_ENTRY = FileEntry(path = "review", name = "Review", isDirectory = false)
+
 /**
  * Open editors: one pane, or two after "Split Right". Every action applies to the active pane; a file open in
  * both panes shares its [Document]. Closing the active tab activates the most recently used one, like IntelliJ.
@@ -69,6 +72,21 @@ class EditorState(
     /** Opens (or activates) the merge tab of the conflicted [entry]: its three versions side by side. */
     fun openMerge(entry: FileEntry): EditorTab = openIn(activePane, entry, diff = true, merge = true)
 
+    /**
+     * Opens (or activates) the review tab of [files], whose paths are relative to the project root. Opened again, the
+     * tab keeps the verdicts of the files that are still there.
+     */
+    fun openReview(files: List<ReviewFile>, mode: ReviewMode = ReviewMode.Manual): EditorTab {
+        val tab = openIn(activePane, REVIEW_ENTRY, diff = true, review = mode)
+        val current = (tab.status as? TabStatus.Review)?.state
+        val state = current ?: ReviewState(mode).also { tab.status = TabStatus.Review(it) }
+        state.update(files)
+        return tab
+    }
+
+    /** The changes of [entry] against HEAD (what a diff tab shows, and the review next to it). */
+    suspend fun diffLines(entry: FileEntry): List<DiffLine> = files.diffLines(entry)
+
     /** Recomputes every open diff tab (the Git status changed); compare and merge tabs hold their own content. */
     fun reloadDiffs() = allTabs.filter { it.isUncommittedDiff() }.forEach(files::loadDiff)
 
@@ -101,8 +119,9 @@ class EditorState(
         commit: CommitDiffTarget? = null,
         compare: Boolean = false,
         merge: Boolean = false,
+        review: ReviewMode? = null,
     ): EditorTab {
-        val key = tabKey(entry, diff, commit, compare, merge)
+        val key = tabKey(entry, diff, commit, compare, merge, review)
         val tab =
             pane.tabs.firstOrNull { it.key == key } ?: EditorTab(
                 entry,
@@ -111,6 +130,7 @@ class EditorState(
                 commit,
                 compare,
                 merge,
+                review,
             ).also { tab ->
                 val insertAt = pane.activeTab?.let { pane.tabs.indexOf(it) + 1 } ?: pane.tabs.size
                 pane.tabs.add(insertAt, tab)
@@ -149,6 +169,8 @@ class EditorState(
         tab.lastActivated = ++activationCounter
         pane.activeTab = tab
         activePane = pane
+        // A review is no file to come back to with Ctrl+E.
+        if (tab.isReview) return
         recentFiles.remove(tab.entry)
         recentFiles.add(0, tab.entry)
         if (recentFiles.size > MAX_RECENT_FILES) recentFiles.removeAt(recentFiles.lastIndex)
@@ -232,7 +254,7 @@ class EditorState(
 
 // A diff of the working tree against HEAD, the one a save or a commit changes (not a commit's, a compare, a merge).
 private fun EditorTab.isUncommittedDiff(): Boolean {
-    val other = isCompare || isMerge || commit != null
+    val other = isCompare || isMerge || isReview || commit != null
     return isDiff && !other
 }
 

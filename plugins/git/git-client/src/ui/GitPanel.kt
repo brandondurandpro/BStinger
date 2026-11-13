@@ -153,6 +153,16 @@ private fun SelectAll(project: GitHost, changes: Int) {
         }
         Label("Changes ($changes)", Modifier.padding(start = 8.dp), color = IdeColors.TextSecondary, fontSize = 11.sp)
         Box(Modifier.weight(1f))
+        Label(
+            "Review manually",
+            Modifier
+                .clickable { project.openManualReview(project.git.status.keys.sorted()) }
+                .testTag(GitTags.GIT_REVIEW_MANUAL)
+                .padding(horizontal = 6.dp, vertical = 2.dp),
+            color = IdeColors.TextSecondary,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+        )
         val checkedFiles = project.git.selectedForCommit
         if (checkedFiles.isNotEmpty()) {
             ConfirmButton("Revert checked", GitTags.GIT_REVERT_CHECKED, enabled = !project.git.busy) {
