@@ -37,6 +37,17 @@ class ToolbarLayoutE2eTest {
         }
 
     @Test
+    fun `the Git branches button is the lowest of the tool buttons, above the gear`() =
+        runComposeUiTest {
+            launchWithProject(project)
+            val branches = awaitTag(AppTags.TOOL_BRANCHES).getBoundsInRoot()
+            val gear = awaitTag(AppTags.STRIP_SETTINGS).getBoundsInRoot()
+            val terminal = awaitTag(AppTags.TOOL_TERMINAL).getBoundsInRoot()
+            assertTrue(terminal.bottom.value <= branches.top.value, "the branches are not under the terminal")
+            assertTrue(branches.bottom.value <= gear.top.value, "the gear is not under the branches")
+        }
+
+    @Test
     fun `the search sits in the middle of the toolbar, between the project and the Deploy button`() =
         runComposeUiTest {
             launchWithProject(project)

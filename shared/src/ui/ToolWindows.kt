@@ -71,6 +71,7 @@ private fun ColumnScope.ToolButtons(project: ProjectState, devtools: Boolean, re
     Spacer(Modifier.weight(1f))
     // Bottom tool windows sit at the bottom of the strip, like in IntelliJ's New UI.
     shown.filter { it.group == StripGroup.Bottom }.forEach { ToolButton(project, it.window, it.tag, it.icon) }
+    shown.filter { it.group == StripGroup.Last }.forEach { ToolButton(project, it.window, it.tag, it.icon) }
 }
 
 // The button of a tool window: a muted icon, lit up on a filled background while its window is open.

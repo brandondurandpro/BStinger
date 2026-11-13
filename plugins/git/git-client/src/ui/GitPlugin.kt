@@ -25,7 +25,7 @@ fun branchesToolWindow(): ToolWindowContribution =
     ToolWindowContribution(
         defaults = ToolWindowDefaults(ToolWindow.Branches, Dock.Bottom),
         tag = GitTags.TOOL_BRANCHES,
-        group = StripGroup.Top,
+        group = StripGroup.Last,
         // Shown again: the branches and the history may have changed meanwhile. The first time, the panel itself
         // selects the current branch once it is known (`BranchesPanel`).
         onShown = { host ->
