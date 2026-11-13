@@ -35,10 +35,12 @@ class LocalServerTest {
     private fun start(
         java: String? = LocalServer.javaLauncher(),
         classpath: String = System.getProperty("java.class.path"),
+        binary: String? = null,
     ): LocalServer {
         val settings =
             LocalServer.Settings(
                 java = java,
+                binary = binary,
                 classpath = classpath,
                 serverArguments = serverArguments,
                 services = { LocalServices(data.toFile()) },
@@ -155,6 +157,32 @@ class LocalServerTest {
         awaitCondition("the fallback") { server.inProcess }
         assertTrue(answers(client), "the client created at start reaches the fallback server")
         assertTrue(warnings.any { "while starting" in it }, "the fallback is reported: $warnings")
+    }
+
+    @Test
+    fun `a native binary that cannot run falls back to the IDE's JVM, and the failure is reported`() {
+        val missing = File(data.toFile(), "no-such-server").path
+        val server = start(binary = missing)
+
+        assertTrue(server.inProcess)
+        assertTrue(answers(clientOf(server)))
+        assertTrue(warnings.any { missing in it }, "the failure is reported: $warnings")
+    }
+
+    @Test
+    fun `the native binary is the configured file, when it can run and no server plugin is installed`() {
+        val plugins = File(data.toFile(), "server-plugins")
+        val binary = File(data.toFile(), "server").apply { writeText("") }
+        assertEquals(null, LocalServer.nativeBinary(null, plugins))
+        assertEquals(null, LocalServer.nativeBinary("  ", plugins))
+        assertEquals(null, LocalServer.nativeBinary(File(data.toFile(), "missing").path, plugins))
+        // Windows has no executable bit: every file can be executed there.
+        if (!binary.canExecute()) assertEquals(null, LocalServer.nativeBinary(binary.path, plugins))
+        binary.setExecutable(true)
+        assertEquals(binary.path, LocalServer.nativeBinary(binary.path, plugins))
+        // A native binary cannot load the jar of a plugin: the server then runs on a JVM.
+        File(plugins, "some-plugin").mkdirs()
+        assertEquals(null, LocalServer.nativeBinary(binary.path, plugins))
     }
 
     private fun startJava(vararg arguments: String): Process {

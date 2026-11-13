@@ -1,12 +1,10 @@
 package org.example.kotlineditor.memory
 
-import com.sun.management.HotSpotDiagnosticMXBean
 import java.io.Closeable
 import java.lang.foreign.FunctionDescriptor
 import java.lang.foreign.Linker
 import java.lang.foreign.ValueLayout
 import java.lang.invoke.MethodHandle
-import java.lang.management.ManagementFactory
 import kotlin.concurrent.thread
 
 /**
@@ -39,9 +37,10 @@ class MemoryReturn(
 
     @Volatile private var watcher: Thread? = null
 
-    // The options of HotSpot that can be read and set while running; `null` in another JVM.
-    private val diagnostics: HotSpotDiagnosticMXBean? =
-        ManagementFactory.getPlatformMXBean(HotSpotDiagnosticMXBean::class.java)
+    // Compiled by GraalVM: its serial collector only runs when an allocation finds the young generation full.
+    private val isNativeImage = System.getProperty(NATIVE_IMAGE_PROPERTY) != null
+
+    private val vmOptions = VmOptions()
 
     /** Whether this C library can give freed memory back (glibc). */
     val canTrim: Boolean get() = mallocTrim != null
@@ -64,10 +63,10 @@ class MemoryReturn(
     }
 
     /** The interval of the collections of an idle JVM, in milliseconds; `null` when this JVM has none. */
-    fun idleGcInterval(): Long? = vmOption(PERIODIC_GC)?.toLongOrNull()
+    fun idleGcInterval(): Long? = vmOptions.get(PERIODIC_GC)?.toLongOrNull()
 
     /** The share of the heap a collection may leave free, in percent; `null` when this JVM has no such limit. */
-    fun maxHeapFree(): Long? = vmOption(MAX_HEAP_FREE)?.toLongOrNull()
+    fun maxHeapFree(): Long? = vmOptions.get(MAX_HEAP_FREE)?.toLongOrNull()
 
     override fun close() {
         watcher?.interrupt()
@@ -75,9 +74,15 @@ class MemoryReturn(
     }
 
     private fun watch() {
+        var usedAfterCollection = usedHeap()
         try {
             while (!Thread.currentThread().isInterrupted) {
                 Thread.sleep(trimIntervalMs)
+                val grown = usedHeap() - usedAfterCollection >= NATIVE_GARBAGE_BYTES
+                if (isNativeImage && grown) {
+                    collectNativeImageHeap()
+                    usedAfterCollection = usedHeap()
+                }
                 trimNow()
             }
         } catch (_: InterruptedException) {
@@ -85,10 +90,18 @@ class MemoryReturn(
         }
     }
 
+    private fun usedHeap(): Long = Runtime.getRuntime().let { it.totalMemory() - it.freeMemory() }
+
+    // A native binary has no collector that works while the server is idle, and no periodic collection: what a
+    // burst left in its heap stayed resident for good. A full collection of a few dozen megabytes alive takes
+    // milliseconds, and is only asked for after the heap has grown.
+    @Suppress("ExplicitGarbageCollectionCall")
+    private fun collectNativeImageHeap() = System.gc()
+
     // Leaves alone an interval given on the command line.
     private fun collectWhenIdle() {
         if (idleGcInterval() != 0L) return
-        setVmOption(PERIODIC_GC, idleGcIntervalMs)
+        vmOptions.set(PERIODIC_GC, idleGcIntervalMs)
     }
 
     // Leaves alone ratios given on the command line. The minimum first: it may not exceed the maximum.
@@ -96,24 +109,9 @@ class MemoryReturn(
         val isDefault = maxHeapFree() == DEFAULT_MAX_HEAP_FREE_PERCENT
         if (!isDefault) return
         val minHeapFreePercent = minOf(MIN_HEAP_FREE_PERCENT, maxHeapFreePercent)
-        setVmOption(MIN_HEAP_FREE, minHeapFreePercent)
-        setVmOption(MAX_HEAP_FREE, maxHeapFreePercent)
+        vmOptions.set(MIN_HEAP_FREE, minHeapFreePercent)
+        vmOptions.set(MAX_HEAP_FREE, maxHeapFreePercent)
     }
-
-    private fun setVmOption(name: String, value: Long) {
-        try {
-            diagnostics?.setVMOption(name, value.toString())
-        } catch (_: IllegalArgumentException) {
-            // Not a flag this JVM lets change: it keeps its heap as before.
-        }
-    }
-
-    private fun vmOption(name: String): String? =
-        try {
-            diagnostics?.getVMOption(name)?.value
-        } catch (_: IllegalArgumentException) {
-            null // Another collector than G1, another JVM than HotSpot.
-        }
 
     // A function of glibc, `null` in another C library.
     private fun find(name: String, signature: FunctionDescriptor): MethodHandle? {
@@ -124,6 +122,11 @@ class MemoryReturn(
 
     private companion object {
         const val PERIODIC_GC = "G1PeriodicGCInterval"
+        const val NATIVE_IMAGE_PROPERTY = "org.graalvm.nativeimage.imagecode"
+
+        // Less than this since the last collection is not worth one.
+        const val NATIVE_GARBAGE_BYTES = 8L * 1024 * 1024
+
         const val MIN_HEAP_FREE = "MinHeapFreeRatio"
         const val MAX_HEAP_FREE = "MaxHeapFreeRatio"
 
