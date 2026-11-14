@@ -98,6 +98,9 @@ object AgentTags {
     const val AGENT_COMPLETION = "agent.completion"
     const val AGENT_TERMINAL = "agent.terminal"
 
+    /** The link that folds and unfolds a run of tool calls. */
+    const val AGENT_TOOLS_TOGGLE = "agent.tools.toggle"
+
     /** The change a tool call makes to a file: its first lines. */
     const val AGENT_DIFF = "agent.diff"
 
@@ -144,6 +147,10 @@ object AgentTags {
     const val AGENT_BASE_FETCH_ERROR = "agent.basePicker.fetchError"
 
     fun agentBase(branch: String) = "agent.basePicker.branch:$branch"
+    const val AGENT_BASE_OTHER_PROJECT = "agent.basePicker.otherProject"
+    const val AGENT_BASE_BROWSE = "agent.basePicker.browse"
+
+    fun agentBaseProject(path: String) = "agent.basePicker.projectChoice:$path"
     const val AGENT_LAST_MESSAGE = "agent.lastMessage"
 
     fun agentConversationAgent(id: Int) = "agent.conversation.$id.agent"

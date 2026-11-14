@@ -7,6 +7,7 @@ package org.example.kotlineditor.ui
 @Suppress("TooManyFunctions")
 object AppTags {
     const val WELCOME = "welcome"
+    const val PROJECT_NEW_WINDOW = "project.newWindow"
     const val WELCOME_OPEN = "welcome.open"
     const val WELCOME_SEARCH = "welcome.search"
     const val WELCOME_ERROR = "welcome.error"
@@ -33,6 +34,7 @@ object AppTags {
     const val HOME_STATUS_BAR = "home.statusBar"
     const val PROJECT_SETTINGS = "project.settings"
     const val STRIP_SETTINGS = "strip.settings"
+    const val TOOLBAR_LEFT_COLUMN = "toolbar.leftColumn"
     const val WELCOME_SETTINGS = "welcome.settings"
     const val SETTINGS = "settings"
     const val SETTINGS_CLOSE = "settings.close"

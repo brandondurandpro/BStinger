@@ -147,6 +147,20 @@ internal fun ProjectWidget(app: AppState, project: ProjectState) {
     }
 }
 
+// Only where the app can add windows (the desktop app).
+@Composable
+private fun NewWindowMenuItem(app: AppState, close: () -> Unit) {
+    if (app.onNewWindow == null) return
+    IdeMenuItem(
+        text = { Text("New Window", fontSize = 13.sp) },
+        onClick = {
+            close()
+            app.openNewWindow()
+        },
+        modifier = Modifier.testTag(AppTags.PROJECT_NEW_WINDOW),
+    )
+}
+
 @Composable
 internal fun ProjectMenuItems(app: AppState, home: Boolean = false, close: () -> Unit) {
     IdeMenuItem(
@@ -157,6 +171,7 @@ internal fun ProjectMenuItems(app: AppState, home: Boolean = false, close: () ->
         },
         modifier = Modifier.testTag(AppTags.PROJECT_OPEN_OTHER),
     )
+    NewWindowMenuItem(app, close)
     if (!home) HomepageMenuItem(app, close)
     RemoteMenuItem(app, close)
     SettingsMenuItem(app, close)

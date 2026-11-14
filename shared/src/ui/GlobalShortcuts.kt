@@ -166,6 +166,8 @@ internal val BUILT_IN_IDE_SHORTCUTS =
         bind(setOf(Key.Zero, Key.NumPad0), shift = true, alt = true) { app.settings.resetEditorZoom() },
         bind(setOf(Key.F1), alt = true) { revealActiveFile() },
         bind(setOf(Key.S), ctrl = true, alt = true) { app.settings.open() },
+        // Ctrl+Alt+Shift+W: another IDE window, on the same server (desktop app only).
+        bind(setOf(Key.W), ctrl = true, shift = true, alt = true) { app.openNewWindow() },
         bind(setOf(Key.S), ctrl = true) { editor.saveAll() },
         bind(setOf(Key.F4), ctrl = true) { editor.activeTab?.let(editor::close) },
         // Jump to Source: from a diff tab, the file itself.

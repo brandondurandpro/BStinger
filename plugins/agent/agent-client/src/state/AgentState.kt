@@ -5,6 +5,7 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -252,6 +253,9 @@ class Conversation(val id: Int, title: String, val branch: String) {
             val from = probeFrom ?: return items
             return items.take(from)
         }
+
+    /** Ids of the first tool call of each run of tool calls the user opened: the others stay folded behind a link. */
+    internal val openedToolRuns = mutableStateMapOf<String, Boolean>()
 
     /** True when a turn ended since the quota was read: it is read again once the agent is free. */
     internal var quotaStale by mutableStateOf(false)
@@ -541,6 +545,25 @@ class AgentState(
         if (base == null) return
         conversation.base = base
         setMode(conversation, WorkMode.Worktree)
+    }
+
+    /**
+     * The user chose another project in the picker: it opens in another window, which asks its own question "from
+     * which branch?". No conversation starts in this one.
+     */
+    fun chooseProject(path: String) {
+        val picker = basePicker ?: return
+        picker.loading?.cancel()
+        basePicker = null
+        project.startConversationIn(path)
+    }
+
+    /** The user wants a directory that is no recent project: the Open Project dialog, which can create it. */
+    fun browseProject() {
+        val picker = basePicker ?: return
+        picker.loading?.cancel()
+        basePicker = null
+        project.browseProjectForConversation()
     }
 
     /** The user closed the picker: no conversation starts. */
@@ -851,6 +874,10 @@ class BasePicker {
 
     /** True while the remote branches are being fetched. */
     var fetching by mutableStateOf(false)
+        internal set
+
+    /** True while the picker lists the other projects instead of the branches. */
+    var choosingProject by mutableStateOf(false)
         internal set
 
     internal var loading: Job? = null

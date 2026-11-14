@@ -251,6 +251,25 @@ private class PluginSetup(private val loaded: List<AutoCloseable>, val installed
     }
 }
 
+private fun appStateOf(
+    services: AppServices,
+    scope: CoroutineScope,
+    preferences: PreferenceStore,
+    grammars: GrammarStore?,
+    telemetry: ((String) -> Telemetry)?,
+    initialProject: String?,
+): AppState =
+    AppState(
+        services,
+        scope,
+        preferences,
+        grammars,
+        services,
+        JvmRemoteFactory,
+        telemetry,
+        initialProject = initialProject,
+    )
+
 /**
  * Starts the app as in production: a real [EditorServer] (data in a temporary directory) and the UI talking to
  * it through the network client. Everything the e2e tests do therefore goes through the protocol.
@@ -271,6 +290,8 @@ fun ComposeUiTest.launchApp(
     /** A folder of installed plugins (jars), loaded before the UI starts and unloaded when the test ends. */
     pluginsDirectory: File? = null,
     ssh: List<String>? = null,
+    /** A project the window opens at startup, in agent mode on the question of a new conversation (an added window). */
+    initialProject: String? = null,
 ): E2eApp {
     TextClipboard.useSystem = false
     val pluginSetup = PluginSetup(plugins.map(::loadPlugin), pluginsDirectory?.let { startPlugins(it) })
@@ -299,7 +320,7 @@ fun ComposeUiTest.launchApp(
         val scope = rememberCoroutineScope()
         val state =
             remember {
-                AppState(services, scope, withoutRealAgent(preferences), grammars, services, JvmRemoteFactory, measured)
+                appStateOf(services, scope, withoutRealAgent(preferences), grammars, measured, initialProject)
             }
         created = state
         state.plugins = pluginSetup.installed

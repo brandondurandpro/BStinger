@@ -448,6 +448,9 @@ enum class Method(
     /** Remote-tracking branches. */
     GitRemoteBranches("git/remoteBranches", mutating = false),
 
+    /** The default branch of the remote. */
+    GitDefaultRemoteBranch("git/defaultRemoteBranch", mutating = false),
+
     /** A page of the commits of a branch. */
     GitLog("git/log", mutating = false),
 

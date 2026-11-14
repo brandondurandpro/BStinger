@@ -1,6 +1,9 @@
 package org.example.kotlineditor
 
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.withFrameNanos
@@ -10,6 +13,7 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import org.example.kotlineditor.memory.MemoryReturn
+import org.example.kotlineditor.model.AppServices
 import org.example.kotlineditor.remote.JvmRemoteFactory
 import org.example.kotlineditor.rpc.Protocol
 import org.example.kotlineditor.rpc.RpcClient
@@ -63,35 +67,73 @@ fun main(args: Array<String>) {
     val plugins = ClientPlugins().also(ClientPlugins::start)
     val exporter = DesktopExporter()
     application {
-        val scope = rememberCoroutineScope()
-        val state =
-            remember {
-                AppState(
-                    services,
-                    scope,
-                    FilePreferenceStore(),
-                    grammarStore(),
-                    localServices,
-                    JvmRemoteFactory,
-                    telemetryOf = exporter::telemetryOf,
-                ).also { it.plugins = plugins }
-            }
         LaunchedEffect(Unit) { measureStartup() }
         LaunchedEffect(Unit) { plugins.keepServerInSync(client) }
-        Window(
-            onCloseRequest = {
-                state.exit {
-                    plugins.stop()
-                    client.close()
-                    closeInParallel(local, exporter)
-                    exitApplication()
-                }
-            },
-            title = state.title,
-            state = rememberWindowState(size = DpSize(1280.dp, 820.dp)),
-        ) {
-            App(state)
+        val windows = remember { mutableStateListOf(WindowId()) }
+        for (id in windows.toList()) {
+            key(id) {
+                IdeWindow(
+                    services = services,
+                    localServices = localServices,
+                    plugins = plugins,
+                    exporter = exporter,
+                    firstWindow = id === windows.firstOrNull(),
+                    initialProject = id.projectPath,
+                    onNewWindow = { projectPath -> windows.add(WindowId(projectPath)) },
+                    onClosed = {
+                        windows.remove(id)
+                        if (windows.isEmpty()) {
+                            plugins.stop()
+                            client.close()
+                            closeInParallel(local, exporter)
+                            exitApplication()
+                        }
+                    },
+                )
+            }
         }
+    }
+}
+
+/** One IDE window; every window has its own state (project, tabs) on the server shared by all of them. */
+private class WindowId(val projectPath: String? = null)
+
+@Composable
+private fun IdeWindow(
+    services: AppServices,
+    localServices: AppServices?,
+    plugins: ClientPlugins,
+    exporter: DesktopExporter,
+    firstWindow: Boolean,
+    initialProject: String?,
+    onNewWindow: (String?) -> Unit,
+    onClosed: () -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    val state =
+        remember {
+            AppState(
+                services,
+                scope,
+                FilePreferenceStore(),
+                grammarStore(),
+                localServices,
+                JvmRemoteFactory,
+                telemetryOf = exporter::telemetryOf,
+                // The windows added by the user open on the welcome screen, with no project.
+                reopenLastProject = firstWindow,
+                initialProject = initialProject,
+            ).also {
+                it.plugins = plugins
+                it.onNewWindow = onNewWindow
+            }
+        }
+    Window(
+        onCloseRequest = { state.exit(onClosed) },
+        title = state.title,
+        state = rememberWindowState(size = DpSize(1280.dp, 820.dp)),
+    ) {
+        App(state)
     }
 }
 
@@ -142,7 +184,7 @@ private val localServerLog = LoggerFactory.getLogger(LocalServer::class.java)
 
 /** The telemetry of the IDE window, exported to OpenTelemetry once the user agreed. */
 private class DesktopExporter : AutoCloseable {
-    private var hook: OtelHook? = null
+    private val hooks = mutableListOf<OtelHook>()
 
     fun telemetryOf(instanceId: String): Telemetry {
         val config =
@@ -153,13 +195,13 @@ private class DesktopExporter : AutoCloseable {
                 instanceId = instanceId,
             )
         val created = OtelHook(config)
-        hook = created
+        synchronized(hooks) { hooks.add(created) }
         return HookedTelemetry(listOf(created), Side.Client)
     }
 
     // What is queued leaves before the IDE exits, waiting at most the export's timeout.
     override fun close() {
-        hook?.close()
+        synchronized(hooks) { hooks.forEach(OtelHook::close) }
     }
 }
 

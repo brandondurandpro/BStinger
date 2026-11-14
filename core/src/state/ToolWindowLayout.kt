@@ -2,8 +2,11 @@ package org.example.kotlineditor.state
 
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 
 /**
  * A panel around the editors; their buttons stay in the left strip wherever the panels are docked. Network is a
@@ -94,6 +97,9 @@ class ToolWindowLayout(defaults: List<ToolWindowDefaults> = BUILT_IN_TOOL_WINDOW
     private val weights = mutableStateMapOf<ToolWindow, Float>()
     private val panes = mutableStateMapOf<Pane, Float>()
 
+    /** Whether the IDE hides its left column, whatever the windows in it; the windows keep their own visibility. */
+    var leftColumnHidden by mutableStateOf(false)
+
     init {
         defaults.forEach(::add)
     }
@@ -126,10 +132,15 @@ class ToolWindowLayout(defaults: List<ToolWindowDefaults> = BUILT_IN_TOOL_WINDOW
         panes[pane] = (widthOf(pane) + delta).coerceIn(MIN_PANE, MAX_PANE)
     }
 
+    fun toggleLeftColumn() {
+        leftColumnHidden = !leftColumnHidden
+    }
+
     fun isVisible(window: ToolWindow): Boolean = shown[window] == true
 
     fun setVisible(window: ToolWindow, visible: Boolean) {
         shown[window] = visible
+        if (visible && dockOf(window) == Dock.Left) leftColumnHidden = false
     }
 
     fun toggle(window: ToolWindow) = setVisible(window, !isVisible(window))

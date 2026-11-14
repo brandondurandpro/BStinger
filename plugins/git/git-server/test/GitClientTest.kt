@@ -528,6 +528,18 @@ class GitClientTest {
         }
 
     @Test
+    fun `the default branch of the remote is what its HEAD points to`() =
+        runBlocking {
+            val (default, _) = projectWithRemote()
+            val client = CliGitClient()
+            git("remote", "set-head", "origin", default)
+            assertEquals("origin/$default", client.defaultRemoteBranch(root.toString()))
+            git("push", "-q", "origin", "HEAD:feature")
+            git("remote", "set-head", "origin", "feature")
+            assertEquals("origin/feature", client.defaultRemoteBranch(root.toString()))
+        }
+
+    @Test
     fun `blame reports the author and the date of every line`() =
         runBlocking {
             root.resolve("a.kt").writeText("one\ntwo\n")

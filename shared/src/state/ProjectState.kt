@@ -57,6 +57,8 @@ class ProjectState(
     val statusIndicators: StatusIndicators = StatusIndicators(preferences),
     /** The plugins installed in the IDE, for the Extensions window; none in previews. */
     val installedPlugins: () -> ClientPlugins? = { null },
+    /** Where agent mode can start a conversation in another project; null where no window can be added. */
+    private val windows: ProjectWindows? = null,
 ) : GitHost,
     TreeHost,
     LanguageServersHost,
@@ -122,6 +124,10 @@ class ProjectState(
             SettingsState({ servers }, scope).also { it.openUrl = { url -> openUrl(url) } }
         }
     }
+
+    override val canStartInOtherProject: Boolean get() = windows?.available?.invoke() == true
+
+    override val otherProjects: List<String> get() = windows?.projects?.invoke().orEmpty()
 
     val terminal = TerminalState(root.path, services.terminal, scope)
 
@@ -423,6 +429,14 @@ class ProjectState(
     override suspend fun openWorktree(branch: String, base: String?): AgentWorkspace = openWorktreeProject(branch, base)
 
     override suspend fun branchChoices(fetch: Boolean): BranchChoices? = branchChoicesOf(fetch)
+
+    override fun startConversationIn(path: String) {
+        windows?.open?.invoke(path)
+    }
+
+    override fun browseProjectForConversation() {
+        windows?.browse?.invoke()
+    }
 
     override fun agentAsking(title: String, question: String) {
         askingListener?.invoke(title, question)
