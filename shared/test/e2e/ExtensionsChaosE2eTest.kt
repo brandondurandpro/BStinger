@@ -196,8 +196,10 @@ class ExtensionsChaosE2eTest {
             awaitTag(EditorTags.extensionTab("plugin:todo"))
             awaitTag(AppTags.pluginToggle("todo"))
 
-            File(plugins, "todo").deleteRecursively()
             val installed = checkNotNull(app.installedPlugins)
+            // Windows locks the jar of a plugin that runs: there, no program can delete it before it is turned off.
+            if (WINDOWS_DISK) installed.setEnabled("todo", false)
+            assertTrue(File(plugins, "todo").deleteRecursively(), "the folder of the plugin could not be deleted")
             installed.start()
 
             awaitNoTag(AppTags.extension("plugin:todo"))

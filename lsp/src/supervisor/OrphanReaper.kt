@@ -59,6 +59,9 @@ class OrphanReaper(private val directory: Path) {
 
     /** Process helpers. */
     companion object {
+        // What the start time of a process started this instant may exceed the clock read here by.
+        private const val CLOCK_TOLERANCE_MS = 2_000L
+
         /** Start time of [process] in epoch milliseconds, 0 when the OS does not tell. */
         fun startOf(process: ProcessHandle): Long =
             process
@@ -90,7 +93,8 @@ class OrphanReaper(private val directory: Path) {
         fun ownDescendants(process: ProcessHandle, start: Long): List<ProcessHandle> {
             val reused = ProcessHandle.of(process.pid()).map { startOf(it) != start }.orElse(false)
             if (start == 0L || reused) return emptyList()
-            return ownTree(process, start, ::childrenOf, ::startOf)
+            val latestStart = System.currentTimeMillis() + CLOCK_TOLERANCE_MS
+            return ownTree(process, start, latestStart, ::childrenOf, ::startOf)
         }
 
         private fun childrenOf(process: ProcessHandle): List<ProcessHandle> =
@@ -100,13 +104,22 @@ class OrphanReaper(private val directory: Path) {
 
 /**
  * The processes below [root], which started at [rootStart], [childrenOf] naming the processes whose parent pid is
- * the pid of a process and [startOf] their start time (0: unknown).
+ * the pid of a process and [startOf] their start time (0: unknown). [latestStart] is the latest time a process can
+ * have started at: now.
  *
  * A process is its parent's only when it started after it: one that started before was started by a dead process
  * that had the same pid. Such a process is left out with everything below it, however recent: a process started a
- * moment ago by a stranger is not ours because it is young.
+ * moment ago by a stranger is not ours because it is young. One that says it started after [latestStart] is left
+ * out too: it started before the clock of the machine was set back (a virtual machine corrects its clock after it
+ * booted), which makes it older than it looks, not a child.
  */
-internal fun <P> ownTree(root: P, rootStart: Long, childrenOf: (P) -> List<P>, startOf: (P) -> Long): List<P> {
+internal fun <P> ownTree(
+    root: P,
+    rootStart: Long,
+    latestStart: Long,
+    childrenOf: (P) -> List<P>,
+    startOf: (P) -> Long,
+): List<P> {
     val own = LinkedHashSet<P>()
     val parents = ArrayDeque<Pair<P, Long>>()
     parents.addLast(root to rootStart)
@@ -114,7 +127,7 @@ internal fun <P> ownTree(root: P, rootStart: Long, childrenOf: (P) -> List<P>, s
         val (parent, parentStart) = parents.removeFirst()
         for (child in childrenOf(parent)) {
             val childStart = startOf(child)
-            val startedByParent = childStart != 0L && childStart >= parentStart
+            val startedByParent = childStart != 0L && childStart in parentStart..latestStart
             val isNew = child != root && child !in own
             if (!startedByParent || !isNew) continue
             own += child
