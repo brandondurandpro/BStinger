@@ -42,7 +42,7 @@ import kotlin.system.exitProcess
  * The IDE is a client of the Kotlin Editor server. By default the server is local: a child process on loopback with a
  * random token ([LocalServer]; in the IDE's JVM when no child can be started); `--server host:port --token-file
  * <file>` (or KOTLIN_EDITOR_SERVER / KOTLIN_EDITOR_TOKEN) uses another one. Remote Development from the welcome
- * screen installs and tunnels to a server on another machine.
+ * screen installs and tunnels to a server on another machine. `--open <folder>` opens that folder as a project.
  */
 fun main(args: Array<String>) {
     fun option(name: String) = args.indexOf("--$name").takeIf { it >= 0 }?.let { args.getOrNull(it + 1) }
@@ -64,12 +64,13 @@ fun main(args: Array<String>) {
     val localServices = services.takeIf { local != null }
 
     // The plugins installed by the user, in ~/.kotlin-editor/plugins; a plugin that fails stays off, the IDE starts.
+    val startFolder = option("open")?.let(::absoluteFolder)
     val plugins = ClientPlugins().also(ClientPlugins::start)
     val exporter = DesktopExporter()
     application {
         LaunchedEffect(Unit) { measureStartup() }
         LaunchedEffect(Unit) { plugins.keepServerInSync(client) }
-        val windows = remember { mutableStateListOf(WindowId()) }
+        val windows = remember { mutableStateListOf(WindowId(startFolder = startFolder)) }
         for (id in windows.toList()) {
             key(id) {
                 IdeWindow(
@@ -79,6 +80,7 @@ fun main(args: Array<String>) {
                     exporter = exporter,
                     firstWindow = id === windows.firstOrNull(),
                     initialProject = id.projectPath,
+                    startProject = id.startFolder,
                     onNewWindow = { projectPath -> windows.add(WindowId(projectPath)) },
                     onClosed = {
                         windows.remove(id)
@@ -96,7 +98,7 @@ fun main(args: Array<String>) {
 }
 
 /** One IDE window; every window has its own state (project, tabs) on the server shared by all of them. */
-private class WindowId(val projectPath: String? = null)
+private class WindowId(val projectPath: String? = null, val startFolder: String? = null)
 
 @Composable
 private fun IdeWindow(
@@ -106,6 +108,7 @@ private fun IdeWindow(
     exporter: DesktopExporter,
     firstWindow: Boolean,
     initialProject: String?,
+    startProject: String?,
     onNewWindow: (String?) -> Unit,
     onClosed: () -> Unit,
 ) {
@@ -123,6 +126,7 @@ private fun IdeWindow(
                 // The windows added by the user open on the welcome screen, with no project.
                 reopenLastProject = firstWindow,
                 initialProject = initialProject,
+                startProject = startProject,
             ).also {
                 it.plugins = plugins
                 it.onNewWindow = onNewWindow
@@ -143,6 +147,9 @@ private fun closeInParallel(vararg closeables: AutoCloseable?) {
     val threads = closeables.filterNotNull().map { closeable -> thread(name = "closing") { closeable.close() } }
     threads.forEach(Thread::join)
 }
+
+// `--open <folder>`: the `ide` script gives an absolute path.
+private fun absoluteFolder(path: String): String = File(path).canonicalPath
 
 // The secret of the server given with --server: --token-file, then --token (deprecated: every user of the machine
 // reads a command line with ps), then KOTLIN_EDITOR_TOKEN.

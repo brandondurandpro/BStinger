@@ -1,0 +1,26 @@
+#!/bin/sh
+#
+# Opens the IDE on a folder, from any directory (Linux and macOS):  ide [folder]   (the current directory by default)
+# Put a link to this file in your PATH:  ln -s "$PWD/ide" ~/.local/bin/ide      (Windows: ide.bat)
+#
+set -eu
+
+# Follows the links of the command to find the repository (macOS has no `readlink -f`).
+script=$0
+while [ -L "$script" ]; do
+    target=$(readlink "$script")
+    case "$target" in
+        /*) script=$target ;;
+        *) script=$(dirname "$script")/$target ;;
+    esac
+done
+repository=$(cd "$(dirname "$script")" && pwd -P)
+
+# The folder is resolved where the command was typed.
+if ! folder=$(cd "${1:-.}" 2>/dev/null && pwd -P); then
+    echo "ide: not a directory: ${1:-.}" >&2
+    exit 2
+fi
+
+cd "$repository"
+nohup ./kotlin run -m desktopApp -- --open "$folder" >"${TMPDIR:-/tmp}/kotlin-editor-ide.log" 2>&1 &

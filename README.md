@@ -19,6 +19,7 @@ Build the whole project with `./kotlin build`.
 Run each module from the command line:
 
 - Desktop app: `./kotlin run -m desktopApp`
+- Open a folder from any shell: `ide` (current directory) or `ide <folder>`. Linux and macOS: `ln -s "$PWD/ide" ~/.local/bin/ide`; Windows: add the repository to the `PATH` (`ide.bat`).
 
 ### Testing
 
