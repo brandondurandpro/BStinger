@@ -74,45 +74,49 @@ internal fun AgentState.followChanges() {
     }
 }
 
-/** Reads the uncommitted changes of the place [conversation] works in, with their lines counted. */
+/**
+ * Reads the uncommitted changes of the place [conversation] works in, with their lines counted. A reading of a place
+ * the conversation left meanwhile (the project, before its worktree opened) is dropped: it may end after the reading
+ * of the new place, and would replace it with the distance of the project from the base.
+ */
 fun AgentState.refreshChanges(conversation: Conversation) {
     val workspace = conversation.workspace ?: return
     val root = workspace.root.path
+    val base = conversation.base.takeIf { conversation.mode == WorkMode.Worktree }
+    val stillThere = { conversation.workspace === workspace }
     project.scope.launch {
         try {
             val status = project.services.git.status(root)
             val sorted = status.entries.sortedBy { it.key }
             // The lines of each file are counted together, not one Git process after the other.
             val limit = Semaphore(PARALLEL_DIFFS)
-            conversation.changes.files =
+            val files =
                 coroutineScope {
                     sorted.mapIndexed { index, entry ->
                         val counted = index < MAX_COUNTED_FILES
                         async { limit.withPermit { changedFile(root, entry.key, entry.value, counted) } }
                     }.awaitAll()
                 }
+            val distance = distanceFromBase(root, base)
+            if (!stillThere()) return@launch
+            conversation.changes.files = files
             conversation.changes.failure = null
             conversation.changes.loaded = true
-            readDistanceFromBase(conversation, root)
+            conversation.changes.aheadBehind = distance?.first
+            conversation.changes.lastCommit = distance?.second
         } catch (failed: IOException) {
-            conversation.changes.failure = "Cannot read the changes: ${failed.message}"
+            if (stillThere()) conversation.changes.failure = "Cannot read the changes: ${failed.message}"
         }
     }
 }
 
-// How far a worktree is from the branch it started from, and its last commit once it has some of its own.
-private suspend fun AgentState.readDistanceFromBase(conversation: Conversation, root: String) {
-    val base = conversation.base
-    if (conversation.mode != WorkMode.Worktree || base == null) {
-        conversation.changes.aheadBehind = null
-        conversation.changes.lastCommit = null
-        return
-    }
+// How far the worktree at [root] is from [base], and its last commit once it has some of its own; null without a base.
+private suspend fun AgentState.distanceFromBase(root: String, base: String?): Pair<AheadBehind, GitCommit?>? {
+    if (base == null) return null
     val git = project.services.git
     val distance = git.aheadBehind(root, base)
     val last = if (distance.ahead > 0) git.log(root, "HEAD", 0, 1).firstOrNull() else null
-    conversation.changes.aheadBehind = distance
-    conversation.changes.lastCommit = last
+    return distance to last
 }
 
 private suspend fun AgentState.changedFile(root: String, path: String, status: GitFileStatus, count: Boolean): ChangedFile {

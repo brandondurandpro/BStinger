@@ -83,18 +83,23 @@ internal class AgentInstaller(
         return status as? RuntimeStatus.Found
     }
 
-    // Downloads, verifies and extracts the archive once; its program is made executable.
+    // Downloads, verifies and extracts the archive once; its program is made executable. One install of a version at
+    // a time: two sessions starting the agent together would otherwise both extract it, the second one emptying the
+    // directory of a program the first one already runs (which Windows refuses: "Failed to delete").
     private fun installed(agent: RegistryAgent, binary: RegistryBinary): AgentCommand {
         val name = binary.archive.substringAfterLast('/').substringBefore('?')
         val digest = Digest(Digest.SHA_256, binary.sha256.orEmpty())
         val tool = PinnedTool("agent-${agent.id}", agent.version, binary.archive, digest, name)
-        val archive = downloader.obtain(tool)
-        val files = downloader.directoryOf(tool).resolve("files")
-        val marker = downloader.directoryOf(tool).resolve(EXTRACTED)
-        val done = runCatching { Files.readString(marker) }.getOrNull() == binary.sha256
-        if (!done || !Files.isDirectory(files)) {
-            extract(archive, files, binary.command)
-            Files.writeString(marker, binary.sha256.orEmpty())
+        val directory = downloader.directoryOf(tool)
+        val files = directory.resolve("files")
+        synchronized(installLockOf(directory)) {
+            val archive = downloader.obtain(tool)
+            val marker = directory.resolve(EXTRACTED)
+            val done = runCatching { Files.readString(marker) }.getOrNull() == binary.sha256
+            if (!done || !Files.isDirectory(files)) {
+                extract(archive, files, binary.command)
+                Files.writeString(marker, binary.sha256.orEmpty())
+            }
         }
         val program = files.resolve(binary.command.replace('\\', '/')).normalize()
         if (!program.startsWith(files) || !Files.isRegularFile(program)) {
@@ -103,6 +108,14 @@ internal class AgentInstaller(
         program.toFile().setExecutable(true)
         return AgentCommand(listOf(program.toString()) + binary.arguments, binary.environment)
     }
+}
+
+// The lock of each install directory, shared by every installer of the process.
+private val installLocks = ConcurrentHashMap<Path, Any>()
+
+private fun installLockOf(directory: Path): Any {
+    val key = directory.toAbsolutePath().normalize()
+    return installLocks.computeIfAbsent(key) { Any() }
 }
 
 /**

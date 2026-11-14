@@ -7,9 +7,12 @@ import org.example.kotlineditor.state.ToolWindow
 import org.example.kotlineditor.state.ToolWindowDefaults
 import org.example.kotlineditor.state.ToolWindowLayout
 import java.nio.file.Files
+import kotlin.concurrent.thread
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+
+private const val READ_MS = 300L
 
 class FilePreferenceStoreTest {
     private val dir = Files.createTempDirectory("kotlin-editor-prefs").toFile()
@@ -42,6 +45,23 @@ class FilePreferenceStoreTest {
         val blocker = dir.resolve("blocker").apply { writeText("a file, not a directory") }
         FilePreferenceStore(blocker.resolve("preferences.properties")).save(mapOf("a" to "1"))
         assertTrue(blocker.isFile)
+        dir.deleteRecursively()
+    }
+
+    @Test
+    fun `values saved while another program reads the file are kept once it is done`() {
+        val store = FilePreferenceStore(file)
+        store.save(mapOf("a" to "1"))
+        // Windows refuses to replace a file that is open, even for reading: the reader lets go a moment later.
+        val reading = Files.newInputStream(file.toPath())
+        val reader =
+            thread {
+                Thread.sleep(READ_MS)
+                reading.close()
+            }
+        store.save(mapOf("a" to "2"))
+        reader.join()
+        assertEquals(mapOf("a" to "2"), FilePreferenceStore(file).load())
         dir.deleteRecursively()
     }
 

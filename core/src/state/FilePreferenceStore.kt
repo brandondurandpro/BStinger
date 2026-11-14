@@ -1,5 +1,6 @@
 package org.example.kotlineditor.state
 
+import org.example.kotlineditor.files.replaceFile
 import java.io.File
 import java.io.IOException
 import java.util.Properties
@@ -18,7 +19,10 @@ class FilePreferenceStore(private val file: File = defaultFile()) : PreferenceSt
             emptyMap()
         }
 
-    /** Writes next to the file then renames, so a crash never leaves a half-written file. Failures are ignored. */
+    /**
+     * Writes next to the file then renames, so a crash never leaves a half-written file; on Windows the rename waits
+     * for a program reading the file to let go of it. Failures are ignored.
+     */
     override fun save(values: Map<String, String>) {
         try {
             val properties = Properties()
@@ -26,12 +30,7 @@ class FilePreferenceStore(private val file: File = defaultFile()) : PreferenceSt
             file.absoluteFile.parentFile?.mkdirs()
             val temp = File(file.absoluteFile.parentFile, "${file.name}.tmp")
             temp.writer(Charsets.UTF_8).use { properties.store(it, null) }
-            java.nio.file.Files.move(
-                temp.toPath(),
-                file.toPath(),
-                java.nio.file.StandardCopyOption.REPLACE_EXISTING,
-                java.nio.file.StandardCopyOption.ATOMIC_MOVE,
-            )
+            replaceFile(temp.toPath(), file.toPath())
         } catch (_: IOException) {
             // Preferences are a convenience: losing them must never break the IDE.
         }
