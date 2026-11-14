@@ -41,7 +41,8 @@ class RemoteDevelopmentPerformanceE2eTest {
 
             measure("remote connect and project tree", budgetMillis = 60_000) {
                 connectRemoteTo(RemoteTestEnvironment, project.path)
-                awaitTag(TreeTags.treeRow("src"), timeout = 60_000)
+                // `src` and `src/main` hold one directory each: the tree folds them into one row.
+                awaitTag(TreeTags.treeRow("src/main/kotlin"), timeout = 60_000)
                 renderFrame()
             }
             measure("open a 5000-line remote file", budgetMillis = 15_000, budgetMegabytes = 512) {
