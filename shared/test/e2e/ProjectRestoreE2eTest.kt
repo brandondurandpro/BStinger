@@ -15,7 +15,7 @@ import kotlin.test.assertEquals
 
 private const val ACTIVE = "src/main/kotlin/util/Strings.kt"
 private val SESSION = listOf("README.md", "docs/guide.md", "src/test/kotlin/AppTest.kt", ACTIVE)
-private val UNFOLDED_TO_ACTIVE = setOf("src", "src/main", "src/main/kotlin", "src/main/kotlin/util")
+private val UNFOLDED_TO_ACTIVE = setOf("src", "src/main/kotlin", "src/main/kotlin/util")
 private const val MANY_TABS = 40
 
 /** Reopening a project: its tabs and its tree appear as they were left, at once, without unfolding or switching. */
