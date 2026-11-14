@@ -547,6 +547,25 @@ class AgentState(
         setMode(conversation, WorkMode.Worktree)
     }
 
+    /**
+     * The user chose another project in the picker: it opens in another window, which asks its own question "from
+     * which branch?". No conversation starts in this one.
+     */
+    fun chooseProject(path: String) {
+        val picker = basePicker ?: return
+        picker.loading?.cancel()
+        basePicker = null
+        project.startConversationIn(path)
+    }
+
+    /** The user wants a directory that is no recent project: the Open Project dialog, which can create it. */
+    fun browseProject() {
+        val picker = basePicker ?: return
+        picker.loading?.cancel()
+        basePicker = null
+        project.browseProjectForConversation()
+    }
+
     /** The user closed the picker: no conversation starts. */
     fun cancelBasePicker() {
         basePicker?.loading?.cancel()
@@ -855,6 +874,10 @@ class BasePicker {
 
     /** True while the remote branches are being fetched. */
     var fetching by mutableStateOf(false)
+        internal set
+
+    /** True while the picker lists the other projects instead of the branches. */
+    var choosingProject by mutableStateOf(false)
         internal set
 
     internal var loading: Job? = null

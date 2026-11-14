@@ -147,6 +147,10 @@ object AgentTags {
     const val AGENT_BASE_FETCH_ERROR = "agent.basePicker.fetchError"
 
     fun agentBase(branch: String) = "agent.basePicker.branch:$branch"
+    const val AGENT_BASE_OTHER_PROJECT = "agent.basePicker.otherProject"
+    const val AGENT_BASE_BROWSE = "agent.basePicker.browse"
+
+    fun agentBaseProject(path: String) = "agent.basePicker.projectChoice:$path"
     const val AGENT_LAST_MESSAGE = "agent.lastMessage"
 
     fun agentConversationAgent(id: Int) = "agent.conversation.$id.agent"

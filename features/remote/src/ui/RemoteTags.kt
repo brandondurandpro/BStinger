@@ -36,6 +36,9 @@ object RemoteTags {
     const val OPEN_PROJECT_HOME = "openProject.home"
     const val OPEN_PROJECT_CHECKING = "openProject.checking"
     const val OPEN_PROJECT_COUNT = "openProject.count"
+    const val OPEN_PROJECT_NEW_FOLDER = "openProject.newFolder"
+    const val OPEN_PROJECT_NEW_NAME = "openProject.newFolder.name"
+    const val OPEN_PROJECT_NEW_CREATE = "openProject.newFolder.create"
 
     fun sshHost(alias: String) = "remote.host:$alias"
 

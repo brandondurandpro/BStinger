@@ -45,6 +45,9 @@ interface ProjectPickerHost {
     /** `user@host` of the remote session, or null when the server is local. */
     val remoteLabel: String?
 
+    /** Whether the dialog picks the project of a new conversation, which opens in a new window. */
+    val projectPickerForNewWindow: Boolean get() = false
+
     /** Directory the dialog starts in. */
     fun projectPickerStart(): String
 
@@ -56,6 +59,9 @@ interface ProjectPickerHost {
     suspend fun resolvePickerDirectory(path: String): FileEntry?
 
     suspend fun pickerSubdirectories(directory: FileEntry): List<FileEntry>
+
+    /** Creates the directory [name] in [parent], on the server's disk; throws when it cannot. */
+    suspend fun createPickerDirectory(parent: FileEntry, name: String): FileEntry
 
     fun openFromProjectPicker(path: String)
 

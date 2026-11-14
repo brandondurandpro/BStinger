@@ -5,12 +5,18 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.ui.AppTags
 import org.example.kotlineditor.ui.RemoteTags
 import org.example.kotlineditor.ui.TreeTags
+import kotlin.io.path.isDirectory
+import kotlin.io.path.listDirectoryEntries
+import kotlin.io.path.name
 import kotlin.test.AfterTest
 import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /**
  * The Open Project dialog while the network or the server fails: its listings go through the same client as the
@@ -20,11 +26,18 @@ import kotlin.test.Test
 class OpenProjectDialogChaosE2eTest {
     private val project = SampleProject.standard()
     private val other = SampleProject().apply { file("Other.kt", "class Other") }
+    private val empty = SampleProject()
 
     @AfterTest
     fun cleanup() {
         project.delete()
         other.delete()
+        empty.delete()
+    }
+
+    private fun ComposeUiTest.typeNewFolder(name: String) {
+        onNodeWithTag(RemoteTags.OPEN_PROJECT_NEW_FOLDER).performClick()
+        awaitTag(RemoteTags.OPEN_PROJECT_NEW_NAME).performTextInput(name)
     }
 
     private fun ComposeUiTest.openFromProjectMenu() {
@@ -88,5 +101,53 @@ class OpenProjectDialogChaosE2eTest {
             awaitReconnected()
             showDirectoryInProjectPicker(project.path)
             awaitTag(srcRowOf(project)).assertIsDisplayed()
+        }
+
+    @Test
+    fun `a folder created while the network is down is created once the network is back`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, chaos = true)
+            openFromProjectMenu()
+            showDirectoryInProjectPicker(empty.path)
+            typeNewFolder("fresh")
+            app.network.goDown()
+            awaitReconnecting()
+            onNodeWithTag(RemoteTags.OPEN_PROJECT_NEW_CREATE).performClick()
+            app.network.comeBack()
+            val created = empty.root.resolve("fresh")
+            awaitCondition(SERVER_START_MS) { shownDirectoryInProjectPicker() == created.toString() }
+            assertTrue(created.isDirectory(), "the folder exists")
+        }
+
+    @Test
+    fun `a folder whose answer was lost exists once and the dialog is not left stuck`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, chaos = true)
+            openFromProjectMenu()
+            showDirectoryInProjectPicker(empty.path)
+            typeNewFolder("fresh")
+            app.network.dropFromServer = true
+            onNodeWithTag(RemoteTags.OPEN_PROJECT_NEW_CREATE).performClick()
+            app.network.cutAll()
+            app.network.dropFromServer = false
+            awaitReconnected()
+            val created = empty.root.resolve("fresh")
+            awaitCondition(SERVER_START_MS) { created.isDirectory() }
+            // The dialog still works: it was not left loading, and shows the directory it was in or the new one.
+            showDirectoryInProjectPicker(other.path)
+            assertEquals(listOf("fresh"), empty.root.listDirectoryEntries().map { it.name })
+        }
+
+    @Test
+    fun `a folder is still created after the server restarted`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, chaos = true)
+            openFromProjectMenu()
+            showDirectoryInProjectPicker(empty.path)
+            app.process.restart()
+            awaitReconnected()
+            typeNewFolder("after")
+            onNodeWithTag(RemoteTags.OPEN_PROJECT_NEW_CREATE).performClick()
+            awaitCondition { empty.root.resolve("after").isDirectory() }
         }
 }

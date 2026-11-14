@@ -3,6 +3,7 @@ package org.example.kotlineditor.e2e
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.ComposeUiTest
+import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performTextInput
@@ -92,6 +93,42 @@ class AgentBasePickerE2eTest {
             val conversation = checkNotNull(app.project.agent.current)
             assertEquals(WorkMode.Direct, conversation.mode)
             assertNull(conversation.base)
+        }
+
+    @Test
+    fun `the remote branches are listed before the local ones`() =
+        runComposeUiTest {
+            repositoryWithBranches()
+            val app = launchWithProject(project, agentPreferences())
+            openPicker(app)
+            val remoteTop = awaitTag(AgentTags.agentBase("origin/feature")).getBoundsInRoot().top
+            val localTop = awaitTag(AgentTags.agentBase("other")).getBoundsInRoot().top
+            assertTrue(remoteTop < localTop, "the remote branch is above the local one")
+        }
+
+    @Test
+    fun `Enter starts from the default branch of the remote`() =
+        runComposeUiTest {
+            repositoryWithBranches()
+            project.git("symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/feature")
+            val app = launchWithProject(project, agentPreferences())
+            openPicker(app)
+            awaitTag(AgentTags.AGENT_BASE_SEARCH).performKeyInput { pressKey(Key.Enter) }
+            awaitTag(AgentTags.AGENT_PROMPT)
+            assertEquals("origin/feature", assertNotNull(app.project.agent.current).base)
+        }
+
+    @Test
+    fun `the default branch of the remote leads the remote branches`() =
+        runComposeUiTest {
+            repositoryWithBranches()
+            project.git("update-ref", "refs/remotes/origin/zeta", project.git("rev-parse", "HEAD").trim())
+            project.git("symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/zeta")
+            val app = launchWithProject(project, agentPreferences())
+            openPicker(app)
+            val defaultTop = awaitTag(AgentTags.agentBase("origin/zeta")).getBoundsInRoot().top
+            val otherTop = awaitTag(AgentTags.agentBase("origin/feature")).getBoundsInRoot().top
+            assertTrue(defaultTop < otherTop, "the default branch is above the other remote ones")
         }
 
     @Test
