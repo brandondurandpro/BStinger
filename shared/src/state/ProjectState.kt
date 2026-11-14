@@ -55,6 +55,8 @@ class ProjectState(
     internal val diffLayout: DiffLayout = DiffLayout(preferences),
     /** The indicators of the status bar that are shown, saved; a worktree of agent mode shares its project's. */
     val statusIndicators: StatusIndicators = StatusIndicators(preferences),
+    /** Where agent mode can start a conversation in another project; null where no window can be added. */
+    private val windows: ProjectWindows? = null,
 ) : GitHost,
     TreeHost,
     LanguageServersHost,
@@ -113,6 +115,10 @@ class ProjectState(
     /** Hover, navigation, usages, problems, rename, reformat and quick fixes, from the language servers. */
     val insight = CodeInsightState(scope, { insightBackend() }, ProjectInsightHost { this })
     override val pluginServer: PluginServer get() = services.plugins
+
+    override val canStartInOtherProject: Boolean get() = windows?.available?.invoke() == true
+
+    override val otherProjects: List<String> get() = windows?.projects?.invoke().orEmpty()
 
     val terminal = TerminalState(root.path, services.terminal, scope)
 
@@ -414,6 +420,14 @@ class ProjectState(
     override suspend fun openWorktree(branch: String, base: String?): AgentWorkspace = openWorktreeProject(branch, base)
 
     override suspend fun branchChoices(fetch: Boolean): BranchChoices? = branchChoicesOf(fetch)
+
+    override fun startConversationIn(path: String) {
+        windows?.open?.invoke(path)
+    }
+
+    override fun browseProjectForConversation() {
+        windows?.browse?.invoke()
+    }
 
     override fun agentAsking(title: String, question: String) {
         askingListener?.invoke(title, question)

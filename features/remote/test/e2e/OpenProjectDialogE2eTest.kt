@@ -1,6 +1,7 @@
 package org.example.kotlineditor.e2e
 
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
@@ -11,6 +12,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performMouseInput
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.v2.runComposeUiTest
@@ -19,10 +21,14 @@ import org.example.kotlineditor.ui.AppTags
 import org.example.kotlineditor.ui.RemoteTags
 import org.example.kotlineditor.ui.TreeTags
 import java.nio.file.Path
+import kotlin.io.path.exists
+import kotlin.io.path.isDirectory
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 /** The Open Project dialog: browsing the directories of the server, from the welcome screen or the project menu. */
 @OptIn(ExperimentalTestApi::class)
@@ -39,6 +45,86 @@ class OpenProjectDialogE2eTest {
     }
 
     private fun pathInProject(relative: String): Path = project.root.resolve(relative)
+
+    private fun ComposeUiTest.createFolder(name: String) {
+        onNodeWithTag(RemoteTags.OPEN_PROJECT_NEW_FOLDER).performClick()
+        awaitTag(RemoteTags.OPEN_PROJECT_NEW_NAME).performTextInput(name)
+        onNodeWithTag(RemoteTags.OPEN_PROJECT_NEW_CREATE).performClick()
+    }
+
+    @Test
+    fun `New Folder creates a directory, shows it, and Open opens it as the project`() =
+        runComposeUiTest {
+            val app = launchApp()
+            openProjectPickerFromWelcome()
+            showDirectoryInProjectPicker(empty.path)
+            createFolder("fresh")
+            val created = empty.root.resolve("fresh")
+            awaitCondition { shownDirectoryInProjectPicker() == created.toString() }
+            assertTrue(created.isDirectory(), "the folder exists on the disk")
+            awaitCondition { runCatching { onNodeWithTag(RemoteTags.OPEN_PROJECT_OPEN).assertIsEnabled() }.isSuccess }
+            onNodeWithTag(RemoteTags.OPEN_PROJECT_OPEN).performClick()
+            awaitCondition {
+                val opened = app.state.session.project
+                opened?.root?.path == created.toString()
+            }
+        }
+
+    @Test
+    fun `New Folder adds only the folder to the disk`() =
+        runComposeUiTest {
+            project.commitAll()
+            val before = DiskSnapshot.take(project)
+            launchApp()
+            openProjectPickerFromWelcome()
+            showDirectoryInProjectPicker(project.path)
+            createFolder("fresh")
+            awaitCondition { project.root.resolve("fresh").isDirectory() }
+            before.assertUnchanged(project)
+        }
+
+    @Test
+    fun `New Folder refuses a name that exists, a empty one and a path, creating nothing`() =
+        runComposeUiTest {
+            launchApp()
+            openProjectPickerFromWelcome()
+            showDirectoryInProjectPicker(project.path)
+            createFolder("src")
+            awaitTag(RemoteTags.OPEN_PROJECT_ERROR)
+            onNodeWithTag(RemoteTags.OPEN_PROJECT_NEW_NAME).performTextReplacement("")
+            onNodeWithTag(RemoteTags.OPEN_PROJECT_NEW_CREATE).performClick()
+            awaitTag(RemoteTags.OPEN_PROJECT_ERROR)
+            onNodeWithTag(RemoteTags.OPEN_PROJECT_NEW_NAME).performTextReplacement("../escape")
+            onNodeWithTag(RemoteTags.OPEN_PROJECT_NEW_CREATE).performClick()
+            awaitTag(RemoteTags.OPEN_PROJECT_ERROR)
+            assertEquals(project.path, shownDirectoryInProjectPicker())
+            assertFalse(project.root.resolveSibling("escape").exists(), "nothing is created outside the directory")
+        }
+
+    @Test
+    fun `Escape in the name of a new folder closes only that field`() =
+        runComposeUiTest {
+            launchApp()
+            openProjectPickerFromWelcome()
+            showDirectoryInProjectPicker(empty.path)
+            onNodeWithTag(RemoteTags.OPEN_PROJECT_NEW_FOLDER).performClick()
+            awaitTag(RemoteTags.OPEN_PROJECT_NEW_NAME).performKeyInput { pressKey(Key.Escape) }
+            awaitNoTag(RemoteTags.OPEN_PROJECT_NEW_NAME)
+            awaitTag(RemoteTags.OPEN_PROJECT)
+        }
+
+    @Test
+    fun `Enter in the name of a new folder creates it`() =
+        runComposeUiTest {
+            launchApp()
+            openProjectPickerFromWelcome()
+            showDirectoryInProjectPicker(empty.path)
+            onNodeWithTag(RemoteTags.OPEN_PROJECT_NEW_FOLDER).performClick()
+            awaitTag(RemoteTags.OPEN_PROJECT_NEW_NAME).performTextInput("typed")
+            onNodeWithTag(RemoteTags.OPEN_PROJECT_NEW_NAME).performKeyInput { pressKey(Key.Enter) }
+            awaitCondition { empty.root.resolve("typed").isDirectory() }
+            awaitCondition { shownDirectoryInProjectPicker() == empty.root.resolve("typed").toString() }
+        }
 
     @Test
     fun `Open starts in the home directory of the server`() =

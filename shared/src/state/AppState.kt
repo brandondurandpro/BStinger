@@ -34,6 +34,8 @@ class AppState(
     telemetryOf: ((instanceId: String) -> Telemetry)? = null,
     /** Whether to reopen the last project at startup when the user starts in agent mode; false for added windows. */
     reopenLastProject: Boolean = true,
+    /** A project to open at startup, in agent mode with the question of a new conversation: an added window's. */
+    initialProject: String? = null,
 ) {
     val preferences = PreferenceHub(preferenceStore)
 
@@ -56,8 +58,11 @@ class AppState(
     var session: ServerContext by mutableStateOf(contextOf(initialServices, tunnel = null))
         private set
 
-    /** Opens another IDE window; set by the desktop app, null where windows cannot be added (previews, tests). */
-    var onNewWindow: (() -> Unit)? by mutableStateOf(null)
+    /**
+     * Opens another IDE window, on the project [String] when there is one; set by the desktop app, null where windows
+     * cannot be added (previews, tests).
+     */
+    var onNewWindow: ((String?) -> Unit)? by mutableStateOf(null)
 
     /** Whether the devtools were opened (Ctrl+Alt+Shift+D) since the IDE started: shows their buttons. */
     var devtools by mutableStateOf(false)
@@ -91,7 +96,23 @@ class AppState(
 
     init {
         scope.launch { preferences.saveOnChange(::currentPreferences) }
-        if (launching) scope.launch { launchInAgentMode() } else session.reloadRecents()
+        when {
+            initialProject != null -> scope.launch { openForNewConversation(initialProject) }
+            launching -> scope.launch { launchInAgentMode() }
+            else -> session.reloadRecents()
+        }
+    }
+
+    // An added window of a conversation started in another project: the project opens in agent mode, on the question
+    // of the branch the conversation starts from.
+    private suspend fun openForNewConversation(path: String) {
+        val shown = session
+        shown.loadRecents()
+        shown.openProject(path)
+        snapshotFlow { shown.opening }.first { it == null }
+        val opened = shown.project ?: return
+        opened.agentMode = true
+        opened.agent.requestNewConversation()
     }
 
     // The user prefers agent mode: the last project opens straight in it; the welcome screen only when there is none.
@@ -108,7 +129,7 @@ class AppState(
     }
 
     fun openNewWindow() {
-        onNewWindow?.invoke()
+        onNewWindow?.invoke(null)
     }
 
     /** Saves the open project, stops the remote session (its daemon keeps running) and shows the local server. */
@@ -181,6 +202,7 @@ class AppState(
             startsInAgentMode = { settings.startsInAgentMode },
             consent = { settings.telemetry.shared },
             onRemoteProjectOpened = remote::recordWorkspace,
+            newWindow = { onNewWindow?.let { open -> { path: String -> open(path) } } },
         )
 
     // The preferences of every part of the IDE, the open project's last (on top of those last saved).

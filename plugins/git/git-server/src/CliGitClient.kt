@@ -348,6 +348,19 @@ class CliGitClient :
                 .sorted()
         }
 
+    // The target of `refs/remotes/<remote>/HEAD`, `origin`'s first; if none is set, `origin/main` or `origin/master`.
+    override suspend fun defaultRemoteBranch(root: String): String? =
+        runInterruptible(Dispatchers.IO) {
+            val format = "--format=%(refname)%00%(symref:short)"
+            val lines = gitOutput(root, FOR_EACH_REF, format, "refs/remotes").orEmpty()
+            val records = lines.map { it.split('\u0000') }
+            val heads = records.filter { it.size == 2 && it[1].isNotEmpty() }
+            val origin = heads.firstOrNull { it[0] == "refs/remotes/origin/HEAD" }
+            val target = (origin ?: heads.firstOrNull())?.get(1)
+            val known = records.map { it[0].removePrefix("refs/remotes/") }
+            target ?: listOf("origin/main", "origin/master").firstOrNull { it in known }
+        }
+
     // `left...right` with `--left-right --count` prints "<commits only in base>\t<commits only in HEAD>".
     override suspend fun aheadBehind(root: String, base: String): AheadBehind =
         runInterruptible(Dispatchers.IO) {

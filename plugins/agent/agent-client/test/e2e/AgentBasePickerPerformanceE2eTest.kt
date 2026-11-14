@@ -49,14 +49,14 @@ class AgentBasePickerPerformanceE2eTest {
             awaitTag(AgentTags.MODE_AGENT).performClick()
             measure("open the picker on ${2 * BRANCHES} branches", budgetMillis = 8_000, budgetMegabytes = 300) {
                 awaitTag(AgentTags.AGENT_NEW).performClick()
-                awaitTag(AgentTags.agentBase("perf/branch-0000"))
+                awaitTag(AgentTags.agentBase("origin/perf/branch-0000"))
                 renderFrame()
             }
             val composed = onAllNodes(hasTestTagPrefix(BRANCH_ROWS)).fetchSemanticsNodes().size
             assertTrue(composed < MAX_COMPOSED_ROWS, "composed rows: $composed")
             measure("filter ${2 * BRANCHES} branches", budgetMillis = 5_000, budgetMegabytes = 200) {
                 awaitTag(AgentTags.AGENT_BASE_SEARCH).performTextInput("branch-2999")
-                awaitNoTag(AgentTags.agentBase("perf/branch-0000"))
+                awaitNoTag(AgentTags.agentBase("origin/perf/branch-0000"))
                 renderFrame()
             }
             assertTrue(app.project.agent.conversations.isEmpty(), "browsing the branches starts nothing")
