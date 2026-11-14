@@ -23,8 +23,8 @@ import org.example.kotlineditor.state.LspLevelSource
 import org.example.kotlineditor.state.ProjectState
 
 /**
- * The level of the language servers in force (Off, Basic or Full) and where it was chosen; a click asks the level,
- * then whether it is for the conversation shown (in agent mode), the project, or every project.
+ * The level of the language servers in force (Off, Basic or Full) and where it was chosen, in the status bar; a click
+ * asks the level, then whether it is for the conversation shown (in agent mode), the project, or every project.
  */
 @Composable
 internal fun LspLevelWidget(app: AppState, project: ProjectState) {
@@ -40,13 +40,14 @@ internal fun LspLevelWidget(app: AppState, project: ProjectState) {
                 .border(1.dp, IdeColors.Separator, RoundedCornerShape(50))
                 .clickable { open = true }
                 .testTag(AppTags.LSP_LEVEL_BUTTON)
-                .padding(horizontal = 10.dp, vertical = 4.dp),
+                .padding(horizontal = 8.dp, vertical = 1.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Label("LSP", color = IdeColors.TextSecondary)
-            Label(project.lspLevel.title, modifier = Modifier.padding(start = 6.dp))
+            Label("LSP", color = IdeColors.TextSecondary, fontSize = 12.sp)
+            Label(project.lspLevel.title, modifier = Modifier.padding(start = 6.dp), fontSize = 12.sp)
             val source = project.lspLevelSource.title
-            Label(source, color = IdeColors.TextSecondary, modifier = Modifier.padding(start = 6.dp))
+            val sourceModifier = Modifier.padding(start = 6.dp)
+            Label(source, color = IdeColors.TextSecondary, modifier = sourceModifier, fontSize = 12.sp)
         }
         IdeDropdownMenu(open, onDismissRequest = close) {
             for (level in LspLevel.entries) {

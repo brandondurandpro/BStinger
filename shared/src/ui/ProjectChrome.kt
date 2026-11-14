@@ -77,8 +77,6 @@ internal fun Toolbar(app: AppState, project: ProjectState) {
             ModeSwitch(project.agentMode) { project.agentMode = it }
             Spacer(Modifier.width(10.dp))
         }
-        LspLevelWidget(app, project)
-        Spacer(Modifier.width(10.dp))
         RunWidget(project.run, { project.showToolWindow(ToolWindow.Run) })
         Spacer(Modifier.width(10.dp))
         IdeButton("Deploy", { project.deployments.show() }, Modifier.testTag(AppTags.DEPLOY_BUTTON))
@@ -331,6 +329,8 @@ internal fun StatusBar(app: AppState, project: ProjectState) {
             color = IdeColors.TextSecondary,
             fontSize = 12.sp,
         )
+        // In the status bar, not the toolbar: the toolbar keeps its room for the pinned branches.
+        LspLevelWidget(app, project)
         app.session.remoteLabel?.let {
             Label(
                 "Remote: $it",
