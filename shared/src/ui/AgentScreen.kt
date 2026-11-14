@@ -1,5 +1,8 @@
 package org.example.kotlineditor.ui
 
+import androidx.compose.foundation.LocalScrollbarStyle
+import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,12 +13,17 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.rememberScrollbarAdapter
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -31,6 +39,10 @@ import org.example.kotlineditor.state.Dock
 import org.example.kotlineditor.state.ProjectState
 import org.example.kotlineditor.state.workspaceProject
 
+private const val PANEL_HEIGHT = 560f
+private val THIN_SCROLLBAR = 4.dp
+private const val LIST_KEY = "conversations"
+
 /**
  * Agent mode: the strip of buttons on the far left (Conversations, then the tool windows), the conversation list,
  * and the open conversations in tabs. The tool windows (Project, Git, Terminal, Network) are those of the worktree of
@@ -41,6 +53,7 @@ internal fun AgentWorkspace(app: AppState, project: ProjectState) {
     val agent = project.agent
     val workspace = agent.current?.workspaceProject
     val drag = remember { ToolWindowDrag() }
+    val heights = remember { PanelHeights(PANEL_HEIGHT) }
     val findFocus = remember(workspace) { FocusRequester() }
     val shortcuts =
         remember(workspace) { workspace?.let { GlobalShortcuts(IdeContext(app, it, findFocus), ideOnly = true) } }
@@ -59,8 +72,21 @@ internal fun AgentWorkspace(app: AppState, project: ProjectState) {
         Row(Modifier.fillMaxSize()) {
             ToolStrip(workspace, app.devtools) { ConversationsButton(agent) }
             if (agent.conversationsVisible) {
-                val list = Modifier.width(agent.conversationsWidth.dp).fillMaxHeight().padding(bottom = ISLAND_GAP)
-                ConversationList(agent, list.island())
+                // The tree and the Git panel sit under the list; the column scrolls, each panel keeping its height.
+                val column = Modifier.width(agent.conversationsWidth.dp).fillMaxHeight().padding(bottom = ISLAND_GAP)
+                val scroll = rememberScrollState()
+                Box(column) {
+                    Column(Modifier.fillMaxSize().verticalScroll(scroll)) {
+                        CollapsibleCard(
+                            heights,
+                            LIST_KEY,
+                            AgentTags.AGENT_LIST_BAR,
+                            AgentTags.AGENT_LIST_HEIGHT_SPLITTER,
+                        ) { modifier -> ConversationList(agent, modifier.island()) }
+                        workspace?.let { ToolDockBelow(it, drag, heights) }
+                    }
+                    ThinScrollbar(scroll, Modifier.align(Alignment.CenterEnd).fillMaxHeight())
+                }
                 // Dragging to the right widens the list, on the left of the splitter.
                 val density = LocalDensity.current
                 SplitterBox(horizontalBar = false, tag = AgentTags.AGENT_LIST_SPLITTER) { delta ->
@@ -72,6 +98,8 @@ internal fun AgentWorkspace(app: AppState, project: ProjectState) {
         }
         DropOverlay(drag)
         workspace?.let { WorkspacePopups(it) }
+        // Shown once the branches are read: a project that is no repository starts its conversation without asking.
+        agent.basePicker?.takeIf { it.choices != null || it.failure != null }?.let { BasePickerPopup(agent, it) }
     }
 }
 
@@ -86,7 +114,8 @@ private fun AgentBody(
 ) {
     Column(modifier.fillMaxHeight().padding(end = ISLAND_GAP, bottom = ISLAND_GAP)) {
         Row(Modifier.weight(1f).fillMaxWidth()) {
-            workspace?.let { ToolDock(it, Dock.Left, drag) }
+            // With the conversation list shown, the left dock is under it instead.
+            if (!agent.conversationsVisible) workspace?.let { ToolDock(it, Dock.Left, drag) }
             AgentTabsArea(app, agent, findFocus, Modifier.weight(1f).fillMaxHeight().island(IdeColors.Editor))
             workspace?.let { ToolDock(it, Dock.Right, drag) }
         }
@@ -143,5 +172,14 @@ private fun NotifyWhenFinished(project: ProjectState) {
             project.finishedListener = null
             project.askingListener = null
         }
+    }
+}
+
+// A scrollbar thinner than the theme's, over the right edge of the column it belongs to.
+@Composable
+private fun ThinScrollbar(state: ScrollState, modifier: Modifier) {
+    val style = LocalScrollbarStyle.current.copy(thickness = THIN_SCROLLBAR)
+    CompositionLocalProvider(LocalScrollbarStyle provides style) {
+        VerticalScrollbar(rememberScrollbarAdapter(state), modifier.testTag(AgentTags.AGENT_COLUMN_SCROLLBAR))
     }
 }

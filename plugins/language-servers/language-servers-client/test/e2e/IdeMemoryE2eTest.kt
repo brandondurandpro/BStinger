@@ -23,11 +23,20 @@ internal const val MEGABYTE = 1024L * 1024L
  * The UI as a process of its own, as in the desktop app, whose server is a child process: the server of an e2e app
  * runs in the process of the UI. Its memory is [residentBytes], which a test changes to see the UI follow.
  */
-internal class SeparateUiProcess(@Volatile var residentBytes: Long? = 300 * MEGABYTE) {
+internal class SeparateUiProcess(
+    @Volatile var residentBytes: Long? = 300 * MEGABYTE,
+    /** Its processor use, in percent of one core; null when the OS does not tell it. */
+    @Volatile var cpuPercent: Int? = 5,
+) {
     private val other = ProcessIdentity(pid = ProcessHandle.current().pid() + 1, startedAtMillis = 1)
 
     /** What the IDE reads the memory of its UI from. */
-    val process = UiProcess(other) { residentBytes?.let { ProcessMemory(privateBytes = it, residentBytes = it) } }
+    val process =
+        UiProcess(
+            identity = other,
+            memory = { residentBytes?.let { ProcessMemory(privateBytes = it, residentBytes = it) } },
+            cpuPercent = { cpuPercent },
+        )
 }
 
 /** Shows the UI of [app] as [ui], a process of its own. */

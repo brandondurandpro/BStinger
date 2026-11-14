@@ -24,6 +24,8 @@ class AgentUsageAndForkE2eTest {
         runComposeUiTest {
             val app = launchWithProject(project, agentPreferences())
             val conversation = startConversation(app)
+            // Narrow: a wide conversation shows the figures in the card at its right (next test) instead.
+            app.project.agent.resizeConversations(1000f)
             sendPrompt("echo hello")
             awaitAnswer(conversation, "hello")
             awaitIdle(conversation)

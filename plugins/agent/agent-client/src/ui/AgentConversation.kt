@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -70,7 +71,9 @@ fun ConversationView(agent: AgentState, conversation: Conversation) {
     FollowTheEnd(conversation)
     BoxWithConstraints(Modifier.fillMaxSize()) {
         // The card of the quota is at the right of the transcript, which makes room for it when the window is narrow.
-        val hasFigures = conversation.quota.isNotEmpty() || conversation.usage != null || conversation.started
+        val hasFigures =
+            conversation.quota.isNotEmpty() || conversation.usage != null || conversation.started ||
+                conversation.changes.files.isNotEmpty() || conversation.workspace != null
         val showsCard = maxWidth >= QUOTA_CARD_MIN_WIDTH && hasFigures
         val reserve = if (showsCard) (QUOTA_CARD_ROOM * 2 - (maxWidth - CONTENT_WIDTH)).coerceAtLeast(0.dp) else 0.dp
         CompositionLocalProvider(LocalQuotaCard provides showsCard) {
@@ -95,13 +98,24 @@ private fun ConversationColumn(agent: AgentState, conversation: Conversation, sh
             Box(Modifier.fillMaxSize().padding(end = reserve)) {
                 SelectionContainer { Transcript(agent, conversation) }
             }
-            if (showsCard) QuotaCard(conversation, Modifier.align(Alignment.TopEnd).padding(top = 12.dp, end = 20.dp))
+            if (showsCard) {
+                // The quota, then what the agent changed, in a column of cards at the right of the transcript.
+                Column(
+                    Modifier.align(Alignment.TopEnd).padding(top = 12.dp, end = 20.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    LocationCard(agent, conversation, Modifier)
+                    QuotaCard(conversation, Modifier)
+                    ChangesCard(agent, conversation, Modifier)
+                }
+            }
             VerticalScrollbar(
                 rememberScrollbarAdapter(listState),
                 Modifier.align(Alignment.CenterEnd).fillMaxHeight(),
             )
         }
-        ChangesBar(agent, conversation)
+        // The card at the right shows the changes of a wide conversation; the bar is for a narrow one.
+        if (!showsCard) ChangesBar(agent, conversation)
         Prompt(agent, conversation)
     }
 }
@@ -295,13 +309,8 @@ private fun PromptActions(agent: AgentState, conversation: Conversation) {
         DiscussButton(agent, conversation)
         ReviewButton(agent, conversation)
         Spacer(Modifier.width(8.dp))
-        val name = conversation.agentName ?: "Agent: " + agent.agentLabelOf(conversation)
-        Label(
-            name,
-            Modifier.weight(1f).testTag(AgentTags.AGENT_NAME),
-            color = IdeColors.TextSecondary,
-            fontSize = 12.sp,
-        )
+        // The picker already says which agent answers: no label for it, only the room that keeps Stop and Send right.
+        Spacer(Modifier.weight(1f))
         Spacer(Modifier.width(8.dp))
         // The silent question about the quota is no work to stop: the prompt keeps its Send button.
         if (conversation.busy && conversation.probeFrom == null) {

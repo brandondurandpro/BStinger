@@ -57,7 +57,6 @@ object AgentTags {
 
     fun agentImagePreview(name: String) = "agent.image.preview.$name"
 
-    fun agentFolderGroup(label: String) = "agent.group.folder.$label"
 
     fun agentDetailChat(id: Int) = "agent.detail.chat.$id"
 
@@ -121,6 +120,30 @@ object AgentTags {
     fun agentTabClose(id: Int) = "agent.tab.$id.close"
 
     const val AGENT_LIST_SPLITTER = "agent.listSplitter"
+    const val AGENT_LIST_HEIGHT_SPLITTER = "agent.listHeightSplitter"
+    const val AGENT_COLUMN_SCROLLBAR = "agent.columnScrollbar"
+    const val AGENT_LIST_BAR = "agent.listBar"
+    const val AGENT_LOCATION_CARD = "agent.locationCard"
+    const val AGENT_INFO_BRANCH = "agent.info.branch"
+    const val AGENT_INFO_PATH = "agent.info.path"
+    const val AGENT_INFO_MODE = "agent.info.mode"
+    const val AGENT_INFO_BASE = "agent.info.base"
+    const val AGENT_INFO_GIT = "agent.info.git"
+    const val AGENT_INFO_GIT_ERROR = "agent.info.gitError"
+    const val AGENT_INFO_COMMIT = "agent.info.commit"
+    const val AGENT_INFO_FILES = "agent.info.files"
+    const val AGENT_INFO_TERMINAL = "agent.info.terminal"
+    const val AGENT_GIT_ACTIONS = "agent.gitActions"
+
+    fun agentGitAction(name: String) = "agent.gitAction:$name"
+    const val AGENT_BASE_PICKER = "agent.basePicker"
+    const val AGENT_BASE_SEARCH = "agent.basePicker.search"
+    const val AGENT_BASE_PROJECT = "agent.basePicker.project"
+    const val AGENT_BASE_ERROR = "agent.basePicker.error"
+    const val AGENT_BASE_FETCHING = "agent.basePicker.fetching"
+    const val AGENT_BASE_FETCH_ERROR = "agent.basePicker.fetchError"
+
+    fun agentBase(branch: String) = "agent.basePicker.branch:$branch"
     const val AGENT_LAST_MESSAGE = "agent.lastMessage"
 
     fun agentConversationAgent(id: Int) = "agent.conversation.$id.agent"

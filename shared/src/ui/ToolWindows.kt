@@ -16,14 +16,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import org.example.kotlineditor.plugin.StripGroup
 import org.example.kotlineditor.plugin.ToolWindowRegistry
@@ -116,6 +120,73 @@ internal fun ToolDock(project: ProjectState, dock: Dock, drag: ToolWindowDrag) {
                     Modifier.fillMaxWidth().height(project.toolWindows.sizeOf(dock).dp),
                 )
             }
+        }
+    }
+}
+
+/** The height of a panel of a scrolling column, in dp, that the user sets with the splitter under it. */
+internal class PanelHeights(private val default: Float) {
+    private val heights = mutableStateMapOf<Any, Float>()
+    private val collapsed = mutableStateMapOf<Any, Boolean>()
+
+    fun isCollapsed(key: Any): Boolean = collapsed[key] == true
+
+    fun toggle(key: Any) {
+        collapsed[key] = !isCollapsed(key)
+    }
+
+    fun heightOf(key: Any): Dp = (heights[key] ?: default).dp
+
+    fun resize(key: Any, delta: Float) {
+        heights[key] = ((heights[key] ?: default) + delta).coerceIn(MIN_PANEL_HEIGHT, MAX_PANEL_HEIGHT)
+    }
+}
+
+private const val MIN_PANEL_HEIGHT = 120f
+private const val MAX_PANEL_HEIGHT = 2000f
+
+/** A splitter under a panel of a scrolling column: dragging it down makes the panel taller. */
+@Composable
+internal fun PanelSplitter(heights: PanelHeights, key: Any, tag: String? = null) {
+    val density = LocalDensity.current
+    SplitterBox(horizontalBar = true, tag = tag) { delta ->
+        heights.resize(key, with(density) { delta.toDp().value })
+    }
+}
+
+/**
+ * A card of a scrolling column, at the height the user gave it and with the splitter that changes it. Its own header
+ * folds it (the chevron [FoldChevron] draws): folded, the card shrinks to that header.
+ */
+@Composable
+internal fun CollapsibleCard(
+    heights: PanelHeights,
+    key: Any,
+    tag: String,
+    splitterTag: String?,
+    content: @Composable (Modifier) -> Unit,
+) {
+    val folded = heights.isCollapsed(key)
+    val height = if (folded) HEADER_HEIGHT else heights.heightOf(key)
+    val fold = CardFold(folded, tag) { heights.toggle(key) }
+    CompositionLocalProvider(LocalCardFold provides fold) {
+        content(Modifier.fillMaxWidth().height(height).clipToBounds())
+    }
+    if (folded) Spacer(Modifier.height(ISLAND_GAP)) else PanelSplitter(heights, key, splitterTag)
+}
+
+/**
+ * The left dock under another panel (the conversation list of agent mode), in a column that scrolls: each window
+ * is a card that folds, and keeps its own height, which its splitter changes, instead of sharing the height left.
+ */
+@Composable
+internal fun ToolDockBelow(project: ProjectState, drag: ToolWindowDrag, heights: PanelHeights) {
+    // The changes come first: they are what the agent just did, the tree is for browsing.
+    val windows = project.toolWindows.visibleIn(Dock.Left).sortedBy { if (it == ToolWindow.Git) 0 else 1 }
+    windows.forEach { window ->
+        val barTag = AppTags.dockCardBar(window.name)
+        CollapsibleCard(heights, window, barTag, AppTags.dockSplitter(window.name)) { modifier ->
+            ToolWindowContent(project, window, drag, modifier)
         }
     }
 }

@@ -16,6 +16,9 @@ open class RemoteException(message: String, cause: Throwable? = null) : IOExcept
  * `-Dkotlin.editor.remote.bundle=/path/to/server-linux-x86_64.tar.gz` at a local build.
  */
 object RemoteBundles {
+    private const val REMOTE_DIRECTORY = "remote"
+    private const val BUILD_DIRECTORY = "build/remote"
+    private const val WORKING_DIRECTORY = "user.dir"
     private const val BUFFER_SIZE = 64 * 1024
     private const val BUILD_ID_LENGTH = 16
 
@@ -24,20 +27,25 @@ object RemoteBundles {
     fun find(target: RemoteTarget): File {
         val name = "server-${target.id}.tar.gz"
         val base = applicationDirectory()
-        val candidates =
-            buildList {
-                System.getProperty("kotlin.editor.remote.bundle")?.let { add(File(it)) }
-                System.getenv("KOTLIN_EDITOR_REMOTE_BUNDLE")?.let { add(File(it)) }
-                add(File(base, "remote/$name"))
-                add(File(System.getProperty("user.dir"), "build/remote/$name"))
-                add(File(System.getProperty("user.home"), ".kotlin-editor/bundles/$name"))
-            }
+        val candidates = candidates(target)
         return candidates.firstOrNull { it.isFile }
             ?: throw RemoteException(
                 "No server bundle for ${target.id}. Build one with tools/remote-bundle.sh, then put it in " +
-                    "${File(base, "remote/$name")} or set -Dkotlin.editor.remote.bundle. Tried:\n" +
+                    "${File(base, "$REMOTE_DIRECTORY/$name")} or set -Dkotlin.editor.remote.bundle. Tried:\n" +
                     candidates.joinToString("\n") { "  $it" },
             )
+    }
+
+    private fun candidates(target: RemoteTarget): List<File> {
+        val name = "server-${target.id}.tar.gz"
+        val base = applicationDirectory()
+        return buildList {
+            System.getProperty("kotlin.editor.remote.bundle")?.let { add(File(it)) }
+            System.getenv("KOTLIN_EDITOR_REMOTE_BUNDLE")?.let { add(File(it)) }
+            add(File(base, "$REMOTE_DIRECTORY/$name"))
+            add(File(System.getProperty(WORKING_DIRECTORY), "$BUILD_DIRECTORY/$name"))
+            add(File(System.getProperty("user.home"), ".kotlin-editor/bundles/$name"))
+        }
     }
 
     /**
@@ -61,11 +69,19 @@ object RemoteBundles {
         }
     }
 
+    /** The folders searched on this machine for a bundle, whatever the target (Settings shows them). */
+    fun searchedDirectories(): List<File> =
+        listOf(
+            File(applicationDirectory(), REMOTE_DIRECTORY),
+            File(System.getProperty(WORKING_DIRECTORY), BUILD_DIRECTORY),
+            File(System.getProperty("user.home"), ".kotlin-editor/bundles"),
+        )
+
     private fun applicationDirectory(): File =
         runCatching {
             val location =
                 RemoteBundles::class.java.protectionDomain.codeSource.location
                     .toURI()
             File(location).let { if (it.isDirectory) it else it.parentFile }
-        }.getOrNull() ?: File(System.getProperty("user.dir"))
+        }.getOrNull() ?: File(System.getProperty(WORKING_DIRECTORY))
 }

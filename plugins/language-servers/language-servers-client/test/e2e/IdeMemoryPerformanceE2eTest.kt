@@ -36,6 +36,18 @@ class IdeMemoryPerformanceE2eTest {
         }
 
     @Test
+    fun `reading the CPU of the UI costs a few microseconds`() =
+        runComposeUiTest {
+            launchWithProject(project)
+            val ui = UiProcess.current()
+            ui.cpuPercent()
+            // The JVM's own reader of the CPU time of a process: a few small reads, no child process.
+            measure("$READS reads of the UI's CPU", budgetMillis = 4_000, budgetMegabytes = 400) {
+                repeat(READS) { ui.cpuPercent() }
+            }
+        }
+
+    @Test
     fun `drawing a memory that changes at every frame`() =
         runComposeUiTest {
             val app = launchWithProject(project)
@@ -45,6 +57,7 @@ class IdeMemoryPerformanceE2eTest {
             // The worst case: at every frame the items change from one number to three and back.
             measure("$FRAMES frames of the memory items", budgetMillis = 10_000, budgetMegabytes = 400) {
                 repeat(FRAMES) { frame ->
+                    separate.cpuPercent = frame % 300
                     app.state.session.languageServers.uiProcess = if (frame % 2 == 0) separate.process else own
                     renderFrame()
                 }
@@ -69,7 +82,7 @@ class IdeMemoryPerformanceE2eTest {
             val sent = frames.filter { it.direction == Direction.Sent && it.kind == "Request" }
             val asked = sent.mapNotNull { it.method }
             println("PERF memory samples: ${sent.size} requests sent while the UI's memory changed 3 times")
-            assertTrue(asked.none { it.contains("emory") }, "requests sent: $asked")
+            assertTrue(asked.none { it.contains("emory") || it.contains("pu") }, "requests sent: $asked")
             assertTrue(sent.size <= 6, "${sent.size} requests in a few seconds: $asked")
         }
 }

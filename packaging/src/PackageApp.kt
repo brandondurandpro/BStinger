@@ -19,6 +19,8 @@ import kotlin.io.path.isRegularFile
 import kotlin.io.path.listDirectoryEntries
 import kotlin.io.path.name
 
+private const val JAVA_OPTIONS = "--java-options"
+
 /**
  * Packages the application with its own Java runtime (jlink + jpackage), then the deliverables of the system,
  * named `<name>-<version>-<os>-<arch>.<ext>` in `<distDir>/deliverables`:
@@ -159,8 +161,10 @@ private fun buildAppImageDirectory(jdk: Jdk, app: App, jars: List<Path>, launch:
             addAll(listOf("--main-class", launch.mainClass))
             addAll(listOf("--jlink-options", jlinkOptions.joinToString(" ")))
             // libghostty-vt and pty4j use the Foreign Function & Memory API.
-            addAll(listOf("--java-options", "--enable-native-access=ALL-UNNAMED"))
-            launch.javaOptions.forEach { addAll(listOf("--java-options", it)) }
+            addAll(listOf(JAVA_OPTIONS, "--enable-native-access=ALL-UNNAMED"))
+            // The IDE downloads the remote server of the GitHub release of its own version.
+            addAll(listOf(JAVA_OPTIONS, "-Dkotlin.editor.version=${app.versionLabel}"))
+            launch.javaOptions.forEach { addAll(listOf(JAVA_OPTIONS, it)) }
             if (Files.exists(app.icon)) addAll(listOf("--icon", app.icon))
             if (launch.modules.isNotEmpty()) addAll(listOf("--add-modules", launch.modules.joinToString(",")))
             if (app.console && Os.current == Os.WINDOWS) add("--win-console")

@@ -45,6 +45,8 @@ import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.Document
 import org.example.kotlineditor.state.PopupKind
 import org.example.kotlineditor.state.ProjectState
+import org.example.kotlineditor.state.StatusIndicator
+import org.example.kotlineditor.state.StatusIndicators
 import org.example.kotlineditor.state.ToolWindow
 import org.example.kotlineditor.state.workspaceProject
 
@@ -346,9 +348,16 @@ internal fun StatusBar(app: AppState, project: ProjectState) {
         app.session.error?.let {
             Label(it, Modifier.testTag(AppTags.STATUS_ERROR), color = IdeColors.Error, fontSize = 12.sp)
         }
-        LanguageServerStatusItems(project)
+        val indicators = project.statusIndicators
+        LanguageServerStatusItems(
+            project,
+            showServers = indicators.isShown(StatusIndicator.LanguageServers),
+            showMemory = indicators.isShown(StatusIndicator.Memory),
+            showCpu = indicators.isShown(StatusIndicator.Cpu),
+        )
         LinkStatus(app)
-        if (!project.agentMode) tab?.document?.let { DocumentStatus(it) }
+        if (!project.agentMode) tab?.document?.let { DocumentStatus(it, indicators) }
+        StatusIndicatorsMenu(indicators)
     }
 }
 
@@ -370,7 +379,7 @@ private fun LinkStatus(app: AppState) {
 }
 
 @Composable
-private fun DocumentStatus(document: Document) {
+private fun DocumentStatus(document: Document, indicators: StatusIndicators) {
     val caret = document.caret
     // Cheap summary: never materialize a potentially huge selection just to count it.
     val range = document.selectionRange()
@@ -380,18 +389,32 @@ private fun DocumentStatus(document: Document) {
             range.first.line == range.second.line -> " (${range.second.column - range.first.column} chars)"
             else -> " (${range.second.line - range.first.line + 1} lines)"
         }
-    Label(
-        "${caret.line + 1}:${caret.column + 1}$selection",
-        Modifier.testTag(AppTags.STATUS_CARET),
-        color = IdeColors.TextSecondary,
-        fontSize = 12.sp,
-    )
-    Label(if (document.lineSeparator == "\r\n") "CRLF" else "LF", color = IdeColors.TextSecondary, fontSize = 12.sp)
-    Label("UTF-8", color = IdeColors.TextSecondary, fontSize = 12.sp)
-    Label(
-        document.syntax?.spec?.name ?: document.language.name,
-        Modifier.testTag(AppTags.STATUS_LANGUAGE),
-        color = IdeColors.TextSecondary,
-        fontSize = 12.sp,
-    )
+    if (indicators.isShown(StatusIndicator.Caret)) {
+        Label(
+            "${caret.line + 1}:${caret.column + 1}$selection",
+            Modifier.testTag(AppTags.STATUS_CARET),
+            color = IdeColors.TextSecondary,
+            fontSize = 12.sp,
+        )
+    }
+    if (indicators.isShown(StatusIndicator.LineSeparator)) {
+        val separator = if (document.lineSeparator == "\r\n") "CRLF" else "LF"
+        Label(
+            separator,
+            Modifier.testTag(AppTags.STATUS_LINE_SEPARATOR),
+            color = IdeColors.TextSecondary,
+            fontSize = 12.sp,
+        )
+    }
+    if (indicators.isShown(StatusIndicator.Encoding)) {
+        Label("UTF-8", Modifier.testTag(AppTags.STATUS_ENCODING), color = IdeColors.TextSecondary, fontSize = 12.sp)
+    }
+    if (indicators.isShown(StatusIndicator.Language)) {
+        Label(
+            document.syntax?.spec?.name ?: document.language.name,
+            Modifier.testTag(AppTags.STATUS_LANGUAGE),
+            color = IdeColors.TextSecondary,
+            fontSize = 12.sp,
+        )
+    }
 }

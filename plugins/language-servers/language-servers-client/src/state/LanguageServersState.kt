@@ -30,9 +30,12 @@ import org.example.kotlineditor.model.LanguageServersStatus
 import org.example.kotlineditor.model.ProjectCheckResult
 import java.io.IOException
 import java.util.Locale
+import kotlin.math.abs
 
 private const val RETRY_MS = 1_000L
 private const val UI_MEMORY_SAMPLE_MS = 2_000L
+
+private const val UI_CPU_NOISE_POINTS = 1
 
 // Declared when no project is open: the server then knows the project left.
 private const val NO_PROJECT = ""
@@ -79,8 +82,14 @@ class LanguageServersState(
     // Last memory read of the process of the UI, null before the first and where it cannot be read.
     private var uiMemory: ProcessMemory? by mutableStateOf(null)
 
+    // Last processor use of the process of the UI, null before the second measure and where it cannot be read.
+    private var uiCpu: Int? by mutableStateOf(null)
+
     /** Memory of the UI and of the IDE server, as last measured. */
     val memory: IdeMemory get() = ideMemory(uiProcess.identity, uiMemory, status.server)
+
+    /** Processor use of the UI and of the IDE server, as last measured. */
+    val cpu: IdeCpu get() = ideCpu(uiProcess.identity, uiCpu, status.server)
 
     /** Whether a language server runs: before that, nothing can adapt the code to a file operation. */
     val anyRunning: Boolean get() = status.servers.any { it.state == LanguageServerState.Running }
@@ -134,7 +143,7 @@ class LanguageServersState(
     init {
         scope.launch { poll() }
         scope.launch { pollDiagnostics() }
-        scope.launch { sampleUiMemory() }
+        scope.launch { sampleUiProcess() }
         // One at a time, in order: each declaration replaces the previous one on the server.
         scope.launch { declarations.filterNotNull().collect(::send) }
         // A restarted server lost the sessions and what they declared: declared again at each reconnection.
@@ -368,17 +377,26 @@ class LanguageServersState(
         }
     }
 
-    // Reads the memory of the UI every few seconds, away from the UI thread (and from the virtual time of the tests).
-    // A read that would show the same text is dropped: an idle IDE draws no frame for it.
-    private suspend fun sampleUiMemory() {
+    // Reads the memory and the processor use of the UI every few seconds, away from the UI thread (and from the virtual
+    // time of the tests). A read that would show the same text is dropped: an idle IDE draws no frame for it.
+    private suspend fun sampleUiProcess() {
         while (true) {
             val process = uiProcess
             val read = withContext(Dispatchers.Default) { process.memory() }
             val shown = uiMemory?.residentBytes?.let(::memoryText)
             val next = read?.residentBytes?.let(::memoryText)
             if (next != shown) uiMemory = read
+            val cpuRead = withContext(Dispatchers.Default) { process.cpuPercent() }
+            if (cpuMoved(uiCpu, cpuRead)) uiCpu = cpuRead
             withContext(Dispatchers.Default) { delay(UI_MEMORY_SAMPLE_MS) }
         }
+    }
+
+    // A processor use worth a new frame: one that appeared or vanished, or moved by more than the noise of the OS's
+    // counting steps (an idle process flips between 0% and 1%).
+    private fun cpuMoved(shown: Int?, read: Int?): Boolean {
+        if (shown == null || read == null) return shown != read
+        return abs(read - shown) > UI_CPU_NOISE_POINTS
     }
 
     // Long poll, like the status: a server that restarted answers its own (lower) version at once.

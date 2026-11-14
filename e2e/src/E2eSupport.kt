@@ -551,7 +551,7 @@ fun ComposeUiTest.awaitReconnecting() {
 
 /** Waits until the status bar no longer warns about the server. */
 @OptIn(ExperimentalTestApi::class)
-fun ComposeUiTest.awaitReconnected() = awaitNoTag(AppTags.STATUS_CONNECTION)
+fun ComposeUiTest.awaitReconnected(timeout: Long = TIMEOUT) = awaitNoTag(AppTags.STATUS_CONNECTION, timeout)
 
 /** Waits until the status bar's connection message contains [text]. */
 @OptIn(ExperimentalTestApi::class)
