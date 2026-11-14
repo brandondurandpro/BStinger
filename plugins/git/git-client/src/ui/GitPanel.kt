@@ -111,9 +111,8 @@ private fun Message(text: String, tag: String) {
 // partial selection of IntelliJ's checkboxes, and its label tells how many changes are listed.
 @Composable
 private fun SelectAll(project: GitHost, changes: Int) {
-    val checked = project.git.selectedForCommit.size
-    val allChecked = checked == changes && changes > 0
-    val someChecked = checked in 1 until changes
+    val checkedFiles = project.git.selectedForCommit
+    val changedFiles = project.git.status.keys.sorted()
     Row(
         Modifier
             .fillMaxWidth()
@@ -121,44 +120,8 @@ private fun SelectAll(project: GitHost, changes: Int) {
             .padding(start = 9.dp, top = 3.dp, bottom = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            Modifier
-                .testTag(GitTags.GIT_SELECT_ALL)
-                .clickable(
-                    remember { MutableInteractionSource() },
-                    indication = null,
-                ) { project.git.toggleAllCommitSelection() },
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
-                Modifier
-                    .size(14.dp)
-                    .background(if (allChecked) IdeColors.Accent else Color.Transparent, IdeShapes.Small)
-                    .border(
-                        1.dp,
-                        if (allChecked || someChecked) IdeColors.Accent else IdeColors.InputBorder,
-                        IdeShapes.Small,
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                when {
-                    allChecked -> {
-                        CheckIcon(Modifier.size(9.dp), color = IdeColors.OnAccent)
-                    }
-    
-                    someChecked -> {
-                        Box(
-                            Modifier
-                                .size(width = 8.dp, height = 2.dp)
-                                .background(IdeColors.Accent, RoundedCornerShape(1.dp)),
-                        )
-                    }
-                }
-            }
-            Label("Changes ($changes)", Modifier.padding(start = 8.dp), color = IdeColors.TextSecondary, fontSize = 11.sp)
-        }
+        SelectAllToggle(project, changes)
         Box(Modifier.weight(1f))
-        val changedFiles = project.git.status.keys.sorted()
         Label(
             "Review manually",
             Modifier
@@ -169,12 +132,50 @@ private fun SelectAll(project: GitHost, changes: Int) {
             fontSize = 12.sp,
             fontWeight = FontWeight.Medium,
         )
-        val checkedFiles = project.git.selectedForCommit
         if (checkedFiles.isNotEmpty()) {
             ConfirmButton("Revert checked", GitTags.GIT_REVERT_CHECKED, enabled = !project.git.busy) {
                 project.git.revert(checkedFiles)
             }
         }
+    }
+}
+
+// The master checkbox and its label: the only part of the row that toggles the selection, so that the buttons next
+// to it keep their own clicks.
+@Composable
+private fun SelectAllToggle(project: GitHost, changes: Int) {
+    val checked = project.git.selectedForCommit.size
+    val allChecked = checked == changes && changes > 0
+    val someChecked = checked in 1 until changes
+    val filled = if (allChecked) IdeColors.Accent else Color.Transparent
+    val borderColor = if (allChecked || someChecked) IdeColors.Accent else IdeColors.InputBorder
+    Row(
+        Modifier
+            .testTag(GitTags.GIT_SELECT_ALL)
+            .clickable(
+                remember { MutableInteractionSource() },
+                indication = null,
+            ) { project.git.toggleAllCommitSelection() },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier
+                .size(14.dp)
+                .background(filled, IdeShapes.Small)
+                .border(1.dp, borderColor, IdeShapes.Small),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (allChecked) CheckIcon(Modifier.size(9.dp), color = IdeColors.OnAccent)
+            if (someChecked) {
+                Box(
+                    Modifier
+                        .size(width = 8.dp, height = 2.dp)
+                        .background(IdeColors.Accent, RoundedCornerShape(1.dp)),
+                )
+            }
+        }
+        val label = "Changes ($changes)"
+        Label(label, Modifier.padding(start = 8.dp), color = IdeColors.TextSecondary, fontSize = 11.sp)
     }
 }
 
