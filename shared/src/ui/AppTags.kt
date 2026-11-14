@@ -7,6 +7,7 @@ package org.example.kotlineditor.ui
 @Suppress("TooManyFunctions")
 object AppTags {
     const val WELCOME = "welcome"
+    const val PROJECT_NEW_WINDOW = "project.newWindow"
     const val WELCOME_OPEN = "welcome.open"
     const val WELCOME_SEARCH = "welcome.search"
     const val WELCOME_ERROR = "welcome.error"

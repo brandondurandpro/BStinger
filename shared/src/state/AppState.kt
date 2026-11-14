@@ -32,6 +32,8 @@ class AppState(
     remoteFactory: RemoteFactory? = null,
     /** Makes the telemetry the user agrees to, for an installation id; null measures nothing (previews, tests). */
     telemetryOf: ((instanceId: String) -> Telemetry)? = null,
+    /** Whether to reopen the last project at startup when the user starts in agent mode; false for added windows. */
+    reopenLastProject: Boolean = true,
 ) {
     val preferences = PreferenceHub(preferenceStore)
 
@@ -53,6 +55,9 @@ class AppState(
     /** The server shown: its services, language servers, recent projects and open project. */
     var session: ServerContext by mutableStateOf(contextOf(initialServices, tunnel = null))
         private set
+
+    /** Opens another IDE window; set by the desktop app, null where windows cannot be added (previews, tests). */
+    var onNewWindow: (() -> Unit)? by mutableStateOf(null)
 
     /** Whether the devtools were opened (Ctrl+Alt+Shift+D) since the IDE started: shows their buttons. */
     var devtools by mutableStateOf(false)
@@ -81,7 +86,7 @@ class AppState(
             }
 
     /** Whether the IDE is reopening its last project in agent mode: the welcome screen is not shown meanwhile. */
-    var launching by mutableStateOf(settings.startsInAgentMode)
+    var launching by mutableStateOf(reopenLastProject && settings.startsInAgentMode)
         private set
 
     init {
@@ -100,6 +105,10 @@ class AppState(
         } finally {
             launching = false
         }
+    }
+
+    fun openNewWindow() {
+        onNewWindow?.invoke()
     }
 
     /** Saves the open project, stops the remote session (its daemon keeps running) and shows the local server. */
