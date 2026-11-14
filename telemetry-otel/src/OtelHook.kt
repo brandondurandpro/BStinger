@@ -47,6 +47,8 @@ class ExportConfig(
     val instanceId: String,
     /** Longest wait for the collector: a request, then the shutdown. */
     val timeoutMs: Long = TIMEOUT_MS,
+    /** Longest wait for the last export when closing: quitting must not wait for a collector that does not answer. */
+    val closeTimeoutMs: Long = CLOSE_TIMEOUT_MS,
     /** Spans waiting for their export; the newer ones are dropped once it is full, nothing waits. */
     val queueSize: Int = QUEUE_SIZE,
     /** How often the spans are sent. */
@@ -61,6 +63,7 @@ class ExportConfig(
         /** The environment variable that changes [endpoint]. */
         const val ENDPOINT_VARIABLE = "OTEL_EXPORTER_OTLP_ENDPOINT"
         private const val TIMEOUT_MS = 2_000L
+        private const val CLOSE_TIMEOUT_MS = 400L
         private const val QUEUE_SIZE = 2048
         private const val SPAN_DELAY_MS = 5_000L
         private const val METRIC_INTERVAL_MS = 30_000L
@@ -194,16 +197,16 @@ class OtelHook(private val config: ExportConfig) :
         close()
     }
 
-    /** Sends what is queued (unless switched off) and stops, waiting at most the timeout. */
+    /** Sends what is queued (unless switched off) and stops, waiting at most the close timeout. */
     override fun close() {
-        val deadline = System.nanoTime() + config.timeoutMs * NANOS_PER_MILLI
+        val deadline = System.nanoTime() + config.closeTimeoutMs * NANOS_PER_MILLI
         // The meter provider's shutdown sends the last histogram before it even returns its result, waiting for the
         // collector for seconds: it runs on a daemon thread, side by side with the spans' shutdown.
         val metrics = thread(isDaemon = true, name = "otel-metrics-shutdown") { meterProvider.shutdown() }
         // The spans' shutdown may block before it returns too (a full queue sent to a silent collector): the same.
         val spans =
             thread(isDaemon = true, name = "otel-spans-shutdown") {
-                tracerProvider.shutdown().join(config.timeoutMs, TimeUnit.MILLISECONDS)
+                tracerProvider.shutdown().join(config.closeTimeoutMs, TimeUnit.MILLISECONDS)
             }
         spans.join(remainingMs(deadline))
         metrics.join(remainingMs(deadline))

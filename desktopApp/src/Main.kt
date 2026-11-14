@@ -31,6 +31,7 @@ import org.slf4j.LoggerFactory
 import java.io.File
 import java.io.IOException
 import java.lang.management.ManagementFactory
+import kotlin.concurrent.thread
 import kotlin.system.exitProcess
 
 /**
@@ -82,8 +83,7 @@ fun main(args: Array<String>) {
                 state.exit {
                     plugins.stop()
                     client.close()
-                    local?.close()
-                    exporter.close()
+                    closeInParallel(local, exporter)
                     exitApplication()
                 }
             },
@@ -93,6 +93,13 @@ fun main(args: Array<String>) {
             App(state)
         }
     }
+}
+
+// The local server and the telemetry export each wait for something outside (a child process, a collector): side by
+// side, closing takes the longer of the two rather than their sum.
+private fun closeInParallel(vararg closeables: AutoCloseable?) {
+    val threads = closeables.filterNotNull().map { closeable -> thread(name = "closing") { closeable.close() } }
+    threads.forEach(Thread::join)
 }
 
 // The secret of the server given with --server: --token-file, then --token (deprecated: every user of the machine
