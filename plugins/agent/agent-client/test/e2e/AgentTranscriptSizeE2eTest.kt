@@ -42,6 +42,7 @@ class AgentTranscriptSizeE2eTest {
             sendPrompt("tools 2 $OUTPUT_LINES")
             awaitShown(conversation, "Searched 2 times.")
             awaitIdle(conversation)
+            openToolCalls()
             assertContains(shownConversation(conversation), "1 matches")
             assertContains(shownConversation(conversation), "line 1 of the output")
             val outputs = conversation.itemsOf<AgentItem.ToolCall>().map { it.output }
@@ -60,6 +61,7 @@ class AgentTranscriptSizeE2eTest {
             awaitIdle(conversation)
             val output = conversation.itemsOf<AgentItem.ToolCall>().firstOrNull()?.output
             assertEquals(3, output?.lines()?.size)
+            openToolCalls()
             assertContains(shownConversation(conversation), "line 2 of the output")
         }
 
@@ -74,6 +76,7 @@ class AgentTranscriptSizeE2eTest {
             awaitShown(conversation, "Wrote")
             awaitIdle(conversation)
             assertEquals(WRITTEN_LINES, file.readText().lines().size)
+            openToolCalls()
             val shown = textOf(AgentTags.AGENT_DIFF)
             assertContains(shown, "+ line 1")
             assertContains(shown, "+ line $SHOWN_LINES")
@@ -93,6 +96,7 @@ class AgentTranscriptSizeE2eTest {
             answerPermission("allow")
             awaitShown(conversation, "Wrote")
             awaitIdle(conversation)
+            openToolCalls()
             assertContains(textOf(AgentTags.AGENT_DIFF), "+ line 3")
             awaitNoTag(AgentTags.AGENT_DIFF_MORE)
         }

@@ -126,9 +126,10 @@ private fun FollowTheEnd(conversation: Conversation) {
     val listState = conversation.listState
     val items = conversation.shownItems
     val last = items.lastOrNull()
+    val rows = transcriptRows(items)
     LaunchedEffect(items.size, last?.version) {
-        if (items.isNotEmpty()) {
-            listState.scrollToItem(items.lastIndex)
+        if (rows.isNotEmpty()) {
+            listState.scrollToItem(rows.lastIndex)
             listState.scrollBy(TO_THE_END)
         }
     }
@@ -138,14 +139,14 @@ private fun FollowTheEnd(conversation: Conversation) {
 @Composable
 private fun Transcript(agent: AgentState, conversation: Conversation) {
     val listState = conversation.listState
-    val items = conversation.shownItems
+    val rows = transcriptRows(conversation.shownItems)
     LazyColumn(
         Modifier.fillMaxSize(),
         state = listState,
         horizontalAlignment = Alignment.CenterHorizontally,
         contentPadding = PaddingValues(vertical = 16.dp),
     ) {
-        itemsIndexed(items, key = { _, item -> item.id }) { index, item ->
+        itemsIndexed(rows, key = { _, row -> row.key }) { index, row ->
             Box(
                 Modifier
                     .widthIn(max = CONTENT_WIDTH)
@@ -153,7 +154,10 @@ private fun Transcript(agent: AgentState, conversation: Conversation) {
                     .padding(horizontal = 20.dp, vertical = 6.dp)
                     .testTag(AgentTags.agentMessage(index)),
             ) {
-                ItemView(agent, conversation, item)
+                when (row) {
+                    is TranscriptRow.Single -> ItemView(agent, conversation, row.item)
+                    is TranscriptRow.Tools -> ToolCallRun(conversation, row.calls)
+                }
             }
         }
         if (thinking(conversation)) {
