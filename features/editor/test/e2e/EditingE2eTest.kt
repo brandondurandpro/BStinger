@@ -18,6 +18,7 @@ import androidx.compose.ui.test.withKeyDown
 import org.example.kotlineditor.state.Document
 import org.example.kotlineditor.state.TextPos
 import org.example.kotlineditor.state.delete
+import org.example.kotlineditor.state.insert
 import org.example.kotlineditor.state.selectedText
 import org.example.kotlineditor.ui.AppTags
 import org.example.kotlineditor.ui.EditorTags
@@ -114,6 +115,26 @@ class EditingE2eTest {
             type("x")
             keys { pressKey(Key.Enter) }
             assertEquals("    ", doc.lines[8])
+        }
+
+    @Test
+    fun `Enter between auto-closed braces puts the closing brace on its own line`() =
+        runComposeUiTest {
+            val app = launchWithProject(project)
+            openFromTree("src/main/kotlin/App.kt")
+            val doc = app.document()
+            onNodeWithTag(EditorTags.EDITOR).performClick()
+            runOnUiThread {
+                doc.moveTo(TextPos(0, 0))
+                doc.insert("{}\n")
+                doc.moveTo(TextPos(0, 1))
+            }
+            keys { pressKey(Key.Enter) }
+            assertEquals("{", doc.lines[0])
+            assertEquals("    ", doc.lines[1])
+            assertEquals("}", doc.lines[2])
+            assertEquals("package demo", doc.lines[3])
+            assertEquals(TextPos(1, 4), doc.caret)
         }
 
     @Test
