@@ -4,6 +4,8 @@ import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.model.AgentItem
@@ -13,6 +15,7 @@ import org.example.kotlineditor.state.ReviewAspect
 import org.example.kotlineditor.state.TabStatus
 import org.example.kotlineditor.state.refreshChanges
 import org.example.kotlineditor.state.reviewPrompt
+import org.example.kotlineditor.state.reviewReport
 import org.example.kotlineditor.ui.AgentTags
 import org.example.kotlineditor.ui.EditorTags
 import java.io.File
@@ -82,13 +85,61 @@ class AgentReviewE2eTest {
             awaitTag(AgentTags.agentReviewAspect(ReviewAspect.Tests.name)).performClick()
             awaitTag(AgentTags.agentReviewAspect(ReviewAspect.Security.name)).performClick()
             awaitTag(AgentTags.AGENT_REVIEW_START).performClick()
-            awaitTag(AgentTags.AGENT_REVIEW_DEFAULT).performClick()
             awaitCondition(AGENT_TIMEOUT) { app.project.agent.conversations.any { it.title.startsWith("Review:") } }
             val reviewer = app.project.agent.conversations.first { it.title.startsWith("Review:") }
             awaitCondition(AGENT_TIMEOUT) { reviewer.itemsOf<AgentItem.UserText>().isNotEmpty() }
             val sent = reviewer.itemsOf<AgentItem.UserText>().first().text
             assertTrue(ReviewAspect.Security.label in sent, sent)
             assertFalse(ReviewAspect.Tests.label in sent, sent)
+        }
+
+    @Test
+    fun `a review sent to the original agent reaches it and shows its conversation`() =
+        runComposeUiTest {
+            project.commitAll()
+            val app = launchWithProject(project, agentPreferences())
+            val author = conversationWithChange(app)
+            awaitTag(AgentTags.AGENT_REVIEW).performClick()
+            awaitTag(AgentTags.AGENT_REVIEW_BY_AGENT).performClick()
+            awaitTag(AgentTags.AGENT_REVIEW_START).performClick()
+            awaitCondition(AGENT_TIMEOUT) { app.project.agent.conversations.any { it.title.startsWith("Review:") } }
+            val reviewer = app.project.agent.conversations.first { it.title.startsWith("Review:") }
+            assertEquals(author, reviewer.reviewOf)
+            awaitCondition(AGENT_TIMEOUT) { !reviewer.busy && reviewReport(reviewer) != null }
+            val report = checkNotNull(reviewReport(reviewer))
+            awaitTag(AgentTags.AGENT_REVIEW_SEND).performClick()
+            awaitCondition(AGENT_TIMEOUT) { app.project.agent.current === author }
+            awaitCondition(AGENT_TIMEOUT) {
+                author.itemsOf<AgentItem.UserText>().any { "Another agent reviewed your work" in it.text && report in it.text }
+            }
+        }
+
+    @Test
+    fun `a conversation that reviews nothing has no Send button`() =
+        runComposeUiTest {
+            project.commitAll()
+            val app = launchWithProject(project, agentPreferences())
+            startConversation(app)
+            awaitNoTag(AgentTags.AGENT_REVIEW_SEND)
+        }
+
+    @Test
+    fun `the model of the reviewing agent is chosen in the dialog and its session uses it`() =
+        runComposeUiTest {
+            project.commitAll()
+            val app = launchWithProject(project, agentPreferences())
+            conversationWithChange(app)
+            awaitTag(AgentTags.AGENT_REVIEW).performClick()
+            awaitTag(AgentTags.AGENT_REVIEW_BY_AGENT).performClick()
+            // Clickable once the agent said which models it offers.
+            val offered = hasTestTag(AgentTags.AGENT_REVIEW_MODEL) and hasClickAction()
+            awaitCondition { onAllNodes(offered).fetchSemanticsNodes().isNotEmpty() }
+            awaitTag(AgentTags.AGENT_REVIEW_MODEL).performClick()
+            awaitTag(AgentTags.agentReviewModel("fake-smart")).performClick()
+            awaitTag(AgentTags.AGENT_REVIEW_START).performClick()
+            awaitCondition(AGENT_TIMEOUT) { app.project.agent.conversations.any { it.title.startsWith("Review:") } }
+            val reviewer = app.project.agent.conversations.first { it.title.startsWith("Review:") }
+            awaitCondition(AGENT_TIMEOUT) { reviewer.model?.current == "fake-smart" }
         }
 
     @Test

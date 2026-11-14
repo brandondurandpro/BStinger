@@ -311,6 +311,7 @@ private fun PromptActions(agent: AgentState, conversation: Conversation) {
         DiscussButton(agent, conversation)
         // The card of the changes has the button once something changed; before, it stays here.
         if (conversation.changes.files.isEmpty()) ReviewButton(agent, conversation)
+        SendReviewButton(agent, conversation)
         Spacer(Modifier.width(8.dp))
         // The picker already says which agent answers: no label for it, only the room that keeps Stop and Send right.
         Spacer(Modifier.weight(1f))

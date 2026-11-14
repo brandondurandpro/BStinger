@@ -23,6 +23,9 @@ import androidx.compose.ui.window.Dialog
 import org.example.kotlineditor.state.DEFAULT_REVIEW_ASPECTS
 import org.example.kotlineditor.state.ReviewAspect
 import org.example.kotlineditor.state.reviewManually
+import org.example.kotlineditor.state.reviewerModels
+import org.example.kotlineditor.state.reviewReport
+import org.example.kotlineditor.state.sendReviewToAuthor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -37,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
+import org.example.kotlineditor.model.AgentOption
 import org.example.kotlineditor.model.AgentRegistryEntry
 import org.example.kotlineditor.state.AgentState
 import org.example.kotlineditor.state.Conversation
@@ -98,10 +102,33 @@ fun ReviewButton(agent: AgentState, conversation: Conversation, modifier: Modifi
     if (choosing) ReviewDialog(agent, conversation) { choosing = false }
 }
 
-/** What the reviewing agent looks at, ticked by the user, then the agent that starts the review. */
+/** "Send to the original agent": the report of a reviewer goes to the agent it reviewed, which fixes what is real. */
+@Composable
+fun SendReviewButton(agent: AgentState, conversation: Conversation) {
+    if (conversation.reviewOf == null) return
+    val enabled = !conversation.busy && reviewReport(conversation) != null
+    IdeButton(
+        "Send to the original agent",
+        { agent.sendReviewToAuthor(conversation) },
+        Modifier.testTag(AgentTags.AGENT_REVIEW_SEND),
+        enabled = enabled,
+        compact = true,
+    )
+}
+
+/** What the reviewing agent looks at, ticked by the user, then the agent and its model, then the start. */
 @Composable
 private fun ReviewDialog(agent: AgentState, conversation: Conversation, close: () -> Unit) {
     var aspects by remember { mutableStateOf(DEFAULT_REVIEW_ASPECTS) }
+    var reviewer by remember { mutableStateOf<String?>(null) }
+    var models by remember { mutableStateOf<AgentOption?>(null) }
+    var model by remember { mutableStateOf<String?>(null) }
+    // The models are those of the agent chosen: read again when it changes, the one chosen before is forgotten.
+    LaunchedEffect(reviewer) {
+        model = null
+        models = null
+        models = agent.reviewerModels(reviewer)
+    }
     Dialog(onDismissRequest = close) {
         Column(
             Modifier
@@ -118,15 +145,77 @@ private fun ReviewDialog(agent: AgentState, conversation: Conversation, close: (
                 val checked = aspect in aspects
                 AspectRow(aspect, checked) { aspects = if (checked) aspects - aspect else aspects + aspect }
             }
+            Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Label("Agent", Modifier.width(52.dp), color = IdeColors.TextSecondary, fontSize = 12.sp)
+                ReviewerPicker(agent, reviewer) { reviewer = it }
+                Spacer(Modifier.width(12.dp))
+                ReviewerModelPicker(models, model) { model = it }
+            }
+            val settings = reviewerSettings(models, model)
             Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
                 IdeButton("Cancel", close, Modifier.testTag(AgentTags.AGENT_REVIEW_CANCEL))
                 Spacer(Modifier.width(8.dp))
-                val tags = RegistryTags(AgentTags.AGENT_REVIEW_DEFAULT, AgentTags.AGENT_REVIEW_FILTER, AgentTags::agentReviewer)
-                val button = RegistryButton("Start", "Choose the agent that reviews", AgentTags.AGENT_REVIEW_START, tags)
-                RegistryAgentButton(agent, button, aspects.isNotEmpty()) { entry ->
+                val start = {
                     close()
-                    agent.reviewWith(conversation, entry, aspects)
+                    agent.reviewWith(conversation, reviewer, aspects, settings)
+                    Unit
                 }
+                IdeButton("Start", start, Modifier.testTag(AgentTags.AGENT_REVIEW_START), primary = true, enabled = aspects.isNotEmpty())
+            }
+        }
+    }
+}
+
+// The setting that gives the session the model chosen; none while the choice is the agent's own.
+private fun reviewerSettings(models: AgentOption?, model: String?): Map<String, String> {
+    if (models == null || model == null) return emptyMap()
+    return mapOf(models.id to model)
+}
+
+/** The agent that reviews: the one of the settings, or one of the registry. */
+@Composable
+private fun ReviewerPicker(agent: AgentState, chosen: String?, choose: (String?) -> Unit) {
+    val tags = RegistryTags(AgentTags.AGENT_REVIEW_DEFAULT, AgentTags.AGENT_REVIEW_FILTER, AgentTags::agentReviewer)
+    val nameOf: (List<AgentRegistryEntry>?) -> String = { entries ->
+        val named = entries?.firstOrNull { it.id == chosen }?.name
+        if (chosen == null) agent.settingsAgentLabel else named ?: chosen
+    }
+    val button = RegistryButton("Agent", "Choose the agent that reviews", AgentTags.AGENT_REVIEW_AGENT, tags, chosen, nameOf)
+    RegistryAgentButton(agent, button, enabled = true, choose)
+}
+
+/** The model of the reviewing agent among those it offers; "Default" leaves the choice to the agent. */
+@Composable
+private fun ReviewerModelPicker(models: AgentOption?, chosen: String?, choose: (String?) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    val shown = models?.values?.firstOrNull { it.value == chosen }?.name ?: "Default model"
+    Box {
+        Label(
+            "$shown ▾",
+            Modifier
+                .background(if (open) IdeColors.Selection else Color.Transparent, IdeShapes.Medium)
+                .clickable(enabled = models != null) { open = true }
+                .testTag(AgentTags.AGENT_REVIEW_MODEL)
+                .padding(horizontal = 6.dp, vertical = 2.dp),
+            color = if (models != null) IdeColors.TextSecondary else IdeColors.LineNumber,
+            fontSize = 12.sp,
+        )
+        IdeDropdownMenu(open, onDismissRequest = { open = false }, Modifier.widthIn(max = MENU_WIDTH).closesOnEscape { open = false }) {
+            val pick: (String?) -> Unit = { value ->
+                open = false
+                choose(value)
+            }
+            IdeMenuItem(
+                text = { Text("Default model", fontSize = 13.sp) },
+                onClick = { pick(null) },
+                modifier = Modifier.testTag(AgentTags.agentReviewModel("")),
+            )
+            for (value in models?.values.orEmpty()) {
+                IdeMenuItem(
+                    text = { Text(value.name, fontSize = 13.sp) },
+                    onClick = { pick(value.value) },
+                    modifier = Modifier.testTag(AgentTags.agentReviewModel(value.value)),
+                )
             }
         }
     }
@@ -174,7 +263,15 @@ fun DiscussButton(agent: AgentState, conversation: Conversation) {
 }
 
 /** What a button that lists the agents of the registry shows: its [label], its tooltip, its tag and those of its menu. */
-private class RegistryButton(val label: String, val tooltip: String, val tag: String, val tags: RegistryTags)
+private class RegistryButton(
+    val label: String,
+    val tooltip: String,
+    val tag: String,
+    val tags: RegistryTags,
+    /** The agent marked as chosen in its menu, and what the button says given the registry (its name, once read). */
+    val chosenId: String? = null,
+    val text: (List<AgentRegistryEntry>?) -> String = { label },
+)
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -195,7 +292,7 @@ private fun RegistryAgentButton(agent: AgentState, button: RegistryButton, enabl
     Box {
         TooltipArea(tooltip = { Tooltip(button.tooltip) }) {
             Label(
-                "${button.label} ▾",
+                "${button.text(entries)} ▾",
                 Modifier
                     .background(if (open) IdeColors.Selection else Color.Transparent, IdeShapes.Medium)
                     .clickable(enabled = enabled) { open = true }
@@ -210,7 +307,7 @@ private fun RegistryAgentButton(agent: AgentState, button: RegistryButton, enabl
             choose(entry)
         }
         IdeDropdownMenu(open, onDismissRequest = { open = false }, Modifier.widthIn(max = MENU_WIDTH).closesOnEscape { open = false }) {
-            val menu = RegistryMenu(agent.settingsAgentLabel, chosenId = null, tags = button.tags)
+            val menu = RegistryMenu(agent.settingsAgentLabel, chosenId = button.chosenId, tags = button.tags)
             AgentRegistryMenu(menu, entries, failure, picked)
         }
     }

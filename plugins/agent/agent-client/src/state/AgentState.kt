@@ -240,6 +240,10 @@ class Conversation(val id: Int, title: String, val branch: String) {
     /** Where the items of the silent question about the quota start, null when none is in flight. */
     internal var probeFrom: Int? by mutableStateOf(null)
 
+    /** The conversation this one reviews (the review by an agent), null for any other conversation. */
+    var reviewOf: Conversation? by mutableStateOf(null)
+        internal set
+
     /** The discussion with another agent this conversation leads, null when none runs. */
     internal var discussion: Job? = null
 
