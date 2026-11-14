@@ -33,6 +33,7 @@ object AppTags {
     const val HOME_STATUS_BAR = "home.statusBar"
     const val PROJECT_SETTINGS = "project.settings"
     const val STRIP_SETTINGS = "strip.settings"
+    const val TOOLBAR_LEFT_COLUMN = "toolbar.leftColumn"
     const val WELCOME_SETTINGS = "welcome.settings"
     const val SETTINGS = "settings"
     const val SETTINGS_CLOSE = "settings.close"
