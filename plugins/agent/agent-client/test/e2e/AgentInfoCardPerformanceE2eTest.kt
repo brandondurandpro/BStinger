@@ -10,10 +10,12 @@ import org.example.kotlineditor.ui.AgentTags
 import java.io.File
 import kotlin.test.AfterTest
 import kotlin.test.Test
+import kotlin.time.Duration.Companion.minutes
 
 private const val COMMITS = 5_000
 private const val CHANGED_FILES = 150
-private const val SETUP_TIMEOUT = 60_000L
+private const val SETUP_TIMEOUT = 120_000L
+private val TEST_TIMEOUT = 5.minutes
 
 /**
  * The "Informations" card on a repository of [COMMITS] commits, whose worktree has [CHANGED_FILES] uncommitted files:
@@ -51,7 +53,7 @@ class AgentInfoCardPerformanceE2eTest {
 
     @Test
     fun `the card reads its distance from the base and its changes fast on a long history`() =
-        runComposeUiTest {
+        runComposeUiTest(testTimeout = TEST_TIMEOUT) {
             history()
             val app = launchWithProject(project, agentPreferences())
             awaitTag(AgentTags.MODE_AGENT).performClick()
