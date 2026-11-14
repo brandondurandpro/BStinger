@@ -3,9 +3,11 @@ package org.example.kotlineditor.e2e
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.e2e.FakePhpServers.Companion.FAKE
@@ -142,6 +144,23 @@ class LanguageServerE2eTest {
             awaitNoTag(LanguageServerTags.LSP_CHOICE)
             assertEquals(1, app.languageServers.size)
             assertEquals(1, running.users)
+        }
+
+    @Test
+    fun `the window is one column, with the settings above the servers and the memory of the IDE under them`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, languageServers = servers().chosen().settings)
+            openFromTree("src/index.php")
+            val running = awaitServer(app) { it.state == LanguageServerState.Running }
+            awaitTag(LanguageServerTags.statusLanguageServer(running.id)).performClick()
+            // Scrolled to the bottom first, then all measured in the same frame.
+            awaitTag(LanguageServerTags.LANGUAGE_SERVERS_IDE).performScrollTo()
+            val memory = awaitTag(LanguageServerTags.LANGUAGE_SERVERS_IDE).getBoundsInRoot()
+            val server = awaitTag(LanguageServerTags.languageServerRestart(running.id)).getBoundsInRoot()
+            val hints = awaitTag(LanguageServerTags.inlayHintsMode("Inline")).getBoundsInRoot()
+            // Under each other, not side by side.
+            assertTrue(hints.bottom.value <= server.top.value, "the servers are not under the settings: $hints $server")
+            assertTrue(server.bottom.value <= memory.top.value, "the memory is not under the servers: $server $memory")
         }
 
     @Test

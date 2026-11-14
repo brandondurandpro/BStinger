@@ -9,16 +9,14 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -143,24 +141,14 @@ private fun ColumnScope.LanguageServersContent(project: LanguageServersHost, sta
         )
     }
     val servers = state.status.servers
-    BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-        // Wide (the bottom dock): the settings on the left and the servers beside them, all in view at once.
-        if (maxWidth >= WIDE_LAYOUT) {
-            Row(Modifier.fillMaxSize()) {
-                Column(Modifier.width(SETTINGS_WIDTH).fillMaxHeight().verticalScroll(rememberScrollState())) {
-                    SettingsSections(project, state, servers)
-                }
-                Box(Modifier.fillMaxHeight().width(1.dp).background(IdeColors.Separator))
-                Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState())) {
-                    ServersSection(project, state, servers)
-                }
-            }
-        } else {
-            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-                SettingsSections(project, state, servers)
-                SectionDivider()
-                ServersSection(project, state, servers)
-            }
+    // One column, read from top to bottom: the few settings, the servers they apply to, then the IDE's own use.
+    Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
+        Column(Modifier.widthIn(max = CONTENT_MAX_WIDTH).fillMaxWidth()) {
+            SettingsSection(project, state, servers)
+            SectionDivider()
+            ServersSection(project, state, servers)
+            SectionDivider()
+            IdeMemorySection(state)
         }
     }
     state.log?.let { log ->
@@ -169,25 +157,25 @@ private fun ColumnScope.LanguageServersContent(project: LanguageServersHost, sta
     }
 }
 
-// From this width the window shows its settings and its servers side by side.
-private val WIDE_LAYOUT = 640.dp
-private val SETTINGS_WIDTH = 340.dp
+// The column stops growing here, so that a window as wide as the screen does not stretch its cards.
+private val CONTENT_MAX_WIDTH = 860.dp
 
-// The inlay hints, the check of the project, and the memory of the IDE server.
+// One line for the inlay hints mode and the check of the project, the notes and the check's result under it.
 @Composable
-private fun SettingsSections(
+private fun SettingsSection(
     project: LanguageServersHost,
     state: LanguageServersState,
     servers: List<LanguageServerInfo>,
 ) {
-    Column(SECTION, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        InlayHintsModeRow(project)
+    Column(SECTION, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            InlayHintsModeRow(project, Modifier.weight(1f))
+            ProjectCheckButton(project, state)
+        }
         InlayHintsNote(servers)
         SetupNote(servers)
-        ProjectCheckSection(project, state)
+        ProjectCheckResult(project, state)
     }
-    SectionDivider()
-    IdeMemorySection(state)
 }
 
 // A card per running language server, or why there is none.
@@ -222,14 +210,19 @@ private fun SectionDivider() {
 
 // The check of the whole project with vue-tsc: the language servers only know the files that are open.
 @Composable
-private fun ProjectCheckSection(project: LanguageServersHost, state: LanguageServersState) {
+private fun ProjectCheckButton(project: LanguageServersHost, state: LanguageServersState) {
     IdeButton(
         if (state.checking) "Checking…" else "Check project (vue-tsc)",
         { state.checkProject(project.root.path) },
-        Modifier.fillMaxWidth().testTag(LanguageServerTags.PROJECT_CHECK),
+        Modifier.testTag(LanguageServerTags.PROJECT_CHECK),
         enabled = !state.checking,
         icon = Lucide.Check,
     )
+}
+
+// What the last check found: its summary, then one line per problem.
+@Composable
+private fun ProjectCheckResult(project: LanguageServersHost, state: LanguageServersState) {
     state.projectCheck?.let {
         Label(
             it.summary,
@@ -268,8 +261,8 @@ private val PROBLEMS_HEIGHT = 160.dp
 // How the inlay hints (`name:` before an argument) show in the editors: not at all, above the caret's line, or in
 // the code.
 @Composable
-private fun InlayHintsModeRow(project: LanguageServersHost) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+private fun InlayHintsModeRow(project: LanguageServersHost, modifier: Modifier) {
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
         Label("Inlay hints", Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
         SegmentedControl(
             InlayHintsMode.entries,
@@ -320,7 +313,7 @@ internal fun MemoryLine(name: String, value: String, valueTag: String? = null) {
 }
 
 @Composable
-private fun MonoValue(value: String, modifier: Modifier = Modifier) {
+internal fun MonoValue(value: String, modifier: Modifier = Modifier) {
     val style = LocalCodeStyle.current.copy(color = IdeColors.Text, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
     BasicText(value, modifier, style = style, maxLines = 1)
 }
