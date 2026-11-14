@@ -99,7 +99,7 @@ class RemoteDaemonSharingE2eTest {
             awaitTag(RemoteTags.REMOTE_REPLACE_CONFIRM, timeout = 60_000).performClick()
             awaitTag(TreeTags.treeRow("src"), timeout = 60_000)
             assertTrue(app.state.session.isRemote)
-            assertFalse(isAlive(oldPid), "the old daemon must be stopped")
+            awaitDaemonStopped(oldPid)
             assertEquals("${Protocol.VERSION}", RemoteTestEnvironment.daemonState()?.getProperty("protocol"))
         }
 
@@ -112,7 +112,7 @@ class RemoteDaemonSharingE2eTest {
             connectRemoteTo(RemoteTestEnvironment, project.path)
             awaitTag(TreeTags.treeRow("src"), timeout = 60_000)
             awaitNoTag(RemoteTags.REMOTE_REPLACE_QUESTION)
-            assertFalse(isAlive(oldPid), "the old daemon must be stopped")
+            awaitDaemonStopped(oldPid)
             assertNotEquals(oldPid, RemoteTestEnvironment.daemonPid(), "the daemon must be replaced")
         }
 
@@ -128,10 +128,16 @@ class RemoteDaemonSharingE2eTest {
             assertTrue(isAlive(oldPid), "the old daemon must keep running until the user agrees")
             onNodeWithTag(RemoteTags.REMOTE_REPLACE_CONFIRM).performClick()
             awaitTag(TreeTags.treeRow("src"), timeout = 60_000)
-            assertFalse(isAlive(oldPid), "the old daemon must be stopped")
+            awaitDaemonStopped(oldPid)
         }
 
     private fun isAlive(pid: Long): Boolean = ProcessHandle.of(pid).map { it.isAlive }.orElse(false)
+
+    // The old daemon is stopped by the replacement, but its process takes a moment to exit on a loaded runner.
+    private fun ComposeUiTest.awaitDaemonStopped(pid: Long) {
+        awaitCondition(timeout = 60_000) { !isAlive(pid) }
+        assertFalse(isAlive(pid), "the old daemon must be stopped")
+    }
 
     @Test
     fun `the bundles of other builds unused for a week are removed, the others are kept`() =
