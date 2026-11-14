@@ -258,6 +258,7 @@ private fun appStateOf(
     grammars: GrammarStore?,
     telemetry: ((String) -> Telemetry)?,
     initialProject: String?,
+    startProject: String?,
 ): AppState =
     AppState(
         services,
@@ -268,6 +269,7 @@ private fun appStateOf(
         JvmRemoteFactory,
         telemetry,
         initialProject = initialProject,
+        startProject = startProject,
     )
 
 /**
@@ -292,6 +294,8 @@ fun ComposeUiTest.launchApp(
     ssh: List<String>? = null,
     /** A project the window opens at startup, in agent mode on the question of a new conversation (an added window). */
     initialProject: String? = null,
+    /** A folder opened at startup like the one the `ide` command gives. */
+    startProject: String? = null,
 ): E2eApp {
     TextClipboard.useSystem = false
     val pluginSetup = PluginSetup(plugins.map(::loadPlugin), pluginsDirectory?.let { startPlugins(it) })
@@ -320,7 +324,8 @@ fun ComposeUiTest.launchApp(
         val scope = rememberCoroutineScope()
         val state =
             remember {
-                appStateOf(services, scope, withoutRealAgent(preferences), grammars, measured, initialProject)
+                val store = withoutRealAgent(preferences)
+                appStateOf(services, scope, store, grammars, measured, initialProject, startProject)
             }
         created = state
         state.plugins = pluginSetup.installed

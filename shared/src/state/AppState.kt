@@ -36,6 +36,8 @@ class AppState(
     reopenLastProject: Boolean = true,
     /** A project to open at startup, in agent mode with the question of a new conversation: an added window's. */
     initialProject: String? = null,
+    /** A project to open at startup as the user would from the welcome screen: the folder given on the command line. */
+    startProject: String? = null,
 ) {
     val preferences = PreferenceHub(preferenceStore)
 
@@ -97,9 +99,25 @@ class AppState(
     init {
         scope.launch { preferences.saveOnChange(::currentPreferences) }
         when {
-            initialProject != null -> scope.launch { openForNewConversation(initialProject) }
-            launching -> scope.launch { launchInAgentMode() }
-            else -> session.reloadRecents()
+            initialProject != null -> {
+                scope.launch { openForNewConversation(initialProject) }
+            }
+
+            // The folder given on the command line opens as from the welcome screen, in the mode the user left.
+            startProject != null -> {
+                scope.launch {
+                    session.loadRecents()
+                    session.openProject(startProject)
+                }
+            }
+
+            launching -> {
+                scope.launch { launchInAgentMode() }
+            }
+
+            else -> {
+                session.reloadRecents()
+            }
         }
     }
 

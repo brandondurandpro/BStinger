@@ -7,3 +7,6 @@
 
 # Kotlin CLI wrapper without extension
 kotlin text eol=lf
+
+# Launcher scripts
+ide text eol=lf
