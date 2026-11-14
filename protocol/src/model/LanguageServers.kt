@@ -139,6 +139,10 @@ data class LanguageServerCandidateInfo(
     val available: Boolean,
     /** What was detected there, one sentence per requirement. */
     val details: List<String>,
+    /** The version the IDE downloads and runs; null for a server already on the machine. */
+    val version: String? = null,
+    /** Its GitHub page, null when it has none. */
+    val homepage: String? = null,
 )
 
 /** The servers offered for a language, and the one already chosen. */
@@ -151,7 +155,15 @@ data class LanguageServerChoice(
     val candidates: List<LanguageServerCandidateInfo>,
     /** Id of the chosen candidate, null when none was chosen yet. */
     val chosen: String?,
-)
+    /** Whether the user turned the servers of this language off: none starts, whatever [chosen] says. */
+    val disabled: Boolean = false,
+) {
+    /** What [LanguageServers.choose] takes. */
+    companion object {
+        /** The candidate that turns a language's servers off; choosing a real one turns them on again. */
+        const val DISABLED = "off"
+    }
+}
 
 /** Language servers running on the server machine for the open projects. */
 @Suppress("TooManyFunctions", "ComplexInterface")

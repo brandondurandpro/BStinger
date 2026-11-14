@@ -37,6 +37,8 @@ import org.example.kotlineditor.state.revertChanges
 
 private val BAR_WIDTH = 760.dp
 private val LIST_MAX_HEIGHT = 220.dp
+// The card sits beside a tall transcript: its list gets more room than the bar above the prompt.
+private val CARD_LIST_MAX_HEIGHT = 380.dp
 
 /**
  * What the agent changed where it works: the number of files and of lines, then (opened) each file, whose diff a
@@ -86,7 +88,9 @@ private fun ChangesBody(agent: AgentState, conversation: Conversation, compact: 
 private fun ChangesHeader(agent: AgentState, conversation: Conversation, compact: Boolean) {
     val changes = conversation.changes
     val count = changes.files.size
-    val title = if (count == 1) "1 file changed" else "$count files changed"
+    val noun = if (count == 1) "file" else "files"
+    // The card is narrow, and the first line holds the Review button too.
+    val title = if (compact) "$count $noun" else "$count $noun changed"
     val toggle =
         Modifier
             .fillMaxWidth()
@@ -103,6 +107,9 @@ private fun ChangesHeader(agent: AgentState, conversation: Conversation, compact
         Row(toggle, verticalAlignment = Alignment.CenterVertically) {
             Chevron(changes.expanded)
             Label(title, Modifier.padding(start = 4.dp), fontWeight = FontWeight.Medium)
+            Box(Modifier.weight(1f))
+            // On the first line, which stays in view when the cards above squeeze this one.
+            ReviewButton(agent, conversation, Modifier.padding(start = 6.dp), asButton = true)
         }
         Row(Modifier.fillMaxWidth().padding(start = 10.dp, end = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             figures()
@@ -115,6 +122,7 @@ private fun ChangesHeader(agent: AgentState, conversation: Conversation, compact
             Label(title, Modifier.padding(start = 4.dp), fontWeight = FontWeight.Medium)
             figures()
             Box(Modifier.weight(1f))
+            ReviewButton(agent, conversation)
             actions()
         }
     }
@@ -135,7 +143,8 @@ private fun ChangesActions(agent: AgentState, conversation: Conversation) {
 
 @Composable
 private fun ChangesList(agent: AgentState, conversation: Conversation, compact: Boolean) {
-    Column(Modifier.fillMaxWidth().heightIn(max = LIST_MAX_HEIGHT).verticalScroll(rememberScrollState())) {
+    val maxHeight = if (compact) CARD_LIST_MAX_HEIGHT else LIST_MAX_HEIGHT
+    Column(Modifier.fillMaxWidth().heightIn(max = maxHeight).verticalScroll(rememberScrollState())) {
         for (file in conversation.changes.files) {
             key(file.path) { ChangeRow(agent, conversation, file, compact) }
         }

@@ -117,6 +117,10 @@ private fun tagsOf(tab: EditorTab): TabTags {
             )
         }
 
+        tab.extension != null -> {
+            TabTags(EditorTags.extensionTab(tab.extension.key), EditorTags.extensionTabClose(tab.extension.key))
+        }
+
         tab.isReview -> {
             TabTags(EditorTags.REVIEW_TAB, EditorTags.REVIEW_TAB_CLOSE)
         }

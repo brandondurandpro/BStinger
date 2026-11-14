@@ -86,6 +86,7 @@ object WebServers {
             extras = vueBundle,
             optionsIn = { _, extras -> extras?.let(::vuePluginOptions) },
             command = { runtimes, installed -> nodeCommand(runtimes, installed, SERVER, "lib", "cli.mjs") },
+            homepage = "https://github.com/typescript-language-server/typescript-language-server",
         )
 
     /**
@@ -119,6 +120,7 @@ object WebServers {
             command = { runtimes, installed ->
                 nodeCommand(runtimes, installed, TAILWIND_PACKAGE, "bin", "tailwindcss-language-server")
             },
+            homepage = "https://github.com/tailwindlabs/tailwindcss-intellisense",
         )
 
     /**
@@ -149,6 +151,7 @@ object WebServers {
                 nodeCommand(runtimes, installed, VUE_SERVER_PACKAGE, "bin", "vue-language-server.js")
             },
             optionsIn = { bundle, _ -> vueServerOptions(bundle) },
+            homepage = "https://github.com/vuejs/language-tools",
         )
 
     /**

@@ -136,6 +136,34 @@ class LanguageServerChoiceTest {
         assertEquals("intelephense", LanguageServerChoiceStore(file).choice("php"))
     }
 
+    @Test
+    fun `every server shows its pinned version and the GitHub page it comes from`() {
+        val candidates = PhpServers.all + WebServers.all
+        for (candidate in candidates) {
+            assertTrue(candidate.homepage.orEmpty().startsWith("https://github.com/"), candidate.id)
+            assertTrue(candidate.version.orEmpty().isNotBlank(), candidate.id)
+        }
+        assertEquals(PhpServers.phpactor.tool?.version, PhpServers.phpactor.version)
+        assertEquals(WebServers.tailwindLanguageServer.bundle?.version, WebServers.tailwindLanguageServer.version)
+    }
+
+    @Test
+    fun `a language turned off keeps its chosen server, and is off for every project`() {
+        val file = directory.resolve("choices.properties")
+        val store = LanguageServerChoiceStore(file)
+        store.choose("php", "intelephense")
+        assertFalse(store.disabled("php"))
+
+        store.setDisabled("php", true)
+        val reread = LanguageServerChoiceStore(file)
+        assertTrue(reread.disabled("php"))
+        assertFalse(reread.disabled("vue"))
+        assertEquals("intelephense", reread.choice("php", "/home/me/shop"))
+
+        store.setDisabled("php", false)
+        assertFalse(LanguageServerChoiceStore(file).disabled("php"))
+    }
+
     private companion object {
         const val READ_MS = 300L
     }

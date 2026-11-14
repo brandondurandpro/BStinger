@@ -125,7 +125,8 @@ internal fun ProjectWidget(app: AppState, project: ProjectState) {
             ProjectBadge(project.name)
             Label(
                 project.name,
-                Modifier.padding(start = 8.dp).widthIn(max = PROJECT_NAME_WIDTH),
+                // Shrinks (ellipsis) when the toolbar is too narrow for the branch next to it.
+                Modifier.weight(1f, fill = false).padding(start = 8.dp).widthIn(max = PROJECT_NAME_WIDTH),
                 fontWeight = FontWeight.SemiBold,
             )
             Chevron(expanded = true, Modifier.padding(start = 2.dp))

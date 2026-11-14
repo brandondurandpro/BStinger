@@ -50,6 +50,7 @@ class FakePhpServers(
             // Configured as phpactor is: its inlay hints on, types included.
             initializationOptions = PhpServers.PHPACTOR_OPTIONS,
             withoutInlayHints = WITHOUT_INLAY_HINTS,
+            homepage = FAKE_HOMEPAGE,
         )
     private val needsNode =
         fake.copy(
@@ -128,6 +129,9 @@ class FakePhpServers(
 
     companion object {
         const val FAKE = "fake"
+
+        /** The GitHub page of `fake` (and of the servers made from it), shown as a link. */
+        const val FAKE_HOMEPAGE = "https://github.com/example/fakephp"
         const val NEEDS_NODE = "needs-node"
         const val OTHER = "other"
         const val FAKE_TYPESCRIPT = "fake-ts"

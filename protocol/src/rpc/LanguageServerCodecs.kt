@@ -5,6 +5,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
@@ -33,11 +34,12 @@ private const val LANGUAGE = "language"
 private const val MESSAGE = "message"
 private const val ID = "id"
 private const val LANGUAGE_NAME = "languageName"
+private const val VERSION = "version"
 
 /** A status snapshot. */
 fun LanguageServersStatus.toJson(): JsonObject =
     buildJsonObject {
-        put("version", version)
+        put(VERSION, version)
         put(
             "server",
             buildJsonObject {
@@ -57,7 +59,7 @@ fun JsonElement.languageServersStatus(): LanguageServersStatus {
     val status = jsonObject
     val server = status.getValue("server").jsonObject
     return LanguageServersStatus(
-        version = status.long("version"),
+        version = status.long(VERSION),
         server =
         ServerMemory(
             heapUsedBytes = server.long("heapUsed"),
@@ -136,6 +138,7 @@ fun LanguageServerChoice.languageServerChoiceJson(): JsonObject =
         put(LANGUAGE, language)
         put(LANGUAGE_NAME, languageName)
         put("chosen", chosen?.let(::JsonPrimitive) ?: JsonNull)
+        put("disabled", disabled)
         put(
             "candidates",
             JsonArray(
@@ -148,6 +151,8 @@ fun LanguageServerChoice.languageServerChoiceJson(): JsonObject =
                         put("drawbacks", it.drawbacks.toJson())
                         put("available", it.available)
                         put("details", it.details.toJson())
+                        put(VERSION, it.version?.let(::JsonPrimitive) ?: JsonNull)
+                        put("homepage", it.homepage?.let(::JsonPrimitive) ?: JsonNull)
                     }
                 },
             ),
@@ -162,6 +167,7 @@ fun JsonElement.languageServerChoice(): LanguageServerChoice {
         languageName = choice.string(LANGUAGE_NAME),
         candidates = choice.getValue("candidates").jsonArray.map { it.jsonObject.candidateInfo() },
         chosen = choice.stringOrNull("chosen"),
+        disabled = choice["disabled"]?.jsonPrimitive?.booleanOrNull == true,
     )
 }
 
@@ -174,6 +180,8 @@ private fun JsonObject.candidateInfo() =
         drawbacks = getValue("drawbacks").strings(),
         available = bool("available"),
         details = getValue("details").strings(),
+        version = stringOrNull(VERSION),
+        homepage = stringOrNull("homepage"),
     )
 
 /** Edits of a document, as arrays `[startLine, startColumn, endLine, endColumn, text]`: one per keystroke. */

@@ -52,7 +52,12 @@ data class LanguageServerCandidate(
     val optionsIn: ((bundle: Path, extras: Path?) -> JsonElement?)? = null,
     /** Why it may give no inlay hints, shown in the Language Servers window when it gives none. */
     val withoutInlayHints: String? = null,
-)
+    /** Where the server's source and its releases are (its GitHub page), shown as a link; null when it has none. */
+    val homepage: String? = null,
+) {
+    /** The version pinned and downloaded (`2026.10.07.0`, or `5.1.3+ts5.9.3` with its compiler); null if none. */
+    val version: String? get() = tool?.version ?: bundle?.version
+}
 
 /** A candidate and whether it can run on this server machine. */
 data class CandidateStatus(

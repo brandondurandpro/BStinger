@@ -1,5 +1,6 @@
 package org.example.kotlineditor.e2e
 
+import org.example.kotlineditor.model.LanguageServerChoice
 import org.example.kotlineditor.model.LanguageServers
 import org.example.kotlineditor.model.TextChange
 import java.util.concurrent.CopyOnWriteArrayList
@@ -20,6 +21,11 @@ class LanguageServersRecorder(private val servers: LanguageServers) : LanguageSe
     override suspend fun use(project: String, files: List<String>): List<String> {
         recorded += LanguageServerCall("use", project)
         return servers.use(project, files)
+    }
+
+    override suspend fun choice(language: String, project: String): LanguageServerChoice {
+        recorded += LanguageServerCall("choice", language)
+        return servers.choice(language, project)
     }
 
     override suspend fun openDocument(project: String, path: String, version: Int, text: String) {

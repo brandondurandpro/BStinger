@@ -271,6 +271,10 @@ private fun TabContent(
             )
         }
 
+        is TabStatus.Extension -> {
+            ExtensionTabView(project, status.target, Modifier.fillMaxSize())
+        }
+
         is TabStatus.Review -> {
             ReviewView(
                 status.state,

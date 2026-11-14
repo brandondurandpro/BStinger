@@ -55,6 +55,8 @@ class ProjectState(
     internal val diffLayout: DiffLayout = DiffLayout(preferences),
     /** The indicators of the status bar that are shown, saved; a worktree of agent mode shares its project's. */
     val statusIndicators: StatusIndicators = StatusIndicators(preferences),
+    /** The plugins installed in the IDE, for the Extensions window; none in previews. */
+    val installedPlugins: () -> ClientPlugins? = { null },
     /** Where agent mode can start a conversation in another project; null where no window can be added. */
     private val windows: ProjectWindows? = null,
 ) : GitHost,
@@ -115,6 +117,13 @@ class ProjectState(
     /** Hover, navigation, usages, problems, rename, reformat and quick fixes, from the language servers. */
     val insight = CodeInsightState(scope, { insightBackend() }, ProjectInsightHost { this })
     override val pluginServer: PluginServer get() = services.plugins
+
+    /** The language servers offered for each language, shared by the Extensions window and its tabs; null without. */
+    val extensionServers: SettingsState? by lazy {
+        languageServers?.let { servers ->
+            SettingsState({ servers }, scope).also { it.openUrl = { url -> openUrl(url) } }
+        }
+    }
 
     override val canStartInOtherProject: Boolean get() = windows?.available?.invoke() == true
 

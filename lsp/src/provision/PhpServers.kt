@@ -89,6 +89,7 @@ object PhpServers {
                 listOf(runtimes.getValue(RuntimeKind.Php).toString(), checkNotNull(phar).toString(), "language-server")
             },
             initializationOptions = PHPACTOR_OPTIONS,
+            homepage = "https://github.com/phpactor/phpactor",
         )
 
     /** intelephense: proprietary with a free core, runs on Node.js. */
@@ -120,6 +121,7 @@ object PhpServers {
             withoutInlayHints =
             "intelephense gives inlay hints only with a Premium licence, and never the type of a variable: " +
                 "phpactor gives both for free.",
+            homepage = "https://github.com/bmewburn/vscode-intelephense",
         )
 
     /** Both, in the order the choice panel shows them. */

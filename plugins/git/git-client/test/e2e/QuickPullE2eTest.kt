@@ -1,13 +1,17 @@
 package org.example.kotlineditor.e2e
 
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.v2.runComposeUiTest
+import androidx.compose.ui.text.TextLayoutResult
 import org.example.kotlineditor.state.InMemoryPreferenceStore
+import org.example.kotlineditor.ui.AppTags
 import org.example.kotlineditor.ui.GitTags
 import java.nio.file.Files
 import java.nio.file.Path
@@ -82,6 +86,35 @@ class QuickPullE2eTest {
             assertEquals(gitIn(remote, "rev-parse", default).trim(), project.git("rev-parse", "HEAD").trim())
             assertEquals("from the remote\n", project.root.resolve("remote.txt").readText())
             awaitNoTag(GitTags.branchBehind(default))
+        }
+
+    // Whether the first text of the node tagged [tag] is cut (ellipsis) by the room it was given.
+    private fun ComposeUiTest.textIsCut(tag: String): Boolean {
+        val node = onNodeWithTag(tag).fetchSemanticsNode()
+        val layouts = ArrayList<TextLayoutResult>()
+        node.config[SemanticsActions.GetTextLayoutResult].action?.invoke(layouts)
+        val layout = checkNotNull(layouts.firstOrNull()) { "$tag has no text" }
+        return layout.isLineEllipsized(0)
+    }
+
+    // The name of the sample project is longer than the project widget shows: with the commits to pull next to the
+    // branch, the toolbar of a 1024-pixel window has no room for everything.
+    @Test
+    fun `a long project name gives way to the branch and its Pull button in a narrow window`() =
+        runComposeUiTest {
+            val (default, remote) = projectWithRemote()
+            advanceRemote(remote, default)
+            launchWithProject(project)
+            awaitTag(GitTags.branchBehind(default), unmerged = true)
+
+            onNodeWithTag(GitTags.QUICK_PULL).assertIsDisplayed()
+            assertFalse(textIsCut(GitTags.QUICK_PULL), "the Pull button is cut")
+            assertFalse(textIsCut(GitTags.GIT_BRANCH), "the name of the branch is cut")
+            // Nothing overlaps: the project, the branch, its button, then the search field.
+            val tags = listOf(AppTags.PROJECT_WIDGET, GitTags.GIT_BRANCH, GitTags.QUICK_PULL, AppTags.TOOLBAR_SEARCH)
+            val bounds = tags.map { onNodeWithTag(it).fetchSemanticsNode().boundsInRoot }
+            val ordered = bounds.zipWithNext().all { (before, after) -> before.right <= after.left }
+            assertTrue(ordered, "the widgets of the toolbar overlap: $bounds")
         }
 
     @Test

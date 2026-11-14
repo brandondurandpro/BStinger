@@ -41,11 +41,12 @@ class ProcessTreeTest {
     // A process of a made-up tree: its pid, the pid its parent had, and when it started.
     private data class Listed(val pid: Long, val parentPid: Long, val start: Long)
 
-    private fun ownOf(root: Listed, processes: List<Listed>): List<Long> {
+    private fun ownOf(root: Listed, processes: List<Listed>, now: Long = Long.MAX_VALUE): List<Long> {
         val own =
             ownTree(
                 root = root,
                 rootStart = root.start,
+                latestStart = now,
                 childrenOf = { parent -> processes.filter { it.parentPid == parent.pid } },
                 startOf = { it.start },
             )
@@ -65,6 +66,19 @@ class ProcessTreeTest {
         val processes = listOf(runner, otherTests, theirGit, node, helper)
 
         assertEquals(listOf(80L, 90L), ownOf(agent, processes))
+    }
+
+    @Test
+    fun `a stranger that started before the clock was set back is not taken`() {
+        // The runner started while the clock of the machine was hours ahead, then the clock was corrected: its start
+        // time is later than the server's, and later than now. Its job started after the correction.
+        val server = Listed(pid = 40, parentPid = 7, start = 1_000)
+        val runner = Listed(pid = 50, parentPid = 40, start = 90_000)
+        val job = Listed(pid = 60, parentPid = 50, start = 1_050)
+        val node = Listed(pid = 80, parentPid = 40, start = 1_100)
+        val processes = listOf(runner, job, node)
+
+        assertEquals(listOf(80L), ownOf(server, processes, now = 1_500))
     }
 
     @Test

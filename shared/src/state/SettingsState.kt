@@ -133,6 +133,15 @@ class SettingsState(private val languageServers: () -> LanguageServersState, par
 
     private val choices = mutableStateMapOf<String, LanguageServerChoice>()
 
+    // The connection the servers were listed on: asking costs the server a check of each runtime, once is enough.
+    private var listedOn: Long? = null
+
+    /** Opens a web address (a server's GitHub page) in the browser of the IDE; the project's window replaces it. */
+    var openUrl: (String) -> Unit = ::openInBrowser
+
+    /** Whether the server answered for every language. */
+    val loaded: Boolean get() = SERVER_LANGUAGES.all { choices[it] != null }
+
     /** Why the servers offered could not be listed or changed, null when nothing failed. */
     var serverError: String? by mutableStateOf(null)
         private set
@@ -157,13 +166,19 @@ class SettingsState(private val languageServers: () -> LanguageServersState, par
         query = ""
     }
 
-    /** Asks the server which servers it offers for each language, and which one is used. */
-    fun loadServers() {
+    /**
+     * Asks the server which servers it offers for each language, and which one is used. Asked again for the same
+     * [connection] (a window shown again), it keeps what it has; a new connection (a restarted server) asks anew.
+     */
+    fun loadServers(connection: Long? = null) {
+        val listedAlready = connection != null && connection == listedOn
+        if (listedAlready && loaded) return
         scope.launch {
             try {
                 for (language in SERVER_LANGUAGES) {
                     choices[language] = languageServers().choiceFor(language)
                 }
+                listedOn = connection
                 serverError = null
             } catch (failure: IOException) {
                 serverError = "Could not list the language servers: ${failure.message}"
@@ -178,7 +193,7 @@ class SettingsState(private val languageServers: () -> LanguageServersState, par
         scope.launch {
             try {
                 languageServers().use(language, candidate)
-                choices[language]?.let { choices[language] = it.copy(chosen = candidate) }
+                choices[language]?.let { choices[language] = it.afterUse(candidate) }
                 serverError = null
             } catch (failure: IOException) {
                 serverError = "Could not change the language server: ${failure.message}"
@@ -188,6 +203,32 @@ class SettingsState(private val languageServers: () -> LanguageServersState, par
         }
     }
 
+    /**
+     * Turns the servers of [language] off, or on again with the one chosen before (the recommended one when none was).
+     * A server that cannot run here is never picked to turn a language on.
+     */
+    fun setServersEnabled(language: String, enabled: Boolean) {
+        val choice = choices[language] ?: return
+        val candidate = if (enabled) previousServerOf(choice) else LanguageServerChoice.DISABLED
+        if (candidate == null) return
+        useServer(language, candidate)
+    }
+
+    private fun previousServerOf(choice: LanguageServerChoice): String? {
+        val chosen = choice.chosen
+        if (chosen != null) return chosen
+        val available = choice.candidates.firstOrNull { it.available }
+        return available?.id
+    }
+
     /** Stops what the dialog was waiting for. */
     fun close() = scope.cancel()
 }
+
+// The choice as it stands once [candidate] was used: off, or on with that server.
+private fun LanguageServerChoice.afterUse(candidate: String): LanguageServerChoice =
+    if (candidate == LanguageServerChoice.DISABLED) {
+        copy(disabled = true)
+    } else {
+        copy(chosen = candidate, disabled = false)
+    }
