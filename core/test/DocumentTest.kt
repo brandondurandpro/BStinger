@@ -118,6 +118,24 @@ class DocumentTest {
     }
 
     @Test
+    fun `newline between braces opens the block`() {
+        val d = doc("function toto(){}")
+        d.moveTo(TextPos(0, 16))
+        d.newLine()
+        assertEquals("function toto(){\n    \n}", d.text())
+        assertEquals(TextPos(1, 4), d.caret)
+    }
+
+    @Test
+    fun `newline between braces keeps the indentation`() {
+        val d = doc("    if (x) {}")
+        d.moveTo(TextPos(0, 12))
+        d.newLine()
+        assertEquals("    if (x) {\n        \n    }", d.text())
+        assertEquals(TextPos(1, 8), d.caret)
+    }
+
+    @Test
     fun `indent and outdent selected lines`() {
         val d = doc("a\nb")
         d.selectAll()
