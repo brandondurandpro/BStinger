@@ -78,7 +78,8 @@ fun main(args: Array<String>) {
                     plugins = plugins,
                     exporter = exporter,
                     firstWindow = id === windows.firstOrNull(),
-                    onNewWindow = { windows.add(WindowId()) },
+                    initialProject = id.projectPath,
+                    onNewWindow = { projectPath -> windows.add(WindowId(projectPath)) },
                     onClosed = {
                         windows.remove(id)
                         if (windows.isEmpty()) {
@@ -95,7 +96,7 @@ fun main(args: Array<String>) {
 }
 
 /** One IDE window; every window has its own state (project, tabs) on the server shared by all of them. */
-private class WindowId
+private class WindowId(val projectPath: String? = null)
 
 @Composable
 private fun IdeWindow(
@@ -104,7 +105,8 @@ private fun IdeWindow(
     plugins: ClientPlugins,
     exporter: DesktopExporter,
     firstWindow: Boolean,
-    onNewWindow: () -> Unit,
+    initialProject: String?,
+    onNewWindow: (String?) -> Unit,
     onClosed: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -120,6 +122,7 @@ private fun IdeWindow(
                 telemetryOf = exporter::telemetryOf,
                 // The windows added by the user open on the welcome screen, with no project.
                 reopenLastProject = firstWindow,
+                initialProject = initialProject,
             ).also {
                 it.plugins = plugins
                 it.onNewWindow = onNewWindow

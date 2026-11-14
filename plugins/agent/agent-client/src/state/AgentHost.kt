@@ -50,12 +50,32 @@ interface AgentHost : AgentWorkspace {
      */
     suspend fun branchChoices(fetch: Boolean): BranchChoices? = null
 
+    /** Whether a conversation can start in another project, which opens in another window: not on a remote server. */
+    val canStartInOtherProject: Boolean get() = false
+
+    /** The other projects (the recent ones) a conversation can start in. */
+    val otherProjects: List<String> get() = emptyList()
+
+    /** Asks for a directory, to create if need be, as the project of a new conversation in another window. */
+    fun browseProjectForConversation() = Unit
+
+    /** Opens [path] in another window, which asks which branch its new conversation starts from. */
+    fun startConversationIn(path: String) = Unit
+
     /** An agent finished its turn in the conversation [title]; [failed] when it ended with an error. */
     fun agentFinished(title: String, failed: Boolean) = Unit
 
     /** An agent asks the user for a permission in the conversation [title]: [question] says what it wants to do. */
     fun agentAsking(title: String, question: String) = Unit
 }
+
+/** The other windows a project can open: the projects it can be opened with, and how to open one. */
+class ProjectWindows(
+    val available: () -> Boolean,
+    val projects: () -> List<String>,
+    val open: (path: String) -> Unit,
+    val browse: () -> Unit,
+)
 
 /** The branches of the project a conversation can start from: the one checked out, the local ones, the remote ones. */
 class BranchChoices(

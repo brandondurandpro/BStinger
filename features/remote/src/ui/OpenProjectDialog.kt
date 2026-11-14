@@ -82,6 +82,7 @@ fun OpenProjectDialog(app: ProjectPickerHost) {
     PopupFrame(RemoteTags.OPEN_PROJECT, onClose, width = OPEN_PROJECT_WIDTH) {
         Column(Modifier.pickerPanelKeys(browser, fieldFocused, onClose)) {
             DirectoryHeader(browser, fieldFocus, { fieldFocused = it }, onClose)
+            NewFolderRow(browser)
             browser.error?.let {
                 Label(
                     it,
@@ -105,7 +106,7 @@ private fun DirectoryHeader(
 ) {
     Label("Open Project", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
     Label(
-        browser.remote?.let { "Choose a project directory on $it." } ?: "Choose a project directory on the server.",
+        subtitle(browser),
         Modifier.padding(top = 2.dp),
         color = IdeColors.TextSecondary,
         fontSize = 12.sp,
@@ -130,6 +131,48 @@ private fun DirectoryHeader(
                 .fieldKeys({ browser.followPath() }, onClose),
             placeholder = "Directory path",
             onSubmit = browser::followPath,
+        )
+        IdeButton(
+            "New Folder",
+            browser::startCreating,
+            Modifier.padding(start = 6.dp).testTag(RemoteTags.OPEN_PROJECT_NEW_FOLDER),
+            enabled = browser.current != null && !browser.loading,
+        )
+    }
+}
+
+private fun subtitle(browser: DirectoryBrowser): String {
+    val remote = browser.remote
+    return when {
+        browser.forNewWindow -> "Choose or create the project directory; it opens in a new window."
+        remote != null -> "Choose a project directory on $remote."
+        else -> "Choose a project directory on the server."
+    }
+}
+
+// The name of a folder to create in the shown directory, which then becomes the shown one.
+@Composable
+private fun NewFolderRow(browser: DirectoryBrowser) {
+    if (!browser.creating) return
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        IdeTextField(
+            browser.newName,
+            { browser.newName = it },
+            Modifier
+                .weight(1f)
+                .testTag(RemoteTags.OPEN_PROJECT_NEW_NAME)
+                .focusRequester(focus)
+                .fieldKeys(browser::createFolder, browser::cancelCreating),
+            placeholder = "Name of the new folder",
+            onSubmit = browser::createFolder,
+        )
+        IdeButton(
+            "Create",
+            browser::createFolder,
+            Modifier.padding(start = 6.dp).testTag(RemoteTags.OPEN_PROJECT_NEW_CREATE),
+            primary = true,
         )
     }
 }
@@ -324,7 +367,8 @@ private fun Modifier.fieldKeys(commit: () -> Unit, close: () -> Unit): Modifier 
 private fun Modifier.pickerPanelKeys(browser: DirectoryBrowser, fieldFocused: Boolean, close: () -> Unit): Modifier =
     onPreviewKeyEvent { event ->
         val key = event.key
-        if (event.type != KeyEventType.KeyDown) {
+        // The name of a new folder is typed: its field owns Enter and Escape.
+        if (event.type != KeyEventType.KeyDown || browser.creating) {
             false
         } else {
             when (key) {
@@ -400,6 +444,16 @@ private class DirectoryBrowser(private val app: ProjectPickerHost, private val s
     var loading: Boolean by mutableStateOf(true)
         private set
 
+    /** Whether the dialog picks the project of a new conversation, which opens in a new window. */
+    val forNewWindow: Boolean get() = app.projectPickerForNewWindow
+
+    /** Whether the name of a new folder is being typed. */
+    var creating: Boolean by mutableStateOf(false)
+        private set
+
+    /** The name typed for the new folder. */
+    var newName: String by mutableStateOf("")
+
     /** Why the last navigation failed, `null` when it succeeded or while it runs. */
     var error: String? by mutableStateOf(null)
         private set
@@ -421,6 +475,37 @@ private class DirectoryBrowser(private val app: ProjectPickerHost, private val s
     private var navigation = 0
 
     private var pendingCheck: Job? = null
+
+    /** Asks for the name of a folder to create in the shown directory (the New Folder button). */
+    fun startCreating() {
+        newName = ""
+        creating = true
+    }
+
+    /** Gives up the new folder (Escape in its field). */
+    fun cancelCreating() {
+        creating = false
+    }
+
+    /** Creates the folder named [newName] in the shown directory and shows it, empty, ready to be opened. */
+    fun createFolder() {
+        val parent = current ?: return
+        val name = newName.trim()
+        val problem = folderNameProblem(name)
+        if (problem != null) {
+            error = problem
+            return
+        }
+        scope.launch {
+            try {
+                val created = app.createPickerDirectory(parent, name)
+                creating = false
+                show(created.path)
+            } catch (expected: IOException) {
+                fail("Cannot create $name: ${expected.message}")
+            }
+        }
+    }
 
     /** Shows the parent of the browsed directory (the Up button), one level back. */
     fun goUp() {
@@ -561,6 +646,17 @@ private class DirectoryBrowser(private val app: ProjectPickerHost, private val s
             val absolute = path.startsWith("/") || WINDOWS_ABSOLUTE.matches(path)
             val underHome = path == "~" || path.startsWith("~/")
             return absolute || underHome
+        }
+
+        // Why [name] cannot be the name of a folder, null when it can.
+        fun folderNameProblem(name: String): String? {
+            val hasSeparator = name.contains('/') || name.contains('\\')
+            return when {
+                name.isEmpty() -> "Give the folder a name"
+                hasSeparator -> "A folder name holds no / or \\"
+                name == "." || name == ".." -> "$name is not a folder name"
+                else -> null
+            }
         }
 
         fun sameDirectory(a: String, b: String): Boolean = a.trimEnd('/', '\\') == b.trimEnd('/', '\\')

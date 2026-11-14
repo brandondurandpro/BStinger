@@ -42,19 +42,28 @@ fun BasePickerPopup(agent: AgentState, picker: BasePicker) {
     val cursor = remember { ListCursor() }
     val focus = remember { FocusRequester() }
     val choices = picker.choices
+    val projects = agent.project.otherProjects
+    val canChooseProject = agent.project.canStartInOtherProject
     val matches = remember(choices, query) { choices?.let { matching(it, query) }.orEmpty() }
-    LaunchedEffect(Unit) { focus.requestFocus() }
+    val projectMatches = remember(projects, query) { matchingProjects(projects, query) }
     // The remote's default branch (`origin/main`) is highlighted first, so that Enter starts from it; the project's own
     // line when there is none or the query leaves it out.
     val defaultRemote = choices?.defaultRemote
-    LaunchedEffect(query, defaultRemote) {
+    LaunchedEffect(picker.choosingProject) { focus.requestFocus() }
+    LaunchedEffect(query, defaultRemote, picker.choosingProject) {
         val defaultIndex = matches.indexOfFirst { it.base != null && it.base == defaultRemote }
-        cursor.selected = maxOf(defaultIndex, 0)
+        cursor.selected = if (picker.choosingProject) 0 else maxOf(defaultIndex, 0)
     }
     val choose = { choice: BaseChoice? -> if (choice != null) agent.chooseBase(choice.base) }
+    val chooseProject = { path: String? -> if (path != null) agent.chooseProject(path) }
+    val shown = if (picker.choosingProject) projectMatches.size else matches.size
+    val accept = {
+        val index = cursor.selected
+        if (picker.choosingProject) chooseProject(projectMatches.getOrNull(index)) else choose(matches.getOrNull(index))
+    }
     PopupFrame(AgentTags.AGENT_BASE_PICKER, agent::cancelBasePicker, width = PICKER_WIDTH) {
         Column {
-            Label("Start from which branch?", fontWeight = FontWeight.SemiBold)
+            Label(if (picker.choosingProject) "Start in which project?" else "Start from which branch?", fontWeight = FontWeight.SemiBold)
             IdeTextField(
                 query,
                 { query = it },
@@ -63,16 +72,63 @@ fun BasePickerPopup(agent: AgentState, picker: BasePicker) {
                     .padding(top = 10.dp)
                     .testTag(AgentTags.AGENT_BASE_SEARCH)
                     .focusRequester(focus)
-                    .popupKeys({ choose(matches.getOrNull(cursor.selected)) }, agent::cancelBasePicker) {
-                        cursor.move(it, matches.size)
-                    },
-                placeholder = "Search branches…",
+                    .popupKeys(accept, agent::cancelBasePicker) { cursor.move(it, shown) },
+                placeholder = if (picker.choosingProject) "Search projects…" else "Search branches…",
                 leading = { SearchIcon(color = IdeColors.TextSecondary) },
             )
-            PickerStatus(agent, picker)
-            ResultList(matches, cursor.selected) { index, choice -> BaseRow(choice, index == cursor.selected) { choose(choice) } }
+            if (picker.choosingProject) {
+                BrowseButton(agent::browseProject)
+                ResultList(projectMatches, cursor.selected) { index, path ->
+                    ProjectRow(path, index == cursor.selected) { chooseProject(path) }
+                }
+            } else {
+                PickerStatus(agent, picker)
+                OtherProjectButton(canChooseProject) {
+                    query = ""
+                    picker.choosingProject = true
+                }
+                ResultList(matches, cursor.selected) { index, choice -> BaseRow(choice, index == cursor.selected) { choose(choice) } }
+            }
         }
     }
+}
+
+// A directory that is no recent project, perhaps still to create: the Open Project dialog.
+@Composable
+private fun BrowseButton(onClick: () -> Unit) {
+    IdeButton("Browse…", onClick, Modifier.padding(top = 8.dp, bottom = 8.dp).testTag(AgentTags.AGENT_BASE_BROWSE))
+}
+
+// Another project is started in its own window: offered where windows can be added.
+@Composable
+private fun OtherProjectButton(available: Boolean, onClick: () -> Unit) {
+    if (!available) return
+    IdeButton("Other project…", onClick, Modifier.padding(bottom = 8.dp).testTag(AgentTags.AGENT_BASE_OTHER_PROJECT))
+}
+
+@Composable
+private fun ProjectRow(path: String, selected: Boolean, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().resultRow(selected).clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 6.dp)
+            .testTag(AgentTags.agentBaseProject(path)),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Label(folderName(path), Modifier.weight(1f))
+        Label(path, color = IdeColors.TextSecondary, fontSize = 11.sp)
+    }
+}
+
+// The last folder of a path of the server, which writes it with `/` or a backslash.
+private fun folderName(path: String): String {
+    val trimmed = path.trimEnd('/', '\\')
+    val name = trimmed.substringAfterLast('/').substringAfterLast('\\')
+    return name.ifEmpty { path }
+}
+
+// The projects the query is in, the most recent first as the server lists them.
+private fun matchingProjects(projects: List<String>, query: String): List<String> {
+    val needle = query.trim()
+    return if (needle.isEmpty()) projects else projects.filter { it.contains(needle, ignoreCase = true) }
 }
 
 // The status of the list keeps its line whether it says something or not: the remote branches are fetched while the
