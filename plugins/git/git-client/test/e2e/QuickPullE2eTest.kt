@@ -140,13 +140,13 @@ class QuickPullE2eTest {
             val preferences = InMemoryPreferenceStore(mapOf(key to "feature\ndeleted-meanwhile"))
             val app = launchWithProject(project, preferences)
 
-            awaitTag(GitTags.pinnedBranch("feature"))
+            awaitCondition { app.project.git.selectedBranches == setOf("feature") }
             awaitCondition { preferences.load()[key] == "feature" }
-            assertEquals(setOf("feature"), app.project.git.selectedBranches)
 
             // Unpinning is saved too.
-            onNodeWithTag(GitTags.unpinnedBranch("feature")).performClick()
-            awaitNoTag(GitTags.pinnedBranch("feature"))
+            onNodeWithTag(GitTags.GIT_BRANCH).performClick()
+            awaitTag(GitTags.BRANCH_PICKER)
+            onNodeWithTag(GitTags.branchPin("feature")).performClick()
             awaitCondition { preferences.load()[key] == "" }
             assertTrue(
                 app.project.git.selectedBranches

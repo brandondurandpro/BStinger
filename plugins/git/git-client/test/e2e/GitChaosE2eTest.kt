@@ -1,21 +1,16 @@
 package org.example.kotlineditor.e2e
 
-import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performTextInput
-import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.state.delete
 import org.example.kotlineditor.ui.AppTags
 import org.example.kotlineditor.ui.EditorTags
 import org.example.kotlineditor.ui.GitTags
-import java.nio.file.Files
-import java.nio.file.Path
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -197,108 +192,6 @@ class GitChaosE2eTest {
             onNodeWithTag(GitTags.BRANCH_DELETE_CONFIRM).performClick()
             awaitTag(GitTags.BRANCH_DONE)
             assertEquals(setOf(default), localBranches())
-        }
-
-    // `feature` tracks a bare remote and has one local commit to push; it is pinned in the toolbar.
-    private fun ComposeUiTest.pinnedFeatureAheadOfRemote(remote: Path): E2eApp {
-        project.commitAll()
-        val default = project.git("rev-parse", "--abbrev-ref", "HEAD").trim()
-        gitIn(remote, "init", "-q", "--bare")
-        project.git("remote", "add", "origin", remote.toString())
-        project.git("push", "-q", "-u", "origin", "HEAD")
-        project.git("checkout", "-q", "-b", "feature")
-        project.git("push", "-q", "-u", "origin", "feature")
-        project.git("commit", "-q", "--allow-empty", "-m", "local work")
-        project.git("checkout", "-q", default)
-        val app = launchWithProject(project, chaos = true)
-        awaitCondition {
-            app.project.git.branchInfos
-                .any { it.name == "feature" && it.ahead == 1 }
-        }
-        onNodeWithTag(GitTags.GIT_BRANCH).performClick()
-        awaitTag(GitTags.BRANCH_PICKER)
-        onNodeWithTag(GitTags.branchPin("feature")).performClick()
-        onNodeWithTag(GitTags.BRANCH_SEARCH).performClick()
-        onNodeWithTag(GitTags.BRANCH_SEARCH).performKeyInput { pressKey(Key.Escape) }
-        awaitTag(GitTags.pinnedBranch("feature"))
-        return app
-    }
-
-    private fun ComposeUiTest.openFeatureChipMenu() {
-        onNodeWithTag(GitTags.pinnedBranchMenu("feature")).performClick()
-        awaitTag(GitTags.branchMenuPush("feature"))
-    }
-
-    private fun ComposeUiTest.pushFeatureFromItsChip() {
-        openFeatureChipMenu()
-        onNodeWithTag(GitTags.branchMenuPush("feature")).performClick()
-    }
-
-    @Test
-    fun `a push of a pinned branch whose answer is lost is reported as done`() =
-        runComposeUiTest {
-            val remote = Files.createTempDirectory("kotlin-editor-remote")
-            try {
-                val app = pinnedFeatureAheadOfRemote(remote)
-                // The push is made, then the connection breaks before its answer: the retried push changes nothing.
-                // The menu opens first: only the push may be sent while answers are dropped, within deadAfterMs.
-                openFeatureChipMenu()
-                app.network.dropFromServer = true
-                onNodeWithTag(GitTags.branchMenuPush("feature")).performClick()
-                awaitCondition {
-                    gitIn(remote, "rev-parse", "feature").trim() == project.git("rev-parse", "feature").trim()
-                }
-                app.network.cutAll()
-                app.network.dropFromServer = false
-                awaitCondition {
-                    app.project.git.branchSync
-                        ?.running == false
-                }
-                assertEquals(
-                    false,
-                    app.project.git.branchSync
-                        ?.isError,
-                    app.project.git.branchSync
-                        ?.text,
-                )
-                awaitNoTag(GitTags.branchAhead("feature"))
-            } finally {
-                remote.toFile().deleteRecursively()
-            }
-        }
-
-    @Test
-    fun `a push of a pinned branch while the network is down says it is pushing, then pushes`() =
-        runComposeUiTest {
-            val remote = Files.createTempDirectory("kotlin-editor-remote")
-            try {
-                val app = pinnedFeatureAheadOfRemote(remote)
-                app.network.goDown()
-                awaitReconnecting()
-                pushFeatureFromItsChip()
-                awaitTag(GitTags.BRANCH_SYNC_STATUS)
-                assertEquals(
-                    true,
-                    app.project.git.branchSync
-                        ?.running,
-                )
-                app.network.comeBack()
-                awaitReconnected()
-                awaitCondition {
-                    app.project.git.branchSync
-                        ?.running == false
-                }
-                assertEquals(
-                    false,
-                    app.project.git.branchSync
-                        ?.isError,
-                    app.project.git.branchSync
-                        ?.text,
-                )
-                assertEquals(project.git("rev-parse", "feature").trim(), gitIn(remote, "rev-parse", "feature").trim())
-            } finally {
-                remote.toFile().deleteRecursively()
-            }
         }
 
     @Test

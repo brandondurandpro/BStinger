@@ -114,7 +114,7 @@ class BranchBulkActionsE2eTest {
             awaitNoTag(GitTags.BRANCH_PICK_COUNT)
             assertEquals(setOf("feature/search-ui"), app.project.git.selectedBranches)
             onNodeWithTag(GitTags.BRANCH_SEARCH).performKeyInput { pressKey(Key.Escape) }
-            awaitTag(GitTags.pinnedBranch("feature/search-ui"))
+            assertEquals(setOf("feature/search-ui"), app.project.git.selectedBranches)
         }
 
     @Test

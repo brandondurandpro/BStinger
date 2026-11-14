@@ -139,7 +139,7 @@ class BranchPickerE2eTest {
         }
 
     @Test
-    fun `several branches can be pinned in the toolbar and unpinned`() =
+    fun `several branches can be pinned in the picker and unpinned`() =
         runComposeUiTest {
             project.commitAll()
             project.git("branch", "feature/login")
@@ -162,16 +162,11 @@ class BranchPickerE2eTest {
             onNodeWithTag(GitTags.BRANCH_SEARCH).performKeyInput { pressKey(Key.Escape) }
             awaitNoTag(GitTags.BRANCH_PICKER)
 
-            // Both pinned branches are chips in the toolbar; closing one unpins it.
-            awaitTag(GitTags.pinnedBranch("feature/login"))
-            awaitTag(GitTags.pinnedBranch("feature/search-ui"))
-            onNodeWithTag(GitTags.unpinnedBranch("feature/login")).performClick()
+            // Clicking the pin of a pinned branch unpins it.
+            onNodeWithTag(GitTags.GIT_BRANCH).performClick()
+            awaitTag(GitTags.BRANCH_PICKER)
+            onNodeWithTag(GitTags.branchPin("feature/login")).performClick()
             awaitCondition { app.project.git.selectedBranches == setOf("feature/search-ui") }
-            awaitNoTag(GitTags.pinnedBranch("feature/login"))
-
-            // A chip checks its branch out, like its row in the picker.
-            onNodeWithTag(GitTags.pinnedBranch("feature/search-ui")).performClick()
-            awaitCondition { app.project.git.currentBranch == "feature/search-ui" }
         }
 
     @Test
@@ -253,7 +248,6 @@ class BranchPickerE2eTest {
             project.git("branch", "-D", "feature/gone")
             onNodeWithTag(GitTags.BRANCH_REFRESH).performClick()
             awaitNoTag(GitTags.branchItem("feature/gone"))
-            awaitNoTag(GitTags.pinnedBranch("feature/gone"))
             awaitCondition { "feature/gone" !in app.project.git.selectedBranches }
             awaitCondition { "feature/gone" !in app.project.git.pickedBranches }
         }

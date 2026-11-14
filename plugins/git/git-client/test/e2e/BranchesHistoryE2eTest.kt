@@ -1,6 +1,5 @@
 package org.example.kotlineditor.e2e
 
-import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertTextContains
@@ -11,10 +10,8 @@ import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextInput
-import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.state.HISTORY_PAGE
 import org.example.kotlineditor.ui.AppTags
@@ -121,30 +118,6 @@ class BranchesHistoryE2eTest {
             awaitNoTag(GitTags.historyBranch(default))
             awaitNoTag(GitTags.historyBranch("origin/$default"))
             awaitTag(GitTags.historyBranch("feature/login"))
-        }
-
-    @Test
-    fun `Show History of a pinned branch opens the window on that branch`() =
-        runComposeUiTest {
-            project.commitAll()
-            project.git("branch", "feature")
-            val app = launchWithProject(project)
-            awaitCondition {
-                app.project.git.branchInfos
-                    .any { it.name == "feature" }
-            }
-            onNodeWithTag(GitTags.GIT_BRANCH).performClick()
-            awaitTag(GitTags.BRANCH_PICKER)
-            onNodeWithTag(GitTags.branchPin("feature")).performClick()
-            onNodeWithTag(GitTags.BRANCH_SEARCH).performClick()
-            onNodeWithTag(GitTags.BRANCH_SEARCH).performKeyInput { pressKey(Key.Escape) }
-            awaitTag(GitTags.pinnedBranch("feature"))
-
-            onNodeWithTag(GitTags.pinnedBranchMenu("feature")).performClick()
-            awaitTag(GitTags.branchMenuHistory("feature")).performClick()
-            awaitTag(GitTags.BRANCHES_PANEL)
-            awaitTitle("feature")
-            awaitTag(GitTags.historyCommit(hashOf("feature")))
         }
 
     @Test
