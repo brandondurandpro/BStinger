@@ -64,6 +64,7 @@ private const val PATHS = "paths"
 private const val LIMIT = "limit"
 private const val BRANCH = "branch"
 private const val DIRECTORY = "directory"
+private const val FOLD = "fold"
 private const val ENTRY = "entry"
 private const val FILE = "file"
 private const val PATH = "path"
@@ -124,6 +125,15 @@ class RemoteFileSystem(private val client: RpcClient) : ProjectFileSystem {
 
     override suspend fun list(directory: FileEntry): List<FileEntry> =
         client.call(Method.ListDirectory) { put(DIRECTORY, directory.toJson()) }.entries()
+
+    override suspend fun listFolded(directory: FileEntry): List<FileEntry> {
+        val answer =
+            client.call(Method.ListDirectory) {
+                put(DIRECTORY, directory.toJson())
+                put(FOLD, true)
+            }
+        return answer.entries()
+    }
 
     override suspend fun read(file: FileEntry): FileContent =
         client.call(Method.Read) { put(FILE, file.toJson()) }.content()

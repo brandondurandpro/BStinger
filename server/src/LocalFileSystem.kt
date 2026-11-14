@@ -20,6 +20,8 @@ import java.nio.file.attribute.BasicFileAttributes
 import kotlin.io.path.isDirectory
 import kotlin.io.path.name
 
+private const val MAX_FOLDED = 64
+
 private val DIRECTORIES_FIRST =
     compareBy<FileEntry> { !it.isDirectory }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
 
@@ -46,6 +48,36 @@ class LocalFileSystem(private val maxFileSize: Long = TextFiles.DEFAULT_MAX_SIZE
                 }
             children.sortedWith(DIRECTORIES_FIRST)
         }
+
+    override suspend fun listFolded(directory: FileEntry): List<FileEntry> =
+        withContext(Dispatchers.IO) {
+            val folded = list(directory).map { if (it.isDirectory) foldedChain(it) else it }
+            folded.sortedWith(DIRECTORIES_FIRST)
+        }
+
+    // The directory at the end of the chain from [entry] where each directory holds one directory and nothing else.
+    private fun foldedChain(entry: FileEntry): FileEntry {
+        var path = Paths.get(entry.path)
+        val names = arrayListOf(entry.name)
+        while (names.size < MAX_FOLDED) {
+            val only = soleDirectory(path) ?: break
+            path = only
+            names += only.name
+        }
+        if (names.size == 1) return entry
+        return FileEntry(path.toString(), path.name, isDirectory = true, label = names.joinToString("/"))
+    }
+
+    // The only entry of [directory] when it is a real directory (not a link, which could loop), `null` otherwise.
+    private fun soleDirectory(directory: Path): Path? {
+        val entries = runCatching { firstTwoEntries(directory) }.getOrDefault(emptyList())
+        val only = entries.singleOrNull()
+        val isRealDirectory = only != null && Files.isDirectory(only, LinkOption.NOFOLLOW_LINKS)
+        return only.takeIf { isRealDirectory }
+    }
+
+    private fun firstTwoEntries(directory: Path): List<Path> =
+        Files.newDirectoryStream(directory).use { stream -> stream.take(2) }
 
     override suspend fun read(file: FileEntry): FileContent =
         withContext(Dispatchers.IO) { TextFiles.readWithVersion(Paths.get(file.path), maxFileSize) }

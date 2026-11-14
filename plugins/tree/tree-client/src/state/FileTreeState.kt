@@ -30,7 +30,10 @@ class TreeListing(val entries: List<FileEntry>, val ticket: Long)
 class TreeReveal(val path: String, val levels: List<Pair<FileEntry, TreeListing>>)
 
 @Immutable
-data class TreeRow(val entry: FileEntry, val depth: Int, val expanded: Boolean, val loading: Boolean)
+data class TreeRow(val entry: FileEntry, val depth: Int, val expanded: Boolean, val loading: Boolean) {
+    /** What the row shows: the name of [entry], or `src/main/java` when the server folded a chain of directories. */
+    val label: String get() = entry.label ?: entry.name
+}
 
 /**
  * Project tree with lazy loading: a directory is listed only the first time it is expanded, and only the
@@ -47,6 +50,9 @@ class FileTreeState(val root: FileEntry, private val fileSystem: ProjectFileSyst
     private val loading = mutableStateMapOf<String, Boolean>()
     private val directories = HashMap<String, FileEntry>()
     private val heldTickets = HashMap<String, Long>()
+
+    // The directory listing each folded entry (`src/main/java`), whose parent path is not a directory of the tree.
+    private val listedIn = HashMap<String, FileEntry>()
     private var lastTicket = 0L
 
     var selectedPath: String? by mutableStateOf(root.path)
@@ -94,7 +100,7 @@ class FileTreeState(val root: FileEntry, private val fileSystem: ProjectFileSyst
     fun parentOf(entry: FileEntry): FileEntry? {
         if (entry.path == root.path) return null
         val parentPath = entry.path.substring(0, entry.path.lastIndexOfAny(charArrayOf('/', '\\')).coerceAtLeast(0))
-        return directories[parentPath] ?: root.takeIf { parentPath == it.path }
+        return directories[parentPath] ?: listedIn[entry.path] ?: root.takeIf { parentPath == it.path }
     }
 
     /** Expands every ancestor of [path] and selects it, loading directories as needed. */
@@ -117,9 +123,13 @@ class FileTreeState(val root: FileEntry, private val fileSystem: ProjectFileSyst
             val parentChildren = levels.lastOrNull()?.second?.entries
             // The entry the server listed, rather than the one built from the path (whose separators may be mixed).
             val listedEntry = parentChildren?.firstOrNull { slashed(it.path) == slashed(directory.path) }
+            // A directory inside a folded entry has no row of its own: its listing is not needed.
+            val insideFold = listedEntry == null && parentChildren.orEmpty().any { it.folds(directory) }
             val entry = if (parentChildren == null) directory else listedEntry
-            if (listing == null || entry == null) break
-            levels += entry to listing
+            if (!insideFold) {
+                if (listing == null || entry == null) break
+                levels += entry to listing
+            }
         }
         return TreeReveal(path, levels)
     }
@@ -141,7 +151,7 @@ class FileTreeState(val root: FileEntry, private val fileSystem: ProjectFileSyst
         val cached = children[directory.path]
         if (cached != null) return TreeListing(cached, heldTickets[directory.path] ?: 0L)
         val ticket = nextTicket()
-        val listed = runCatching { fileSystem.list(directory) }.getOrNull()
+        val listed = runCatching { fileSystem.listFolded(directory) }.getOrNull()
         return listed?.let { TreeListing(it, ticket) }
     }
 
@@ -159,7 +169,7 @@ class FileTreeState(val root: FileEntry, private val fileSystem: ProjectFileSyst
                 Operation.TreeExpand,
                 outcomeOf = { listed: Result<List<FileEntry>> -> listed.outcome() },
             ) {
-                val listed = runCatching { fileSystem.list(directory) }
+                val listed = runCatching { fileSystem.listFolded(directory) }
                 store(directory, TreeListing(listed.getOrElse { emptyList() }, ticket))
                 listed
             }
@@ -177,6 +187,7 @@ class FileTreeState(val root: FileEntry, private val fileSystem: ProjectFileSyst
         if (listing.ticket < held) return
         heldTickets[directory.path] = listing.ticket
         children[directory.path] = listing.entries
+        listing.entries.filter { it.label != null }.forEach { listedIn[it.path] = directory }
         loading.remove(directory.path)
     }
 
@@ -223,4 +234,10 @@ private fun FileEntry.leadsTo(target: String): Boolean {
     val nextIsSeparator = target.getOrNull(path.length) in SEPARATORS
     val below = endsWithSeparator || nextIsSeparator
     return target.length > path.length && target.startsWith(path) && below
+}
+
+// This entry is a folded chain of directories going through [directory].
+private fun FileEntry.folds(directory: FileEntry): Boolean {
+    val inner = slashed(directory.path).trimEnd('/') + "/"
+    return label != null && slashed(path).startsWith(inner)
 }

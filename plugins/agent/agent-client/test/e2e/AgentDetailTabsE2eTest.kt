@@ -31,7 +31,6 @@ class AgentDetailTabsE2eTest {
             assertTrue(!isShown(AgentTags.AGENT_DETAIL_TABS), "no second row while nothing is open")
             if (!isShown(TreeTags.treeRow("src"))) awaitTag(AppTags.TOOL_PROJECT).performClick()
             awaitTag(TreeTags.treeChevron("src")).performClick()
-            awaitTag(TreeTags.treeChevron("src/main")).performClick()
             awaitTag(TreeTags.treeChevron("src/main/kotlin")).performClick()
             awaitTag(TreeTags.treeRow(app)).performDoubleClick()
             awaitCondition { !conversation.showsChat }

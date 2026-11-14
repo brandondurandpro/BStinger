@@ -72,7 +72,7 @@ private fun RowNode(scene: TreeScene, index: Int, row: TreeRow) {
     val relativePath = scene.cache.relativePath(scene.tree, row.entry.path)
     val status = scene.gitStatus()[relativePath]
     val density = LocalDensity.current
-    val name = scene.cache.name(row.entry.name)
+    val name = scene.cache.name(row.label)
     val nameWidth = name.size.width
     val labelWidth = with(density) { nameWidth.toDp() }
     Box(
@@ -95,7 +95,7 @@ private fun RowNode(scene: TreeScene, index: Int, row: TreeRow) {
             Modifier
                 .offset { IntOffset(g.labelLeft(row.depth).roundToInt(), 0) }
                 .size(labelWidth, ROW_HEIGHT)
-                .semantics { text = AnnotatedString(row.entry.name) }
+                .semantics { text = AnnotatedString(row.label) }
                 .then(statusTag),
         )
     }

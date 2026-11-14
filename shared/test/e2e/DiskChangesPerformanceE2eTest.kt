@@ -75,7 +75,7 @@ class DiskChangesPerformanceE2eTest {
             project.dir("build")
             launchWithProject(project)
             onNodeWithTag(TreeTags.treeChevron("src")).performClick()
-            awaitTag(TreeTags.treeRow("src/main"))
+            awaitTag(TreeTags.treeRow("src/main/kotlin"))
             // Writing the outputs is the disk's time, not the IDE's (2 to 5 s on the Windows runner, 0.2 s on Linux):
             // what is measured is the source showing while the tree still digests them.
             repeat(FILES) { project.file("build/classes/c${it % 50}/C$it.class", "") }

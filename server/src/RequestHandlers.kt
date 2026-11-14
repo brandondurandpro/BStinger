@@ -27,6 +27,7 @@ typealias Handler = suspend Request.() -> JsonElement
 private const val PATH = "path"
 private const val PROJECT = "project"
 private const val DIRECTORY = "directory"
+private const val FOLD = "fold"
 private const val NAME = "name"
 private const val ROOT = "root"
 private const val PATHS = "paths"
@@ -42,7 +43,12 @@ internal fun fileHandlers(services: LocalServices): Map<MethodSpec, Handler> {
     return mapOf(
         Method.ResolveDirectory to { fs.resolveDirectory(params.string(PATH)).toJsonOrNull() },
         Method.UserHome to { JsonPrimitive(services.places.home()) },
-        Method.ListDirectory to { fs.list(entry(DIRECTORY)).toJson() },
+        Method.ListDirectory to {
+            val directory = entry(DIRECTORY)
+            val fold = FOLD in params && params.bool(FOLD)
+            val listed = if (fold) fs.listFolded(directory) else fs.list(directory)
+            listed.toJson()
+        },
         Method.Read to {
             code = true
             fs.read(entry("file")).toJson()

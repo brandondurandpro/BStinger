@@ -88,7 +88,8 @@ class StickyTreeE2eTest {
             app.project.tree.reveal(project.root.resolve("src/main/kotlin/many/f0.kt").toString())
             awaitTag(TreeTags.treeRow("src/main/kotlin/many/f0.kt"))
             scrollTreeTo(rowIndex(app, "src/main/kotlin/many/f150.kt"))
-            val stack = listOf(rootName, "src", "src/main", "src/main/kotlin", "src/main/kotlin/many")
+            // `main` holds only `kotlin`: one row, `src/main/kotlin`.
+            val stack = listOf(rootName, "src", "src/main/kotlin", "src/main/kotlin/many")
             stack.forEach { awaitTag(TreeTags.treeSticky(it)) }
             val tops = stack.map { onNodeWithTag(TreeTags.treeSticky(it)).top() }
             assertEquals(tops.sorted(), tops, "headers are stacked from the root down")

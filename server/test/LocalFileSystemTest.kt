@@ -205,4 +205,34 @@ class LocalFileSystemTest {
                 assertEquals(listOf("file synced, the file holds 'second'"), inPlaceSync.steps)
             }
         }
+
+    @Test
+    fun `listFolded folds directories holding only a directory`() =
+        runBlocking {
+            Files.createDirectories(project.resolve("src/main/java/fr"))
+            project.resolve("src/main/java/fr/App.java").writeText("class App {}")
+            Files.createDirectories(project.resolve("two/a"))
+            Files.createDirectories(project.resolve("two/b"))
+            Files.createDirectories(project.resolve("empty"))
+            Files.createDirectories(project.resolve("withfile"))
+            project.resolve("withfile/x.txt").writeText("x")
+            val listed = fs.listFolded(entryOf(project)).associateBy { it.name }
+            assertEquals(setOf("fr", "two", "empty", "withfile"), listed.keys)
+            assertEquals("src/main/java/fr", listed.getValue("fr").label)
+            assertEquals(project.resolve("src/main/java/fr").toString(), listed.getValue("fr").path)
+            assertEquals(null, listed.getValue("two").label)
+            assertEquals(null, listed.getValue("empty").label)
+            assertEquals(null, listed.getValue("withfile").label)
+        }
+
+    @Test
+    fun `listFolded does not follow a symbolic link`() =
+        runBlocking {
+            Files.createDirectories(project.resolve("wrapper"))
+            val linkMade = linked(project.resolve("wrapper/link"), outside)
+            if (linkMade) {
+                val listed = fs.listFolded(entryOf(project))
+                assertEquals(null, listed.single().label)
+            }
+        }
 }
