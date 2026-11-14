@@ -32,6 +32,8 @@ class AppState(
     remoteFactory: RemoteFactory? = null,
     /** Makes the telemetry the user agrees to, for an installation id; null measures nothing (previews, tests). */
     telemetryOf: ((instanceId: String) -> Telemetry)? = null,
+    /** Whether to reopen the last project at startup when the user starts in agent mode; false for added windows. */
+    reopenLastProject: Boolean = true,
 ) {
     val preferences = PreferenceHub(preferenceStore)
 
@@ -84,7 +86,7 @@ class AppState(
             }
 
     /** Whether the IDE is reopening its last project in agent mode: the welcome screen is not shown meanwhile. */
-    var launching by mutableStateOf(settings.startsInAgentMode)
+    var launching by mutableStateOf(reopenLastProject && settings.startsInAgentMode)
         private set
 
     init {

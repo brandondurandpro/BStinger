@@ -77,6 +77,7 @@ fun main(args: Array<String>) {
                     localServices = localServices,
                     plugins = plugins,
                     exporter = exporter,
+                    firstWindow = id === windows.firstOrNull(),
                     onNewWindow = { windows.add(WindowId()) },
                     onClosed = {
                         windows.remove(id)
@@ -102,6 +103,7 @@ private fun IdeWindow(
     localServices: AppServices?,
     plugins: ClientPlugins,
     exporter: DesktopExporter,
+    firstWindow: Boolean,
     onNewWindow: () -> Unit,
     onClosed: () -> Unit,
 ) {
@@ -116,6 +118,8 @@ private fun IdeWindow(
                 localServices,
                 JvmRemoteFactory,
                 telemetryOf = exporter::telemetryOf,
+                // The windows added by the user open on the welcome screen, with no project.
+                reopenLastProject = firstWindow,
             ).also {
                 it.plugins = plugins
                 it.onNewWindow = onNewWindow
