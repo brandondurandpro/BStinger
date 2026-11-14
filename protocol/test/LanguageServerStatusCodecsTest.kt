@@ -1,7 +1,11 @@
 package org.example.kotlineditor.rpc
 
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import org.example.kotlineditor.model.LanguageServerCandidateInfo
+import org.example.kotlineditor.model.LanguageServerChoice
 import org.example.kotlineditor.model.LanguageServersStatus
 import org.example.kotlineditor.model.ServerMemory
 import kotlin.test.Test
@@ -31,5 +35,33 @@ class LanguageServerStatusCodecsTest {
         val oldServer = JsonObject(sent.getValue("server").jsonObject - "cpuPercent")
         val read = JsonObject(sent + ("server" to oldServer)).languageServersStatus()
         assertEquals(ServerMemory.NOT_MEASURED, read.server.cpuPercent)
+    }
+
+    private val candidate =
+        LanguageServerCandidateInfo(
+            id = "phpactor",
+            displayName = "phpactor",
+            licence = "MIT",
+            strengths = listOf("Free"),
+            drawbacks = listOf("Slower"),
+            available = true,
+            details = emptyList(),
+            version = "2026.10.07.0",
+            homepage = "https://github.com/phpactor/phpactor",
+        )
+
+    @Test
+    fun `the version and the GitHub page of a server travel with its candidate`() {
+        val choice = LanguageServerChoice("php", "PHP", listOf(candidate), "phpactor")
+        assertEquals(choice, choice.languageServerChoiceJson().languageServerChoice())
+    }
+
+    @Test
+    fun `a candidate of an older server has no version and no page`() {
+        val choice = LanguageServerChoice("php", "PHP", listOf(candidate), "phpactor")
+        val sent = choice.languageServerChoiceJson()
+        val old = sent.getValue("candidates").jsonArray.map { JsonObject(it.jsonObject - "version" - "homepage") }
+        val read = JsonObject(sent + ("candidates" to JsonArray(old))).languageServerChoice()
+        assertEquals(candidate.copy(version = null, homepage = null), read.candidates.single())
     }
 }

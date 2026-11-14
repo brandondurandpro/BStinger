@@ -172,6 +172,7 @@ class AppState(
             startsInAgentMode = { settings.startsInAgentMode },
             consent = { settings.telemetry.shared },
             onRemoteProjectOpened = remote::recordWorkspace,
+            installedPlugins = { plugins },
         )
 
     // The preferences of every part of the IDE, the open project's last (on top of those last saved).

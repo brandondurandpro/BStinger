@@ -227,17 +227,45 @@ internal fun ServerControl(settings: SettingsState) {
     }
 }
 
+/** Turns the servers of [language] off, or on again with the server chosen before. */
 @Composable
-private fun LanguageServerList(settings: SettingsState, language: String, choice: LanguageServerChoice) {
+internal fun ServersToggleButton(
+    settings: SettingsState,
+    language: String,
+    choice: LanguageServerChoice,
+    compact: Boolean = false,
+) {
+    IdeButton(
+        if (choice.disabled) "Enable" else "Disable",
+        { settings.setServersEnabled(language, choice.disabled) },
+        Modifier.testTag(AppTags.settingsServerToggle(language)),
+        primary = choice.disabled && !compact,
+        enabled = settings.switchingTo == null,
+        compact = compact,
+    )
+}
+
+@Composable
+internal fun LanguageServerList(
+    settings: SettingsState,
+    language: String,
+    choice: LanguageServerChoice,
+    showHeader: Boolean = true,
+) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Label(
-            Languages.nameOf(language),
-            Modifier.testTag(AppTags.settingsServerLanguage(language)),
-            color = IdeColors.TextSecondary,
-            fontSize = 12.sp,
-        )
+        if (showHeader) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Label(
+                    Languages.nameOf(language) + if (choice.disabled) " (off)" else "",
+                    Modifier.weight(1f).testTag(AppTags.settingsServerLanguage(language)),
+                    color = IdeColors.TextSecondary,
+                    fontSize = 12.sp,
+                )
+                ServersToggleButton(settings, language, choice, compact = true)
+            }
+        }
         choice.candidates.forEach {
-            ServerCard(settings, language, it, isCurrent = it.id == choice.chosen)
+            ServerCard(settings, language, it, isCurrent = it.id == choice.chosen && !choice.disabled)
         }
     }
 }
@@ -261,6 +289,7 @@ private fun ServerCard(
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Label(candidate.displayName, fontWeight = FontWeight.SemiBold)
             Label(candidate.licence, color = IdeColors.TextSecondary, fontSize = 12.sp)
+            ServerSource(settings, candidate)
             val status = if (candidate.available) "Can run on the server" else candidate.details.joinToString(" ")
             Label(status, color = if (candidate.available) Success else IdeColors.Error, fontSize = 11.sp, maxLines = 2)
         }
@@ -285,6 +314,35 @@ private fun ServerCard(
                     enabled = candidate.available && settings.switchingTo == null,
                 )
             }
+        }
+    }
+}
+
+// The version the IDE runs and a link to the GitHub page of the server: each only when the server has it.
+@Composable
+private fun ServerSource(settings: SettingsState, candidate: LanguageServerCandidateInfo) {
+    val version = candidate.version
+    val homepage = candidate.homepage
+    if (version == null && homepage == null) return
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (version != null) {
+            Label(
+                "Version $version",
+                Modifier.testTag(AppTags.settingsServerVersion(candidate.id)),
+                color = IdeColors.TextSecondary,
+                fontSize = 12.sp,
+            )
+        }
+        if (homepage != null) {
+            Label(
+                homepage.removePrefix("https://"),
+                Modifier
+                    .clickable { settings.openUrl(homepage) }
+                    .pointerHoverIcon(PointerIcon.Hand)
+                    .testTag(AppTags.settingsServerLink(candidate.id)),
+                color = IdeColors.Accent,
+                fontSize = 12.sp,
+            )
         }
     }
 }

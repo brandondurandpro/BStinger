@@ -31,7 +31,13 @@ sealed interface TabStatus {
 
     /** A review tab: the changed files with the reviewer's verdict on each, and the diff of the selected one. */
     class Review(val state: ReviewState) : TabStatus
+
+    /** An extension tab: the detail of a plugin or of the language servers of a language. */
+    class Extension(val target: ExtensionTarget) : TabStatus
 }
+
+/** An extension an editor tab shows: [key] tells which one (`plugin:todo`, `servers:php`), [title] names the tab. */
+data class ExtensionTarget(val key: String, val title: String)
 
 /** Horizontal offset shared by every line of an editor; read in the layout phase so scrolling never recomposes. */
 @Stable
@@ -72,9 +78,11 @@ fun tabKey(
     isCompare: Boolean = false,
     isMerge: Boolean = false,
     review: ReviewMode? = null,
+    extension: ExtensionTarget? = null,
 ): String {
     val path = slashed(entry.path)
     return when {
+        extension != null -> "extension:${extension.key}"
         review != null -> review.tabKey
         commit != null -> "diff@${commit.hash}:$path"
         isMerge -> "merge:$path"
@@ -109,15 +117,20 @@ class EditorTab(
     val isMerge: Boolean = false,
     /** A review tab: the changed files with a verdict each and the diff of the selected one (also a diff tab). */
     val review: ReviewMode? = null,
+    /** An extension tab: the detail of a plugin or of the language servers of a language (also a diff tab). */
+    val extension: ExtensionTarget? = null,
 ) {
     /** Identity of the tab: a file open as text, as its diff, as the diff of a commit, compared, or merged. */
-    val key: String get() = tabKey(entry, isDiff, commit, isCompare, isMerge, review)
+    val key: String get() = tabKey(entry, isDiff, commit, isCompare, isMerge, review, extension)
 
     val isReview: Boolean get() = review != null
+
+    val isExtension: Boolean get() = extension != null
 
     val title: String
         get() =
             when {
+                extension != null -> extension.title
                 review != null -> "Review"
                 commit != null -> "${entry.name} @ ${commit.shortHash}"
                 isMerge -> "Merge: ${entry.name}"

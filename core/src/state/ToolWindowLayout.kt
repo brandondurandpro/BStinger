@@ -37,6 +37,9 @@ data class ToolWindow(
 
         /** Language servers. */
         val LanguageServers = ToolWindow("LanguageServers")
+
+        /** Extensions: the plugins installed, to turn on or off, and the field that installs one. */
+        val Extensions = ToolWindow("Extensions")
     }
 }
 
@@ -50,6 +53,7 @@ val BUILT_IN_TOOL_WINDOWS: List<ToolWindowDefaults> =
         ToolWindowDefaults(ToolWindow.Project, Dock.Left, shown = true),
         ToolWindowDefaults(ToolWindow.Git, Dock.Left),
         ToolWindowDefaults(ToolWindow.Branches, Dock.Bottom),
+        ToolWindowDefaults(ToolWindow.Extensions, Dock.Left),
         ToolWindowDefaults(ToolWindow.Run, Dock.Bottom),
         ToolWindowDefaults(ToolWindow.Terminal, Dock.Bottom),
         ToolWindowDefaults(ToolWindow.Network, Dock.Bottom),
