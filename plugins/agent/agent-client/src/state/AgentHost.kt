@@ -63,4 +63,6 @@ class BranchChoices(
     val local: List<String>,
     val remote: List<String>,
     val fetchError: String? = null,
+    /** The default branch of the remote (`origin/main`): the one the picker highlights first. */
+    val defaultRemote: String? = null,
 )

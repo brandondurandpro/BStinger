@@ -41,7 +41,8 @@ internal suspend fun ProjectState.branchChoicesOf(fetch: Boolean): BranchChoices
     val fetchError = if (fetch) fetchFailure() else null
     val local = git.branches(root.path)
     val remote = git.remoteBranches(root.path)
-    return BranchChoices(current, local, remote, fetchError)
+    val defaultRemote = runCatching { git.defaultRemoteBranch(root.path) }.getOrNull()
+    return BranchChoices(current, local, remote, fetchError, defaultRemote)
 }
 
 // Why the remotes could not be fetched (no network, no remote): the branches already known stay usable.

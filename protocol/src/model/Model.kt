@@ -645,6 +645,9 @@ interface GitClient : WorktreeClient {
     /** Remote-tracking branches (`origin/main`), without the remotes' `HEAD`. */
     suspend fun remoteBranches(root: String): List<String>
 
+    /** The default branch of the remote (`origin/main`, what its `HEAD` points to), null when Git does not know it. */
+    suspend fun defaultRemoteBranch(root: String): String?
+
     /** Commits reachable from [ref], newest first: [limit] of them after skipping [skip]; empty past the end. */
     suspend fun log(root: String, ref: String, skip: Int, limit: Int): List<GitCommit>
 
@@ -731,6 +734,8 @@ interface GitClient : WorktreeClient {
         override suspend fun blame(root: String, path: String): List<BlameLine> = emptyList()
 
         override suspend fun remoteBranches(root: String): List<String> = emptyList()
+
+        override suspend fun defaultRemoteBranch(root: String): String? = null
 
         override suspend fun log(root: String, ref: String, skip: Int, limit: Int): List<GitCommit> = emptyList()
 

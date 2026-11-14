@@ -56,6 +56,7 @@ private fun readHandlers(git: GitClient): Map<MethodSpec, Handler> =
         },
         Method.GitBlame to { git.blame(root(), params.string(PATH)).blameJson() },
         Method.GitRemoteBranches to { git.remoteBranches(root()).toJson() },
+        Method.GitDefaultRemoteBranch to { JsonPrimitive(git.defaultRemoteBranch(root())) },
         Method.GitLog to {
             git.log(root(), params.string("ref"), params.int("skip"), params.int(LIMIT)).commitsJson()
         },

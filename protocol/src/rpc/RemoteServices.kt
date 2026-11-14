@@ -494,6 +494,9 @@ class RemoteGit(private val client: RpcClient) :
     override suspend fun remoteBranches(root: String): List<String> =
         client.call(Method.GitRemoteBranches) { put(ROOT, root) }.strings()
 
+    override suspend fun defaultRemoteBranch(root: String): String? =
+        client.call(Method.GitDefaultRemoteBranch) { put(ROOT, root) }.stringOrNull()
+
     override suspend fun log(root: String, ref: String, skip: Int, limit: Int): List<GitCommit> {
         val page =
             client.call(Method.GitLog) {

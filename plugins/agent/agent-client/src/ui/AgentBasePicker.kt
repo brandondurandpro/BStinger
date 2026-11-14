@@ -44,7 +44,13 @@ fun BasePickerPopup(agent: AgentState, picker: BasePicker) {
     val choices = picker.choices
     val matches = remember(choices, query) { choices?.let { matching(it, query) }.orEmpty() }
     LaunchedEffect(Unit) { focus.requestFocus() }
-    LaunchedEffect(query) { cursor.selected = 0 }
+    // The remote's default branch (`origin/main`) is highlighted first, so that Enter starts from it; the project's own
+    // line when there is none or the query leaves it out.
+    val defaultRemote = choices?.defaultRemote
+    LaunchedEffect(query, defaultRemote) {
+        val defaultIndex = matches.indexOfFirst { it.base != null && it.base == defaultRemote }
+        cursor.selected = maxOf(defaultIndex, 0)
+    }
     val choose = { choice: BaseChoice? -> if (choice != null) agent.chooseBase(choice.base) }
     PopupFrame(AgentTags.AGENT_BASE_PICKER, agent::cancelBasePicker, width = PICKER_WIDTH) {
         Column {
@@ -110,13 +116,15 @@ private fun BaseRow(choice: BaseChoice, selected: Boolean, onClick: () -> Unit) 
     }
 }
 
-// The project's own branch first, then the local branches, then the remote ones; those the query is in.
+// The project's own branch first, then the remote branches (the default one first), then the local ones; those the query is in.
 private fun matching(choices: BranchChoices, query: String): List<BaseChoice> {
     val current = choices.current
     val own = BaseChoice(null, "${current ?: "Current branch"} (the project itself)", "no worktree")
     val local = choices.local.map { BaseChoice(it, it, "local") }
-    val remote = choices.remote.map { BaseChoice(it, it, "remote") }
-    val all = listOf(own) + local + remote
+    // The remote's default branch (`origin/main`) leads the remote ones, the others keep their order.
+    val (defaults, others) = choices.remote.partition { it == choices.defaultRemote }
+    val remote = (defaults + others).map { BaseChoice(it, it, "remote") }
+    val all = listOf(own) + remote + local
     val needle = query.trim()
     return if (needle.isEmpty()) all else all.filter { it.base == null || it.label.contains(needle, ignoreCase = true) }
 }
