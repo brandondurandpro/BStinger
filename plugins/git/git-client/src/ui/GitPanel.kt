@@ -117,46 +117,52 @@ private fun SelectAll(project: GitHost, changes: Int) {
     Row(
         Modifier
             .fillMaxWidth()
-            .testTag(GitTags.GIT_SELECT_ALL)
-            .clickable(
-                remember { MutableInteractionSource() },
-                indication = null,
-            ) { project.git.toggleAllCommitSelection() }
             .background(IdeColors.Panel)
             .padding(start = 9.dp, top = 3.dp, bottom = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
+        Row(
             Modifier
-                .size(14.dp)
-                .background(if (allChecked) IdeColors.Accent else Color.Transparent, IdeShapes.Small)
-                .border(
-                    1.dp,
-                    if (allChecked || someChecked) IdeColors.Accent else IdeColors.InputBorder,
-                    IdeShapes.Small,
-                ),
-            contentAlignment = Alignment.Center,
+                .testTag(GitTags.GIT_SELECT_ALL)
+                .clickable(
+                    remember { MutableInteractionSource() },
+                    indication = null,
+                ) { project.git.toggleAllCommitSelection() },
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            when {
-                allChecked -> {
-                    CheckIcon(Modifier.size(9.dp), color = IdeColors.OnAccent)
-                }
-
-                someChecked -> {
-                    Box(
-                        Modifier
-                            .size(width = 8.dp, height = 2.dp)
-                            .background(IdeColors.Accent, RoundedCornerShape(1.dp)),
-                    )
+            Box(
+                Modifier
+                    .size(14.dp)
+                    .background(if (allChecked) IdeColors.Accent else Color.Transparent, IdeShapes.Small)
+                    .border(
+                        1.dp,
+                        if (allChecked || someChecked) IdeColors.Accent else IdeColors.InputBorder,
+                        IdeShapes.Small,
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                when {
+                    allChecked -> {
+                        CheckIcon(Modifier.size(9.dp), color = IdeColors.OnAccent)
+                    }
+    
+                    someChecked -> {
+                        Box(
+                            Modifier
+                                .size(width = 8.dp, height = 2.dp)
+                                .background(IdeColors.Accent, RoundedCornerShape(1.dp)),
+                        )
+                    }
                 }
             }
+            Label("Changes ($changes)", Modifier.padding(start = 8.dp), color = IdeColors.TextSecondary, fontSize = 11.sp)
         }
-        Label("Changes ($changes)", Modifier.padding(start = 8.dp), color = IdeColors.TextSecondary, fontSize = 11.sp)
         Box(Modifier.weight(1f))
+        val changedFiles = project.git.status.keys.sorted()
         Label(
             "Review manually",
             Modifier
-                .clickable { project.openManualReview(project.git.status.keys.sorted()) }
+                .clickable { project.openManualReview(changedFiles) }
                 .testTag(GitTags.GIT_REVIEW_MANUAL)
                 .padding(horizontal = 6.dp, vertical = 2.dp),
             color = IdeColors.TextSecondary,

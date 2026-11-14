@@ -254,8 +254,9 @@ class EditorState(
 
 // A diff of the working tree against HEAD, the one a save or a commit changes (not a commit's, a compare, a merge).
 private fun EditorTab.isUncommittedDiff(): Boolean {
-    val other = isCompare || isMerge || isReview || commit != null
-    return isDiff && !other
+    val isSpecialDiff = isCompare || isMerge || isReview
+    val isCommitDiff = commit != null
+    return isDiff && !isSpecialDiff && !isCommitDiff
 }
 
 internal fun EditorState.paneOf(tab: EditorTab): EditorPane? = panes.firstOrNull { tab in it.tabs }

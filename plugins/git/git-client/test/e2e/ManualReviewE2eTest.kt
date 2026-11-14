@@ -36,7 +36,8 @@ class ManualReviewE2eTest {
         app.project.toolWindows.setVisible(ToolWindow.Git, true)
         awaitTag(GitTags.GIT_REVIEW_MANUAL).performClick()
         awaitTag(EditorTags.REVIEW)
-        val status = app.project.editor.activeTab?.status
+        val activeTab = app.project.editor.activeTab
+        val status = activeTab?.status
         val review = status as? TabStatus.Review
         return assertNotNull(review).state
     }
@@ -99,7 +100,8 @@ class ManualReviewE2eTest {
             awaitCondition { state.isApproved("README.md") }
 
             awaitTag(GitTags.GIT_REVIEW_MANUAL).performClick()
-            val tabs = app.project.editor.allTabs.filter { it.isReview }
+            val allTabs = app.project.editor.allTabs
+            val tabs = allTabs.filter { it.isReview }
             assertEquals(1, tabs.size)
             assertTrue(state.isApproved("README.md"))
         }

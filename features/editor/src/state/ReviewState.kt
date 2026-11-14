@@ -30,6 +30,8 @@ class ReviewState(val mode: ReviewMode = ReviewMode.Manual) {
     var selected: String? by mutableStateOf(null)
         private set
 
+    val selectedFile: ReviewFile? get() = files.firstOrNull { it.relativePath == selected }
+
     val approvedCount: Int get() = files.count { isApproved(it.relativePath) }
 
     fun isApproved(relativePath: String): Boolean = approved[relativePath] == true
@@ -41,8 +43,6 @@ class ReviewState(val mode: ReviewMode = ReviewMode.Manual) {
     fun select(relativePath: String) {
         if (files.any { it.relativePath == relativePath }) selected = relativePath
     }
-
-    val selectedFile: ReviewFile? get() = files.firstOrNull { it.relativePath == selected }
 
     /**
      * Replaces the files by [updated] (the review is opened again while changes came or went): the verdicts of the
