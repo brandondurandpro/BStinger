@@ -23,8 +23,10 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollbarAdapter
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -101,7 +103,7 @@ private fun ConversationColumn(agent: AgentState, conversation: Conversation, sh
             if (showsCard) {
                 // The quota, then what the agent changed, in a column of cards at the right of the transcript.
                 Column(
-                    Modifier.align(Alignment.TopEnd).padding(top = 12.dp, end = 20.dp),
+                    Modifier.align(Alignment.TopEnd).padding(top = 12.dp, end = 20.dp).verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     LocationCard(agent, conversation, Modifier)
@@ -307,7 +309,8 @@ private fun PromptActions(agent: AgentState, conversation: Conversation) {
         EffortPicker(agent, conversation)
         PermissionsPicker(agent, conversation)
         DiscussButton(agent, conversation)
-        ReviewButton(agent, conversation)
+        // The card of the changes has the button once something changed; before, it stays here.
+        if (conversation.changes.files.isEmpty()) ReviewButton(agent, conversation)
         Spacer(Modifier.width(8.dp))
         // The picker already says which agent answers: no label for it, only the room that keeps Stop and Send right.
         Spacer(Modifier.weight(1f))

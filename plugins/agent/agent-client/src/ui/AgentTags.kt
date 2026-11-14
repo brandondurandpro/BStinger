@@ -73,6 +73,14 @@ object AgentTags {
 
     fun agentChangeRevert(path: String) = "agent.change.revert:$path"
 
+    const val AGENT_REVIEW_MANUAL = "agent.review.manual"
+    const val AGENT_REVIEW_BY_AGENT = "agent.review.byAgent"
+    const val AGENT_REVIEW_DIALOG = "agent.review.dialog"
+    const val AGENT_REVIEW_CANCEL = "agent.review.cancel"
+    const val AGENT_REVIEW_START = "agent.review.start"
+
+    fun agentReviewAspect(name: String) = "agent.review.aspect.$name"
+
     const val AGENT_REVIEW_DEFAULT = "agent.review.default"
 
     fun agentReviewer(id: String) = "agent.review.$id"
