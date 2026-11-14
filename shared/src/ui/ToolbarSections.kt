@@ -23,6 +23,10 @@ import org.example.kotlineditor.state.workspaceProject
 @Composable
 internal fun ToolbarStart(app: AppState, project: ProjectState, modifier: Modifier) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        if (!project.agentMode) {
+            LeftColumnButton(project)
+            Spacer(Modifier.width(8.dp))
+        }
         ProjectWidget(app, project)
         if (app.session.isRemote) {
             RemoteBadge(app)
@@ -61,5 +65,22 @@ internal fun SettingsButton(onClick: () -> Unit) {
         contentAlignment = Alignment.Center,
     ) {
         IdeIcon(Lucide.Settings)
+    }
+}
+
+// Hides or shows the left column (Project, Git) of the IDE; the windows in it keep their own visibility.
+@Composable
+private fun LeftColumnButton(project: ProjectState) {
+    val hidden = project.toolWindows.leftColumnHidden
+    val tint = if (hidden) IdeColors.TextSecondary else IdeColors.Text
+    Box(
+        Modifier
+            .size(30.dp)
+            .clip(IdeShapes.Large)
+            .clickable { project.toolWindows.toggleLeftColumn() }
+            .testTag(AppTags.TOOLBAR_LEFT_COLUMN),
+        contentAlignment = Alignment.Center,
+    ) {
+        IdeIcon(Lucide.PanelLeft, color = tint)
     }
 }

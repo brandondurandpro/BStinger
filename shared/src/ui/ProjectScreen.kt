@@ -129,7 +129,7 @@ private fun ProjectBody(app: AppState, project: ProjectState, findFocus: FocusRe
             ToolStrip(project, app.devtools, onSettings = app.settings::open)
             Column(Modifier.weight(1f).fillMaxHeight().padding(end = ISLAND_GAP, bottom = ISLAND_GAP)) {
                 Row(Modifier.weight(1f).fillMaxWidth()) {
-                    ToolDock(project, Dock.Left, drag)
+                    if (!project.toolWindows.leftColumnHidden) ToolDock(project, Dock.Left, drag)
                     Column(Modifier.weight(1f)) {
                         LanguageServerChoiceBanner(project)
                         EditorArea(app, project, findFocus, Modifier.weight(1f))
