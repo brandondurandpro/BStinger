@@ -54,6 +54,9 @@ class AppState(
     var session: ServerContext by mutableStateOf(contextOf(initialServices, tunnel = null))
         private set
 
+    /** Opens another IDE window; set by the desktop app, null where windows cannot be added (previews, tests). */
+    var onNewWindow: (() -> Unit)? by mutableStateOf(null)
+
     /** Whether the devtools were opened (Ctrl+Alt+Shift+D) since the IDE started: shows their buttons. */
     var devtools by mutableStateOf(false)
 
@@ -100,6 +103,10 @@ class AppState(
         } finally {
             launching = false
         }
+    }
+
+    fun openNewWindow() {
+        onNewWindow?.invoke()
     }
 
     /** Saves the open project, stops the remote session (its daemon keeps running) and shows the local server. */
