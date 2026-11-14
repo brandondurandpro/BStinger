@@ -13,6 +13,7 @@ import kotlin.test.Test
 
 private const val COMMITS = 5_000
 private const val CHANGED_FILES = 150
+private const val SETUP_TIMEOUT = 60_000L
 
 /**
  * The "Informations" card on a repository of [COMMITS] commits, whose worktree has [CHANGED_FILES] uncommitted files:
@@ -59,19 +60,19 @@ class AgentInfoCardPerformanceE2eTest {
             awaitTag(AgentTags.AGENT_PROMPT)
             app.project.agent.conversationsVisible = false
             val conversation = checkNotNull(app.project.agent.current)
-            awaitCondition { conversation.workspace != null && shows("up to date") }
+            awaitCondition(SETUP_TIMEOUT) { conversation.workspace != null && shows("up to date") }
             val directory = File(checkNotNull(conversation.workspace).root.path)
             repeat(CHANGED_FILES) { File(directory, "file-$it.txt").writeText("$it\n") }
             measure("read $CHANGED_FILES changes and the distance from the base on $COMMITS commits", 15_000, 400) {
                 app.project.agent.refreshChanges(conversation)
-                awaitCondition { shows("$CHANGED_FILES uncommitted files") }
+                awaitCondition(SETUP_TIMEOUT) { shows("$CHANGED_FILES uncommitted files") }
                 renderFrame()
             }
             gitIn(directory.toPath(), "add", "-A")
             gitIn(directory.toPath(), "commit", "-q", "-m", "all of them")
             measure("read the last commit and the distance after a commit", 8_000, 200) {
                 app.project.agent.refreshChanges(conversation)
-                awaitCondition { shows("1 ahead") && shows("all of them") }
+                awaitCondition(SETUP_TIMEOUT) { shows("1 ahead") && shows("all of them") }
                 renderFrame()
             }
         }

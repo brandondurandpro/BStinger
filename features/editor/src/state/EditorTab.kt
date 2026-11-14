@@ -28,6 +28,9 @@ sealed interface TabStatus {
 
     /** A merge tab: the three versions of a conflicted file and what the user decided so far. */
     class Merge(val state: MergeState) : TabStatus
+
+    /** A review tab: the changed files with the reviewer's verdict on each, and the diff of the selected one. */
+    class Review(val state: ReviewState) : TabStatus
 }
 
 /** Horizontal offset shared by every line of an editor; read in the layout phase so scrolling never recomposes. */
@@ -68,9 +71,11 @@ fun tabKey(
     commit: CommitDiffTarget?,
     isCompare: Boolean = false,
     isMerge: Boolean = false,
+    review: ReviewMode? = null,
 ): String {
     val path = slashed(entry.path)
     return when {
+        review != null -> review.tabKey
         commit != null -> "diff@${commit.hash}:$path"
         isMerge -> "merge:$path"
         isCompare -> "compare:$path"
@@ -102,13 +107,18 @@ class EditorTab(
     val isCompare: Boolean = false,
     /** A merge tab: the three columns resolving a conflicted file (also a diff tab: it holds no document). */
     val isMerge: Boolean = false,
+    /** A review tab: the changed files with a verdict each and the diff of the selected one (also a diff tab). */
+    val review: ReviewMode? = null,
 ) {
     /** Identity of the tab: a file open as text, as its diff, as the diff of a commit, compared, or merged. */
-    val key: String get() = tabKey(entry, isDiff, commit, isCompare, isMerge)
+    val key: String get() = tabKey(entry, isDiff, commit, isCompare, isMerge, review)
+
+    val isReview: Boolean get() = review != null
 
     val title: String
         get() =
             when {
+                review != null -> "Review"
                 commit != null -> "${entry.name} @ ${commit.shortHash}"
                 isMerge -> "Merge: ${entry.name}"
                 isCompare -> "Compare: ${entry.name}"

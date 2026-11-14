@@ -10,6 +10,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.example.kotlineditor.state.RemoteDialogState
@@ -67,6 +68,8 @@ private fun Progress(app: RemoteHost, dialog: RemoteDialogState) {
             it,
             color = IdeColors.Error,
             fontSize = 12.sp,
+            maxLines = Int.MAX_VALUE,
+            overflow = TextOverflow.Clip,
             modifier = Modifier.padding(top = 10.dp).testTag(RemoteTags.REMOTE_ERROR),
         )
     }
@@ -80,6 +83,8 @@ private fun ReplaceQuestion(app: RemoteHost, dialog: RemoteDialogState, question
             question,
             color = IdeColors.Error,
             fontSize = 12.sp,
+            maxLines = Int.MAX_VALUE,
+            overflow = TextOverflow.Clip,
             modifier = Modifier.testTag(RemoteTags.REMOTE_REPLACE_QUESTION),
         )
         Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {

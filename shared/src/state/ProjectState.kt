@@ -334,6 +334,12 @@ class ProjectState(
         editor.openDiff(entryAt(relativePath))
     }
 
+    /** Opens the review tab of the files at [relativePaths] (the Review manually button of the Git panel). */
+    override fun openManualReview(relativePaths: List<String>) {
+        val files = relativePaths.map { ReviewFile(entryAt(it), it) }
+        editor.openReview(files)
+    }
+
     /** Opens the three-way merge of the conflicted file at [relativePath] (a click on a conflict of the Git panel). */
     override fun openMerge(relativePath: String) {
         editor.openMerge(entryAt(relativePath))

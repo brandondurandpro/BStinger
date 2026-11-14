@@ -41,7 +41,14 @@ class AppState(
     /** The plugins installed in the plugins folder; set by whoever starts them (the desktop app), null in previews. */
     var plugins: ClientPlugins? by mutableStateOf(null)
 
-    val remote = RemoteController(preferences, scope, remoteFactory, ::showRemote)
+    val remote =
+        RemoteController(
+            preferences,
+            scope,
+            remoteFactory,
+            ::showRemote,
+            { settings.remoteBundleSource },
+        )
 
     /** The server shown: its services, language servers, recent projects and open project. */
     var session: ServerContext by mutableStateOf(contextOf(initialServices, tunnel = null))
