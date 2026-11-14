@@ -148,7 +148,10 @@ private fun ReviewDialog(agent: AgentState, conversation: Conversation, close: (
             Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Label("Agent", Modifier.width(52.dp), color = IdeColors.TextSecondary, fontSize = 12.sp)
                 ReviewerPicker(agent, reviewer) { reviewer = it }
-                Spacer(Modifier.width(12.dp))
+            }
+            // Its own line: both pickers side by side were wider than the dialog, and a click outside closes it.
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Label("Model", Modifier.width(52.dp), color = IdeColors.TextSecondary, fontSize = 12.sp)
                 ReviewerModelPicker(models, model) { model = it }
             }
             val settings = reviewerSettings(models, model)
