@@ -10,12 +10,17 @@ import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.ui.AppTags
 import org.example.kotlineditor.ui.RemoteTags
+import kotlin.time.Duration.Companion.minutes
+
+// Connecting alone may take a minute on a slow runner (the remote server is uploaded and started over SSH), longer
+// than the one minute a Compose test gets by default.
+private val REMOTE_TEST_TIMEOUT = 5.minutes
 
 /** Runs [block] in a Compose test, or does nothing on a platform that cannot host the POSIX test remote. */
 @OptIn(ExperimentalTestApi::class)
 fun remoteUiTest(block: ComposeUiTest.() -> Unit) {
     if (!RemoteTestEnvironment.available) return
-    runComposeUiTest { block() }
+    runComposeUiTest(testTimeout = REMOTE_TEST_TIMEOUT) { block() }
 }
 
 /** Replaces the path of the Open Project dialog in one edit, without Enter (one debounced check). */

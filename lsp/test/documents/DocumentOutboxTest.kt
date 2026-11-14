@@ -32,6 +32,7 @@ import kotlin.test.assertTrue
 
 private const val MEGABYTE = 1024 * 1024
 private const val WAIT_MS = 10_000L
+private const val MEMORY_READINGS = 3
 
 /** A stream that blocks until [gate] opens, as the stdout of a server that writes nothing. */
 private class GatedInput(private val gate: CountDownLatch) : InputStream() {
@@ -83,11 +84,13 @@ class DocumentOutboxTest {
         scope.cancel()
     }
 
-    private fun usedMemory(): Long {
-        repeat(3) { System.gc() }
-        val runtime = Runtime.getRuntime()
-        return runtime.totalMemory() - runtime.freeMemory()
-    }
+    // The least of a few readings: a reading also counts what other threads of the JVM allocate meanwhile.
+    private fun usedMemory(): Long =
+        (1..MEMORY_READINGS).minOf {
+            repeat(3) { System.gc() }
+            val runtime = Runtime.getRuntime()
+            runtime.totalMemory() - runtime.freeMemory()
+        }
 
     private fun document(text: String, path: String = "/project/a.php"): MirroredDocument =
         MirroredDocument(path, "php", "/project").apply { reset("s1", 1, text) }
@@ -125,8 +128,11 @@ class DocumentOutboxTest {
         val outbox = DocumentOutbox(link, scope, SyncKind.Full, maxUnreadBytes = Long.MAX_VALUE)
         val document = MirroredDocument("/project/big.php", "php", "/project")
         document.lines += "x".repeat(MEGABYTE)
+        // The first change is written, and blocks there: what it holds while being written is not the queue's.
+        outbox.didChange(document, listOf(TextChange(0, 0, 0, 0, "y")))
+        assertTrue(output.writing.await(WAIT_MS, TimeUnit.MILLISECONDS), "the outbox did not write")
         val before = usedMemory()
-        repeat(300) { outbox.didChange(document, listOf(TextChange(0, 0, 0, 0, "y"))) }
+        repeat(299) { outbox.didChange(document, listOf(TextChange(0, 0, 0, 0, "y"))) }
         val retained = usedMemory() - before
         println("PERF outbox of 300 changes of a 1 MB document: ${retained / MEGABYTE} MB retained")
         assertTrue(retained < 32L * MEGABYTE, "${retained / MEGABYTE} MB retained by the outbox")
