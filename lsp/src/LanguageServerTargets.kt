@@ -34,11 +34,12 @@ internal class LanguageServerTargets(private val settings: LanguageServerSetting
         // No runtime detection here (it runs programs): it happens when the server starts.
         val handled = files.mapNotNull { file -> Languages.languageOf(file)?.let { file to it } }
         for ((file, language) in handled) {
-            if (settings.candidates.offered(language).isEmpty()) {
+            val offered = settings.candidates.offered(language)
+            // A language without a server, or turned off by the user, still has its companions.
+            if (offered.isEmpty() || choices.disabled(language)) {
                 addCompanions(targets, file, project)
                 continue
             }
-            val offered = settings.candidates.offered(language)
             val chosenId = choices.choice(language, project)
             // A language with one server needs no choice: that server is the one.
             val chosen = chosenId?.let { id -> offered.firstOrNull { it.id == id } } ?: offered.singleOrNull()
@@ -63,7 +64,8 @@ internal class LanguageServerTargets(private val settings: LanguageServerSetting
 
     // The server of a [companion] language for [file]: only where the project uses it, and never asks for a choice.
     private fun companionTarget(companion: String, file: String, project: String): ServerTarget? {
-        val candidate = settings.candidates.offered(companion).singleOrNull()
+        val offered = settings.candidates.offered(companion).singleOrNull()
+        val candidate = if (choices.disabled(companion)) null else offered
         val root = if (companion == Languages.TAILWIND) TailwindProjects.rootOf(file, project) else project
         return if (candidate == null || root == null) {
             null
@@ -84,14 +86,19 @@ internal class LanguageServerTargets(private val settings: LanguageServerSetting
         val offered = settings.candidates.candidates(language).map(::infoOf)
         val only = settings.candidates.offered(language).singleOrNull()
         val chosen = choices.choice(language, project) ?: only?.id
-        return LanguageServerChoice(language, Languages.nameOf(language), offered, chosen)
+        return LanguageServerChoice(language, Languages.nameOf(language), offered, chosen, choices.disabled(language))
     }
 
     /** Saves [candidate] for [language], for every project. */
     fun choose(language: String, project: String, candidate: String) {
+        if (candidate == LanguageServerChoice.DISABLED) {
+            choices.setDisabled(language, true)
+            return
+        }
         require(settings.candidates.offered(language).any { it.id == candidate }) {
             "Unknown language server $candidate for $language"
         }
+        choices.setDisabled(language, false)
         choices.choose(language, candidate)
         choices.clearProjectChoice(language, project)
     }
@@ -105,6 +112,8 @@ internal class LanguageServerTargets(private val settings: LanguageServerSetting
             drawbacks = status.candidate.drawbacks,
             available = status.available,
             details = status.details,
+            version = status.candidate.version,
+            homepage = status.candidate.homepage,
         )
 
     // The requirements are checked again at each start: PHP may have been installed since.

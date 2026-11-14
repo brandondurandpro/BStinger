@@ -202,6 +202,7 @@ class AppState(
             startsInAgentMode = { settings.startsInAgentMode },
             consent = { settings.telemetry.shared },
             onRemoteProjectOpened = remote::recordWorkspace,
+            installedPlugins = { plugins },
             newWindow = { onNewWindow?.let { open -> { path: String -> open(path) } } },
         )
 

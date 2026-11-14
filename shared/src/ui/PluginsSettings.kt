@@ -28,19 +28,40 @@ import java.io.File
 /** The Plugins settings: the plugins of the folder with their switch, and the field that installs an archive. */
 @Composable
 internal fun PluginsControl(app: AppState) {
-    val plugins = app.plugins
+    PluginsList(app.plugins)
+}
+
+/** The plugins of [plugins] with their switch and the install field; a note when plugins are not available. */
+@Composable
+internal fun PluginsList(plugins: ClientPlugins?) {
     if (plugins == null) {
         Label("Plugins are not available here.", color = IdeColors.TextSecondary)
         return
     }
-    val scope = rememberCoroutineScope()
-    var error by remember { mutableStateOf("") }
+    val background = rememberBackground()
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         if (plugins.entries.isEmpty()) Label("No plugin installed.", color = IdeColors.TextSecondary)
         for (entry in plugins.entries) {
-            PluginRow(entry, plugins) { scope.launch { withContext(Dispatchers.IO) { it() } } }
+            PluginRow(entry, plugins, background)
         }
-        InstallRow(plugins, onError = { error = it }) { scope.launch { withContext(Dispatchers.IO) { it() } } }
+        InstallSection(plugins)
+    }
+}
+
+/** Runs what it is given off the UI thread: installing and unloading a plugin wait for the garbage collector. */
+@Composable
+internal fun rememberBackground(): (() -> Unit) -> Unit {
+    val scope = rememberCoroutineScope()
+    return remember(scope) { { work -> scope.launch { withContext(Dispatchers.IO) { work() } } } }
+}
+
+/** The field that installs a plugin archive, and what went wrong when it could not. */
+@Composable
+internal fun InstallSection(plugins: ClientPlugins) {
+    val background = rememberBackground()
+    var error by remember { mutableStateOf("") }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        InstallRow(plugins, onError = { error = it }, background)
         if (error.isNotBlank()) Label(error, Modifier.testTag(AppTags.PLUGIN_ERROR), color = IdeColors.Error)
     }
 }

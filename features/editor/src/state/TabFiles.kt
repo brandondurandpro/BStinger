@@ -80,6 +80,9 @@ internal class TabFiles(
             // A review tab is given its state when it is opened, see [EditorState.openReview].
             tab.isReview -> Unit
 
+            // An extension tab is given its target when it is opened, see [EditorState.openExtension].
+            tab.isExtension -> Unit
+
             tab.isMerge -> loadMerge(tab)
 
             tab.isDiff -> loadDiff(tab)

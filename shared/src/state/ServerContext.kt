@@ -51,6 +51,8 @@ class ServerContext(
     private val consent: () -> SharedConsent,
     /** A project was opened on this remote server (never called for a local one). */
     private val onRemoteProjectOpened: (path: String) -> Unit,
+    /** The plugins installed in the IDE, shown by the Extensions window of each project. */
+    private val installedPlugins: () -> ClientPlugins? = { null },
     /** How to open a project in another IDE window, asked each time as the desktop app sets it late; null: none. */
     private val newWindow: () -> ((path: String) -> Unit)? = { null },
 ) : ProjectPickerHost {
@@ -184,6 +186,7 @@ class ServerContext(
                 grammars = grammars,
                 languageServers = languageServers,
                 agentCommand = agentCommand,
+                installedPlugins = installedPlugins,
                 windows = windowsForProjects(),
             )
         // "Opening…" stays shown meanwhile: the project then appears with its tabs and tree as they were left.

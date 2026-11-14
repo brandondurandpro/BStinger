@@ -84,6 +84,14 @@ class EditorState(
         return tab
     }
 
+    /** Opens (or activates) the tab of the extension [target]. */
+    fun openExtension(target: ExtensionTarget): EditorTab {
+        val entry = FileEntry(path = "extension:${target.key}", name = target.title, isDirectory = false)
+        val tab = openIn(activePane, entry, diff = true, extension = target)
+        if (tab.status !is TabStatus.Extension) tab.status = TabStatus.Extension(target)
+        return tab
+    }
+
     /** The changes of [entry] against HEAD (what a diff tab shows, and the review next to it). */
     suspend fun diffLines(entry: FileEntry): List<DiffLine> = files.diffLines(entry)
 
@@ -120,8 +128,9 @@ class EditorState(
         compare: Boolean = false,
         merge: Boolean = false,
         review: ReviewMode? = null,
+        extension: ExtensionTarget? = null,
     ): EditorTab {
-        val key = tabKey(entry, diff, commit, compare, merge, review)
+        val key = tabKey(entry, diff, commit, compare, merge, review, extension)
         val tab =
             pane.tabs.firstOrNull { it.key == key } ?: EditorTab(
                 entry,
@@ -131,6 +140,7 @@ class EditorState(
                 compare,
                 merge,
                 review,
+                extension,
             ).also { tab ->
                 val insertAt = pane.activeTab?.let { pane.tabs.indexOf(it) + 1 } ?: pane.tabs.size
                 pane.tabs.add(insertAt, tab)
@@ -169,8 +179,8 @@ class EditorState(
         tab.lastActivated = ++activationCounter
         pane.activeTab = tab
         activePane = pane
-        // A review is no file to come back to with Ctrl+E.
-        if (tab.isReview) return
+        // A review or an extension is no file to come back to with Ctrl+E.
+        if (tab.isReview || tab.isExtension) return
         recentFiles.remove(tab.entry)
         recentFiles.add(0, tab.entry)
         if (recentFiles.size > MAX_RECENT_FILES) recentFiles.removeAt(recentFiles.lastIndex)
@@ -254,7 +264,8 @@ class EditorState(
 
 // A diff of the working tree against HEAD, the one a save or a commit changes (not a commit's, a compare, a merge).
 private fun EditorTab.isUncommittedDiff(): Boolean {
-    val isSpecialDiff = isCompare || isMerge || isReview
+    val isSpecialView = isReview || isExtension
+    val isSpecialDiff = isCompare || isMerge || isSpecialView
     val isCommitDiff = commit != null
     return isDiff && !isSpecialDiff && !isCommitDiff
 }

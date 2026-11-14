@@ -97,6 +97,10 @@ object EditorTags {
     const val REVIEW_TAB = "tab.review"
     const val REVIEW_TAB_CLOSE = "tab.review.close"
 
+    fun extensionTab(key: String) = "tab.extension:$key"
+
+    fun extensionTabClose(key: String) = "tab.extension.close:$key"
+
     fun tab(relativePath: String) = "tab:$relativePath"
 
     fun tabClose(relativePath: String) = "tab.close:$relativePath"

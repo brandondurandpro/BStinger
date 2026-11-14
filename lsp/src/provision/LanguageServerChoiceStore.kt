@@ -42,6 +42,20 @@ class LanguageServerChoiceStore(
         }
     }
 
+    /** Whether the servers of [language] are turned off, whatever server is chosen. */
+    fun disabled(language: String): Boolean = synchronized(lock) { load() }.getProperty(disabledKey(language)) == "true"
+
+    /** Turns the servers of [language] off or on, keeping the server chosen. */
+    fun setDisabled(language: String, disabled: Boolean) {
+        synchronized(lock) {
+            val saved = load()
+            if (disabled) saved.setProperty(disabledKey(language), "true") else saved.remove(disabledKey(language))
+            save(saved)
+        }
+    }
+
+    private fun disabledKey(language: String) = "$language!disabled"
+
     private fun key(language: String, projectRoot: String) = "$language@$projectRoot"
 
     private fun load(): Properties =

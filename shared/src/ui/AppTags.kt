@@ -60,6 +60,14 @@ object AppTags {
     const val TOOL_TERMINAL = TerminalTags.TOOL_BUTTON
     const val TOOL_RUN = RunTags.TOOL_BUTTON
     const val TOOL_NETWORK = "tool.network"
+    const val TOOL_EXTENSIONS = "tool.extensions"
+    const val EXTENSIONS = "extensions"
+    const val EXTENSIONS_HIDE = "extensions.hide"
+    const val EXTENSIONS_SEARCH = "extensions.search"
+    const val EXTENSIONS_EMPTY = "extensions.empty"
+    const val EXTENSIONS_ERROR = "extensions.error"
+    const val EXTENSIONS_SERVERS = "extensions.servers"
+    const val EXTENSION_TAB = "extensions.tab"
     const val NETWORK = "network"
     const val NETWORK_RECORD = "network.record"
     const val NETWORK_CLEAR = "network.clear"
@@ -158,6 +166,9 @@ object AppTags {
     /** A setting of the Settings dialog, by its enum name (`FontSize`). */
     fun setting(name: String) = "settings.setting:$name"
 
+    /** The card of an extension, by key (`plugin:todo`, `servers:php`). */
+    fun extension(key: String) = "extensions.card:$key"
+
     fun plugin(id: String) = "settings.plugins.plugin:$id"
 
     fun pluginToggle(id: String) = "settings.plugins.toggle:$id"
@@ -177,6 +188,15 @@ object AppTags {
 
     /** A language server offered in the Settings dialog, by its id (`phpactor`). */
     fun settingsServerLanguage(language: String) = "settings.server.language:$language"
+
+    /** The button that turns the servers of a language off or on, by language id (`php`). */
+    fun settingsServerToggle(language: String) = "settings.server.toggle:$language"
+
+    /** The version of a language server in its card, by server id. */
+    fun settingsServerVersion(id: String) = "settings.server.version:$id"
+
+    /** The link to the GitHub page of a language server in its card, by server id. */
+    fun settingsServerLink(id: String) = "settings.server.link:$id"
 
     fun settingsServer(id: String) = "settings.server:$id"
 
