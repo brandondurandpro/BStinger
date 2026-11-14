@@ -144,7 +144,7 @@ private fun DrawScope.drawTreeRow(scene: TreeScene, row: TreeRow, background: Co
         }
     }
     translate(g.iconLeft(row.depth), iconTop) { drawFileIcon(scene.cache, row, g.icon) }
-    val name = scene.cache.name(row.entry.name)
+    val name = scene.cache.name(row.label)
     val labelLeft = g.labelLeft(row.depth)
     val textTop = ((height - name.size.height) / 2).roundToInt().toFloat()
     clipRect(right = size.width - TREE_ROW_START.toPx(), bottom = height) {

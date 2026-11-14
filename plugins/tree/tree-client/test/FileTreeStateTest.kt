@@ -18,6 +18,7 @@ import kotlin.test.assertTrue
 private val ROOT = FileEntry("/p", "p", isDirectory = true)
 private val SUB = FileEntry("/p/sub", "sub", isDirectory = true)
 private val INNER = FileEntry("/p/sub/inner", "inner", isDirectory = true)
+private val FOLDED = FileEntry("/p/sub/inner", "inner", isDirectory = true, label = "sub/inner")
 private val OLD = FileEntry("/p/old.txt", "old.txt", isDirectory = false)
 private val NEW = FileEntry("/p/new.txt", "new.txt", isDirectory = false)
 private val SUB_OLD = FileEntry("/p/sub/old.txt", "old.txt", isDirectory = false)
@@ -96,6 +97,30 @@ class FileTreeStateTest {
         fileSystem.answer(INNER, listOf(DEEP))
         assertEquals(listOf(ROOT, SUB, INNER, DEEP).map { it.path }, tree.shownPaths())
         assertEquals(DEEP.path, tree.selectedPath)
+    }
+
+    @Test
+    fun `a folded entry is one row, shown with its label`() {
+        val tree = treeOf(listOf(FOLDED, OLD))
+        assertEquals("sub/inner", tree.rows.firstOrNull { it.entry.path == INNER.path }?.label)
+        assertEquals("old.txt", tree.rows.firstOrNull { it.entry.path == OLD.path }?.label)
+        assertEquals(1, tree.rows.firstOrNull { it.entry.path == INNER.path }?.depth)
+    }
+
+    @Test
+    fun `a reveal through a folded entry expands it and selects the file`() {
+        val tree = treeOf(listOf(FOLDED))
+        tree.reveal(DEEP.path)
+        fileSystem.answer(SUB, listOf(INNER))
+        fileSystem.answer(INNER, listOf(DEEP))
+        assertEquals(listOf(ROOT, INNER, DEEP).map { it.path }, tree.shownPaths())
+        assertEquals(DEEP.path, tree.selectedPath)
+    }
+
+    @Test
+    fun `the parent of a folded entry is the directory listing it`() {
+        val tree = treeOf(listOf(FOLDED))
+        assertEquals(ROOT.path, tree.parentOf(FOLDED)?.path)
     }
 }
 

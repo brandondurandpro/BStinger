@@ -6,8 +6,10 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.example.kotlineditor.model.FileContent
 import org.example.kotlineditor.model.FileEntry
@@ -26,6 +28,7 @@ fun FileEntry.toJson(): JsonObject =
     buildJsonObject {
         put("path", path)
         put("isDirectory", isDirectory)
+        if (label != null) put("label", label)
     }
 
 /** An optional entry, JSON null when absent. */
@@ -35,7 +38,8 @@ fun FileEntry?.toJsonOrNull(): JsonElement = this?.toJson() ?: JsonNull
 fun JsonElement.entry(): FileEntry {
     val fields = jsonObject
     val path = fields.string("path")
-    return FileEntry(path, pathName(path), fields.bool("isDirectory"))
+    val label = fields["label"]?.jsonPrimitive?.contentOrNull
+    return FileEntry(path, pathName(path), fields.bool("isDirectory"), label)
 }
 
 /** Reads an optional entry. */
