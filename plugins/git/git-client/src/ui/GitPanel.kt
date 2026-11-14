@@ -112,7 +112,8 @@ private fun Message(text: String, tag: String) {
 @Composable
 private fun SelectAll(project: GitHost, changes: Int) {
     val checkedFiles = project.git.selectedForCommit
-    val changedFiles = project.git.status.keys.sorted()
+    val statusByFile = project.git.status
+    val changedFiles = statusByFile.keys.sorted()
     Row(
         Modifier
             .fillMaxWidth()
