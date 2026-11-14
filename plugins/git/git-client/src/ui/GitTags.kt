@@ -108,24 +108,6 @@ object GitTags {
 
     fun historyFile(path: String) = "history.file:$path"
 
-    fun branchMenuHistory(name: String) = "branch.menu.history:$name"
-
-    fun pinnedBranchMenu(name: String) = "branch.pinnedMenu:$name"
-
-    fun branchMenuCheckout(name: String) = "branch.menu.checkout:$name"
-
-    fun branchMenuPull(name: String) = "branch.menu.pull:$name"
-
-    fun branchMenuPush(name: String) = "branch.menu.push:$name"
-
-    fun branchMenuChanges(name: String) = "branch.menu.changes:$name"
-
-    fun branchMenuUnpin(name: String) = "branch.menu.unpin:$name"
-
-    fun pinnedBranch(name: String) = "branch.pinned:$name"
-
-    fun unpinnedBranch(name: String) = "branch.unpinned:$name"
-
     /** Item [action] of the right-click menu of a branch or a commit of the Branches window. */
     fun historyMenuItem(action: String) = "history.menu:$action"
 }

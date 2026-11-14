@@ -90,6 +90,23 @@ class SearchChaosE2eTest {
         }
 
     @Test
+    fun `changing an option keeps the results on screen until the new ones replace them`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, chaos = true)
+            openFindInFiles()
+            onNodeWithTag(TreeTags.FIND_IN_FILES_INPUT).performTextInput("hello")
+            awaitTag(TreeTags.findInFilesItem("docs/guide.md", 1))
+            app.network.latencyMs = 400
+            awaitTag(TreeTags.FIND_IN_FILES_CASE).performClick()
+            // The case now matters: "hello" matches less, but until its answer arrives the list is not blank.
+            awaitCondition { !app.project.findInFiles.finished }
+            val kept = app.project.findInFiles.results
+            assertTrue(kept.isNotEmpty(), "the results vanished while searching")
+            onNodeWithTag(TreeTags.FIND_IN_FILES_COUNT).assertTextEquals("Searching…")
+            awaitCondition { app.project.findInFiles.finished }
+        }
+
+    @Test
     fun `a search cut mid-flight is replayed by the server, with neither a gap nor a duplicate`() =
         runComposeUiTest {
             val expected = prepareMatches()

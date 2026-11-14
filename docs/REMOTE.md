@@ -63,19 +63,27 @@ the same way.
   `ssh-keyscan host >> ~/.ssh/known_hosts` after checking the fingerprint. Host keys are checked strictly.
 - The server host must run Linux or macOS, with a POSIX `sh`, `tar`, `sed`, `mkdir`, `chmod`, `nohup`, `kill` and
   either `openssl` or `od`. This is the default on every supported distribution.
-- The host needs **no Java**: the bundle carries a jlink runtime. The first upload is about 65 MB; later connections
-  only transfer the protocol.
+- The host needs **no Java**: the bundle carries the server compiled to a native binary (Linux x86_64, about 19 MB)
+  or a jlink runtime (about 65 MB). Later connections only transfer the protocol.
 
 ## Building the server bundle
 
-A bundle is a `.tar.gz` whose root holds `VERSION`, `serverApp.jar`, `runtime/` (a jlink image) and `start.sh`.
+A bundle is a `.tar.gz` whose root holds `VERSION`, `start.sh` and the server: on Linux x86_64 the native binary
+`kotlin-editor-server` built with GraalVM (`./native-server build` downloads GraalVM once, see `NATIVE_SERVER.md`: less
+memory, no JVM to start; it cannot load server plugins), elsewhere `serverApp.jar` and `runtime/` (a jlink image).
 Build one for the machine running the command:
 
 ```sh
 ./tools/remote-bundle.sh
 ```
 
-Cross-build for another target. `--jdk` points at a JDK whose `jmods/` are for that platform; the `jlink` tool
+The script also copies the bundle to `~/.kotlin-editor/bundles/`, the place an installed IDE finds it (it is the last
+one tried, after `remote/` of the application and `build/remote/` of the working directory), so that a stale copy
+there does not keep installing an old server. `--no-install` leaves it alone.
+
+`--jvm` builds the jar and jlink bundle even on Linux x86_64 (a server with plugins).
+
+Cross-build for another target (always a jar and a jlink runtime: `native-image` does not cross-compile). `--jdk` points at a JDK whose `jmods/` are for that platform; the `jlink` tool
 itself runs on the build machine (override it with `--jlink` if the versions differ). If `jlink` refuses a foreign
 target on your machine, run the script on that platform:
 

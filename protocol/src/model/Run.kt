@@ -27,8 +27,23 @@ class RunStream(
     val chunks: Flow<RunChunk>,
 )
 
+/** A manifest a project declares scripts in (`package.json`, `composer.json`), found by the server on its disk. */
+data class RunManifest(
+    /** The file name of the manifest: `package.json` or `composer.json`. */
+    val fileName: String,
+    /** Its directory, relative to the project with `/` separators; blank for the root. */
+    val directory: String,
+    /** Its text. */
+    val content: String,
+    /** The names of the files next to it (the lock files tell the package manager). */
+    val siblings: Set<String>,
+)
+
 /** Runs commands in a project, next to its files. */
 interface ProjectRunner {
+    /** The manifests of the project at [root]: the server walks its disk, so a remote project costs one request. */
+    suspend fun manifests(root: String): List<RunManifest> = emptyList()
+
     /**
      * Starts [command] (the program, then its arguments, without a shell) in [directory], or returns `null` when
      * this server cannot run commands.

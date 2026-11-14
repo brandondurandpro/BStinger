@@ -67,6 +67,13 @@ class FindInFilesSearch(
     // The span of the running search, ended once its results reached the screen (like a terminal's start one).
     private var span: Span? = null
 
+    /**
+     * Whether [results] are still the ones of the replaced search: kept on screen, so that a change of option does
+     * not blank the list, until the first batch (or the end) of the new search takes their place.
+     */
+    var stale: Boolean by mutableStateOf(false)
+        private set
+
     // Identifies the state a search updates: a batch of a cancelled old one does not update anything.
     private var generation = 0
 
@@ -84,7 +91,11 @@ class FindInFilesSearch(
     private suspend fun run(options: FindOptions, token: Int, restarts: Int = RESTARTS) {
         begin()
         this.options = options
-        if (options.text.isEmpty()) return
+        if (options.text.isEmpty()) {
+            results = emptyList()
+            stale = false
+            return
+        }
         span = ClientTelemetry.start(Operation.SearchFindInFiles)
         streamOf(options, token, restarts)
     }
@@ -116,11 +127,15 @@ class FindInFilesSearch(
     // One more batch: more hits below the popup, then the end of the search with its engine and error.
     private fun absorb(batch: SearchBatch, token: Int) {
         if (token != generation) return
-        if (batch.hits.isNotEmpty()) {
-            val more =
-                batch.hits.map { hit ->
-                    SearchHit(hit.entry, fileIndex.relativePath(hit.entry), hit.line, hit.column, hit.lineText)
-                }
+        val more =
+            batch.hits.map { hit ->
+                SearchHit(hit.entry, fileIndex.relativePath(hit.entry), hit.line, hit.column, hit.lineText)
+            }
+        val replacing = stale && (more.isNotEmpty() || batch.done)
+        if (replacing) {
+            results = more
+            stale = false
+        } else if (more.isNotEmpty()) {
             results = results + more
         }
         if (batch.error != null) error = batch.error
@@ -149,13 +164,14 @@ class FindInFilesSearch(
             results = emptyList()
         }
         finished = true
+        stale = false
         results = unsaved.over(results, options, documents())
         endAtShown()
     }
 
-    // No state of the replaced search left standing here: its hits, its engine, and its error all gone.
+    // The replaced search's engine and error are gone at once; its hits stay (stale) until the new ones arrive.
     private fun begin() {
-        results = emptyList()
+        stale = results.isNotEmpty()
         finished = false
         engine = null
         error = null

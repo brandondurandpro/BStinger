@@ -38,4 +38,4 @@ internal fun SearchField(onClick: () -> Unit) {
     }
 }
 
-private val SEARCH_WIDTH = 140.dp
+private val SEARCH_WIDTH = 200.dp

@@ -3,10 +3,8 @@ package org.example.kotlineditor.server.ripgrep
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
+import java.net.HttpURLConnection
 import java.net.URI
-import java.net.http.HttpClient
-import java.net.http.HttpRequest
-import java.net.http.HttpResponse
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.Path
@@ -14,7 +12,6 @@ import java.nio.file.Paths
 import java.nio.file.StandardCopyOption
 import java.security.DigestInputStream
 import java.security.MessageDigest
-import java.time.Duration
 import java.util.HexFormat
 import java.util.concurrent.TimeUnit
 import java.util.zip.GZIPInputStream
@@ -44,14 +41,27 @@ data class RipgrepSettings(
 
         /**
          * Packaging hook: a server distribution ships ripgrep as `ripgrep/rg` (`rg.exe` on Windows) next to the
-         * jar holding the server classes. The copy must be the pinned release ([RipgrepRelease]): it is verified
-         * like a downloaded one. No packaging step does it yet, so this directory is usually absent.
+         * jar holding the server classes, or next to the executable of a native server. The copy must be the pinned
+         * release ([RipgrepRelease]): it is verified like a downloaded one. `tools/remote-bundle.sh` does it.
          */
-        fun defaultBundledDirectory(): Path? =
+        fun defaultBundledDirectory(): Path? = beside(jarOfServer()) ?: beside(executableOfServer())
+
+        private fun beside(file: Path?): Path? = file?.parent?.resolve("ripgrep")
+
+        private fun jarOfServer(): Path? =
             runCatching {
-                val jar = RipgrepSettings::class.java.protectionDomain.codeSource.location
-                Paths.get(jar.toURI()).parent?.resolve("ripgrep")
+                val location = RipgrepSettings::class.java.protectionDomain.codeSource.location
+                Paths.get(location.toURI())
             }.getOrNull()
+
+        // A native binary has no code source: the file the process runs from.
+        private fun executableOfServer(): Path? =
+            ProcessHandle
+                .current()
+                .info()
+                .command()
+                .map { Paths.get(it) }
+                .orElse(null)
     }
 }
 
@@ -119,6 +129,8 @@ internal class RipgrepProvisioner(
                 true
             } catch (_: IOException) {
                 false
+            } catch (_: LinkageError) {
+                false // a runtime without a class of the download: the built-in search takes over
             }
 
     // Archive downloaded to a temporary file, verified, then the executable extracted, verified and moved in place
@@ -219,8 +231,8 @@ internal class RipgrepProvisioner(
         private const val VERSION_CHECK_SECONDS = 10L
         private const val MAX_VERSION_OUTPUT = 4096
         private const val HTTP_OK = 200
-        private val CONNECT_TIMEOUT = Duration.ofSeconds(15)
-        private val DOWNLOAD_TIMEOUT = Duration.ofMinutes(2)
+        private const val CONNECT_TIMEOUT_MS = 15_000
+        private const val READ_TIMEOUT_MS = 120_000
 
         /** Whether [path] is a ripgrep executable that starts here (not some other program, not a noexec mount). */
         fun runs(path: Path): Boolean =
@@ -260,31 +272,19 @@ internal class RipgrepProvisioner(
             if (!condition) throw IOException(message())
         }
 
+        // HttpURLConnection, of java.base, rather than java.net.http: a server on a trimmed Java runtime has no such
+        // module, and the download must not break the search. It follows the redirects of the release by itself.
         private fun httpGet(url: String): InputStream {
-            val client =
-                HttpClient
-                    .newBuilder()
-                    .followRedirects(HttpClient.Redirect.NORMAL)
-                    .connectTimeout(CONNECT_TIMEOUT)
-                    .build()
-            val request =
-                HttpRequest
-                    .newBuilder(URI.create(url))
-                    .timeout(DOWNLOAD_TIMEOUT)
-                    .GET()
-                    .build()
-            val response =
-                try {
-                    client.send(request, HttpResponse.BodyHandlers.ofInputStream())
-                } catch (e: InterruptedException) {
-                    Thread.currentThread().interrupt()
-                    throw IOException("Download interrupted", e)
-                }
-            if (response.statusCode() != HTTP_OK) {
-                response.body().close()
-                throw IOException("HTTP ${response.statusCode()} for $url")
+            val connection = URI.create(url).toURL().openConnection() as HttpURLConnection
+            connection.connectTimeout = CONNECT_TIMEOUT_MS
+            connection.readTimeout = READ_TIMEOUT_MS
+            connection.instanceFollowRedirects = true
+            val status = connection.responseCode
+            if (status != HTTP_OK) {
+                connection.disconnect()
+                throw IOException("HTTP $status for $url")
             }
-            return response.body()
+            return connection.inputStream
         }
     }
 }

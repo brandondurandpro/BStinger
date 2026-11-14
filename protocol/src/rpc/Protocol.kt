@@ -359,6 +359,9 @@ enum class Method(
     /** Every file of a project. */
     WalkFiles("search/walkFiles", mutating = false),
 
+    /** The directories and common extensions of a project, for the filters of Find in Files. */
+    Facets("search/facets", mutating = false),
+
     /** Full-text search in a project. */
     FindInFiles("search/findInFiles", mutating = false),
 
@@ -384,6 +387,9 @@ enum class Method(
 
     /** Stops a run and the processes it started. */
     RunStop("run/stop", mutating = true),
+
+    /** The `package.json` and `composer.json` files of a project, with their text, to list their scripts. */
+    RunManifests("run/manifests", mutating = false),
 
     /** Replays the chunks of a run after its last sequence number (a reconnection). */
     RunResume("run/resume", mutating = false),

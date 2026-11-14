@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -47,8 +46,6 @@ import org.example.kotlineditor.state.PopupKind
 import org.example.kotlineditor.state.ProjectState
 import org.example.kotlineditor.state.StatusIndicator
 import org.example.kotlineditor.state.StatusIndicators
-import org.example.kotlineditor.state.ToolWindow
-import org.example.kotlineditor.state.workspaceProject
 
 // The IDE frame around the editors: toolbar, tool window strip and panels, splitters, status bar.
 
@@ -62,26 +59,9 @@ internal fun Toolbar(app: AppState, project: ProjectState) {
             .padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        ProjectWidget(app, project)
-        if (app.session.isRemote) {
-            RemoteBadge(app)
-        }
-        // In agent mode, the branch of the project the agent of the active conversation works on.
-        val branchProject = if (project.agentMode) project.agent.current?.workspaceProject else project
-        if (branchProject == null || branchProject.git.currentBranch == null) {
-            Spacer(Modifier.weight(1f))
-        } else {
-            BranchWidget(branchProject, Modifier.weight(1f).padding(start = 12.dp))
-        }
-        if (app.settings.agentModeEnabled) {
-            ModeSwitch(project.agentMode) { project.agentMode = it }
-            Spacer(Modifier.width(10.dp))
-        }
-        RunWidget(project.run, { project.showToolWindow(ToolWindow.Run) })
-        Spacer(Modifier.width(10.dp))
-        IdeButton("Deploy", { project.deployments.show() }, Modifier.testTag(AppTags.DEPLOY_BUTTON))
-        Spacer(Modifier.width(6.dp))
+        ToolbarStart(app, project, Modifier.weight(1f))
         SearchField { project.showPopup(PopupKind.GotoFile) }
+        ToolbarEnd(app, project, Modifier.weight(1f))
     }
 }
 
@@ -91,7 +71,7 @@ private val MENU_MIN_WIDTH = 320.dp
 private val MENU_MAX_WIDTH = 900.dp
 
 @Composable
-private fun RemoteBadge(app: AppState) {
+internal fun RemoteBadge(app: AppState) {
     var menuOpen by remember { mutableStateOf(false) }
     val connection by app.session.connection.collectAsState()
     val failure by app.session.remoteFailure.collectAsState()
@@ -129,7 +109,7 @@ private fun RemoteBadge(app: AppState) {
 }
 
 @Composable
-private fun ProjectWidget(app: AppState, project: ProjectState) {
+internal fun ProjectWidget(app: AppState, project: ProjectState) {
     var menuOpen by remember { mutableStateOf(false) }
     Box {
         Row(
@@ -168,20 +148,7 @@ private fun ProjectWidget(app: AppState, project: ProjectState) {
 }
 
 @Composable
-private fun SettingsMenuItem(app: AppState, close: () -> Unit) {
-    IdeMenuItem(
-        text = { Text("Settings…", fontSize = 13.sp) },
-        trailingIcon = { Text("Ctrl+Alt+S", fontSize = 12.sp, color = IdeColors.TextSecondary) },
-        onClick = {
-            close()
-            app.settings.open()
-        },
-        modifier = Modifier.testTag(AppTags.PROJECT_SETTINGS),
-    )
-}
-
-@Composable
-private fun ProjectMenuItems(app: AppState, close: () -> Unit) {
+internal fun ProjectMenuItems(app: AppState, home: Boolean = false, close: () -> Unit) {
     IdeMenuItem(
         text = { Text("Open Project…", fontSize = 13.sp) },
         onClick = {
@@ -190,14 +157,8 @@ private fun ProjectMenuItems(app: AppState, close: () -> Unit) {
         },
         modifier = Modifier.testTag(AppTags.PROJECT_OPEN_OTHER),
     )
-    IdeMenuItem(
-        text = { Text("Go Homepage", fontSize = 13.sp) },
-        onClick = {
-            close()
-            app.session.closeProject()
-        },
-        modifier = Modifier.testTag(AppTags.PROJECT_CLOSE),
-    )
+    if (!home) HomepageMenuItem(app, close)
+    RemoteMenuItem(app, close)
     SettingsMenuItem(app, close)
     // Feature flag of the experimental agent mode, saved with the preferences.
     IdeMenuItem(
@@ -363,7 +324,7 @@ internal fun StatusBar(app: AppState, project: ProjectState) {
 
 // What is wrong with the link to the server, if anything: SSH refusing the host first, then the protocol client.
 @Composable
-private fun LinkStatus(app: AppState) {
+internal fun LinkStatus(app: AppState) {
     val connection by app.session.connection.collectAsState()
     val remoteFailure by app.session.remoteFailure.collectAsState()
     val message =

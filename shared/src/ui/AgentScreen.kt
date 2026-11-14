@@ -70,7 +70,7 @@ internal fun AgentWorkspace(app: AppState, project: ProjectState) {
             .onGloballyPositioned { drag.workspace = it.boundsInRoot() },
     ) {
         Row(Modifier.fillMaxSize()) {
-            ToolStrip(workspace, app.devtools) { ConversationsButton(agent) }
+            ToolStrip(workspace, app.devtools, onSettings = app.settings::open) { ConversationsButton(agent) }
             if (agent.conversationsVisible) {
                 // The tree and the Git panel sit under the list; the column scrolls, each panel keeping its height.
                 val column = Modifier.width(agent.conversationsWidth.dp).fillMaxHeight().padding(bottom = ISLAND_GAP)

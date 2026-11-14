@@ -104,7 +104,8 @@ public class UpdateGrammars {
         g("haskell", "Haskell", "hs", "", "tree-sitter/tree-sitter-haskell", "haskell");
         g("hcl", "HCL", "hcl tf tfvars", "", "MichaHoffmann/tree-sitter-hcl", "hcl");
         g("hocon", "HOCON", "hocon", "", null, "hocon");
-        g("html", "HTML", "html htm xhtml", "", "tree-sitter/tree-sitter-html", "html");
+        // XML has no grammar in bonede/tree-sitter-ng: the HTML one colors tags, attributes, strings and comments.
+        g("html", "HTML", "html htm xhtml xml xsd xsl xslt svg plist wsdl rss atom xaml fxml csproj props targets resx", "", "tree-sitter/tree-sitter-html", "html");
         g("java", "Java", "java", "", "tree-sitter/tree-sitter-java", "java");
         g("javascript", "JavaScript", "js mjs cjs jsx", "", "tree-sitter/tree-sitter-javascript", "javascript");
         g("jq", "jq", "jq", "", null, "jq");
@@ -478,9 +479,9 @@ public class UpdateGrammars {
         if (values.isEmpty()) return prefix + "emptySet(),\n";
         String line = prefix + "setOf(" + quoted(values) + "),";
         if (line.length() <= 120) return line + "\n";
-        StringBuilder out = new StringBuilder(prefix).append("\n                setOf(\n");
-        for (String value : values) out.append("                    \"").append(value).append("\",\n");
-        return out.append("                ),\n").toString();
+        StringBuilder out = new StringBuilder(prefix).append("\n            setOf(\n");
+        for (String value : values) out.append("                \"").append(value).append("\",\n");
+        return out.append("            ),\n").toString();
     }
 
     static List<String> words(String text) {

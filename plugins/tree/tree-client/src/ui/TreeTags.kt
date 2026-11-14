@@ -34,6 +34,13 @@ object TreeTags {
     const val FIND_IN_FILES_INCLUDE_IGNORED = "findInFiles.includeIgnored"
     const val FIND_IN_FILES_SCOPE_BUTTON = "findInFiles.scope"
     const val FIND_IN_FILES_SCOPE_MENU = "findInFiles.scopeMenu"
+    const val FIND_IN_FILES_SCOPE_FILTER = "findInFiles.scopeFilter"
+    const val FIND_IN_FILES_GLOB_CLEAR = "findInFiles.globClear"
+    const val FIND_IN_FILES_CLEAR = "findInFiles.clear"
+    const val FIND_IN_FILES_SCOPE_CLEAR = "findInFiles.scopeClear"
+    const val FIND_IN_FILES_SCOPE_FILTER_CLEAR = "findInFiles.scopeFilterClear"
+    const val FIND_IN_FILES_SCOPE_ALL = "findInFiles.scopeAll"
+    const val FIND_IN_FILES_SCOPE_NONE = "findInFiles.scopeNone"
     const val FIND_IN_FILES_ERROR = "findInFiles.error"
     const val GOTO_SYMBOL = "gotoSymbol"
     const val GOTO_SYMBOL_INPUT = "gotoSymbol.input"
@@ -53,6 +60,9 @@ object TreeTags {
     fun gotoFileItem(relativePath: String) = "gotoFile.item:$relativePath"
 
     fun findInFilesItem(relativePath: String, line: Int) = "findInFiles.item:$relativePath:$line"
+
+    /** A suggestion chip of the glob field of Find in Files: its glob (`*.kt`, `!*.xml`, `!build/`). */
+    fun findInFilesGlobSuggestion(glob: String) = "findInFiles.glob:$glob"
 
     /** A row of the scope dropdown of Find in Files: its choice (`.` for the whole project root). */
     fun findInFilesScopeRow(scope: String) = "findInFiles.scope:$scope"

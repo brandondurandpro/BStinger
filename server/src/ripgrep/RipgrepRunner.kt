@@ -11,6 +11,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runInterruptible
 import org.example.kotlineditor.lsp.supervisor.OrphanReaper
 import org.example.kotlineditor.model.IGNORED_DIRECTORIES
+import org.example.kotlineditor.server.FileGlobs
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
@@ -36,8 +37,8 @@ internal data class RipgrepQuery(
     val regex: Boolean = false,
     /** Only files whose name matches this glob (`*.kt`), or null for all of them. */
     val filePattern: String? = null,
-    /** Directory searched, relative to [root] (`src`), or null for its whole root. */
-    val scope: String? = null,
+    /** Directories searched, relative to [root] (`src`), or none for its whole root. */
+    val scopes: List<String> = emptyList(),
     /** Whether ignored files (Git-ignored, `.git`, build output) are searched too. */
     val includeIgnored: Boolean = false,
 )
@@ -88,26 +89,18 @@ internal class RipgrepRunner(
                 addExcludedDirectories()
             }
             // The file glob comes last, after the ignored directories', so that it decides when they disagree.
-            if (query.filePattern != null) {
+            // Several patterns, the excluding ones with their `!` (see [FileGlobs]).
+            FileGlobs.parse(query.filePattern)?.all.orEmpty().forEach { pattern ->
                 add("--glob")
-                add(checkNotNull(query.filePattern))
+                add(pattern)
             }
             add("--max-filesize")
             add(maxFileSize.toString())
             add("--file")
             add("-")
             add("--")
-            add(searchDirectory(query).toString())
+            searchDirectories(query.root, query.scopes).forEach { add(it.toString()) }
         }
-
-    // The directory ripgrep searches: the root, or the scope inside it (normalized as well).
-    private fun searchDirectory(query: RipgrepQuery): Path {
-        val scope = query.scope ?: return query.root
-        return query.root
-            .resolve(scope)
-            .toAbsolutePath()
-            .normalize()
-    }
 
     /**
      * Command line for [files]: the same filters as the search ([IGNORED_DIRECTORIES] are excluded explicitly,
@@ -259,4 +252,18 @@ internal class RipgrepRunner(
                 "" // Closed because the process was killed.
             }
     }
+}
+
+/**
+ * The directories to search: the root when there is no scope, else each scope resolved under the root, made
+ * absolute and normalized. A scope inside another one is left out (its files are searched with the outer one),
+ * and so is a duplicate.
+ */
+internal fun searchDirectories(root: Path, scopes: List<String>): List<Path> {
+    if (scopes.isEmpty()) return listOf(root)
+    val resolved =
+        scopes
+            .map { root.resolve(it).toAbsolutePath().normalize() }
+            .distinct()
+    return resolved.filter { directory -> resolved.all { it == directory || !directory.startsWith(it) } }
 }

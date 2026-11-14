@@ -8,7 +8,7 @@ import kotlin.test.assertEquals
 /** The syntax facet of a language declared in [LanguageSupport]: its tree-sitter grammar, or a stated lack of one. */
 class LanguageSupportSyntaxTest {
     // Languages colored by the line lexer only, for want of a grammar in the catalog: a language that gets one leaves.
-    private val lexerOnly = setOf(LanguageSupport.Xml, LanguageSupport.Gradle, LanguageSupport.Batch)
+    private val lexerOnly = setOf(LanguageSupport.Gradle, LanguageSupport.Batch)
 
     @Test
     fun `every language has a tree-sitter grammar for each of its extensions, or is stated to have none`() {

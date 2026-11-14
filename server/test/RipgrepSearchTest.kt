@@ -266,8 +266,14 @@ class RipgrepSearchTest {
             val kotlinOnly = wholeWords.copy(filePattern = "*.kt")
             assertEquals(listOf("src/One.kt:0:0"), search.findInFiles(project, kotlinOnly, 100).relative())
 
-            val inSource = wholeWords.copy(scope = "src")
+            val inSource = wholeWords.copy(scopes = listOf("src"))
             assertEquals(listOf("src/One.kt:0:0"), search.findInFiles(project, inSource, 100).relative())
+
+            val inBoth = wholeWords.copy(scopes = listOf("src", "docs"))
+            assertEquals(
+                listOf("docs/Two.md:0:0", "src/One.kt:0:0"),
+                search.findInFiles(project, inBoth, 100).relative(),
+            )
 
             val everything = wholeWords.copy(includeIgnored = true)
             assertEquals(4, search.findInFiles(project, everything, 100).size)

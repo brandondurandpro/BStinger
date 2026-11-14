@@ -10,8 +10,11 @@ import org.example.kotlineditor.state.ToolWindowDefaults
 import org.example.kotlineditor.ui.LucideIcon
 import org.example.kotlineditor.ui.ToolWindowDrag
 
-/** Which group of the strip holds the button of a tool window: the top one, or the bottom one under the spacer. */
-enum class StripGroup { Top, Bottom }
+/**
+ * Which group of the strip holds the button of a tool window: the top one, the bottom one under the spacer, or
+ * the last one, at the very bottom of the strip (above the settings gear).
+ */
+enum class StripGroup { Top, Bottom, Last }
 
 /** A tool window as a feature contributes it: its defaults, its button and its content. */
 @Immutable

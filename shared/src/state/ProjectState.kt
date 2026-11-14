@@ -24,6 +24,7 @@ import org.example.kotlineditor.model.GitCommitFile
 import org.example.kotlineditor.model.GitFileStatus
 import org.example.kotlineditor.model.MergeHistory
 import org.example.kotlineditor.model.PluginServer
+import org.example.kotlineditor.model.RunManifest
 import org.example.kotlineditor.model.pathName
 import org.example.kotlineditor.model.slashed
 import org.example.kotlineditor.syntax.treesitter.GrammarStore
@@ -212,41 +213,23 @@ class ProjectState(
         val entries = runCatching { services.fileSystem.list(root) }.getOrDefault(emptyList())
         val windows = !root.path.startsWith("/")
         val wrappers = suggestedConfigurations(entries.map { it.name }.toSet(), windows)
-        return wrappers + discoverComposerScripts(windows) + discoverPackageScripts(windows)
+        return wrappers + discoverManifestScripts(windows)
     }
 
-    private suspend fun discoverComposerScripts(windows: Boolean): List<RunConfiguration> {
-        fileIndex.ensureLoaded()
-        val files = snapshotFlow { fileIndex.files }.filterNotNull().first()
-        val rootPrefix = slashed(root.path).trimEnd('/') + "/"
-        val manifests = files.filter { isProjectComposerFile(slashed(it.path, root.path).removePrefix(rootPrefix)) }
-        return manifests.flatMap { manifest ->
-            val relative = slashed(manifest.path, root.path).removePrefix(rootPrefix)
-            val directory = relative.substringBeforeLast('/', "")
-            val content = runCatching { services.fileSystem.read(manifest) }.getOrNull()
-            val text = (content as? FileContent.Text)?.lines?.joinToString("\n").orEmpty()
-            composerConfigurations(directory, composerScriptNames(text), windows)
-        }
+    // The server walks the disk and reads the manifests (one request, whether it is local or remote); the client turns
+    // their scripts into configurations.
+    private suspend fun discoverManifestScripts(windows: Boolean): List<RunConfiguration> {
+        val manifests = runCatching { services.runner.manifests(root.path) }.getOrDefault(emptyList())
+        return manifests.flatMap { manifest -> manifestConfigurations(manifest, windows) }
     }
 
-    private suspend fun discoverPackageScripts(windows: Boolean): List<RunConfiguration> {
-        fileIndex.ensureLoaded()
-        val files = snapshotFlow { fileIndex.files }.filterNotNull().first()
-        val rootPrefix = slashed(root.path).trimEnd('/') + "/"
-        val relativePaths = files.map { slashed(it.path, root.path).removePrefix(rootPrefix) }
-        val manifests = files.filter { isProjectPackageFile(slashed(it.path, root.path).removePrefix(rootPrefix)) }
-        return manifests.flatMap { manifest ->
-            val relative = slashed(manifest.path, root.path).removePrefix(rootPrefix)
-            val directory = relative.substringBeforeLast('/', "")
-            val prefix = if (directory.isEmpty()) "" else "$directory/"
-            val siblings =
-                relativePaths
-                    .filter { it.startsWith(prefix) && !it.removePrefix(prefix).contains('/') }
-                    .map { it.removePrefix(prefix) }
-                    .toSet()
-            val content = runCatching { services.fileSystem.read(manifest) }.getOrNull()
-            val text = (content as? FileContent.Text)?.lines?.joinToString("\n").orEmpty()
-            packageConfigurations(directory, packageScriptNames(text), packageManagerOf(siblings), windows)
+    private fun manifestConfigurations(manifest: RunManifest, windows: Boolean): List<RunConfiguration> {
+        val directory = manifest.directory
+        val manager = packageManagerOf(manifest.siblings)
+        return when (manifest.fileName) {
+            "composer.json" -> composerConfigurations(directory, composerScriptNames(manifest.content), windows)
+            "package.json" -> packageConfigurations(directory, packageScriptNames(manifest.content), manager, windows)
+            else -> emptyList()
         }
     }
 

@@ -120,8 +120,8 @@ data class FindOptions(
     val regex: Boolean = false,
     /** Only files whose name matches this glob (`*.kt`), or null for all of them. */
     val filePattern: String? = null,
-    /** Directory searched, relative to the root of the project (`src`), or null for its whole root. */
-    val scope: String? = null,
+    /** Directories searched, relative to the root of the project (`src`), or none for its whole root. */
+    val scopes: List<String> = emptyList(),
     /** Whether ignored files (Git-ignored, `.git`, build output) are searched too. */
     val includeIgnored: Boolean = false,
 )
@@ -218,6 +218,9 @@ interface ProjectFileSystem {
 interface ProjectSearch {
     /** Every regular file under [root], skipping VCS and build output directories. */
     suspend fun walkFiles(root: FileEntry, limit: Int = DEFAULT_WALK_LIMIT): List<FileEntry>
+
+    /** The directories and common extensions of the files under [root], what the Find in Files filters offer. */
+    suspend fun facets(root: FileEntry): SearchFacets = facetsOf(walkFiles(root), root.path)
 
     /** Full-text search of [query] in the text files under [root]. */
     suspend fun findInFiles(root: FileEntry, query: String, ignoreCase: Boolean, limit: Int): List<TextMatch>

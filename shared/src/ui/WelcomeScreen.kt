@@ -40,6 +40,15 @@ import org.example.kotlineditor.state.AppState
 
 @Composable
 fun WelcomeScreen(state: AppState) {
+    Column(Modifier.fillMaxSize().background(IdeColors.Frame)) {
+        HomeToolbar(state)
+        Box(Modifier.weight(1f)) { HomePage(state) }
+        HomeStatusBar(state)
+    }
+}
+
+@Composable
+private fun HomePage(state: AppState) {
     Row(Modifier.fillMaxSize().background(IdeColors.Panel).testTag(AppTags.WELCOME)) {
         Column(Modifier.width(220.dp).fillMaxHeight().padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

@@ -11,7 +11,8 @@ open class RemoteException(message: String, cause: Throwable? = null) : IOExcept
 /**
  * Where the IDE finds the self-contained server archive for a remote target.
  *
- * A bundle is a `.tar.gz` whose root holds `VERSION`, `serverApp.jar`, `runtime/` (a jlink image) and `start.sh`.
+ * A bundle is a `.tar.gz` whose root holds `VERSION`, `start.sh` and the server: the native binary
+ * `kotlin-editor-server`, or `serverApp.jar` and `runtime/` (a jlink image).
  * Release builds put one per target next to the application, in `remote/`; developers can point
  * `-Dkotlin.editor.remote.bundle=/path/to/server-linux-x86_64.tar.gz` at a local build.
  */

@@ -21,6 +21,7 @@ test-dependencies:
   - $libs.tree.sitter.vue
   - $libs.tree.sitter.typescript
   - $libs.tree.sitter.css
+  - $libs.tree.sitter.html
 
 test-settings:
   jvm:

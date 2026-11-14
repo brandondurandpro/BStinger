@@ -1,10 +1,14 @@
 package org.example.kotlineditor.ui
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.TooltipArea
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -130,6 +134,37 @@ fun <T> ResultList(items: List<T>, selected: Int, row: @Composable (Int, T) -> U
 /** Background of a result row, highlighted when selected. */
 fun Modifier.resultRow(selected: Boolean): Modifier =
     background(if (selected) IdeColors.Selection else Color.Transparent, IdeShapes.Medium)
+
+/**
+ * A toggle drawn as an [icon] (and a [label] beside it when given): the options of a search. [description] is the
+ * tooltip. On, it takes the selection background; off, it is only lit by the pointer.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun IconChip(
+    icon: LucideIcon,
+    on: Boolean,
+    description: String,
+    modifier: Modifier = Modifier,
+    label: String? = null,
+    onToggle: () -> Unit,
+) {
+    val tint = if (on) IdeColors.Text else IdeColors.TextSecondary
+    TooltipArea(tooltip = { Tooltip(description) }) {
+        Row(
+            modifier
+                .background(if (on) IdeColors.Selection else Color.Transparent, IdeShapes.Small)
+                .border(1.dp, if (on) IdeColors.InputBorder else Color.Transparent, IdeShapes.Small)
+                .clickable(onClick = onToggle)
+                .padding(horizontal = 5.dp, vertical = 3.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            IdeIcon(icon, color = tint, size = 15.dp)
+            if (label != null) Label(label, fontSize = 12.sp, color = tint)
+        }
+    }
+}
 
 @Composable
 fun ToggleChip(text: String, on: Boolean, modifier: Modifier = Modifier, onToggle: () -> Unit) {

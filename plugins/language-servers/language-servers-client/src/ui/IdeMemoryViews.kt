@@ -1,12 +1,6 @@
 package org.example.kotlineditor.ui
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.unit.dp
 import org.example.kotlineditor.model.ServerMemory
 import org.example.kotlineditor.state.IdeCpu
 import org.example.kotlineditor.state.IdeMemory
@@ -59,30 +53,6 @@ internal fun IdeCpuStatusItem(project: LanguageServersHost, state: LanguageServe
     ) { project.showToolWindow(ToolWindow.LanguageServers) }
 }
 
-/** The same numbers in the Language Servers window, with the heap of the server's JVM. */
-@Composable
-internal fun IdeMemorySection(state: LanguageServersState) {
-    val server = state.status.server
-    val memory = state.memory
-    Column(
-        SECTION.testTag(LanguageServerTags.LANGUAGE_SERVERS_IDE),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        if (memory.sameProcess) {
-            MemoryLine("UI and IDE server (one process)", textOf(memory.totalBytes), LanguageServerTags.MEMORY_TOTAL)
-        } else {
-            MemoryLine("UI process", textOf(memory.uiBytes), LanguageServerTags.MEMORY_UI)
-            MemoryLine("IDE server process", textOf(memory.serverBytes), LanguageServerTags.MEMORY_SERVER)
-            MemoryLine("Total", textOf(memory.totalBytes), LanguageServerTags.MEMORY_TOTAL)
-        }
-        CpuLines(state.cpu)
-        if (server.heapMaxBytes > 0) {
-            MemoryLine("IDE server · heap", "${memoryText(server.heapUsedBytes)} / ${memoryText(server.heapMaxBytes)}")
-            ProgressBar(server.heapUsedBytes.toFloat() / server.heapMaxBytes, Modifier.fillMaxWidth())
-        }
-    }
-}
-
 /** One number of the status bar. */
 private class MemoryItem(val text: String, val tag: String)
 
@@ -129,18 +99,7 @@ private fun memoryTooltip(memory: IdeMemory, server: ServerMemory): String {
 }
 
 // A number of bytes, or that it cannot be measured on this OS.
-private fun textOf(bytes: Long?): String = bytes?.let(::memoryText) ?: "n/a"
-
-@Composable
-private fun CpuLines(cpu: IdeCpu) {
-    if (cpu.sameProcess) {
-        MemoryLine("UI and IDE server · CPU", cpuOf(cpu.totalPercent), LanguageServerTags.CPU_TOTAL)
-    } else {
-        MemoryLine("UI process · CPU", cpuOf(cpu.uiPercent), LanguageServerTags.CPU_UI)
-        MemoryLine("IDE server process · CPU", cpuOf(cpu.serverPercent), LanguageServerTags.CPU_SERVER)
-        MemoryLine("Total · CPU", cpuOf(cpu.totalPercent), LanguageServerTags.CPU_TOTAL)
-    }
-}
+internal fun textOf(bytes: Long?): String = bytes?.let(::memoryText) ?: "n/a"
 
 // What the status bar says: one number for one process, else the parts that are known.
 private fun cpuStatusText(cpu: IdeCpu): String? {
@@ -177,4 +136,4 @@ private fun cpuTooltip(cpu: IdeCpu): String {
 }
 
 // A processor use, or that it cannot be measured (yet, or on this OS).
-private fun cpuOf(percent: Int?): String = percent?.let(::cpuText) ?: "n/a"
+internal fun cpuOf(percent: Int?): String = percent?.let(::cpuText) ?: "n/a"

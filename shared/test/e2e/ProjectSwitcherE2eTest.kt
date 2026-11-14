@@ -22,6 +22,7 @@ import androidx.compose.ui.text.TextLayoutResult
 import org.example.kotlineditor.state.delete
 import org.example.kotlineditor.ui.AppTags
 import org.example.kotlineditor.ui.EditorTags
+import org.example.kotlineditor.ui.RemoteTags
 import org.example.kotlineditor.ui.TreeTags
 import java.nio.file.Files
 import kotlin.io.path.createDirectories
@@ -172,6 +173,18 @@ class ProjectSwitcherE2eTest {
             awaitTag(AppTags.PROJECT_OPEN_OTHER)
             assertTrue(onAllNodes(hasTestTagPrefix("project.switch:")).fetchSemanticsNodes().isEmpty())
             assertTrue(onAllNodes(hasText("Recent Projects")).fetchSemanticsNodes().isEmpty())
+        }
+
+    @Test
+    fun `the menu opens the Remote Development dialog without leaving the project`() =
+        runComposeUiTest {
+            val app = launchWithProject(project)
+            val opened = app.project
+            onNodeWithTag(AppTags.PROJECT_WIDGET).performClick()
+            awaitTag(AppTags.PROJECT_REMOTE).performClick()
+            awaitTag(RemoteTags.REMOTE_DIALOG)
+            awaitNoTag(AppTags.PROJECT_MENU)
+            assertTrue(app.project === opened)
         }
 
     @Test

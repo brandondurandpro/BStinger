@@ -45,6 +45,7 @@ private val BUTTON_GAP = 4.dp
 internal fun ToolStrip(
     project: ProjectState?,
     devtools: Boolean,
+    onSettings: () -> Unit,
     registry: ToolWindowRegistry = IdeRegistries.toolWindows,
     top: @Composable ColumnScope.() -> Unit = {},
 ) {
@@ -55,7 +56,8 @@ internal fun ToolStrip(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         top()
-        if (project != null) ToolButtons(project, devtools, registry)
+        if (project != null) ToolButtons(project, devtools, registry) else Spacer(Modifier.weight(1f))
+        SettingsButton(onSettings)
     }
 }
 
@@ -69,6 +71,7 @@ private fun ColumnScope.ToolButtons(project: ProjectState, devtools: Boolean, re
     Spacer(Modifier.weight(1f))
     // Bottom tool windows sit at the bottom of the strip, like in IntelliJ's New UI.
     shown.filter { it.group == StripGroup.Bottom }.forEach { ToolButton(project, it.window, it.tag, it.icon) }
+    shown.filter { it.group == StripGroup.Last }.forEach { ToolButton(project, it.window, it.tag, it.icon) }
 }
 
 // The button of a tool window: a muted icon, lit up on a filled background while its window is open.

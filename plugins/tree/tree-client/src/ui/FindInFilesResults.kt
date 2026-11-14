@@ -1,6 +1,7 @@
 package org.example.kotlineditor.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -8,6 +9,7 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -16,6 +18,8 @@ import org.example.kotlineditor.model.FindOptions
 import org.example.kotlineditor.model.SearchEngine
 import org.example.kotlineditor.state.FindInFilesSearch
 import org.example.kotlineditor.state.SearchHit
+
+private const val STALE_ALPHA = 0.45f
 
 /** The results of the search: what is typed below the chips while rows arrive, an error instead when it failed. */
 @Composable
@@ -29,8 +33,11 @@ internal fun ResultsSection(
 ) {
     val error = search.error
     if (error == null) {
-        ResultList(results, cursor.selected) { index, hit ->
-            SearchHitRow(hit, matchLength(optionsOf(query, options), hit), index == cursor.selected) { open(hit) }
+        // The results of the replaced search stay, dimmed, until the new ones arrive: the list never blanks.
+        Box(Modifier.alpha(if (search.stale) STALE_ALPHA else 1f)) {
+            ResultList(results, cursor.selected) { index, hit ->
+                SearchHitRow(hit, matchLength(optionsOf(query, options), hit), index == cursor.selected) { open(hit) }
+            }
         }
     } else {
         Label(
@@ -64,6 +71,7 @@ private fun regexOf(options: FindOptions): Regex? =
 internal fun status(search: FindInFilesSearch, query: String): String =
     when {
         query.isEmpty() -> ""
+        search.stale -> "Searching…"
         !search.finished && search.results.isEmpty() -> "Searching…"
         !search.finished -> "${plural(search.results.size, "match", "matches")}…"
         search.results.isEmpty() -> "No matches"

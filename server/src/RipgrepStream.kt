@@ -31,7 +31,7 @@ internal fun queryOf(root: FileEntry, options: FindOptions) =
         wholeWord = options.wholeWord,
         regex = options.regex,
         filePattern = options.filePattern,
-        scope = options.scope,
+        scopes = options.scopes,
         includeIgnored = options.includeIgnored,
     )
 

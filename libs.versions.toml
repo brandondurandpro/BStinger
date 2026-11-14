@@ -15,6 +15,7 @@ tree-sitter-php = "0.24.2"
 tree-sitter-vue = "0.2.1a"
 tree-sitter-typescript = "0.23.2"
 tree-sitter-css = "0.25.0"
+tree-sitter-html = "0.23.2"
 tree-sitter-dockerfile = "0.2.0"
 tree-sitter-yaml = "0.5.0a"
 tree-sitter-bash = "0.25.1"
@@ -58,6 +59,7 @@ tree-sitter-php = { module = "io.github.bonede:tree-sitter-php", version.ref = "
 tree-sitter-vue = { module = "io.github.bonede:tree-sitter-vue", version.ref = "tree-sitter-vue" }
 tree-sitter-typescript = { module = "io.github.bonede:tree-sitter-typescript", version.ref = "tree-sitter-typescript" }
 tree-sitter-css = { module = "io.github.bonede:tree-sitter-css", version.ref = "tree-sitter-css" }
+tree-sitter-html = { module = "io.github.bonede:tree-sitter-html", version.ref = "tree-sitter-html" }
 tree-sitter-dockerfile = { module = "io.github.bonede:tree-sitter-dockerfile", version.ref = "tree-sitter-dockerfile" }
 tree-sitter-yaml = { module = "io.github.bonede:tree-sitter-yaml", version.ref = "tree-sitter-yaml" }
 tree-sitter-bash = { module = "io.github.bonede:tree-sitter-bash", version.ref = "tree-sitter-bash" }
