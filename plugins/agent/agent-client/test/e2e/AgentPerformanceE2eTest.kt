@@ -98,6 +98,8 @@ class AgentPerformanceE2eTest {
             awaitIdle(conversation)
             measure("Command of $COMMAND_LINES lines run and shown", COMMAND_BUDGET_MS, BUDGET_MB) {
                 sendPrompt("run $COMMAND_LINES 0")
+                awaitTag(AgentTags.AGENT_TOOLS_TOGGLE)
+                onNodeWithTag(AgentTags.AGENT_TOOLS_TOGGLE).performClick()
                 awaitCondition(COMMAND_BUDGET_MS) { "line $COMMAND_LINES" in textOf(AgentTags.AGENT_TERMINAL) }
                 awaitIdle(conversation)
                 renderFrame()

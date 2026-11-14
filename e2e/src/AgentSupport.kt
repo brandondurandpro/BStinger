@@ -4,6 +4,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
@@ -97,6 +98,21 @@ fun ComposeUiTest.sendPrompt(text: String) {
 /** The text the conversation shows, every item and the prompt bar. */
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.shownConversation(conversation: Conversation): String = textOf(AgentTags.agentView(conversation.id))
+
+/** Clicks the link of every folded run of tool calls: the transcript folds them behind it. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.openToolCalls() {
+    awaitTag(AgentTags.AGENT_TOOLS_TOGGLE)
+    val toggles = onAllNodesWithTag(AgentTags.AGENT_TOOLS_TOGGLE)
+    val count = toggles.fetchSemanticsNodes().size
+    for (index in 0 until count) {
+        val toggle = toggles[index]
+        val label = toggle.fetchSemanticsNode().config.getOrElseNullable(SemanticsProperties.Text) { null }
+        val folded = label?.firstOrNull()?.text?.startsWith("Show") == true
+        if (folded) toggle.performClick()
+    }
+    waitForIdle()
+}
 
 /** Waits until the conversation shows [text]. */
 @OptIn(ExperimentalTestApi::class)

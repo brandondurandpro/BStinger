@@ -98,6 +98,9 @@ object AgentTags {
     const val AGENT_COMPLETION = "agent.completion"
     const val AGENT_TERMINAL = "agent.terminal"
 
+    /** The link that folds and unfolds a run of tool calls. */
+    const val AGENT_TOOLS_TOGGLE = "agent.tools.toggle"
+
     /** The change a tool call makes to a file: its first lines. */
     const val AGENT_DIFF = "agent.diff"
 

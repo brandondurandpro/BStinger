@@ -103,6 +103,7 @@ class AgentE2eTest {
             awaitShown(conversation, "Wrote")
             awaitIdle(conversation)
             assertEquals("Notes of the agent", file.readText())
+            openToolCalls()
             assertContains(shownConversation(conversation), "+ Notes of the agent")
             assertContains(shownConversation(conversation), "Answered: Allow")
             // The tree picks the new file up without waiting for the window to regain the focus.
@@ -260,6 +261,7 @@ class AgentE2eTest {
             sendPrompt("run 3 2")
             awaitShown(conversation, "Exit code 2,")
             awaitIdle(conversation)
+            openToolCalls()
             val card = textOf(AgentTags.AGENT_TERMINAL)
             assertContains(card, "line 3")
             assertContains(card, "failed with 2")
@@ -268,16 +270,35 @@ class AgentE2eTest {
         }
 
     @Test
+    fun `the commands of the agent hide behind a link that folds and unfolds them`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, agentPreferences())
+            val conversation = startConversation(app)
+            sendPrompt("run 3 0")
+            awaitIdle(conversation)
+            awaitTag(AgentTags.AGENT_TOOLS_TOGGLE)
+            assertContains(textOf(AgentTags.AGENT_TOOLS_TOGGLE), "Show 1 command")
+            awaitNoTag(AgentTags.AGENT_TERMINAL)
+            onNodeWithTag(AgentTags.AGENT_TOOLS_TOGGLE).performClick()
+            awaitTag(AgentTags.AGENT_TERMINAL)
+            assertContains(textOf(AgentTags.AGENT_TOOLS_TOGGLE), "Hide 1 command")
+            onNodeWithTag(AgentTags.AGENT_TOOLS_TOGGLE).performClick()
+            awaitNoTag(AgentTags.AGENT_TERMINAL)
+        }
+
+    @Test
     fun `stopping the agent kills the command it runs`() =
         runComposeUiTest {
             val app = launchWithProject(project, agentPreferences())
             val conversation = startConversation(app)
             sendPrompt("run forever")
-            // Its output shows while it runs.
+            // Its output shows while it runs, once the link unfolds the command.
+            openToolCalls()
             awaitShown(conversation, "tick 3")
             onNodeWithTag(AgentTags.AGENT_STOP).performClick()
             awaitShown(conversation, "Killed.")
             awaitIdle(conversation)
+            openToolCalls()
             assertContains(textOf(AgentTags.AGENT_TERMINAL), "Exit code")
         }
 

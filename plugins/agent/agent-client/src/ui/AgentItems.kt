@@ -2,6 +2,7 @@ package org.example.kotlineditor.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,6 +25,7 @@ import org.example.kotlineditor.model.AgentDiff
 import org.example.kotlineditor.model.AgentItem
 import org.example.kotlineditor.model.AgentTerminalOutput
 import org.example.kotlineditor.model.AgentToolStatus
+import org.example.kotlineditor.state.Conversation
 
 // The items of a conversation: the prompts, thoughts, tool calls with their diffs, plans, permission requests and
 // notices.
@@ -74,6 +76,68 @@ internal fun NoticeView(notice: AgentItem.Notice) {
             fontSize = 12.sp,
         ),
     )
+}
+
+// A row of the transcript: one item, or the tool calls the agent made one after the other.
+internal sealed interface TranscriptRow {
+    val key: String
+
+    data class Single(val item: AgentItem) : TranscriptRow {
+        override val key get() = item.id
+    }
+
+    data class Tools(val calls: List<AgentItem.ToolCall>) : TranscriptRow {
+        override val key get() = calls.firstOrNull()?.id.orEmpty()
+    }
+}
+
+internal fun transcriptRows(items: List<AgentItem>): List<TranscriptRow> {
+    val rows = ArrayList<TranscriptRow>()
+    var run = ArrayList<AgentItem.ToolCall>()
+    for (item in items) {
+        if (item is AgentItem.ToolCall) {
+            run.add(item)
+            continue
+        }
+        if (run.isNotEmpty()) rows.add(TranscriptRow.Tools(run))
+        run = ArrayList()
+        rows.add(TranscriptRow.Single(item))
+    }
+    if (run.isNotEmpty()) rows.add(TranscriptRow.Tools(run))
+    return rows
+}
+
+// The commands of the agent are folded behind a link, with the last one beside it to follow what it does.
+@Composable
+internal fun ToolCallRun(conversation: Conversation, calls: List<AgentItem.ToolCall>) {
+    val first = calls.firstOrNull() ?: return
+    val opened = conversation.openedToolRuns[first.id] == true
+    val noun = if (calls.size == 1) "command" else "commands"
+    val verb = if (opened) "Hide" else "Show"
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Label(
+                "$verb ${calls.size} $noun",
+                Modifier
+                    .clickable { conversation.openedToolRuns[first.id] = !opened }
+                    .testTag(AgentTags.AGENT_TOOLS_TOGGLE),
+                color = IdeColors.Accent,
+                fontSize = 12.sp,
+            )
+            val last = calls.lastOrNull()
+            if (!opened && last != null) {
+                BasicText(
+                    last.title,
+                    Modifier.padding(start = 8.dp).weight(1f),
+                    style = LocalCodeStyleSmall().copy(color = IdeColors.TextSecondary),
+                    maxLines = 1,
+                )
+            }
+        }
+        if (opened) {
+            for (call in calls) ToolCallCard(call)
+        }
+    }
 }
 
 @Composable
