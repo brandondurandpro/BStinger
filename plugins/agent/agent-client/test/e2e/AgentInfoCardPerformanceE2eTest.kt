@@ -1,10 +1,12 @@
 package org.example.kotlineditor.e2e
 
+import androidx.compose.ui.test.ComposeTimeoutException
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.v2.runComposeUiTest
+import org.example.kotlineditor.state.Conversation
 import org.example.kotlineditor.state.refreshChanges
 import org.example.kotlineditor.ui.AgentTags
 import java.io.File
@@ -51,6 +53,30 @@ class AgentInfoCardPerformanceE2eTest {
         gitFastImport(project.root, script.toString())
     }
 
+    // What the card is waiting for, said when it never comes: the CI logs have nothing else to show where it stalls.
+    private fun ComposeUiTest.awaitCardReady(conversation: Conversation) {
+        try {
+            awaitCondition(SETUP_TIMEOUT) { conversation.workspace != null && shows("up to date") }
+        } catch (timeout: ComposeTimeoutException) {
+            val changes = conversation.changes
+            val workspace = conversation.workspace
+            val facts =
+                listOf(
+                    "mode=${conversation.mode}",
+                    "base=${conversation.base}",
+                    "workspace=${workspace?.root?.path}",
+                    "preparing=${conversation.preparingWorktree}",
+                    "workspaceError=${conversation.workspaceError}",
+                    "loaded=${changes.loaded}",
+                    "aheadBehind=${changes.aheadBehind}",
+                    "failure=${changes.failure}",
+                    "files=${changes.files.size}",
+                )
+            val state = facts.joinToString(" ")
+            throw AssertionError("The card never read 'up to date': $state", timeout)
+        }
+    }
+
     @Test
     fun `the card reads its distance from the base and its changes fast on a long history`() =
         runComposeUiTest(testTimeout = TEST_TIMEOUT) {
@@ -62,7 +88,7 @@ class AgentInfoCardPerformanceE2eTest {
             awaitTag(AgentTags.AGENT_PROMPT)
             app.project.agent.conversationsVisible = false
             val conversation = checkNotNull(app.project.agent.current)
-            awaitCondition(SETUP_TIMEOUT) { conversation.workspace != null && shows("up to date") }
+            awaitCardReady(conversation)
             val directory = File(checkNotNull(conversation.workspace).root.path)
             repeat(CHANGED_FILES) { File(directory, "file-$it.txt").writeText("$it\n") }
             measure("read $CHANGED_FILES changes and the distance from the base on $COMMITS commits", 15_000, 400) {
