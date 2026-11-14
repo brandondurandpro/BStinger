@@ -173,10 +173,12 @@ server restart).
   that contradict a convention of our tools, each with its reason.
 - GitHub Actions (`.github/workflows/ci.yml`) runs `./lint` and the whole suite on Ubuntu 20.04, 22.04 and 24.04
   under X11 (Xvfb) and Wayland (headless Weston, with XWayland for AWT), plus Windows. Each Ubuntu version and
-  session runs its tests in a few jobs side by side (`tools/ci/linux-test-groups.txt`); a pull request runs two of
-  the six, or all six when it changes the terminal, the display, the packaging or the CI, and `main` runs all six.
-  One Linux job of each session also launches the desktop app and checks that it stays open, which proves the
-  session really works.
+  session runs its tests in a few jobs side by side (`tools/ci/linux-test-groups.txt`), and so does Windows
+  (`tools/ci/windows-test-groups.txt`): a job runs a few small modules, or a shard of a big one
+  (`tools/ci/test-shards.txt`), so that the jobs last about the same. A pull request runs two of the six Linux
+  cells, or all six when it changes the terminal, the display, the packaging or the CI, and `main` runs all six and
+  saves its build directory, which the other runs restore to only compile what they change. One Linux job of each
+  session also launches the desktop app and checks that it stays open, which proves the session really works.
 - `./windows-vm` – the Windows job on your machine, without waiting for GitHub: `./windows-vm start` boots a local
   Windows Server 2025 VM (the image of `windows-latest`, evaluation edition) in Docker with KVM, through
   [dockur/windows](https://github.com/dockur/windows); the first start downloads and installs Windows (20 to 60

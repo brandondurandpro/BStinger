@@ -5,14 +5,73 @@
 # performance budgets: side by side on the few cores of a CI runner, they slow each other down and miss their budgets
 # and timeouts. So the other modules run first, together, then each module of tools/ui-test-modules.txt alone.
 #
-# With --only, runs only the steps listed, separated by commas: `non-ui` (the modules without UI tests) and UI
-# modules (e.g. ./run-tests --only non-ui,agent). Each Linux CI job runs a group of tools/ci/linux-test-groups.txt.
+# With --only, runs only the steps listed, separated by commas: `non-ui` (the modules without UI tests), a UI module
+# (all its tests) or a shard of a UI module, `<module>.<shard>`, the test classes of one line group of
+# tools/ci/test-shards.txt (e.g. ./run-tests --only non-ui,agent-client.1,shared.rest). Each CI job runs a group of
+# tools/ci/linux-test-groups.txt or tools/ci/windows-test-groups.txt. `./run-tests --list <step>` prints the arguments
+# of `./kotlin test` that select a step, without running it.
 #
 # The failures of the steps are listed again at the end, where the log of a CI job is read first.
 #
 # With other arguments, runs `./kotlin test` with them as they are (e.g. ./run-tests -m server).
 set -u
 cd "$(dirname "$0")"
+
+modules=()
+while read -r module; do
+    case "$module" in '' | '#'*) continue ;; esac
+    modules+=("$module")
+done < tools/ui-test-modules.txt
+
+# The arguments of `./kotlin test` that select a shard of a module (see tools/ci/test-shards.txt), one per line: the
+# classes of its lines, or, for `rest`, every class that no line names. Nothing is printed for a module without
+# shards, nor for a shard that does not exist.
+shard_arguments() {
+    local module=$1 shard=$2 line_module line_shard pattern
+    while read -r line_module line_shard pattern _; do
+        case "$line_module" in '' | '#'*) continue ;; esac
+        [ "$line_module" = "$module" ] || continue
+        if [ "$shard" = rest ]; then
+            echo "--exclude-classes=$pattern"
+        elif [ "$line_shard" = "$shard" ]; then
+            echo "--include-classes=$pattern"
+        fi
+    done < tools/ci/test-shards.txt
+}
+
+# The arguments of `./kotlin test` of a step: non-ui, a module or a shard of a module (`<module>.<shard>`).
+# Fails, with a message, for a step that does not exist.
+step_arguments() {
+    local step=$1 module=${1%%.*} shard="" listed
+    [ "$module" = "$step" ] || shard=${step#*.}
+    if [ "$step" = non-ui ]; then
+        printf '%s\n' "${excludes[@]}"
+        return 0
+    fi
+    case " ${modules[*]} " in
+        *" $module "*) ;;
+        *) echo "run-tests: unknown step '$step' (non-ui, a line of tools/ui-test-modules.txt or <module>.<shard>)" >&2; return 2 ;;
+    esac
+    if [ -z "$shard" ]; then
+        printf '%s\n' -m "$module"
+        return 0
+    fi
+    listed=$(shard_arguments "$module" "$shard")
+    if [ -z "$listed" ]; then
+        echo "run-tests: unknown shard '$step' (see tools/ci/test-shards.txt)" >&2
+        return 2
+    fi
+    printf '%s\n' -m "$module"
+    echo "$listed"
+}
+
+excludes=()
+for module in "${modules[@]}"; do excludes+=(--exclude-module "$module"); done
+
+if [ "${1:-}" = --list ]; then
+    step_arguments "${2:?--list needs a step}"
+    exit $?
+fi
 
 only=""
 if [ "${1:-}" = --only ]; then
@@ -21,28 +80,11 @@ if [ "${1:-}" = --only ]; then
 fi
 if [ $# -gt 0 ]; then exec ./kotlin test "$@"; fi
 
-modules=()
-while read -r module; do
-    case "$module" in '' | '#'*) continue ;; esac
-    modules+=("$module")
-done < tools/ui-test-modules.txt
-
-# Whether the step is run: every step without --only.
-selected() {
-    [ -z "$only" ] || [[ "$only" == *",$1,"* ]]
-}
-
 # A misspelled step would silently run nothing.
 IFS=, read -r -a wanted <<< "${only#,}"
 for step in "${wanted[@]}"; do
-    case " non-ui ${modules[*]} " in
-        *" $step "*) ;;
-        *) echo "run-tests: unknown step '$step' (non-ui or a line of tools/ui-test-modules.txt)" >&2; exit 2 ;;
-    esac
+    step_arguments "$step" > /dev/null || exit 2
 done
-
-excludes=()
-for module in "${modules[@]}"; do excludes+=(--exclude-module "$module"); done
 
 failed=()
 summary=$(mktemp)
@@ -74,15 +116,20 @@ step() {
     rm -f "$log"
 }
 
-if selected non-ui; then
-    echo "run-tests: modules without UI tests"
-    step "modules without UI tests" "${excludes[@]}"
+# Runs the steps wanted, in the order of the list given, or non-ui then each module without --only.
+run_step() {
+    local name=$1 arguments
+    echo "run-tests: $name"
+    mapfile -t arguments < <(step_arguments "$name")
+    step "$name" "${arguments[@]}"
+}
+
+if [ -z "$only" ]; then
+    run_step non-ui
+    for module in "${modules[@]}"; do run_step "$module"; done
+else
+    for name in "${wanted[@]}"; do run_step "$name"; done
 fi
-for module in "${modules[@]}"; do
-    selected "$module" || continue
-    echo "run-tests: $module"
-    step "$module" -m "$module"
-done
 
 if [ ${#failed[@]} -gt 0 ]; then
     cat "$summary" >&2

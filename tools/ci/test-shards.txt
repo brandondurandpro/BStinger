@@ -1,0 +1,158 @@
+# The shards of the big UI modules: a step of `run-tests --only` that is `<module>.<shard>` runs only the test classes
+# of the shard (`./kotlin test -m <module> --include-classes=...`), so that the CI runs a module in several jobs.
+#
+#   module  shard  class pattern  seconds on Windows  seconds on Linux
+#
+# - A line puts the classes matching its pattern (fully qualified name, `*` and `?` as wildcards) in a shard of the module.
+# - The shard `rest` has no line: it runs every class of the module that is in no other shard (`--exclude-classes`
+#   for each pattern below), so a test class added later runs without anyone editing this file.
+# - A module without line has no shard: its step is the whole module. tools/ci/check-test-groups, which the CI runs, fails
+#   when a pattern matches no class or a class of two shards, and when a group of tools/ci/*-test-groups.txt does not
+#   run every module (or every shard of a module) exactly once. `./run-tests --list <step>` prints the arguments of a step.
+# - The seconds are the time of each class in the CI run 43650560775 (Nov 2026), from the timestamps of its log. They only
+#   balance the shards (and the groups): nothing reads them. A shard is about 2 minutes of tests; add a class to the
+#   lightest shard when you rebalance, or leave it to `rest`.
+
+# agent-client.1: 130 s on Windows, 62 s on Linux
+agent-client 1 *.AgentBasePickerE2eTest 17 3
+agent-client 1 *.AgentReviewE2eTest 16 7
+agent-client 1 *.AgentModelChaosE2eTest 16 13
+agent-client 1 *.AgentInfoCardE2eTest 13 3
+agent-client 1 *.AgentContextE2eTest 11 7
+agent-client 1 *.AgentReleaseE2eTest 9 5
+agent-client 1 *.AgentPickerE2eTest 9 5
+agent-client 1 *.AgentInfoCardPerformanceE2eTest 6 1
+agent-client 1 *.AgentContextChaosE2eTest 5 3
+agent-client 1 *.AgentReleaseChaosE2eTest 4 2
+agent-client 1 *.AgentPermissionsE2eTest 4 2
+agent-client 1 *.AgentTranscriptSizeE2eTest 4 2
+agent-client 1 *.AgentPickerChaosE2eTest 4 2
+agent-client 1 *.AgentChangesCardE2eTest 3 1
+agent-client 1 *.AgentUsageAndForkE2eTest 3 2
+agent-client 1 *.AgentQuotaRefreshE2eTest 2 1
+agent-client 1 *.AgentTemplatesE2eTest 2 2
+agent-client 1 *.AgentRegistryChaosE2eTest 1 1
+agent-client 1 *.AgentPromptHistoryE2eTest 1 1
+agent-client 1 *.AgentDetailTabsE2eTest 1 0
+agent-client 1 *.AgentDiscussionE2eTest 1 0
+agent-client 1 *.AgentStatusE2eTest 1 0
+# agent-client.rest: 135 s on Windows, 56 s on Linux, 24 classes (no line)
+
+# editor.1: 123 s on Windows, 112 s on Linux
+editor 1 *.FindUsagesE2eTest 28 26
+editor 1 *.CompletionChaosE2eTest 15 13
+editor 1 *.CodeInsightE2eTest 13 11
+editor 1 *.WebCompletionE2eTest 10 7
+editor 1 *.CodeEditingInsightE2eTest 8 7
+editor 1 *.CompletionE2eTest 8 6
+editor 1 *.CompletionPerformanceE2eTest 7 8
+editor 1 *.SyntaxHighlightingE2eTest 6 5
+editor 1 *.CompletionDocumentationE2eTest 5 4
+editor 1 *.DiffScrollPerformanceE2eTest 4 5
+editor 1 *.SplitEditorE2eTest 3 3
+editor 1 *.BracketColorsE2eTest 3 2
+editor 1 *.EditingE2eTest 3 4
+editor 1 *.MultiCaretE2eTest 3 2
+editor 1 *.TagClosingE2eTest 2 2
+editor 1 *.ProblemsListPerformanceE2eTest 2 3
+editor 1 *.BracketColorsPerformanceE2eTest 1 1
+editor 1 *.FoldingE2eTest 1 1
+editor 1 *.VueSetupNoteE2eTest 1 1
+editor 1 *.EmptyEditorE2eTest 1 0
+editor 1 *.LineLayoutRenderingE2eTest 0 0
+editor 1 *.ThreeWayMergeTest 0 0
+editor 1 *.CompareLinesTest 0 0
+editor 1 *.EditorKeymapTest 0 0
+editor 1 *.DiffLayoutTest 0 0
+editor 1 *.MarkdownParserTest 0 0
+editor 1 *.UsageSpanTest 0 0
+editor 1 *.CompletionSignatureTest 0 0
+# editor.rest: 108 s on Windows, 127 s on Linux, 26 classes (no line)
+
+# git-client.1: 204 s on Windows, 45 s on Linux
+git-client 1 *.BranchesHistoryE2eTest 43 3
+git-client 1 *.MergeE2eTest 25 5
+git-client 1 *.BranchesSearchE2eTest 19 3
+git-client 1 *.CommitDiffE2eTest 17 2
+git-client 1 *.HistoryActionsE2eTest 17 5
+git-client 1 *.BranchPickerE2eTest 13 4
+git-client 1 *.BranchesHistoryChaosE2eTest 13 4
+git-client 1 *.QuickPullPerformanceE2eTest 10 1
+git-client 1 *.GitBlameE2eTest 10 4
+git-client 1 *.HistoryActionsChaosE2eTest 10 4
+git-client 1 *.BranchBulkActionsE2eTest 9 3
+git-client 1 *.GitGutterLiveE2eTest 5 2
+git-client 1 *.HistoryContextMenusE2eTest 5 1
+git-client 1 *.HistoryActionsPerformanceE2eTest 4 1
+git-client 1 *.MergePerformanceE2eTest 2 1
+git-client 1 *.GitGutterLivePerformanceE2eTest 2 1
+# git-client.rest: 198 s on Windows, 51 s on Linux, 16 classes (no line)
+
+# shared.1: 141 s on Windows, 94 s on Linux
+shared 1 *.DiskInvariantsE2eTest 21 3
+shared 1 *.PhpInlayHintsE2eTest 17 16
+shared 1 *.PhpHierarchyChaosE2eTest 9 9
+shared 1 *.PhpSelectionChaosE2eTest 8 7
+shared 1 *.PhpPullDiagnosticsChaosE2eTest 7 7
+shared 1 *.PhpSemanticTokensChaosE2eTest 7 6
+shared 1 *.DiskChangesPerformanceE2eTest 7 1
+shared 1 *.ProjectRestorePerformanceE2eTest 6 0
+shared 1 *.PhpSymbolsPerformanceE2eTest 6 2
+shared 1 *.PhpCodeLensE2eTest 5 5
+shared 1 *.PhpDiskChangesE2eTest 5 5
+shared 1 *.ProjectRestoreChaosE2eTest 5 5
+shared 1 *.PhpFileOperationsE2eTest 5 4
+shared 1 *.PhpSymbolsE2eTest 5 4
+shared 1 *.ServerPluginE2eTest 4 2
+shared 1 *.PhpHierarchyE2eTest 4 3
+shared 1 *.ExtensionsPanelE2eTest 3 3
+shared 1 *.PhpPullDiagnosticsE2eTest 3 2
+shared 1 *.ExternalPluginE2eTest 2 1
+shared 1 *.DeployDiskInvariantsE2eTest 2 1
+shared 1 *.PhpSelectionPerformanceE2eTest 2 1
+shared 1 *.ProjectRestoreE2eTest 2 0
+shared 1 *.DeployE2eTest 2 3
+shared 1 *.NavigationE2eTest 1 1
+shared 1 *.ExitE2eTest 1 0
+shared 1 *.WelcomeScreenE2eTest 1 1
+shared 1 *.ServerConnectionE2eTest 1 1
+shared 1 *.PluginContributionsE2eTest 0 0
+# shared.2: 125 s on Windows, 109 s on Linux
+shared 2 *.ExitChaosE2eTest 24 21
+shared 2 *.PhpFileOperationsChaosE2eTest 10 10
+shared 2 *.ExtensionsPerformanceE2eTest 8 8
+shared 2 *.PhpCodeLensChaosE2eTest 8 7
+shared 2 *.PhpInlayHintsChaosE2eTest 7 7
+shared 2 *.DeployPerformanceE2eTest 7 2
+shared 2 *.PhpDocumentLinksChaosE2eTest 6 6
+shared 2 *.DiskChangesChaosE2eTest 5 5
+shared 2 *.StatusIndicatorsE2eTest 5 5
+shared 2 *.PhpTypeFormattingE2eTest 5 4
+shared 2 *.PhpFoldingE2eTest 4 4
+shared 2 *.SettingsChaosE2eTest 4 3
+shared 2 *.DeploymentsChaosE2eTest 4 4
+shared 2 *.TelemetryPerformanceE2eTest 4 3
+shared 2 *.IdeFeaturesE2eTest 3 4
+shared 2 *.PhpSemanticTokensPerformanceE2eTest 3 3
+shared 2 *.PhpFoldingPerformanceE2eTest 3 2
+shared 2 *.PluginsSettingsE2eTest 3 2
+shared 2 *.PhpPullDiagnosticsPerformanceE2eTest 2 1
+shared 2 *.DeployChaosE2eTest 2 2
+shared 2 *.PhpInlayHintsPerformanceE2eTest 2 1
+shared 2 *.PlatformFilesE2eTest 1 1
+shared 2 *.PhpDocumentLinksPerformanceE2eTest 1 1
+shared 2 *.StatusIndicatorsPerformanceE2eTest 1 1
+shared 2 *.PreferencesE2eTest 1 1
+shared 2 *.NewWindowE2eTest 1 1
+shared 2 *.ToolbarLayoutE2eTest 0 1
+shared 2 *.LeftColumnToggleE2eTest 0 0
+# shared.rest: 136 s on Windows, 99 s on Linux, 32 classes (no line)
+
+# tree-client.1: 93 s on Windows, 15 s on Linux
+tree-client 1 *.SearchE2eTest 80 7
+tree-client 1 *.SearchChaosE2eTest 6 5
+tree-client 1 *.StickyTreeE2eTest 4 1
+tree-client 1 *.SearchUnsavedE2eTest 1 1
+tree-client 1 *.SearchFilesE2eTest 1 1
+tree-client 1 *.SearchUnsavedPerformanceE2eTest 1 1
+# tree-client.rest: 73 s on Windows, 34 s on Linux, 12 classes (no line)

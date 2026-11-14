@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# Checks that the desktop app really starts in the display session of the CI (X11, or XWayland under Weston): the
+# tests render off-screen, so only this proves it. It starts the app, waits for its window to appear (at most 2
+# minutes: the first start can download a JBR), then checks that the app is still running a few seconds later, which a
+# crash right after the first frame would not survive. Then it stops the app and everything it started.
+#
+# Needs DISPLAY and xwininfo (x11-utils). Used by .github/workflows/ci.yml and tools/linux-vm/run.sh.
+set -u
+cd "$(dirname "$0")/../.."
+
+window_class=org-example-kotlineditor-MainKt
+start_limit=120
+stay_seconds=10
+
+log=$(mktemp)
+app_windows() {
+    xwininfo -root -tree 2> /dev/null | grep -c "\"$window_class\""
+}
+
+windows_before=$(app_windows)
+# Its own session, so that the whole process group (the CLI, the JVM, the server it starts) is stopped together.
+SKIKO_RENDER_API=SOFTWARE setsid ./kotlin run -m desktopApp > "$log" 2>&1 &
+group=$!
+
+# Whether something of the app still runs: the group of its leader.
+running() { kill -0 -- "-$group" 2> /dev/null; }
+
+stop_app() {
+    kill -TERM -- "-$group" 2> /dev/null
+    for _ in $(seq 1 10); do
+        running || break
+        sleep 1
+    done
+    kill -KILL -- "-$group" 2> /dev/null
+    true
+}
+
+failed() {
+    echo "check-desktop-app: $1"
+    echo "----- output of the app"
+    tail -n 60 "$log"
+    stop_app
+    rm -f "$log"
+    exit 1
+}
+
+seconds=0
+while [ "$(app_windows)" -le "$windows_before" ]; do
+    running || failed "the desktop app exited before opening its window"
+    [ "$seconds" -lt "$start_limit" ] || failed "no window after $start_limit seconds"
+    sleep 1
+    seconds=$((seconds + 1))
+done
+echo "check-desktop-app: window open after $seconds s"
+
+for _ in $(seq 1 "$stay_seconds"); do
+    running || failed "the desktop app exited after opening its window"
+    sleep 1
+done
+echo "check-desktop-app: still running $stay_seconds s later"
+
+stop_app
+running && failed "the desktop app is still running after being stopped"
+rm -f "$log"

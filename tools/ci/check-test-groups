@@ -1,0 +1,131 @@
+#!/usr/bin/env bash
+# Checks that the CI runs every test class of every module exactly once, on each platform:
+#
+# - tools/ci/test-shards.txt: its lines name existing UI modules and shards, each pattern matches at least one test class
+#   of its module (a renamed class would leave a stale pattern, and its class would silently go to `rest`), and no class
+#   is in two shards;
+# - tools/ci/linux-test-groups.txt and tools/ci/windows-test-groups.txt: every step exists, and `non-ui` and every UI module
+#   are run exactly once, whole or as all of its shards (`rest` included), each shard in exactly one group.
+#
+# The test classes are found in the sources of the module (files under its test/ directory that have a @Test). Prints
+# the problems found, and exits with 1 when there are some.
+set -u
+cd "$(dirname "$0")/../.."
+
+failures=0
+fail() {
+    echo "::error::$*"
+    failures=$((failures + 1))
+}
+
+lines() { grep -vE '^[[:space:]]*(#|$)' "$1"; }
+
+modules=$(lines tools/ui-test-modules.txt)
+
+# Shards of each module: "module shard" pairs of the table, without duplicates, then `rest` for each module of the table.
+declare -A shards_of
+declare -A patterns_of_shard
+declare -A seen_pattern
+while read -r module shard pattern _; do
+    if ! grep -qx "$module" <<< "$modules"; then
+        fail "tools/ci/test-shards.txt: '$module' is not a module of tools/ui-test-modules.txt"
+        continue
+    fi
+    if [ "$shard" = rest ] || [ -z "$pattern" ]; then
+        fail "tools/ci/test-shards.txt: '$module $shard $pattern': a line is 'module shard pattern', and rest has no line"
+        continue
+    fi
+    if [ -n "${seen_pattern["$module $pattern"]:-}" ]; then
+        fail "tools/ci/test-shards.txt: '$pattern' of $module is twice in the table"
+    fi
+    seen_pattern["$module $pattern"]=1
+    case " ${shards_of[$module]:-} " in
+        *" $shard "*) ;;
+        *) shards_of[$module]="${shards_of[$module]:-} $shard" ;;
+    esac
+    patterns_of_shard["$module $shard"]="${patterns_of_shard["$module $shard"]:-} $pattern"
+done < <(lines tools/ci/test-shards.txt)
+for module in "${!shards_of[@]}"; do
+    shards_of[$module]="${shards_of[$module]} rest"
+done
+
+# The test classes of a module, fully qualified, one per line.
+test_classes() {
+    local module=$1 module_file dir file package
+    module_file=$(git ls-files "*/$module/module.yaml" "$module/module.yaml" | head -n 1)
+    [ -n "$module_file" ] || return 1
+    dir=$(dirname "$module_file")
+    while IFS= read -r file; do
+        grep -q '@Test' "$file" || continue
+        package=$(sed -nE 's/^package ([A-Za-z0-9_.]+).*/\1/p' "$file" | head -n 1)
+        sed -nE 's/^(private |internal |abstract |open )*class ([A-Za-z0-9_]+).*/\2/p' "$file" | sed "s/^/$package./"
+    done < <(git ls-files "$dir/test" | grep '\.kt$')
+}
+
+# Each pattern matches a class, and each class is in at most one shard.
+for module in "${!shards_of[@]}"; do
+    classes=$(test_classes "$module") || { fail "tools/ci/test-shards.txt: no module directory for '$module'"; continue; }
+    for shard in ${shards_of[$module]}; do
+        [ "$shard" = rest ] && continue
+        for pattern in ${patterns_of_shard["$module $shard"]}; do
+            matched=0
+            while IFS= read -r class; do
+                # shellcheck disable=SC2053 # the pattern is meant as a glob, like the one of `kotlin test`
+                [[ $class == $pattern ]] && matched=1
+            done <<< "$classes"
+            [ "$matched" -eq 1 ] || fail "tools/ci/test-shards.txt: '$pattern' ($module $shard) matches no test class"
+        done
+    done
+    while IFS= read -r class; do
+        in_shards=""
+        for shard in ${shards_of[$module]}; do
+            [ "$shard" = rest ] && continue
+            for pattern in ${patterns_of_shard["$module $shard"]}; do
+                # shellcheck disable=SC2053
+                if [[ $class == $pattern ]]; then
+                    case " $in_shards " in *" $shard "*) ;; *) in_shards="$in_shards $shard" ;; esac
+                fi
+            done
+        done
+        # shellcheck disable=SC2086
+        [ "$(echo $in_shards | wc -w)" -le 1 ] || fail "tools/ci/test-shards.txt: $class is in the shards$in_shards of $module"
+    done <<< "$classes"
+done
+
+# The steps each module must be run as: its whole self, or each of its shards.
+check_groups() {
+    local file=$1 group step
+    local -A count=()
+    while IFS= read -r group; do
+        for step in ${group//,/ }; do
+            count[$step]=$(( ${count[$step]:-0} + 1 ))
+        done
+    done < <(lines "$file")
+
+    local expected=("non-ui")
+    local module shard
+    for module in $modules; do
+        if [ -z "${shards_of[$module]:-}" ]; then
+            expected+=("$module")
+            continue
+        fi
+        for shard in ${shards_of[$module]}; do expected+=("$module.$shard"); done
+        if [ -n "${count[$module]:-}" ]; then
+            fail "$file: $module is run whole, and in shards too"
+        fi
+    done
+    for step in "${expected[@]}"; do
+        [ "${count[$step]:-0}" -eq 1 ] || fail "$file: $step is run ${count[$step]:-0} times (expected once)"
+        unset "count[$step]"
+    done
+    for step in "${!count[@]}"; do
+        fail "$file: unknown step '$step'"
+    done
+}
+check_groups tools/ci/linux-test-groups.txt
+check_groups tools/ci/windows-test-groups.txt
+
+if [ "$failures" -gt 0 ]; then
+    exit 1
+fi
+echo "check-test-groups: every test class runs once per platform"

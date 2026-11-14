@@ -11,8 +11,12 @@ Use `./kotlin` (`kotlin.bat` on Windows); it downloads the toolchain on first us
   memory); a development run has no such setting, add `--jvm-args="-XX:ParallelGCThreads=2 -XX:ConcGCThreads=1"`
   to measure memory as released.
 - All tests: `./run-tests` (`run-tests.bat`), which runs the UI modules one at a time, as the CI does (see the
-  script); `./kotlin test` runs them all at once. One module: `./kotlin test -m shared`. One Linux CI job:
-  `./run-tests --only shared,terminal-client` (its line of `tools/ci/linux-test-groups.txt`).
+  script); `./kotlin test` runs them all at once. One module: `./kotlin test -m shared`. One CI job: `./run-tests
+  --only shared.1,terminal-client` (`run-tests.bat --only "shared.1,terminal-client"`), the steps of its line of
+  `tools/ci/linux-test-groups.txt` or `tools/ci/windows-test-groups.txt`. A step is `non-ui`, a UI module, or a shard of a
+  big module, `<module>.<shard>`, the classes that `tools/ci/test-shards.txt` gives it (`rest`: all the others, so a
+  new test class needs no edit there); `./run-tests --list shared.1` prints the arguments of `./kotlin test` of a step.
+  `tools/ci/check-test-groups` checks that every module runs exactly once on each platform, as the CI does.
 - One test class: `./kotlin test -m shared --include-classes='*EditorTabsE2eTest'`; one test: `--include-test=<fqn>.method`.
 - Lint: `./lint`.
 

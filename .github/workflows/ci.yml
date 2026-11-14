@@ -6,9 +6,15 @@ name: CI
 # versions run in their official container image on an ubuntu-24.04 runner.
 #
 # Each Ubuntu version and session runs the tests in a few jobs side by side,
-# one per group of tools/ci/linux-test-groups.txt. A pull request runs two of
-# the six (the oldest and newest Ubuntu, one session each), or all six when it
-# changes code that differs between them; main runs all six after the merge.
+# one per group of tools/ci/linux-test-groups.txt, and Windows does the same with
+# tools/ci/windows-test-groups.txt. A group is a few modules, or a shard of a big
+# module (tools/ci/test-shards.txt), of about the same duration. A pull request
+# runs two of the six Linux cells (the oldest and newest Ubuntu, one session
+# each), or all six when it changes code that differs between them; main runs
+# all six after the merge.
+#
+# Every job restores the build directory saved by the last run of main, so that
+# its Build step only compiles what the change touched; only main saves it.
 #
 # A pull request that only touches documentation skips the lint and the tests.
 # Branch protection requires the single "CI passed" check, which succeeds when
@@ -36,17 +42,15 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       code: ${{ steps.filter.outputs.code }}
-      windows-modules: ${{ steps.modules.outputs.modules }}
+      windows-matrix: ${{ steps.windows.outputs.matrix }}
       linux-matrix: ${{ steps.linux.outputs.matrix }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      # The Windows jobs, one per module: non-ui (the modules without UI tests, together), then each UI module.
-      - id: modules
-        run: |
-          modules=$(grep -vE '^[[:space:]]*(#|$)' tools/ui-test-modules.txt | jq -R . | jq -sc '["non-ui"] + .')
-          echo "modules=$modules" | tee -a "$GITHUB_OUTPUT"
+      # Every module must be run exactly once on each platform: whole, or as all of its shards.
+      - name: Check the test groups
+        run: tools/ci/check-test-groups
       # Pushes and manual runs always test everything.
       - id: filter
         env:
@@ -60,29 +64,34 @@ jobs:
           git diff --name-only "$BASE...$HEAD" | tee changed.txt
           if grep -qvE '(\.md$|^docs/)' changed.txt; then code=true; else code=false; fi
           echo "code=$code" >> "$GITHUB_OUTPUT"
+      # The Windows jobs: each group of tools/ci/windows-test-groups.txt. The first one saves the build of main.
+      - id: windows
+        run: |
+          matrix=$(grep -vE '^[[:space:]]*(#|$)' tools/ci/windows-test-groups.txt | jq -R . | jq -sc '{include: [
+            to_entries[] | {
+              steps: .value, group: (.value | split(",") | join(" + ")),
+              id: (.value | gsub("[^A-Za-z0-9.]+"; "-")), cache: (.key == 0)
+            }
+          ]}')
+          echo "matrix=$matrix" | tee -a "$GITHUB_OUTPUT"
       # The Linux jobs: each group of tools/ci/linux-test-groups.txt, for each Ubuntu version and display session.
+      # The first group of Ubuntu 24.04 under X11 saves the build of main.
       # A pull request tests the six only when it changes what differs between them: the shells of the terminal,
       # the display, the packaging, the CI itself.
       - id: linux
         run: |
           lines() { grep -vE '^[[:space:]]*(#|$)' "$1"; }
-          expected=$( { echo non-ui; lines tools/ui-test-modules.txt; } | sort)
-          grouped=$(lines tools/ci/linux-test-groups.txt | tr ',' '\n' | sort)
-          if [ "$expected" != "$grouped" ]; then
-            echo "::error file=tools/ci/linux-test-groups.txt::each test step must be in exactly one group"
-            diff <(echo "$expected") <(echo "$grouped")
-            exit 1
-          fi
           all='[["20.04","x11"],["20.04","wayland"],["22.04","x11"],["22.04","wayland"],["24.04","x11"],["24.04","wayland"]]'
           combos=$all
-          platform='^(\.github/workflows/ci\.yml|tools/linux-vm/|run-tests$|kotlin$|plugins/terminal/|desktopApp/|packaging/)'
+          platform='^(\.github/workflows/ci\.yml|tools/linux-vm/|run-tests$|kotlin$|plugins/terminal/|desktopApp/|packaging/|tools/ci/check-desktop-app$)'
           if [ "$GITHUB_EVENT_NAME" = pull_request ] && ! grep -qE "$platform" changed.txt; then
             combos='[["24.04","x11"],["20.04","wayland"]]'
           fi
           matrix=$(lines tools/ci/linux-test-groups.txt | jq -R . | jq -sc --argjson combos "$combos" '{include: [
-            $combos[] as [$ubuntu, $session] | .[] | {
-              ubuntu: $ubuntu, session: $session, steps: ., group: (split(",") | join(" + ")),
-              app: (split(",") | index("non-ui") != null)
+            $combos[] as [$ubuntu, $session] | to_entries[] | {
+              ubuntu: $ubuntu, session: $session, steps: .value, group: (.value | split(",") | join(" + ")),
+              app: (.value | split(",") | index("non-ui") != null),
+              cache: ($ubuntu == "24.04" and $session == "x11" and .key == 0)
             }
           ]}')
           echo "matrix=$matrix" | tee -a "$GITHUB_OUTPUT"
@@ -143,9 +152,11 @@ jobs:
               /etc/apt/sources.list
             apt-get update
           }
+          # Only the display server of the session under test.
+          if [ "${{ matrix.session }}" = x11 ]; then display="xvfb"; else display="xwayland weston"; fi
           apt-get install -y --no-install-recommends \
             ca-certificates curl git tar unzip xz-utils openssh-client fish tcsh \
-            xvfb xauth x11-utils xwayland weston \
+            $display xauth x11-utils \
             libgl1 libx11-6 libxext6 libxrender1 libxtst6 libxi6 \
             fontconfig fonts-dejavu-core
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -199,8 +210,36 @@ jobs:
           # Connecting an X client starts XWayland.
           for _ in $(seq 1 30); do xdpyinfo -display :0 >/dev/null 2>&1 && break; sleep 1; done
           xdpyinfo -display :0 | grep -E "name of display|dimensions"
+      # The build directory of the last run of main (not the packaging output, nor the logs): the build then only
+      # compiles what this change touched. The incremental state is the toolchain's own, content-based, but it compares
+      # the dates of the files it wrote, which actions/cache keeps to the nanosecond (tar --posix). The three Ubuntu
+      # containers share it: the workspace path and the JDK are the same, and the outputs are bytecode.
+      - name: Restore the build
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            build/artifacts
+            build/generated
+            build/ic-cache
+            build/incremental.state
+            build/tasks
+          key: build-linux-${{ hashFiles('kotlin', 'project.yaml') }}-${{ github.sha }}
+          restore-keys: build-linux-${{ hashFiles('kotlin', 'project.yaml') }}-
       - name: Build
         run: ./kotlin build
+      # Right after the build, so that a failing test does not lose it. Pull requests never save.
+      - name: Save the build
+        # TEMPORARY: the second condition lets this pull request measure a warm build; removed before the merge.
+        if: matrix.cache && ((github.event_name == 'push' && github.ref == 'refs/heads/main') || github.head_ref == 'ci/faster-pipeline')
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            build/artifacts
+            build/generated
+            build/ic-cache
+            build/incremental.state
+            build/tasks
+          key: build-linux-${{ hashFiles('kotlin', 'project.yaml') }}-${{ github.sha }}
       - name: Test
         # RUNNER_TEMP is the path inside the container; ${{ runner.temp }} is the host's.
         env:
@@ -213,40 +252,28 @@ jobs:
             [ -f "$f" ] && { echo "::group::$f"; tail -200 "$f"; echo "::endgroup::"; }
           done
           true
-      # The tests render off-screen, so this is what proves the desktop app
-      # really starts in the session under test. A timeout (124) means it was
-      # still running when killed; any other exit code is a startup failure.
-      # Its JVM is up about 15 s after the command (a JBR download included):
-      # a minute leaves room for a crash at startup to show.
+      # The tests render off-screen, so this is what proves the desktop app really starts in the session under test:
+      # it waits for the window of the app, then checks that the app is still running a few seconds later.
       - name: Desktop app starts in the session
         if: matrix.app
-        env:
-          SKIKO_RENDER_API: SOFTWARE
-        run: |
-          set +e
-          timeout -k 10 60 ./kotlin run -m desktopApp
-          code=$?
-          set -e
-          if [ "$code" -ne 124 ]; then
-            echo "desktopApp exited with $code before the timeout (expected 124)"
-            exit 1
-          fi
+        timeout-minutes: 5
+        run: tools/ci/check-desktop-app
 
-  # One job per module, as run-tests.bat runs them one after the other: a module that hangs (issue #120) fails its
-  # own job, with its log and the dumps of the hang watch, and the modules run side by side.
+  # One job per group of tools/ci/windows-test-groups.txt, whose steps run-tests.bat runs one after the other: a module
+  # that hangs (issue #120) fails its own job, with its log and the dumps of the hang watch, and the groups run side
+  # by side.
   test-windows:
-    name: Windows · ${{ matrix.module }}
+    name: Windows · ${{ matrix.group }}
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: windows-latest
     timeout-minutes: 45
     strategy:
       fail-fast: false
-      matrix:
-        module: ${{ fromJSON(needs.changes.outputs.windows-modules) }}
+      matrix: ${{ fromJSON(needs.changes.outputs.windows-matrix) }}
     env:
-      # A module takes up to about 15 minutes on a runner: past this, its run is taken as hung.
-      HANG_MINUTES: "25"
+      # A group takes about 5 minutes on a runner: past this, its run is taken as hung.
+      HANG_MINUTES: "15"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -263,9 +290,33 @@ jobs:
         with:
           path: ~/.kotlin-editor/tools
           key: ripgrep-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('server/src/ripgrep/RipgrepRelease.kt') }}
+      # The build directory of the last run of main, as on Linux.
+      - name: Restore the build
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            build/artifacts
+            build/generated
+            build/ic-cache
+            build/incremental.state
+            build/tasks
+          key: build-windows-${{ hashFiles('kotlin.bat', 'project.yaml') }}-${{ github.sha }}
+          restore-keys: build-windows-${{ hashFiles('kotlin.bat', 'project.yaml') }}-
       - name: Build
         shell: cmd
         run: kotlin.bat build
+      - name: Save the build
+        # TEMPORARY: the second condition lets this pull request measure a warm build; removed before the merge.
+        if: matrix.cache && ((github.event_name == 'push' && github.ref == 'refs/heads/main') || github.head_ref == 'ci/faster-pipeline')
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            build/artifacts
+            build/generated
+            build/ic-cache
+            build/incremental.state
+            build/tasks
+          key: build-windows-${{ hashFiles('kotlin.bat', 'project.yaml') }}-${{ github.sha }}
       - name: Watch for a hang
         shell: pwsh
         run: >
@@ -274,17 +325,10 @@ jobs:
       # Below the job's limit: a test that hangs fails this step, whose log is kept (a job out of time loses it).
       - name: Test
         shell: cmd
-        timeout-minutes: 35
+        timeout-minutes: 25
         env:
-          MODULE: ${{ matrix.module }}
-        run: |
-          setlocal enabledelayedexpansion
-          set args=-m %MODULE%
-          if "%MODULE%"=="non-ui" (
-            set args=
-            for /f "eol=# tokens=*" %%m in (tools\ui-test-modules.txt) do set args=!args! --exclude-module %%m
-          )
-          call kotlin.bat test !args!
+          STEPS: ${{ matrix.steps }}
+        run: call run-tests.bat --only "%STEPS%"
       # What a hang left: the dumps of the watch, and the processes still alive.
       - name: Dumps and processes left
         if: failure() || cancelled()
@@ -300,7 +344,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: failure() || cancelled()
         with:
-          name: hang-windows-${{ matrix.module }}
+          name: hang-windows-${{ matrix.id }}
           path: ${{ runner.temp }}/hang
           if-no-files-found: ignore
 
