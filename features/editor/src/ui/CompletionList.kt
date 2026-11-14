@@ -56,7 +56,7 @@ private val DOCUMENTATION_WIDTH = 420.dp
 private val POPUP_CORNERS = IdeShapes.Medium
 
 /**
- * The completion popup, under the word being completed (above it when there is no room below), like IntelliJ's:
+ * The completion popup, under the word being completed (above it when there is no room below):
  * a badge for the kind, the label with the typed letters emphasized, and the signature or type on the right.
  * Placed in the layout phase, so that scrolling the editor moves it without recomposing.
  */
@@ -118,7 +118,7 @@ internal fun CompletionList(
                 }
             }
         }
-        // Like IntelliJ's documentation next to the list, for the selected item.
+        // The documentation next to the list, for the selected item.
         popup.documentation?.let { CompletionDocumentation(it) }
     }
 }

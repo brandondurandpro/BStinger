@@ -1,6 +1,6 @@
 package org.example.kotlineditor.state
 
-// Alt+J and its variants: carets on the occurrences of a text (IntelliJ keymap).
+// Alt+J and its variants: carets on the occurrences of a text.
 
 /**
  * Alt+J: without a selection, selects the word at the caret; with one, adds a caret selecting the next occurrence of

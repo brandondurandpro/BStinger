@@ -75,7 +75,7 @@ private const val MAX_REF_PILLS = 3
 private const val MIN_COMMITS_WIDTH = 200f
 
 /**
- * Branches tool window, like IntelliJ's Git log: the local and remote branches on the left, the history of the
+ * Branches tool window: the local and remote branches on the left, the history of the
  * selected branch in the middle (loaded page by page while scrolling), the selected commit's message and files on
  * the right.
  */

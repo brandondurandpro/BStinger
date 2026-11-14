@@ -38,14 +38,15 @@ internal fun OptionsSection(options: FindChips) {
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         ScopeChip(options)
-        val globLabel = if (options.globOn && options.globText.isNotBlank()) options.globText else "File types"
+        val filtering = options.globText.isNotBlank()
+        val globLabel = if (filtering) options.globText else "File types"
         IconChip(
             Lucide.ListFilter,
-            options.globOn,
+            options.globOpen || filtering,
             "Only some files: *.kt, or an exclusion: !*.xml",
             Modifier.testTag(TreeTags.FIND_IN_FILES_GLOB_BUTTON),
             label = globLabel.take(MAX_GLOB_LABEL),
-        ) { options.globOn = !options.globOn }
+        ) { options.globOpen = !options.globOpen }
         IconChip(
             Lucide.Eye,
             options.includeIgnored,
@@ -54,7 +55,7 @@ internal fun OptionsSection(options: FindChips) {
             label = "Ignored files",
         ) { options.includeIgnored = !options.includeIgnored }
     }
-    if (options.globOn) GlobPanel(options)
+    if (options.globOpen) GlobPanel(options)
     if (options.scopeMenuOpen) ScopeMenu(options)
 }
 

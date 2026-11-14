@@ -134,7 +134,7 @@ class LocalSearch(private val files: LocalFileSystem) : ProjectSearch {
             return if (result.size >= limit) FileVisitResult.TERMINATE else FileVisitResult.CONTINUE
         }
 
-        // Unreadable entries (permissions, races with deletions) are skipped, like IntelliJ's indexer does.
+        // Unreadable entries (permissions, races with deletions) are skipped.
         override fun visitFileFailed(file: Path, exc: IOException): FileVisitResult = FileVisitResult.CONTINUE
     }
 

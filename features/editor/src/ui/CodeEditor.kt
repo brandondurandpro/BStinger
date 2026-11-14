@@ -81,7 +81,7 @@ internal class CaretHints(val identifier: String?, val brackets: Pair<TextPos, T
 
 /**
  * Virtualized code editor: only visible rows are composed, horizontal scrolling is read in the layout phase, and
- * highlighting is computed per visible line. Keys go through the IntelliJ keymap of `EditorKeymap.kt`.
+ * highlighting is computed per visible line. Keys go through the keymap of `EditorKeymap.kt`.
  */
 @Composable
 fun CodeEditor(
@@ -164,7 +164,7 @@ fun CodeEditor(
     }
 }
 
-// Keys go through the IntelliJ keymap, and through the completion popup first when the file has one, then
+// Keys go through the editor keymap, and through the completion popup first when the file has one, then
 // through the lists code intelligence shows.
 private fun editorKeys(
     document: Document,
@@ -321,7 +321,7 @@ private fun FollowCaret(
     LaunchedEffect(document) {
         val reveal: suspend (TextPos) -> Unit = { caret ->
             tab.revealCaret = false
-            // A search or "go to line" may land inside a folded region: unfold it, like IntelliJ.
+            // A search or "go to line" may land inside a folded region: unfold it.
             if (document.folding.isHidden(caret.line)) document.folding.reveal(caret.line)
             scrollToRow(viewport, metrics, document.folding.rowOf(caret.line))
             val x = document.visualColumnOf(caret.line, caret.column) * metrics.charWidth + metrics.paddingPx

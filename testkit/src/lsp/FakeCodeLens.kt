@@ -22,7 +22,7 @@ private const val FUNCTION = 12
 
 /**
  * The code lenses of the [FakeLanguageServer], from [FakePhpCode]: an interface implemented somewhere gets
- * `2 implementations`, which lists them through VS Code's `editor.action.showReferences`; a function or method
+ * `2 implementations`, which lists them through the client command `editor.action.showReferences`; a function or method
  * without a docblock gets `Add docblock`, left unresolved until `codeLens/resolve`, which runs `add_docblock`.
  */
 internal class FakeCodeLens(private val code: FakePhpCode) {

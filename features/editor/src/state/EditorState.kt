@@ -22,7 +22,7 @@ private val REVIEW_ENTRY = FileEntry(path = "review", name = "Review", isDirecto
 
 /**
  * Open editors: one pane, or two after "Split Right". Every action applies to the active pane; a file open in
- * both panes shares its [Document]. Closing the active tab activates the most recently used one, like IntelliJ.
+ * both panes shares its [Document]. Closing the active tab activates the most recently used one.
  */
 @Stable
 @Suppress("TooManyFunctions")
@@ -192,7 +192,7 @@ class EditorState(
 
     fun close(tab: EditorTab) {
         val pane = paneOf(tab) ?: return
-        save(tab) // IntelliJ saves automatically, closing never loses edits
+        save(tab) // Saved automatically: closing never loses edits
         pane.tabs.remove(tab)
         release(tab)
         if (pane.activeTab == tab) pane.activeTab = pane.tabs.maxByOrNull { it.lastActivated }

@@ -69,7 +69,7 @@ private fun ColumnScope.ToolButtons(project: ProjectState, devtools: Boolean, re
     val shown = contributions.filter { devtools || !it.devtools }
     shown.filter { it.group == StripGroup.Top }.forEach { ToolButton(project, it.window, it.tag, it.icon) }
     Spacer(Modifier.weight(1f))
-    // Bottom tool windows sit at the bottom of the strip, like in IntelliJ's New UI.
+    // Bottom tool windows sit at the bottom of the strip.
     shown.filter { it.group == StripGroup.Bottom }.forEach { ToolButton(project, it.window, it.tag, it.icon) }
     shown.filter { it.group == StripGroup.Last }.forEach { ToolButton(project, it.window, it.tag, it.icon) }
 }

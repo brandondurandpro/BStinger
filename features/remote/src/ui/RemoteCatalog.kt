@@ -37,8 +37,8 @@ import org.example.kotlineditor.state.RemoteHost
 import org.example.kotlineditor.state.RemoteWorkspace
 
 /**
- * Recent remote folders and `~/.ssh/config` hosts, searchable; the picked line is highlighted like an IntelliJ
- * selection, rows carry the user's tags as chips, and clicking a chip filters by it.
+ * Recent remote folders and `~/.ssh/config` hosts, searchable; the picked line is highlighted
+ * like a selection, rows carry the user's tags as chips, and clicking a chip filters by it.
  */
 @Suppress("CognitiveComplexMethod") // filtering, loading and two sections in one compact panel
 @Composable

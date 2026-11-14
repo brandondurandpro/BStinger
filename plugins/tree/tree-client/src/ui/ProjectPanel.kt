@@ -34,7 +34,7 @@ fun ProjectPanel(project: TreeHost, drag: ToolWindowDrag, modifier: Modifier = M
     }
 }
 
-// Toggle of "Always Select Opened File", like the crosshair button of IntelliJ's Project view.
+// Toggle of "Always Select Opened File", a crosshair button.
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun AutoSelectToggle(project: TreeHost) {

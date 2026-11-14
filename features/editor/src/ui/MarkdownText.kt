@@ -29,7 +29,7 @@ private val HEADING_SIZE = 15.sp
 private val TEXT_SIZE = 13.sp
 
 /**
- * [markdown] laid out like IntelliJ's documentation popup: headings, paragraphs, lists, rules, tables and code blocks,
+ * [markdown] laid out as a documentation popup: headings, paragraphs, lists, rules, tables and code blocks,
  * the code colored like the editor. The documentation of the language servers and the answers of the agent use it.
  */
 @Composable

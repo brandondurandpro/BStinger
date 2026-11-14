@@ -36,6 +36,7 @@ private fun allToolWindows(): List<ToolWindowContribution> {
         listOf(
             projectToolWindow(),
             gitToolWindow(),
+            searchToolWindow(),
             branchesToolWindow(),
             extensionsToolWindow(),
             runToolWindow(),
@@ -48,6 +49,7 @@ private fun allToolWindows(): List<ToolWindowContribution> {
         listOf(
             ToolWindow.Project,
             ToolWindow.Git,
+            ToolWindow.Search,
             ToolWindow.Branches,
             ToolWindow.Extensions,
             ToolWindow.Run,

@@ -1,7 +1,7 @@
 package org.example.kotlineditor.state
 
 /**
- * IntelliJ-like fuzzy matching of names: the query characters must appear in order; contiguous characters, word
+ * Fuzzy matching of names: the query characters must appear in order; contiguous characters, word
  * starts (CamelCase humps, after `_ - .`) and prefixes score higher.
  */
 internal object FuzzyMatch {

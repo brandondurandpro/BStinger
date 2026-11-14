@@ -58,7 +58,7 @@ fun FileStructurePopup(
         // A language without a local outline (PHP) asks its language server.
         all = local.ifEmpty { askOutline(serverOutline) }
         loading = false
-        // Start on the declaration enclosing the caret, like IntelliJ.
+        // Start on the declaration enclosing the caret.
         cursor.selected = all.indexOfLast { it.line <= document.caret.line }.coerceAtLeast(0)
     }
     val results =

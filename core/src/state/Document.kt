@@ -41,7 +41,7 @@ class Document(initialLines: List<String>, val language: Language, val lineSepar
     /** Told of every change of the text while carets are moved for each of them, see [forEachCaret]. */
     internal var caretTracker: ((TextChange) -> Unit)? = null
 
-    /** The word Alt+J selected at the caret: its next occurrences are whole words only, like IntelliJ. */
+    /** The word Alt+J selected at the caret: its next occurrences are whole words only. */
     internal var occurrenceWord: String? = null
 
     /** Incremented on every edit; lets observers (save state, highlighting) react cheaply. */
@@ -135,7 +135,7 @@ class Document(initialLines: List<String>, val language: Language, val lineSepar
         val anchorBefore: TextPos?,
         val caretAfter: TextPos,
     ) : UndoStep {
-        // Consecutive typing of the same kind of characters is one undo step, like IntelliJ.
+        // Consecutive typing of the same kind of characters is one undo step.
         fun absorbs(at: TextPos, removedNow: String, typed: String): Boolean {
             val oneChar = removedNow.isEmpty() && typed.length == 1 && typed != "\n"
             val wasTyping = removed.isEmpty() && inserted.isNotEmpty() && '\n' !in inserted

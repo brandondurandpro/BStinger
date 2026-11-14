@@ -5,8 +5,8 @@ import androidx.compose.ui.text.SpanStyle
 import org.example.kotlineditor.syntax.SyntaxColor
 import org.example.kotlineditor.syntax.treesitter.LineSpans
 
-// [text] (the displayed line) with its brackets colored by depth, from [startDepth] open where the line starts, like
-// VS Code; a closing bracket nothing opened is red. Brackets inside a string or a comment of [spans] keep its color.
+// [text] (the displayed line) with its brackets colored by depth, from [startDepth] open where the line starts; a
+// closing bracket nothing opened is red. Brackets inside a string or a comment of [spans] keep its color.
 // Only the first [limit] characters are looked at: the ones of a long line that are colored.
 internal fun withBracketColors(
     text: AnnotatedString,

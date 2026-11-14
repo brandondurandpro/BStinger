@@ -160,7 +160,7 @@ internal fun DrawScope.drawProblems(problems: List<LineProblem>?, line: ScreenLi
             }
 
             problem.severity == DiagnosticSeverity.Hint -> {
-                // a hint is not drawn, like in IntelliJ
+                // a hint is not drawn
             }
 
             problem.severity == DiagnosticSeverity.Information -> {

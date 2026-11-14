@@ -78,7 +78,7 @@ fun GitPanel(project: GitHost, drag: ToolWindowDrag, modifier: Modifier = Modifi
     }
 }
 
-// Toggles the blame annotations of the active editor, like "Annotate" in IntelliJ's gutter menu.
+// Toggles the blame annotations of the active editor, as "Annotate" does in the gutter menu.
 @Composable
 private fun BlameToggle(project: GitHost) {
     val active = project.editor.activeTab?.blameVisible == true
@@ -108,7 +108,7 @@ private fun Message(text: String, tag: String) {
 }
 
 // Master checkbox above the list: it ticks every change for the commit, or unticks them all. A dash marks the
-// partial selection of IntelliJ's checkboxes, and its label tells how many changes are listed.
+// partial selection of its checkboxes, and its label tells how many changes are listed.
 @Composable
 private fun SelectAll(project: GitHost, changes: Int) {
     val checkedFiles = project.git.selectedForCommit
