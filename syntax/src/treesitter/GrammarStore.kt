@@ -9,6 +9,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.future.await
+import kotlinx.coroutines.launch
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.IOException
@@ -90,6 +91,8 @@ class GrammarStore(
 
     private val downloaded = AtomicInteger()
 
+    private val prefetching = ConcurrentHashMap.newKeySet<String>()
+
     /** Number of jars downloaded (cached libraries are not downloaded again). */
     val downloads: Int get() = downloaded.get()
 
@@ -97,6 +100,27 @@ class GrammarStore(
     @Volatile
     var lastFailure: String? = null
         private set
+
+    /** The grammar of [spec] if it is loaded already, `null` otherwise (it is not downloaded, see [prefetch]). */
+    fun loaded(spec: GrammarSpec): LoadedGrammar? {
+        val load = loads[spec.id]?.takeIf { it.isCompleted && !it.isCancelled } ?: return null
+        return runCatching { load.getCompleted() }.getOrNull()
+    }
+
+    /**
+     * Starts loading the grammar of [spec] without waiting for it, and calls [onLoaded] when it is there. Does
+     * nothing while a [prefetch] of the same grammar is pending.
+     */
+    fun prefetch(spec: GrammarSpec, onLoaded: () -> Unit) {
+        if (!prefetching.add(spec.id)) return
+        scope.launch {
+            try {
+                if (await(spec) != null) onLoaded()
+            } finally {
+                prefetching.remove(spec.id)
+            }
+        }
+    }
 
     /** The grammar of [spec], once it is available; `null` if it never will be here. Suspends while it downloads. */
     suspend fun await(spec: GrammarSpec): LoadedGrammar? {

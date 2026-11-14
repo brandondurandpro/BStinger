@@ -77,6 +77,9 @@ internal class TabFiles(
             // A compare tab carries its lines: [EditorState.compareWithDisk] computed and put them there.
             tab.isCompare -> Unit
 
+            // A review tab is given its state when it is opened, see [EditorState.openReview].
+            tab.isReview -> Unit
+
             tab.isMerge -> loadMerge(tab)
 
             tab.isDiff -> loadDiff(tab)
@@ -84,6 +87,9 @@ internal class TabFiles(
             else -> loadText(tab)
         }
     }
+
+    /** The changes of [entry] against HEAD. */
+    suspend fun diffLines(entry: FileEntry): List<DiffLine> = diffs(entry)
 
     /** Reads the three versions of a conflicted file and merges them: what both sides left alone is resolved. */
     fun loadMerge(tab: EditorTab) {

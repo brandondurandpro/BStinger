@@ -8,6 +8,11 @@ import org.example.kotlineditor.model.AgentItem
 import org.example.kotlineditor.testkit.acp.FakeRegistry
 import java.io.File
 import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.attribute.BasicFileAttributes
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.CountDownLatch
+import kotlin.concurrent.thread
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -54,6 +59,31 @@ class AgentRegistryTest {
         val again = server()
         again.prompt("c1", agent, directory, "u1", "echo again")
         assertEquals(listOf("again "), again.idle("c1") { it.answers().isNotEmpty() }.items.answers())
+        assertEquals(1, registry.downloads.get())
+    }
+
+    @Test
+    fun `sessions starting an agent of the registry together install it once`() {
+        val installer = AgentInstaller(ToolDownloader(tools), platform = platform)
+        val agents = AgentRegistry(registry.url, installer, cacheMs = 60_000)
+        val start = CountDownLatch(1)
+        // The program each session got, and its file once it got it: a second extraction would replace that file
+        // while the first session runs it (which Windows refuses).
+        val installed = ConcurrentLinkedQueue<Pair<String, Any?>>()
+        val sessions =
+            List(SESSIONS) {
+                thread {
+                    start.await()
+                    val command = agents.command("fake-agent")
+                    val program = command.command.firstOrNull().orEmpty()
+                    val attributes = Files.readAttributes(Path.of(program), BasicFileAttributes::class.java)
+                    installed += program to attributes.fileKey()
+                }
+            }
+        start.countDown()
+        sessions.forEach(Thread::join)
+        assertEquals(SESSIONS, installed.size)
+        assertEquals(1, installed.toSet().size, "the sessions got: $installed")
         assertEquals(1, registry.downloads.get())
     }
 
@@ -114,6 +144,7 @@ class AgentRegistryTest {
     }
 
     private companion object {
+        const val SESSIONS = 8
         const val NPX_REGISTRY =
             """{"version":"1.0.0","agents":[{"id":"npx-agent","name":"Npx Agent","version":"2.0.0",
             "description":"An npm package","distribution":{"npx":{"package":"@example/npx-agent@2.0.0",

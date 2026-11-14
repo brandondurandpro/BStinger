@@ -478,15 +478,7 @@ private const val OPEN_ATTEMPTS = 3
  */
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.openFromTree(relativePath: String) {
-    val parts = relativePath.split('/')
-    for (i in 1 until parts.size) {
-        val dir = parts.subList(0, i).joinToString("/")
-        val child = parts.subList(0, i + 1).joinToString("/")
-        if (onAllNodes(hasTestTag(TreeTags.treeRow(child))).fetchSemanticsNodes().isEmpty()) {
-            awaitTag(TreeTags.treeChevron(dir)).performClick()
-            awaitTag(TreeTags.treeRow(child))
-        }
-    }
+    expandAncestorRowsOf(relativePath)
     val row = TreeTags.treeRow(relativePath)
     val tab = EditorTags.tab(relativePath)
     var attempts = 0
@@ -497,6 +489,23 @@ fun ComposeUiTest.openFromTree(relativePath: String) {
     } while (!opened && attempts < OPEN_ATTEMPTS)
     awaitTag(tab)
     awaitEditorReady()
+}
+
+@OptIn(ExperimentalTestApi::class)
+private fun ComposeUiTest.hasTreeRow(path: String): Boolean =
+    onAllNodes(hasTestTag(TreeTags.treeRow(path))).fetchSemanticsNodes().isNotEmpty()
+
+// A chain of directories holding only one (`src/main/java`) is one row: the ancestors are the rows found.
+@OptIn(ExperimentalTestApi::class)
+private fun ComposeUiTest.expandAncestorRowsOf(relativePath: String) {
+    val parts = relativePath.split('/')
+    val prefixes = (1 until parts.size).map { parts.subList(0, it).joinToString("/") }
+    while (!hasTreeRow(relativePath)) {
+        val deepest = prefixes.lastOrNull { hasTreeRow(it) } ?: break
+        val deeper = prefixes.filter { it.length > deepest.length } + relativePath
+        awaitTag(TreeTags.treeChevron(deepest)).performClick()
+        waitUntil(timeoutMillis = TIMEOUT) { deeper.any { hasTreeRow(it) } }
+    }
 }
 
 /** Waits until the active tab finished loading (its content or a message is shown). */

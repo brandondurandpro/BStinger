@@ -197,6 +197,10 @@ private fun SettingControl(app: AppState, settings: SettingsState, setting: Sett
             ThemeControl(app)
         }
 
+        Setting.RemoteServer -> {
+            RemoteServerControl(app)
+        }
+
         Setting.FontSize -> {
             FontSizeControl(app)
         }

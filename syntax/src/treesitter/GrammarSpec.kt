@@ -31,9 +31,19 @@ class GrammarSpec(
 
         val all: List<GrammarSpec> get() = GRAMMAR_CATALOG
 
-        /** The grammar of the file named [name] (by its full name, then its extension), `null` if there is none. */
-        fun forFileName(name: String): GrammarSpec? =
-            byFileName[name] ?: byExtension[name.substringAfterLast('.', "").lowercase()]
+        // `Dockerfile.dev`, `Containerfile.prod`: the extension names the variant, not the language.
+        private val dockerfilePrefixes = listOf("Dockerfile.", "Containerfile.")
+        private val dockerfile: GrammarSpec? by lazy { GRAMMAR_CATALOG.firstOrNull { it.id == "dockerfile" } }
+
+        /**
+         * The grammar of the file named [name] (by its full name, a Dockerfile variant, then its extension), `null`
+         * if there is none.
+         */
+        fun forFileName(name: String): GrammarSpec? {
+            val isDockerfileVariant = dockerfilePrefixes.any { name.startsWith(it) }
+            val byVariant = if (isDockerfileVariant) dockerfile else null
+            return byFileName[name] ?: byVariant ?: byExtension[name.substringAfterLast('.', "").lowercase()]
+        }
     }
 }
 

@@ -121,6 +121,10 @@ internal fun overlaid(base: LineSpans, inner: LineSpans, allowed: List<IntRange>
         val end = base.ends[i].coerceAtMost(length)
         painted.fill(base.styles[i], base.starts[i].coerceAtMost(end), end)
     }
+    // The injected code is colored by its own language only: the colors under it belong to the host's raw text.
+    for (range in allowed) {
+        painted.fill(CaptureStyles.NONE, range.first.coerceAtMost(length), (range.last + 1).coerceAtMost(length))
+    }
     for (i in 0 until inner.size) {
         for (range in allowed) {
             val from = maxOf(inner.starts[i], range.first)

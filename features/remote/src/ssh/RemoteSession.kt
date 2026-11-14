@@ -16,6 +16,7 @@ import org.example.kotlineditor.model.ConnectionStatus
 import org.example.kotlineditor.rpc.ClientOptions
 import org.example.kotlineditor.rpc.RpcClient
 import org.example.kotlineditor.rpc.appServices
+import org.example.kotlineditor.state.RemoteBundleSource
 import org.example.kotlineditor.state.RemoteConnection
 import org.example.kotlineditor.state.RemoteFactory
 import org.example.kotlineditor.telemetry.ClientTelemetry
@@ -118,9 +119,10 @@ class RemoteSession(
             onProgress: (String) -> Unit = {},
             options: ClientOptions = ClientOptions(heartbeatMs = 5_000, deadAfterMs = 15_000, maxBackoffMs = 2_000),
             replaceServer: Boolean = false,
+            bundleSource: RemoteBundleSource = RemoteBundleSource.Local,
         ): RemoteSession {
             val ssh = SshClient(target)
-            val installer = RemoteInstaller(ssh)
+            val installer = RemoteInstaller(ssh, source = bundleSource)
             onProgress("Checking ${target.destination}")
             val host = installer.detectHost()
             onProgress("Preparing the server on ${host.target.id}")
@@ -174,8 +176,10 @@ object JvmRemoteFactory : RemoteFactory {
     override suspend fun connect(
         target: SshTarget,
         replaceServer: Boolean,
+        bundleSource: RemoteBundleSource,
         onProgress: (String) -> Unit,
-    ): RemoteConnection = RemoteSession.connect(target, onProgress, replaceServer = replaceServer)
+    ): RemoteConnection =
+        RemoteSession.connect(target, onProgress, replaceServer = replaceServer, bundleSource = bundleSource)
 
     override suspend fun sshHosts(): List<SshConfigHost> = SshConfig.load()
 }

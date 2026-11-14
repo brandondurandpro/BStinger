@@ -115,7 +115,8 @@ class PlatformFilesE2eTest {
                     .toString()
                     .length > 260,
             )
-            awaitTag(TreeTags.treeRow("deep"))
+            // `deep` and the directories under it hold one directory each: one row, down to the last.
+            awaitTag(TreeTags.treeRow("deep/$directory"))
             openFromTree(relative)
             onNodeWithTag(EditorTags.EDITOR).performClick()
             typeCode("x")

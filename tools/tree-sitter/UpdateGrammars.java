@@ -39,6 +39,7 @@ public class UpdateGrammars {
     static final String MAVEN = "https://repo1.maven.org/maven2/io/github/bonede/";
     /** Helix revision the fallback queries come from. */
     static final String HELIX = "ba40e547426b0f9896c8bdc699a4ab11f2b37dbc";
+    static Path LOCAL_QUERIES = Path.of("tools", "tree-sitter", "queries");
     static final Path CACHE = Path.of(System.getProperty("user.home"), ".cache", "kotlin-editor-tools", "grammars");
     static final HttpClient HTTP = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build();
 
@@ -153,7 +154,7 @@ public class UpdateGrammars {
         g("wast", "WebAssembly script", "wast", "", null, "wast");
         g("wat", "WebAssembly text", "wat", "", null, "wat");
         g("wgsl", "WGSL", "wgsl", "", null, "wgsl");
-        g("yaml", "YAML", "yaml yml", ".clang-format .clangd", null, "yaml");
+        g("yaml", "YAML", "yaml yml", ".clang-format .clangd .clang-tidy .yamllint .gemrc CITATION.cff", null, "yaml");
         g("zig", "Zig", "zig zon", "", null, "zig");
     }
 
@@ -164,6 +165,7 @@ public class UpdateGrammars {
     public static void main(String[] args) throws Exception {
         Path repo = Path.of(args.length > 0 ? args[0] : ".").toAbsolutePath().normalize();
         Path queries = repo.resolve("syntax/resources/tree-sitter");
+        LOCAL_QUERIES = repo.resolve("tools/tree-sitter/queries");
         Files.createDirectories(CACHE);
         Map<String, Built> built = new ConcurrentHashMap<>();
         try (var pool = Executors.newFixedThreadPool(8)) {
@@ -260,6 +262,15 @@ public class UpdateGrammars {
             }
         }
         if (keptCount == 0) throw new IOException("no pattern of the query compiles");
+        // The patterns of this repository for the grammar (tools/tree-sitter/queries/<id>.scm) come last, so they win.
+        Path local = LOCAL_QUERIES.resolve(grammar.id() + ".scm");
+        if (Files.isRegularFile(local)) {
+            for (String pattern : patterns(Files.readString(local))) {
+                if (!usable(language, pattern)) throw new IOException("local pattern does not compile: " + pattern);
+                kept.append(pattern).append('\n');
+                keptCount++;
+            }
+        }
         // The whole query must compile too (it then does in the editor).
         language.query(kept.toString()).close();
         Path out = queries.resolve(grammar.id()).resolve("highlights.scm");

@@ -68,13 +68,28 @@ private fun Document.autoCloses(c: Char, next: Char?): Boolean {
     return freeAfter && !(c in QUOTES && afterLetter)
 }
 
-/** Enter: new line keeping the current indentation, plus one level after an opening bracket. */
+/**
+ * Enter: new line keeping the current indentation, plus one level after an opening bracket. Between an opening
+ * bracket and its closer (`{|}`), the block opens: the caret lands on an indented line and the closer moves to a
+ * line of its own, at the original indentation.
+ */
 fun Document.newLine() {
     val line = lines[caret.line]
     val indent = line.takeWhile { it == ' ' || it == '\t' }
     val before = line.substring(0, minOf(caret.column, line.length)).trimEnd()
-    val extra = if (before.lastOrNull() in OPENERS) " ".repeat(TAB_SIZE) else ""
-    insert("\n" + indent + extra)
+    val opener = before.lastOrNull()
+    val extra = if (opener in OPENERS) " ".repeat(TAB_SIZE) else ""
+    val closer = opener?.let { PAIRS[it] }
+    val nextChar = line.getOrNull(caret.column)
+    val closerFollows = closer != null && nextChar == closer
+    val splitsEmptyPair = closerFollows && !hasSelection
+    if (splitsEmptyPair) {
+        val closerLine = "\n" + indent
+        insert("\n" + indent + extra + closerLine)
+        moveTo(TextPos(caret.line - 1, indent.length + extra.length))
+    } else {
+        insert("\n" + indent + extra)
+    }
 }
 
 /** Backspace; deleting the opener of an empty pair `()` removes both characters, like IntelliJ. */

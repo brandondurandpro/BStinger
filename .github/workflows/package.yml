@@ -138,9 +138,22 @@ jobs:
         if: runner.os == 'Linux'
         run: ./kotlin task :serverApp:package@packaging
 
+      # The server of remote development, as the IDE installs it on a host (Settings > Remote Development >
+      # Download from GitHub): kotlin-editor-remote-<version>-<os>-<arch>.tar.gz, found by the IDE of that version.
+      - name: Build the remote server bundle
+        if: runner.os == 'Linux'
+        run: |
+          tools/remote-bundle.sh
+          target="linux-$(uname -m)"
+          mkdir -p build/remote-release
+          cp "build/remote/server-$target.tar.gz" "build/remote-release/kotlin-editor-remote-$APP_VERSION_LABEL-$target.tar.gz"
+
       - name: Collect the deliverables
         run: |
           mkdir -p dist
+          if [ -d build/remote-release ]; then
+            cp build/remote-release/* dist/
+          fi
           cp build/tasks/_desktopApp_package@packaging/deliverables/* dist/
           if [ -d build/tasks/_serverApp_package@packaging/deliverables ]; then
             cp build/tasks/_serverApp_package@packaging/deliverables/* dist/
@@ -153,7 +166,7 @@ jobs:
           OS: ${{ runner.os }}
         run: |
           case "$OS" in
-            Linux) expected="kotlin-editor-[0-9]*.deb kotlin-editor-[0-9]*.AppImage kotlin-editor-[0-9]*.tar.gz kotlin-editor-server-*.tar.gz" ;;
+            Linux) expected="kotlin-editor-[0-9]*.deb kotlin-editor-[0-9]*.AppImage kotlin-editor-[0-9]*.tar.gz kotlin-editor-server-*.tar.gz kotlin-editor-remote-*.tar.gz" ;;
             Windows) expected="kotlin-editor-*.zip" ;;
             macOS) expected="kotlin-editor-*.dmg" ;;
           esac

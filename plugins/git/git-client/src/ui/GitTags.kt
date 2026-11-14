@@ -42,6 +42,7 @@ object GitTags {
     const val GIT_HIDE = "git.hide"
     const val GIT_BLAME = "git.blame"
     const val GIT_SELECT_ALL = "git.selectAll"
+    const val GIT_REVIEW_MANUAL = "git.reviewManual"
     const val GIT_REVERT_CHECKED = "git.revertChecked"
     const val GIT_REVERT_PICKED = "git.revertPicked"
     const val GIT_COMMIT_MESSAGE = "git.commitMessage"

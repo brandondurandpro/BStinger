@@ -45,8 +45,8 @@ class ProjectTreeChaosE2eTest {
             onNodeWithTag(TreeTags.treeChevron("src")).performClick()
             awaitCondition { tree.rows.any { tree.relativePath(it.entry) == "src" && it.loading } }
             app.network.comeBack()
-            awaitTag(TreeTags.treeRow("src/main"))
-            awaitTag(TreeTags.treeRow("src/test"))
+            awaitTag(TreeTags.treeRow("src/main/kotlin"))
+            awaitTag(TreeTags.treeRow("src/test/kotlin"))
             awaitCondition { tree.rows.none { it.loading } }
         }
 

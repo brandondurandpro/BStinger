@@ -173,6 +173,37 @@ class SyntaxHighlightingPerformanceE2eTest {
             }
         }
 
+    @Test
+    fun `a large Dockerfile with thousands of shell commands`() =
+        runComposeUiTest {
+            // Three lines per stage: line 3k is its FROM, 3k+1 and 3k+2 a RUN continued over two lines.
+            val stages =
+                (0 until STAGES).joinToString("\n") { i ->
+                    textOf("FROM alpine AS stage$i", "RUN apk add pkg$i \\", "    && echo $i")
+                }
+            project.file("Dockerfile", stages)
+            for (id in listOf("dockerfile", "bash")) {
+                assertNotNull(runBlocking { TestGrammars.shared.await(GrammarSpec.all.single { it.id == id }) })
+            }
+            val app = launchWithProject(project)
+            measure(
+                "open a 6,000-line Dockerfile until its shell is colored",
+                budgetMillis = 3_000,
+                budgetMegabytes = 200,
+            ) {
+                openFromTree("Dockerfile")
+                awaitColor(1, "apk", IdeColors.FunctionDeclaration)
+            }
+            val tab = app.project.editor.activeTab!!
+            onNodeWithTag(EditorTags.EDITOR).performClick()
+            pressInEditor(Key.MoveEnd, ctrl = true)
+            measure("type a command at the end of the Dockerfile", budgetMillis = 2_000, budgetMegabytes = 150) {
+                typeInEditor("\nRUN apk add curl")
+                awaitColor(tab.document!!.lines.lastIndex, "apk", IdeColors.FunctionDeclaration)
+            }
+            assertWindowBounded(tab)
+        }
+
     // Only the lines around the visible ones are colored, never the whole file.
     private fun ComposeUiTest.assertWindowBounded(tab: EditorTab) {
         val window = assertNotNull(tab.document!!.syntax!!.highlights).window
@@ -182,6 +213,7 @@ class SyntaxHighlightingPerformanceE2eTest {
 
     private companion object {
         const val CLASSES = 3_334
+        const val STAGES = 2_000
         const val TYPED_LINES = 20
         const val JUMPS = 10
         const val SCROLL_FRAMES = 200

@@ -64,6 +64,9 @@ class SyntaxSession(val spec: GrammarSpec) {
     // Editors showing the document: its tree is only kept while there is one.
     private val shown = MutableStateFlow(0)
 
+    // Counts the grammars of injected code that finished loading: the colors are then computed again with them.
+    private val grammarLoads = MutableStateFlow(0)
+
     /** An editor shows the document, until [hide]. */
     fun show() = shown.update { it + 1 }
 
@@ -84,11 +87,11 @@ class SyntaxSession(val spec: GrammarSpec) {
         // Parser and tree are used by one thread at a time; the UI thread only reads the published highlights.
         val worker = Dispatchers.Default.limitedParallelism(1)
         val highlighter = withContext(worker) { TreeSitterHighlighter(grammar) }
-        val injected = InjectedHighlighters(store)
+        val injected = InjectedHighlighters(store) { grammarLoads.update { it + 1 } }
         try {
             val visible = shown.map { it > 0 }.distinctUntilChanged()
             val requests =
-                combine(snapshotFlow { source.version }, wanted, visible) { _, range, isShown ->
+                combine(snapshotFlow { source.version }, wanted, visible, grammarLoads) { _, range, isShown, _ ->
                     range.takeIf { isShown }
                 }
             requests.conflate().collect { range ->

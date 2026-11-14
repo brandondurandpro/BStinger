@@ -49,6 +49,7 @@ import org.example.kotlineditor.state.ProjectState
 import org.example.kotlineditor.state.TabStatus
 import org.example.kotlineditor.state.TextPos
 import org.example.kotlineditor.state.findAll
+import org.example.kotlineditor.state.firstChangedLine
 import org.example.kotlineditor.state.gotoDeclaration
 import org.example.kotlineditor.state.hasInsight
 import org.example.kotlineditor.state.openFileOfDiff
@@ -266,6 +267,18 @@ private fun TabContent(
                 onCancel = { project.editor.close(tab) },
                 loadHistory = { project.mergeHistoryOf(tab) },
                 onOpenCommit = { commit -> project.openMergeCommit(tab, commit) },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+
+        is TabStatus.Review -> {
+            ReviewView(
+                status.state,
+                loadDiff = project.editor::diffLines,
+                spansOf = { name, lines -> project.grammars?.highlightDiff(name, lines) },
+                sideBySide = project.diffSideBySide,
+                onToggleSideBySide = { project.diffSideBySide = !project.diffSideBySide },
+                onOpenFile = { entry, lines -> project.navigate(entry, TextPos(firstChangedLine(lines), 0)) },
                 modifier = Modifier.fillMaxSize(),
             )
         }

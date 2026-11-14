@@ -61,10 +61,10 @@ class ProjectTreeE2eTest {
         runComposeUiTest {
             launchWithProject(project)
             onNodeWithTag(TreeTags.treeChevron("src")).performClick()
-            awaitTag(TreeTags.treeRow("src/main")).assertIsDisplayed()
-            awaitTag(TreeTags.treeRow("src/test"))
+            awaitTag(TreeTags.treeRow("src/main/kotlin")).assertIsDisplayed()
+            awaitTag(TreeTags.treeRow("src/test/kotlin"))
             onNodeWithTag(TreeTags.treeChevron("src")).performClick()
-            awaitNoTag(TreeTags.treeRow("src/main"))
+            awaitNoTag(TreeTags.treeRow("src/main/kotlin"))
         }
 
     @Test
@@ -166,5 +166,33 @@ class ProjectTreeE2eTest {
             project.file("NEW.txt", "new")
             app.project.tree.refresh()
             awaitTag(TreeTags.treeRow("NEW.txt")).assertIsDisplayed()
+        }
+
+    @Test
+    fun `directories holding only a directory are shown as one row`() =
+        runComposeUiTest {
+            project.file("pkg/main/java/fr/app/App.java", "class App {}")
+            val app = launchWithProject(project)
+            val folded = "pkg/main/java/fr/app"
+            awaitTag(TreeTags.treeRow(folded)).assertIsDisplayed()
+            assertTrue(rowPaths(app).none { it == "pkg" || it == "pkg/main" || it == "pkg/main/java" })
+            val row =
+                app.project.tree.rows
+                    .firstOrNull { app.project.tree.relativePath(it.entry) == folded }
+            assertEquals(folded, row?.label)
+            onNodeWithTag(TreeTags.treeChevron(folded)).performClick()
+            awaitTag(TreeTags.treeRow("$folded/App.java")).assertIsDisplayed()
+            onNodeWithTag(TreeTags.treeChevron(folded)).performClick()
+            awaitNoTag(TreeTags.treeRow("$folded/App.java"))
+        }
+
+    @Test
+    fun `a directory with two entries is not folded`() =
+        runComposeUiTest {
+            project.file("pkg/main/a.txt", "a")
+            project.file("pkg/main/b.txt", "b")
+            val app = launchWithProject(project)
+            awaitTag(TreeTags.treeRow("pkg/main")).assertIsDisplayed()
+            assertTrue(rowPaths(app).none { it == "pkg" })
         }
 }

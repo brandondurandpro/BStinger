@@ -17,6 +17,11 @@ data class FileEntry(
     val name: String,
     /** Whether this is a directory. */
     val isDirectory: Boolean,
+    /**
+     * What a tree shows for a directory standing for a chain of directories each holding only the next, such as
+     * `src/main/java` (its [path] is then the last of them); `null` for any other entry. See [ProjectFileSystem.listFolded].
+     */
+    val label: String? = null,
 )
 
 /**
@@ -175,6 +180,13 @@ interface ProjectFileSystem {
 
     /** Children of [directory], directories first, then case-insensitive by name (like IntelliJ). */
     suspend fun list(directory: FileEntry): List<FileEntry>
+
+    /**
+     * [list], where a directory holding only one directory, itself holding only one directory and so on, is
+     * returned as the last of the chain, [FileEntry.label] telling the names (`src/main/java`), like IntelliJ's
+     * compact middle packages. The server decides, as the client of a remote server does not see the disk.
+     */
+    suspend fun listFolded(directory: FileEntry): List<FileEntry> = list(directory)
 
     /** Content of [file]. */
     suspend fun read(file: FileEntry): FileContent

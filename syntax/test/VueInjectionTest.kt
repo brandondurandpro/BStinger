@@ -39,6 +39,11 @@ class VueInjectionTest {
     private fun colored(): Map<Int, LineSpans> {
         val spec = GrammarSpec.all.single { it.id == "vue" }
         val grammar = assertNotNull(runBlocking { store.await(spec) }, store.lastFailure)
+        // Injected grammars are not waited for by the highlighter: they are loaded beforehand.
+        for (id in listOf("typescript", "css")) {
+            val injectedSpec = GrammarSpec.all.single { it.id == id }
+            runBlocking { store.await(injectedSpec) }
+        }
         TreeSitterHighlighter(grammar).use { highlighter ->
             InjectedHighlighters(store).use { injected ->
                 highlighter.update(lines)

@@ -48,8 +48,14 @@ class OtelHookTest {
         val hook = OtelHook(config())
         val telemetry = HookedTelemetry(listOf(hook), Side.Client)
         telemetry.span(Operation.EditorOpenFile, Attributes.of(Attribute.Language to "php")) {}
-        awaitUntil { collector.traces.isNotEmpty() && collector.metrics.any { DURATION_METRIC in it } }
-        val trace = collector.traces.first()
+        // Wait for the request that carries the span, not just for any request: on a loaded runner the first one
+        // received may be another export.
+        awaitUntil {
+            val tracesWithSpan = collector.traces.filter { "editor.open_file" in it }
+            val metricsWithDuration = collector.metrics.filter { DURATION_METRIC in it }
+            tracesWithSpan.isNotEmpty() && metricsWithDuration.isNotEmpty()
+        }
+        val trace = checkNotNull(collector.traces.firstOrNull { "editor.open_file" in it })
         for (text in listOf("editor.open_file", "kotlin-editor-desktop", "1.2.3", "0b8a3f4e-instance", "php", "client")) {
             assertTrue(text in trace, text)
         }
@@ -145,7 +151,7 @@ class OtelHookTest {
         (0..size - part.size).any { start -> part.indices.all { this[start + it] == part[it] } }
 
     private companion object {
-        const val WAIT_MS = 10_000L
+        const val WAIT_MS = 30_000L
         const val POLL_MS = 20L
         const val SPANS = 100_000
         const val MB = 1024 * 1024

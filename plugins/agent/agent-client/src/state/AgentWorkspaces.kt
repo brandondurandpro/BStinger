@@ -32,7 +32,7 @@ internal fun Conversation.prepareIn(project: AgentHost) {
     }
     preparing =
         project.scope.launch {
-            runCatching { project.openWorktree(branch) }
+            runCatching { project.openWorktree(branch, base) }
                 .onSuccess { workspace = it }
                 .onFailure { workspaceError = it.message ?: "The worktree could not be created" }
         }

@@ -10,6 +10,7 @@ import java.io.File
 import java.net.InetSocketAddress
 import java.net.JarURLConnection
 import java.nio.file.Files
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -32,6 +33,9 @@ class LocalGrammarRepository : AutoCloseable {
     /** Answers an HTML page with status 200 instead of the jar. */
     @Volatile
     var captivePortal = false
+
+    /** Ids of the grammars (`bash`...) answered "not found", as when only some of them can be downloaded. */
+    val unavailable: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
     private val served = AtomicInteger()
 
@@ -59,7 +63,7 @@ class LocalGrammarRepository : AutoCloseable {
                 .substringAfterLast('/')
                 .removeSuffix(".jar")
         val spec = GrammarSpec.all.firstOrNull { "${it.artifact}-${it.version}" == artifact }
-        val jar = spec?.let(::jarOf)
+        val jar = spec?.takeIf { it.id !in unavailable }?.let(::jarOf)
         if (jar == null) {
             exchange.sendResponseHeaders(NOT_FOUND, -1)
         } else {

@@ -2,8 +2,11 @@ package org.example.kotlineditor.syntax.treesitter
 
 import io.github.treesitter.jtreesitter.Node
 
-/** Code of [language] between the characters [start] and [end] of a document, inside another language's. */
-internal class Injection(val language: String, val start: Int, val end: Int)
+/**
+ * Code of [language] between the characters [start] and [end] of a document, inside another language's.
+ * [separator] is put after it when the language sees the document, so that the parts are separate statements.
+ */
+internal class Injection(val language: String, val start: Int, val end: Int, val separator: Char? = null)
 
 /** Where a `.vue` file holds code besides its markup: the script, the style, the expressions of the template. */
 internal object VueInjections {
@@ -26,7 +29,7 @@ internal object VueInjections {
         for (child in node.children) {
             val language = languageInside(node, child, textOf)
             if (language != null) {
-                found += Injection(language, child.startByte / 2, child.endByte / 2)
+                found += Injection(language, child.startByte / 2, child.endByte / 2, ';')
             } else {
                 collect(child, textOf, found)
             }

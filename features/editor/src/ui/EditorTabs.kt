@@ -117,6 +117,10 @@ private fun tagsOf(tab: EditorTab): TabTags {
             )
         }
 
+        tab.isReview -> {
+            TabTags(EditorTags.REVIEW_TAB, EditorTags.REVIEW_TAB_CLOSE)
+        }
+
         tab.isMerge -> {
             TabTags(EditorTags.mergeTab(tab.relativePath), EditorTags.mergeTabClose(tab.relativePath))
         }

@@ -96,6 +96,19 @@ Put the results next to the application, in `remote/` (`server-linux-x86_64.tar.
 at one with `-Dkotlin.editor.remote.bundle=/path/to/server-linux-x86_64.tar.gz`. The IDE also looks in
 `build/remote/` and `~/.kotlin-editor/bundles/`.
 
+### Where the IDE gets the bundle
+
+Settings > Remote Development > *Server on remote hosts* chooses between two sources:
+
+- **Local file** (the default): the bundle found as described above.
+- **Download from GitHub**: the bundle of the GitHub release of the IDE's own version
+  (`kotlin-editor-remote-<version>-<os>-<arch>.tar.gz`, attached by the Package workflow with `SHA256SUMS.txt`).
+  It is downloaded once to `~/.kotlin-editor/bundles/downloads/<version>/`, after its SHA-256 was checked against
+  the release's `SHA256SUMS.txt`. The packaged app knows its version from `-Dkotlin.editor.version`; a development
+  run does not, and must use a local file. `-Dkotlin.editor.remote.releases=<url>` replaces the release's base URL.
+
+Releases published before this option (v0.1.0, v0.2.0) have no such file: use a local bundle with them.
+
 ## Security
 
 - The server listens on `127.0.0.1` only; the SSH tunnel is the only way in.

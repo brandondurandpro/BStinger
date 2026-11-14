@@ -47,6 +47,8 @@ object AppTags {
     const val SETTINGS_SERVERS_ERROR = "settings.servers.error"
     const val SETTINGS_TELEMETRY_FORBIDDEN = "settings.telemetry.forbidden"
     const val SETTINGS_AGENT_COMMAND = "settings.agentCommand"
+    const val SETTINGS_REMOTE_ORIGIN = "settings.remote.origin"
+    const val SETTINGS_REMOTE_DESTINATION = "settings.remote.destination"
     const val PLUGIN_PATH = "settings.plugins.path"
     const val PLUGIN_INSTALL = "settings.plugins.install"
     const val PLUGIN_ERROR = "settings.plugins.error"
@@ -163,9 +165,12 @@ object AppTags {
     /** The check box of an on/off setting, by its enum name (`AutoSelect`). */
     fun settingToggle(name: String) = "settings.toggle:$name"
 
-    /** The button of an inlay hints mode (`Inline`) in the Settings dialog. */
+    /** The button of a source of the remote server (`GitHub`) in the Settings dialog. */
+    fun settingsRemoteSource(name: String) = "settings.remoteSource:$name"
+
     fun settingsTheme(name: String) = "settings.theme:$name"
 
+    /** The button of an inlay hints mode (`Inline`) in the Settings dialog. */
     fun settingsInlayHints(mode: String) = "settings.inlayHints:$mode"
 
     /** A language server offered in the Settings dialog, by its id (`phpactor`). */
