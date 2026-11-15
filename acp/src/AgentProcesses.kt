@@ -20,6 +20,7 @@ class AgentProcesses internal constructor(
     private val registry: AgentRegistry,
 ) : Closeable {
     private val processes = HashMap<AgentCommand, AgentProcess>()
+    private val probes = ProbeSessions()
 
     /** The sessions [agent] keeps that work in one of [directories], newest first. */
     suspend fun sessions(agent: AgentCommand, directories: List<String>): AgentSessions {
@@ -74,7 +75,7 @@ class AgentProcesses internal constructor(
     // A new process of [agent], started with [command], in place of the one that stopped. Under the lock.
     private fun started(agent: AgentCommand, command: AgentCommand): AgentProcess {
         processes[agent]?.destroy()
-        return AgentProcess(command, scope, files).also { processes[agent] = it }
+        return AgentProcess(command, scope, files, probes).also { processes[agent] = it }
     }
 
     /** Stops the processes no session uses any more. */

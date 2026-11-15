@@ -1,4 +1,4 @@
-package org.example.kotlineditor.acp.relay
+package org.example.kotlineditor.acp
 
 import org.example.kotlineditor.model.AgentOptionValue
 

@@ -38,6 +38,14 @@ private const val RAW_TASK_MARK = """
 // The conversation of the n-th delegation of the conversation `m` is `m~d<n>`.
 private const val CHILD_MARK = "~d"
 
+// The agent gives up a tool call after about a minute by default: a delegation may last much longer.
+private const val TOOL_TIMEOUT_VARIABLE = "MCP_TOOL_TIMEOUT"
+private const val TOOL_TIMEOUT_MS = "1800000"
+
+/** This command with the environment a manager of the relay needs: its tool calls (the delegations) may last long. */
+internal fun AgentCommand.forManager(): AgentCommand =
+    copy(environment = environment + (TOOL_TIMEOUT_VARIABLE to TOOL_TIMEOUT_MS))
+
 // Claude's own tools that launch sub-agents: disabled for a manager, whose team is the relay's.
 private val NATIVE_LAUNCHERS = listOf("Task", "Agent")
 
@@ -125,7 +133,7 @@ internal class DelegationRelay(private val service: AgentService, private val sc
             val spec = team.members.firstOrNull { it.name == member }
             if (spec == null) return ToolOutcome("There is no member named \"$member\".", isError = true)
             val child = "$parent$CHILD_MARK${counter.incrementAndGet()}"
-            service.conversations[parent]?.attachChild(toolUseId, child)
+            service.conversations[parent]?.attachChild(toolUseId, child, spec.name)
             delegated.add(child)
             try {
                 return turns.withLock { runMember(child, spec, task) }
@@ -140,8 +148,9 @@ internal class DelegationRelay(private val service: AgentService, private val sc
             try {
                 val process = service.processes.processFor(agent)
                 val prompt = brief(child, spec, task, process)
-                choose(child, AgentOption.MODEL, spec.model)
-                choose(child, AgentOption.THOUGHT_LEVEL, spec.effort)
+                // Set once its session lists its settings: the efforts offered depend on the model.
+                val wanted = listOf(AgentOption.MODEL to spec.model, AgentOption.THOUGHT_LEVEL to spec.effort)
+                service.conversation(child).keeper.byCategory = wanted.filter { it.second.isNotBlank() }
                 service.prompt(child, agent, directory, "$child-task", prompt)
                 val journal = service.conversation(child).journal
                 journal.version.first { hideSession(journal, process) && journal.state == AgentTurnState.Idle }
@@ -160,16 +169,6 @@ internal class DelegationRelay(private val service: AgentService, private val sc
             if (claude && hasBrief) conversation.keeper.extras = SessionExtras(meta = systemPromptMeta(spec.prompt))
             val inTask = !claude && hasBrief
             return if (inTask) spec.prompt + RAW_TASK_MARK + task else task
-        }
-
-        // Sets the setting of [category] to the offered value [wanted] names, when there is one; else the default.
-        private suspend fun choose(child: String, category: String, wanted: String) {
-            val journal = service.conversation(child).journal
-            val shown = journal.header.options
-            val offered = shown.ifEmpty { service.processes.knownOptions(agent) }
-            val option = offered.firstOrNull { it.category == category }
-            val value = option?.let { offeredValue(it.values, wanted) }
-            if (option != null && value != null) service.setOption(child, agent, option.id, value.value)
         }
 
         // The session of a delegation is no conversation of the user: the history does not list it.

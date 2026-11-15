@@ -46,13 +46,17 @@ internal class TranscriptWriter(
      * Records [child], the key of the conversation of a team member, on the `delegate` call of the manager that runs
      * it: the call [toolUseId] when the MCP request named it (Claude Code puts it in `_meta`), else the oldest
      * `delegate` call that has no child yet, since the calls of a manager reach the server in the order it made them.
+     * The call is titled `delegate · <member>` ([member]): the agent never changes its title, and the IDE names the run
+     * after the member it finds there.
      */
-    fun attachChild(toolUseId: String?, child: String) {
+    fun attachChild(toolUseId: String?, child: String, member: String) {
         val named = toolUseId?.let(toolItems::get)
         val calls = journal.filter { it as? AgentItem.ToolCall }
         val unclaimed = calls.firstOrNull { it.child == null && it.isRunning() && it.isDelegate() }
         val target = named ?: unclaimed?.id ?: return
-        journal.update(target) { item, version -> (item as AgentItem.ToolCall).copy(version = version, child = child) }
+        journal.update(target) { item, version ->
+            (item as AgentItem.ToolCall).copy(version = version, child = child, title = "delegate · $member")
+        }
     }
 
     /** A new session started: its tool call ids are its own. */

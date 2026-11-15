@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
 import org.example.kotlineditor.acp.relay.DelegationRelay
+import org.example.kotlineditor.acp.relay.forManager
 import org.example.kotlineditor.lsp.provision.ToolDownloader
 import org.example.kotlineditor.model.AgentAttachment
 import org.example.kotlineditor.model.AgentCommand
@@ -109,15 +110,19 @@ class AgentService(
     ) {
         val prompt = UserPrompt(itemId, text, attachments)
         val target = conversation(conversation)
-        if (relay != null) target.keeper.extras = delegations.attach(conversation, agent, directory, relay)
-        target.prompt(prompt, agent, directory, session) { processes.processFor(agent) }
+        // The members run in the process of their manager, which waits long for a delegation.
+        val running = if (relay == null) agent else agent.forManager()
+        if (relay != null) target.keeper.extras = delegations.attach(conversation, running, directory, relay)
+        target.prompt(prompt, running, directory, session) { processes.processFor(running) }
     }
 
     /** Opens the agent's [session] as [conversation]: the agent replays its history into the transcript. */
     fun open(conversation: String, agent: AgentCommand, directory: String, session: String, relay: RelayTeam? = null) {
         val target = conversation(conversation)
-        if (relay != null) target.keeper.extras = delegations.attach(conversation, agent, directory, relay)
-        target.open(agent, session, directory) { processes.processFor(agent) }
+        // The members run in the process of their manager, which waits long for a delegation.
+        val running = if (relay == null) agent else agent.forManager()
+        if (relay != null) target.keeper.extras = delegations.attach(conversation, running, directory, relay)
+        target.open(running, session, directory) { processes.processFor(running) }
     }
 
     /**

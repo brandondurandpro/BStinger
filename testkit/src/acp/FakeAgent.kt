@@ -92,6 +92,9 @@ class FakeAgent(
     private val config = FakeConfig(options.extraModels)
 
     // What each session was started or reopened with: its `mcpServers` and its `_meta`, as JSON (the `setup` prompt).
+    // The `session/new` requests received so far (the `sessions` prompt).
+    private val created = java.util.concurrent.atomic.AtomicInteger()
+
     private val setups = ConcurrentHashMap<String, String>()
 
     private val writeLock = Any()
@@ -198,6 +201,7 @@ class FakeAgent(
     private fun newSession(id: JsonElement, params: JsonObject): JsonObject {
         if (loginRequired && !loggedIn) return failure(id, AUTH_REQUIRED, "Authentication required")
         val session = store.create(params.text("cwd").orEmpty())
+        created.incrementAndGet()
         setups[session.id] = setupOf(params)
         awaitListed()
         return success(id, sessionAnswer(session, buildJsonObject { put("sessionId", session.id) }))
@@ -391,6 +395,7 @@ class FakeAgent(
             "tools" -> tools(session, words.getOrNull(1)?.toIntOrNull() ?: 1, words.getOrNull(2)?.toIntOrNull() ?: 0)
             "crash" -> crash()
             "count" -> chunks(session, listOf("Prompt $count of $session."))
+            "sessions" -> chunks(session, listOf("Sessions created: ${created.get()}."))
             "setup" -> chunks(session, listOf(setups[session].orEmpty()))
             "usage" -> chunks(session, listOf("5-hour limit — ${count * QUOTA_STEP}% · Resets 11pm"))
             "run" -> run(session, words.drop(1))

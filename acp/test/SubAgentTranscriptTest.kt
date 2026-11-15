@@ -86,17 +86,20 @@ class SubAgentTranscriptTest {
     private fun delegateCall(id: String, tool: String = "mcp__kotlin-editor-team__delegate") =
         send(
             "{'_meta':{'claudeCode':{'toolName':'$tool'}},'toolCallId':'$id'," +
-                "'sessionUpdate':'tool_call','status':'pending','title':'delegate','kind':'other'}",
+                "'sessionUpdate':'tool_call','status':'pending'," +
+                "'title':'mcp__kotlin-editor-team__delegate','kind':'other'}",
         )
 
     @Test
     fun `the conversation of a delegation is recorded on the call the MCP request names`() {
         delegateCall("T1")
         delegateCall("T2")
-        writer.attachChild("T2", "m~d1")
+        writer.attachChild("T2", "m~d1", "Dev")
         val byCall = calls()
         assertNull(byCall.first().child)
         assertEquals("m~d1", byCall.last().child)
+        assertEquals("delegate · Dev", byCall.last().title)
+        assertEquals("mcp__kotlin-editor-team__delegate", byCall.first().title)
     }
 
     @Test
@@ -104,10 +107,11 @@ class SubAgentTranscriptTest {
         inner("R1", null)
         delegateCall("T1")
         delegateCall("T2")
-        writer.attachChild(null, "m~d1")
-        writer.attachChild(null, "m~d2")
+        writer.attachChild(null, "m~d1", "Dev")
+        writer.attachChild(null, "m~d2", "Tester")
         val delegates = calls().filter { it.tool?.endsWith("delegate") == true }
         assertEquals(listOf("m~d1", "m~d2"), delegates.map { it.child })
+        assertEquals(listOf("delegate · Dev", "delegate · Tester"), delegates.map { it.title })
         assertNull(calls().first { it.tool == "Read" }.child)
     }
 }

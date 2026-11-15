@@ -80,7 +80,7 @@ internal fun AgentStrip(agent: AgentState, conversation: Conversation) {
     val close = { shown = null }
     val run = runs.firstOrNull { it.id == key }
     if (key == MANAGER_KEY) {
-        ManagerDetail(MANAGER_MARK + managerName, managerCalls(items), close)
+        ManagerDetail(MANAGER_MARK + managerName, managerCalls(items, agent.modeOf(conversation) == OrchestrationMode.Relay), close)
     } else if (run != null && run.relayed) {
         RelayRunDetail(agent, run, close)
     } else if (run != null) {

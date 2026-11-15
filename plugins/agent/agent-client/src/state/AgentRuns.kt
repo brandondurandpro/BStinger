@@ -45,7 +45,8 @@ private fun isLaunch(call: AgentItem.ToolCall): Boolean {
 // The member whose name the call mentions (its title, else its report): the longest name wins.
 private fun memberOf(call: AgentItem.ToolCall, team: AgentTeam?): TeamMember? {
     val candidates = team?.members.orEmpty().filter { it.name.isNotBlank() }
-    val title = squashed(call.title)
+    // A delegation of the relay is titled `delegate · Member`: the member is what follows the dot.
+    val title = squashed(call.title.substringAfterLast('·'))
     val report = squashed(call.output)
     val inTitle = candidates.filter { squashed(it.name) in title }
     val found = inTitle.ifEmpty { candidates.filter { squashed(it.name) in report } }
@@ -62,10 +63,13 @@ fun agentRuns(items: List<AgentItem>, team: AgentTeam?): List<AgentRun> {
     }
 }
 
-/** The tool calls of the manager itself: all but the launches of sub-agents and the calls the sub-agents made. */
-fun managerCalls(items: List<AgentItem>): List<AgentItem.ToolCall> {
+/**
+ * The tool calls of the manager itself: all but the launches of sub-agents and the calls the sub-agents made; in
+ * [relay] mode also the `ToolSearch` calls the agent makes to find the `delegate` tool.
+ */
+fun managerCalls(items: List<AgentItem>, relay: Boolean = false): List<AgentItem.ToolCall> {
     val calls = items.filterIsInstance<AgentItem.ToolCall>()
-    return calls.filter { !isLaunch(it) && it.parent == null }
+    return calls.filter { !isLaunch(it) && it.parent == null && !(relay && it.tool == "ToolSearch") }
 }
 
 /** The tool calls [run] made, in order; empty when the agent does not tell (a reloaded conversation). */

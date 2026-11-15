@@ -118,6 +118,29 @@ class DelegationRelayTest {
     }
 
     @Test
+    fun `a delegation with a model starts one session, not a probe session more`() {
+        val client = startManager()
+        client.delegate(1, "coder", "do it")
+        service.prompt("m", agent, directory, "u9", "sessions", relay = team)
+        val said =
+            service
+                .idle(
+                    "m",
+                ) { it.answers().any { text -> text.startsWith("Sessions created") } }
+                .items
+                .answers()
+        assertEquals("Sessions created: 2.", said.last())
+    }
+
+    @Test
+    fun `the manager runs with a long tool timeout, the members do not need it`() {
+        val timeout = "MCP_TOOL_TIMEOUT"
+        val command = agent.forManager()
+        assertEquals("1800000", command.environment[timeout])
+        assertEquals(null, agent.environment[timeout])
+    }
+
+    @Test
     fun `the member does not get the delegate tool`() {
         val client = startManager()
         val answer = client.delegate(1, "plain", "setup")

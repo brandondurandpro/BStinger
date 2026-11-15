@@ -102,7 +102,7 @@ internal class ServerConversation(
     }
 
     /** Records the conversation [child] on the `delegate` call [toolUseId] (else the oldest without child). */
-    fun attachChild(toolUseId: String?, child: String) = writer.attachChild(toolUseId, child)
+    fun attachChild(toolUseId: String?, child: String, member: String) = writer.attachChild(toolUseId, child, member)
 
     /** Stops the prompt: the agent is asked to stop, and abandoned if it does not within the grace delay. */
     fun cancel() {

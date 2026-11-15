@@ -77,6 +77,16 @@ class AgentRunsTest {
     }
 
     @Test
+    fun `the real relay call, titled by the server, names its run after the member and hides ToolSearch`() {
+        val real = delegate("d", "delegate · Reviewer", "m~d1")
+        val search = AgentItem.ToolCall("s", 1, "ToolSearch", AgentToolKind.Other, AgentToolStatus.Completed, tool = "ToolSearch")
+        val items = listOf(search, real)
+        assertEquals(listOf("Reviewer"), agentRuns(items, team).map { it.name })
+        assertEquals(listOf("s"), managerCalls(items).map { it.id })
+        assertEquals(emptyList(), managerCalls(items, relay = true).map { it.id })
+    }
+
+    @Test
     fun `a delegate call whose member is not known yet is a relayed run without a child`() {
         val run = agentRuns(listOf(delegate("d", "delegate", null)), team).single()
         assertNull(run.child)
