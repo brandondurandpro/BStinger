@@ -340,6 +340,30 @@ class AppUpdateE2eTest {
             assertEquals(1, rig.assetRequests())
         }
 
+    @Test
+    fun `Restart is refused, and says why, while another IDE runs from the same install`() =
+        runComposeUiTest {
+            val rig = rig()
+            val app = launchApp(updates = rig.notifier)
+            val closed = AtomicBoolean(false)
+            runOnUiThread { app.state.onClosed = { closed.set(true) } }
+            openDialog()
+            onNodeWithTag(AppTags.UPDATE_INSTALL).performClick()
+            awaitTag(AppTags.UPDATE_RESTART, timeout = TIMEOUT * 3)
+            rig.otherInstances.set(1)
+            onNodeWithTag(AppTags.UPDATE_RESTART).performClick()
+            awaitTag(AppTags.UPDATE_BLOCKED).assertTextContains("Another Kotlin Editor is running", substring = true)
+            assertFalse(closed.get(), "the IDE stays open")
+            assertFalse(rig.updater.launchInstaller())
+            assertEquals("old", rig.install.version())
+            // The other IDE is closed: the same button restarts.
+            rig.otherInstances.set(0)
+            onNodeWithTag(AppTags.UPDATE_RESTART).performClick()
+            awaitCondition(UNSAVED_TIMEOUT) { closed.get() }
+            assertTrue(rig.updater.launchInstaller())
+            assertEquals(1, rig.jobs.size)
+        }
+
     private companion object {
         const val HASH_LENGTH = 64
         const val CHECK_MILLIS = 100L

@@ -50,7 +50,7 @@ private fun UpdateDialogFrame(app: AppState, updates: UpdateNotifier, state: Upd
             when (state) {
                 is UpdateState.Downloading -> DownloadingBody(state, updater)
                 is UpdateState.Staging -> Message("Preparing version ${release.version}…")
-                is UpdateState.Ready -> ReadyBody(release, updater, close)
+                is UpdateState.Ready -> ReadyBody(state, updater, close)
                 is UpdateState.Restarting -> Message("Closing the IDE to install version ${release.version}…")
                 is UpdateState.Failed -> FailedBody(state, updater, close)
                 UpdateState.Idle -> OfferBody(updates, release, close)

@@ -12,6 +12,7 @@ import java.io.File
 import java.nio.file.Files
 import java.time.Duration
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
 private const val STALL_MILLIS = 5_000L
@@ -40,6 +41,9 @@ class UpdateRig(
     /** The installers that were started, in order: what the helper script would have been given. */
     val jobs = CopyOnWriteArrayList<SwapJob>()
 
+    /** How many other IDEs run from the fake install (started twice, or by the `ide` command). */
+    val otherInstances = AtomicInteger()
+
     /** The pages opened in the browser. */
     val opened = CopyOnWriteArrayList<String>()
 
@@ -62,7 +66,9 @@ class UpdateRig(
             { downloadBase.get() },
             VerifiedDownload(stallMillis = STALL_MILLIS),
             jobs::add,
-        ) { FAKE_PID }
+            processId = { FAKE_PID },
+            otherInstances = { otherInstances.get() },
+        )
     val notifier = UpdateNotifier(current, ReleaseSource { releases }, interval, opened::add, updater)
 
     init {

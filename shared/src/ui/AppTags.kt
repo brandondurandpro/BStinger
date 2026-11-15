@@ -27,6 +27,7 @@ object AppTags {
     const val UPDATE_REASON = "update.reason"
     const val UPDATE_PROGRESS = "update.progress"
     const val UPDATE_ERROR = "update.error"
+    const val UPDATE_BLOCKED = "update.blocked"
     const val UPDATE_LATER = "update.later"
     const val UPDATE_NOTES = "update.notes"
     const val UPDATE_INSTALL = "update.install"

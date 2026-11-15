@@ -34,8 +34,8 @@ sealed interface UpdateState {
     /** Downloaded and verified, being unpacked next to the install. */
     data class Staging(override val release: AvailableRelease) : Pinned
 
-    /** Staged: the next restart installs it. */
-    data class Ready(override val release: AvailableRelease) : Pinned
+    /** Staged: the next restart installs it. [blocked] says why the restart just asked for did not start. */
+    data class Ready(override val release: AvailableRelease, val blocked: String? = null) : Pinned
 
     /** The windows are closing; the last one to close starts the installer and the IDE exits. */
     data class Restarting(override val release: AvailableRelease) : Pinned
@@ -60,6 +60,8 @@ class AppUpdater(
     downloader: VerifiedDownload = VerifiedDownload(),
     private val installer: (SwapJob) -> Unit = { UpdateSwap.start(it) },
     private val processId: () -> Long = { ProcessHandle.current().pid() },
+    /** How many other IDEs run from the install: it is never swapped under one of them. */
+    private val otherInstances: (UpdateTarget) -> Int = RunningInstances::others,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val downloads = UpdateDownloads(updatesDirectory, downloadBase, downloader)
@@ -110,11 +112,16 @@ class AppUpdater(
         if (state is UpdateState.Failed) state = UpdateState.Idle
     }
 
-    /** Asks the windows to close so that the staged update installs. */
+    /**
+     * Asks the windows to close so that the staged update installs. Refused, with the reason in [UpdateState.Ready],
+     * while another IDE runs from the same install: the swap would pull its files from under it.
+     */
     @Synchronized
     fun requestRestart() {
         val ready = state as? UpdateState.Ready ?: return
-        state = UpdateState.Restarting(ready.release)
+        val target = (planFor(ready.release) as? UpdatePlan.InApp)?.target
+        val shared = target != null && otherInstances(target) > 0
+        state = if (shared) ready.copy(blocked = OTHER_INSTANCE) else UpdateState.Restarting(ready.release)
     }
 
     /** A window did not close (the user kept it open): nothing is installed, the update waits for another restart. */
@@ -132,9 +139,10 @@ class AppUpdater(
     fun launchInstaller(): Boolean {
         val restarting = state as? UpdateState.Restarting
         val plan = restarting?.let { planFor(it.release) } as? UpdatePlan.InApp ?: return false
-        val job = SwapJob.forTarget(plan.target, processId(), updatesDirectory)
         return try {
-            installer(job)
+            // Another IDE was started from this install while the windows were closing: nothing is installed.
+            if (otherInstances(plan.target) > 0) throw IOException(OTHER_INSTANCE)
+            installer(SwapJob.forTarget(plan.target, processId(), updatesDirectory))
             true
         } catch (failure: IOException) {
             System.err.println("Update not installed: ${failure.message}")
@@ -171,6 +179,11 @@ class AppUpdater(
     @Synchronized
     private fun advance(mine: Int, next: (UpdateState) -> UpdateState) {
         if (mine == generation) state = next(state)
+    }
+
+    companion object {
+        const val OTHER_INSTANCE =
+            "Another Kotlin Editor is running from this install. Close it, then restart to install the update."
     }
 }
 

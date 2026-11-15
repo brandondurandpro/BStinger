@@ -89,8 +89,16 @@ internal fun DownloadingBody(state: UpdateState.Downloading, updater: AppUpdater
 }
 
 @Composable
-internal fun ReadyBody(release: AvailableRelease, updater: AppUpdater, close: () -> Unit) {
-    Message("Version ${release.version} is ready. Restart the IDE to install it.")
+internal fun ReadyBody(state: UpdateState.Ready, updater: AppUpdater, close: () -> Unit) {
+    Message("Version ${state.release.version} is ready. Restart the IDE to install it.")
+    state.blocked?.let { reason ->
+        Label(
+            reason,
+            color = IdeColors.Error,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(top = 6.dp).testTag(AppTags.UPDATE_BLOCKED),
+        )
+    }
     Buttons {
         IdeButton(LATER, close, Modifier.testTag(AppTags.UPDATE_LATER))
         IdeButton("Restart", updater::requestRestart, Modifier.testTag(AppTags.UPDATE_RESTART), primary = true)

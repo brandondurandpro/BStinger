@@ -8,6 +8,7 @@ import org.example.kotlineditor.state.AppUpdater
 import org.example.kotlineditor.state.AppVersion
 import org.example.kotlineditor.state.AvailableRelease
 import org.example.kotlineditor.state.ReleaseAsset
+import org.example.kotlineditor.state.RunningInstances
 import org.example.kotlineditor.state.SwapJob
 import org.example.kotlineditor.state.UpdateState
 import org.example.kotlineditor.state.UpdateSwap
@@ -16,6 +17,7 @@ import java.io.IOException
 import java.nio.file.Files
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.LockSupport
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -30,6 +32,7 @@ import kotlin.test.assertTrue
  * the installer. It does not use the IDE's server, so it has no chaos test.
  */
 class AppUpdaterTest {
+    private val others = AtomicInteger()
     private val server = FakeReleaseServer()
     private val install = FakeInstall.create()
     private val work: File = Files.createTempDirectory("app-updater").toFile()
@@ -55,7 +58,16 @@ class AppUpdaterTest {
                 jobs.add(job)
             }
         }
-        val created = AppUpdater(install.environment, updates, { server.base }, VerifiedDownload(), installer) { PID }
+        val created =
+            AppUpdater(
+                install.environment,
+                updates,
+                { server.base },
+                VerifiedDownload(),
+                installer,
+                processId = { PID },
+                otherInstances = { others.get() },
+            )
         updaters.add(created)
         return created
     }
@@ -194,6 +206,42 @@ class AppUpdaterTest {
         assertEquals(listOf(install.launcher.path), job.launcher)
         assertEquals(updates, job.directory)
         assertEquals("old", install.version(), "the running install is never swapped by the IDE itself")
+    }
+
+    @Test
+    fun `no restart and no installer while another IDE runs from the same install`() {
+        val release = publish("0.3.0")
+        val updater = updater()
+        updater.start(release)
+        updater.awaitReady()
+        others.set(1)
+        updater.requestRestart()
+        val blocked = assertIs<UpdateState.Ready>(updater.state)
+        assertEquals(AppUpdater.OTHER_INSTANCE, blocked.blocked)
+        assertFalse(updater.restarting)
+        // The other IDE is closed: the restart goes on. One started while the windows close stops the installer.
+        others.set(0)
+        updater.requestRestart()
+        assertTrue(updater.restarting)
+        others.set(1)
+        assertFalse(updater.launchInstaller())
+        assertTrue(jobs.isEmpty())
+        others.set(0)
+        assertTrue(updater.launchInstaller())
+    }
+
+    @Test
+    fun `a program is of the install when it is its file or inside its directory`() {
+        val directory = File("/apps/kotlin-editor")
+        assertTrue(RunningInstances.isFromInstall("/apps/kotlin-editor/bin/kotlin-editor", directory, true))
+        assertTrue(RunningInstances.isFromInstall("/apps/kotlin-editor/lib/runtime/bin/java", directory, true))
+        assertFalse(RunningInstances.isFromInstall("/apps/kotlin-editor-2/bin/kotlin-editor", directory, true))
+        assertFalse(RunningInstances.isFromInstall("/usr/bin/java", directory, true))
+        val image = File("/apps/Kotlin Editor.AppImage")
+        assertTrue(RunningInstances.isFromInstall("/apps/Kotlin Editor.AppImage", image, true))
+        assertFalse(RunningInstances.isFromInstall("/apps/kotlin editor.appimage", image, true))
+        val windows = File("/apps/Kotlin Editor")
+        assertTrue(RunningInstances.isFromInstall("/Apps/KOTLIN EDITOR/Kotlin Editor.exe", windows, false))
     }
 
     @Test
