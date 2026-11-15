@@ -11,8 +11,8 @@ import java.nio.file.Path
 import java.util.Base64
 
 // The content blocks of a prompt (ACP `ContentBlock`): the text typed, then what the user joined to it. Every agent
-// takes text and links to files (`resource_link`); a file goes whole (`resource`) to an agent that takes embedded
-// context, an image (`image`) to one that takes images.
+// takes text and links to files and directories (`resource_link`); a file goes whole (`resource`) to an agent that
+// takes embedded context, an image (`image`) to one that takes images.
 
 // Larger files go as links: the agent reads what it needs of them.
 private const val MAX_EMBEDDED_BYTES = 256 * 1024
@@ -73,7 +73,11 @@ private fun fileUnder(root: Path, path: String): Path {
     return file
 }
 
-private fun fileBlock(file: Path, take: PromptCapabilities): JsonObject {
+// A directory goes as a link: the agent lists and reads what it needs of it.
+private fun fileBlock(file: Path, take: PromptCapabilities): JsonObject =
+    if (Files.isDirectory(file)) directoryLink(file) else regularFileBlock(file, take)
+
+private fun regularFileBlock(file: Path, take: PromptCapabilities): JsonObject {
     if (!Files.isRegularFile(file)) throw IOException("the file no longer exists")
     val size = Files.size(file)
     val name = file.fileName.toString()

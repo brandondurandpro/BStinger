@@ -61,6 +61,9 @@ class FileIndex(private val root: FileEntry, private val search: ProjectSearch, 
     private var symbols: List<Pair<FileEntry, Declaration>>? = null
     private var facets: SearchFacets? = null
 
+    // The directories of the files of the index, cached per list of files.
+    private val directories = DirectoryIndex()
+
     fun ensureLoaded() {
         if (files == null && job?.isActive != true) {
             job =
@@ -87,6 +90,7 @@ class FileIndex(private val root: FileEntry, private val search: ProjectSearch, 
         files = null
         symbols = null
         facets = null
+        directories.invalidate()
     }
 
     /** The directories and common extensions of the project, found by the server and cached until invalidated. */
@@ -139,6 +143,13 @@ class FileIndex(private val root: FileEntry, private val search: ProjectSearch, 
             matches.sortedWith(BEST_FILE_FIRST).take(limit)
         }
     }
+
+    /**
+     * The directories holding the files of the index (`src`, `src/main`…) whose name matches [query]: all of them, in
+     * the order of their paths, for an empty query. An empty directory, which holds no file, is not listed.
+     */
+    suspend fun searchDirectories(query: String, limit: Int = DEFAULT_RESULTS): List<DirectoryMatch> =
+        directories.search(files.orEmpty(), ::relativePath, query, limit)
 
     /** Full-text search, run by the server next to the files: only matching lines cross the network. */
     suspend fun findInFiles(

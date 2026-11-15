@@ -53,6 +53,31 @@ class AgentContextE2eTest {
         }
 
     @Test
+    fun `an @ lists the directories of the project too, and the agent gets a link to the one joined`() =
+        runComposeUiTest {
+            val launched = launchWithProject(project, agentPreferences())
+            val conversation = startConversation(launched)
+            typePrompt("context @util")
+            // A directory shows with a slash after its path, among the files.
+            awaitTag(AgentTags.agentCompletion("src/main/kotlin/util/"), timeout = AGENT_TIMEOUT)
+            assertEquals("src/main/kotlin/util/", suggestions().firstOrNull())
+            pressInPrompt(Key.Enter)
+            awaitTag(AgentTags.agentAttachment("util"))
+            awaitNoTag(AgentTags.AGENT_COMPLETION)
+            assertEquals("context ", conversation.draft)
+            // A parent directory is listed even though it holds no file of its own.
+            typePrompt("@main")
+            awaitTag(AgentTags.agentCompletion("src/main/"), timeout = AGENT_TIMEOUT)
+            pressInPrompt(Key.Tab)
+            awaitTag(AgentTags.agentAttachment("main"))
+            pressInPrompt(Key.Enter)
+            awaitShown(conversation, "Context: link util; link main.")
+            awaitIdle(conversation)
+            awaitTag(AgentTags.agentSentAttachment("util"))
+            assertEquals(listOf("util", "main"), conversation.itemsOf<AgentItem.UserText>().single().context)
+        }
+
+    @Test
     fun `a file joined can be removed, an @ that matches nothing lists nothing, Escape closes the list`() =
         runComposeUiTest {
             val launched = launchWithProject(project, agentPreferences())

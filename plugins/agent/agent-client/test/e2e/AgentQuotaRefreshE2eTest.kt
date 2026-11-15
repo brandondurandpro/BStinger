@@ -8,7 +8,7 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.minutes
 
-/** Once the quota is known, the bars follow it after every turn, and the question asked for it stays out of sight. */
+/** Once the quota is known, the bars follow it after every turn and every half minute while the agent is free, and the question asked for it stays out of sight. */
 @OptIn(ExperimentalTestApi::class)
 class AgentQuotaRefreshE2eTest {
     private val project = SampleProject.standard()
@@ -65,7 +65,33 @@ class AgentQuotaRefreshE2eTest {
             assertTrue(seen.none { it.startsWith("probe-") }, "the question was shown: $seen")
         }
 
+    @Test
+    fun `the quota is read again while the agent is free, without any turn of the user`() =
+        runComposeUiTest(testTimeout = 3.minutes) {
+            val app = launchWithProject(project, agentPreferences())
+            // Much shorter than the thirty seconds of production, so the test waits only for the periodic reads.
+            app.project.agent.quotaRefreshMillis = 400
+            val conversation = startConversation(app)
+            // The list folded, the conversation is wide enough for the card of the quota.
+            app.project.agent.conversationsVisible = false
+            awaitTag(AgentTags.AGENT_COMMANDS, timeout = AGENT_TIMEOUT)
+            sendPrompt("usage")
+            awaitCondition(AGENT_TIMEOUT) { conversation.quota.isNotEmpty() }
+            awaitIdle(conversation)
+            // The user sends nothing more: each new percent is a read of the periodic timer (its silent question is a
+            // turn of the session, the fake agent answers a percent higher by its step).
+            awaitCondition(AGENT_TIMEOUT) { (conversation.quota.firstOrNull()?.percent ?: 0) >= THIRD_TURN_PERCENT }
+            awaitCondition(AGENT_TIMEOUT) { (conversation.quota.firstOrNull()?.percent ?: 0) >= FOURTH_TURN_PERCENT }
+            awaitIdle(conversation)
+            // Nothing of the silent questions was ever shown, and none stayed in the conversation.
+            assertTrue(conversation.shownItems.none { it.id.startsWith("probe-") })
+            assertTrue(conversation.items.filter { it.id.startsWith("probe-") }.isEmpty())
+            awaitTag(AgentTags.AGENT_QUOTA_CARD)
+            assertTrue(textOf(AgentTags.agentQuotaLimit(0)).isNotBlank())
+        }
+
     private companion object {
         const val THIRD_TURN_PERCENT = 30
+        const val FOURTH_TURN_PERCENT = 40
     }
 }
