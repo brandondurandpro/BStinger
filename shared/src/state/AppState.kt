@@ -38,11 +38,16 @@ class AppState(
     initialProject: String? = null,
     /** Tells that a newer release is published; shared by the windows, run by whoever owns it; null in previews. */
     val updates: UpdateNotifier? = null,
+    /** A project to open at startup as the user would from the welcome screen: the folder given on the command line. */
+    startProject: String? = null,
 ) {
     val preferences = PreferenceHub(preferenceStore)
 
     val settings =
         SettingsController(preferences, scope, { session.project }, { session.languageServers }, telemetryOf)
+
+    /** The `ide` command of the shell, which the user installs from the Settings; unavailable when not set. */
+    var commandLineTool: CommandLineTool = CommandLineTool.unavailable()
 
     /** The plugins installed in the plugins folder; set by whoever starts them (the desktop app), null in previews. */
     var plugins: ClientPlugins? by mutableStateOf(null)
@@ -108,9 +113,25 @@ class AppState(
     init {
         scope.launch { preferences.saveOnChange(::currentPreferences) }
         when {
-            initialProject != null -> scope.launch { openForNewConversation(initialProject) }
-            launching -> scope.launch { launchInAgentMode() }
-            else -> session.reloadRecents()
+            initialProject != null -> {
+                scope.launch { openForNewConversation(initialProject) }
+            }
+
+            // The folder given on the command line opens as from the welcome screen, in the mode the user left.
+            startProject != null -> {
+                scope.launch {
+                    session.loadRecents()
+                    session.openProject(startProject)
+                }
+            }
+
+            launching -> {
+                scope.launch { launchInAgentMode() }
+            }
+
+            else -> {
+                session.reloadRecents()
+            }
         }
     }
 

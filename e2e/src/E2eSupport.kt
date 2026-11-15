@@ -43,6 +43,7 @@ import org.example.kotlineditor.server.ServerTelemetry
 import org.example.kotlineditor.server.ripgrep.RipgrepSettings
 import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.ClientPlugins
+import org.example.kotlineditor.state.CommandLineTool
 import org.example.kotlineditor.state.InMemoryPreferenceStore
 import org.example.kotlineditor.state.PreferenceStore
 import org.example.kotlineditor.state.ProjectState
@@ -253,14 +254,16 @@ private class PluginSetup(private val loaded: List<AutoCloseable>, val installed
     }
 }
 
+/** What a window starts with: a project, a folder of the command line, the check for a newer release. */
+private class StartOptions(val initialProject: String?, val startProject: String?, val updates: UpdateNotifier?)
+
 private fun appStateOf(
     services: AppServices,
     scope: CoroutineScope,
     preferences: PreferenceStore,
     grammars: GrammarStore?,
     telemetry: ((String) -> Telemetry)?,
-    initialProject: String?,
-    updates: UpdateNotifier?,
+    starts: StartOptions,
 ): AppState =
     AppState(
         services,
@@ -270,8 +273,9 @@ private fun appStateOf(
         services,
         JvmRemoteFactory,
         telemetry,
-        initialProject = initialProject,
-        updates = updates,
+        initialProject = starts.initialProject,
+        updates = starts.updates,
+        startProject = starts.startProject,
     )
 
 /**
@@ -298,6 +302,10 @@ fun ComposeUiTest.launchApp(
     initialProject: String? = null,
     /** Tells that a newer release exists, from a stand-in of GitHub; none by default (no network in tests). */
     updates: UpdateNotifier? = null,
+    /** A folder opened at startup like the one the `ide` command gives. */
+    startProject: String? = null,
+    /** The `ide` command of the Settings; unavailable (no launcher) when not given. */
+    commandLineTool: CommandLineTool? = null,
 ): E2eApp {
     TextClipboard.useSystem = false
     val pluginSetup = PluginSetup(plugins.map(::loadPlugin), pluginsDirectory?.let { startPlugins(it) })
@@ -326,11 +334,13 @@ fun ComposeUiTest.launchApp(
         val scope = rememberCoroutineScope()
         val state =
             remember {
-                appStateOf(services, scope, withoutRealAgent(preferences), grammars, measured, initialProject, updates)
+                val starts = StartOptions(initialProject, startProject, updates)
+                appStateOf(services, scope, withoutRealAgent(preferences), grammars, measured, starts)
             }
         created = state
         LaunchedEffect(updates) { updates?.run() }
         state.plugins = pluginSetup.installed
+        commandLineTool?.let { state.commandLineTool = it }
         DisposableEffect(Unit) {
             onDispose {
                 created?.dispose()

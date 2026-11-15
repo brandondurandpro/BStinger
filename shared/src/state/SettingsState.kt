@@ -25,6 +25,7 @@ enum class SettingsCategory(val title: String) {
     ProjectView("Project View"),
     Privacy("Privacy"),
     RemoteDevelopment("Remote Development"),
+    CommandLine("Command Line"),
     Plugins("Plugins"),
     Experimental("Experimental"),
 }
@@ -72,6 +73,12 @@ enum class Setting(val category: SettingsCategory, val title: String, val descri
         "Server on remote hosts",
         "Where the server installed on a host comes from: a local bundle, or the GitHub release of this version.",
         "ssh bundle download github release install remote",
+    ),
+    CommandLine(
+        SettingsCategory.CommandLine,
+        "Shell command ide",
+        "Opens the IDE on a folder from a terminal: ide to open the current directory, ide <folder> for another one.",
+        "terminal shell bash powershell cmd path launcher open folder directory cli",
     ),
     Plugins(
         SettingsCategory.Plugins,

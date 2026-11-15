@@ -224,6 +224,10 @@ private fun SettingControl(app: AppState, settings: SettingsState, setting: Sett
             TelemetryControl(app)
         }
 
+        Setting.CommandLine -> {
+            CommandLineControl(app.commandLineTool)
+        }
+
         Setting.Plugins -> {
             PluginsControl(app)
         }
