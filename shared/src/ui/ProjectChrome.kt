@@ -333,6 +333,7 @@ internal fun StatusBar(app: AppState, project: ProjectState) {
             showCpu = indicators.isShown(StatusIndicator.Cpu),
         )
         LinkStatus(app)
+        UpdateIndicator(app)
         if (!project.agentMode) tab?.document?.let { DocumentStatus(it, indicators) }
         StatusIndicatorsMenu(indicators)
     }

@@ -1,6 +1,7 @@
 package org.example.kotlineditor.e2e
 
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.input.key.Key
@@ -47,6 +48,7 @@ import org.example.kotlineditor.state.InMemoryPreferenceStore
 import org.example.kotlineditor.state.PreferenceStore
 import org.example.kotlineditor.state.ProjectState
 import org.example.kotlineditor.state.Screen
+import org.example.kotlineditor.state.UpdateNotifier
 import org.example.kotlineditor.syntax.treesitter.GrammarStore
 import org.example.kotlineditor.telemetry.ClientTelemetry
 import org.example.kotlineditor.telemetry.InMemoryHook
@@ -252,14 +254,16 @@ private class PluginSetup(private val loaded: List<AutoCloseable>, val installed
     }
 }
 
+/** What a window starts with: a project, a folder of the command line, the check for a newer release. */
+private class StartOptions(val initialProject: String?, val startProject: String?, val updates: UpdateNotifier?)
+
 private fun appStateOf(
     services: AppServices,
     scope: CoroutineScope,
     preferences: PreferenceStore,
     grammars: GrammarStore?,
     telemetry: ((String) -> Telemetry)?,
-    initialProject: String?,
-    startProject: String?,
+    starts: StartOptions,
 ): AppState =
     AppState(
         services,
@@ -269,8 +273,9 @@ private fun appStateOf(
         services,
         JvmRemoteFactory,
         telemetry,
-        initialProject = initialProject,
-        startProject = startProject,
+        initialProject = starts.initialProject,
+        updates = starts.updates,
+        startProject = starts.startProject,
     )
 
 /**
@@ -295,6 +300,8 @@ fun ComposeUiTest.launchApp(
     ssh: List<String>? = null,
     /** A project the window opens at startup, in agent mode on the question of a new conversation (an added window). */
     initialProject: String? = null,
+    /** Tells that a newer release exists, from a stand-in of GitHub; none by default (no network in tests). */
+    updates: UpdateNotifier? = null,
     /** A folder opened at startup like the one the `ide` command gives. */
     startProject: String? = null,
     /** The `ide` command of the Settings; unavailable (no launcher) when not given. */
@@ -327,10 +334,11 @@ fun ComposeUiTest.launchApp(
         val scope = rememberCoroutineScope()
         val state =
             remember {
-                val store = withoutRealAgent(preferences)
-                appStateOf(services, scope, store, grammars, measured, initialProject, startProject)
+                val starts = StartOptions(initialProject, startProject, updates)
+                appStateOf(services, scope, withoutRealAgent(preferences), grammars, measured, starts)
             }
         created = state
+        LaunchedEffect(updates) { updates?.run() }
         state.plugins = pluginSetup.installed
         commandLineTool?.let { state.commandLineTool = it }
         DisposableEffect(Unit) {
@@ -453,6 +461,7 @@ fun ComposeUiTest.launchWithProject(
     plugins: List<IdePlugin> = emptyList(),
     pluginsDirectory: File? = null,
     ssh: List<String>? = null,
+    updates: UpdateNotifier? = null,
 ): E2eApp {
     val app =
         launchApp(
@@ -466,6 +475,7 @@ fun ComposeUiTest.launchWithProject(
             plugins = plugins,
             pluginsDirectory = pluginsDirectory,
             ssh = ssh,
+            updates = updates,
         )
     openProjectDirectoryFromWelcome(project.path)
     awaitTag(TreeTags.treeRow("src"))

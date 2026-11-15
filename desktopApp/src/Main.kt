@@ -15,6 +15,7 @@ import androidx.compose.ui.window.rememberWindowState
 import org.example.kotlineditor.memory.MemoryReturn
 import org.example.kotlineditor.model.AppServices
 import org.example.kotlineditor.remote.JvmRemoteFactory
+import org.example.kotlineditor.remote.RemoteBundleDownload
 import org.example.kotlineditor.rpc.Protocol
 import org.example.kotlineditor.rpc.RpcClient
 import org.example.kotlineditor.rpc.appServices
@@ -24,6 +25,8 @@ import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.ClientPlugins
 import org.example.kotlineditor.state.CommandLineTool
 import org.example.kotlineditor.state.FilePreferenceStore
+import org.example.kotlineditor.state.GitHubReleases
+import org.example.kotlineditor.state.UpdateNotifier
 import org.example.kotlineditor.syntax.treesitter.GrammarStore
 import org.example.kotlineditor.telemetry.ClientTelemetry
 import org.example.kotlineditor.telemetry.HookedTelemetry
@@ -70,8 +73,11 @@ fun main(args: Array<String>) {
     val commandLineTool = CommandLineTool.forThisMachine(launcherOfThisApp())
     val plugins = ClientPlugins().also(ClientPlugins::start)
     val exporter = DesktopExporter()
+    // One check for all the windows; a development run does not know its version and never checks.
+    val updates = UpdateNotifier(RemoteBundleDownload.ideVersion(), GitHubReleases())
     application {
         LaunchedEffect(Unit) { measureStartup() }
+        LaunchedEffect(Unit) { updates.run() }
         LaunchedEffect(Unit) { plugins.keepServerInSync(client) }
         val windows = remember { mutableStateListOf(WindowId(startFolder = startFolder)) }
         for (id in windows.toList()) {
@@ -82,6 +88,7 @@ fun main(args: Array<String>) {
                     plugins = plugins,
                     commandLineTool = commandLineTool,
                     exporter = exporter,
+                    updates = updates,
                     firstWindow = id === windows.firstOrNull(),
                     initialProject = id.projectPath,
                     startProject = id.startFolder,
@@ -92,6 +99,8 @@ fun main(args: Array<String>) {
                             plugins.stop()
                             client.close()
                             closeInParallel(local, exporter)
+                            // A restart asked by the update dialog: the installer takes over once the IDE has exited.
+                            updates.updater.launchInstaller()
                             exitApplication()
                         }
                     },
@@ -111,6 +120,7 @@ private fun IdeWindow(
     plugins: ClientPlugins,
     commandLineTool: CommandLineTool,
     exporter: DesktopExporter,
+    updates: UpdateNotifier,
     firstWindow: Boolean,
     initialProject: String?,
     startProject: String?,
@@ -131,11 +141,13 @@ private fun IdeWindow(
                 // The windows added by the user open on the welcome screen, with no project.
                 reopenLastProject = firstWindow,
                 initialProject = initialProject,
+                updates = updates,
                 startProject = startProject,
             ).also {
                 it.plugins = plugins
                 it.commandLineTool = commandLineTool
                 it.onNewWindow = onNewWindow
+                it.onClosed = onClosed
             }
         }
     Window(
