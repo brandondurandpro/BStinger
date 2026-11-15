@@ -60,6 +60,11 @@ data class AgentSettings(
     val registryCacheMs: Long = 3_600_000,
     /** Where the agents of the registry are installed, shared with the other downloaded tools. */
     val toolsDirectory: Path = Paths.get(System.getProperty("user.home"), ".kotlin-editor", "tools"),
+    /**
+     * Where the ids of the sessions the history never lists are saved (the members of a team); null keeps them in
+     * memory only.
+     */
+    val hiddenSessions: Path? = null,
 ) {
     /** The registry the server reads by default. */
     companion object {
@@ -87,7 +92,7 @@ class AgentService(
     private val created = MutableStateFlow(0L)
 
     /** The agent processes, one per command line, and the sessions they keep. */
-    val processes = AgentProcesses(scope, files, registry(settings))
+    val processes = AgentProcesses(scope, files, registry(settings), settings.hiddenSessions)
 
     // The teams run by the server: a manager delegates through its tools (see [DelegationRelay]).
     internal val delegations = DelegationRelay(this, scope)

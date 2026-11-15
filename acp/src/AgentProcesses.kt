@@ -9,6 +9,7 @@ import org.example.kotlineditor.model.AgentRegistryEntry
 import org.example.kotlineditor.model.AgentSessions
 import org.example.kotlineditor.model.AgentSlashCommand
 import java.io.Closeable
+import java.nio.file.Path
 
 /**
  * The agent processes of the server, one per command line, shared by the conversations that use it, and the sessions
@@ -18,9 +19,10 @@ class AgentProcesses internal constructor(
     private val scope: CoroutineScope,
     private val files: FileAccess,
     private val registry: AgentRegistry,
+    hiddenSessions: Path? = null,
 ) : Closeable {
     private val processes = HashMap<AgentCommand, AgentProcess>()
-    private val probes = ProbeSessions()
+    private val probes = ProbeSessions(hiddenSessions)
 
     /** The sessions [agent] keeps that work in one of [directories], newest first. */
     suspend fun sessions(agent: AgentCommand, directories: List<String>): AgentSessions {

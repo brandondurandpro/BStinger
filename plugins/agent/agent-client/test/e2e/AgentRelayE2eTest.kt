@@ -267,6 +267,32 @@ class AgentRelayE2eTest {
         }
 
     @Test
+    fun `the session of a member is not listed with the conversations, even after the server restarts`() =
+        runComposeUiTest {
+            val (app, agent, conversation) = startTeam(relayTeam())
+            sendPrompt("delegate-via-mcp Dev echo hi")
+            awaitShown(conversation, "The member answered.")
+            awaitIdle(conversation)
+            val manager = checkNotNull(conversation.session)
+            awaitCondition(AGENT_TIMEOUT) { storedSessions().size == 2 }
+            val member = storedSessions().firstOrNull { it != manager }
+            app.process.restart()
+            // A session made meanwhile: once it is listed, the history was listed again, by the restarted server.
+            val other = pastSession(store, app.project.root.path, listOf("echo other" to "other "))
+            awaitTag(AgentTags.MODE_IDE).performClick()
+            awaitHistory(app, other)
+            val listed = agent.conversations.mapNotNull { it.session }
+            assertFalse(member in listed, "the member's session $member is listed: $listed")
+            assertTrue(agent.conversations.none { it.key.contains("~d") })
+        }
+
+    // The ids of the sessions the agent keeps on its disk.
+    private fun storedSessions(): List<String> =
+        Files.list(store).use { files ->
+            files.map { it.fileName.toString() }.filter { it.endsWith(".json") }.map { it.removeSuffix(".json") }.toList()
+        }
+
+    @Test
     fun `deleting the conversation stops following its members`() =
         runComposeUiTest {
             val (_, agent, conversation) = startTeam(relayTeam())
