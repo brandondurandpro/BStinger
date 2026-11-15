@@ -15,12 +15,28 @@ data class AgentRun(
     val status: AgentToolStatus,
     val result: String,
     val member: TeamMember?,
+    /** The key of the conversation of the member on the server when the IDE ran it (relay mode); null otherwise. */
+    val child: String? = null,
+    /** True for a delegation of the IDE's relay (its session may not be known yet), false for a launch of the agent. */
+    val relayed: Boolean = false,
 )
 
 // What the agent calls "thinking" besides launching a sub-agent: not a run.
 private val NOT_A_LAUNCH = listOf("update todos", "ready to code", "exit plan mode", "todo")
 
+// The names the adapter gives the tool that launches a sub-agent.
+private val LAUNCH_TOOLS = listOf("Agent", "Task")
+
+// The tool the IDE gives a manager in relay mode (`mcp__<server>__delegate` for Claude).
+private fun isDelegate(call: AgentItem.ToolCall): Boolean {
+    val tool = call.tool.orEmpty()
+    return call.child != null || tool.endsWith("delegate", ignoreCase = true)
+}
+
 private fun isLaunch(call: AgentItem.ToolCall): Boolean {
+    if (isDelegate(call)) return true
+    val tool = call.tool
+    if (tool != null) return tool in LAUNCH_TOOLS
     if (call.kind != AgentToolKind.Think) return false
     val title = call.title.trim().lowercase()
     return NOT_A_LAUNCH.none { title.startsWith(it) }
@@ -42,10 +58,16 @@ fun agentRuns(items: List<AgentItem>, team: AgentTeam?): List<AgentRun> {
     return launches.map { call ->
         val member = memberOf(call, team)
         val description = call.title.trim()
-        AgentRun(call.id, member?.name ?: description, description, call.status, call.output.trim(), member)
+        AgentRun(call.id, member?.name ?: description, description, call.status, call.output.trim(), member, call.child, isDelegate(call))
     }
 }
 
-/** The tool calls of the manager itself: all but the launches of sub-agents. */
-fun managerCalls(items: List<AgentItem>): List<AgentItem.ToolCall> =
-    items.filterIsInstance<AgentItem.ToolCall>().filterNot { isLaunch(it) }
+/** The tool calls of the manager itself: all but the launches of sub-agents and the calls the sub-agents made. */
+fun managerCalls(items: List<AgentItem>): List<AgentItem.ToolCall> {
+    val calls = items.filterIsInstance<AgentItem.ToolCall>()
+    return calls.filter { !isLaunch(it) && it.parent == null }
+}
+
+/** The tool calls [run] made, in order; empty when the agent does not tell (a reloaded conversation). */
+fun nestedCalls(items: List<AgentItem>, run: AgentRun): List<AgentItem.ToolCall> =
+    items.filterIsInstance<AgentItem.ToolCall>().filter { it.parent == run.id }

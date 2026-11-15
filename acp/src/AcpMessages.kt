@@ -125,19 +125,30 @@ private fun sessionCapabilities(capabilities: JsonObject?): SessionCapabilities 
 
 private fun JsonObject?.has(name: String): Boolean = this?.get(name).obj() != null
 
-/** `session/new` in [directory], with the MCP servers the user configured ([McpServers]). */
-internal fun newSessionParams(directory: String, mcp: McpCapabilities): JsonObject =
+/** `session/new` in [directory], with the MCP servers the user configured ([McpServers]) and the [extras]. */
+internal fun newSessionParams(
+    directory: String,
+    mcp: McpCapabilities,
+    extras: SessionExtras = SessionExtras.None,
+): JsonObject =
     buildJsonObject {
         put("cwd", directory)
-        put("mcpServers", McpServers.forAgent(mcp))
+        put("mcpServers", extras.servers(mcp))
+        extras.meta?.let { put("_meta", it) }
     }
 
-/** `session/load` and `session/resume`: reopens [session] in [directory], with the same MCP servers. */
-internal fun reopenParams(session: String, directory: String, mcp: McpCapabilities): JsonObject =
+/** `session/load` and `session/resume`: reopens [session] in [directory], with the same MCP servers and [extras]. */
+internal fun reopenParams(
+    session: String,
+    directory: String,
+    mcp: McpCapabilities,
+    extras: SessionExtras = SessionExtras.None,
+): JsonObject =
     buildJsonObject {
         put(SESSION_ID, session)
         put("cwd", directory)
-        put("mcpServers", McpServers.forAgent(mcp))
+        put("mcpServers", extras.servers(mcp))
+        extras.meta?.let { put("_meta", it) }
     }
 
 /** `session/list` of the sessions working in [directory], from [cursor] on. */

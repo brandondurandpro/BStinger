@@ -35,6 +35,7 @@ import androidx.compose.ui.window.Dialog
 import kotlinx.coroutines.delay
 import org.example.kotlineditor.state.AgentState
 import org.example.kotlineditor.state.AgentTeam
+import org.example.kotlineditor.state.OrchestrationMode
 import org.example.kotlineditor.state.Conversation
 import org.example.kotlineditor.state.TeamMember
 import org.example.kotlineditor.state.TeamOffers
@@ -79,6 +80,7 @@ internal fun TeamsButton(agent: AgentState) {
 private class TeamDraft {
     var previous by mutableStateOf<String?>(null)
     var name by mutableStateOf("")
+    var mode by mutableStateOf(OrchestrationMode.Agent)
     var expanded by mutableStateOf<Int?>(null)
     val members = mutableStateListOf(TeamMember("Manager"))
     private var baseline = AgentTeam("", TeamMember("Manager"))
@@ -89,6 +91,7 @@ private class TeamDraft {
     fun load(team: AgentTeam?) {
         previous = team?.name
         name = team?.name.orEmpty()
+        mode = team?.mode ?: OrchestrationMode.Agent
         members.clear()
         members.add(team?.manager ?: TeamMember("Manager"))
         members.addAll(team?.members.orEmpty())
@@ -121,7 +124,7 @@ private class TeamDraft {
 
     fun toTeam(): AgentTeam {
         val manager = members.firstOrNull() ?: TeamMember("Manager")
-        return AgentTeam(name, manager, members.drop(1))
+        return AgentTeam(name, manager, members.drop(1), mode)
     }
 }
 
@@ -210,7 +213,8 @@ private fun TeamRow(team: AgentTeam, edit: () -> Unit, delete: () -> Unit) {
             Label(team.name, fontWeight = FontWeight.Medium)
             val size = plural(team.members.size + 1, "agent", "agents")
             val summary = listOf(size, team.manager.model).filter { it.isNotBlank() }.joinToString(" · ")
-            Label(summary, color = IdeColors.TextSecondary, fontSize = 12.sp)
+            val relay = if (team.mode == OrchestrationMode.Relay) listOf("IDE relay") else emptyList()
+            Label((listOf(summary) + relay).joinToString(" · "), color = IdeColors.TextSecondary, fontSize = 12.sp)
         }
         TipIconButton(Lucide.Pencil, "Edit team", AgentTags.agentTeamEdit(team.name), edit)
         TipConfirmButton("Delete team", AgentTags.agentTeamDelete(team.name), delete)
@@ -239,6 +243,7 @@ private fun TeamEditor(agent: AgentState, draft: TeamDraft, offers: OffersView, 
     val title = draft.previous?.let { "Edit team · $it" } ?: "New team"
     Label(title, fontWeight = FontWeight.SemiBold)
     IdeTextField(draft.name, { draft.name = it }, Modifier.fillMaxWidth().testTag(AgentTags.AGENT_TEAM_NAME), placeholder = "Team name")
+    ModeChoice(draft.mode) { draft.mode = it }
     FieldCaption("Members")
     Column(
         Modifier.fillMaxWidth().heightIn(max = EDITOR_MAX_HEIGHT).verticalScroll(rememberScrollState()),
@@ -256,9 +261,32 @@ private fun TeamEditor(agent: AgentState, draft: TeamDraft, offers: OffersView, 
     TeamEditorActions(agent, draft, back)
 }
 
+// Who runs the delegations of the team: the agent, or the IDE with a session per member.
+@Composable
+private fun ModeChoice(mode: OrchestrationMode, choose: (OrchestrationMode) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FieldCaption("Orchestration")
+        Row(
+            Modifier
+                .background(IdeColors.Editor, IdeShapes.Large)
+                .border(1.dp, IdeColors.Separator, IdeShapes.Large)
+                .padding(2.dp),
+        ) {
+            val agentSelected = mode == OrchestrationMode.Agent
+            ModeButton("Agent", agentSelected, AgentTags.AGENT_TEAM_MODE_AGENT) { choose(OrchestrationMode.Agent) }
+            ModeButton("IDE relay", !agentSelected, AgentTags.AGENT_TEAM_MODE_RELAY) { choose(OrchestrationMode.Relay) }
+        }
+    }
+    FieldCaption(MODE_EXPLANATION)
+}
+
+private const val MODE_EXPLANATION =
+    "Agent: the agent launches its own sub-agents. IDE relay: the IDE runs each member in its own session, " +
+        "with its own model and effort."
+
 @Composable
 private fun FieldCaption(text: String) {
-    Label(text, color = IdeColors.TextSecondary, fontSize = 12.sp)
+    Label(text, color = IdeColors.TextSecondary, fontSize = 12.sp, maxLines = Int.MAX_VALUE)
 }
 
 @Composable
@@ -395,6 +423,49 @@ private fun TeamEditorActions(agent: AgentState, draft: TeamDraft, back: () -> U
 }
 
 /**
+ * How the team of [conversation] is orchestrated: "Agent ▾" or "IDE relay ▾", a menu until its session starts (the
+ * relay needs its tool when the session starts, so the choice is locked after).
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun ModePicker(agent: AgentState, conversation: Conversation) {
+    var open by remember { mutableStateOf(false) }
+    val mode = agent.modeOf(conversation)
+    val locked = !agent.canChooseMode(conversation)
+    val name = if (mode == OrchestrationMode.Relay) "IDE relay" else "Agent"
+    val tip = if (locked) "Fixed once the conversation has started: start a new one to change it" else MODE_EXPLANATION
+    Box {
+        TooltipArea(tooltip = { Tooltip(tip) }) {
+            Label(
+                "$name ▾",
+                Modifier
+                    .background(if (open) IdeColors.Selection else Color.Transparent, IdeShapes.Medium)
+                    .clickable(enabled = !locked) { open = true }
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                    .testTag(AgentTags.AGENT_TEAM_MODE),
+                color = IdeColors.TextSecondary.copy(alpha = if (locked) LOCKED_ALPHA else 1f),
+                fontSize = 12.sp,
+            )
+        }
+        IdeDropdownMenu(open, onDismissRequest = { open = false }, Modifier.closesOnEscape { open = false }) {
+            val choices = listOf(OrchestrationMode.Agent to "Agent", OrchestrationMode.Relay to "IDE relay")
+            for ((choice, text) in choices) {
+                val tag = if (choice == OrchestrationMode.Relay) AgentTags.AGENT_TEAM_MODE_RELAY else AgentTags.AGENT_TEAM_MODE_AGENT
+                val mark = if (choice == mode) "  ✓" else ""
+                IdeMenuItem(
+                    { Label(text + mark) },
+                    {
+                        open = false
+                        agent.chooseMode(conversation, choice)
+                    },
+                    Modifier.testTag(tag),
+                )
+            }
+        }
+    }
+}
+
+/**
  * The team of [conversation], among those made: its manager answers and delegates to the members. It can change
  * between two turns (the next prompt carries the briefing); while the agent works the button only says which team.
  */
@@ -448,5 +519,6 @@ internal fun TeamPicker(agent: AgentState, conversation: Conversation) {
             )
         }
     }
+    if (conversation.team != null) ModePicker(agent, conversation)
     if (making) TeamsDialog(agent) { making = false }
 }

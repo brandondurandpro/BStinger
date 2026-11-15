@@ -7,11 +7,13 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
+import org.example.kotlineditor.acp.relay.DelegationRelay
 import org.example.kotlineditor.lsp.provision.ToolDownloader
 import org.example.kotlineditor.model.AgentAttachment
 import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.model.AgentTranscript
 import org.example.kotlineditor.model.AgentTurnState
+import org.example.kotlineditor.model.RelayTeam
 import java.io.Closeable
 import java.io.IOException
 import java.nio.file.Files
@@ -78,15 +80,22 @@ class AgentService(
 
     /** Instance of this service: item ids and transcript versions are only meaningful within it. */
     val epoch: String = UUID.randomUUID().toString().take(EPOCH_LENGTH)
-    private val conversations = ConcurrentHashMap<String, ServerConversation>()
+
+    /** The conversations, by key. */
+    internal val conversations = ConcurrentHashMap<String, ServerConversation>()
     private val created = MutableStateFlow(0L)
 
     /** The agent processes, one per command line, and the sessions they keep. */
     val processes = AgentProcesses(scope, files, registry(settings))
 
+    // The teams run by the server: a manager delegates through its tools (see [DelegationRelay]).
+    internal val delegations = DelegationRelay(this, scope)
+
     /**
      * Sends [text] to the agent of [conversation], started with [agent] in [directory] when needed; a conversation
-     * this service does not know continues the agent's [session]; [attachments] go with the text.
+     * this service does not know continues the agent's [session]; [attachments] go with the text. With a [relay], the
+     * conversation is a manager whose team the server runs: it gets a `delegate` tool instead of the agent's own
+     * launchers of sub-agents, in the session it starts (a session already running keeps what it was started with).
      */
     fun prompt(
         conversation: String,
@@ -96,14 +105,19 @@ class AgentService(
         text: String,
         session: String? = null,
         attachments: List<AgentAttachment> = emptyList(),
+        relay: RelayTeam? = null,
     ) {
         val prompt = UserPrompt(itemId, text, attachments)
-        conversation(conversation).prompt(prompt, agent, directory, session) { processes.processFor(agent) }
+        val target = conversation(conversation)
+        if (relay != null) target.keeper.extras = delegations.attach(conversation, agent, directory, relay)
+        target.prompt(prompt, agent, directory, session) { processes.processFor(agent) }
     }
 
     /** Opens the agent's [session] as [conversation]: the agent replays its history into the transcript. */
-    fun open(conversation: String, agent: AgentCommand, directory: String, session: String) {
-        conversation(conversation).open(agent, session, directory) { processes.processFor(agent) }
+    fun open(conversation: String, agent: AgentCommand, directory: String, session: String, relay: RelayTeam? = null) {
+        val target = conversation(conversation)
+        if (relay != null) target.keeper.extras = delegations.attach(conversation, agent, directory, relay)
+        target.open(agent, session, directory) { processes.processFor(agent) }
     }
 
     /**
@@ -118,6 +132,7 @@ class AgentService(
     /** Stops the prompt running in [conversation]. */
     fun cancel(conversation: String) {
         conversations[conversation]?.cancel()
+        delegations.cancelChildren(conversation)
     }
 
     /** Answers the permission request [itemId] of [conversation]. */
@@ -166,18 +181,31 @@ class AgentService(
     /** Forgets [conversation]: its prompt stops and its agent process ends once no conversation uses it. */
     suspend fun close(conversation: String) {
         val removed = conversations.remove(conversation) ?: return
+        delegations.close(conversation)
         removed.close()
         processes.destroyUnused()
     }
 
     override fun close() {
+        delegations.close()
         conversations.clear()
         processes.close()
         scope.cancel()
     }
 
-    // The conversation [key], created on first use.
-    private fun conversation(key: String): ServerConversation {
+    // A conversation with a [team] to serve gets the tools of its manager before its session starts.
+    private fun managed(
+        key: String,
+        target: ServerConversation,
+        agent: AgentCommand,
+        directory: String,
+        team: RelayTeam?,
+    ) {
+        if (team != null) target.keeper.extras = delegations.attach(key, agent, directory, team)
+    }
+
+    /** The conversation [key], created on first use. */
+    internal fun conversation(key: String): ServerConversation {
         val known = conversations[key]
         if (known != null) return known
         val target = conversations.computeIfAbsent(key) { ServerConversation(Journal(epoch), scope, settings) }

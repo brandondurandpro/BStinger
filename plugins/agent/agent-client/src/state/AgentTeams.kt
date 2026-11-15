@@ -1,5 +1,8 @@
 package org.example.kotlineditor.state
 
+import org.example.kotlineditor.model.RelayMember
+import org.example.kotlineditor.model.RelayTeam
+
 /**
  * A member of a team of agents: [name] says its role, [model] and [effort] are what it should run with (as the user
  * names them: `Opus 5.5`, `high`), [skills] the skills it may use and [prompt] its system prompt.
@@ -12,11 +15,25 @@ data class TeamMember(
     val prompt: String = "",
 )
 
+/** Who runs the delegations of a team: the agent with its own sub-agents, or the IDE's server, a session per member. */
+enum class OrchestrationMode {
+    /** The agent launches its own sub-agents. */
+    Agent,
+
+    /** The IDE runs each member in its own session, with its own model and effort. */
+    Relay,
+}
+
 /**
  * A team of agents: the [manager] coordinates (its prompt says when to delegate), the [members] are the sub-agents
- * it delegates to and whose work it controls.
+ * it delegates to and whose work it controls; [mode] says who runs the delegations.
  */
-data class AgentTeam(val name: String, val manager: TeamMember, val members: List<TeamMember> = emptyList())
+data class AgentTeam(
+    val name: String,
+    val manager: TeamMember,
+    val members: List<TeamMember> = emptyList(),
+    val mode: OrchestrationMode = OrchestrationMode.Agent,
+)
 
 private const val MANAGER = "manager"
 private const val MEMBER = "member"
@@ -49,6 +66,23 @@ internal fun decodeTeams(saved: String?): List<AgentTeam> {
         if (fields[1] == MANAGER) managers.putIfAbsent(team, member) else members.getOrPut(team) { mutableListOf() }.add(member)
     }
     return managers.map { (team, manager) -> AgentTeam(team, manager, members[team].orEmpty()) }
+}
+
+/** The modes of the teams that are not orchestrated by the agent, as saved: one `team`, a tab and the mode per line. */
+internal fun encodeModes(teams: List<AgentTeam>): String =
+    teams
+        .filter { it.mode != OrchestrationMode.Agent }
+        .joinToString("\n") { escaped(it.name) + "\t" + it.mode.name }
+
+/** [teams] with the modes saved by [encodeModes]; a team without a line, or with an unknown mode, keeps the agent's. */
+internal fun withSavedModes(teams: List<AgentTeam>, saved: String?): List<AgentTeam> {
+    val modes = HashMap<String, OrchestrationMode>()
+    for (line in saved.orEmpty().lines()) {
+        val fields = line.split('\t')
+        val mode = OrchestrationMode.entries.firstOrNull { it.name == fields.getOrNull(1) }
+        if (fields.size == 2 && mode != null) modes[unescaped(fields[0])] = mode
+    }
+    return teams.map { team -> team.copy(mode = modes[team.name] ?: OrchestrationMode.Agent) }
 }
 
 private fun memberOf(fields: List<String>): TeamMember {
@@ -134,6 +168,36 @@ internal fun teamBriefing(team: AgentTeam, request: String): String {
     out.append(request)
     return out.toString()
 }
+
+/**
+ * What the manager is told before the first request of a conversation run by the IDE: its own system prompt, then the
+ * members it can delegate to with the `delegate(member, task)` tool, by name; the server gives each member its own
+ * prompt, model and effort, so they are not repeated here. The request of the user comes last.
+ */
+internal fun relayBriefing(team: AgentTeam, request: String): String {
+    val out = StringBuilder()
+    out.appendLine("You are ${team.manager.name}, the manager of the team \"${team.name}\".")
+    if (team.manager.prompt.isNotBlank()) out.appendLine(team.manager.prompt)
+    if (team.members.isNotEmpty()) {
+        out.appendLine()
+        out.appendLine("Your team. Delegate by calling the `delegate` tool with the member's name, exactly as written below, and a")
+        out.appendLine("complete task (a member does not see this conversation); do not launch sub-agents yourself. Then review")
+        out.appendLine("the report it returns before going on:")
+        for (member in team.members) out.appendLine("- ${member.description()}")
+    }
+    out.appendLine()
+    out.appendLine("# Request")
+    out.append(request)
+    return out.toString()
+}
+
+/** The team as the server runs it in relay mode: the members, with the prompts, models and efforts to apply. */
+internal fun AgentTeam.toRelay(): RelayTeam {
+    val managerMember = manager.toRelay()
+    return RelayTeam(managerMember, members.map { it.toRelay() })
+}
+
+private fun TeamMember.toRelay() = RelayMember(name, prompt, model, effort)
 
 /** The value of [values] (`id` to name) the user's [wanted] words point at, comparing letters and digits only; null when none. */
 internal fun matchingValue(values: List<Pair<String, String>>, wanted: String): String? {

@@ -197,7 +197,7 @@ private fun thinking(conversation: Conversation): Boolean {
 internal val bodyStyle get() = TextStyle(fontFamily = IdeFonts.ui, color = IdeColors.Text, fontSize = 13.sp, lineHeight = 20.sp)
 
 @Composable
-private fun ItemView(agent: AgentState, conversation: Conversation, item: AgentItem) {
+internal fun ItemView(agent: AgentState, conversation: Conversation, item: AgentItem) {
     when (item) {
         is AgentItem.UserText -> UserBubble(item.text, item.context)
         is AgentItem.AgentText -> MarkdownText(item.text.trimEnd(), Modifier.fillMaxWidth())

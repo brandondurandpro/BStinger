@@ -65,4 +65,42 @@ class AgentTeamsTest {
     fun `a saved effort the agent does not offer is listed with the values used in the teams`() {
         assertEquals(listOf("high"), otherValues(efforts, listOf("high"), loose = true))
     }
+
+    private val relayTeam =
+        AgentTeam("R", TeamMember("Lead", prompt = "Coordinate."), listOf(TeamMember("Dev", "Sonnet 5.5", "high", prompt = "Code")), OrchestrationMode.Relay)
+
+    @Test
+    fun `only the teams run by the relay are saved as modes, apart from the teams`() {
+        val teams = listOf(relayTeam, AgentTeam("A", TeamMember("Boss")))
+        assertEquals("R\tRelay", encodeModes(teams))
+        assertEquals(teams.map { it.mode }, withSavedModes(teams.map { it.copy(mode = OrchestrationMode.Agent) }, encodeModes(teams)).map { it.mode })
+        // The team lines keep their seven fields: an older build reads them all.
+        assertTrue(encodeTeams(teams).lines().all { it.split('\t').size == 7 })
+    }
+
+    @Test
+    fun `a missing or damaged modes value leaves every team to the agent`() {
+        val teams = listOf(AgentTeam("A", TeamMember("Boss")), relayTeam.copy(mode = OrchestrationMode.Agent))
+        assertEquals(teams, withSavedModes(teams, null))
+        assertEquals(teams, withSavedModes(teams, "garbage\nA\tNoSuchMode\nUnknown\tRelay"))
+    }
+
+    @Test
+    fun `the relay briefing names the members for the delegate tool and leaves their prompts to the server`() {
+        val text = relayBriefing(relayTeam, "Fix it")
+        assertTrue("`delegate`" in text)
+        assertTrue("Dev (Sonnet 5.5, effort high)" in text)
+        assertTrue("Coordinate." in text)
+        assertTrue("Code" !in text.substringAfter("Your team"))
+        assertTrue(text.endsWith("# Request\nFix it"))
+    }
+
+    @Test
+    fun `the team the server runs carries the prompts, models and efforts`() {
+        val relay = relayTeam.toRelay()
+        assertEquals("Lead", relay.manager.name)
+        assertEquals(listOf("Dev"), relay.members.map { it.name })
+        assertEquals("Sonnet 5.5", relay.members.single().model)
+        assertEquals("Code", relay.members.single().prompt)
+    }
 }

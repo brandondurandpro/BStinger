@@ -46,6 +46,12 @@ object PreferenceKeys {
     /** The teams of agents of the user: one member per line (see `encodeTeams`); an empty value is "no team". */
     const val AGENT_TEAMS = "agent.teams"
 
+    /**
+     * How each team is orchestrated, apart from [AGENT_TEAMS] so that an older build still reads the teams: one team
+     * per line, its name, a tab and the mode (see `encodeModes`); a team without a line is orchestrated by the agent.
+     */
+    const val AGENT_TEAM_MODES = "agent.teams.modes"
+
     /** Per project (the key ends with its path): its prompt templates, in the format of [AGENT_TEMPLATES]. */
     const val AGENT_TEMPLATES_PREFIX = "agent.templates."
 

@@ -207,4 +207,111 @@ class AgentStripE2eTest {
             awaitTag(AgentTags.agentStripEntry("Explore the repository"), timeout = AGENT_TIMEOUT)
             awaitIdle(conversation)
         }
+
+    private fun androidx.compose.ui.test.ComposeUiTest.openRun(name: String): String {
+        awaitTag(AgentTags.agentStripEntry(name), timeout = AGENT_TIMEOUT).performClick()
+        awaitTag(AgentTags.AGENT_STRIP_DETAIL)
+        return textOf(AgentTags.AGENT_STRIP_DETAIL)
+    }
+
+    private fun androidx.compose.ui.test.ComposeUiTest.closeRun() {
+        awaitTag(AgentTags.AGENT_STRIP_DETAIL_CLOSE).performClick()
+        awaitNoTag(AgentTags.AGENT_STRIP_DETAIL)
+    }
+
+    @Test
+    fun `a sub-agent popup lists the calls it made, and the report it handed back rather than the note of the launch`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, preferences())
+            val conversation = startConversation(app)
+            chooseDefaultTeamAndGreet(conversation)
+            sendPrompt("subagent Dev: add the button")
+            awaitIdle(conversation)
+            val shown = openRun("Dev")
+            assertTrue("What it did (2)" in shown, shown)
+            assertTrue("Read file 1" in shown && "Run tests 2" in shown, shown)
+            assertTrue("Output of Read file 1" in shown, shown)
+            assertTrue("Report of Dev: add the button: handed back." in shown, shown)
+            assertFalse("agentId" in shown, shown)
+            closeRun()
+        }
+
+    @Test
+    fun `the manager popup lists neither the launch nor the calls of the sub-agent`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, preferences())
+            val conversation = startConversation(app)
+            chooseDefaultTeamAndGreet(conversation)
+            sendPrompt("subagent Dev: add the button")
+            awaitIdle(conversation)
+            val shown = openRun("Manager")
+            assertTrue("No command yet." in shown, shown)
+            assertFalse("Read file" in shown || "Run tests" in shown || "Task" in shown, shown)
+            closeRun()
+        }
+
+    @Test
+    fun `two sub-agents each show only their own calls`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, preferences())
+            val conversation = startConversation(app)
+            chooseDefaultTeamAndGreet(conversation)
+            sendPrompt("subagent Dev: first job")
+            awaitIdle(conversation)
+            sendPrompt("subagent-calls 1 Tester: second job")
+            awaitIdle(conversation)
+            val dev = openRun("Dev")
+            assertTrue("What it did (2)" in dev && "Run tests 2" in dev && "handed back" in dev && "first job" in dev, dev)
+            assertFalse("second job: handed back" in dev, dev)
+            closeRun()
+            val tester = openRun("Tester")
+            assertTrue("What it did (1)" in tester && "Read file 1" in tester, tester)
+            assertFalse("Run tests 2" in tester, tester)
+            assertFalse("first job: handed back" in tester, tester)
+            closeRun()
+        }
+
+    @Test
+    fun `calls that arrive before their launch are shown under it once it is known`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, preferences())
+            val conversation = startConversation(app)
+            chooseDefaultTeamAndGreet(conversation)
+            sendPrompt("subagent-early Dev: add the button")
+            awaitIdle(conversation)
+            val shown = openRun("Dev")
+            assertTrue("What it did (2)" in shown && "Read file 1" in shown && "Run tests 2" in shown, shown)
+            closeRun()
+            val manager = openRun("Manager")
+            assertFalse("Read file" in manager, manager)
+            closeRun()
+        }
+
+    @Test
+    fun `a sub-agent whose calls the agent did not tell says that none was recorded`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, preferences())
+            val conversation = startConversation(app)
+            chooseDefaultTeamAndGreet(conversation)
+            sendPrompt("delegate Dev: add the button")
+            awaitIdle(conversation)
+            val shown = openRun("Dev")
+            assertTrue("No command recorded." in shown && "Report of Dev: add the button: done." in shown, shown)
+            closeRun()
+        }
+
+    @Test
+    fun `the run and its calls are still there after the server restarts`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, preferences(), chaos = true)
+            val conversation = startConversation(app)
+            chooseDefaultTeamAndGreet(conversation)
+            sendPrompt("subagent Dev: add the button")
+            awaitIdle(conversation)
+            app.process.restart()
+            awaitReconnected()
+            val shown = openRun("Dev")
+            assertTrue("What it did (2)" in shown && "handed back" in shown, shown)
+            closeRun()
+        }
 }

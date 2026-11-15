@@ -58,6 +58,10 @@ internal class SessionKeeper(
     // Whether the journal shows more than the session holds: what a session lost, or another agent, was told.
     private var outlivedSession = false
 
+    /** What its sessions get besides the user's MCP servers when they start or reopen: the `delegate` tool, a brief. */
+    @Volatile
+    var extras: SessionExtras = SessionExtras.None
+
     // The agent the current (or resumable) session belongs to: a prompt of another agent starts over.
     @Volatile
     private var served: AgentCommand? = null
@@ -183,7 +187,7 @@ internal class SessionKeeper(
     private suspend fun fresh(agent: AgentProcess, info: AgentInfo, directory: String): AgentSession {
         val started =
             try {
-                agent.newSession(directory, listener)
+                agent.newSession(directory, listener, extras)
             } catch (refused: LspResponseException) {
                 throw if (refused.code == AUTH_REQUIRED) loginRequired(refused, info) else refused
             }
@@ -224,7 +228,7 @@ internal class SessionKeeper(
         if (replays && wanted) journal.describe { it.copy(replayed = true) }
         val reopened =
             try {
-                val options = agent.reopenSession(id, directory, listener, method)
+                val options = agent.reopenSession(id, directory, listener, method, extras)
                 options?.let { listed -> journal.describe { it.copy(options = listed) } }
                 true
             } catch (_: LspResponseException) {

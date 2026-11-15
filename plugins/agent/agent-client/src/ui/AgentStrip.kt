@@ -13,9 +13,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,8 +36,12 @@ import org.example.kotlineditor.model.AgentToolStatus
 import org.example.kotlineditor.state.AgentRun
 import org.example.kotlineditor.state.AgentState
 import org.example.kotlineditor.state.Conversation
+import org.example.kotlineditor.state.OrchestrationMode
 import org.example.kotlineditor.state.agentRuns
+import org.example.kotlineditor.state.followDelegation
+import org.example.kotlineditor.state.unfollowDelegation
 import org.example.kotlineditor.state.managerCalls
+import org.example.kotlineditor.state.nestedCalls
 
 private val DETAIL_WIDTH = 560.dp
 private val DETAIL_MAX_HEIGHT = 420.dp
@@ -64,6 +71,9 @@ internal fun AgentStrip(agent: AgentState, conversation: Conversation) {
     ) {
         val managerStatus = if (managerBusy) AgentToolStatus.Running else AgentToolStatus.Completed
         StripChip(MANAGER_MARK + managerName, managerStatus, AgentTags.agentStripEntry(managerName)) { shown = MANAGER_KEY }
+        if (agent.modeOf(conversation) == OrchestrationMode.Relay) {
+            Label("relay", Modifier.testTag(AgentTags.AGENT_STRIP_RELAY), color = IdeColors.TextSecondary, fontSize = 11.sp)
+        }
         for (run in runs) StripChip(run.name, run.status, AgentTags.agentStripEntry(run.name)) { shown = run.id }
     }
     val key = shown ?: return
@@ -71,8 +81,10 @@ internal fun AgentStrip(agent: AgentState, conversation: Conversation) {
     val run = runs.firstOrNull { it.id == key }
     if (key == MANAGER_KEY) {
         ManagerDetail(MANAGER_MARK + managerName, managerCalls(items), close)
+    } else if (run != null && run.relayed) {
+        RelayRunDetail(agent, run, close)
     } else if (run != null) {
-        RunDetail(run, close)
+        RunDetail(run, nestedCalls(items, run), close)
     }
 }
 
@@ -93,7 +105,7 @@ private fun StripChip(name: String, status: AgentToolStatus, tag: String, open: 
 }
 
 @Composable
-private fun DetailDialog(title: String, status: AgentToolStatus, close: () -> Unit, body: @Composable () -> Unit) {
+private fun DetailDialog(title: String, status: AgentToolStatus, close: () -> Unit, body: LazyListScope.() -> Unit) {
     Dialog(onDismissRequest = close) {
         Column(
             Modifier
@@ -108,10 +120,12 @@ private fun DetailDialog(title: String, status: AgentToolStatus, close: () -> Un
                 Label(title, Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
                 Label(statusText(status), color = IdeColors.TextSecondary, fontSize = 12.sp)
             }
-            Column(
-                Modifier.heightIn(max = DETAIL_MAX_HEIGHT).verticalScroll(rememberScrollState()),
+            // Lazy: only the cards in view are composed, however many calls the agent made.
+            LazyColumn(
+                Modifier.heightIn(max = DETAIL_MAX_HEIGHT),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) { body() }
+                content = body,
+            )
             Row {
                 Box(Modifier.weight(1f))
                 IdeButton("Close", close, Modifier.testTag(AgentTags.AGENT_STRIP_DETAIL_CLOSE), primary = true)
@@ -121,11 +135,41 @@ private fun DetailDialog(title: String, status: AgentToolStatus, close: () -> Un
 }
 
 @Composable
-private fun RunDetail(run: AgentRun, close: () -> Unit) {
+private fun RunDetail(run: AgentRun, calls: List<AgentItem.ToolCall>, close: () -> Unit) {
     DetailDialog(run.name, run.status, close) {
-        Section("Task", run.description)
+        item(key = "task") { Section("Task", run.description) }
+        if (calls.isEmpty()) {
+            item(key = "calls") { Section("What it did", "No command recorded.") }
+        } else {
+            item(key = "calls") {
+                Label("What it did (${calls.size})", color = IdeColors.TextSecondary, fontSize = 12.sp)
+            }
+            items(calls, key = { it.id }) { call -> ToolCallCard(call) }
+        }
         val report = run.result.ifEmpty { "No report yet." }
-        Section("Report", report)
+        item(key = "report") { Section("Report", report) }
+    }
+}
+
+// A run of the IDE's relay: the transcript of the session of the member, followed while the dialog is open.
+@Composable
+private fun RelayRunDetail(agent: AgentState, run: AgentRun, close: () -> Unit) {
+    val key = run.child
+    if (key == null) {
+        DetailDialog(run.name, run.status, close) { item(key = "starting") { Section("Task", "The member is starting.") } }
+        return
+    }
+    val followed = remember(key) { agent.followDelegation(key, run.name) }
+    DisposableEffect(key) { onDispose { agent.unfollowDelegation(key) } }
+    val rows = transcriptRows(followed.shownItems)
+    DetailDialog(run.name, run.status, close) {
+        items(rows, key = { it.key }) { row ->
+            when (row) {
+                is TranscriptRow.Single -> ItemView(agent, followed, row.item)
+                is TranscriptRow.Tools -> ToolCallRun(followed, row.calls)
+            }
+        }
+        item(key = "report") { Section("Report", run.result.ifEmpty { "No report yet." }) }
     }
 }
 
@@ -133,8 +177,10 @@ private fun RunDetail(run: AgentRun, close: () -> Unit) {
 private fun ManagerDetail(title: String, calls: List<AgentItem.ToolCall>, close: () -> Unit) {
     val working = if (calls.any { it.status == AgentToolStatus.Running }) AgentToolStatus.Running else AgentToolStatus.Completed
     DetailDialog(title, working, close) {
-        if (calls.isEmpty()) Label("No command yet.", color = IdeColors.TextSecondary, fontSize = 12.sp)
-        for (call in calls) ToolCallCard(call)
+        if (calls.isEmpty()) {
+            item(key = "none") { Label("No command yet.", color = IdeColors.TextSecondary, fontSize = 12.sp) }
+        }
+        items(calls, key = { it.id }) { call -> ToolCallCard(call) }
     }
 }
 
