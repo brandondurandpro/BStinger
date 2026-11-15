@@ -60,7 +60,12 @@ private fun AgentHost.apply(conversation: Conversation, transcript: AgentTranscr
         conversation.replayedEpoch = transcript.epoch
         conversation.replaceByHistory()
     }
-    if (transcript.items.isNotEmpty() && !transcript.replayed) conversation.lastMessageAt = System.currentTimeMillis()
+    // The silent questions about the quota of the history replayed stay out of sight, as they did when asked.
+    if (transcript.replayed) conversation.hidden.addAll(replayedQuotaQuestions(transcript.items))
+    // The answer to the silent question about the quota is no message of the conversation.
+    val probing = conversation.probeFrom != null
+    val messaged = transcript.items.isNotEmpty() && !transcript.replayed && !probing
+    if (messaged) conversation.lastMessageAt = System.currentTimeMillis()
     var wrote = false
     var asked: String? = null
     for (item in transcript.items) {
@@ -83,16 +88,38 @@ private fun AgentHost.apply(conversation: Conversation, transcript: AgentTranscr
     if (turnEnded && answeredFrom != null) {
         // The silent question about the quota is answered: the bars read it, the conversation forgets it.
         conversation.probeFrom = null
-        // Their ids are remembered: the server sends them again with the next snapshot.
-        while (conversation.items.size > answeredFrom) conversation.hidden.add(conversation.items.removeAt(conversation.items.lastIndex).id)
+        conversation.forgetProbe(answeredFrom)
     } else if (turnEnded && probeFrom == null) {
         conversation.quotaStale = true
         conversation.finished = true
         conversation.seen = false
         agentFinished(conversation.title, conversation.outcome == AgentOutcome.Failed)
     }
-    // The tree, the Git panel and the open editors pick the changes of the agent up.
-    if (wrote || turnEnded) conversation.workspace?.synchronize()
+    // The tree, the Git panel and the open editors pick the changes of the agent up; the quota read changed nothing.
+    val probeAnswered = turnEnded && answeredFrom != null
+    if (wrote || (turnEnded && !probeAnswered)) conversation.workspace?.synchronize()
+}
+
+/**
+ * The ids of the questions about the quota (`/usage`, `/status`) in the history [items] the agent replayed, and of
+ * their answers: the IDE asked them every half minute, the history would be full of them. A prompt sent by this window
+ * (its id is the IDE's) is never one.
+ */
+internal fun replayedQuotaQuestions(items: List<AgentItem>): Set<String> {
+    val ids = HashSet<String>()
+    var inQuestion = false
+    for (item in items) {
+        if (item is AgentItem.UserText) inQuestion = isReplayedQuotaQuestion(item)
+        if (inQuestion) ids.add(item.id)
+    }
+    return ids
+}
+
+private fun isReplayedQuotaQuestion(prompt: AgentItem.UserText): Boolean {
+    val sentHere = prompt.id.startsWith(USER_PROMPT_PREFIX)
+    val command = prompt.text.trim().removePrefix("/")
+    val asksQuota = prompt.text.trim().startsWith("/") && command in QUOTA_COMMANDS
+    return !sentHere && asksQuota
 }
 
 // The server does not know the conversation: it restarted. The next prompt reopens the session of the agent, which

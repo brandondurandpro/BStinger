@@ -71,6 +71,15 @@ class AgentContextTest {
     }
 
     @Test
+    fun `a directory goes as a link, whether the agent takes embedded context or not`() {
+        val (answer, notices) = contextOf(AgentAttachment.File("src"))
+        assertEquals("Context: link src.", answer)
+        assertEquals("", notices)
+        val (linked, _) = contextOf(AgentAttachment.File("src"), agent = agent("--no-embedded"))
+        assertEquals("Context: link src.", linked)
+    }
+
+    @Test
     fun `images go as images, binary files as links`() {
         val pasted = AgentAttachment.Image("pasted.png", "image/png", Base64.getEncoder().encodeToString(PNG))
         val (answer, notices) =

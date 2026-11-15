@@ -259,7 +259,10 @@ sealed interface AgentAttachment {
     /** What the prompt shows of it, such as a file name or `Main.kt:3-7`. */
     val label: String
 
-    /** A file, sent whole when the agent takes it, else as a link the agent reads. */
+    /**
+     * A file, sent whole when the agent takes it, else as a link the agent reads; or a directory, sent as a link the
+     * agent lists.
+     */
     data class File(
         /** Where it is. */
         val path: String,

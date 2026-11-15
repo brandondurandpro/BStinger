@@ -47,6 +47,13 @@ internal fun link(file: Path, size: Long): JsonObject =
         put("size", size)
     }
 
+internal fun directoryLink(directory: Path): JsonObject =
+    buildJsonObject {
+        put(TYPE, "resource_link")
+        put(URI, directory.toUri().toString())
+        put("name", directory.fileName.toString())
+    }
+
 // The text of [bytes] when they are UTF-8 text; null for a binary file.
 internal fun textOf(bytes: ByteArray): String? {
     val decoder =

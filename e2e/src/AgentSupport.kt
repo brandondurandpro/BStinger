@@ -1,5 +1,6 @@
 package org.example.kotlineditor.e2e
 
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ComposeUiTest
@@ -157,6 +158,10 @@ fun ComposeUiTest.answerPermission(option: String) {
 /** Leaves the node tagged [tag] alone: used to check a button is there without clicking it. */
 @OptIn(ExperimentalTestApi::class)
 fun ComposeUiTest.isShown(tag: String): Boolean = runCatching { onNodeWithTag(tag).assertExists() }.isSuccess
+
+/** The bounds in the root of the node tagged [tag], to compare two states of the same view. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.boundsOf(tag: String): Rect = onNodeWithTag(tag).fetchSemanticsNode().boundsInRoot
 
 /**
  * Writes a session of the fake agent into [store], as an earlier IDE left it: it works in [directory] and holds

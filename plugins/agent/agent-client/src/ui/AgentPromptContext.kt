@@ -37,26 +37,40 @@ import org.example.kotlineditor.state.PromptContext
 
 private const val FILE_SUGGESTIONS = 50
 
-/** The files matching the word after an `@`, searched off the UI thread for the word they were found for. */
+/** The files and directories matching the word after an `@`, searched off the UI thread for the word they were found for. */
 @Stable
 internal class FileSuggestions {
-    private var foundFor: String? by mutableStateOf(null)
+    /** The list of the last search that finished, kept while the next one runs. */
     private var found: List<Suggestion> by mutableStateOf(emptyList())
 
-    /** The files found for [word]; none while they are searched. */
-    fun of(word: Completing.File): List<Suggestion> = if (foundFor == word.query) found else emptyList()
+    /**
+     * The files and directories to show for [word]: those of the last search that finished, kept while the search of
+     * the word typed now runs, so the list does not flash away and back between two keys typed. The next search
+     * replaces them as soon as it is done.
+     */
+    fun of(): List<Suggestion> = found
 
-    /** Searches [index] for [word]; picking a file joins it to [context] and removes the word. */
+    /**
+     * Searches [index] for [word]: its files and its directories, the best matches first. Picking one joins it to
+     * [context] and removes the word; a directory shows with a `/` after its path.
+     */
     suspend fun search(index: FileIndex, word: Completing.File, context: PromptContext) {
         index.ensureLoaded()
-        val matches = index.searchFiles(word.query, FILE_SUGGESTIONS)
-        found =
-            matches.map { match ->
-                val path = match.relativePath
-                val directory = path.substringBeforeLast('/', "")
-                Suggestion(path, directory, replacement = "") { context.attach(AgentAttachment.File(path)) }
-            }
-        foundFor = word.query
+        val files = index.searchFiles(word.query, FILE_SUGGESTIONS).map { Mention(it.relativePath, it.score, false) }
+        val directories =
+            index.searchDirectories(word.query, FILE_SUGGESTIONS).map { Mention(it.relativePath, it.score, true) }
+        // At equal score a file comes first: what was listed before directories could be mentioned stays in place.
+        val best = (files + directories).sortedByDescending { it.score }.take(FILE_SUGGESTIONS)
+        found = best.map { it.suggestion(context) }
+    }
+}
+
+/** A file or a directory the `@` can mention, at [path] relative to the root. */
+private class Mention(val path: String, val score: Int, val directory: Boolean) {
+    fun suggestion(context: PromptContext): Suggestion {
+        val parent = path.substringBeforeLast('/', "")
+        val label = if (directory) "$path/" else path
+        return Suggestion(label, parent, replacement = "") { context.attach(AgentAttachment.File(path)) }
     }
 }
 
