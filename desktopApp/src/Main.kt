@@ -22,6 +22,7 @@ import org.example.kotlineditor.server.LocalServer
 import org.example.kotlineditor.server.TokenFile
 import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.ClientPlugins
+import org.example.kotlineditor.state.CommandLineTool
 import org.example.kotlineditor.state.FilePreferenceStore
 import org.example.kotlineditor.syntax.treesitter.GrammarStore
 import org.example.kotlineditor.telemetry.ClientTelemetry
@@ -35,6 +36,7 @@ import org.slf4j.LoggerFactory
 import java.io.File
 import java.io.IOException
 import java.lang.management.ManagementFactory
+import java.nio.file.Path
 import kotlin.concurrent.thread
 import kotlin.system.exitProcess
 
@@ -65,6 +67,7 @@ fun main(args: Array<String>) {
 
     // The plugins installed by the user, in ~/.kotlin-editor/plugins; a plugin that fails stays off, the IDE starts.
     val startFolder = option("open")?.let(::absoluteFolder)
+    val commandLineTool = CommandLineTool.forThisMachine(launcherOfThisApp())
     val plugins = ClientPlugins().also(ClientPlugins::start)
     val exporter = DesktopExporter()
     application {
@@ -77,6 +80,7 @@ fun main(args: Array<String>) {
                     services = services,
                     localServices = localServices,
                     plugins = plugins,
+                    commandLineTool = commandLineTool,
                     exporter = exporter,
                     firstWindow = id === windows.firstOrNull(),
                     initialProject = id.projectPath,
@@ -105,6 +109,7 @@ private fun IdeWindow(
     services: AppServices,
     localServices: AppServices?,
     plugins: ClientPlugins,
+    commandLineTool: CommandLineTool,
     exporter: DesktopExporter,
     firstWindow: Boolean,
     initialProject: String?,
@@ -129,6 +134,7 @@ private fun IdeWindow(
                 startProject = startProject,
             ).also {
                 it.plugins = plugins
+                it.commandLineTool = commandLineTool
                 it.onNewWindow = onNewWindow
             }
         }
@@ -146,6 +152,17 @@ private fun IdeWindow(
 private fun closeInParallel(vararg closeables: AutoCloseable?) {
     val threads = closeables.filterNotNull().map { closeable -> thread(name = "closing") { closeable.close() } }
     threads.forEach(Thread::join)
+}
+
+// The program that starts the installed app: the native launcher of jpackage (`jpackage.app-path`), or the AppImage
+// file when that launcher is inside its mount, which disappears with it. APPIMAGE is inherited by every child of an
+// AppImage, a terminal for one: it counts only when this app is under APPDIR. Null from the sources.
+private fun launcherOfThisApp(): Path? {
+    val packaged = System.getProperty("jpackage.app-path")?.takeIf { it.isNotBlank() } ?: return null
+    val appImage = System.getenv("APPIMAGE")?.takeIf { it.isNotBlank() }
+    val appDir = System.getenv("APPDIR")?.takeIf { it.isNotBlank() }
+    val insideImage = appImage != null && appDir != null && packaged.startsWith(appDir)
+    return Path.of(if (insideImage) appImage else packaged)
 }
 
 // `--open <folder>`: the `ide` script gives an absolute path.

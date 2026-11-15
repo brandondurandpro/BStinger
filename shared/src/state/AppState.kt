@@ -44,6 +44,9 @@ class AppState(
     val settings =
         SettingsController(preferences, scope, { session.project }, { session.languageServers }, telemetryOf)
 
+    /** The `ide` command of the shell, which the user installs from the Settings; unavailable when not set. */
+    var commandLineTool: CommandLineTool = CommandLineTool.unavailable()
+
     /** The plugins installed in the plugins folder; set by whoever starts them (the desktop app), null in previews. */
     var plugins: ClientPlugins? by mutableStateOf(null)
 

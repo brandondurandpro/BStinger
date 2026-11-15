@@ -42,6 +42,7 @@ import org.example.kotlineditor.server.ServerTelemetry
 import org.example.kotlineditor.server.ripgrep.RipgrepSettings
 import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.ClientPlugins
+import org.example.kotlineditor.state.CommandLineTool
 import org.example.kotlineditor.state.InMemoryPreferenceStore
 import org.example.kotlineditor.state.PreferenceStore
 import org.example.kotlineditor.state.ProjectState
@@ -296,6 +297,8 @@ fun ComposeUiTest.launchApp(
     initialProject: String? = null,
     /** A folder opened at startup like the one the `ide` command gives. */
     startProject: String? = null,
+    /** The `ide` command of the Settings; unavailable (no launcher) when not given. */
+    commandLineTool: CommandLineTool? = null,
 ): E2eApp {
     TextClipboard.useSystem = false
     val pluginSetup = PluginSetup(plugins.map(::loadPlugin), pluginsDirectory?.let { startPlugins(it) })
@@ -329,6 +332,7 @@ fun ComposeUiTest.launchApp(
             }
         created = state
         state.plugins = pluginSetup.installed
+        commandLineTool?.let { state.commandLineTool = it }
         DisposableEffect(Unit) {
             onDispose {
                 created?.dispose()
