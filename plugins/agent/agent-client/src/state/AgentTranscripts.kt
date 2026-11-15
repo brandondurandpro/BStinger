@@ -85,7 +85,7 @@ private fun AgentHost.apply(conversation: Conversation, transcript: AgentTranscr
         conversation.probeFrom = null
         // Their ids are remembered: the server sends them again with the next snapshot.
         while (conversation.items.size > answeredFrom) conversation.hidden.add(conversation.items.removeAt(conversation.items.lastIndex).id)
-    } else if (turnEnded && probeFrom == null) {
+    } else if (turnEnded && probeFrom == null && !conversation.delegation) {
         conversation.quotaStale = true
         conversation.finished = true
         conversation.seen = false

@@ -5,10 +5,10 @@ data class PromptTemplate(val name: String, val text: String, val global: Boolea
 
 private const val ESCAPE = '\\'
 
-private fun escaped(text: String): String =
+internal fun escaped(text: String): String =
     text.replace("$ESCAPE", "$ESCAPE$ESCAPE").replace("\n", "${ESCAPE}n").replace("\t", "${ESCAPE}t")
 
-private fun unescaped(text: String): String {
+internal fun unescaped(text: String): String {
     val out = StringBuilder()
     var index = 0
     while (index < text.length) {

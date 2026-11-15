@@ -92,7 +92,7 @@ internal fun AgentHost.restore(conversation: Conversation, agent: AgentCommand) 
             if (!conversation.closedOnServer) services.agents.close(conversation.key)
             conversation.closedOnServer = true
             followTranscript(conversation)
-            services.agents.open(conversation.key, agent, directory, session)
+            services.agents.open(conversation.key, agent, directory, session, conversation.relayTeam)
         } catch (failure: IOException) {
             conversation.note("The conversation could not be opened: ${failure.message}")
         }

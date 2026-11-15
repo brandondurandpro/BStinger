@@ -43,7 +43,13 @@ internal interface SessionListener {
  * [command]. It is the client side of ACP: [AgentRequests] answers what the agent asks (files, permissions), and the
  * updates go to the session they belong to.
  */
-internal class AgentProcess(val command: AgentCommand, scope: CoroutineScope, files: FileAccess) {
+internal class AgentProcess(
+    val command: AgentCommand,
+    scope: CoroutineScope,
+    files: FileAccess,
+    /** The sessions started only to read settings, or for a delegation: shared, any process may list one. */
+    val probes: ProbeSessions = ProbeSessions(),
+) {
     private val log = LogRing(STDERR_LINES)
     private val sessions = ConcurrentHashMap<String, SessionListener>()
 
@@ -52,9 +58,6 @@ internal class AgentProcess(val command: AgentCommand, scope: CoroutineScope, fi
     private val requests = AgentRequests(sessions, files, terminals)
     private val start = Mutex()
     private var info: AgentInfo? = null
-
-    /** The sessions started only to read settings, which the history does not list. */
-    val probes = ProbeSessions()
 
     /** The settings (model…) the latest new session offered; null before one started. */
     @Volatile

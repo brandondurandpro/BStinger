@@ -5,6 +5,8 @@ import org.example.kotlineditor.lsp.provision.RuntimeDetector
 import org.example.kotlineditor.lsp.provision.ToolDownloader
 import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.model.AgentItem
+import org.example.kotlineditor.model.RelayMember
+import org.example.kotlineditor.model.RelayTeam
 import org.example.kotlineditor.testkit.acp.FakeRegistry
 import java.io.File
 import java.nio.file.Files
@@ -85,6 +87,16 @@ class AgentRegistryTest {
         assertEquals(SESSIONS, installed.size)
         assertEquals(1, installed.toSet().size, "the sessions got: $installed")
         assertEquals(1, registry.downloads.get())
+    }
+
+    @Test
+    fun `a manager of the relay running an agent of the registry gets the long tool timeout`() {
+        val server = server()
+        val agent = AgentCommand(emptyList(), registry = "fake-agent")
+        val team = RelayTeam(RelayMember("lead"), listOf(RelayMember("coder")))
+        server.prompt("c1", agent, directory, "u1", "env MCP_TOOL_TIMEOUT", relay = team)
+        val answers = server.idle("c1") { it.answers().isNotEmpty() }.items.answers()
+        assertEquals(listOf("MCP_TOOL_TIMEOUT=1800000"), answers)
     }
 
     @Test

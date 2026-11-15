@@ -8,6 +8,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -41,9 +42,19 @@ private const val CLIENT_TIMEOUT_S = 60L
  *   (`lines <n> <path>`: the same, the text being `n` lines);
  * - `plan`: a plan of two steps, updated as they complete;
  * - `slow`: chunks every 50 ms until it is cancelled (`stubborn`: the same, but it never stops);
+ * - `delegate <title>`: the launch of a sub-agent (a tool call of kind think) completed with the report
+ *   `Report of <title>: done.` and a second line `Second line of the report.`; `delegating <title>`: the same call, still running;
+ * - `subagent <title>`: a sub-agent as the Claude adapter reports it: the launch `Task` (kind think), two calls of its
+ *   own (`Read file 1`, `Run tests 2`) stamped with the launch, the report handed back (`Report of <title>: handed back.`)
+ *   and a harness-like note as the content of the completed launch; `subagent-early <title>`: its calls come before
+ *   the launch; `subagent-calls <n> <title>`: `n` calls of its own;
+ * - `delegate-via-mcp <member> <task>`: the manager of the IDE's relay calls the tool `delegate` of the `kotlin-editor-team`
+ *   server its session was started with (the call shown as `delegate <member>`) and answers with the result; a task
+ *   the relay prefixed with the member's instructions (`<prompt>` then `# Task`) is read from its `# Task` part;
  * - `stream <n>`: `n` chunks at once; `tools <n>`: `n` completed tool calls (`tools <n> <lines>`: each with an
  *   output of `lines` more lines, as a file read); `crash`: exits with code 3;
  * - `count`: the number of prompts of its session;
+ * - `setup`: the `mcpServers` and the `_meta` its session was started or reopened with, as JSON;
  * - `model`: `Model: <model>.`, the model of its session (`mode`: `Mode: <mode>.`, `write` asks nothing in
  *   `accept-edits`; `effort`: `Effort: <effort>.`); `fallback`: it moves to `fake-fast` itself and says so;
  * - `context`: what the user joined to the prompt ([describeContext]), sent as the agent takes it: images unless
@@ -79,6 +90,12 @@ class FakeAgent(
     private val store = FakeSessions(options.store)
     private val turns = ConcurrentHashMap<String, FakeTurn>()
     private val config = FakeConfig(options.extraModels)
+
+    // What each session was started or reopened with: its `mcpServers` and its `_meta`, as JSON (the `setup` prompt).
+    // The `session/new` requests received so far (the `sessions` prompt).
+    private val created = java.util.concurrent.atomic.AtomicInteger()
+
+    private val setups = ConcurrentHashMap<String, String>()
 
     private val writeLock = Any()
     private val ids = AtomicLong()
@@ -142,6 +159,7 @@ class FakeAgent(
             put("protocolVersion", 1)
             putJsonObject("agentCapabilities") {
                 put("loadSession", options.history && options.load)
+                putJsonObject("mcpCapabilities") { put("http", true) }
                 putJsonObject("promptCapabilities") {
                     put("image", options.images)
                     put("embeddedContext", options.embedded)
@@ -183,9 +201,17 @@ class FakeAgent(
     private fun newSession(id: JsonElement, params: JsonObject): JsonObject {
         if (loginRequired && !loggedIn) return failure(id, AUTH_REQUIRED, "Authentication required")
         val session = store.create(params.text("cwd").orEmpty())
+        created.incrementAndGet()
+        setups[session.id] = setupOf(params)
         awaitListed()
         return success(id, sessionAnswer(session, buildJsonObject { put("sessionId", session.id) }))
     }
+
+    private fun setupOf(params: JsonObject): String =
+        buildJsonObject {
+            put("mcpServers", params["mcpServers"] ?: JsonNull)
+            put("_meta", params["_meta"] ?: JsonNull)
+        }.toString()
 
     // `--new-after-list`: the new session is listed (`session/list`) before the client is told its id.
     private fun awaitListed() {
@@ -203,6 +229,7 @@ class FakeAgent(
             unsupported -> failure(id, METHOD_NOT_FOUND, "Sessions cannot be reopened")
             session == null -> failure(id, RESOURCE_NOT_FOUND, "Unknown session ${params.text("sessionId")}")
             else -> {
+                setups[session.id] = setupOf(params)
                 if (replay) replayed(session)
                 success(id, sessionAnswer(session, JsonObject(emptyMap())))
             }
@@ -341,11 +368,16 @@ class FakeAgent(
 
     private fun answer(session: String, prompt: String, count: Int): String {
         // A slash command (`/echo hi`) is the same prompt as its name.
-        val typed = prompt.trim().removePrefix("/")
+        // A task the IDE's relay prefixed with the instructions of its member (`<prompt>\n\n# Task\n<task>`): the task is the command.
+        // A prompt that already starts with a command is that command, as before.
+        val head = prompt.substringBefore("\n\n# Task\n").trim().removePrefix("/").substringBefore(' ')
+        val task = if (head in COMMAND_WORDS) prompt else prompt.substringAfter("\n\n# Task\n", prompt)
+        val typed = task.trim().removePrefix("/")
         val words = typed.split(Regex("\\s+"))
         val rest = typed.substringAfter(' ', "")
         return when (words.firstOrNull()) {
             "echo" -> chunks(session, rest.split(' ').map { "$it " })
+            "env" -> chunks(session, listOf("$rest=${System.getenv(rest).orEmpty()}"))
             "think" -> think(session, rest)
             "read" -> read(session, rest)
             "write" -> write(session, words.getOrNull(1).orEmpty(), rest.substringAfter(' ', ""))
@@ -355,9 +387,18 @@ class FakeAgent(
             "slow" -> slow(session, stubborn = false)
             "stubborn" -> slow(session, stubborn = true)
             "stream" -> chunks(session, List(words.getOrNull(1)?.toIntOrNull() ?: 1) { "chunk $it " })
+            "delegate" -> delegate(session, rest, finish = true)
+            "subagent" -> subagent(session, rest, calls = 2, early = false)
+            "subagent-early" -> subagent(session, rest, calls = 2, early = true)
+            "subagent-calls" -> subagent(session, words.drop(2).joinToString(" "), words.getOrNull(1)?.toIntOrNull() ?: 1, early = false)
+            "delegate-via-mcp" -> viaMcp(session, words.getOrNull(1).orEmpty(), typed.substringAfter(' ', "").substringAfter(' ', ""))
+            "delegate-via-mcp-timeout" -> viaMcp(session, words.getOrNull(2).orEmpty(), words.drop(3).joinToString(" "), words.getOrNull(1)?.toLongOrNull())
+            "delegating" -> delegate(session, rest, finish = false)
             "tools" -> tools(session, words.getOrNull(1)?.toIntOrNull() ?: 1, words.getOrNull(2)?.toIntOrNull() ?: 0)
             "crash" -> crash()
             "count" -> chunks(session, listOf("Prompt $count of $session."))
+            "sessions" -> chunks(session, listOf("Sessions created: ${created.get()}."))
+            "setup" -> chunks(session, listOf(setups[session].orEmpty()))
             "usage" -> chunks(session, listOf("5-hour limit — ${count * QUOTA_STEP}% · Resets 11pm"))
             "run" -> run(session, words.drop(1))
             "markdown" -> chunks(session, MARKDOWN.chunked(MARKDOWN_PIECE))
@@ -503,6 +544,155 @@ class FakeAgent(
         return END_TURN
     }
 
+    // The launch of a sub-agent, as Claude shows it (a tool call of kind think): [finish] gives its report, else it stays running.
+    private fun delegate(session: String, title: String, finish: Boolean): String {
+        tool(session, "delegate-${title.hashCode()}", title, "think", "in_progress", "/delegate")
+        if (finish) toolUpdate(session, "delegate-${title.hashCode()}", "completed", "Report of $title: done.\nSecond line of the report.")
+        message(session, if (finish) "Delegated." else "Delegating.")
+        return END_TURN
+    }
+
+    private val toolUses = AtomicLong()
+    private val mcpHttp by lazy { java.net.http.HttpClient.newHttpClient() }
+
+    // The manager of the IDE's relay: it calls the tool `delegate(member, task)` of the MCP server its session was started
+    // with (the url and the bearer token it recorded), shows the call as the Claude adapter does, and answers with the result.
+    // With [timeoutMs], it gives up the call after that long, as Claude does after its MCP tool timeout: the request is
+    // dropped without `notifications/cancelled`, and the call fails.
+    private fun viaMcp(session: String, member: String, task: String, timeoutMs: Long? = null): String {
+        val server = relayServer(session) ?: return chunks(session, listOf("No kotlin-editor-team server in this session."))
+        val callId = "mcp-delegate-${toolUses.incrementAndGet()}"
+        update(session, "tool_call") {
+            put("toolCallId", callId)
+            put("title", "delegate $member")
+            put("kind", "other")
+            put("status", "pending")
+            putJsonArray("content") {}
+            claudeMeta("mcp__kotlin-editor-team__delegate")
+        }
+        val (url, authorization) = server
+        mcpPost(url, authorization, """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"fake-agent","version":"1"}}}""")
+        val arguments = buildJsonObject { put("member", member); put("task", task) }
+        val call =
+            buildJsonObject {
+                put("jsonrpc", "2.0")
+                put("id", 2)
+                put("method", "tools/call")
+                putJsonObject("params") {
+                    put("name", "delegate")
+                    put("arguments", arguments)
+                    putJsonObject("_meta") { put("claudecode/toolUseId", callId) }
+                }
+            }
+        val posted =
+            try {
+                mcpPost(url, authorization, call.toString(), timeoutMs)
+            } catch (_: java.net.http.HttpTimeoutException) {
+                toolUpdate(session, callId, "failed", "MCP error -32001: Request timed out")
+                message(session, "The delegation timed out.")
+                return END_TURN
+            }
+        val answer = Json.parseToJsonElement(posted).jsonObject
+        val result = answer["result"]?.jsonObject
+        val failed = result?.get("isError")?.jsonPrimitive?.booleanOrNull == true || result == null
+        val text = ((result?.get("content") as? JsonArray)?.firstOrNull() as? JsonObject)?.text("text") ?: answer.toString()
+        toolUpdate(session, callId, if (failed) "failed" else "completed", text)
+        message(session, if (failed) "The delegation failed." else "The member answered.")
+        return END_TURN
+    }
+
+    // The url and the `Authorization` header of the `kotlin-editor-team` server the session was started with.
+    private fun relayServer(session: String): Pair<String, String>? {
+        val setup = setups[session]?.let { Json.parseToJsonElement(it).jsonObject } ?: return null
+        val servers = setup["mcpServers"] as? JsonArray ?: return null
+        val server = servers.map { it.jsonObject }.firstOrNull { it.text("name") == "kotlin-editor-team" } ?: return null
+        val headers = (server["headers"] as? JsonArray).orEmpty().map { it.jsonObject }
+        val authorization = headers.firstOrNull { it.text("name") == "Authorization" }?.text("value").orEmpty()
+        return server.text("url").orEmpty() to authorization
+    }
+
+    private fun mcpPost(url: String, authorization: String, body: String, timeoutMs: Long? = null): String {
+        val builder = java.net.http.HttpRequest.newBuilder(java.net.URI.create(url)).POST(java.net.http.HttpRequest.BodyPublishers.ofString(body))
+        if (timeoutMs != null) builder.timeout(java.time.Duration.ofMillis(timeoutMs))
+        builder.header("Content-Type", "application/json")
+        if (authorization.isNotEmpty()) builder.header("Authorization", authorization)
+        return mcpHttp.send(builder.build(), java.net.http.HttpResponse.BodyHandlers.ofString()).body()
+    }
+
+    // `_meta.claudeCode`, as the Claude adapter adds it: the tool's name, the launch a call belongs to, the report handed back.
+    private fun JsonObjectBuilder.claudeMeta(toolName: String, parent: String? = null, report: String? = null) =
+        putJsonObject("_meta") {
+            putJsonObject("claudeCode") {
+                put("toolName", toolName)
+                if (parent != null) put("parentToolUseId", parent)
+                if (report != null) {
+                    putJsonObject("toolResponse") { putJsonObject("handbackReport") { put("text", report) } }
+                }
+            }
+        }
+
+    // A sub-agent launched as the adapter reports it: a call `Task` of kind think, its title and input, [calls] calls of its own
+    // (stamped with the launch), the report it hands back, and a harness-like note as the content of the completed launch.
+    // [early]: the calls come before the launch is known.
+    private fun subagent(session: String, title: String, calls: Int, early: Boolean): String {
+        val launch = "subagent-${title.hashCode()}"
+        val children = List(calls) { "$launch-call-$it" }
+        if (early) children.indices.forEach { subagentCall(session, launch, children[it], it) }
+        update(session, "tool_call") {
+            put("toolCallId", launch)
+            put("name", "Agent")
+            putJsonObject("rawInput") {}
+            put("status", "pending")
+            put("title", "Task")
+            put("kind", "think")
+            putJsonArray("content") {}
+            claudeMeta("Agent")
+        }
+        update(session, "tool_call_update") {
+            put("toolCallId", launch)
+            put("title", title)
+            putJsonObject("rawInput") { put("description", title) }
+            claudeMeta("Agent")
+        }
+        if (!early) children.indices.forEach { subagentCall(session, launch, children[it], it) }
+        update(session, "tool_call_update") {
+            put("toolCallId", launch)
+            claudeMeta("Agent", report = "Report of $title: handed back.")
+        }
+        update(session, "tool_call_update") {
+            put("toolCallId", launch)
+            put("status", "completed")
+            putJsonArray("content") {
+                add(buildJsonObject { put("type", "content"); put("content", textBlock("agentId: $launch (for resuming)")) })
+            }
+            claudeMeta("Agent")
+        }
+        message(session, "Sub-agent done.")
+        return END_TURN
+    }
+
+    private fun subagentCall(session: String, launch: String, id: String, index: Int) {
+        val names = listOf("Read file" to "Read", "Run tests" to "Bash")
+        val (title, tool) = names[index % names.size]
+        val label = "$title ${index + 1}"
+        update(session, "tool_call") {
+            put("toolCallId", id)
+            put("title", label)
+            put("kind", if (tool == "Read") "read" else "execute")
+            put("status", "pending")
+            putJsonArray("content") {}
+            claudeMeta(tool, parent = launch)
+        }
+        update(session, "tool_call_update") {
+            put("toolCallId", id)
+            put("status", "completed")
+            putJsonArray("content") {
+                add(buildJsonObject { put("type", "content"); put("content", textBlock("Output of $label")) })
+            }
+            claudeMeta(tool, parent = launch)
+        }
+    }
+
     // [count] tool calls, each with an output of [outputLines] more lines (a file read, the output of a command).
     private fun tools(session: String, count: Int, outputLines: Int = 0): String {
         val body = (1..outputLines).joinToString("") { "\nline $it of the output of the tool, as long as a line of code" }
@@ -595,6 +785,12 @@ class FakeAgent(
         }
 
     private companion object {
+        // The first words the fake agent understands as commands.
+        private val COMMAND_WORDS = setOf(
+            "echo", "think", "read", "write", "rewrite", "lines", "plan", "slow", "stubborn", "stream", "tools", "crash",
+            "count", "usage", "run", "markdown", "model", "mode", "effort", "fallback", "context", "setup", "delegate",
+            "delegating", "delegate-via-mcp", "subagent", "subagent-early", "subagent-calls", "env", "delegate-via-mcp-timeout",
+        )
         const val END_TURN = "end_turn"
         const val CANCELLED = "cancelled"
         const val METHOD_NOT_FOUND = -32_601
@@ -700,6 +896,7 @@ data class FakeAgentOptions(
     val newAfterList: Boolean = false,
 ) {
     companion object {
+
         /**
          * Reads `--login`, `--store <dir>`, `--no-load`, `--no-history`, `--no-config`, `--models <n>`,
          * `--no-commands`, `--commands <n>`, `--no-images`, `--no-embedded` and `--new-after-list`.

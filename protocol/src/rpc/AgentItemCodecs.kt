@@ -29,6 +29,9 @@ private const val STATUS = "status"
 private const val NAME = "name"
 private const val TITLE = "title"
 private const val TERMINAL = "terminal"
+private const val PARENT = "parent"
+private const val TOOL = "tool"
+private const val CHILD = "child"
 
 internal fun JsonObjectBuilder.tool(item: AgentItem.ToolCall) {
     put(TYPE, "tool")
@@ -39,6 +42,10 @@ internal fun JsonObjectBuilder.tool(item: AgentItem.ToolCall) {
     put("diffs", JsonArray(item.diffs.map { it.toJson() }))
     put("locations", item.locations.toJson())
     put(TERMINAL, item.terminal?.toJson() ?: JsonNull)
+    // Optional: a client that does not know them reads the call as one of the manager.
+    item.parent?.let { put(PARENT, it) }
+    item.tool?.let { put(TOOL, it) }
+    item.child?.let { put(CHILD, it) }
 }
 
 internal fun JsonObjectBuilder.permission(item: AgentItem.Permission) {
@@ -60,6 +67,9 @@ internal fun JsonObject.toolCall(id: String, version: Long) =
         diffs = field("diffs").jsonArray.map { it.diff() },
         locations = field("locations").strings(),
         terminal = get(TERMINAL)?.terminalOutput(),
+        parent = stringOrNull(PARENT),
+        tool = stringOrNull(TOOL),
+        child = stringOrNull(CHILD),
     )
 
 internal fun JsonObject.permission(id: String, version: Long) =

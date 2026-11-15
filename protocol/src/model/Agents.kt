@@ -209,6 +209,12 @@ sealed interface AgentItem {
         val locations: List<String> = emptyList(),
         /** The command it runs on the server, when it runs one. */
         val terminal: AgentTerminalOutput? = null,
+        /** The journal id of the sub-agent launch this call was made under, null for a call of the manager itself. */
+        val parent: String? = null,
+        /** The name the agent gives the tool (`Agent` for a launch of a sub-agent), when it says it. */
+        val tool: String? = null,
+        /** The key of the conversation of the team member this `delegate` call runs (relay mode), null otherwise. */
+        val child: String? = null,
     ) : AgentItem
 
     /** The plan of the agent for the current prompt, replaced as it goes. */
@@ -307,6 +313,26 @@ data class AgentSlashCommand(
     val description: String,
     /** What to type after it, when it takes something (`text to echo`); null when it takes nothing. */
     val hint: String? = null,
+)
+
+/** A member of a team run by the IDE's server (relay mode): its brief, and the model and effort it works with. */
+data class RelayMember(
+    /** What the manager calls it in `delegate(member, task)`. */
+    val name: String,
+    /** Its instructions, given to its own session as its system prompt. */
+    val prompt: String = "",
+    /** Its model, as the user named it (matched loosely to those the agent offers); blank for the default. */
+    val model: String = "",
+    /** Its effort, the same way. */
+    val effort: String = "",
+)
+
+/** The team a conversation in relay mode serves: the server runs each delegation of the manager as its own session. */
+data class RelayTeam(
+    /** The member that talks to the user and delegates. */
+    val manager: RelayMember,
+    /** The members it delegates to, by name. */
+    val members: List<RelayMember>,
 )
 
 /** A value an [AgentOption] can take: a model of the agent, or a mode. */
@@ -460,7 +486,8 @@ interface Agents : AgentChoices {
     /**
      * Sends [text] to the agent of [conversation], started with [agent] in [directory] if it does not run yet. The
      * prompt shows as item [itemId]. A conversation the server does not know continues the agent's [session], when
-     * the agent can reopen it. [attachments] go with the text. A request sent twice is run once.
+     * the agent can reopen it. [attachments] go with the text. A request sent twice is run once. With a [relay], the
+     * manager delegates to [RelayTeam.members] through a `delegate` tool the server hosts (see [RelayTeam]).
      */
     suspend fun prompt(
         conversation: String,
@@ -470,13 +497,21 @@ interface Agents : AgentChoices {
         text: String,
         session: String? = null,
         attachments: List<AgentAttachment> = emptyList(),
+        relay: RelayTeam? = null,
     )
 
     /**
      * Opens the agent's [session] (from [sessions]) as [conversation], working in [directory]: its transcript replays
-     * the history the agent kept. A request sent twice is run once.
+     * the history the agent kept. A request sent twice is run once. The [relay] of a conversation in relay mode is
+     * given again, so that the reopened manager keeps its `delegate` tool.
      */
-    suspend fun open(conversation: String, agent: AgentCommand, directory: String, session: String)
+    suspend fun open(
+        conversation: String,
+        agent: AgentCommand,
+        directory: String,
+        session: String,
+        relay: RelayTeam? = null,
+    )
 
     /** The sessions [agent] keeps for the project at [root] and its worktrees of agent mode, newest first. */
     suspend fun sessions(agent: AgentCommand, root: String): AgentSessions
@@ -509,10 +544,16 @@ interface Agents : AgentChoices {
             text: String,
             session: String?,
             attachments: List<AgentAttachment>,
+            relay: RelayTeam?,
         ): Unit = throw java.io.IOException(NO_SERVER)
 
-        override suspend fun open(conversation: String, agent: AgentCommand, directory: String, session: String): Unit =
-            throw java.io.IOException(NO_SERVER)
+        override suspend fun open(
+            conversation: String,
+            agent: AgentCommand,
+            directory: String,
+            session: String,
+            relay: RelayTeam?,
+        ): Unit = throw java.io.IOException(NO_SERVER)
 
         override suspend fun sessions(agent: AgentCommand, root: String) = AgentSessions(false, emptyList())
 

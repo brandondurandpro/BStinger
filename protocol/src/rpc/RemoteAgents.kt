@@ -9,11 +9,13 @@ import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.model.AgentSessions
 import org.example.kotlineditor.model.AgentTranscript
 import org.example.kotlineditor.model.Agents
+import org.example.kotlineditor.model.RelayTeam
 
 private const val CONVERSATION = "conversation"
 private const val AGENT = "agent"
 private const val DIRECTORY = "directory"
 private const val SESSION = "session"
+private const val RELAY = "relay"
 
 /** [Agents] run by the server. */
 class RemoteAgents(private val client: RpcClient) :
@@ -27,6 +29,7 @@ class RemoteAgents(private val client: RpcClient) :
         text: String,
         session: String?,
         attachments: List<AgentAttachment>,
+        relay: RelayTeam?,
     ) {
         client.call(Method.AgentPrompt) {
             put(CONVERSATION, conversation)
@@ -36,15 +39,23 @@ class RemoteAgents(private val client: RpcClient) :
             put("text", text)
             put(SESSION, session.orNull())
             if (attachments.isNotEmpty()) put("attachments", attachments.attachmentsToJson())
+            if (relay != null) put(RELAY, relay.toJson())
         }
     }
 
-    override suspend fun open(conversation: String, agent: AgentCommand, directory: String, session: String) {
+    override suspend fun open(
+        conversation: String,
+        agent: AgentCommand,
+        directory: String,
+        session: String,
+        relay: RelayTeam?,
+    ) {
         client.call(Method.AgentOpen) {
             put(CONVERSATION, conversation)
             put(AGENT, agent.toJson())
             put(DIRECTORY, directory)
             put(SESSION, session)
+            if (relay != null) put(RELAY, relay.toJson())
         }
     }
 

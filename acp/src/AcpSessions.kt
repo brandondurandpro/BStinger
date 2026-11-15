@@ -25,8 +25,12 @@ internal class StartedSession(val id: String, val options: List<AgentOption>?)
  * Starts a session working in [directory], whose updates go to [listener]; the settings it offers are remembered as
  * those of the next sessions of the agent.
  */
-internal suspend fun AgentProcess.newSession(directory: String, listener: SessionListener): StartedSession {
-    val answer = request("session/new", newSessionParams(directory, ready().mcp))
+internal suspend fun AgentProcess.newSession(
+    directory: String,
+    listener: SessionListener,
+    extras: SessionExtras = SessionExtras.None,
+): StartedSession {
+    val answer = request("session/new", newSessionParams(directory, ready().mcp, extras))
     val id = answer?.text(SESSION_ID) ?: throw IOException("The agent started a session without an id")
     listen(id, listener)
     val options = answer.configOptions()
@@ -53,18 +57,19 @@ internal fun reopenMethod(can: SessionCapabilities, replay: Boolean): String? =
 
 /**
  * Reopens [session] in [directory] with [method], its updates going to [listener]; returns its settings (null when the
- * agent did not list them). Fails when the agent cannot.
+ * agent did not list them). Fails when the agent cannot. The [extras] are those the session had when it started.
  */
 internal suspend fun AgentProcess.reopenSession(
     session: String,
     directory: String,
     listener: SessionListener,
     method: String,
+    extras: SessionExtras = SessionExtras.None,
 ): List<AgentOption>? {
     // A replay comes before the answer: the listener must hear it.
     listen(session, listener)
     try {
-        return request(method, reopenParams(session, directory, ready().mcp)).configOptions()
+        return request(method, reopenParams(session, directory, ready().mcp, extras)).configOptions()
     } catch (failure: LspResponseException) {
         release(session)
         throw failure

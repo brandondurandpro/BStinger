@@ -38,6 +38,7 @@ internal class AgentSession(val process: AgentProcess, val id: String, val direc
  * that stopped). The agent keeps the sessions and their history; a session it cannot reopen is replaced by a new one,
  * with a notice.
  */
+@Suppress("TooManyFunctions") // the whole lifecycle of a session: start, reopen, settings, release
 internal class SessionKeeper(
     private val journal: Journal,
     private val writer: TranscriptWriter,
@@ -57,6 +58,17 @@ internal class SessionKeeper(
 
     // Whether the journal shows more than the session holds: what a session lost, or another agent, was told.
     private var outlivedSession = false
+
+    /** What its sessions get besides the user's MCP servers when they start or reopen: the `delegate` tool, a brief. */
+    @Volatile
+    var extras: SessionExtras = SessionExtras.None
+
+    /**
+     * Settings chosen by what they are about (`model`, `thought_level`) and the words naming the value, set in every
+     * session it starts once the session lists its settings: the efforts it offers depend on the model set before.
+     */
+    @Volatile
+    var byCategory: List<Pair<String, String>> = emptyList()
 
     // The agent the current (or resumable) session belongs to: a prompt of another agent starts over.
     @Volatile
@@ -107,6 +119,7 @@ internal class SessionKeeper(
         settings.withLock {
             if (taken.switched) choices.clear()
             applyChoices(session)
+            applyByCategory(session)
         }
         return session
     }
@@ -169,13 +182,28 @@ internal class SessionKeeper(
     // Sets the choices of the user in [session]; one the agent refuses becomes a notice, and is forgotten.
     private suspend fun applyChoices(session: AgentSession) {
         for ((option, value) in choices.entries.toList()) {
-            try {
-                val options = session.process.setOption(session.id, option, value)
-                journal.describe { it.copy(options = options ?: chosen(it.options, option, value)) }
-            } catch (refused: LspResponseException) {
-                choices.remove(option)
-                writer.notice("The agent refused $value for $option: ${refused.message}", error = true)
-            }
+            if (!applyChoice(session, option, value)) choices.remove(option)
+        }
+    }
+
+    // Sets [option] to [value] in [session]; false (and a notice) when the agent refuses.
+    private suspend fun applyChoice(session: AgentSession, option: String, value: String): Boolean {
+        try {
+            val options = session.process.setOption(session.id, option, value)
+            journal.describe { it.copy(options = options ?: chosen(it.options, option, value)) }
+            return true
+        } catch (refused: LspResponseException) {
+            writer.notice("The agent refused $value for $option: ${refused.message}", error = true)
+            return false
+        }
+    }
+
+    // Sets the settings of [byCategory] in [session], each one among those the session offers at that point.
+    private suspend fun applyByCategory(session: AgentSession) {
+        for ((category, wanted) in byCategory) {
+            val option = journal.header.options.firstOrNull { it.category == category }
+            val value = option?.let { offeredValue(it.values, wanted) }
+            if (option != null && value != null) applyChoice(session, option.id, value.value)
         }
     }
 
@@ -183,7 +211,7 @@ internal class SessionKeeper(
     private suspend fun fresh(agent: AgentProcess, info: AgentInfo, directory: String): AgentSession {
         val started =
             try {
-                agent.newSession(directory, listener)
+                agent.newSession(directory, listener, extras)
             } catch (refused: LspResponseException) {
                 throw if (refused.code == AUTH_REQUIRED) loginRequired(refused, info) else refused
             }
@@ -224,7 +252,7 @@ internal class SessionKeeper(
         if (replays && wanted) journal.describe { it.copy(replayed = true) }
         val reopened =
             try {
-                val options = agent.reopenSession(id, directory, listener, method)
+                val options = agent.reopenSession(id, directory, listener, method, extras)
                 options?.let { listed -> journal.describe { it.copy(options = listed) } }
                 true
             } catch (_: LspResponseException) {

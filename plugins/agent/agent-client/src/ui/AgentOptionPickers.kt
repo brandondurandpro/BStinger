@@ -18,11 +18,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -32,13 +27,13 @@ import org.example.kotlineditor.model.AgentOptionValue
 import org.example.kotlineditor.state.AgentState
 import org.example.kotlineditor.state.Conversation
 
-private val MENU_WIDTH = 320.dp
+internal val CHOICE_MENU_WIDTH = 320.dp
 
 // Past this many values, the menu has a field to search them.
 private const val SEARCHABLE_FROM = 5
 
 // A menu shows a few values at once, the rest comes scrolling in place.
-private val MENU_HEIGHT = 300.dp
+internal val CHOICE_MENU_HEIGHT = 300.dp
 
 /** The model of the session of [conversation]. */
 @Composable
@@ -87,13 +82,7 @@ private fun OptionPicker(
             )
         }
         // Escape closes it without a choice, as every menu of the IDE.
-        val escape =
-            Modifier.onPreviewKeyEvent { event ->
-                val closes = event.key == Key.Escape && event.type == KeyEventType.KeyDown
-                if (closes) open = false
-                closes
-            }
-        IdeDropdownMenu(open, onDismissRequest = { open = false }, Modifier.widthIn(max = MENU_WIDTH).then(escape)) {
+        IdeDropdownMenu(open, onDismissRequest = { open = false }, Modifier.widthIn(max = CHOICE_MENU_WIDTH).closesOnEscape { open = false }) {
             // A long list of values (the models of a provider) has a field that filters it.
             var filter by remember { mutableStateOf("") }
             val searchable = option.values.size > SEARCHABLE_FROM
@@ -101,13 +90,11 @@ private fun OptionPicker(
                 AgentFilterField(filter, "$tag.filter", "Search ${option.name.lowercase()}…") { filter = it }
             }
             val shown = option.values.filter { it.matches(filter) }
-            if (shown.isEmpty()) {
-                Label("""No match for "$filter".""", Modifier.padding(12.dp), color = IdeColors.TextSecondary, fontSize = 12.sp)
-            }
-            // The values may be longer than a menu shows: capped at a few rows, scrolled in place.
-            Column(Modifier.heightIn(max = MENU_HEIGHT).verticalScroll(rememberScrollState())) {
+            if (shown.isEmpty()) NoMatch(filter)
+            ChoiceScroller {
                 for (value in shown) {
-                    OptionItem(option, value, valueTag(value.value)) {
+                    val chosen = value.value == option.current
+                    ChoiceItem(value.name, value.description, chosen, valueTag(value.value)) {
                         open = false
                         agent.options.choose(conversation, option.id, value.value)
                     }
@@ -118,7 +105,7 @@ private fun OptionPicker(
 }
 
 // The name, the value or the description of [this] has [filter] in it, case ignored; all match an empty filter.
-private fun AgentOptionValue.matches(filter: String): Boolean {
+internal fun AgentOptionValue.matches(filter: String): Boolean {
     val wanted = filter.trim()
     if (wanted.isEmpty()) return true
     val inName = name.contains(wanted, ignoreCase = true)
@@ -127,15 +114,27 @@ private fun AgentOptionValue.matches(filter: String): Boolean {
     return inName || inValue || inDescription
 }
 
+/** The message of a menu whose [filter] matches no value. */
 @Composable
-private fun OptionItem(option: AgentOption, value: AgentOptionValue, tag: String, choose: () -> Unit) {
-    val chosen = value.value == option.current
+internal fun NoMatch(filter: String, modifier: Modifier = Modifier) {
+    Label("""No match for "$filter".""", modifier.padding(12.dp), color = IdeColors.TextSecondary, fontSize = 12.sp)
+}
+
+// The values may be longer than a menu shows: capped at a few rows, scrolled in place.
+@Composable
+internal fun ChoiceScroller(content: @Composable () -> Unit) {
+    Column(Modifier.heightIn(max = CHOICE_MENU_HEIGHT).verticalScroll(rememberScrollState())) { content() }
+}
+
+/** A row of a menu of values: the name, the description under it, and a check mark when it is [chosen]. */
+@Composable
+internal fun ChoiceItem(name: String, description: String?, chosen: Boolean, tag: String, choose: () -> Unit) {
     IdeMenuItem(
         text = {
             Column {
                 val mark = if (chosen) "✓  " else "     "
-                Label(mark + value.name, fontWeight = if (chosen) FontWeight.Medium else FontWeight.Normal)
-                value.description?.let { Label(it, color = IdeColors.TextSecondary, fontSize = 12.sp, maxLines = 2) }
+                Label(mark + name, fontWeight = if (chosen) FontWeight.Medium else FontWeight.Normal)
+                description?.let { Label(it, color = IdeColors.TextSecondary, fontSize = 12.sp, maxLines = 2) }
             }
         },
         onClick = choose,

@@ -36,7 +36,8 @@ internal object McpServers {
         return parsed?.filter { it is JsonObject }.orEmpty()
     }
 
-    private fun supported(server: JsonElement, capabilities: McpCapabilities): Boolean {
+    /** Whether the agent can connect to [server]: a remote one only when it announced that transport. */
+    fun supported(server: JsonElement, capabilities: McpCapabilities): Boolean {
         val type = (server as? JsonObject)?.text("type")
         return when (type) {
             "http" -> capabilities.http

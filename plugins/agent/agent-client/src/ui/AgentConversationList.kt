@@ -85,6 +85,7 @@ fun ConversationList(agent: AgentState, modifier: Modifier) {
             if (cost != null) {
                 Label(cost, Modifier.testTag(AgentTags.AGENT_COST), color = IdeColors.TextSecondary, fontSize = 12.sp)
             }
+            TeamsButton(agent)
             IconButton({ agent.requestNewConversation() }, Modifier.testTag(AgentTags.AGENT_NEW)) { PlusIcon() }
         }
         IdeTextField(

@@ -197,14 +197,14 @@ private fun TerminalOutput(terminal: AgentTerminalOutput) {
     }
 }
 
-private fun statusColor(status: AgentToolStatus) =
+internal fun statusColor(status: AgentToolStatus) =
     when (status) {
         AgentToolStatus.Pending, AgentToolStatus.Running -> IdeColors.Accent
         AgentToolStatus.Completed -> IdeColors.GitAdded
         AgentToolStatus.Failed -> IdeColors.Error
     }
 
-private fun statusText(status: AgentToolStatus) =
+internal fun statusText(status: AgentToolStatus) =
     when (status) {
         AgentToolStatus.Pending -> "pending"
         AgentToolStatus.Running -> "running…"

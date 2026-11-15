@@ -13,12 +13,20 @@ private const val STATUS = "status"
  * Turns the updates of an agent's session into items of [journal]: chunks of text grow the item they continue, a
  * tool call and its updates are one item, the plan of a prompt is one item, replaced as it goes.
  */
+@Suppress("TooManyFunctions") // one function per kind of update of the agent
 internal class TranscriptWriter(
     private val journal: Journal,
     private val terminals: (String) -> AgentTerminal? = { null },
 ) {
     // Journal item of each tool call of the current session, by the id the agent gave it.
     private val toolItems = ConcurrentHashMap<String, String>()
+
+    // Calls made under a sub-agent launch the writer has not seen yet: journal item -> tool-use id of the launch.
+    // The launch comes first in practice; if not, the call is resolved when the launch appears.
+    private val waitingParents = ConcurrentHashMap<String, String>()
+
+    // Journal items of the launches whose report came from the adapter: later outputs (a harness note) keep it.
+    private val reported = ConcurrentHashMap.newKeySet<String>()
 
     // Journal item of the tool call that shows each terminal, by terminal id.
     private val terminalItems = ConcurrentHashMap<String, String>()
@@ -34,9 +42,28 @@ internal class TranscriptWriter(
     @Volatile
     var mode = Mode.Live
 
+    /**
+     * Records [child], the key of the conversation of a team member, on the `delegate` call of the manager that runs
+     * it: the call [toolUseId] when the MCP request named it (Claude Code puts it in `_meta`), else the oldest
+     * `delegate` call that has no child yet, since the calls of a manager reach the server in the order it made them.
+     * The call is titled `delegate · <member>` ([member]): the agent never changes its title, and the IDE names the run
+     * after the member it finds there.
+     */
+    fun attachChild(toolUseId: String?, child: String, member: String) {
+        val named = toolUseId?.let(toolItems::get)
+        val calls = journal.filter { it as? AgentItem.ToolCall }
+        val unclaimed = calls.firstOrNull { it.child == null && it.isRunning() && it.isDelegate() }
+        val target = named ?: unclaimed?.id ?: return
+        journal.update(target) { item, version ->
+            (item as AgentItem.ToolCall).copy(version = version, child = child, title = "delegate · $member")
+        }
+    }
+
     /** A new session started: its tool call ids are its own. */
     fun newSession() {
         toolItems.clear()
+        waitingParents.clear()
+        reported.clear()
         terminalItems.clear()
         messageId = null
     }
@@ -134,28 +161,35 @@ internal class TranscriptWriter(
         val terminal = content?.terminals?.lastOrNull()
         if (terminal != null) terminalItems[terminal] = id
         val shown = terminal?.let(terminals)?.shown()
+        val parentCallId = update.claudeMeta()?.text("parentToolUseId")
+        val report = update.handbackReport()?.let { shownOutput(listOf(it)) }
+        if (report != null) reported.add(id)
         if (existing == null) {
             toolItems[callId] = id
-            journal.add { version -> newTool(id, version, callId, update).copy(terminal = shown) }
+            val parent = parentCallId?.let(toolItems::get)
+            if (parent == null && parentCallId != null) waitingParents[id] = parentCallId
+            journal.add { version ->
+                val created = newTool(id, version, callId, update).copy(terminal = shown, parent = parent)
+                if (report == null) created else created.copy(output = report)
+            }
+            adoptWaitingChildren(callId, id)
         } else {
             journal.update(existing) { item, version ->
                 val changed = changedTool(item as AgentItem.ToolCall, version, update)
-                if (shown == null) changed else changed.copy(terminal = shown)
+                val output = reportedOutput(changed, item, report, id in reported)
+                val kept = changed.copy(output = output)
+                if (shown == null) kept else kept.copy(terminal = shown)
             }
         }
     }
 
-    private fun changedTool(call: AgentItem.ToolCall, version: Long, update: JsonObject): AgentItem.ToolCall {
-        val content = update.toolContent()
-        return call.copy(
-            version = version,
-            title = update.text(TITLE) ?: call.title,
-            kind = update.text(KIND)?.let(::toolKind) ?: call.kind,
-            status = toolStatus(update.text(STATUS)) ?: call.status,
-            output = content?.output ?: call.output,
-            diffs = content?.diffs ?: call.diffs,
-            locations = update.toolLocations() ?: call.locations,
-        )
+    // The calls that named [callId] as their launch before it was known now point to its item [id].
+    private fun adoptWaitingChildren(callId: String, id: String) {
+        val children = waitingParents.filterValues { it == callId }.keys
+        for (child in children) {
+            waitingParents.remove(child)
+            journal.update(child) { item, version -> (item as AgentItem.ToolCall).copy(version = version, parent = id) }
+        }
     }
 
     // The plan of the prompt: the latest plan item is replaced while it is the plan of the current prompt.
@@ -199,6 +233,37 @@ private enum class Text {
         }
 }
 
+// The report of a sub-agent wins over the output of its call, now and in the updates that follow.
+private fun reportedOutput(
+    changed: AgentItem.ToolCall,
+    before: AgentItem.ToolCall,
+    report: String?,
+    kept: Boolean,
+): String {
+    if (report != null) return report
+    return if (kept) before.output else changed.output
+}
+
+private fun changedTool(call: AgentItem.ToolCall, version: Long, update: JsonObject): AgentItem.ToolCall {
+    val content = update.toolContent()
+    return call.copy(
+        version = version,
+        title = update.text(TITLE) ?: call.title,
+        kind = update.text(KIND)?.let(::toolKind) ?: call.kind,
+        status = toolStatus(update.text(STATUS)) ?: call.status,
+        output = content?.output ?: call.output,
+        diffs = content?.diffs ?: call.diffs,
+        locations = update.toolLocations() ?: call.locations,
+        tool = update.claudeMeta()?.text("toolName") ?: call.tool,
+    )
+}
+
+// The tool of the relay is named `mcp__<server>__delegate` by Claude, `delegate` elsewhere.
+private fun AgentItem.ToolCall.isDelegate(): Boolean {
+    val name = tool ?: title
+    return name.endsWith("delegate", ignoreCase = true)
+}
+
 private fun AgentItem.ToolCall.isRunning() = status == AgentToolStatus.Pending || status == AgentToolStatus.Running
 
 private fun appended(item: AgentItem, chunk: String, version: Long, context: List<String>): AgentItem =
@@ -226,5 +291,6 @@ private fun newTool(id: String, version: Long, callId: String, update: JsonObjec
         output = content?.output.orEmpty(),
         diffs = content?.diffs.orEmpty(),
         locations = update.toolLocations().orEmpty(),
+        tool = update.claudeMeta()?.text("toolName"),
     )
 }

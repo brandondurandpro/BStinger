@@ -9,6 +9,7 @@ import org.example.kotlineditor.model.AgentRegistryEntry
 import org.example.kotlineditor.model.AgentSessions
 import org.example.kotlineditor.model.AgentSlashCommand
 import java.io.Closeable
+import java.nio.file.Path
 
 /**
  * The agent processes of the server, one per command line, shared by the conversations that use it, and the sessions
@@ -18,8 +19,10 @@ class AgentProcesses internal constructor(
     private val scope: CoroutineScope,
     private val files: FileAccess,
     private val registry: AgentRegistry,
+    hiddenSessions: Path? = null,
 ) : Closeable {
     private val processes = HashMap<AgentCommand, AgentProcess>()
+    private val probes = ProbeSessions(hiddenSessions)
 
     /** The sessions [agent] keeps that work in one of [directories], newest first. */
     suspend fun sessions(agent: AgentCommand, directories: List<String>): AgentSessions {
@@ -67,14 +70,14 @@ class AgentProcesses internal constructor(
         val running = synchronized(processes) { processes[agent]?.takeIf { it.isAlive } }
         if (running != null) return running
         val id = agent.registry
-        val command = if (id == null) agent else registry.command(id)
+        val command = if (id == null) agent else installedWith(registry.command(id), agent)
         return synchronized(processes) { processes[agent]?.takeIf { it.isAlive } ?: started(agent, command) }
     }
 
     // A new process of [agent], started with [command], in place of the one that stopped. Under the lock.
     private fun started(agent: AgentCommand, command: AgentCommand): AgentProcess {
         processes[agent]?.destroy()
-        return AgentProcess(command, scope, files).also { processes[agent] = it }
+        return AgentProcess(command, scope, files, probes).also { processes[agent] = it }
     }
 
     /** Stops the processes no session uses any more. */
@@ -93,3 +96,7 @@ class AgentProcesses internal constructor(
         }
     }
 }
+
+// The installed command of a registry agent, with the variables [agent] adds (the long tool timeout of a manager).
+private fun installedWith(installed: AgentCommand, agent: AgentCommand): AgentCommand =
+    installed.copy(environment = installed.environment + agent.environment)

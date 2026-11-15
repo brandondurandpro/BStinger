@@ -3,12 +3,14 @@ package org.example.kotlineditor.agent.server
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.example.kotlineditor.acp.authMethods
 import org.example.kotlineditor.acp.authenticate
 import org.example.kotlineditor.acp.fork
 import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.model.AgentSessions
+import org.example.kotlineditor.model.RelayTeam
 import org.example.kotlineditor.rpc.Method
 import org.example.kotlineditor.rpc.MethodSpec
 import org.example.kotlineditor.rpc.agentAttachments
@@ -17,6 +19,7 @@ import org.example.kotlineditor.rpc.authMethodsToJson
 import org.example.kotlineditor.rpc.commandsToJson
 import org.example.kotlineditor.rpc.long
 import org.example.kotlineditor.rpc.read
+import org.example.kotlineditor.rpc.relayTeam
 import org.example.kotlineditor.rpc.string
 import org.example.kotlineditor.rpc.stringOrNull
 import org.example.kotlineditor.rpc.toJson
@@ -29,6 +32,12 @@ private const val ITEM = "item"
 private const val AGENT = "agent"
 private const val DIRECTORY = "directory"
 private const val SESSION = "session"
+
+// The team of a conversation in relay mode, when the client sent one (an older client does not).
+private fun JsonObject.relayOrNull(): RelayTeam? {
+    val relay = get("relay")
+    return if (relay == null || relay is JsonNull) null else relay.relayTeam()
+}
 
 /** Found by the server through `META-INF/services`. */
 class AgentServerContribution : ServerContribution {
@@ -53,6 +62,7 @@ private fun conversationHandlers(component: AgentsComponent): Map<MethodSpec, Ha
                 params.string("text"),
                 params.stringOrNull(SESSION),
                 params["attachments"]?.agentAttachments().orEmpty(),
+                params.relayOrNull(),
             )
             JsonNull
         },
@@ -62,6 +72,7 @@ private fun conversationHandlers(component: AgentsComponent): Map<MethodSpec, Ha
                 params.read(AGENT) { it.agentCommand() },
                 params.string(DIRECTORY),
                 params.string(SESSION),
+                params.relayOrNull(),
             )
             JsonNull
         },

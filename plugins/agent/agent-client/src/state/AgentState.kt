@@ -18,6 +18,7 @@ import kotlinx.coroutines.sync.Mutex
 import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.model.AgentItem
 import org.example.kotlineditor.model.AgentOption
+import org.example.kotlineditor.model.RelayTeam
 import org.example.kotlineditor.model.AgentSlashCommand
 import org.example.kotlineditor.model.AgentUsage
 import org.example.kotlineditor.model.AGENT_BUSY_MESSAGE
@@ -43,9 +44,13 @@ enum class WorkMode {
  * followed as it changes; [key] names it on the server.
  */
 @Stable
-class Conversation(val id: Int, title: String, val branch: String) {
+class Conversation(
+    val id: Int,
+    title: String,
+    val branch: String,
     /** Name of the conversation on the server, unique across projects and IDEs. */
-    val key: String = UUID.randomUUID().toString()
+    val key: String = UUID.randomUUID().toString(),
+) {
 
     var title by mutableStateOf(title)
         internal set
@@ -84,6 +89,23 @@ class Conversation(val id: Int, title: String, val branch: String) {
 
     /** What the user joins to the next prompt: files, lines, images. */
     val context = PromptContext()
+
+    /** The name of the team of agents this conversation works with (its manager answers); null for the agent alone. */
+    var team: String? by mutableStateOf(null)
+        internal set
+
+    /** How the team is orchestrated here when not as the team says; null for the team's own mode. Set before the first prompt. */
+    var orchestration: OrchestrationMode? by mutableStateOf(null)
+        internal set
+
+    /** The team the server runs for this conversation (relay mode), sent with every prompt; null when the agent runs it. */
+    internal var relayTeam: RelayTeam? = null
+
+    /** True for the hidden conversation that follows the session of a delegation: it is no conversation of the user. */
+    internal var delegation = false
+
+    /** True once the team was briefed: the first prompt carried the prompts of the manager and its members. */
+    internal var briefed = false
 
     /** The commands the agent offers in its session (`/compact`…); empty before it said. */
     var commands: List<AgentSlashCommand> by mutableStateOf(emptyList())
@@ -444,6 +466,91 @@ class AgentState(
         templates.removeAll { it.name == name }
     }
 
+    /** The teams of agents the user made: a manager and its sub-agents each; a first use starts with the default team. */
+    val teams =
+        mutableStateListOf<AgentTeam>().apply {
+            val savedTeams = saved[PreferenceKeys.AGENT_TEAMS]
+            // An empty value is a first use too: a build that saved before the default team existed must not leave no team.
+            val decoded = decodeTeams(savedTeams)
+            addAll(withSavedModes(decoded.ifEmpty { defaultTeams() }, saved[PreferenceKeys.AGENT_TEAM_MODES]))
+        }
+
+    /**
+     * Saves [team], replacing the team called [previous] (the name it had when edited) or one of the same name.
+     * Returns false when the team or its manager has no name.
+     */
+    fun saveTeam(previous: String?, team: AgentTeam): Boolean {
+        val name = team.name.trim()
+        val managerName = team.manager.name.trim()
+        val namedMembers = team.members.filter { it.name.isNotBlank() }
+        if (name.isEmpty() || managerName.isEmpty()) return false
+        val stored = AgentTeam(name, team.manager.copy(name = managerName), namedMembers, team.mode)
+        val index = teams.indexOfFirst { it.name == previous }
+        teams.removeAll { it.name == name || it.name == previous }
+        if (index in 0..teams.size) teams.add(index, stored) else teams.add(stored)
+        conversations.filter { previous != null && it.team == previous && previous != name }.forEach { it.team = name }
+        return true
+    }
+
+    /** Forgets the team [name]; the conversations that had it go on with the agent alone. */
+    fun removeTeam(name: String) {
+        teams.removeAll { it.name == name }
+        conversations.filter { it.team == name }.forEach { it.team = null }
+    }
+
+    /**
+     * Gives [conversation] the team [name], or none when it is null or unknown: its manager answers the first prompt,
+     * after the briefing of the team, and its model and effort are chosen when the agent offers them. A conversation
+     * already started is briefed with its next prompt; not while the agent works on one.
+     */
+    fun chooseTeam(conversation: Conversation, name: String?) {
+        val chosen = teams.firstOrNull { it.name == name }
+        if (conversation.busy || conversation.team == chosen?.name) return
+        conversation.team = chosen?.name
+        if (chosen == null) conversation.orchestration = null
+        conversation.briefed = false
+        if (chosen != null) applyManagerSettings(conversation, chosen.manager)
+    }
+
+    /**
+     * How the team of [conversation] is orchestrated: its own choice, else its team's. The IDE can only run a team from
+     * the first prompt (the session needs the `delegate` tool when it starts): a started conversation keeps the mode
+     * it started with, and goes on with the agent's when it had none.
+     */
+    fun modeOf(conversation: Conversation): OrchestrationMode {
+        val team = teams.firstOrNull { it.name == conversation.team } ?: return OrchestrationMode.Agent
+        if (conversation.relayTeam != null) return OrchestrationMode.Relay
+        if (conversation.started) return OrchestrationMode.Agent
+        return conversation.orchestration ?: team.mode
+    }
+
+    /** Whether the mode of [conversation] can still be chosen: before its session starts. */
+    fun canChooseMode(conversation: Conversation): Boolean = !conversation.started && conversation.team != null
+
+    /** Chooses how the team of [conversation] is orchestrated; null follows the team. Ignored once it started. */
+    fun chooseMode(conversation: Conversation, mode: OrchestrationMode?) {
+        if (canChooseMode(conversation)) conversation.orchestration = mode
+    }
+
+    // The model and effort of the manager, once the agent said what it offers; a value it does not offer stays as it is.
+    private fun applyManagerSettings(conversation: Conversation, manager: TeamMember) {
+        options.offer(conversation)
+        project.scope.launch {
+            conversation.offering?.join()
+            val model = conversation.model
+            val effort = conversation.effort
+            val modelId = model?.let { matchingValue(it.values.map { v -> v.value to v.name }, manager.model) }
+            if (model != null && modelId != null) options.choose(conversation, model.id, modelId)
+            // The efforts follow the model: those of the model just chosen are read once it is set.
+            val efforts = conversation.effort ?: effort
+            val effortId = efforts?.let { matchingValue(it.values.map { v -> v.value to v.name }, manager.effort) }
+            if (efforts != null && effortId != null) options.choose(conversation, efforts.id, effortId)
+        }
+    }
+
+    /** The hidden conversations that follow the delegations of the managers shown, by their key on the server. */
+    internal val delegations = HashMap<String, Conversation>()
+
     /** The agents of the registry the user worked with: the history lists the sessions of each, not only the settings'. */
     internal val usedAgents =
         saved[PreferenceKeys.AGENT_USED].orEmpty().lines().filter { it.isNotBlank() }.toMutableList()
@@ -499,6 +606,7 @@ class AgentState(
      * released when its agent can replay it: it opens again as a conversation of the history does.
      */
     fun closeTab(conversation: Conversation) {
+        unfollowDelegations(conversation)
         tabs.close(conversation)
         release(conversation)
     }
@@ -611,6 +719,7 @@ class AgentState(
     fun delete(conversation: Conversation) {
         conversation.job?.cancel()
         conversation.polling?.cancel()
+        unfollowDelegations(conversation)
         tabs.close(conversation)
         conversations.remove(conversation)
         val started = conversation.started
@@ -694,11 +803,14 @@ class AgentState(
         if (!conversation.started) conversation.title = titleOf(text)
         val itemId = "prompt-${UUID.randomUUID()}"
         val attachments = conversation.context.take()
+        // Decided before the prompt is shown: a conversation with an item is started.
+        val team = teams.firstOrNull { it.name == conversation.team }
+        if (team != null && modeOf(conversation) == OrchestrationMode.Relay) conversation.relayTeam = team.toRelay()
         // Shown at once; the server's copy of the prompt replaces it, under the same id.
         conversation.upsert(AgentItem.UserText(itemId, 0, text, attachments.map { it.label }))
         conversations.remove(conversation)
         conversations.add(0, conversation)
-        val prompt = OutgoingPrompt(itemId, text, attachments)
+        val prompt = OutgoingPrompt(itemId, briefedText(conversation, text), attachments)
         if (conversation.busy) {
             // The agent answers another prompt: this one waits, and goes once it is done (nothing lost, nothing
             // sent) — a keystroke against an answer in flight must not wipe the text the user typed.
@@ -706,6 +818,16 @@ class AgentState(
             return
         }
         launchDelivery(conversation, prompt)
+    }
+
+    // The first request of a conversation with a team goes after the briefing of its manager; the later ones as typed.
+    private fun briefedText(conversation: Conversation, text: String): String {
+        val team = teams.firstOrNull { it.name == conversation.team }
+        if (team == null || conversation.briefed) return text
+        conversation.briefed = true
+        // The agent titles the session from this first prompt, briefing included: the title made from the request stays.
+        conversation.renamed = true
+        return if (conversation.relayTeam != null) relayBriefing(team, text) else teamBriefing(team, text)
     }
 
     /**
@@ -777,7 +899,8 @@ class AgentState(
             project.followTranscript(conversation)
             val directory = workspace.root.path
             val (itemId, text, attachments) = prompt
-            agents.prompt(conversation.key, agentOf(conversation), directory, itemId, text, conversation.session, attachments)
+            val agent = agentOf(conversation)
+            agents.prompt(conversation.key, agent, directory, itemId, text, conversation.session, attachments, conversation.relayTeam)
         } catch (refused: IOException) {
             if (refused.message == AGENT_BUSY_MESSAGE) {
                 // A server that arrived first (or filled its queue) says the agent answers: the prompt goes again
@@ -820,6 +943,8 @@ class AgentState(
 
     /** Closes the worktrees when the project closes; they stay on disk for the next session. */
     fun dispose() {
+        delegations.values.forEach { it.polling?.cancel() }
+        delegations.clear()
         conversations.forEach {
             it.polling?.cancel()
             it.closeWorktree(project)
