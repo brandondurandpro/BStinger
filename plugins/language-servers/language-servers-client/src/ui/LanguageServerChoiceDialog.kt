@@ -54,7 +54,7 @@ import org.example.kotlineditor.state.LanguageServersHost
 import org.example.kotlineditor.state.LanguageServersState
 import org.example.kotlineditor.state.recommendedOf
 
-// IntelliJ New UI Dark: editor notification banner, and the colors of its inspection results.
+// Editor notification banner, and the colors of its inspection results.
 private val BannerBackground get() = IdeColors.BannerBackground
 private val BannerBorder get() = IdeColors.BannerBorder
 private val InfoBlue get() = IdeColors.Link
@@ -63,7 +63,7 @@ private val Caution get() = IdeColors.GitBehind
 private val Backdrop = Color(0x66000000)
 
 /**
- * IntelliJ's editor notification: a thin strip above the editors when a file needs a language server and none is
+ * The editor notification: a thin strip above the editors when a file needs a language server and none is
  * chosen. It blocks nothing; its links open the choice dialog, use the recommended server at once, or dismiss it.
  */
 @Composable
@@ -129,7 +129,7 @@ private fun InfoIcon() {
 }
 
 /**
- * The choice dialog, like IntelliJ's settings: the servers on the left, the selected one's advantages, limitations
+ * The choice dialog: the servers on the left, the selected one's advantages, limitations
  * and requirements on the right, Cancel and Use at the bottom right. Arrows select, Enter uses, Escape cancels.
  */
 @Composable
@@ -343,7 +343,7 @@ private fun CandidateDetails(
     }
 }
 
-// IntelliJ's titled separator: a title followed by a line.
+// A titled separator: a title followed by a line.
 @Composable
 private fun Section(title: String, content: @Composable () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {

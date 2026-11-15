@@ -122,7 +122,7 @@ private fun hierarchyMessage(result: HierarchyResult, kind: HierarchyKind): Stri
     }
 }
 
-// Callers first, like IntelliJ; subtypes first, as the type hierarchy shows what derives from the class.
+// Callers first; subtypes first, as the type hierarchy shows what derives from the class.
 private fun sideOf(kind: HierarchyKind) =
     if (kind == HierarchyKind.Calls) HierarchyDirection.Callers else HierarchyDirection.Subtypes
 

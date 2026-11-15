@@ -31,7 +31,7 @@ import androidx.compose.ui.unit.sp
 val ISLAND_GAP = 6.dp
 
 /**
- * An island (IntelliJ's Islands theme): a rounded card with a hairline border, floating on [IdeColors.Frame]; what
+ * An island: a rounded card with a hairline border, floating on [IdeColors.Frame]; what
  * it holds is clipped to its corners.
  */
 fun Modifier.island(background: Color = IdeColors.Panel): Modifier =

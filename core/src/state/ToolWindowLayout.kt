@@ -41,6 +41,9 @@ data class ToolWindow(
         /** Language servers. */
         val LanguageServers = ToolWindow("LanguageServers")
 
+        /** Find in Files, as a panel: the content search of Ctrl+Shift+F, its results kept beside the editors. */
+        val Search = ToolWindow("Search")
+
         /** Extensions: the plugins installed, to turn on or off, and the field that installs one. */
         val Extensions = ToolWindow("Extensions")
     }
@@ -55,6 +58,7 @@ val BUILT_IN_TOOL_WINDOWS: List<ToolWindowDefaults> =
     listOf(
         ToolWindowDefaults(ToolWindow.Project, Dock.Left, shown = true),
         ToolWindowDefaults(ToolWindow.Git, Dock.Left),
+        ToolWindowDefaults(ToolWindow.Search, Dock.Left),
         ToolWindowDefaults(ToolWindow.Branches, Dock.Bottom),
         ToolWindowDefaults(ToolWindow.Extensions, Dock.Left),
         ToolWindowDefaults(ToolWindow.Run, Dock.Bottom),

@@ -31,3 +31,8 @@ interface TreeHost : ProjectHost {
     /** The declarations of the project named like [query], from its language servers; empty when none answers. */
     suspend fun serverSymbols(query: String): List<SymbolMatch> = emptyList()
 }
+
+/** A [TreeHost] whose Find in Files is kept by the project, so that its side panel and its popup share the results. */
+interface FindInFilesHost : TreeHost {
+    val findInFiles: FindInFilesSearch
+}

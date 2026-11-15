@@ -173,9 +173,7 @@ private fun ReviewDiffArea(
         }
 
         is ReviewDiff.Loaded -> {
-            val spans by produceState<List<LineSpans?>?>(null, diff.lines) {
-                value = spansOf(file.entry.name, diff.lines)
-            }
+            val spans = rememberDiffSpans(diff.lines) { lines -> spansOf(file.entry.name, lines) }
             // The scroll positions belong to the file shown, a tab of the diff of that file only holds them.
             val diffTab = remember(file.relativePath) { EditorTab(file.entry, file.relativePath, isDiff = true) }
             DiffView(

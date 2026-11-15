@@ -74,7 +74,7 @@ fun DiffView(
     }
 }
 
-// The commit of the diff, like IntelliJ's commit details: hash, author, date, then the whole message.
+// The commit of the diff: hash, author, date, then the whole message.
 @Composable
 private fun CommitHeaderView(commit: CommitDiffTarget, header: CommitHeader) {
     Column(
@@ -128,7 +128,7 @@ private fun DiffToolbar(sideBySide: Boolean, onToggleSideBySide: () -> Unit, onO
     Box(Modifier.fillMaxWidth().height(1.dp).background(IdeColors.Separator))
 }
 
-// Opens the file itself, at its first changed line (F4, like IntelliJ's Jump to Source).
+// Opens the file itself, at its first changed line (F4).
 @Composable
 private fun OpenFileButton(onOpenFile: () -> Unit) {
     val shape = IdeShapes.Medium

@@ -101,7 +101,7 @@ internal val BUILT_IN_AGENT_SHORTCUTS =
         bind(setOf(Key.Tab), ctrl = true) { project.agent.tabs.selectNext(if (it.shift) -1 else 1) },
     )
 
-// IntelliJ default keymap, first match wins. Alt+Shift+. / Alt+Shift+, change the font size (Ctrl+- / Ctrl+= fold).
+// the default keymap, first match wins. Alt+Shift+. / Alt+Shift+, change the font size (Ctrl+- / Ctrl+= fold).
 internal val BUILT_IN_IDE_SHORTCUTS =
     listOf(
         TOGGLE_AGENT_MODE,
@@ -156,7 +156,7 @@ internal val BUILT_IN_IDE_SHORTCUTS =
         ) { project.withInsight { path, document -> showCodeActions(path, document) } },
         bind(setOf(Key.F2)) { project.withInsight { _, document -> nextProblem(document, backward = it.shift) } },
         bind(setOf(Key.R), ctrl = true) { openFindBar(replace = true) },
-        bind(setOf(Key.F), ctrl = true, shift = true) { project.showPopup(PopupKind.FindInFiles) },
+        bind(setOf(Key.F), ctrl = true, shift = true) { project.openFindInFiles() },
         bind(setOf(Key.F), ctrl = true, shift = false) { openFindBar() },
         bind(setOf(Key.G), ctrl = true) { project.showPopup(PopupKind.GotoLine) },
         bind(setOf(Key.E), ctrl = true) { project.showPopup(PopupKind.RecentFiles) },
@@ -267,7 +267,7 @@ private fun escapesTerminal(event: KeyEvent): Boolean =
         }
     }
 
-/** Detects Shift pressed twice in a row (Search Everywhere / Go to File in IntelliJ). */
+/** Detects Shift pressed twice in a row (Search Everywhere / Go to File). */
 private class DoubleShift {
     private var lastRelease = 0L
     private var otherKeySinceShift = false

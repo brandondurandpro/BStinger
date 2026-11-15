@@ -31,8 +31,9 @@ class SearchUnsavedE2eTest {
     }
 
     private fun ComposeUiTest.openFindInFiles() {
-        onNodeWithTag(TreeTags.TREE).performClick()
-        onNodeWithTag(TreeTags.TREE).performKeyInput {
+        // From the editor: the Search window hides the tree, which the second opening cannot click.
+        onNodeWithTag(EditorTags.EDITOR).performClick()
+        onNodeWithTag(EditorTags.EDITOR).performKeyInput {
             withKeyDown(Key.CtrlLeft) { withKeyDown(Key.ShiftLeft) { pressKey(Key.F) } }
         }
         awaitTag(TreeTags.FIND_IN_FILES_INPUT)
@@ -73,7 +74,7 @@ class SearchUnsavedE2eTest {
             onNodeWithTag(TreeTags.FIND_IN_FILES_COUNT).assertTextEquals("1 match in 1 file")
 
             onNodeWithTag(TreeTags.FIND_IN_FILES_INPUT).performKeyInput { pressKey(Key.Escape) }
-            awaitNoTag(TreeTags.FIND_IN_FILES)
+            awaitNoTag(TreeTags.SEARCH_PANEL)
             saveFromEditor()
             awaitCondition {
                 !app.project.editor.activeTab!!

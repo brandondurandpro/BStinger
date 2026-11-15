@@ -264,7 +264,7 @@ class SearchE2eTest {
                 withKeyDown(Key.CtrlLeft) { withKeyDown(Key.ShiftLeft) { pressKey(Key.F) } }
             }
             awaitTag(TreeTags.FIND_IN_FILES_INPUT).performKeyInput { pressKey(Key.Escape) }
-            awaitNoTag(TreeTags.FIND_IN_FILES)
+            awaitNoTag(TreeTags.SEARCH_PANEL)
             onNodeWithTag(AppTags.PROJECT).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.P) } }
             awaitTag(TreeTags.GOTO_FILE_INPUT).assertIsFocused()
             assertNull(app.project.editor.activeTab)

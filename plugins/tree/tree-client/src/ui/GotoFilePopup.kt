@@ -142,7 +142,7 @@ private suspend fun enterNextFrame(
 private suspend fun matches(project: TreeHost, query: String, recentOnly: Boolean): List<FileMatch> =
     if (recentOnly) recentMatches(project, query) else project.fileIndex.searchFiles(query)
 
-// Like IntelliJ, Ctrl+E then Enter goes back to the previous file.
+// Ctrl+E then Enter goes back to the previous file.
 private fun firstSelection(recentOnly: Boolean, query: String, results: List<FileMatch>): Int {
     val recentList = recentOnly && query.isBlank()
     return if (recentList && results.size > 1) 1 else 0

@@ -17,7 +17,7 @@ internal fun shiftedHint(hint: InlayHint, change: TextChange): InlayHint? {
 }
 
 /**
- * The hints worth showing, like IntelliJ: not the type hints right after a closing brace, which name the block it
+ * The hints worth showing: not the type hints right after a closing brace, which name the block it
  * closes (phpactor's `class User` after a class, `method name` after a method).
  */
 internal fun shownHints(hints: List<InlayHint>, lines: List<String>): List<InlayHint> =

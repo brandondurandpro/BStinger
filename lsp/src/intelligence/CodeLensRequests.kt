@@ -20,7 +20,7 @@ private const val CODE_LENS_PROVIDER = "codeLensProvider"
 private const val COMMAND = "command"
 private const val ARGUMENTS = "arguments"
 
-// The client-side command of VS Code that lists places: `[uri, position, locations]`.
+// The client-side command that lists places: `[uri, position, locations]`.
 private const val SHOW_REFERENCES = "editor.action.showReferences"
 private const val LOCATIONS_ARGUMENT = 2
 

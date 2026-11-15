@@ -23,7 +23,7 @@ import kotlin.test.assertEquals
 private const val FILE = "Multi.kt"
 private val CODE = listOf("val alpha = 1", "val beta = alpha", "val gamma = alpha + beta")
 
-/** Several carets: Alt+click, Alt+J (next occurrence) and column selection (Alt+Shift+drag), like IntelliJ. */
+/** Several carets: Alt+click, Alt+J (next occurrence) and column selection (Alt+Shift+drag). */
 @OptIn(ExperimentalTestApi::class)
 class MultiCaretE2eTest {
     private val project = SampleProject.standard().apply { file(FILE, CODE.joinToString("\n")) }

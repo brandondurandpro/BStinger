@@ -36,7 +36,7 @@ data class StickyHeader(val index: Int, val y: Int)
 class TreeScroll(val firstIndex: Int, val firstOffset: Int, val rowHeight: Int)
 
 /**
- * The directories whose names stay pinned at the top of the tree, like IntelliJ's sticky lines: the header of slot
+ * The directories whose names stay pinned at the top of the tree, as sticky lines: the header of slot
  * `k` is the ancestor of depth `k` of the row drawn under that slot (or the row itself when it is an expanded
  * directory whose top is scrolled away). A header is pushed up when the end of its directory reaches it.
  */

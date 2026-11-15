@@ -34,7 +34,7 @@ fun Document.moveRight(extend: Boolean = false, word: Boolean = false) {
 
 fun Document.moveVertically(delta: Int, extend: Boolean = false) = moveVerticallyTo(caret.line + delta, extend)
 
-/** Home: first non-blank char, then column 0 (IntelliJ "smart home"). */
+/** Home: first non-blank char, then column 0 ("smart home"). */
 fun Document.moveHome(extend: Boolean = false) {
     val line = lines[caret.line]
     val indent = line.indexOfFirst { !it.isWhitespace() }.let { if (it < 0) line.length else it }

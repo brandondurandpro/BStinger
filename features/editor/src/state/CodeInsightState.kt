@@ -24,7 +24,7 @@ internal const val NOT_READY = "The language server is not ready"
 internal const val INDEXING = "Indexing the project… the results will show once it is done"
 
 /**
- * Code intelligence in the editor (see #97), like IntelliJ's: documentation on hover and Ctrl+Q, Ctrl+click and
+ * Code intelligence in the editor (see #97): documentation on hover and Ctrl+Q, Ctrl+click and
  * Ctrl+B to the declaration (its usages when already on it), Ctrl+Alt+B and Ctrl+Shift+B, usages with Alt+F7 and
  * a "3 usages" hint after each declaration, problems underlined, occurrences of the symbol at the caret, parameter
  * info, rename (Shift+F6), reformat (Ctrl+Alt+L) and quick fixes (Alt+Enter, see `CodeInsightEdits.kt`). Each
@@ -225,7 +225,7 @@ class CodeInsightState(
                     delay(HIGHLIGHT_DELAY_MS)
                     val found = askAt(path, document, caret) { servers, at -> servers.highlights(at) }.orEmpty()
                     val unchanged = document.version == version && document.caret == caret
-                    // A lone occurrence is not worth highlighting, like IntelliJ.
+                    // A lone occurrence is not worth highlighting.
                     if (unchanged && found.size > 1) insight.highlights = found
                 }
         }

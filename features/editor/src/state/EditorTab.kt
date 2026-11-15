@@ -151,7 +151,7 @@ class EditorTab(
     val splitListState = LazyListState()
     val horizontalScroll = HorizontalScroll()
 
-    /** Kept per tab so switching tabs restores the scroll position, like IntelliJ. */
+    /** Kept per tab so switching tabs restores the scroll position. */
     val verticalScroll = VerticalScroll()
 
     /** Gutter marks of the lines changed since HEAD (text tabs only). */

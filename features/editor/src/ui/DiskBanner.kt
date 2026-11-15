@@ -15,7 +15,7 @@ import org.example.kotlineditor.state.Document
 
 /**
  * Above an editor whose file the disk and the IDE disagree on: another program changed it while it had unsaved edits
- * (the user chooses which to keep, like IntelliJ's file cache conflict), or its last save failed (and why). The
+ * (the user chooses which to keep), or its last save failed (and why). The
  * conflict also offers Compare, a diff of the editor's content against what the disk holds, before choosing.
  */
 @Composable

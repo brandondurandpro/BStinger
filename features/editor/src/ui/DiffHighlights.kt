@@ -1,5 +1,9 @@
 package org.example.kotlineditor.ui
 
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import org.example.kotlineditor.model.DiffKind
@@ -66,6 +70,22 @@ internal fun diffCode(text: String, spans: LineSpans?, language: Language): Anno
     return highlighted(source)
 }
 
+/**
+ * The tree-sitter colors of [lines], computed by [compute] and `null` until they are: never the colors of the lines
+ * shown before. A value kept across a change of [lines] would be read against the new lines for a frame.
+ */
+@Composable
+fun rememberDiffSpans(
+    lines: List<DiffLine>,
+    compute: suspend (List<DiffLine>) -> List<LineSpans?>?,
+): List<LineSpans?>? {
+    // Content-equal lists give the same token, and the same colors.
+    val token = remember(lines) { Any() }
+    val computed by produceState<Pair<Any, List<LineSpans?>?>?>(null, token) { value = token to compute(lines) }
+    val current = computed
+    return if (current != null && current.first === token) current.second else null
+}
+
 /** Characters shown of a line of a diff: more than the widest screen holds. */
 internal const val MAX_DIFF_LINE_CHARACTERS = 2_048
 
@@ -78,7 +98,9 @@ internal class DiffCode(private val language: Language, private val spans: List<
         // laid out whole a line of megabytes takes minutes and gigabytes.
         val tooLong = text.length > MAX_DIFF_LINE_CHARACTERS
         val shown = if (tooLong) text.substring(0, shownLength(text)) else text
-        val shownSpans = if (tooLong) lineSpans?.clippedTo(shown.length) else lineSpans
+        // Colors computed for other lines (a diff replaced while its colors were being computed) never reach past
+        // the text: a span beyond it breaks the layout of the row.
+        val shownSpans = lineSpans?.clippedTo(shown.length)
         return diffCode(shown, shownSpans, language)
     }
 

@@ -32,7 +32,7 @@ import org.example.kotlineditor.ui.IdeRegistries
 import org.example.kotlineditor.ui.RUN_SERVICE
 import org.example.kotlineditor.ui.TERMINAL_SERVICE
 
-private val INDEXED_POPUPS = setOf(PopupKind.GotoFile, PopupKind.FindInFiles, PopupKind.GotoSymbol)
+private val INDEXED_POPUPS = setOf(PopupKind.GotoFile, PopupKind.GotoSymbol)
 private val DOCUMENT_POPUPS = setOf(PopupKind.GotoLine, PopupKind.FileStructure)
 
 /** An open project: its tree, editors, index, terminal and tool windows. See `ProjectActions.kt` for actions. */
@@ -60,7 +60,7 @@ class ProjectState(
     /** Where agent mode can start a conversation in another project; null where no window can be added. */
     private val windows: ProjectWindows? = null,
 ) : GitHost,
-    TreeHost,
+    FindInFilesHost,
     LanguageServersHost,
     AgentHost,
     DeployHost {
@@ -87,7 +87,7 @@ class ProjectState(
             grammars = grammars,
         )
     override val fileIndex = FileIndex(root, services.search, scope)
-    val findInFiles =
+    override val findInFiles =
         FindInFilesSearch(
             root,
             services.search,
@@ -178,7 +178,7 @@ class ProjectState(
     /** The destination of the last deployment, offered again by the next one. */
     override var deployDestination: String by mutableStateOf("")
 
-    /** "Always Select Opened File" (IntelliJ): the active file is selected and revealed in the project tree. */
+    /** "Always Select Opened File": the active file is selected and revealed in the project tree. */
     override var autoSelectOpenedFile by mutableStateOf(autoSelectOf(preferences))
 
     override var inlayHintsMode: InlayHintsMode
@@ -316,6 +316,13 @@ class ProjectState(
     /** Shows [window] if it is hidden (a pinned branch's Show Changes opens the Git tool window). */
     override fun showToolWindow(window: ToolWindow) {
         if (!toolWindows.isVisible(window)) toggleToolWindow(window)
+    }
+
+    /** Ctrl+Shift+F: shows the Search window and puts the caret in its query field. */
+    fun openFindInFiles() {
+        fileIndex.ensureLoaded()
+        showToolWindow(ToolWindow.Search)
+        findInFiles.requestFocus()
     }
 
     fun showPopup(kind: PopupKind) {

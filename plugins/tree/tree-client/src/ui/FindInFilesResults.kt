@@ -1,16 +1,23 @@
 package org.example.kotlineditor.ui
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -20,26 +27,24 @@ import org.example.kotlineditor.state.FindInFilesSearch
 import org.example.kotlineditor.state.SearchHit
 
 private const val STALE_ALPHA = 0.45f
+private const val HITS_INDENT = 22
 
-/** The results of the search: what is typed below the chips while rows arrive, an error instead when it failed. */
+/**
+ * The results of the search, grouped by file: a line per file (its name, its folder, its number of
+ * hits) that folds its hits, and under it the hits of the file. An error replaces them when the search failed.
+ */
 @Composable
 internal fun ResultsSection(
     search: FindInFilesSearch,
-    results: List<SearchHit>,
+    groups: List<ResultGroup>,
     query: String,
     options: FindChips,
     cursor: ListCursor,
-    open: (SearchHit?) -> Unit,
+    open: (SearchHit) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val error = search.error
-    if (error == null) {
-        // The results of the replaced search stay, dimmed, until the new ones arrive: the list never blanks.
-        Box(Modifier.alpha(if (search.stale) STALE_ALPHA else 1f)) {
-            ResultList(results, cursor.selected) { index, hit ->
-                SearchHitRow(hit, matchLength(optionsOf(query, options), hit), index == cursor.selected) { open(hit) }
-            }
-        }
-    } else {
+    if (error != null) {
         Label(
             error,
             Modifier
@@ -49,6 +54,60 @@ internal fun ResultsSection(
             color = IdeColors.Error,
             fontSize = 12.sp,
         )
+        return
+    }
+    val collapsed = options.collapsed.toList()
+    val rows = rowsOf(groups, collapsed)
+    val listState = rememberLazyListState()
+    val selected = cursor.selected
+    LaunchedEffect(selected, rows.size) { revealSelected(listState, rows, selected) }
+    val length = { hit: SearchHit -> matchLength(optionsOf(query, options), hit) }
+    // The results of the replaced search stay, dimmed, until the new ones arrive: the list never blanks.
+    LazyColumn(modifier.padding(top = 8.dp).alpha(if (search.stale) STALE_ALPHA else 1f), state = listState) {
+        items(rows) { row ->
+            when (row) {
+                is ResultRow.Header -> {
+                    FileHeader(row.group, row.collapsed) { toggleFolded(options, row.group) }
+                }
+
+                is ResultRow.Hit -> {
+                    val hit = row.hit
+                    SearchHitRow(hit, length(hit), row.visibleIndex == selected) { open(hit) }
+                }
+            }
+        }
+    }
+}
+
+private fun toggleFolded(options: FindChips, group: ResultGroup) {
+    val path = group.relativePath
+    if (!options.collapsed.remove(path)) options.collapsed.add(path)
+}
+
+// The line of a file: a chevron that says whether its hits are shown, its icon, its name, its folder and its count.
+@Composable
+private fun FileHeader(group: ResultGroup, collapsed: Boolean, onClick: () -> Unit) {
+    val folder = group.relativePath.substringBeforeLast('/', "")
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .testTag(TreeTags.findInFilesFile(group.relativePath))
+            .padding(horizontal = 4.dp, vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        IdeIcon(if (collapsed) Lucide.ChevronRight else Lucide.ChevronDown)
+        FileIcon(group.name, isDirectory = false)
+        Label(group.name, fontWeight = FontWeight.SemiBold)
+        Label(
+            folder,
+            Modifier.weight(1f),
+            color = IdeColors.TextSecondary,
+            fontSize = 12.sp,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Label(group.hits.size.toString(), color = IdeColors.TextSecondary, fontSize = 12.sp)
     }
 }
 
@@ -107,7 +166,8 @@ private fun SearchHitRow(hit: SearchHit, length: Int, selected: Boolean, onClick
             .clickable(onClick = onClick)
             .testTag(TreeTags.findInFilesItem(hit.relativePath, hit.line))
             .resultRow(selected)
-            .padding(horizontal = 8.dp, vertical = 3.dp),
+            .semantics { this.selected = selected }
+            .padding(start = HITS_INDENT.dp, end = 8.dp, top = 3.dp, bottom = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         val trimmed = hit.lineText.trimStart()
@@ -120,7 +180,7 @@ private fun SearchHitRow(hit: SearchHit, length: Int, selected: Boolean, onClick
             overflow = TextOverflow.Ellipsis,
         )
         Label(
-            "${hit.entry.name} ${hit.line + 1}",
+            "${hit.line + 1}",
             Modifier.padding(start = 10.dp),
             color = IdeColors.TextSecondary,
             fontSize = 12.sp,

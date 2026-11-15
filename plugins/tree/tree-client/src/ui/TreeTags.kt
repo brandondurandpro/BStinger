@@ -23,6 +23,8 @@ object TreeTags {
     const val RECENT_FILES = "recentFiles"
     const val GOTO_FILE_INPUT = "gotoFile.input"
     const val FIND_IN_FILES = "findInFiles"
+    const val SEARCH_TOOL_BUTTON = "tool.search"
+    const val SEARCH_PANEL = "searchPanel"
     const val FIND_IN_FILES_INPUT = "findInFiles.input"
     const val FIND_IN_FILES_COUNT = "findInFiles.count"
     const val FIND_IN_FILES_ENGINE = "findInFiles.engine"
@@ -58,6 +60,9 @@ object TreeTags {
     fun treeGitStatus(relativePath: String, status: String) = "tree.git:$relativePath:$status"
 
     fun gotoFileItem(relativePath: String) = "gotoFile.item:$relativePath"
+
+    /** The row of a file in the grouped results, by its path relative to the project. */
+    fun findInFilesFile(relativePath: String) = "findInFiles.file:$relativePath"
 
     fun findInFilesItem(relativePath: String, line: Int) = "findInFiles.item:$relativePath:$line"
 

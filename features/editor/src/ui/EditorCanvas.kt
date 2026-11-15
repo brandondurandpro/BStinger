@@ -53,7 +53,7 @@ internal class GutterMarks(changes: List<GitLineChange>, blame: List<BlameLine>?
 }
 
 /**
- * The rows of an editor drawn on one canvas, like IntelliJ's editor: scrolling and caret moves only redraw, nothing
+ * The rows of an editor drawn on one canvas: scrolling and caret moves only redraw, nothing
  * is composed per line, and the highlighted text of each line is laid out once ([LineRenderCache]). Everything is
  * read in the draw phase. The caret has a layer of its own, so its blinking does not redraw the text.
  */

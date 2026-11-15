@@ -16,7 +16,7 @@ internal fun escape(document: Document) {
     if (document.extraCarets.isNotEmpty()) document.removeExtraCarets() else document.clearSelection()
 }
 
-// IntelliJ: copy and cut without a selection act on the whole line.
+// Copy and cut without a selection act on the whole line.
 internal fun copy(document: Document, cut: Boolean) {
     if (document.extraCarets.isNotEmpty()) return copyOfCarets(document, cut)
     val whole = !document.hasSelection
