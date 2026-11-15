@@ -78,6 +78,22 @@ class AgentContextE2eTest {
         }
 
     @Test
+    fun `the list of an @ stays in place while the word typed filters it`() =
+        runComposeUiTest {
+            val launched = launchWithProject(project, agentPreferences())
+            startConversation(launched)
+            typePrompt("@")
+            awaitTag(AgentTags.AGENT_COMPLETION, timeout = AGENT_TIMEOUT)
+            val shown = boundsOf(AgentTags.AGENT_COMPLETION)
+            // While the search of the next key typed runs, the list keeps what the last one found: no flash away.
+            typePrompt("App")
+            assertTrue(isShown(AgentTags.AGENT_COMPLETION), "the list flashed away between two keys typed")
+            awaitCondition(AGENT_TIMEOUT) { suggestions() == listOf(app, "src/test/kotlin/AppTest.kt") }
+            // And it keeps its bounds key after key: the prompt under it does not shake with every result.
+            assertEquals(shown, boundsOf(AgentTags.AGENT_COMPLETION))
+        }
+
+    @Test
     fun `a file joined can be removed, an @ that matches nothing lists nothing, Escape closes the list`() =
         runComposeUiTest {
             val launched = launchWithProject(project, agentPreferences())
@@ -89,8 +105,7 @@ class AgentContextE2eTest {
             awaitTag(AgentTags.agentAttachmentRemove("Strings.kt")).performClick()
             awaitNoTag(AgentTags.agentAttachment("Strings.kt"))
             typePrompt("@zzz")
-            waitForIdle()
-            assertEquals(emptyList(), suggestions())
+            awaitNoTag(AgentTags.AGENT_COMPLETION)
             conversation.draft = ""
             typePrompt("@")
             awaitTag(AgentTags.AGENT_COMPLETION, timeout = AGENT_TIMEOUT)

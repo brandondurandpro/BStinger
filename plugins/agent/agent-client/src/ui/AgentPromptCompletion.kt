@@ -6,7 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -38,6 +38,8 @@ import org.example.kotlineditor.state.completingAt
 import org.example.kotlineditor.state.replaced
 import org.example.kotlineditor.model.AgentSlashCommand
 
+// The list keeps this height the whole time it shows: sized on its content, it would resize with every key typed and
+// shake the prompt under it.
 private val LIST_HEIGHT = 240.dp
 
 /** A suggestion of the completion of the prompt: what it shows, what it types, what else choosing it does. */
@@ -62,7 +64,7 @@ internal class Suggestion(
 internal class PromptCompletion(
     private val conversation: Conversation,
     private val commands: () -> List<AgentSlashCommand>,
-    private val files: (Completing.File) -> List<Suggestion> = { emptyList() },
+    private val files: () -> List<Suggestion> = { emptyList() },
 ) {
     var selected by mutableIntStateOf(0)
         private set
@@ -76,7 +78,7 @@ internal class PromptCompletion(
         get() =
             when (val word = completing) {
                 is Completing.Command -> commandsMatching(commands(), word.query).map { it.suggestion() }
-                is Completing.File -> files(word)
+                is Completing.File -> files()
                 null -> emptyList()
             }
 
@@ -132,7 +134,7 @@ internal fun CompletionList(completion: PromptCompletion, modifier: Modifier = M
     LaunchedEffect(selected) { state.scrollToItem(selected) }
     LazyColumn(
         modifier
-            .heightIn(max = LIST_HEIGHT)
+            .height(LIST_HEIGHT)
             .background(IdeColors.Panel, IdeShapes.ExtraLarge)
             .border(1.dp, IdeColors.Separator, IdeShapes.ExtraLarge)
             .padding(4.dp)

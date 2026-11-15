@@ -40,11 +40,15 @@ private const val FILE_SUGGESTIONS = 50
 /** The files and directories matching the word after an `@`, searched off the UI thread for the word they were found for. */
 @Stable
 internal class FileSuggestions {
-    private var foundFor: String? by mutableStateOf(null)
+    /** The list of the last search that finished, kept while the next one runs. */
     private var found: List<Suggestion> by mutableStateOf(emptyList())
 
-    /** The files and directories found for [word]; none while they are searched. */
-    fun of(word: Completing.File): List<Suggestion> = if (foundFor == word.query) found else emptyList()
+    /**
+     * The files and directories to show for [word]: those of the last search that finished, kept while the search of
+     * the word typed now runs, so the list does not flash away and back between two keys typed. The next search
+     * replaces them as soon as it is done.
+     */
+    fun of(): List<Suggestion> = found
 
     /**
      * Searches [index] for [word]: its files and its directories, the best matches first. Picking one joins it to
@@ -58,7 +62,6 @@ internal class FileSuggestions {
         // At equal score a file comes first: what was listed before directories could be mentioned stays in place.
         val best = (files + directories).sortedByDescending { it.score }.take(FILE_SUGGESTIONS)
         found = best.map { it.suggestion(context) }
-        foundFor = word.query
     }
 }
 
