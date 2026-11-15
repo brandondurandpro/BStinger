@@ -43,6 +43,9 @@ object PreferenceKeys {
     /** The prompt templates of the user: one per line, `name`, a tab, the text with `\\`, newlines and tabs escaped. */
     const val AGENT_TEMPLATES = "agent.templates"
 
+    /** The teams of agents of the user: one member per line (see `encodeTeams`); an empty value is "no team". */
+    const val AGENT_TEAMS = "agent.teams"
+
     /** Per project (the key ends with its path): its prompt templates, in the format of [AGENT_TEMPLATES]. */
     const val AGENT_TEMPLATES_PREFIX = "agent.templates."
 

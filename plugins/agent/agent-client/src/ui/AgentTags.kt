@@ -40,6 +40,25 @@ object AgentTags {
     const val AGENT_STATS_PROMPTS = "agent.stats.prompts"
     const val AGENT_STATS_CLOSE = "agent.stats.close"
     const val AGENT_TEMPLATES = "agent.templates"
+    const val AGENT_TEAMS = "agent.teams"
+    const val AGENT_TEAM = "agent.team"
+    const val AGENT_TEAM_NONE = "agent.team.none"
+    const val AGENT_TEAM_MAKE = "agent.team.make"
+    const val AGENT_STRIP = "agent.strip"
+    const val AGENT_STRIP_DETAIL = "agent.strip.detail"
+    const val AGENT_STRIP_DETAIL_CLOSE = "agent.strip.detail.close"
+    const val AGENT_TEAM_NAME = "agent.team.name"
+    const val AGENT_TEAM_NEW = "agent.team.new"
+    const val AGENT_TEAM_CANCEL = "agent.team.cancel"
+    const val AGENT_TEAMS_EMPTY = "agent.teams.empty"
+    const val AGENT_TEAM_SAVE = "agent.team.save"
+    const val AGENT_TEAM_CLOSE = "agent.team.close"
+    const val AGENT_TEAM_ADD_MEMBER = "agent.team.addMember"
+    const val AGENT_MEMBER_NAME = "agent.team.member.name"
+    const val AGENT_MEMBER_MODEL = "agent.team.member.model"
+    const val AGENT_MEMBER_EFFORT = "agent.team.member.effort"
+    const val AGENT_MEMBER_SKILLS = "agent.team.member.skills"
+    const val AGENT_MEMBER_PROMPT = "agent.team.member.prompt"
     const val AGENT_TEMPLATE_NEW = "agent.template.new"
     const val AGENT_TEMPLATE_NAME = "agent.template.name"
     const val AGENT_TEMPLATE_TEXT = "agent.template.text"
@@ -59,6 +78,26 @@ object AgentTags {
 
 
     fun agentDetailChat(id: Int) = "agent.detail.chat.$id"
+
+    fun agentStripEntry(name: String) = "agent.strip.entry.$name"
+
+    fun agentTeam(name: String) = "agent.team.choice.$name"
+
+    fun agentTeamEntry(name: String) = "agent.team.entry.$name"
+
+    fun agentTeamMember(index: Int) = "agent.team.member.$index"
+
+    fun agentTeamEdit(name: String) = "agent.team.edit.$name"
+
+    fun agentTeamDelete(name: String) = "agent.team.delete.$name"
+
+    fun agentTeamMemberEdit(index: Int) = "agent.team.member.edit.$index"
+
+    fun agentTeamMemberRemove(index: Int) = "agent.team.member.remove.$index"
+
+    fun agentMemberSkill(name: String) = "agent.team.member.skill.$name"
+
+    fun agentMemberSkillRemove(name: String) = "agent.team.member.skill.remove.$name"
 
     fun agentTemplate(name: String) = "agent.template.$name"
 

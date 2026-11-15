@@ -41,6 +41,8 @@ private const val CLIENT_TIMEOUT_S = 60L
  *   (`lines <n> <path>`: the same, the text being `n` lines);
  * - `plan`: a plan of two steps, updated as they complete;
  * - `slow`: chunks every 50 ms until it is cancelled (`stubborn`: the same, but it never stops);
+ * - `delegate <title>`: the launch of a sub-agent (a tool call of kind think) completed with the report
+ *   `Report of <title>: done.` and a second line `Second line of the report.`; `delegating <title>`: the same call, still running;
  * - `stream <n>`: `n` chunks at once; `tools <n>`: `n` completed tool calls (`tools <n> <lines>`: each with an
  *   output of `lines` more lines, as a file read); `crash`: exits with code 3;
  * - `count`: the number of prompts of its session;
@@ -355,6 +357,8 @@ class FakeAgent(
             "slow" -> slow(session, stubborn = false)
             "stubborn" -> slow(session, stubborn = true)
             "stream" -> chunks(session, List(words.getOrNull(1)?.toIntOrNull() ?: 1) { "chunk $it " })
+            "delegate" -> delegate(session, rest, finish = true)
+            "delegating" -> delegate(session, rest, finish = false)
             "tools" -> tools(session, words.getOrNull(1)?.toIntOrNull() ?: 1, words.getOrNull(2)?.toIntOrNull() ?: 0)
             "crash" -> crash()
             "count" -> chunks(session, listOf("Prompt $count of $session."))
@@ -500,6 +504,14 @@ class FakeAgent(
             message(session, "tick $index ")
             Thread.sleep(SLOW_CHUNK_MS)
         }
+        return END_TURN
+    }
+
+    // The launch of a sub-agent, as Claude shows it (a tool call of kind think): [finish] gives its report, else it stays running.
+    private fun delegate(session: String, title: String, finish: Boolean): String {
+        tool(session, "delegate-${title.hashCode()}", title, "think", "in_progress", "/delegate")
+        if (finish) toolUpdate(session, "delegate-${title.hashCode()}", "completed", "Report of $title: done.\nSecond line of the report.")
+        message(session, if (finish) "Delegated." else "Delegating.")
         return END_TURN
     }
 

@@ -55,8 +55,9 @@ fun AgentState.toPreferences(): Map<String, String> {
     val used = PreferenceKeys.AGENT_USED to usedAgentIds().joinToString("\n")
     val saved = PreferenceKeys.AGENT_TEMPLATES to encodeTemplates(templates.filter { it.global })
     val own = PreferenceKeys.AGENT_TEMPLATES_PREFIX + project.root.path to encodeTemplates(templates.filter { !it.global })
+    val teamLines = PreferenceKeys.AGENT_TEAMS to encodeTeams(teams)
     // Nothing of the tabs is saved before the last ones were put back: it would erase them.
-    if (!restored) return mapOf(width, last, saved, own, used)
+    if (!restored) return mapOf(width, last, saved, own, used, teamLines)
     val root = project.root.path
     val open = tabs.open.mapNotNull { it.session }.joinToString("\n")
     val active = tabs.active?.session.orEmpty()
@@ -79,6 +80,7 @@ fun AgentState.toPreferences(): Map<String, String> {
         saved,
         own,
         used,
+        teamLines,
         PreferenceKeys.AGENT_ARCHIVED_PREFIX + root to archived,
         PreferenceKeys.AGENT_PINNED_PREFIX + root to pinned,
         PreferenceKeys.AGENT_OPEN_PREFIX + root to open,

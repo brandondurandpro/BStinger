@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -146,11 +147,11 @@ private fun TemplateList(templates: List<PromptTemplate>, editing: String?, choo
 }
 
 @Composable
-private fun TemplateTextField(text: String, change: (String) -> Unit, modifier: Modifier) {
+internal fun TemplateTextField(text: String, change: (String) -> Unit, modifier: Modifier, placeholder: String = "Prompt", height: Dp = TEXT_HEIGHT) {
     BasicTextField(
         value = text,
         onValueChange = change,
-        modifier = modifier.fillMaxWidth().height(TEXT_HEIGHT),
+        modifier = modifier.fillMaxWidth().height(height),
         cursorBrush = SolidColor(IdeColors.Caret),
         textStyle = TextStyle(fontFamily = IdeFonts.ui, color = IdeColors.Text, fontSize = 13.sp),
         decorationBox = { inner ->
@@ -161,7 +162,7 @@ private fun TemplateTextField(text: String, change: (String) -> Unit, modifier: 
                     .border(1.dp, IdeColors.InputBorder, IdeShapes.Medium)
                     .padding(8.dp),
             ) {
-                if (text.isEmpty()) Label("Prompt", color = IdeColors.TextSecondary)
+                if (text.isEmpty()) Label(placeholder, color = IdeColors.TextSecondary)
                 inner()
             }
         },

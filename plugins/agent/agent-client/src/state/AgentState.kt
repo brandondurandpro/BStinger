@@ -85,6 +85,13 @@ class Conversation(val id: Int, title: String, val branch: String) {
     /** What the user joins to the next prompt: files, lines, images. */
     val context = PromptContext()
 
+    /** The name of the team of agents this conversation works with (its manager answers); null for the agent alone. */
+    var team: String? by mutableStateOf(null)
+        internal set
+
+    /** True once the team was briefed: the first prompt carried the prompts of the manager and its members. */
+    internal var briefed = false
+
     /** The commands the agent offers in its session (`/compact`…); empty before it said. */
     var commands: List<AgentSlashCommand> by mutableStateOf(emptyList())
 
@@ -444,6 +451,67 @@ class AgentState(
         templates.removeAll { it.name == name }
     }
 
+    /** The teams of agents the user made: a manager and its sub-agents each; a first use starts with the default team. */
+    val teams =
+        mutableStateListOf<AgentTeam>().apply {
+            val savedTeams = saved[PreferenceKeys.AGENT_TEAMS]
+            // An empty value is a first use too: a build that saved before the default team existed must not leave no team.
+            val decoded = decodeTeams(savedTeams)
+            addAll(decoded.ifEmpty { defaultTeams() })
+        }
+
+    /**
+     * Saves [team], replacing the team called [previous] (the name it had when edited) or one of the same name.
+     * Returns false when the team or its manager has no name.
+     */
+    fun saveTeam(previous: String?, team: AgentTeam): Boolean {
+        val name = team.name.trim()
+        val managerName = team.manager.name.trim()
+        val namedMembers = team.members.filter { it.name.isNotBlank() }
+        if (name.isEmpty() || managerName.isEmpty()) return false
+        val stored = AgentTeam(name, team.manager.copy(name = managerName), namedMembers)
+        val index = teams.indexOfFirst { it.name == previous }
+        teams.removeAll { it.name == name || it.name == previous }
+        if (index in 0..teams.size) teams.add(index, stored) else teams.add(stored)
+        conversations.filter { previous != null && it.team == previous && previous != name }.forEach { it.team = name }
+        return true
+    }
+
+    /** Forgets the team [name]; the conversations that had it go on with the agent alone. */
+    fun removeTeam(name: String) {
+        teams.removeAll { it.name == name }
+        conversations.filter { it.team == name }.forEach { it.team = null }
+    }
+
+    /**
+     * Gives [conversation] the team [name], or none when it is null or unknown: its manager answers the first prompt,
+     * after the briefing of the team, and its model and effort are chosen when the agent offers them. A conversation
+     * already started is briefed with its next prompt; not while the agent works on one.
+     */
+    fun chooseTeam(conversation: Conversation, name: String?) {
+        val chosen = teams.firstOrNull { it.name == name }
+        if (conversation.busy || conversation.team == chosen?.name) return
+        conversation.team = chosen?.name
+        conversation.briefed = false
+        if (chosen != null) applyManagerSettings(conversation, chosen.manager)
+    }
+
+    // The model and effort of the manager, once the agent said what it offers; a value it does not offer stays as it is.
+    private fun applyManagerSettings(conversation: Conversation, manager: TeamMember) {
+        options.offer(conversation)
+        project.scope.launch {
+            conversation.offering?.join()
+            val model = conversation.model
+            val effort = conversation.effort
+            val modelId = model?.let { matchingValue(it.values.map { v -> v.value to v.name }, manager.model) }
+            if (model != null && modelId != null) options.choose(conversation, model.id, modelId)
+            // The efforts follow the model: those of the model just chosen are read once it is set.
+            val efforts = conversation.effort ?: effort
+            val effortId = efforts?.let { matchingValue(it.values.map { v -> v.value to v.name }, manager.effort) }
+            if (efforts != null && effortId != null) options.choose(conversation, efforts.id, effortId)
+        }
+    }
+
     /** The agents of the registry the user worked with: the history lists the sessions of each, not only the settings'. */
     internal val usedAgents =
         saved[PreferenceKeys.AGENT_USED].orEmpty().lines().filter { it.isNotBlank() }.toMutableList()
@@ -698,7 +766,7 @@ class AgentState(
         conversation.upsert(AgentItem.UserText(itemId, 0, text, attachments.map { it.label }))
         conversations.remove(conversation)
         conversations.add(0, conversation)
-        val prompt = OutgoingPrompt(itemId, text, attachments)
+        val prompt = OutgoingPrompt(itemId, briefedText(conversation, text), attachments)
         if (conversation.busy) {
             // The agent answers another prompt: this one waits, and goes once it is done (nothing lost, nothing
             // sent) — a keystroke against an answer in flight must not wipe the text the user typed.
@@ -706,6 +774,16 @@ class AgentState(
             return
         }
         launchDelivery(conversation, prompt)
+    }
+
+    // The first request of a conversation with a team goes after the briefing of its manager; the later ones as typed.
+    private fun briefedText(conversation: Conversation, text: String): String {
+        val team = teams.firstOrNull { it.name == conversation.team }
+        if (team == null || conversation.briefed) return text
+        conversation.briefed = true
+        // The agent titles the session from this first prompt, briefing included: the title made from the request stays.
+        conversation.renamed = true
+        return teamBriefing(team, text)
     }
 
     /**

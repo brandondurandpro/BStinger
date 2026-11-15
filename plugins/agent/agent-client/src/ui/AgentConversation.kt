@@ -89,6 +89,7 @@ private fun ConversationColumn(agent: AgentState, conversation: Conversation, sh
     val listState = conversation.listState
     val items = conversation.shownItems
     Column(Modifier.fillMaxSize().testTag(AgentTags.agentView(conversation.id))) {
+        AgentStrip(agent, conversation)
         Box(Modifier.weight(1f).fillMaxWidth()) {
             if (items.isEmpty()) {
                 Label(
@@ -309,6 +310,7 @@ private fun PromptActions(agent: AgentState, conversation: Conversation) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         // The agent first (an id, not a whole command line), then the settings of its session.
         AgentPicker(agent, conversation)
+        TeamPicker(agent, conversation)
         ModelPicker(agent, conversation)
         EffortPicker(agent, conversation)
         PermissionsPicker(agent, conversation)
