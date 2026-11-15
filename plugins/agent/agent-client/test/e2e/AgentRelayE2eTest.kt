@@ -214,6 +214,27 @@ class AgentRelayE2eTest {
     }
 
     @Test
+    fun `a delegation the manager gives up on stops its member, whose popup says why`() =
+        runComposeUiTest {
+            val (_, _, conversation) = startTeam(relayTeam())
+            // The manager gives up its call after 3 s, as Claude does after its tool timeout; the member would tick for
+            // much longer than the test waits.
+            sendPrompt("delegate-via-mcp-timeout 3000 Dev slow")
+            openChip("Dev")
+            val notice = "The manager stopped waiting for this delegation"
+            awaitCondition(AGENT_TIMEOUT) { notice in textOf(AgentTags.AGENT_STRIP_DETAIL) }
+            closeDetail()
+            awaitShown(conversation, "The delegation timed out.")
+            awaitIdle(conversation)
+            val call = awaitDelegateCall(conversation)
+            assertEquals(AgentToolStatus.Failed, call().status)
+            // The member stopped: the next delegation does not wait behind it.
+            sendPrompt("delegate-via-mcp Tester echo next")
+            awaitShown(conversation, "The member answered.")
+            awaitIdle(conversation)
+        }
+
+    @Test
     fun `an unknown member gives the manager an error result and nothing else happens`() =
         runComposeUiTest {
             val (_, _, conversation) = startTeam(relayTeam())
