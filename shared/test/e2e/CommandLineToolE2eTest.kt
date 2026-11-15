@@ -117,9 +117,19 @@ class CommandLineToolE2eTest {
         return process.waitFor()
     }
 
-    private fun ComposeUiTest.awaitReceived(): String {
-        awaitCondition { Files.exists(received) && Files.size(received) > 0 }
-        return Files.readString(received)
+    private fun receivedArguments(): List<String> {
+        if (!Files.exists(received)) return emptyList()
+        val lines = runCatching { Files.readAllLines(received) }.getOrDefault(emptyList())
+        return lines.filter { it.isNotBlank() }
+    }
+
+    // The folder the launcher was started on. It is compared as a file, not as text: the shell may spell it
+    // another way (RUNNER~1 for runneradmin in the temporary directory of the Windows CI).
+    private fun ComposeUiTest.awaitOpenedFolder(): Path {
+        awaitCondition { receivedArguments().size >= 2 }
+        val arguments = receivedArguments()
+        assertEquals("--open", arguments.firstOrNull(), arguments.toString())
+        return Path.of(arguments.last())
     }
 
     @Test
@@ -135,9 +145,8 @@ class CommandLineToolE2eTest {
 
             val project = Files.createDirectories(root.resolve("work/project"))
             assertEquals(0, runIde(from = root.resolve("work"), folder = "project"))
-            val arguments = awaitReceived()
-            assertTrue("--open" in arguments, arguments)
-            assertTrue(project.toRealPath().toString().lowercase() in arguments.lowercase(), arguments)
+            val opened = awaitOpenedFolder()
+            assertTrue(Files.isSameFile(project, opened), opened.toString())
         }
 
     @Test
@@ -146,7 +155,8 @@ class CommandLineToolE2eTest {
             installFromSettings(toolOf(fakeLauncher()))
             val here = Files.createDirectories(root.resolve("here"))
             assertEquals(0, runIde(from = here, folder = null))
-            assertTrue(here.toRealPath().toString().lowercase() in awaitReceived().lowercase())
+            val opened = awaitOpenedFolder()
+            assertTrue(Files.isSameFile(here, opened), opened.toString())
         }
 
     @Test
