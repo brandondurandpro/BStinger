@@ -1,9 +1,9 @@
 # The Windows CI jobs: the steps of `run-tests.bat` each job runs, separated by commas, in the format of
-# linux-test-groups.txt (which says how a step is written and checked). A Windows job pays about 1 minute of setup (checkout, toolchain cache, build),
-# so the small modules share a job, and the big ones are in shards.
+# linux-test-groups.txt (which says how a step is written and checked). A Windows job pays about 1 minute of setup
+# (checkout, toolchain cache, build), so the small modules share a job, and the big ones are in shards.
 #
-# Balanced on the times of the steps on a Windows runner (Nov 2026, CI run 43655501650): every group is about 4.7
-# minutes of tests.
+# Balanced on the times of the steps on a Windows runner (Nov 2026, CI runs 43655501650 and 43659624963): every group
+# is about 5 minutes of tests.
 run-client,shared.rest
 non-ui,remote,terminal-client,tree-client.rest
 editor.1,git-client.1

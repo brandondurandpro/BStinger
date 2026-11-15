@@ -229,8 +229,7 @@ jobs:
         run: ./kotlin build
       # Right after the build, so that a failing test does not lose it. Pull requests never save.
       - name: Save the build
-        # TEMPORARY: the second condition lets this pull request measure a warm build; removed before the merge.
-        if: matrix.cache && ((github.event_name == 'push' && github.ref == 'refs/heads/main') || startsWith(github.head_ref, 'ci/faster-pipeline'))
+        if: matrix.cache && github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
@@ -306,8 +305,7 @@ jobs:
         shell: cmd
         run: kotlin.bat build
       - name: Save the build
-        # TEMPORARY: the second condition lets this pull request measure a warm build; removed before the merge.
-        if: matrix.cache && ((github.event_name == 'push' && github.ref == 'refs/heads/main') || startsWith(github.head_ref, 'ci/faster-pipeline'))
+        if: matrix.cache && github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
