@@ -68,7 +68,7 @@ class AgentProcesses internal constructor(
         val running = synchronized(processes) { processes[agent]?.takeIf { it.isAlive } }
         if (running != null) return running
         val id = agent.registry
-        val command = if (id == null) agent else registry.command(id)
+        val command = if (id == null) agent else installedWith(registry.command(id), agent)
         return synchronized(processes) { processes[agent]?.takeIf { it.isAlive } ?: started(agent, command) }
     }
 
@@ -94,3 +94,7 @@ class AgentProcesses internal constructor(
         }
     }
 }
+
+// The installed command of a registry agent, with the variables [agent] adds (the long tool timeout of a manager).
+private fun installedWith(installed: AgentCommand, agent: AgentCommand): AgentCommand =
+    installed.copy(environment = installed.environment + agent.environment)

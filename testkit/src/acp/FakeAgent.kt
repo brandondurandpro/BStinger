@@ -377,6 +377,7 @@ class FakeAgent(
         val rest = typed.substringAfter(' ', "")
         return when (words.firstOrNull()) {
             "echo" -> chunks(session, rest.split(' ').map { "$it " })
+            "env" -> chunks(session, listOf("$rest=${System.getenv(rest).orEmpty()}"))
             "think" -> think(session, rest)
             "read" -> read(session, rest)
             "write" -> write(session, words.getOrNull(1).orEmpty(), rest.substringAfter(' ', ""))
@@ -776,7 +777,7 @@ class FakeAgent(
         private val COMMAND_WORDS = setOf(
             "echo", "think", "read", "write", "rewrite", "lines", "plan", "slow", "stubborn", "stream", "tools", "crash",
             "count", "usage", "run", "markdown", "model", "mode", "effort", "fallback", "context", "setup", "delegate",
-            "delegating", "delegate-via-mcp", "subagent", "subagent-early", "subagent-calls",
+            "delegating", "delegate-via-mcp", "subagent", "subagent-early", "subagent-calls", "env",
         )
         const val END_TURN = "end_turn"
         const val CANCELLED = "cancelled"
