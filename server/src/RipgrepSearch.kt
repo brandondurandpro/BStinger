@@ -21,7 +21,7 @@ import java.io.IOException
 import kotlin.time.Duration
 
 /**
- * [ProjectSearch] whose Find in Files runs ripgrep, like VS Code: native, parallel, no index, and it honours
+ * [ProjectSearch] whose Find in Files runs ripgrep: native, parallel, no index, and it honours
  * `.gitignore`. The file lists too (`rg --files`, for Go to File). The other queries, and every query whenever
  * ripgrep is missing or fails, use [fallback].
  */

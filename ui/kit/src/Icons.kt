@@ -120,7 +120,7 @@ fun StopIcon(modifier: Modifier = Modifier, color: Color = IdeColors.TextSeconda
     IdeIcon(Lucide.Square, modifier, color, size = 14.dp, filled = filled)
 }
 
-/** Colored square with the project's initials, like IntelliJ's project widget. */
+/** Colored square with the project's initials. */
 @Composable
 fun ProjectBadge(name: String, modifier: Modifier = Modifier, size: Dp = 20.dp) {
     val initials =

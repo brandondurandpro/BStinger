@@ -7,7 +7,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import org.example.kotlineditor.model.FeatureStatus
 import org.example.kotlineditor.model.TextRange
 
-// Ctrl+W in a file with a language server: the ranges of textDocument/selectionRange, like IntelliJ's syntax-aware
+// Ctrl+W in a file with a language server: the ranges of textDocument/selectionRange, the syntax-aware
 // selection; the editor's own steps (word, line, block, document) when the server has none.
 
 private const val SELECTION_TIMEOUT_MS = 1_500L

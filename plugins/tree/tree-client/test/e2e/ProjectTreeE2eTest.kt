@@ -118,7 +118,7 @@ class ProjectTreeE2eTest {
                     ?.entry
                     ?.name,
             )
-            // Opening moved the focus to the editor (like IntelliJ); click back into the tree.
+            // Opening moved the focus to the editor; click back into the tree.
             onNodeWithTag(TreeTags.treeRow("docs/guide.md")).performClick()
             // Left goes back to the parent, a second Left collapses it.
             onNodeWithTag(TreeTags.TREE).performKeyInput {

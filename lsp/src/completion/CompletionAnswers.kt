@@ -34,7 +34,7 @@ private class Candidate(
 private fun rank(typed: String, filter: String): Int? {
     val isExactPrefix = typed.isEmpty() || filter.startsWith(typed)
     val isPrefixIgnoringCase = filter.startsWith(typed, ignoreCase = true)
-    // Like IntelliJ: the first letter must match, the others may be spread (`stu` finds `strtoupper`).
+    // The first letter must match, the others may be spread (`stu` finds `strtoupper`).
     val firstTyped = typed.firstOrNull()
     val firstOfFilter = filter.firstOrNull()
     val sameFirstLetter = firstTyped != null && firstOfFilter != null && firstTyped.equals(firstOfFilter, true)

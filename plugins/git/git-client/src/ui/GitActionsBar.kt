@@ -21,7 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.example.kotlineditor.state.GitHost
 
-/** Commit, branch switch, pull and push, at the top of the Git panel (IntelliJ's commit area). */
+/** Commit, branch switch, pull and push, at the top of the Git panel. */
 @Composable
 internal fun GitActionsBar(project: GitHost) {
     Column(Modifier.fillMaxWidth().background(IdeColors.Panel).padding(8.dp)) {

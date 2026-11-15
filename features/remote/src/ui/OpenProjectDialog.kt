@@ -362,7 +362,7 @@ private fun Modifier.fieldKeys(commit: () -> Unit, close: () -> Unit): Modifier 
     }
 
 // The keyboard of the dialog (preview, ahead of the focused path field): the arrows move the highlighted
-// directory of the list (even while typing, like an autocomplete of IntelliJ), Escape closes; Enter opens the
+// directory of the list (even while typing, like an autocomplete), Escape closes; Enter opens the
 // highlighted directory as the project, but stays with the path field while it owns the focus, committing it.
 private fun Modifier.pickerPanelKeys(browser: DirectoryBrowser, fieldFocused: Boolean, close: () -> Unit): Modifier =
     onPreviewKeyEvent { event ->

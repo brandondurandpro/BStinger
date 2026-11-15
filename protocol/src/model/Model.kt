@@ -178,13 +178,13 @@ interface ProjectFileSystem {
     /** Returns the entry for [path] if it is an existing directory, `null` otherwise. */
     suspend fun resolveDirectory(path: String): FileEntry?
 
-    /** Children of [directory], directories first, then case-insensitive by name (like IntelliJ). */
+    /** Children of [directory], directories first, then case-insensitive by name. */
     suspend fun list(directory: FileEntry): List<FileEntry>
 
     /**
      * [list], where a directory holding only one directory, itself holding only one directory and so on, is
-     * returned as the last of the chain, [FileEntry.label] telling the names (`src/main/java`), like IntelliJ's
-     * compact middle packages. The server decides, as the client of a remote server does not see the disk.
+     * returned as the last of the chain, [FileEntry.label] telling the names (`src/main/java`), as compact
+     * middle packages. The server decides, as the client of a remote server does not see the disk.
      */
     suspend fun listFolded(directory: FileEntry): List<FileEntry> = list(directory)
 
@@ -201,7 +201,7 @@ interface ProjectFileSystem {
      */
     suspend fun write(file: FileEntry, text: String, expected: FileVersion? = null): FileVersion?
 
-    /** Creates an empty file; [name] may contain `/` to create intermediate directories, like IntelliJ. */
+    /** Creates an empty file; [name] may contain `/` to create intermediate directories. */
     suspend fun createFile(directory: FileEntry, name: String): FileEntry
 
     /** Creates the directory [name] in [directory]. */
@@ -245,7 +245,7 @@ interface ProjectSearch {
     }
 }
 
-/** Directories that are never indexed nor searched (IntelliJ excludes them too). */
+/** Directories that are never indexed nor searched. */
 val IGNORED_DIRECTORIES =
     setOf(".git", ".hg", ".svn", ".idea", ".gradle", ".kotlin", "build", "out", "node_modules", "target")
 

@@ -50,7 +50,7 @@ enum class InlayHintsMode {
     /** The line of the caret, hints included, in a small popup above it: the code itself does not move. */
     Popup,
 
-    /** In the code, between its characters, like IntelliJ. */
+    /** In the code, between its characters. */
     Inline,
     ;
 

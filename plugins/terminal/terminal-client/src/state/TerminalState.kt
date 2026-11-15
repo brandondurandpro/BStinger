@@ -34,7 +34,7 @@ private const val DEFAULT_CELL_HEIGHT = 16
 class TerminalTab(
     /** Stable id of the tab, used for its key in the UI and its test tag. */
     val number: Int,
-    /** Short name shown on the tab, like IntelliJ's: "Local", then "Local (2)" and so on. */
+    /** Short name shown on the tab: "Local", then "Local (2)" and so on. */
     val name: String,
     private val process: TerminalProcess,
     private val scope: CoroutineScope,
@@ -139,7 +139,7 @@ class TerminalTab(
 
 /**
  * The Terminal tool window: tabs, each with its own shell. Tabs are started the first time the window is shown
- * and keep running while it is hidden, like IntelliJ's terminal.
+ * and keep running while it is hidden.
  */
 @Stable
 class TerminalState(
@@ -240,5 +240,5 @@ class TerminalState(
     }
 }
 
-/** Name of the [index]-th terminal tab (one-based), as IntelliJ names its local terminals. */
+/** Name of the [index]-th terminal tab (one-based). */
 fun tabName(index: Int): String = if (index == 1) "Local" else "Local ($index)"

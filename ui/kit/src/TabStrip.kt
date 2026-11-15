@@ -32,7 +32,7 @@ fun isFullyVisible(listState: LazyListState, index: Int): Boolean {
     }
 }
 
-// Middle click closes the tab, like in IntelliJ and browsers; right click opens its context menu.
+// Middle click closes the tab, as in browsers; right click opens its context menu.
 @OptIn(ExperimentalComposeUiApi::class)
 fun onTabPress(event: PointerEvent, onSelect: () -> Unit, onClose: () -> Unit, onContextMenu: (Offset) -> Unit) {
     val position = event.changes.firstOrNull()?.position ?: Offset.Zero

@@ -369,4 +369,25 @@ class SearchOptionsE2eTest {
                 }.isSuccess
             }
         }
+
+    @Test
+    fun `closing the file types panel keeps the filter, opening it again shows the choice`() =
+        runComposeUiTest {
+            write("src/One.kt", "needle\n")
+            write("src/Two.xml", "needle\n")
+            launchWithProject(project)
+            openFindInFiles()
+            type("needle")
+            countIs { onNodeWithTag(TreeTags.FIND_IN_FILES_COUNT).assertTextContains("2 matches in 2 files") }
+            awaitTag(TreeTags.FIND_IN_FILES_GLOB_BUTTON).performClick()
+            awaitTag(TreeTags.findInFilesGlobSuggestion("*.kt")).performClick()
+            countIs { onNodeWithTag(TreeTags.FIND_IN_FILES_COUNT).assertTextContains("1 match in 1 file") }
+            // A second click on the chip closes the panel: the choice is not lost.
+            awaitTag(TreeTags.FIND_IN_FILES_GLOB_BUTTON).performClick()
+            awaitNoTag(TreeTags.FIND_IN_FILES_GLOB_INPUT)
+            countIs { onNodeWithTag(TreeTags.FIND_IN_FILES_COUNT).assertTextContains("1 match in 1 file") }
+            awaitNoTag(TreeTags.findInFilesItem("src/Two.xml", 0))
+            awaitTag(TreeTags.FIND_IN_FILES_GLOB_BUTTON).performClick()
+            awaitTag(TreeTags.FIND_IN_FILES_GLOB_INPUT).assertTextContains("*.kt")
+        }
 }

@@ -53,7 +53,7 @@ private val DialogShape = IdeShapes.ExtraLarge
 private val RowShape = IdeShapes.Large
 
 /**
- * The Settings dialog, like IntelliJ's (Ctrl+Alt+S): a search and the categories on the left, the settings of the
+ * The Settings dialog (Ctrl+Alt+S): a search and the categories on the left, the settings of the
  * category, or those the search finds, on the right. A change applies at once; Escape or a click outside closes.
  */
 @Composable
@@ -131,7 +131,7 @@ private fun CategoryList(settings: SettingsState, search: FocusRequester) {
     }
 }
 
-// Like IntelliJ's lists: the chosen row highlighted, the hovered one shaded, no ripple.
+// The chosen row highlighted, the hovered one shaded, no ripple.
 @Composable
 private fun CategoryRow(category: SettingsCategory, chosen: Boolean, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
@@ -222,6 +222,10 @@ private fun SettingControl(app: AppState, settings: SettingsState, setting: Sett
 
         Setting.Telemetry -> {
             TelemetryControl(app)
+        }
+
+        Setting.CommandLine -> {
+            CommandLineControl(app.commandLineTool)
         }
 
         Setting.Plugins -> {

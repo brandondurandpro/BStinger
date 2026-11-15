@@ -19,6 +19,7 @@ Build the whole project with `./kotlin build`.
 Run each module from the command line:
 
 - Desktop app: `./kotlin run -m desktopApp`
+- Open a folder from a shell: in the installed app, Settings > Command Line > Install writes the `ide` command (`~/.local/bin/ide`, `%LOCALAPPDATA%\kotlin-editor\bin\ide.cmd` on Windows), then `ide` (current directory) or `ide <folder>`. From the sources: `./kotlin run -m desktopApp -- --open "$PWD"`.
 
 ### Testing
 

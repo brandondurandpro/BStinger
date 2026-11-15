@@ -78,7 +78,7 @@ class IdePalette(
     val caret: Color,
     val textSelection: Color,
     val bracketMatch: Color,
-    /** Colors of brackets by nesting depth, in turn (VS Code's bracket pair colorization). */
+    /** Colors of brackets by nesting depth, in turn (bracket pair colorization). */
     val bracketDepths: List<Color>,
     /** A closing bracket that nothing opened. */
     val bracketUnmatched: Color,
@@ -330,7 +330,7 @@ object IdeColors {
     val TextSelection get() = palette.textSelection
     val BracketMatch get() = palette.bracketMatch
 
-    /** Colors of brackets by nesting depth, in turn (VS Code's bracket pair colorization). */
+    /** Colors of brackets by nesting depth, in turn (bracket pair colorization). */
     val BracketDepths get() = palette.bracketDepths
 
     /** A closing bracket that nothing opened. */
@@ -460,7 +460,7 @@ fun IdeTheme(choice: ThemeChoice = ThemeChoice.Dark, content: @Composable () -> 
             Font(Res.font.jetbrains_mono_regular, FontWeight.Normal, FontStyle.Normal),
             Font(Res.font.jetbrains_mono_italic, FontWeight.Normal, FontStyle.Italic),
         )
-    // Ligatures off, as in IntelliJ's defaults.
+    // Ligatures off.
     val codeStyle =
         remember(mono, palette) {
             IdeFonts.Code.copy(

@@ -2,7 +2,7 @@ package org.example.kotlineditor.state
 
 import org.example.kotlineditor.model.FileVersion
 
-// Typing and editing actions (IntelliJ keymap).
+// Typing and editing actions.
 
 private val PAIRS = mapOf('(' to ')', '[' to ']', '{' to '}', '"' to '"', '\'' to '\'')
 private val CLOSERS = setOf(')', ']', '}')
@@ -17,7 +17,7 @@ fun Document.insert(text: String) {
 }
 
 /**
- * Types one character like IntelliJ does: closes brackets and quotes, steps over an auto-inserted closer,
+ * Types one character: closes brackets and quotes, steps over an auto-inserted closer,
  * and wraps the selection when an opening bracket or quote is typed over it. With [closeTags], `>` that ends an
  * opening tag adds its closing tag after the caret.
  */
@@ -92,7 +92,7 @@ fun Document.newLine() {
     }
 }
 
-/** Backspace; deleting the opener of an empty pair `()` removes both characters, like IntelliJ. */
+/** Backspace; deleting the opener of an empty pair `()` removes both characters. */
 fun Document.backspace(word: Boolean = false) {
     val (l, c) = caret
     val line = lines[l]
@@ -138,7 +138,7 @@ fun Document.duplicate() {
     }
 }
 
-/** Ctrl+Y (IntelliJ keymap): deletes the lines touched by the caret or the selection. */
+/** Ctrl+Y: deletes the lines touched by the caret or the selection. */
 fun Document.deleteLines() {
     val (first, last) = selectedLineRange()
     val isLast = last == lines.lastIndex

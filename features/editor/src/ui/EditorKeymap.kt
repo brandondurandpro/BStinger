@@ -62,7 +62,7 @@ private fun eachCaret(
     action: Document.(Modifiers) -> Unit,
 ) = binding<EditorKeys>(keys, ctrl, shift, alt) { modifiers -> document.forEachCaret { action(modifiers) } }
 
-// The editor keymap (IntelliJ defaults), first match wins.
+// The editor keymap, first match wins.
 private val BINDINGS =
     listOf(
         bind(setOf(Key.A), ctrl = true) { document.selectAll() },
@@ -145,7 +145,7 @@ private fun typedChar(event: KeyEvent): Char? {
 }
 
 /**
- * Keys of an editor with code completion (IntelliJ keymap): Ctrl+Space asks for it; while the popup shows items,
+ * Keys of an editor with code completion: Ctrl+Space asks for it; while the popup shows items,
  * Up, Down, Page Up and Page Down move in it, Enter inserts the selected item, Tab inserts it over the rest of the
  * word, and Escape closes it. Other keys go to [editorKey]; a character typed then may open the popup.
  */

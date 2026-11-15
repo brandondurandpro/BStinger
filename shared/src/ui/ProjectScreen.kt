@@ -19,7 +19,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -55,7 +54,6 @@ import org.example.kotlineditor.state.hasInsight
 import org.example.kotlineditor.state.openFileOfDiff
 import org.example.kotlineditor.state.saveAll
 import org.example.kotlineditor.state.visualColumn
-import org.example.kotlineditor.syntax.treesitter.LineSpans
 import org.example.kotlineditor.telemetry.ClientTelemetry
 import org.example.kotlineditor.telemetry.Operation
 import org.example.kotlineditor.telemetry.measureToFrame
@@ -101,7 +99,7 @@ fun ProjectScreen(app: AppState, project: ProjectState) {
     }
 }
 
-// IntelliJ saves all files when the window loses focus, and synchronizes with the disk when it gets it back.
+// All files are saved when the window loses focus, and synchronizes with the disk when it gets it back.
 @Composable
 internal fun SyncOnWindowFocus(project: ProjectState) {
     val windowFocused = LocalWindowInfo.current.isWindowFocused
@@ -153,10 +151,6 @@ internal fun ProjectPopups(project: ProjectState, onClose: () -> Unit) {
 
         PopupKind.RecentFiles -> {
             GotoFilePopup(project, onClose = onClose, recentOnly = true)
-        }
-
-        PopupKind.FindInFiles -> {
-            FindInFilesPopup(project, project.findInFiles, onClose = onClose)
         }
 
         PopupKind.GotoLine -> {
@@ -289,9 +283,12 @@ private fun TabContent(
 
         is TabStatus.Diff -> {
             // The grammar may download: the lexer colors the diff until the tree-sitter colors arrive.
-            val spans by produceState<List<LineSpans?>?>(null, status.lines) {
-                value = project.grammars?.highlightDiff(tab.entry.name, status.lines)
-            }
+            val grammars = project.grammars
+            val spans =
+                rememberDiffSpans(status.lines) { lines ->
+                    val highlighted = grammars?.highlightDiff(tab.entry.name, lines)
+                    highlighted
+                }
             DiffView(
                 tab,
                 status.lines,

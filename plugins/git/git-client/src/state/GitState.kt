@@ -55,7 +55,7 @@ class GitState(
 
     /**
      * True while a background fetch runs: a pull or a push asked meanwhile waits for it (they would fail on the lock
-     * of the refs it updates), as in VS Code and IntelliJ, which run one Git command on the remotes at a time.
+     * of the refs it updates), which runs one Git command on the remotes at a time.
      */
     var fetching by mutableStateOf(false)
         private set
@@ -93,7 +93,7 @@ class GitState(
     /** Whether the toolbar's branch picker is open. */
     var branchPickerOpen by mutableStateOf(false)
 
-    /** Current Git branch (or short commit when detached), shown in the toolbar like IntelliJ's VCS widget. */
+    /** Current Git branch (or short commit when detached), shown in the toolbar. */
     var currentBranch: String? by mutableStateOf(null)
         private set
 

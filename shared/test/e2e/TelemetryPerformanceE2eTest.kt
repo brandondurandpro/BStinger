@@ -60,7 +60,10 @@ class TelemetryPerformanceE2eTest {
                 .isSuccess
         }
         onNodeWithTag(TreeTags.FIND_IN_FILES_INPUT).performKeyInput { pressKey(Key.Escape) }
-        awaitNoTag(TreeTags.FIND_IN_FILES)
+        awaitNoTag(TreeTags.SEARCH_PANEL)
+        // The Search window hid the Project one: the next run opens its file from the tree, as a user would.
+        onNodeWithTag(TreeTags.TOOL_BUTTON).performClick()
+        awaitTag(TreeTags.TREE)
         onNodeWithTag(EditorTags.tabClose("Large.kt")).performClick()
         awaitNoTag(EditorTags.tabClose("Large.kt"))
         renderFrame()

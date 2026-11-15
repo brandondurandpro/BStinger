@@ -2,6 +2,7 @@ package org.example.kotlineditor.state
 
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CoroutineScope
@@ -44,6 +45,10 @@ class FindInFilesSearch(
     private val unsaved: UnsavedDocumentsSearch,
     private val documents: () -> List<UnsavedDocument>,
 ) {
+    /** Counts the requests to focus the query field (Ctrl+Shift+F); the panel focuses it at each new value. */
+    var focusRequests: Int by mutableIntStateOf(0)
+        private set
+
     /** The hits found so far: the batches of the streamed search build one result below the popup. */
     var results: List<SearchHit> by mutableStateOf(emptyList())
         private set
@@ -76,6 +81,11 @@ class FindInFilesSearch(
 
     // Identifies the state a search updates: a batch of a cancelled old one does not update anything.
     private var generation = 0
+
+    /** Asks the panel to put the caret in the query field, whether it was just opened or already shown. */
+    fun requestFocus() {
+        focusRequests++
+    }
 
     /** Runs [options] as its own search, cancelling the running one: every change of options restarts. */
     fun start(options: FindOptions) {

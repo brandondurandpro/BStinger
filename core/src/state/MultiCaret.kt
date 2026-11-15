@@ -2,7 +2,7 @@ package org.example.kotlineditor.state
 
 import org.example.kotlineditor.model.TextChange
 
-// Multiple carets (IntelliJ keymap): Alt+click, Alt+J (see `Occurrences.kt`) and column selection (Alt+Shift+drag).
+// Multiple carets: Alt+click, Alt+J (see `Occurrences.kt`) and column selection (Alt+Shift+drag).
 
 /**
  * Runs [action] at every caret, as if each one were the only one, top to bottom: the carets after the one acting

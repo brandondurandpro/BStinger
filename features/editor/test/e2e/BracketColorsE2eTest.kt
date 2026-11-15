@@ -13,7 +13,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
- * Brackets colored by nesting depth (#33), like VS Code: gold, orchid, blue, then gold again. A closing bracket that
+ * Brackets colored by nesting depth (#33): gold, orchid, blue, then gold again. A closing bracket that
  * nothing opened is red, and the brackets of strings and comments keep their color. The depth carries over from line
  * to line, and follows the edits.
  */
