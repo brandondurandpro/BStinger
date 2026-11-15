@@ -56,6 +56,8 @@ internal object CommandScripts {
         // chcp 65001: cmd reads this file in the code page of the console, and the path of the launcher is UTF-8.
         // A trailing backslash (C:\) would escape the closing quote of the argument.
         // `start`: a batch file waits for the end of a program with a window otherwise.
+        // Known limit: `start` hands every handle of the caller to the IDE, redirections or not (cmd keeps the
+        // originals inheritable): a program that reads the output of `ide` to its end waits for the IDE to exit.
         val text =
             """
             @echo off

@@ -17,11 +17,17 @@ import org.example.kotlineditor.state.UserPath
 import org.example.kotlineditor.ui.AppTags
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlin.test.fail
+
+private const val RUN_TIMEOUT_SECONDS = 30L
 
 /** The `ide` command of the shell: installed from the Settings, it starts the launcher of the app on a folder. */
 @OptIn(ExperimentalTestApi::class)
@@ -46,14 +52,27 @@ class CommandLineToolE2eTest {
 
     // A program that writes the arguments it is started with where the test reads them.
     private fun fakeLauncher(name: String = "launcher"): Path {
-        val file = launcherDir.resolve(if (windows) "$name.cmd" else name)
-        val text = if (windows) windowsLauncher() else posixLauncher()
-        Files.writeString(file, text)
+        if (windows) return windowsLauncher(name)
+        val file = launcherDir.resolve(name)
+        Files.writeString(file, posixLauncher())
         file.toFile().setExecutable(true)
         return file
     }
 
-    private fun windowsLauncher(): String = listOf("@echo off", """echo %* > "$received"""").joinToString("\r\n")
+    // A real program, as the launcher of the installed app is: `start` runs a batch file through `cmd /K`, which
+    // drops the quotes around a path with a space and then stays open. Built with the C# compiler of Windows.
+    private fun windowsLauncher(name: String): Path {
+        val source = launcherDir.resolve("$name.cs")
+        val program = launcherDir.resolve("$name.exe")
+        val body = """System.IO.File.WriteAllText(@"$received", string.Join("\n", args));"""
+        Files.writeString(source, "class Launcher { static void Main(string[] args) { $body } }")
+        val compiler = Path.of(System.getenv("WINDIR"), "Microsoft.NET", "Framework64", "v4.0.30319", "csc.exe")
+        val command = listOf(compiler.toString(), "/nologo", "/target:winexe", "/out:$program", source.toString())
+        val compilation = ProcessBuilder(command).redirectErrorStream(true).start()
+        val messages = compilation.inputStream.readAllBytes().decodeToString()
+        assertEquals(0, compilation.waitFor(), "csc failed: $messages")
+        return program
+    }
 
     private fun posixLauncher(): String =
         listOf("#!/bin/sh", """printf '%s\n' "${'$'}@" > '$received'""").joinToString("\n", postfix = "\n")
@@ -86,7 +105,15 @@ class CommandLineToolE2eTest {
         val arguments = listOfNotNull(folder)
         val command = if (windows) listOf("cmd", "/c", script.toString()) else listOf("/bin/sh", script.toString())
         val process = ProcessBuilder(command + arguments).directory(from.toFile()).redirectErrorStream(true).start()
-        process.inputStream.readAllBytes()
+        // The output is read to its end, with a limit: on Windows what the command starts holds that output until
+        // it exits, and a launcher that stays would otherwise hang the whole run instead of failing this test.
+        val output = CompletableFuture.supplyAsync { process.inputStream.readAllBytes() }
+        try {
+            output.get(RUN_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        } catch (_: TimeoutException) {
+            process.destroyForcibly()
+            fail("the ide command still holds its output after $RUN_TIMEOUT_SECONDS s")
+        }
         return process.waitFor()
     }
 
