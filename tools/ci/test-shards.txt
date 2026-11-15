@@ -156,3 +156,4 @@ tree-client 1 *.SearchUnsavedE2eTest 1 1
 tree-client 1 *.SearchFilesE2eTest 1 1
 tree-client 1 *.SearchUnsavedPerformanceE2eTest 1 1
 # tree-client.rest: 73 s on Windows, 34 s on Linux, 12 classes (no line)
+
