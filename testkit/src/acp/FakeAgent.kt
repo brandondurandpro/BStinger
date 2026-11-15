@@ -392,6 +392,7 @@ class FakeAgent(
             "subagent-early" -> subagent(session, rest, calls = 2, early = true)
             "subagent-calls" -> subagent(session, words.drop(2).joinToString(" "), words.getOrNull(1)?.toIntOrNull() ?: 1, early = false)
             "delegate-via-mcp" -> viaMcp(session, words.getOrNull(1).orEmpty(), typed.substringAfter(' ', "").substringAfter(' ', ""))
+            "delegate-via-mcp-timeout" -> viaMcp(session, words.getOrNull(2).orEmpty(), words.drop(3).joinToString(" "), words.getOrNull(1)?.toLongOrNull())
             "delegating" -> delegate(session, rest, finish = false)
             "tools" -> tools(session, words.getOrNull(1)?.toIntOrNull() ?: 1, words.getOrNull(2)?.toIntOrNull() ?: 0)
             "crash" -> crash()
@@ -556,7 +557,9 @@ class FakeAgent(
 
     // The manager of the IDE's relay: it calls the tool `delegate(member, task)` of the MCP server its session was started
     // with (the url and the bearer token it recorded), shows the call as the Claude adapter does, and answers with the result.
-    private fun viaMcp(session: String, member: String, task: String): String {
+    // With [timeoutMs], it gives up the call after that long, as Claude does after its MCP tool timeout: the request is
+    // dropped without `notifications/cancelled`, and the call fails.
+    private fun viaMcp(session: String, member: String, task: String, timeoutMs: Long? = null): String {
         val server = relayServer(session) ?: return chunks(session, listOf("No kotlin-editor-team server in this session."))
         val callId = "mcp-delegate-${toolUses.incrementAndGet()}"
         update(session, "tool_call") {
@@ -581,7 +584,15 @@ class FakeAgent(
                     putJsonObject("_meta") { put("claudecode/toolUseId", callId) }
                 }
             }
-        val answer = Json.parseToJsonElement(mcpPost(url, authorization, call.toString())).jsonObject
+        val posted =
+            try {
+                mcpPost(url, authorization, call.toString(), timeoutMs)
+            } catch (_: java.net.http.HttpTimeoutException) {
+                toolUpdate(session, callId, "failed", "MCP error -32001: Request timed out")
+                message(session, "The delegation timed out.")
+                return END_TURN
+            }
+        val answer = Json.parseToJsonElement(posted).jsonObject
         val result = answer["result"]?.jsonObject
         val failed = result?.get("isError")?.jsonPrimitive?.booleanOrNull == true || result == null
         val text = ((result?.get("content") as? JsonArray)?.firstOrNull() as? JsonObject)?.text("text") ?: answer.toString()
@@ -600,8 +611,9 @@ class FakeAgent(
         return server.text("url").orEmpty() to authorization
     }
 
-    private fun mcpPost(url: String, authorization: String, body: String): String {
+    private fun mcpPost(url: String, authorization: String, body: String, timeoutMs: Long? = null): String {
         val builder = java.net.http.HttpRequest.newBuilder(java.net.URI.create(url)).POST(java.net.http.HttpRequest.BodyPublishers.ofString(body))
+        if (timeoutMs != null) builder.timeout(java.time.Duration.ofMillis(timeoutMs))
         builder.header("Content-Type", "application/json")
         if (authorization.isNotEmpty()) builder.header("Authorization", authorization)
         return mcpHttp.send(builder.build(), java.net.http.HttpResponse.BodyHandlers.ofString()).body()
@@ -777,7 +789,7 @@ class FakeAgent(
         private val COMMAND_WORDS = setOf(
             "echo", "think", "read", "write", "rewrite", "lines", "plan", "slow", "stubborn", "stream", "tools", "crash",
             "count", "usage", "run", "markdown", "model", "mode", "effort", "fallback", "context", "setup", "delegate",
-            "delegating", "delegate-via-mcp", "subagent", "subagent-early", "subagent-calls", "env",
+            "delegating", "delegate-via-mcp", "subagent", "subagent-early", "subagent-calls", "env", "delegate-via-mcp-timeout",
         )
         const val END_TURN = "end_turn"
         const val CANCELLED = "cancelled"

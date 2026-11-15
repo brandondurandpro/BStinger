@@ -2,7 +2,11 @@ package org.example.kotlineditor.acp.relay
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonArray
@@ -19,6 +23,7 @@ import org.example.kotlineditor.acp.SessionExtras
 import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.model.AgentItem
 import org.example.kotlineditor.model.AgentOption
+import org.example.kotlineditor.model.AgentToolStatus
 import org.example.kotlineditor.model.AgentTurnState
 import org.example.kotlineditor.model.RelayMember
 import org.example.kotlineditor.model.RelayTeam
@@ -46,6 +51,11 @@ private const val TOOL_TIMEOUT_MS = "1800000"
 internal fun AgentCommand.forManager(): AgentCommand =
     copy(environment = environment + (TOOL_TIMEOUT_VARIABLE to TOOL_TIMEOUT_MS))
 
+// What the conversation of a member says when its manager stopped waiting for it.
+private const val GIVEN_UP =
+    "The manager stopped waiting for this delegation (its call ended, a timeout or the end of its turn): " +
+        "the member was stopped."
+
 // Claude's own tools that launch sub-agents: disabled for a manager, whose team is the relay's.
 private val NATIVE_LAUNCHERS = listOf("Task", "Agent")
 
@@ -54,7 +64,8 @@ private val NATIVE_LAUNCHERS = listOf("Task", "Agent")
  * `delegate(member, task)`, served by [McpEndpoint]; each delegation runs the member in its own conversation
  * (`<manager>~d<n>`, with its own session, model, effort and system prompt) and its last answer goes back to the
  * manager as the result of the tool. One delegation runs at a time. Cancelling or closing the manager does the same to
- * its delegations. The members never get the tool, so they cannot delegate in turn.
+ * its delegations, and so does the end of its `delegate` call while the member works (the agent's tool timeout, the
+ * end of its turn): nobody would read the report. The members never get the tool, so they cannot delegate in turn.
  */
 internal class DelegationRelay(private val service: AgentService, private val scope: CoroutineScope) : Closeable {
     private val endpoint = lazy { McpEndpoint(scope) }
@@ -136,11 +147,35 @@ internal class DelegationRelay(private val service: AgentService, private val sc
             service.conversations[parent]?.attachChild(toolUseId, child, spec.name)
             delegated.add(child)
             try {
-                return turns.withLock { runMember(child, spec, task) }
+                return untilGivenUp(child) { turns.withLock { runMember(child, spec, task) } }
             } catch (cancelled: CancellationException) {
                 service.cancel(child)
                 throw cancelled
             }
+        }
+
+        // Runs [work], the delegation of [child], until the manager gives up its call: then it is cancelled, and the
+        // conversation of the member says why.
+        private suspend fun untilGivenUp(child: String, work: suspend () -> ToolOutcome): ToolOutcome =
+            coroutineScope {
+                val delegation = this
+                val watch =
+                    launch {
+                        awaitGivenUp(child)
+                        service.conversation(child).notice(GIVEN_UP)
+                        delegation.cancel()
+                    }
+                try {
+                    work()
+                } finally {
+                    watch.cancel()
+                }
+            }
+
+        // Returns once the `delegate` call of the manager that runs [child] has ended; never when no call names it.
+        private suspend fun awaitGivenUp(child: String) {
+            val journal = service.conversations[parent]?.journal ?: awaitCancellation()
+            journal.version.first { callEnded(journal, child) }
         }
 
         // The member's own conversation: its settings, then the task, then what it answered last.
@@ -220,4 +255,12 @@ private fun reportOf(journal: Journal): ToolOutcome {
     if (reply.isNotEmpty()) return ToolOutcome(reply)
     val notices = journal.filter { it as? AgentItem.Notice }.joinToString("\n") { it.text }
     return ToolOutcome(notices.ifEmpty { "The member sent no report." }, isError = true)
+}
+
+// Whether the call of the manager that runs [child] has ended: the manager no longer waits for its result.
+private fun callEnded(journal: Journal, child: String): Boolean {
+    val calls = journal.filter { it as? AgentItem.ToolCall }
+    val call = calls.firstOrNull { it.child == child } ?: return false
+    val waiting = call.status == AgentToolStatus.Pending || call.status == AgentToolStatus.Running
+    return !waiting
 }

@@ -104,6 +104,9 @@ internal class ServerConversation(
     /** Records the conversation [child] on the `delegate` call [toolUseId] (else the oldest without child). */
     fun attachChild(toolUseId: String?, child: String, member: String) = writer.attachChild(toolUseId, child, member)
 
+    /** Adds a notice of the IDE to the transcript. */
+    fun notice(text: String) = writer.notice(text)
+
     /** Stops the prompt: the agent is asked to stop, and abandoned if it does not within the grace delay. */
     fun cancel() {
         val running = synchronized(lock) { job?.takeIf { it.isActive } } ?: return

@@ -11,7 +11,9 @@ import org.example.kotlineditor.acp.answers
 import org.example.kotlineditor.acp.follow
 import org.example.kotlineditor.acp.idle
 import org.example.kotlineditor.model.AgentCommand
+import org.example.kotlineditor.model.AgentItem
 import org.example.kotlineditor.model.AgentOption
+import org.example.kotlineditor.model.AgentToolStatus
 import org.example.kotlineditor.model.AgentTurnState
 import org.example.kotlineditor.model.RelayMember
 import org.example.kotlineditor.model.RelayTeam
@@ -20,6 +22,7 @@ import java.nio.file.Files
 import kotlin.concurrent.thread
 import kotlin.test.AfterTest
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
@@ -175,6 +178,23 @@ class DelegationRelayTest {
         caller.join(15_000)
         assertNotNull(answer)
         service.idle("m~d1")
+    }
+
+    @Test
+    fun `a delegation the manager gave up on is stopped and says why, and the next one runs`() {
+        service.prompt("m", agent, directory, "u1", "delegate-via-mcp-timeout 1500 plain slow", relay = team)
+        service.follow("m~d1") { state, items -> state == AgentTurnState.Running && items.answers().isNotEmpty() }
+        val manager = service.idle("m") { items -> "The delegation timed out." in items.answers() }.items
+        val call = manager.filterIsInstance<AgentItem.ToolCall>().firstOrNull { it.child == "m~d1" }
+        assertEquals(AgentToolStatus.Failed, call?.status)
+        // The member stops long before the end of its slow task, and its conversation says why.
+        val member = service.idle("m~d1").items
+        val notices = member.filterIsInstance<AgentItem.Notice>().joinToString("\n") { it.text }
+        assertContains(notices, "The manager stopped waiting for this delegation")
+        // The next delegation is not kept waiting behind the one given up.
+        service.prompt("m", agent, directory, "u2", "delegate-via-mcp plain echo next", relay = team)
+        service.idle("m") { items -> "The member answered." in items.answers() }
+        assertEquals(listOf("next "), service.idle("m~d2").items.answers())
     }
 
     @Test
