@@ -45,8 +45,9 @@ class UpdatePlanTest {
         return file("$root/bin/kotlin-editor")
     }
 
+    // The macOS path is asked for here, as `-Dkotlin.editor.update.macos=true` does: it is off by default.
     private fun environment(os: UpdateOs, arch: String = "x64", launcher: File? = null, appImage: File? = null) =
-        InstallEnvironment(os, arch, launcher, appImage)
+        InstallEnvironment(os, arch, launcher, appImage, macInApp = true)
 
     @Test
     fun `an asset is named after the version without its v, the system, the architecture and the format`() {
@@ -188,6 +189,17 @@ class UpdatePlanTest {
                 UpdatePlanner.plan(environment(UpdateOs.LINUX, launcher = deb), release(TAR)),
             )
         assertTrue("package" in packaged.reason, packaged.reason)
+    }
+
+    @Test
+    fun `a macOS app is a manual update unless the untried path is asked for`() {
+        val root = File(base, "Applications/Kotlin Editor.app")
+        File(root, "Contents/MacOS").mkdirs()
+        val launcher = file("Applications/Kotlin Editor.app/Contents/MacOS/Kotlin Editor")
+        val byDefault = InstallEnvironment(UpdateOs.MAC, "arm64", launcher, appImage = null)
+        val manual = assertIs<UpdatePlan.Manual>(UpdatePlanner.plan(byDefault, release(DMG)))
+        assertTrue("macOS" in manual.reason, manual.reason)
+        assertIs<UpdatePlan.InApp>(UpdatePlanner.plan(byDefault.copy(macInApp = true), release(DMG)))
     }
 
     @Test

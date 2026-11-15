@@ -50,12 +50,23 @@ enum class PackageKind(val extension: String) {
  * development run), the `APPIMAGE` file of an AppImage, the system. A fake one points at a temporary directory in the
  * tests.
  */
-data class InstallEnvironment(val os: UpdateOs, val arch: String, val launcher: File?, val appImage: File?) {
+data class InstallEnvironment(
+    val os: UpdateOs,
+    val arch: String,
+    val launcher: File?,
+    val appImage: File?,
+    /**
+     * Whether a macOS app replaces itself. Off unless asked with `-Dkotlin.editor.update.macos=true`: that path
+     * (hdiutil, ditto, `open -n`) was never run on a Mac, and an update that fails there would leave no app.
+     */
+    val macInApp: Boolean = false,
+) {
     companion object {
         const val LAUNCHER_PROPERTY = "jpackage.app-path"
         const val APPIMAGE_VARIABLE = "APPIMAGE"
 
         const val APPDIR_VARIABLE = "APPDIR"
+        const val MAC_PROPERTY = "kotlin.editor.update.macos"
 
         fun current(): InstallEnvironment {
             val launcherPath = System.getProperty(LAUNCHER_PROPERTY)?.takeIf { it.isNotBlank() }
@@ -66,6 +77,7 @@ data class InstallEnvironment(val os: UpdateOs, val arch: String, val launcher: 
                 UpdateOs.archLabel(System.getProperty("os.arch")),
                 launcher,
                 appImage,
+                macInApp = System.getProperty(MAC_PROPERTY) == "true",
             )
         }
 
@@ -153,6 +165,7 @@ internal object InstallLocator {
     private const val NOT_INSTALLED = "This IDE is not an installed one (a development run)."
     private const val UNKNOWN_LAYOUT = "The layout of this install is unknown."
     private const val PACKAGE_MANAGED = "This IDE is installed by your package manager: update it with the package."
+    private const val MAC_NOT_YET = "On macOS the IDE does not replace itself yet: install the new version by hand."
     private const val TRANSLOCATED = "macOS runs this app from a temporary copy: move it to Applications first."
 
     fun locate(environment: InstallEnvironment): Located {
@@ -160,6 +173,7 @@ internal object InstallLocator {
         val launcher = environment.launcher
         return when {
             environment.os == UpdateOs.LINUX && appImage != null -> locateAppImage(appImage)
+            environment.os == UpdateOs.MAC && !environment.macInApp -> Located.Refused(MAC_NOT_YET)
             launcher == null -> Located.Refused(NOT_INSTALLED)
             else -> locateDirectory(environment.os, launcher)
         }
