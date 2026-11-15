@@ -103,5 +103,6 @@ internal fun HomeStatusBar(app: AppState) {
             Label("Remote: $it", color = IdeColors.TextSecondary, fontSize = 12.sp)
         }
         LinkStatus(app)
+        UpdateIndicator(app)
     }
 }

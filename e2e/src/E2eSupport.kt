@@ -1,6 +1,7 @@
 package org.example.kotlineditor.e2e
 
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.input.key.Key
@@ -46,6 +47,7 @@ import org.example.kotlineditor.state.InMemoryPreferenceStore
 import org.example.kotlineditor.state.PreferenceStore
 import org.example.kotlineditor.state.ProjectState
 import org.example.kotlineditor.state.Screen
+import org.example.kotlineditor.state.UpdateNotifier
 import org.example.kotlineditor.syntax.treesitter.GrammarStore
 import org.example.kotlineditor.telemetry.ClientTelemetry
 import org.example.kotlineditor.telemetry.InMemoryHook
@@ -258,6 +260,7 @@ private fun appStateOf(
     grammars: GrammarStore?,
     telemetry: ((String) -> Telemetry)?,
     initialProject: String?,
+    updates: UpdateNotifier?,
 ): AppState =
     AppState(
         services,
@@ -268,6 +271,7 @@ private fun appStateOf(
         JvmRemoteFactory,
         telemetry,
         initialProject = initialProject,
+        updates = updates,
     )
 
 /**
@@ -292,6 +296,8 @@ fun ComposeUiTest.launchApp(
     ssh: List<String>? = null,
     /** A project the window opens at startup, in agent mode on the question of a new conversation (an added window). */
     initialProject: String? = null,
+    /** Tells that a newer release exists, from a stand-in of GitHub; none by default (no network in tests). */
+    updates: UpdateNotifier? = null,
 ): E2eApp {
     TextClipboard.useSystem = false
     val pluginSetup = PluginSetup(plugins.map(::loadPlugin), pluginsDirectory?.let { startPlugins(it) })
@@ -320,9 +326,10 @@ fun ComposeUiTest.launchApp(
         val scope = rememberCoroutineScope()
         val state =
             remember {
-                appStateOf(services, scope, withoutRealAgent(preferences), grammars, measured, initialProject)
+                appStateOf(services, scope, withoutRealAgent(preferences), grammars, measured, initialProject, updates)
             }
         created = state
+        LaunchedEffect(updates) { updates?.run() }
         state.plugins = pluginSetup.installed
         DisposableEffect(Unit) {
             onDispose {
@@ -444,6 +451,7 @@ fun ComposeUiTest.launchWithProject(
     plugins: List<IdePlugin> = emptyList(),
     pluginsDirectory: File? = null,
     ssh: List<String>? = null,
+    updates: UpdateNotifier? = null,
 ): E2eApp {
     val app =
         launchApp(
@@ -457,6 +465,7 @@ fun ComposeUiTest.launchWithProject(
             plugins = plugins,
             pluginsDirectory = pluginsDirectory,
             ssh = ssh,
+            updates = updates,
         )
     openProjectDirectoryFromWelcome(project.path)
     awaitTag(TreeTags.treeRow("src"))

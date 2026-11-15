@@ -20,6 +20,7 @@ object AppTags {
     const val TELEMETRY_SENT = "telemetry.sent"
     const val PROJECT_TELEMETRY = "project.telemetry"
     const val STATUS_REMOTE = "status.remote"
+    const val UPDATE_AVAILABLE = "status.updateAvailable"
     const val TOP_REMOTE = "toolbar.remote"
     const val PROJECT = "project"
     const val PROJECT_WIDGET = "project.widget"

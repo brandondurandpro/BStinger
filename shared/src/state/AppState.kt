@@ -36,6 +36,8 @@ class AppState(
     reopenLastProject: Boolean = true,
     /** A project to open at startup, in agent mode with the question of a new conversation: an added window's. */
     initialProject: String? = null,
+    /** Tells that a newer release is published; shared by the windows, run by whoever owns it; null in previews. */
+    val updates: UpdateNotifier? = null,
 ) {
     val preferences = PreferenceHub(preferenceStore)
 

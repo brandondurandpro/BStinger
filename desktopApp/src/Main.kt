@@ -15,6 +15,7 @@ import androidx.compose.ui.window.rememberWindowState
 import org.example.kotlineditor.memory.MemoryReturn
 import org.example.kotlineditor.model.AppServices
 import org.example.kotlineditor.remote.JvmRemoteFactory
+import org.example.kotlineditor.remote.RemoteBundleDownload
 import org.example.kotlineditor.rpc.Protocol
 import org.example.kotlineditor.rpc.RpcClient
 import org.example.kotlineditor.rpc.appServices
@@ -23,6 +24,8 @@ import org.example.kotlineditor.server.TokenFile
 import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.ClientPlugins
 import org.example.kotlineditor.state.FilePreferenceStore
+import org.example.kotlineditor.state.GitHubReleases
+import org.example.kotlineditor.state.UpdateNotifier
 import org.example.kotlineditor.syntax.treesitter.GrammarStore
 import org.example.kotlineditor.telemetry.ClientTelemetry
 import org.example.kotlineditor.telemetry.HookedTelemetry
@@ -66,8 +69,11 @@ fun main(args: Array<String>) {
     // The plugins installed by the user, in ~/.kotlin-editor/plugins; a plugin that fails stays off, the IDE starts.
     val plugins = ClientPlugins().also(ClientPlugins::start)
     val exporter = DesktopExporter()
+    // One check for all the windows; a development run does not know its version and never checks.
+    val updates = UpdateNotifier(RemoteBundleDownload.ideVersion(), GitHubReleases())
     application {
         LaunchedEffect(Unit) { measureStartup() }
+        LaunchedEffect(Unit) { updates.run() }
         LaunchedEffect(Unit) { plugins.keepServerInSync(client) }
         val windows = remember { mutableStateListOf(WindowId()) }
         for (id in windows.toList()) {
@@ -77,6 +83,7 @@ fun main(args: Array<String>) {
                     localServices = localServices,
                     plugins = plugins,
                     exporter = exporter,
+                    updates = updates,
                     firstWindow = id === windows.firstOrNull(),
                     initialProject = id.projectPath,
                     onNewWindow = { projectPath -> windows.add(WindowId(projectPath)) },
@@ -104,6 +111,7 @@ private fun IdeWindow(
     localServices: AppServices?,
     plugins: ClientPlugins,
     exporter: DesktopExporter,
+    updates: UpdateNotifier,
     firstWindow: Boolean,
     initialProject: String?,
     onNewWindow: (String?) -> Unit,
@@ -123,6 +131,7 @@ private fun IdeWindow(
                 // The windows added by the user open on the welcome screen, with no project.
                 reopenLastProject = firstWindow,
                 initialProject = initialProject,
+                updates = updates,
             ).also {
                 it.plugins = plugins
                 it.onNewWindow = onNewWindow
