@@ -47,6 +47,6 @@ class UpdateIndicatorPerformanceE2eTest {
                 awaitTag(AppTags.UPDATE_AVAILABLE)
                 renderFrame()
             }
-            assertEquals("v0.$RELEASES.0", notifier.available)
+            assertEquals("v0.$RELEASES.0", notifier.available?.tag)
         }
 }

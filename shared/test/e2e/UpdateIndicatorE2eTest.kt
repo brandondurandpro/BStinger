@@ -43,10 +43,13 @@ class UpdateIndicatorE2eTest {
     private fun releases(vararg tags: String) = ReleaseSource { tags.map { ReleaseInfo(it, draft = false) } }
 
     @Test
-    fun `a newer release shows the icon on the welcome screen, and a click opens its page`() =
+    fun `a newer release shows the icon on the welcome screen, and a click opens the update dialog`() =
         runComposeUiTest {
             launchApp(updates = notifier("0.2.0", releases("v0.1.0", "v0.3.0")))
             awaitTag(AppTags.UPDATE_AVAILABLE).performClick()
+            awaitTag(AppTags.UPDATE_DIALOG)
+            // A development run is no install that can replace itself: the dialog sends to the page of the release.
+            awaitTag(AppTags.UPDATE_DOWNLOAD_PAGE).performClick()
             awaitCondition { opened.isNotEmpty() }
             assertEquals(listOf("https://github.com/brandondurandpro/BStinger/releases/tag/v0.3.0"), opened.toList())
         }

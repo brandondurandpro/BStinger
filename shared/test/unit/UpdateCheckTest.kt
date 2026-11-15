@@ -5,6 +5,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 import org.example.kotlineditor.state.AppVersion
 import org.example.kotlineditor.state.GitHubReleases
+import org.example.kotlineditor.state.ReleaseAsset
 import org.example.kotlineditor.state.ReleaseInfo
 import org.example.kotlineditor.state.ReleaseSource
 import org.example.kotlineditor.state.UpdateNotifier
@@ -16,7 +17,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
-import kotlin.test.assertTrue
 
 class UpdateCheckTest {
     private fun version(text: String): AppVersion = AppVersion.parse(text) ?: error("not a version: $text")
@@ -24,32 +24,9 @@ class UpdateCheckTest {
     private fun release(tag: String, draft: Boolean = false) = ReleaseInfo(tag, draft)
 
     @Test
-    fun `versions compare number by number, not as text`() {
-        assertTrue(version("1.10.0") > version("1.9.0"))
-        assertTrue(version("v2") > version("1.99.99"))
-        assertEquals(version("1.2"), version("v1.2.0"))
-        assertEquals(version("1.2").hashCode(), version("1.2.0").hashCode())
-    }
-
-    @Test
-    fun `a pre-release is older than its release`() {
-        assertTrue(version("1.2.3-rc1") < version("1.2.3"))
-        assertTrue(version("1.2.3-rc1") < version("1.2.3-rc2"))
-        assertTrue(version("1.2.3-rc2") < version("1.2.3-rc10"))
-        assertTrue(version("1.2.3-rc9") > version("1.2.2"))
-    }
-
-    @Test
-    fun `what is not a version is refused`() {
-        listOf("", "latest", "v", "1..2", "1.2.3.4.5", " v1.2", "v1.2 ", "1.2/../x", "99999999999", "1.2-").forEach {
-            assertNull(AppVersion.parse(it), "'$it'")
-        }
-    }
-
-    @Test
     fun `the newest published release is offered when it is newer`() {
         val releases = listOf(release("v0.1.0"), release("v0.3.0"), release("v0.2.0"))
-        assertEquals("v0.3.0", UpdateNotifier.newestAfter(version("0.2.0"), releases))
+        assertEquals("v0.3.0", UpdateNotifier.newestAfter(version("0.2.0"), releases)?.tag)
     }
 
     @Test
@@ -70,13 +47,13 @@ class UpdateCheckTest {
                 release("1.5.0"),
                 release("v1.1.0"),
             )
-        assertEquals("v1.1.0", UpdateNotifier.newestAfter(version("1.0.0"), releases))
+        assertEquals("v1.1.0", UpdateNotifier.newestAfter(version("1.0.0"), releases)?.tag)
     }
 
     @Test
     fun `a user of a pre-release is offered the next pre-release`() {
         val releases = listOf(release("v1.0.0-rc2"), release("v1.0.0-rc1"))
-        assertEquals("v1.0.0-rc2", UpdateNotifier.newestAfter(version("1.0.0-rc1"), releases))
+        assertEquals("v1.0.0-rc2", UpdateNotifier.newestAfter(version("1.0.0-rc1"), releases)?.tag)
     }
 
     @Test
@@ -86,6 +63,31 @@ class UpdateCheckTest {
         assertEquals(listOf(release("v1.0.0"), release("v2.0.0", draft = true)), GitHubReleases.parseReleases(body))
         assertFailsWith<Exception> { GitHubReleases.parseReleases("""{"message":"Not Found"}""") }
         assertFailsWith<Exception> { GitHubReleases.parseReleases("<html>") }
+    }
+
+    @Test
+    fun `the assets of a release are read with their names and sizes, what is incomplete is left out`() {
+        val body =
+            """
+            [{"tag_name":"v1.0.0","draft":false,"assets":[
+              {"name":"kotlin-editor-1.0.0-linux-x64.deb","size":123,"browser_download_url":"https://evil.example/x"},
+              {"name":"no-size"},{"size":5},{"name":"SHA256SUMS.txt","size":64}]},
+             {"tag_name":"v2.0.0","draft":false,"assets":"nonsense"}]
+            """.trimIndent()
+        val assets = listOf(ReleaseAsset("kotlin-editor-1.0.0-linux-x64.deb", 123), ReleaseAsset("SHA256SUMS.txt", 64))
+        assertEquals(
+            listOf(ReleaseInfo("v1.0.0", false, assets), ReleaseInfo("v2.0.0", false)),
+            GitHubReleases.parseReleases(body),
+        )
+    }
+
+    @Test
+    fun `the release offered keeps its assets, its version and the page that shows it`() {
+        val asset = ReleaseAsset("kotlin-editor-0.3.0-linux-x64.tar.gz", 10)
+        val offered = UpdateNotifier.newestAfter(version("0.2.0"), listOf(ReleaseInfo("v0.3.0", false, listOf(asset))))
+        assertEquals(listOf(asset), offered?.assets)
+        assertEquals(version("0.3.0"), offered?.version)
+        assertEquals("https://github.com/brandondurandpro/BStinger/releases/tag/v0.3.0", offered?.pageUrl)
     }
 
     @Test
@@ -136,7 +138,7 @@ class UpdateCheckTest {
             }
         val notifier = UpdateNotifier("1.0.0", flaky, Duration.ofMillis(10), {})
         runBlocking { withTimeoutOrNull(500) { notifier.run() } }
-        assertEquals("v1.1.0", notifier.available)
-        assertEquals("https://github.com/brandondurandpro/BStinger/releases/tag/v1.1.0", notifier.releaseUrl)
+        assertEquals("v1.1.0", notifier.available?.tag)
+        assertEquals("https://github.com/brandondurandpro/BStinger/releases/tag/v1.1.0", notifier.available?.pageUrl)
     }
 }

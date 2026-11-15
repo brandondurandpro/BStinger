@@ -93,6 +93,8 @@ fun main(args: Array<String>) {
                             plugins.stop()
                             client.close()
                             closeInParallel(local, exporter)
+                            // A restart asked by the update dialog: the installer takes over once the IDE has exited.
+                            updates.updater.launchInstaller()
                             exitApplication()
                         }
                     },
@@ -135,6 +137,7 @@ private fun IdeWindow(
             ).also {
                 it.plugins = plugins
                 it.onNewWindow = onNewWindow
+                it.onClosed = onClosed
             }
         }
     Window(

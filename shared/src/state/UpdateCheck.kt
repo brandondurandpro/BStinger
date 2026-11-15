@@ -13,6 +13,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 import org.example.kotlineditor.remote.RemoteBundleDownload
 import java.io.IOException
 import java.net.URI
@@ -21,62 +22,20 @@ import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Duration
 
-/** A version number such as `1.2.3`, or `1.2.3-rc1`: what the tags `v1.2.3` of the GitHub releases carry. */
-class AppVersion private constructor(private val numbers: List<Int>, private val suffix: String?) :
-    Comparable<AppVersion> {
-    /** Whether this is a pre-release (`1.2.3-rc1`): older than `1.2.3`. */
-    val isPreRelease: Boolean get() = suffix != null
-
-    override fun compareTo(other: AppVersion): Int {
-        val size = maxOf(numbers.size, other.numbers.size)
-        for (index in 0 until size) {
-            val mine = numbers.getOrElse(index) { 0 }
-            val theirs = other.numbers.getOrElse(index) { 0 }
-            if (mine != theirs) return mine.compareTo(theirs)
-        }
-        val mySuffix = suffix
-        val theirSuffix = other.suffix
-        return when {
-            mySuffix == theirSuffix -> 0
-            mySuffix == null -> 1
-            theirSuffix == null -> -1
-            else -> compareNaturally(mySuffix, theirSuffix)
-        }
-    }
-
-    override fun equals(other: Any?): Boolean = other is AppVersion && compareTo(other) == 0
-
-    override fun hashCode(): Int = numbers.dropLastWhile { it == 0 }.hashCode() * 31 + (suffix?.hashCode() ?: 0)
-
-    // rc2 < rc10: the digits of a suffix are compared as numbers.
-    private fun compareNaturally(first: String, second: String): Int {
-        val mine = CHUNK.findAll(first).map { it.value }.toList()
-        val theirs = CHUNK.findAll(second).map { it.value }.toList()
-        for ((a, b) in mine.zip(theirs)) {
-            val numbers = a.toBigIntegerOrNull()?.let { x -> b.toBigIntegerOrNull()?.let { y -> x.compareTo(y) } }
-            val order = numbers ?: a.compareTo(b)
-            if (order != 0) return order
-        }
-        return mine.size.compareTo(theirs.size)
-    }
-
-    companion object {
-        private val CHUNK = Regex("""\d+|\D+""")
-        private const val MAX_NUMBERS = 4
-        private val PATTERN = Regex("""v?(\d{1,9}(?:\.\d{1,9}){0,${MAX_NUMBERS - 1}})(?:-([0-9A-Za-z.]{1,32}))?""")
-
-        /** The version written in [text], with or without the `v` of a tag; null when it is not one. */
-        fun parse(text: String): AppVersion? {
-            val match = PATTERN.matchEntire(text) ?: return null
-            val numbers = match.groupValues[1].split('.').map { it.toInt() }
-            val suffix = match.groups[2]?.value
-            return AppVersion(numbers, suffix)
-        }
-    }
-}
+/** A file attached to a release: only its name and size are used, never a URL of the API's answer. */
+data class ReleaseAsset(val name: String, val size: Long)
 
 /** A release of the repository, as the GitHub API lists it. */
-data class ReleaseInfo(val tag: String, val draft: Boolean)
+data class ReleaseInfo(val tag: String, val draft: Boolean, val assets: List<ReleaseAsset> = emptyList())
+
+/**
+ * A published release newer than the IDE: its [tag] (`v1.2.3`, checked to be `v` and a [version]), the [version] and
+ * the [assets] it carries.
+ */
+data class AvailableRelease(val tag: String, val version: AppVersion, val assets: List<ReleaseAsset>) {
+    /** The page of the release on GitHub: its notes and its downloads. */
+    val pageUrl: String get() = "https://github.com/${RemoteBundleDownload.REPOSITORY}/releases/tag/$tag"
+}
 
 /** Where the releases come from: the GitHub API, or a stand-in (tests). Throws when they cannot be read. */
 fun interface ReleaseSource {
@@ -125,7 +84,18 @@ class GitHubReleases(
                 val release = element as? JsonObject
                 val tag = release?.get("tag_name")?.jsonPrimitive?.content
                 val draft = release?.get("draft")?.jsonPrimitive?.booleanOrNull ?: false
-                tag?.let { ReleaseInfo(it, draft) }
+                tag?.let { ReleaseInfo(it, draft, assetsOf(release)) }
+            }
+        }
+
+        // A release without `assets`, or an asset without a name or a size, lists what can be read.
+        private fun assetsOf(release: JsonObject): List<ReleaseAsset> {
+            val assets = release["assets"] as? JsonArray ?: return emptyList()
+            return assets.mapNotNull { element ->
+                val asset = element as? JsonObject
+                val name = asset?.get("name")?.jsonPrimitive?.content
+                val size = asset?.get("size")?.jsonPrimitive?.longOrNull
+                if (name == null || size == null) null else ReleaseAsset(name, size)
             }
         }
     }
@@ -142,23 +112,24 @@ class UpdateNotifier(
     private val source: ReleaseSource,
     private val interval: Duration = Duration.ofHours(CHECK_HOURS),
     private val openUrl: (String) -> Unit = ::openInBrowser,
+    /** Downloads and installs the release found; one per process like the notifier. */
+    val updater: AppUpdater = AppUpdater(),
 ) {
-    /** The tag of the newest release when it is newer than this IDE (`v1.2.3`), else null. */
-    var available: String? by mutableStateOf(null)
+    /** The version of this IDE, null when it is unknown (a development run). */
+    val running: AppVersion? = currentVersion?.let(AppVersion::parse)
+
+    /** The newest release when it is newer than this IDE, else null. */
+    var available: AvailableRelease? by mutableStateOf(null)
         private set
 
-    /** The page of that release, null when there is none. */
-    val releaseUrl: String?
-        get() = available?.let { "https://github.com/${RemoteBundleDownload.REPOSITORY}/releases/tag/$it" }
-
-    /** Opens the release page in the browser. */
-    fun openReleasePage() {
-        releaseUrl?.let(openUrl)
+    /** Opens the page of [release] in the browser: its notes and its downloads. */
+    fun openReleasePage(release: AvailableRelease) {
+        openUrl(release.pageUrl)
     }
 
     /** Checks now and every [interval], until the calling coroutine is cancelled. */
     suspend fun run() {
-        val own = currentVersion?.let(AppVersion::parse) ?: return
+        val own = running ?: return
         while (true) {
             checkOnce(own)
             delay(interval.toMillis())
@@ -182,18 +153,23 @@ class UpdateNotifier(
         private const val CHECK_HOURS = 24L
 
         /**
-         * The tag of the newest published release newer than [own]. A pre-release (`-rc1`) is only offered to a
-         * user of a pre-release; a tag that is not strictly `v<numbers>[-suffix]` is ignored.
+         * The newest published release newer than [own]. A pre-release (`-rc1`) is only offered to a user of a
+         * pre-release; a tag that is not strictly `v<numbers>[-suffix]` is ignored.
          */
-        fun newestAfter(own: AppVersion, releases: List<ReleaseInfo>): String? {
+        fun newestAfter(own: AppVersion, releases: List<ReleaseInfo>): AvailableRelease? {
             val candidates =
                 releases
                     .filterNot { it.draft }
                     .filter { it.tag.startsWith("v") }
-                    .mapNotNull { release -> AppVersion.parse(release.tag)?.let { release.tag to it } }
-                    .filter { (_, version) -> own.isPreRelease || !version.isPreRelease }
-            val newest = candidates.maxByOrNull { it.second } ?: return null
-            return newest.first.takeIf { newest.second > own }
+                    .mapNotNull(::availableOf)
+                    .filter { own.isPreRelease || !it.version.isPreRelease }
+            val newest = candidates.maxByOrNull { it.version } ?: return null
+            return newest.takeIf { it.version > own }
+        }
+
+        private fun availableOf(release: ReleaseInfo): AvailableRelease? {
+            val version = AppVersion.parse(release.tag) ?: return null
+            return AvailableRelease(release.tag, version, release.assets)
         }
     }
 }

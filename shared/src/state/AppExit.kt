@@ -26,6 +26,8 @@ class AppExit(
     private val scope: CoroutineScope,
     private val project: () -> ProjectState?,
     private val finish: suspend () -> Unit,
+    /** Called when the user keeps the IDE open instead of closing. */
+    private val onCancel: () -> Unit = {},
 ) {
     /** The files that could not be saved as the IDE closes; null when none, or when it is not closing. */
     var failure: ExitSaveFailure? by mutableStateOf(null)
@@ -61,6 +63,7 @@ class AppExit(
     fun cancel() {
         failure = null
         pending = null
+        onCancel()
     }
 
     private suspend fun saveThenFinish() {

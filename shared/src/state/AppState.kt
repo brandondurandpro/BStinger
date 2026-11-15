@@ -73,7 +73,16 @@ class AppState(
     private val switching = Mutex()
 
     /** Closing the IDE: the files it could not save, until the user retries, closes anyway or keeps it open. */
-    val exiting = AppExit(scope, { session.project }, ::finishExit)
+    val exiting = AppExit(scope, { session.project }, ::finishExit, onCancel = { updates?.updater?.restartAbandoned() })
+
+    /** Whether this window shows the dialog of the update of the IDE (the status bar icon opens it). */
+    var updateDialogOpen by mutableStateOf(false)
+
+    /**
+     * What the desktop app does when this window is closed, set by it; closing for the restart of an update goes
+     * through the same [exit] as the close button: sessions and unsaved files are saved first.
+     */
+    var onClosed: () -> Unit = {}
 
     /** Whether a dialog of the whole window is open (Open Project, Settings): it keeps the keyboard. */
     val dialogOpen: Boolean get() = session.projectPickerOpen || settings.dialog != null

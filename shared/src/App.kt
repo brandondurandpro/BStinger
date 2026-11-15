@@ -7,12 +7,14 @@ import androidx.compose.runtime.key
 import androidx.compose.ui.Modifier
 import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.Screen
+import org.example.kotlineditor.ui.CloseForUpdateRestart
 import org.example.kotlineditor.ui.IdeTheme
 import org.example.kotlineditor.ui.OpenProjectDialog
 import org.example.kotlineditor.ui.ProjectScreen
 import org.example.kotlineditor.ui.RemoteDialog
 import org.example.kotlineditor.ui.SettingsDialog
 import org.example.kotlineditor.ui.UnsavedOnExitDialog
+import org.example.kotlineditor.ui.UpdateDialog
 import org.example.kotlineditor.ui.WelcomeScreen
 
 @Composable
@@ -27,6 +29,9 @@ fun App(state: AppState) {
         }
         if (state.session.projectPickerOpen) OpenProjectDialog(state.session)
         SettingsDialog(state)
+        UpdateDialog(state)
+        // Above the update dialog, which stays open while the IDE closes for its restart.
         state.exiting.failure?.let { UnsavedOnExitDialog(state, it) }
+        CloseForUpdateRestart(state)
     }
 }

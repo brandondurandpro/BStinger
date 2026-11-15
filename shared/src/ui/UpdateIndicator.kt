@@ -9,20 +9,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import org.example.kotlineditor.state.AppState
+import org.example.kotlineditor.state.UpdateState
 
 /**
- * An icon in the status bar when a release newer than the IDE is published; a click opens its page on GitHub.
- * Nothing is shown otherwise, and never an error: a check that fails is silent.
+ * An icon in the status bar when a release newer than the IDE is published (or an update is under way); a click opens
+ * the update dialog. Nothing is shown otherwise, and never an error: a check that fails is silent.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun UpdateIndicator(app: AppState) {
     val updates = app.updates ?: return
-    val tag = updates.available ?: return
-    val description = "Version ${tag.removePrefix("v")} is available: click to see what is new"
+    val release = updates.updater.state.let { (it as? UpdateState.Pinned)?.release } ?: updates.available ?: return
+    val description = "Version ${release.version} is available: click to update"
     TooltipArea(tooltip = { Tooltip(description) }) {
         Row(
-            Modifier.clickable(onClick = updates::openReleasePage).testTag(AppTags.UPDATE_AVAILABLE),
+            Modifier.clickable { app.updateDialogOpen = true }.testTag(AppTags.UPDATE_AVAILABLE),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             ArrowIcon(up = true, color = IdeColors.Accent)
