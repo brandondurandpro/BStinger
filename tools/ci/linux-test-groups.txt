@@ -4,11 +4,12 @@
 # whole, or all of its shards (`rest` included), each in exactly one group; tools/ci/check-test-groups checks it, and
 # the CI runs that check. The desktop app's startup is checked by the group that has `non-ui`.
 #
-# Balanced on the times of a Linux runner (Nov 2026, CI run 43650560775): every group is about 4.5 minutes of tests, which
-# the times of test-shards.txt and of each module (non-ui 1.0 min, language-servers-client 2.2, remote 1.4, run-client
-# 0.9, terminal-client 0.2) add up to; plus about 1.5 minutes of setup in each job.
-agent-client.rest,git-client.1,language-servers-client
-editor.rest,git-client.rest,non-ui
+# Balanced on the times of the steps on a Linux runner (Nov 2026, CI run 43655501650): every group is about 4 minutes of
+# tests, and the group that has `non-ui` is a little lighter because it also checks the desktop app (about 30 s). There
+# are six groups for two cells in a pull request, with the Windows groups and the lint: at most 20 jobs run at once.
+editor.rest,git-client.1,terminal-client
+agent-client.rest,shared.2,tree-client.1
+non-ui,shared.rest
 agent-client.1,editor.1,run-client
-remote,shared.2,tree-client.rest
-shared.1,shared.rest,terminal-client,tree-client.1
+git-client.rest,shared.1,tree-client.rest
+language-servers-client,remote

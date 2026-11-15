@@ -2,14 +2,12 @@
 # linux-test-groups.txt (which says how a step is written and checked). A Windows job pays about 1.5 minutes of setup,
 # so the small modules share a job, and the big ones are in shards.
 #
-# Balanced on the times of a Windows runner (Nov 2026, CI run 43650560775): every group is about 4.2 minutes of tests,
-# from the times of test-shards.txt and of each module (non-ui 1.9 min, language-servers-client 2.6, run-client 1.1,
-# remote 0.4, terminal-client 0.4).
-git-client.1,terminal-client
-git-client.rest,remote
-language-servers-client,run-client
-shared.1,tree-client.rest
-shared.rest,tree-client.1
-agent-client.rest,editor.rest
-agent-client.1,non-ui
-editor.1,shared.2
+# Balanced on the times of the steps on a Windows runner (Nov 2026, CI run 43655501650): every group is about 4.7
+# minutes of tests.
+run-client,shared.rest
+non-ui,remote,terminal-client,tree-client.rest
+editor.1,git-client.1
+editor.rest,shared.2
+language-servers-client,tree-client.1
+agent-client.rest,git-client.rest
+agent-client.1,shared.1
