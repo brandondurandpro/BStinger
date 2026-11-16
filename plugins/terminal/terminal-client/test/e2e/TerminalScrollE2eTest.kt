@@ -18,6 +18,7 @@ import org.example.kotlineditor.model.TerminalMouseButton
 import org.example.kotlineditor.model.text
 import org.example.kotlineditor.ui.AppTags
 import org.example.kotlineditor.ui.TerminalTags
+import java.util.Base64
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -36,12 +37,26 @@ private const val MANY_LINES = 60
 private val ALTERNATE_SCREEN = listOf("1049")
 private val FULL_SCREEN_WITH_MOUSE = listOf("1049", "1002", "1006")
 
+// How long the program printing the sequences is given: PowerShell starts in a second on an idle machine, and in
+// many more on a Windows CI runner whose cores are all busy.
+private const val PROGRAM_TIMEOUT_MS = 60_000L
+
+// Console mode of Windows that delivers the input as VT sequences, and the kernel32 functions that set it.
+private const val ENABLE_VIRTUAL_TERMINAL_INPUT = "0x200"
+private const val CONSOLE_MODE_API =
+    """[DllImport("kernel32.dll")] public static extern IntPtr GetStdHandle(int handle); """ +
+        """[DllImport("kernel32.dll")] public static extern bool GetConsoleMode(IntPtr handle, out uint mode); """ +
+        """[DllImport("kernel32.dll")] public static extern bool SetConsoleMode(IntPtr handle, uint mode);"""
+
 /** The wheel of the terminal grid: scrolling the scrollback, and moving a full-screen program. */
 @OptIn(ExperimentalTestApi::class)
 class TerminalScrollE2eTest {
     private val project = SampleProject.standard()
 
     private val windows = System.getProperty("os.name").startsWith("Windows")
+
+    // The last line printManyLines prints: cmd.exe counts with one loop, a POSIX shell with two.
+    private val lastLine = if (windows) "fill-$MANY_LINES" else "fill-5-12"
 
     @AfterTest
     fun cleanup() {
@@ -113,13 +128,32 @@ class TerminalScrollE2eTest {
         val onOff = if (enter) "h" else "l"
         runCommand(
             if (windows) {
-                val expression = modes.joinToString(" + ") { "(([char]27) + '[?$it$onOff')" }
-                "powershell -NoProfile -Command \"Write-Host -NoNewline $expression\""
+                windowsPrintCommand(modes.map { "[?$it$onOff" })
             } else {
                 val sequence = modes.joinToString("") { "\\033[?$it$onOff" }
                 "printf '$sequence'"
             },
         )
+    }
+
+    // The PowerShell command printing an ESC before each of [sequences], passed encoded so that cmd.exe has
+    // nothing to quote. ConPTY kept the mouse modes for itself when the program printing them read its input
+    // the Windows way, and handed them over to the terminal once it read VT sequences (the form of the mouse
+    // reports): so this one asks for VT input while it prints, then gives the console back as it found it.
+    private fun windowsPrintCommand(sequences: List<String>): String {
+        val text = sequences.joinToString(" + ") { "[char]27 + '$it'" }
+        val script =
+            """
+            ${'$'}api = Add-Type -PassThru -Name Console -Namespace E2e -MemberDefinition '$CONSOLE_MODE_API'
+            ${'$'}stdin = ${'$'}api::GetStdHandle(-10)
+            ${'$'}mode = 0
+            [void]${'$'}api::GetConsoleMode(${'$'}stdin, [ref]${'$'}mode)
+            [void]${'$'}api::SetConsoleMode(${'$'}stdin, ${'$'}mode -bor $ENABLE_VIRTUAL_TERMINAL_INPUT)
+            [Console]::Write($text)
+            [void]${'$'}api::SetConsoleMode(${'$'}stdin, ${'$'}mode)
+            """.trimIndent()
+        val encoded = Base64.getEncoder().encodeToString(script.toByteArray(Charsets.UTF_16LE))
+        return "powershell -NoProfile -EncodedCommand $encoded"
     }
 
     // Prints more lines than the panel can show, so that the scrollback holds rows to scroll back to.
@@ -138,11 +172,11 @@ class TerminalScrollE2eTest {
         runComposeUiTest {
             val app = openTerminal()
             printManyLines()
-            awaitCondition { app.printed("fill-5-12") }
+            awaitCondition { app.printed(lastLine) }
             // The wheel goes up into the scrollback: earlier rows are shown, the last ones are gone.
             wheel(-100f)
             awaitCondition { app.scrollOffset() > 0 }
-            assertTrue(app.screenLines().none { it.endsWith("fill-5-12") }, app.screenLines().joinToString("\n"))
+            assertTrue(app.screenLines().none { it.endsWith(lastLine) }, app.screenLines().joinToString("\n"))
             // And back down, to the live output at the bottom.
             wheel(100f)
             awaitCondition { app.scrollOffset() == 0L }
@@ -154,9 +188,9 @@ class TerminalScrollE2eTest {
             val app = openTerminal()
             // History to scroll back to once the full-screen program is gone (the alternate screen has none).
             printManyLines()
-            awaitCondition { app.printed("fill-5-12") }
+            awaitCondition { app.printed(lastLine) }
             printSequences(enter = true, ALTERNATE_SCREEN)
-            awaitCondition { app.alternateScreen() }
+            awaitCondition(PROGRAM_TIMEOUT_MS) { app.alternateScreen() }
             // A full-screen program owns the screen and there is no scrollback: the wheel sends the cursor
             // keys the program reads, three rows per scroll event, not a scroll of the viewport.
             app.terminalInput.clear()
@@ -167,9 +201,12 @@ class TerminalScrollE2eTest {
             wheel(100f)
             awaitCondition { app.terminalInput.keys.isNotEmpty() }
             assertArrows(app, TerminalKey.ArrowDown)
-            // Out of the alternate screen, the wheel scrolls the scrollback again and sends no key.
+            // Out of the alternate screen, the wheel scrolls the scrollback again and sends no key. The cursor
+            // keys the shell received sit in its input (dash does not edit its line, it keeps them as characters
+            // of the next command): Ctrl+C drops that line first.
+            flushShellInput()
             printSequences(enter = false, ALTERNATE_SCREEN)
-            awaitCondition { !app.alternateScreen() }
+            awaitCondition(PROGRAM_TIMEOUT_MS) { !app.alternateScreen() }
             app.terminalInput.clear()
             wheel(-100f)
             awaitCondition { app.scrollOffset() > 0 && app.terminalInput.keys.isEmpty() }
@@ -181,11 +218,11 @@ class TerminalScrollE2eTest {
             val app = openTerminal()
             // History to scroll back to once the program is gone (the alternate screen has none).
             printManyLines()
-            awaitCondition { app.printed("fill-5-12") }
+            awaitCondition { app.printed(lastLine) }
             // A full-screen program that reads the mouse (`opencode`, `htop`, `tmux`…) switches to the
             // alternate screen and enables mouse tracking: the wheel must become a mouse report, not cursor keys.
             printSequences(enter = true, FULL_SCREEN_WITH_MOUSE)
-            awaitCondition { app.alternateScreen() && app.mouseTracking() }
+            awaitCondition(PROGRAM_TIMEOUT_MS) { app.alternateScreen() && app.mouseTracking() }
             app.terminalInput.clear()
             wheel(-100f)
             awaitCondition { app.terminalInput.mouseEvents.isNotEmpty() }
@@ -212,7 +249,7 @@ class TerminalScrollE2eTest {
             // the shell received sit in its input (it is not reading them): Ctrl+C drops that line first.
             flushShellInput()
             printSequences(enter = false, FULL_SCREEN_WITH_MOUSE)
-            awaitCondition { !app.alternateScreen() && !app.mouseTracking() }
+            awaitCondition(PROGRAM_TIMEOUT_MS) { !app.alternateScreen() && !app.mouseTracking() }
             app.terminalInput.clear()
             wheel(-100f)
             awaitCondition {

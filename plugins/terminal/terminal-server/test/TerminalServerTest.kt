@@ -19,6 +19,10 @@ import kotlin.test.assertTrue
 private const val COMMANDS = 50
 private const val ORDER_FILE = "order.txt"
 
+// How long the program printing a sequence is given: it starts in a second on an idle machine, and in many more on
+// a Windows CI runner where the other modules' tests run beside it.
+private const val PROGRAM_TIMEOUT_MS = 60_000L
+
 /** The terminal feature through a real server and a real socket: the plugin is found on the class path. */
 class TerminalServerTest {
     private val data = Files.createTempDirectory("terminal-data")
@@ -68,12 +72,25 @@ class TerminalServerTest {
     fun `the terminal reports the alternate screen of full-screen programs`() =
         runBlocking {
             val terminal = RemoteTerminalLauncher(client).start(project.toString(), 80, 24, 8, 16)
-            terminal.write("printf '\\033[?1049h'\r".toByteArray())
-            withTimeout(10_000) { terminal.output.first { it.alternateScreen } }
-            terminal.write("printf '\\033[?1049l'\r".toByteArray())
-            withTimeout(10_000) { terminal.output.first { !it.alternateScreen } }
+            terminal.write(printEscape("[?1049h").toByteArray())
+            withTimeout(PROGRAM_TIMEOUT_MS) { terminal.output.first { it.alternateScreen } }
+            terminal.write(printEscape("[?1049l").toByteArray())
+            withTimeout(PROGRAM_TIMEOUT_MS) { terminal.output.first { !it.alternateScreen } }
             terminal.destroy()
         }
+
+    // The command line printing ESC then [sequence], as a full-screen program would: cmd.exe has no `printf`
+    // (the CI's comes from Git for Windows, which is not on every PATH), PowerShell is always there.
+    private fun printEscape(sequence: String): String {
+        val windows = System.getProperty("os.name").startsWith("Windows", ignoreCase = true)
+        val command =
+            if (windows) {
+                "powershell -NoProfile -Command \"[Console]::Write([char]27 + '$sequence')\""
+            } else {
+                "printf '\\033$sequence'"
+            }
+        return command + "\r"
+    }
 
     // What the commands printed, without the shell's prompt. Commands are written before the shell is ready, so the
     // terminal echoes them early and the output lands after a prompt (`$ hello`, `C:\project>hello`); lines echoing
