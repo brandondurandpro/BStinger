@@ -51,6 +51,7 @@ object AgentTags {
     const val AGENT_TEAMS_EMPTY = "agent.teams.empty"
     const val AGENT_TEAMS_CLOSE = "agent.teams.close"
     const val AGENT_TEAM_NEW = "agent.team.new"
+    const val AGENT_TEAM_STARTER = "agent.team.starter"
     const val AGENT_TEAM_FORM = "agent.team.form"
     const val AGENT_TEAM_NAME = "agent.team.name"
     const val AGENT_TEAM_GLOBAL = "agent.team.global"
@@ -62,11 +63,29 @@ object AgentTags {
     /** Why the form of a team cannot be saved yet. */
     const val AGENT_TEAM_PROBLEM = "agent.team.problem"
 
+    /** The picker of the team of a conversation, in the prompt bar. */
+    const val AGENT_TEAM_PICKER = "agent.teamPicker"
+
+    /** Its entry "No team". */
+    const val AGENT_TEAM_PICKER_NONE = "agent.teamPicker.none"
+
+    /** Its entry "Manage teams…", which opens the Teams window. */
+    const val AGENT_TEAM_PICKER_MANAGE = "agent.teamPicker.manage"
+
+    /** Its list of teams, a lazy list: only the rows shown are composed. */
+    const val AGENT_TEAM_PICKER_LIST = "agent.teamPicker.list"
+
+    /** The notice of a started conversation whose team was deleted. */
+    const val AGENT_TEAM_MISSING = "agent.teamPicker.missing"
+
     /** The role of the manager in the tags of the fields of a team. */
     const val TEAM_MANAGER = "manager"
 
     /** The role of the member at [index] in the tags of the fields of a team. */
     fun teamMember(index: Int) = "member.$index"
+
+    /** A team in the menu of the picker, by its id. */
+    fun agentTeamChoice(id: String) = "agent.teamPicker.team.$id"
 
     /** A team of the list, by its id. */
     fun agentTeam(id: String) = "agent.team.row.$id"

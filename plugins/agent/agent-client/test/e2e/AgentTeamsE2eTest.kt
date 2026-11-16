@@ -3,6 +3,7 @@ package org.example.kotlineditor.e2e
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
@@ -16,6 +17,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.state.InMemoryPreferenceStore
 import org.example.kotlineditor.state.PreferenceKeys
+import org.example.kotlineditor.state.STARTER_TEAM_NAME
 import org.example.kotlineditor.state.SavedTeam
 import org.example.kotlineditor.state.toPreferences
 import org.example.kotlineditor.ui.AgentTags
@@ -28,6 +30,9 @@ import kotlin.test.assertTrue
 
 // A point of the window inside its corner, outside any menu.
 private const val CORNER = 6f
+
+// The share of the app window the Teams window takes.
+private const val WINDOW_SHARE = 0.9f
 
 /**
  * The Teams button of agent mode opens a window that manages the teams of agents: a manager and members, each with
@@ -76,6 +81,38 @@ class AgentTeamsE2eTest {
             assertEquals("Writes the tests", saved.team.members.getOrNull(1)?.description)
             assertEquals(TEAM_PROVIDER, saved.team.manager.agent.registry)
             assertEquals(TEAM_PROVIDER, saved.team.members.firstOrNull()?.agent?.registry)
+            awaitTag(AgentTags.agentTeam(saved.team.id))
+        }
+
+    @Test
+    fun `the window takes nine tenths of the app window, in width and in height`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, teamPreferences(), agents = servers.settings())
+            startConversation(app)
+            openTeams()
+            val window = onAllNodes(isRoot())[0].fetchSemanticsNode().size
+            val dialog = awaitTag(AgentTags.AGENT_TEAMS_DIALOG).fetchSemanticsNode().size
+            assertEquals(window.width * WINDOW_SHARE, dialog.width.toFloat(), absoluteTolerance = 1f)
+            assertEquals(window.height * WINDOW_SHARE, dialog.height.toFloat(), absoluteTolerance = 1f)
+        }
+
+    @Test
+    fun `Add Haiku team adds a ready-made team with a manager and five members`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, teamPreferences(), agents = servers.settings())
+            startConversation(app)
+            openTeams()
+            awaitTag(AgentTags.AGENT_TEAM_STARTER).performClick()
+            awaitCondition(AGENT_TIMEOUT) { teamsOf(app).size == 1 }
+            val saved = onlyTeam(app)
+            assertTrue(saved.global)
+            assertEquals(STARTER_TEAM_NAME, saved.team.name)
+            assertEquals("Manager", saved.team.manager.name)
+            assertEquals(listOf("Dev", "Designer", "Tester", "Code reviewer", "Spec writer"), saved.team.members.map { it.name })
+            val providers = (saved.team.members + saved.team.manager).map { it.agent.registry }.toSet()
+            assertEquals(setOf<String?>(TEAM_PROVIDER), providers)
+            // The fake agent offers no Haiku model: the team keeps the default one.
+            assertEquals(emptyMap(), saved.team.manager.settings)
             awaitTag(AgentTags.agentTeam(saved.team.id))
         }
 
