@@ -241,13 +241,6 @@ class Conversation(val id: Int, title: String, val branch: String) {
     /** Where the items of the silent question about the quota start, null when none is in flight. */
     internal var probeFrom: Int? by mutableStateOf(null)
 
-    /** The conversation this one reviews (the review by an agent), null for any other conversation. */
-    var reviewOf: Conversation? by mutableStateOf(null)
-        internal set
-
-    /** The discussion with another agent this conversation leads, null when none runs. */
-    internal var discussion: Job? = null
-
     /**
      * The items the conversation shows: all of them, but the question about the quota and its answer while they are in
      * flight. The user never sees what the IDE asks on its own.
@@ -652,7 +645,7 @@ class AgentState(
             if (session != null) runCatching { agents.delete(agent, session) }
         }
         conversation.closeWorktree(project)?.let { worktree ->
-            // A reviewer works in the worktree of the conversation it reviews: it goes with the last of them.
+            // Conversations may share a worktree: it goes with the last of them.
             val shared = conversations.any { it.workspace?.root?.path == worktree.root.path }
             if (!shared) {
                 project.scope.launch { runCatching { git.removeWorktree(project.root.path, worktree.root.path) } }
@@ -830,8 +823,6 @@ class AgentState(
 
     /** Stops the agent of [conversation]; its permission requests are cancelled. */
     fun stop(conversation: Conversation) {
-        // The user stops the agent: the discussion it led stops too, instead of going on with the next question.
-        conversation.discussion?.cancel()
         if (!conversation.busy) return
         project.scope.launch {
             try {
