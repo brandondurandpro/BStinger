@@ -77,6 +77,10 @@ data class TerminalSnapshot(
     val totalRows: Long = 0,
     /** How many rows the view is scrolled up from the bottom; 0 shows the live output. */
     val scrollOffset: Long = 0,
+    /** Whether a full-screen program owns the alternate screen (`nano`, `vim`…), which has no scrollback. */
+    val alternateScreen: Boolean = false,
+    /** Whether the running program enabled mouse tracking and expects mouse reports. */
+    val mouseTracking: Boolean = false,
     /** Whether the process behind the terminal is still running. */
     val running: Boolean = true,
     /** Exit code of the process, `null` while it runs or when it was killed. */
@@ -324,6 +328,66 @@ enum class TerminalKey {
     Backquote,
 }
 
+/** The buttons and wheel of a mouse, as the client reports them. */
+enum class TerminalMouseButton {
+    /** The left button. */
+    Left,
+
+    /** The middle button. */
+    Middle,
+
+    /** The right button. */
+    Right,
+
+    /** The wheel turned up. */
+    WheelUp,
+
+    /** The wheel turned down. */
+    WheelDown,
+
+    /** The wheel tilted left. */
+    WheelLeft,
+
+    /** The wheel tilted right. */
+    WheelRight,
+}
+
+/** What the user did with a mouse button, as the client reports it. */
+enum class TerminalMouseAction {
+    /** The button went down. */
+    Press,
+
+    /** The button came back up. */
+    Release,
+
+    /**
+     * The pointer moved; [TerminalMouseEvent.button] is the button held while moving, `null` when it moved
+     * without button.
+     */
+    Move,
+}
+
+/**
+ * What the user did with the mouse, at a cell of the grid, as the client reports it. The terminal encodes it the
+ * way the running program asked (X10, SGR…), and sends nothing when the program disabled mouse tracking.
+ */
+data class TerminalMouseEvent(
+    /** What happened: a press, a release, or a move of the pointer. */
+    val action: TerminalMouseAction,
+    /** The button pressed, released or held while moving, `null` when none is. */
+    val button: TerminalMouseButton?,
+    /** Cell column of the pointer, from the left. */
+    val column: Int,
+    /** Cell row of the pointer, from the top of the viewport. */
+    val row: Int,
+    /** Whether Shift was held. */
+    val shift: Boolean = false,
+    /** Whether Control was held. */
+    val control: Boolean = false,
+    /** Whether Alt was held. */
+    val alt: Boolean = false,
+)
+
 /** A key press, release or repeat, with the text it produced when it is a character. */
 data class TerminalKeyEvent(
     /** Which key was pressed. */
@@ -352,6 +416,9 @@ interface TerminalProcess {
 
     /** Sends a key, encoded by the terminal so that Kitty keyboard and `modifyOtherKeys` are honoured. */
     fun sendKey(event: TerminalKeyEvent)
+
+    /** Reports a mouse event, encoded by the terminal so that the program's mouse mode is honoured. */
+    fun mouse(event: TerminalMouseEvent)
 
     /** Pastes [text], wrapped in bracketed-paste markers when the program asked for them. */
     fun paste(text: String)

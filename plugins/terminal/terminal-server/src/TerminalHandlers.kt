@@ -6,6 +6,7 @@ import org.example.kotlineditor.rpc.MethodSpec
 import org.example.kotlineditor.rpc.int
 import org.example.kotlineditor.rpc.keyEvent
 import org.example.kotlineditor.rpc.long
+import org.example.kotlineditor.rpc.mouseEvent
 import org.example.kotlineditor.rpc.read
 import org.example.kotlineditor.rpc.string
 import org.example.kotlineditor.rpc.terminalInput
@@ -80,6 +81,7 @@ internal fun terminalHandlers(): Map<MethodSpec, Handler> =
             }
         },
         Method.TerminalScroll to { nothing { terminalOrFail().scroll(params.int("delta")) } },
+        Method.TerminalMouse to { nothing { terminalOrFail().mouse(params.read("event") { it.mouseEvent() }) } },
         Method.TerminalClear to { nothing { terminalOrFail().clear() } },
         Method.TerminalResume to {
             nothing { state(TERMINALS)[params.long(TERMINAL)]?.resume(params.long("lastSeq")) }

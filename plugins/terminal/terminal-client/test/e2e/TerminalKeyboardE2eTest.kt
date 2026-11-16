@@ -8,7 +8,9 @@ import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performKeyPress
+import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.model.TerminalKey
 import org.example.kotlineditor.model.TerminalKeyEvent
@@ -326,6 +328,34 @@ class TerminalKeyboardE2eTest {
         pressEnter()
         awaitCondition { app.printed("$word-OK") }
     }
+
+    @OptIn(InternalComposeUiApi::class)
+    @Test
+    fun `a dead key composes with the next letter`() =
+        runComposeUiTest {
+            val app = openTerminal()
+            // A dead key arrives as an event that types its spacing character (ˆ, U+02C6), on the dead key's
+            // own code; the terminal holds it, and the next key composes with it.
+            val dead =
+                KeyEvent(
+                    key = Key(130, KEY_LOCATION_STANDARD),
+                    type = KeyEventType.KeyDown,
+                    codePoint = 'ˆ'.code,
+                )
+            onNodeWithTag(TerminalTags.TERMINAL_INPUT).performKeyPress(dead)
+            onNodeWithTag(TerminalTags.TERMINAL_INPUT).performKeyPress(
+                KeyEvent(key = Key.E, type = KeyEventType.KeyDown, codePoint = 'e'.code),
+            )
+            awaitCondition { app.terminalInput.texts.lastOrNull() == "ê" }
+            assertEquals(emptyList(), app.terminalInput.keys)
+            awaitCondition { app.printed("ê") }
+            // ˆ then Space is the bare character, in the form a shell wants.
+            app.terminalInput.clear()
+            onNodeWithTag(TerminalTags.TERMINAL_INPUT).performKeyPress(dead)
+            onNodeWithTag(TerminalTags.TERMINAL_INPUT).performKeyInput { pressKey(Key.Spacebar) }
+            awaitCondition { app.terminalInput.texts.lastOrNull() == "^" }
+            assertEquals(emptyList(), app.terminalInput.keys)
+        }
 
     private companion object {
         // Caps Lock is a lock, not a modifier: AWT reports no mask for it, so it only shows in the characters.

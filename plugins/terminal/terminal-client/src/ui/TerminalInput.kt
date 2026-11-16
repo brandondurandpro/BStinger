@@ -1,9 +1,6 @@
 package org.example.kotlineditor.ui
 
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
@@ -14,9 +11,6 @@ import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.utf16CodePoint
-import androidx.compose.ui.input.pointer.PointerEventType
-import androidx.compose.ui.input.pointer.PointerInputScope
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.insertTextAtCursor
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.setText
@@ -28,7 +22,6 @@ import org.example.kotlineditor.state.TerminalTab
 private const val FIRST_PRINTABLE_CODE_POINT = 0x20
 private const val DELETE_CODE_POINT = 0x7f
 private const val UNDEFINED_CHAR = 0xffff
-private const val WHEEL_ROWS = 3
 
 // Text the punctuation keys produce on a US layout, used when the platform gives no typed character.
 private val PUNCTUATION_TEXT =
@@ -53,9 +46,10 @@ internal fun handleTerminalKey(
     terminal: TerminalState,
     tab: TerminalTab,
     selection: TerminalSelection,
+    deadKeys: DeadKeys,
 ): Boolean {
     if (event.type != KeyEventType.KeyDown) return false
-    return terminalShortcut(event, terminal, tab, selection) || sendKeyFrom(event, tab)
+    return deadKeys.feed(event, tab) || terminalShortcut(event, terminal, tab, selection) || sendKeyFrom(event, tab)
 }
 
 private fun sendKeyFrom(event: KeyEvent, tab: TerminalTab): Boolean {
@@ -152,7 +146,7 @@ private fun typedText(event: KeyEvent, key: TerminalKey?, ctrl: Boolean): String
 
 // A typed character, or null for a control character and for the undefined one that a modifier, a lock or a
 // function key reports (AWT's CHAR_UNDEFINED, U+FFFF).
-private fun printable(codePoint: Int): String? {
+internal fun printable(codePoint: Int): String? {
     val control = codePoint < FIRST_PRINTABLE_CODE_POINT || codePoint == DELETE_CODE_POINT
     return if (!control && codePoint != UNDEFINED_CHAR) {
         String(Character.toChars(codePoint))
@@ -249,45 +243,6 @@ private fun terminalKey(key: Key): TerminalKey? =
         Key.Grave -> TerminalKey.Backquote
         else -> null
     }
-
-/** Focus, drag selection and wheel scrolling of the grid. */
-internal fun Modifier.terminalPointerInput(
-    tab: TerminalTab,
-    focus: FocusRequester,
-    metrics: CellMetrics,
-    selection: TerminalSelection,
-): Modifier =
-    pointerInput(tab) { detectTapGestures { runCatching { focus.requestFocus() } } }
-        .pointerInput(tab) { terminalMouseWheel(tab) }
-        .pointerInput(tab, metrics) {
-            detectDragGestures(
-                onDragStart = { at -> selection.start(cellAt(at, metrics)) },
-                onDrag = { change, _ ->
-                    selection.moveTo(cellAt(change.position, metrics))
-                    change.consume()
-                },
-            )
-        }
-
-private suspend fun PointerInputScope.terminalMouseWheel(tab: TerminalTab) {
-    awaitPointerEventScope {
-        while (true) {
-            val event = awaitPointerEvent()
-            if (event.type == PointerEventType.Scroll) {
-                val delta =
-                    event.changes
-                        .firstOrNull()
-                        ?.scrollDelta
-                        ?.y
-                        ?: 0f
-                if (delta != 0f) {
-                    tab.scroll(if (delta < 0f) WHEEL_ROWS else -WHEEL_ROWS)
-                    event.changes.forEach { it.consume() }
-                }
-            }
-        }
-    }
-}
 
 internal fun Modifier.terminalTextInput(tab: TerminalTab): Modifier =
     semantics {
