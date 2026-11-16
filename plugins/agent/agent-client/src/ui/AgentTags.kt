@@ -11,14 +11,10 @@ object AgentTags {
     const val AGENT_FILTER = "agent.filter"
     const val AGENT_DELETE = "agent.delete"
     const val AGENT_REVIEW = "agent.review"
-    const val AGENT_DISCUSS = "agent.discuss"
-    const val AGENT_DISCUSS_FILTER = "agent.discuss.filter"
-    const val AGENT_DISCUSS_DEFAULT = "agent.discuss.default"
     const val AGENT_LOGIN = "agent.login"
     const val AGENT_PIN = "agent.pin"
     const val AGENT_DUPLICATE = "agent.duplicate"
     const val AGENT_ARCHIVE = "agent.archive"
-    const val AGENT_REVIEW_FILTER = "agent.review.filter"
     const val AGENT_PROJECT_GROUP = "agent.group.project"
     const val AGENT_ARCHIVED = "agent.archived"
     const val AGENT_USAGE = "agent.usage"
@@ -72,24 +68,7 @@ object AgentTags {
 
     fun agentChangeRevert(path: String) = "agent.change.revert:$path"
 
-    const val AGENT_REVIEW_MANUAL = "agent.review.manual"
-    const val AGENT_REVIEW_BY_AGENT = "agent.review.byAgent"
-    const val AGENT_REVIEW_DIALOG = "agent.review.dialog"
-    const val AGENT_REVIEW_CANCEL = "agent.review.cancel"
-    const val AGENT_REVIEW_SEND = "agent.review.send"
-    const val AGENT_REVIEW_START = "agent.review.start"
-    const val AGENT_REVIEW_AGENT = "agent.review.agent"
-    const val AGENT_REVIEW_MODEL = "agent.review.model"
 
-    fun agentReviewModel(value: String) = "agent.review.model:$value"
-
-    fun agentReviewAspect(name: String) = "agent.review.aspect.$name"
-
-    const val AGENT_REVIEW_DEFAULT = "agent.review.default"
-
-    fun agentReviewer(id: String) = "agent.review.$id"
-
-    fun agentDiscussPeer(id: String) = "agent.discuss.$id"
 
     const val AGENT_RENAME = "agent.rename"
     const val AGENT_RENAME_FIELD = "agent.renameField"
