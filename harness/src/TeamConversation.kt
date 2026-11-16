@@ -1,6 +1,7 @@
 package org.example.kotlineditor.harness
 
 import org.example.kotlineditor.model.AgentAttachment
+import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.model.Team
 import org.example.kotlineditor.model.TeamAgent
 import java.util.concurrent.ConcurrentHashMap
@@ -20,9 +21,13 @@ internal class MemberSession(val key: String, val member: TeamAgent) {
     @Volatile
     var configured = false
 
-    /** Whether it already got its first prompt, the one that carries its preamble. */
+    /** Whether it got its preamble in a turn that did not fail: until then its next prompt carries it. */
     @Volatile
     var prompted = false
+
+    /** Whether the settings its agent refused were told in the team conversation. */
+    @Volatile
+    var refusalsTold = false
 }
 
 /**
@@ -46,10 +51,28 @@ internal class TeamConversation(val key: String, val team: Team, val directory: 
     /** The members' sessions, by member id; created at their first task. */
     val members = ConcurrentHashMap<String, MemberSession>()
 
-    /** Whether the manager was configured and got its first prompt (only the run in progress touches it). */
-    var managerStarted = false
+    /** Whether the settings of the manager were applied (only the run in progress touches it). */
+    var managerConfigured = false
+
+    /**
+     * Whether the manager got its preamble in a turn that did not fail: until then its next prompt carries it again,
+     * as a new session of its agent knows nothing of the team.
+     */
+    @Volatile
+    var managerIntroduced = false
 
     private val counter = AtomicLong()
+
+    /**
+     * A turn of [agent] failed, perhaps because its process died, which ends every session it ran: they all get their
+     * preamble again with their next prompt (one that did not need it just reads it twice).
+     */
+    fun forget(agent: AgentCommand) {
+        if (team.manager.agent == agent) managerIntroduced = false
+        for (session in members.values) {
+            if (session.member.agent == agent) session.prompted = false
+        }
+    }
 
     /** A new id for a prompt or an item the harness makes, unique in this conversation. */
     fun nextId(kind: String): String = "team-$kind-${counter.incrementAndGet()}"

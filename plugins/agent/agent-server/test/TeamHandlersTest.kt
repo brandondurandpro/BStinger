@@ -4,6 +4,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.example.kotlineditor.acp.AgentSettings
 import org.example.kotlineditor.model.AGENT_BUSY_MESSAGE
+import org.example.kotlineditor.model.AgentAttachment
 import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.model.AgentItem
 import org.example.kotlineditor.model.AgentTranscript
@@ -119,6 +120,34 @@ class TeamHandlersTest {
         val items = finished()
         assertEquals(1, items.filterIsInstance<AgentItem.UserText>().size)
         assertEquals(1, items.filterIsInstance<AgentItem.Delegation>().size)
+    }
+
+    @Test
+    fun `what the user joined to a team prompt reaches the manager`() {
+        val lines = AgentAttachment.Lines("a.txt", 1, 2, "x\ny")
+        runBlocking {
+            agents.teamPrompt(
+                "K",
+                team,
+                project.toString(),
+                "u-context",
+                "context",
+                attachments = listOf(lines),
+            )
+        }
+        val items =
+            follow(
+                "K",
+            ) { transcript, all -> transcript.state == AgentTurnState.Idle && all.any { it is AgentItem.AgentText } }
+        val answer =
+            items
+                .filterIsInstance<AgentItem.AgentText>()
+                .firstOrNull()
+                ?.text
+                .orEmpty()
+        assertContains(answer, "Context: ")
+        assertFalse("none" in answer, answer)
+        assertEquals(listOf(lines.label), items.filterIsInstance<AgentItem.UserText>().firstOrNull()?.context)
     }
 
     @Test

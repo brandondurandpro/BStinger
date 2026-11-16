@@ -158,13 +158,13 @@ class ConversationControlTest {
     @Test
     fun `a long conversation keeps the outcome of its recent prompts only`() {
         val ids = (1..PROMPTS_SENT).map { number -> send("echo answer$number", shown = null).also(::outcome) }
-        val lastId = ids.last()
-        assertEquals("answer$PROMPTS_SENT", outcome(lastId).text)
+        val firstId = ids.firstOrNull().orEmpty()
+        assertEquals("answer$PROMPTS_SENT", outcome(ids.lastOrNull().orEmpty()).text)
         val oldestKept = ids[PROMPTS_SENT - KEPT_AT_LEAST]
         assertEquals("answer${PROMPTS_SENT - KEPT_AT_LEAST + 1}", outcome(oldestKept).text)
-        assertFailsWith<IllegalArgumentException> { outcome(ids.first()) }
+        assertFailsWith<IllegalArgumentException> { outcome(firstId) }
         // Sent again, a forgotten prompt is still a prompt already run: it does not run twice.
-        service.prompt("c1", agent, directory, ids.first(), "echo again", shown = null)
+        service.prompt("c1", agent, directory, firstId, "echo again", shown = null)
         val items = service.idle("c1").items
         assertEquals(PROMPTS_SENT, items.count { it is AgentItem.AgentText })
     }

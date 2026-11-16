@@ -47,6 +47,9 @@ data class HarnessSettings(
 
 private const val STOPPED = "Stopped."
 
+// What a conversation does with a prompt of the user.
+private enum class Accepted { Known, Waits, Starts, Closed }
+
 /**
  * The coordination of agent teams, on top of the public surface of [AgentService]. A team conversation `K` is the
  * manager's conversation; each member has its own conversation `K#<memberId>`, created at its first task. A prompt of
@@ -86,23 +89,49 @@ class TeamHarness(
         session: String? = null,
         attachments: List<AgentAttachment> = emptyList(),
     ) {
-        val state = conversations.computeIfAbsent(conversation) { TeamConversation(conversation, team, directory) }
         val prompt = QueuedPrompt(itemId, text, session, attachments)
-        val start =
-            synchronized(state.lock) {
-                if (itemId in state.seen) return
-                if (state.running) {
+        while (true) {
+            val state = conversations.computeIfAbsent(conversation) { TeamConversation(conversation, team, directory) }
+            when (accept(state, prompt)) {
+                Accepted.Closed -> conversations.remove(conversation, state)
+                Accepted.Starts -> return start(state, prompt)
+                Accepted.Waits, Accepted.Known -> return
+            }
+        }
+    }
+
+    // How [state] takes [prompt]: a prompt it knows is ignored, one that comes during a run waits, else it starts one.
+    private fun accept(state: TeamConversation, prompt: QueuedPrompt): Accepted =
+        synchronized(state.lock) {
+            when {
+                state.closed -> {
+                    Accepted.Closed
+                }
+
+                prompt.itemId in state.seen -> {
+                    Accepted.Known
+                }
+
+                state.running -> {
                     check(state.queue.size < settings.queuedPrompts) { AGENT_BUSY_MESSAGE }
-                    state.seen.add(itemId)
+                    state.seen.add(prompt.itemId)
                     state.queue.addLast(prompt)
-                    false
-                } else {
-                    state.seen.add(itemId)
+                    Accepted.Waits
+                }
+
+                else -> {
+                    state.seen.add(prompt.itemId)
                     state.running = true
-                    true
+                    Accepted.Starts
                 }
             }
-        if (start) scope.launch { runPrompts(state, prompt) }
+        }
+
+    // Starts a run for [prompt]. The conversation shows busy from now on, before the run's coroutine gets going: a
+    // client that sees the prompt accepted never sees the conversation idle.
+    private fun start(state: TeamConversation, prompt: QueuedPrompt) {
+        val lease = agents.keepBusy(state.key)
+        scope.launch { runPrompts(state, prompt, lease) }
     }
 
     /** Whether [conversation] is a team conversation of this harness. */
@@ -158,8 +187,8 @@ class TeamHarness(
 
     // The runs of [state]: [first], then the prompts that waited, one after the other. The lease of the next run is
     // taken before the one of the run that ended is released, so that the transcript never shows idle between them.
-    private suspend fun runPrompts(state: TeamConversation, first: QueuedPrompt) {
-        var lease = agents.keepBusy(state.key)
+    private suspend fun runPrompts(state: TeamConversation, first: QueuedPrompt, firstLease: ConversationLease) {
+        var lease = firstLease
         var ended = false
         try {
             var current: QueuedPrompt = first
@@ -208,30 +237,57 @@ class TeamHarness(
     }
 
     private suspend fun run(state: TeamConversation, prompt: QueuedPrompt, lease: ConversationLease) {
-        val first = !state.managerStarted
-        val composed = managerFirstOrNext(state, prompt, first)
-        val session = if (first) prompt.session else null
-        val manager = state.team.manager
-        val directory = state.directory
-        agents.prompt(
-            state.key,
-            manager.agent,
-            directory,
-            prompt.itemId,
-            composed,
-            session,
-            prompt.attachments,
-            prompt.text,
-            lease,
-        )
+        val introduced = state.managerIntroduced
+        val text = managerFirstOrNext(state, prompt, introduced)
+        val session = if (introduced) null else prompt.session
+        val first = ToManager(prompt.itemId, text, prompt.text, session, prompt.attachments)
+        var sent = sendToManager(state, lease, first)
         var itemId = prompt.itemId
         var rounds = 0
-        while (true) {
-            val next = afterTurn(state, lease, itemId, rounds) ?: break
-            rounds++
-            itemId = state.nextId("relay")
-            agents.prompt(state.key, manager.agent, directory, itemId, next, shown = null, lease = lease)
+        while (sent) {
+            val next = afterTurn(state, lease, itemId, rounds)
+            if (next != null) {
+                rounds++
+                itemId = state.nextId("relay")
+                sent = sendToManager(state, lease, ToManager(itemId, next, null, null, emptyList()))
+            } else {
+                sent = false
+            }
         }
+    }
+
+    // What goes to the manager: [text] is sent, [shown] (null: nothing) is what the transcript shows of it.
+    private class ToManager(
+        val itemId: String,
+        val text: String,
+        val shown: String?,
+        val session: String?,
+        val attachments: List<AgentAttachment>,
+    )
+
+    // Sends [prompt] to the manager unless the run was stopped meanwhile (false: nothing was sent, the stop is told).
+    private fun sendToManager(state: TeamConversation, lease: ConversationLease, prompt: ToManager): Boolean {
+        val before = stopCause(lease)
+        if (before != null) stopped(state, before, null)
+        if (before == null) {
+            val manager = state.team.manager
+            val itemId = prompt.itemId
+            val text = prompt.text
+            agents.prompt(
+                state.key,
+                manager.agent,
+                state.directory,
+                itemId,
+                text,
+                prompt.session,
+                prompt.attachments,
+                prompt.shown,
+                lease,
+            )
+            // A stop that came while the prompt was being sent did not see the manager's turn start.
+            if (stopCause(lease) != null) agents.cancel(state.key)
+        }
+        return before == null
     }
 
     // Waits for the manager's turn [itemId] and tells what the manager is sent next (the reports of a round, or why its
@@ -244,6 +300,13 @@ class TeamHarness(
     ): String? {
         val outcome = agents.awaitTurn(state.key, itemId)
         val cause = stopCause(lease)
+        if (outcome.ending == TurnEnding.Failed) {
+            state.forget(
+                state.team.manager.agent,
+            )
+        } else {
+            state.managerIntroduced = true
+        }
         return when {
             cause != null -> {
                 stopped(state, cause, outcome)
@@ -281,14 +344,16 @@ class TeamHarness(
         return if (cause == null) prompts.relay(reports) else null
     }
 
-    // The text of the first prompt of the manager of this run: with its preamble the first time, settings applied.
-    private suspend fun managerFirstOrNext(state: TeamConversation, prompt: QueuedPrompt, first: Boolean): String {
-        if (!first) return prompts.managerNext(prompt.text)
-        state.managerStarted = true
+    // The text of the first prompt of the manager of this run: with its preamble until a turn of it did not fail (its
+// settings are applied once, before its first prompt).
+    private suspend fun managerFirstOrNext(state: TeamConversation, prompt: QueuedPrompt, introduced: Boolean): String {
         val manager = state.team.manager
-        applySettings(state, state.key, manager)
-        val own = skillsOf(state, manager)
-        return prompts.managerFirst(state.team, own, prompt.text)
+        if (!state.managerConfigured) {
+            state.managerConfigured = true
+            applySettings(state, state.key, manager)
+        }
+        if (introduced) return prompts.managerNext(prompt.text)
+        return prompts.managerFirst(state.team, skillsOf(state, manager), prompt.text)
     }
 
     // True, with a notice, when the run went through all the rounds it may.
@@ -374,7 +439,6 @@ class TeamHarness(
         val member = task.member
         val session = memberSession(state, member)
         val first = !session.prompted
-        session.prompted = true
         val text =
             if (first) {
                 prompts.memberFirst(state.team, member, skillsOf(state, member), task.task)
@@ -386,7 +450,11 @@ class TeamHarness(
         // A stop that came while the prompt was being sent did not see the member run.
         if (stopCause(lease) != null) agents.cancel(session.key)
         val outcome = agents.awaitTurn(session.key, promptId)
-        if (first) mirrorRefusals(state, session)
+        if (outcome.ending == TurnEnding.Failed) state.forget(member.agent) else session.prompted = true
+        if (!session.refusalsTold) {
+            session.refusalsTold = true
+            mirrorRefusals(state, session)
+        }
         return outcome
     }
 

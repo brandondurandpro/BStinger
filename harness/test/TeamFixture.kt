@@ -95,27 +95,30 @@ fun settingsIn(store: Path, field: String): List<String> {
 /** A service, a harness and a team of fake agents, each one in its own process with its own store of sessions. */
 class TeamFixture(
     harnessSettings: HarnessSettings = HarnessSettings(),
+    protocol: DelegationProtocol = TextDelegationProtocol(),
     val dataDirectory: Path = Files.createTempDirectory("team-data"),
 ) : AutoCloseable {
     val service = AgentService(settings = AgentSettings(holdMs = 2_000, cancelGraceMs = 1_000))
     val project: Path = Files.createTempDirectory("team-project")
     val skills = SkillDiscovery(dataDirectory.toFile())
-    val harness = TeamHarness(service, skills, harnessSettings)
+    val harness = TeamHarness(service, skills, harnessSettings, protocol)
     private val stores = HashMap<String, Path>()
     private var sent = 0
 
     /** The directory where the agent called [name] keeps its sessions. */
     fun storeOf(name: String): Path = stores.getOrPut(name) { Files.createTempDirectory("team-store-$name") }
 
-    /** An agent of a team, its own fake agent process (a crash of one does not reach the others). */
+    /** An agent of a team, its own fake agent process (a crash of one does not reach the others) unless [shared]. */
     fun agent(
         name: String,
         settings: Map<String, String> = emptyMap(),
         skills: List<String> = emptyList(),
         systemPrompt: String = "",
         description: String = "does $name things",
+        shared: Boolean = false,
     ): TeamAgent {
-        val command = AgentCommand(FakeAgentCommand.command("--store", storeOf(name).toString()))
+        val own = FakeAgentCommand.command("--store", storeOf(name).toString())
+        val command = AgentCommand(if (shared) FakeAgentCommand.command() else own)
         return TeamAgent("id-$name", name, description, command, settings, skills, systemPrompt)
     }
 

@@ -5,9 +5,11 @@ import org.example.kotlineditor.model.AGENT_BUSY_MESSAGE
 import org.example.kotlineditor.model.AgentItem
 import org.example.kotlineditor.model.AgentTurnState
 import org.example.kotlineditor.model.DelegationStatus
+import org.example.kotlineditor.model.Team
 import org.example.kotlineditor.model.TeamAgent
 import org.example.kotlineditor.testkit.acp.FakeManager
 import java.nio.file.Files
+import kotlin.concurrent.thread
 import kotlin.io.path.readText
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -240,13 +242,17 @@ class TeamRunTest {
     fun `a prompt sent during a run waits, then starts a second run, and the transcript is busy all along`() {
         val team = team("Backend")
         val file = fixture.project.resolve("f.txt")
+        // The IDE follows the transcript from before the first prompt to the end of the second run.
+        var followed: Followed? = null
+        val follower = thread { followed = fixture.idle { items -> items.answers().any { it.startsWith("second") } } }
         fixture.send(team, "delegate Backend: write $file hi")
         val request = waitingPermission("K#id-Backend")
         fixture.send(team, "echo second")
         // It is not the manager's yet: it neither shows in the transcript nor reaches the agent.
         assertEquals(listOf("delegate Backend: write $file hi"), fixture.until("K") { true }.items.userTexts())
         allow("K#id-Backend", request)
-        val seen = fixture.idle { items -> items.answers().any { it.startsWith("second") } }
+        follower.join(TIMEOUT_MS)
+        val seen = requireNotNull(followed)
         assertEquals(listOf("delegate Backend: write $file hi", "echo second"), seen.items.userTexts())
         assertTrue(seen.items.answers().any { it.startsWith(FakeManager.FINAL_PREFIX) })
         val received = promptsIn(fixture.storeOf("Lead"))
@@ -259,6 +265,7 @@ class TeamRunTest {
     // Once the run showed busy, the transcript was idle only after the end: the answer to the second prompt.
     private fun assertBusyAllAlong(seen: Followed) {
         val started = seen.states.indexOfFirst { it.first != AgentTurnState.Idle }
+        assertTrue(started >= 0, "the run never showed busy: ${seen.states}")
         val after = seen.states.drop(started)
         val idleTooSoon = after.filter { (state, done) -> state == AgentTurnState.Idle && !done }
         assertEquals(emptyList(), idleTooSoon, "idle between two turns of the run: ${seen.states}")
@@ -431,6 +438,68 @@ class TeamRunTest {
         assertFalse("gone" in memberPrompt, memberPrompt)
         val skipped = seen.items.notices().map { it.text }
         assertEquals(listOf("Backend: the skill $gone does not exist any more, skipped."), skipped)
+    }
+
+    @Test
+    fun `a member whose turn failed gets its preamble again with its next task`() {
+        fixture.send(team("Backend"), "delegate Backend: crash ;; Backend: echo again")
+        val seen = fixture.finished()
+        assertEquals(listOf(DelegationStatus.Failed, DelegationStatus.Done), seen.items.delegations().map { it.status })
+        val retried = promptsIn(fixture.storeOf("Backend")).filter { it.endsWith("echo again") }
+        assertEquals(1, retried.size)
+        assertTrue(retried.firstOrNull().orEmpty().startsWith("You are Backend"), retried.toString())
+    }
+
+    @Test
+    fun `a manager whose first turn failed gets its preamble with the next prompt`() {
+        val team = team("Backend")
+        fixture.send(team, "crash")
+        fixture.idle { items -> items.notices().any { it.error } }
+        fixture.send(team, "echo hello")
+        val seen = fixture.idle { items -> items.answers().any { it.startsWith("hello") } }
+        assertEquals(listOf("crash", "echo hello"), seen.items.filterIsInstance<AgentItem.UserText>().map { it.text })
+        val retried = promptsIn(fixture.storeOf("Lead")).filter { it.endsWith("echo hello") }
+        assertTrue(retried.firstOrNull().orEmpty().startsWith("You are Lead, the manager"), retried.toString())
+    }
+
+    @Test
+    fun `a stop that lands between the manager's turn and the round cancels the round before any member starts`() {
+        fixture.close()
+        val stopsBeforeDelegating =
+            object : DelegationProtocol by TextDelegationProtocol() {
+                override fun parse(answer: String, team: Team): ManagerReply {
+                    fixture.harness.cancel("K")
+                    return TextDelegationProtocol().parse(answer, team)
+                }
+            }
+        fixture = TeamFixture(protocol = stopsBeforeDelegating)
+        members.clear()
+        fixture.send(team("Backend"), "delegate Backend: echo never")
+        val seen = fixture.idle { items -> items.notices().isNotEmpty() }
+        assertEquals(listOf("Stopped."), seen.items.notices().map { it.text })
+        assertEquals(listOf(DelegationStatus.Cancelled), seen.items.delegations().map { it.status })
+        assertEquals(emptyList(), promptsIn(fixture.storeOf("Backend")))
+        assertEquals(1, promptsIn(fixture.storeOf("Lead")).size)
+    }
+
+    @Test
+    fun `agents that share one process each get their own session, and a refused setting is told once`() {
+        val manager = fixture.agent("Lead", shared = true)
+        val backend = fixture.agent("Backend", settings = mapOf("model" to "fake-nope"), shared = true)
+        val tester = fixture.agent("Tester", shared = true)
+        members["Lead"] = manager
+        members["Backend"] = backend
+        members["Tester"] = tester
+        fixture.send(fixture.team(manager, backend, tester), "delegate Backend: model | Tester: model")
+        val seen = fixture.finished()
+        assertEquals(listOf("Model: fake-fast.", "Model: fake-fast."), seen.items.delegations().map { it.result })
+        val refused =
+            seen.items
+                .notices()
+                .filter { it.error }
+                .map { it.text }
+        assertEquals(1, refused.size, refused.toString())
+        assertContains(refused.firstOrNull().orEmpty(), "Backend: The agent refused fake-nope for model")
     }
 
     @Test
