@@ -358,6 +358,7 @@ class AgentTeamsE2eTest {
             val saved = onlyTeam(app)
             assertEquals(mapOf("model" to "fake-smart", "effort" to "low"), saved.team.members.firstOrNull()?.settings)
             awaitTag(AgentTags.agentTeamEdit(saved.team.id)).performClick()
+            showAgent(member)
             awaitShownChoice(member, "model", "Smart")
             awaitShownChoice(member, "effort", "Low")
         }
