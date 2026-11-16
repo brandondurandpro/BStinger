@@ -2,10 +2,13 @@ package org.example.kotlineditor
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
@@ -141,15 +144,25 @@ private fun IdeWindow(
                 it.onNewWindow = onNewWindow
             }
         }
-    Window(
-        onCloseRequest = { state.exit(onClosed) },
-        title = state.title,
-        state = rememberWindowState(size = WINDOW_SIZE),
-    ) {
-        App(state)
+    // The window that starts for the agent opens on its agent window alone; closing it shows the IDE window, which
+    // then stays shown (its Agent button opens the window beside it). While the launch is under way (the project
+    // opening), neither window of the IDE shows.
+    var ideShown by remember { mutableStateOf(!state.startsForTheAgent) }
+    val agentProject = state.session.project?.takeIf { it.agentMode }
+    val settled = !state.launching && state.session.opening == null
+    LaunchedEffect(agentProject, settled) {
+        if (agentProject == null && settled) ideShown = true
+    }
+    if (ideShown) {
+        Window(
+            onCloseRequest = { state.exit(onClosed) },
+            title = state.title,
+            state = rememberWindowState(size = WINDOW_SIZE),
+        ) {
+            App(state)
+        }
     }
     // The agent of the project, while its window is open: it goes away with the IDE window that owns it.
-    val agentProject = state.session.project?.takeIf { it.agentMode }
     if (agentProject != null) key(agentProject) { AgentWindow(state, agentProject) }
 }
 
