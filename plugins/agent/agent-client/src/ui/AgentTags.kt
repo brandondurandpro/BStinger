@@ -4,7 +4,6 @@ package org.example.kotlineditor.ui
 object AgentTags {
     const val SETTINGS_AGENTS = "settings.agents"
     const val MODE_SWITCH = "mode.switch"
-    const val MODE_IDE = "mode.ide"
     const val MODE_AGENT = "mode.agent"
     const val AGENT = "agent"
     const val AGENT_LIST = "agent.list"

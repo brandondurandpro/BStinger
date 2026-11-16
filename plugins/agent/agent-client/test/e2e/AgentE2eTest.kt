@@ -107,7 +107,7 @@ class AgentE2eTest {
             assertContains(shownConversation(conversation), "+ Notes of the agent")
             assertContains(shownConversation(conversation), "Answered: Allow")
             // The tree picks the new file up without waiting for the window to regain the focus.
-            awaitTag(AgentTags.MODE_IDE).performClick()
+            closeAgentWindow(app)
             awaitTag(TreeTags.treeRow("NOTES.md"), timeout = AGENT_TIMEOUT)
         }
 
@@ -241,7 +241,7 @@ class AgentE2eTest {
     fun `the agent command is set in the settings`() =
         runComposeUiTest {
             val app = launchWithProject(project, agentPreferences())
-            app.state.settings.open()
+            app.state.settings.dialogs.openIde()
             awaitTag(AppTags.settingsCategory("Experimental")).performClick()
             val field = awaitTag(AppTags.SETTINGS_AGENT_COMMAND)
             field.performTextClearance()

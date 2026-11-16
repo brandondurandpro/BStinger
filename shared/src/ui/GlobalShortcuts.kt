@@ -69,33 +69,35 @@ private fun bind(
     action: IdeContext.(Modifiers) -> Unit,
 ) = binding(keys, ctrl, shift, alt, action)
 
-private val TOGGLE_AGENT_MODE =
+// Ctrl+Alt+A: the agent window opens, or comes to the front when it is already open.
+private val OPEN_AGENT_WINDOW =
     bind(
         setOf(Key.A),
         ctrl = true,
         alt = true,
-    ) { if (app.settings.agentModeEnabled) project.agentMode = !project.agentMode }
+    ) { if (app.settings.agentModeEnabled) project.openAgentWindow() }
 
 // Ctrl+Alt+K, as in the IDE plugins of Claude Code: the lines selected in the editor shown (the file when nothing is
-// selected) join the prompt of the agent, in agent mode.
-private val SEND_TO_AGENT = bind(setOf(Key.K), ctrl = true, alt = true) { sendToAgent() }
+// selected) join the prompt of the agent. From the agent window, the editor shown is the one of the conversation.
+private fun sendToAgentBinding(fromAgentWindow: Boolean) =
+    bind(setOf(Key.K), ctrl = true, alt = true) { sendToAgent(fromAgentWindow) }
 
-private fun IdeContext.sendToAgent() {
+private fun IdeContext.sendToAgent(fromAgentWindow: Boolean) {
     if (!app.settings.agentModeEnabled) return
     val agent = project.agent
-    val conversation = agent.current?.takeIf { !it.showsChat }
-    val conversationFile = conversation?.workspace?.editor
-    val editor = if (project.agentMode) conversationFile else project.editor
+    val editor = if (fromAgentWindow) agent.current?.workspace?.editor else project.editor
     val attachment = editor?.activeTab?.let(::attachmentOf) ?: return
-    project.agentMode = true
+    project.openAgentWindow()
     agent.attachToPrompt(attachment)
 }
 
-// Agent mode hides the editors: only its own shortcuts apply, so nothing acts on a file the user cannot see.
+// The agent window hides the editors of the IDE: only its own shortcuts apply first, so nothing acts on a file the
+// user cannot see.
 internal val BUILT_IN_AGENT_SHORTCUTS =
     listOf(
-        TOGGLE_AGENT_MODE,
-        SEND_TO_AGENT,
+        OPEN_AGENT_WINDOW,
+        sendToAgentBinding(fromAgentWindow = true),
+        bind(setOf(Key.S), ctrl = true, alt = true) { app.settings.dialogs.openAgent() },
         bind(setOf(Key.N), ctrl = true, alt = true) { project.agent.requestNewConversation() },
         bind(setOf(Key.F4), ctrl = true) { project.agent.closeActive() },
         bind(setOf(Key.Tab), ctrl = true) { project.agent.tabs.selectNext(if (it.shift) -1 else 1) },
@@ -104,8 +106,8 @@ internal val BUILT_IN_AGENT_SHORTCUTS =
 // the default keymap, first match wins. Alt+Shift+. / Alt+Shift+, change the font size (Ctrl+- / Ctrl+= fold).
 internal val BUILT_IN_IDE_SHORTCUTS =
     listOf(
-        TOGGLE_AGENT_MODE,
-        SEND_TO_AGENT,
+        OPEN_AGENT_WINDOW,
+        sendToAgentBinding(fromAgentWindow = false),
         bind(setOf(Key.N), ctrl = true, shift = true, alt = true) { project.showPopup(PopupKind.GotoSymbol) },
         bind(setOf(Key.N), ctrl = true, shift = true) { project.showPopup(PopupKind.GotoFile) },
         bind(setOf(Key.P), ctrl = true, shift = false) { project.showPopup(PopupKind.GotoFile) },
@@ -165,7 +167,7 @@ internal val BUILT_IN_IDE_SHORTCUTS =
         bind(setOf(Key.Comma), shift = true, alt = true) { app.settings.zoomEditor(-1f) },
         bind(setOf(Key.Zero, Key.NumPad0), shift = true, alt = true) { app.settings.resetEditorZoom() },
         bind(setOf(Key.F1), alt = true) { revealActiveFile() },
-        bind(setOf(Key.S), ctrl = true, alt = true) { app.settings.open() },
+        bind(setOf(Key.S), ctrl = true, alt = true) { app.settings.dialogs.openIde() },
         // Ctrl+Alt+Shift+W: another IDE window, on the same server (desktop app only).
         bind(setOf(Key.W), ctrl = true, shift = true, alt = true) { app.openNewWindow() },
         bind(setOf(Key.S), ctrl = true) { editor.saveAll() },
@@ -190,13 +192,9 @@ internal val BUILT_IN_IDE_SHORTCUTS =
         },
     )
 
-/**
- * IDE-wide shortcuts, intercepted before the focused component sees them; [ideOnly] keeps the IDE ones in agent mode,
- * for the project the agent works on.
- */
+/** IDE-wide shortcuts of a project, intercepted before the focused component sees them. */
 internal class GlobalShortcuts(
     private val context: IdeContext,
-    private val ideOnly: Boolean = false,
     private val actions: ActionRegistry = IdeRegistries.actions,
 ) {
     private val doubleShift = DoubleShift()
@@ -207,10 +205,6 @@ internal class GlobalShortcuts(
         if (project.terminal.focused && !escapesTerminal(event)) return false
         val closesFindBar = event.key == Key.Escape && project.find.visible && project.popup == null
         return when {
-            project.agentMode && !ideOnly -> {
-                event.type == KeyEventType.KeyDown && actions.bindings(ActionScope.Agent).dispatch(event, context)
-            }
-
             doubleShift.isDoubleShift(event) -> {
                 project.showPopup(PopupKind.GotoFile)
                 true
@@ -247,6 +241,20 @@ internal class GlobalShortcuts(
     // Closes the compare tab (the most recently activated tab comes back).
     private fun IdeContext.closeCompare() {
         editor.activeTab?.let(editor::close)
+    }
+}
+
+/**
+ * The shortcuts of the agent window, for the project of the agent: they come before the IDE ones of the worktree the
+ * agent works in ([GlobalShortcuts]), which the window gives to the keys they do not take.
+ */
+internal class AgentShortcuts(
+    private val context: IdeContext,
+    private val actions: ActionRegistry = IdeRegistries.actions,
+) {
+    fun handle(event: KeyEvent): Boolean {
+        val pressed = event.type == KeyEventType.KeyDown
+        return pressed && actions.bindings(ActionScope.Agent).dispatch(event, context)
     }
 }
 

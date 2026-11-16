@@ -33,9 +33,9 @@ class AppState(
     /** Makes the telemetry the user agrees to, for an installation id; null measures nothing (previews, tests). */
     telemetryOf: ((instanceId: String) -> Telemetry)? = null,
     /** Whether to reopen the last project at startup when the user starts in agent mode; false for added windows. */
-    reopenLastProject: Boolean = true,
+    private val reopenLastProject: Boolean = true,
     /** A project to open at startup, in agent mode with the question of a new conversation: an added window's. */
-    initialProject: String? = null,
+    private val initialProject: String? = null,
     /** A project to open at startup as the user would from the welcome screen: the folder given on the command line. */
     startProject: String? = null,
 ) {
@@ -79,7 +79,8 @@ class AppState(
     val exiting = AppExit(scope, { session.project }, ::finishExit)
 
     /** Whether a dialog of the whole window is open (Open Project, Settings): it keeps the keyboard. */
-    val dialogOpen: Boolean get() = session.projectPickerOpen || settings.dialog != null
+    val dialogOpen: Boolean
+        get() = session.projectPickerOpen || settings.dialogs.ide != null || settings.dialogs.agent != null
 
     val title: String
         get() =
@@ -95,8 +96,13 @@ class AppState(
                 }
             }
 
-    /** Whether the IDE is reopening its last project in agent mode: the welcome screen is not shown meanwhile. */
-    var launching by mutableStateOf(reopenLastProject && settings.startsInAgentMode)
+    /** Whether the window opens for the agent: only its agent window shows at first, the IDE one when that closes. */
+    val startsForTheAgent: Boolean
+        get() = if (initialProject != null) true else reopenLastProject && settings.startsInAgentMode
+
+    /** Whether the window is opening for its agent (see [startsForTheAgent]): the welcome screen is not shown
+     * meanwhile, and the launch is over once its project opened. */
+    var launching by mutableStateOf(startsForTheAgent)
         private set
 
     init {
@@ -124,19 +130,24 @@ class AppState(
         }
     }
 
-    // An added window of a conversation started in another project: the project opens in agent mode, on the question
-    // of the branch the conversation starts from.
+    // An added window of a conversation started in another project: the project opens with its agent window, on the
+    // question of the branch the conversation starts from.
     private suspend fun openForNewConversation(path: String) {
-        val shown = session
-        shown.loadRecents()
-        shown.openProject(path)
-        snapshotFlow { shown.opening }.first { it == null }
-        val opened = shown.project ?: return
-        opened.agentMode = true
-        opened.agent.requestNewConversation()
+        try {
+            val shown = session
+            shown.loadRecents()
+            shown.openProject(path)
+            snapshotFlow { shown.opening }.first { it == null }
+            val opened = shown.project ?: return
+            opened.agentMode = true
+            opened.agent.requestNewConversation()
+        } finally {
+            launching = false
+        }
     }
 
-    // The user prefers agent mode: the last project opens straight in it; the welcome screen only when there is none.
+    // The user prefers the agent: the last project opens straight with its agent window; the welcome screen only
+    // when there is none.
     private suspend fun launchInAgentMode() {
         val shown = session
         try {

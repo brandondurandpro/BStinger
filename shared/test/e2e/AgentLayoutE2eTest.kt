@@ -8,6 +8,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.v2.runComposeUiTest
+import org.example.kotlineditor.e2e.awaitAgentTag
 import org.example.kotlineditor.state.ToolWindow
 import org.example.kotlineditor.ui.AgentTags
 import org.example.kotlineditor.ui.AppTags
@@ -17,7 +18,7 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertTrue
 
-/** Agent mode: the project tree sits under the conversation list, in the same column. */
+/** The agent window: the project tree sits under the conversation list, in the same column. */
 @OptIn(ExperimentalTestApi::class)
 class AgentLayoutE2eTest {
     private val project = SampleProject.standard()
@@ -33,7 +34,7 @@ class AgentLayoutE2eTest {
             val app = launchWithProject(project, agentPreferences())
             startConversation(app)
             val list = awaitTag(AgentTags.AGENT_LIST).getBoundsInRoot()
-            val tree = awaitTag(TreeTags.PROJECT_PANEL).getBoundsInRoot()
+            val tree = awaitAgentTag(TreeTags.PROJECT_PANEL).getBoundsInRoot()
             assertTrue(tree.top >= list.bottom, "the tree starts under the list: $tree vs $list")
             assertTrue(tree.left < list.right, "the tree is in the column of the list: $tree vs $list")
         }
@@ -65,12 +66,14 @@ class AgentLayoutE2eTest {
         runComposeUiTest {
             val app = launchWithProject(project, agentPreferences())
             startConversation(app)
-            app.project.toolWindows.setVisible(ToolWindow.Git, true)
+            // The panels of the agent window are the agent's own, not the IDE window's.
+            val agent = app.project.agent
+            agent.toolWindows.setVisible(ToolWindow.Git, true)
             // Folded, the cards above bring the tree into the window: a card out of view has no bounds.
             awaitTag(AgentTags.AGENT_LIST_BAR).performClick()
             awaitTag(AppTags.dockCardBar(ToolWindow.Git.name)).performClick()
-            val git = awaitTag(GitTags.GIT_PANEL).getBoundsInRoot()
-            val tree = awaitTag(TreeTags.PROJECT_PANEL).getBoundsInRoot()
+            val git = awaitAgentTag(GitTags.GIT_PANEL).getBoundsInRoot()
+            val tree = awaitAgentTag(TreeTags.PROJECT_PANEL).getBoundsInRoot()
             assertTrue(git.bottom <= tree.top, "the Git panel ends above the tree: $git vs $tree")
         }
 

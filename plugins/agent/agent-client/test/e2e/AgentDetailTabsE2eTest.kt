@@ -29,10 +29,10 @@ class AgentDetailTabsE2eTest {
             val launched = launchWithProject(project, agentPreferences())
             val conversation = startConversation(launched)
             assertTrue(!isShown(AgentTags.AGENT_DETAIL_TABS), "no second row while nothing is open")
-            if (!isShown(TreeTags.treeRow("src"))) awaitTag(AppTags.TOOL_PROJECT).performClick()
-            awaitTag(TreeTags.treeChevron("src")).performClick()
-            awaitTag(TreeTags.treeChevron("src/main/kotlin")).performClick()
-            awaitTag(TreeTags.treeRow(app)).performDoubleClick()
+            if (!isAgentShown(TreeTags.treeRow("src"))) awaitAgentTag(AppTags.TOOL_PROJECT).performClick()
+            awaitAgentTag(TreeTags.treeChevron("src")).performClick()
+            awaitAgentTag(TreeTags.treeChevron("src/main/kotlin")).performClick()
+            awaitAgentTag(TreeTags.treeRow(app)).performDoubleClick()
             awaitCondition { !conversation.showsChat }
             awaitTag(AgentTags.AGENT_DETAIL_TABS)
             // The conversation keeps its mark in the first row while one of its files is shown.

@@ -5,12 +5,18 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.KeyInjectionScope
+import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.test.printToString
 import androidx.compose.ui.test.withKeyDown
 import org.example.kotlineditor.acp.AgentSettings
 import org.example.kotlineditor.model.AgentItem
@@ -65,6 +71,60 @@ fun ComposeUiTest.startConversation(app: E2eApp): Conversation {
     clickNewConversation(app)
     awaitTag(AgentTags.AGENT_PROMPT)
     return checkNotNull(app.project.agent.current) { "No conversation open" }
+}
+
+/** Closes the agent window of [app]: the IDE window shows again, the conversations stay open. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.closeAgentWindow(app: E2eApp) = runOnIdle { app.project.agentMode = false }
+
+/**
+ * The node of [tag] in the agent window: the IDE window composed under it shows some of the same panels (the project
+ * tree, the Git panel), and only those of the agent window are laid out for the agent.
+ */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.awaitAgentTag(
+    tag: String,
+    unmerged: Boolean = false,
+    timeout: Long = TIMEOUT,
+): SemanticsNodeInteraction {
+    val inAgentWindow = hasTestTag(tag).and(hasAnyAncestor(hasTestTag(AgentTags.AGENT)))
+    try {
+        waitUntil(timeoutMillis = timeout) { onAllNodes(inAgentWindow, unmerged).fetchSemanticsNodes().isNotEmpty() }
+    } catch (e: androidx.compose.ui.test.ComposeTimeoutException) {
+        val tree = onRoot().printToString(maxDepth = 12)
+        throw AssertionError("No node tagged '$tag' in the agent window. UI tree:\n$tree", e)
+    }
+    return onNode(inAgentWindow, unmerged)
+}
+
+/** True while [tag] shows in the agent window, not counting the same panel in the IDE window composed under it. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.isAgentShown(tag: String): Boolean {
+    val inAgentWindow = hasTestTag(tag).and(hasAnyAncestor(hasTestTag(AgentTags.AGENT)))
+    return onAllNodes(inAgentWindow).fetchSemanticsNodes().isNotEmpty()
+}
+
+/** Sends keys to the editor shown in the agent window, not the one of the IDE window composed under it. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.agentEditorKeys(block: KeyInjectionScope.() -> Unit) {
+    awaitAgentTag(EditorTags.EDITOR).performKeyInput(block)
+    waitForIdle()
+}
+
+/** Waits until the editor shown in the agent window finished loading. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.awaitAgentEditorReady() {
+    awaitCondition {
+        isAgentShown(EditorTags.EDITOR) || isAgentShown(EditorTags.EDITOR_MESSAGE)
+    }
+}
+
+/** Ctrl+Alt+K in the editor of the agent window: sends its selection (or its file) to the prompt of the agent. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.sendSelectionToAgentInAgentWindow() {
+    awaitAgentTag(EditorTags.EDITOR).performKeyInput {
+        withKeyDown(Key.CtrlLeft) { withKeyDown(Key.AltLeft) { pressKey(Key.K) } }
+    }
 }
 
 /** Clicks + and, in a repository, answers the question "from which branch?" with the project's own branch. */

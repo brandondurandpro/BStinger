@@ -292,7 +292,7 @@ class SettingsE2eTest {
             openSettingsFromMenu()
             category(SettingsCategory.Experimental)
             onNodeWithTag(AppTags.settingToggle(Setting.AgentMode.name)).assertIsOff().performClick()
-            awaitTag(AgentTags.MODE_SWITCH)
+            awaitTag(AgentTags.MODE_AGENT)
             category(SettingsCategory.Privacy)
             onNodeWithTag(AppTags.settingToggle(Setting.Telemetry.name)).assertIsOff().performClick()
             onNodeWithTag(AppTags.settingToggle(Setting.Telemetry.name)).assertIsOn()

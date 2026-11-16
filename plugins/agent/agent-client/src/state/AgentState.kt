@@ -390,6 +390,12 @@ class AgentState(
     private val agents get() = project.services.agents
     val conversations = mutableStateListOf<Conversation>()
 
+    /**
+     * The tool windows of the agent window, saved under their own keys: opening one here never opens it in the IDE
+     * window, and the worktrees the conversations open share it, so the panels follow from one place to another.
+     */
+    val toolWindows = ToolWindowLayout(prefix = PreferenceKeys.AGENT_LAYOUT_PREFIX).apply { restore(saved) }
+
     /** Conversations opened in the tabs of agent mode. */
     val tabs = AgentTabs()
 
@@ -663,7 +669,7 @@ class AgentState(
         conversation.showsChat = true
         conversation.workspaceError = null
         if (mode == WorkMode.Direct) {
-            conversation.show(project, project)
+            conversation.show(project.agentWorkspace(), project)
             return
         }
         // The tool windows keep showing the project until the worktree is loaded, then switch at once.
@@ -797,6 +803,8 @@ class AgentState(
                 return
             }
             workspace.editor.flush()
+            // The files modified in the IDE window are saved too: the agent reads what the user sees, in both windows.
+            project.editor.flush()
             options.beforePrompt(conversation)
             project.followTranscript(conversation)
             val directory = workspace.root.path
