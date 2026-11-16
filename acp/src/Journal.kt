@@ -118,4 +118,5 @@ internal fun AgentItem.withVersion(version: Long): AgentItem =
         is AgentItem.Plan -> copy(version = version)
         is AgentItem.Permission -> copy(version = version)
         is AgentItem.Notice -> copy(version = version)
+        is AgentItem.Delegation -> copy(version = version)
     }

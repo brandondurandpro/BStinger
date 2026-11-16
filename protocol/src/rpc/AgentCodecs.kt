@@ -129,6 +129,10 @@ private fun AgentItem.toJson(): JsonObject =
                 text("notice", item.text)
                 put("error", item.error)
             }
+
+            is AgentItem.Delegation -> {
+                delegation(item)
+            }
         }
     }
 
@@ -149,6 +153,7 @@ private fun JsonElement.agentItem(): AgentItem {
         "plan" -> AgentItem.Plan(id, version, json.field("entries").jsonArray.map { it.planEntry() })
         "permission" -> json.permission(id, version)
         "notice" -> AgentItem.Notice(id, version, json.string(TEXT), json.bool("error"))
+        "delegation" -> json.delegation(id, version)
         else -> throw InvalidParamsException("Unknown agent item $type")
     }
 }
