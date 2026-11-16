@@ -96,6 +96,9 @@ object AgentTags {
 
     fun agentTeamDelete(id: String) = "agent.team.delete.$id"
 
+    /** The tab of the agent of [role] (`manager`, `member.0`) in the form of a team: it shows the fields of that agent. */
+    fun agentTeamTab(role: String) = "agent.team.tab.$role"
+
     /** A field of the agent of [role] (`manager`, `member.0`): `name`, `description`, `provider`, `model`, `effort`, `skills`, `prompt`, `remove`. */
     fun agentTeamField(role: String, field: String) = "agent.team.$role.$field"
 

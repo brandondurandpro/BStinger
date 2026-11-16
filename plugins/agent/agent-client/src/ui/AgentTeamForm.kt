@@ -3,7 +3,6 @@ package org.example.kotlineditor.ui
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.TooltipArea
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -39,7 +38,7 @@ import org.example.kotlineditor.state.TeamDraft
 
 private val MENU_WIDTH = 360.dp
 private val MENU_HEIGHT = 300.dp
-private val PROMPT_HEIGHT = 90.dp
+private val PROMPT_HEIGHT = 220.dp
 
 // What the dropdown of a setting offers to leave the choice to the agent.
 private const val DEFAULT_VALUE = ""
@@ -60,12 +59,7 @@ internal fun TeamForm(agent: AgentState, draft: TeamDraft, close: () -> Unit) {
                 placeholder = "Team name",
             )
             ScopeChoice(draft.global, AgentTags.AGENT_TEAM_GLOBAL, AgentTags.AGENT_TEAM_PROJECT) { draft.global = it }
-            AgentSection(agent, "Manager", AgentTags.TEAM_MANAGER, draft.manager, onRemove = null)
-            draft.members.forEachIndexed { index, member ->
-                val role = AgentTags.teamMember(index)
-                AgentSection(agent, "Member ${index + 1}", role, member, onRemove = { draft.removeMember(member) })
-            }
-            IdeButton("Add member", { draft.addMember() }, Modifier.testTag(AgentTags.AGENT_TEAM_ADD_MEMBER))
+            AgentTabs(agent, draft)
         }
         TeamFormActions(agent, draft, close)
     }
@@ -94,18 +88,67 @@ private fun TeamFormActions(agent: AgentState, draft: TeamDraft, close: () -> Un
     }
 }
 
+// The agents of the team as tabs, the manager first: one agent shows at a time, so a team of many members stays one
+// short form. "+ Member" adds a member and shows it; removing the one shown shows the one before it.
+@Composable
+private fun AgentTabs(agent: AgentState, draft: TeamDraft) {
+    // 0 is the manager, n the n-th member.
+    var selected by remember(draft) { mutableStateOf(0) }
+    val shown = selected.coerceIn(0, draft.members.size)
+    AgentTabStrip(draft, shown) { selected = it }
+    if (shown == 0) {
+        AgentFields(agent, AgentTags.TEAM_MANAGER, draft.manager, onRemove = null)
+        return
+    }
+    val index = shown - 1
+    val member = draft.members.getOrNull(index) ?: return
+    val remove = {
+        draft.removeMember(member)
+        selected = index
+    }
+    AgentFields(agent, AgentTags.teamMember(index), member, remove)
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AgentTabStrip(draft: TeamDraft, shown: Int, select: (Int) -> Unit) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        AgentTab(draft.manager.name.ifBlank { "Manager" }, shown == 0, AgentTags.agentTeamTab(AgentTags.TEAM_MANAGER)) { select(0) }
+        draft.members.forEachIndexed { index, member ->
+            val position = index + 1
+            val title = member.name.ifBlank { "Member $position" }
+            AgentTab(title, shown == position, AgentTags.agentTeamTab(AgentTags.teamMember(index))) { select(position) }
+        }
+        val add = {
+            draft.addMember()
+            select(draft.members.size)
+        }
+        AgentTab("+ Member", false, AgentTags.AGENT_TEAM_ADD_MEMBER, add)
+    }
+}
+
+@Composable
+private fun AgentTab(title: String, selected: Boolean, tag: String, select: () -> Unit) {
+    val background = if (selected) IdeColors.Selection else Color.Transparent
+    val color = if (selected) IdeColors.Text else IdeColors.TextSecondary
+    Label(
+        title,
+        Modifier
+            .background(background, IdeShapes.Medium)
+            .clickable(onClick = select)
+            .testTag(tag)
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+        color = color,
+        fontSize = 13.sp,
+        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+    )
+}
+
 // One agent of the team: its name, its role, its provider, model, effort and skills, and its system prompt.
 @Composable
-private fun AgentSection(agent: AgentState, title: String, role: String, draft: AgentDraft, onRemove: (() -> Unit)?) {
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .border(1.dp, IdeColors.Separator, IdeShapes.Medium)
-            .padding(10.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
+private fun AgentFields(agent: AgentState, role: String, draft: AgentDraft, onRemove: (() -> Unit)?) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Label(title, fontWeight = FontWeight.SemiBold)
             IdeTextField(
                 draft.name,
                 { draft.name = it },

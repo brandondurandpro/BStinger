@@ -57,10 +57,18 @@ fun ComposeUiTest.newTeam(name: String) {
     awaitTag(AgentTags.AGENT_TEAM_NAME).performTextInput(name)
 }
 
-/** The field [field] of the agent of [role], scrolled into the view of the form. */
+/** The field [field] of the agent of [role], its tab shown and the field scrolled into the view of the form. */
 @OptIn(ExperimentalTestApi::class)
-fun ComposeUiTest.awaitField(role: String, field: String, timeout: Long = TIMEOUT): SemanticsNodeInteraction =
-    awaitTag(AgentTags.agentTeamField(role, field), timeout).performScrollTo()
+fun ComposeUiTest.awaitField(role: String, field: String, timeout: Long = TIMEOUT): SemanticsNodeInteraction {
+    showAgent(role)
+    return awaitTag(AgentTags.agentTeamField(role, field), timeout).performScrollTo()
+}
+
+/** Shows the agent of [role] in the form: the agents are tabs, one shown at a time. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.showAgent(role: String) {
+    awaitTag(AgentTags.agentTeamTab(role)).performScrollTo().performClick()
+}
 
 /** Types [text] in the field [field] of the agent of [role], replacing what it holds. */
 @OptIn(ExperimentalTestApi::class)
