@@ -5,6 +5,8 @@ import io.github.vlaaad.ghostty.bindings.GhosttyColorRgb
 import io.github.vlaaad.ghostty.bindings.GhosttyKeys
 import io.github.vlaaad.ghostty.bindings.GhosttyMimeReader
 import io.github.vlaaad.ghostty.bindings.GhosttyMimeReaderFn
+import io.github.vlaaad.ghostty.bindings.GhosttyMouseEncoderSize
+import io.github.vlaaad.ghostty.bindings.GhosttyMousePosition
 import io.github.vlaaad.ghostty.bindings.GhosttyPaste
 import io.github.vlaaad.ghostty.bindings.GhosttyRenderStateCursor
 import io.github.vlaaad.ghostty.bindings.GhosttySizeReportSize
@@ -21,12 +23,15 @@ import io.github.vlaaad.ghostty.bindings.ghostty_vt_h
 import org.example.kotlineditor.model.TerminalAttributes
 import org.example.kotlineditor.model.TerminalCell
 import org.example.kotlineditor.model.TerminalKeyEvent
+import org.example.kotlineditor.model.TerminalMouseAction
+import org.example.kotlineditor.model.TerminalMouseEvent
 import org.example.kotlineditor.model.TerminalSnapshot
 import org.example.kotlineditor.terminal.server.TerminalEngine
 import org.example.kotlineditor.terminal.server.TerminalEngineFactory
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 import java.lang.foreign.ValueLayout.ADDRESS
+import java.lang.foreign.ValueLayout.JAVA_BOOLEAN
 import java.lang.foreign.ValueLayout.JAVA_LONG
 import java.lang.foreign.ValueLayout.JAVA_SHORT
 import java.nio.charset.StandardCharsets
@@ -89,10 +94,17 @@ internal class GhosttyEngine(
         createHandle("key encoder") { out -> ghostty_vt_h.ghostty_key_encoder_new(MemorySegment.NULL, out) }
     private val keyEvent =
         createHandle("key event") { out -> ghostty_vt_h.ghostty_key_event_new(MemorySegment.NULL, out) }
+    private val mouseEncoder =
+        createHandle("mouse encoder") { out -> ghostty_vt_h.ghostty_mouse_encoder_new(MemorySegment.NULL, out) }
+    private val mouseEvent =
+        createHandle("mouse event") { out -> ghostty_vt_h.ghostty_mouse_event_new(MemorySegment.NULL, out) }
     private val titleOut = GhosttyString.allocate(arena)
     private val scrollbar = GhosttyTerminalScrollbar.allocate(arena)
     private val cursor = GhosttyRenderStateCursor.allocate(arena)
     private val scrollBehavior = GhosttyTerminalScrollViewport.allocate(arena)
+    private val mousePosition = GhosttyMousePosition.allocate(arena)
+    private val mouseSize = GhosttyMouseEncoderSize.allocate(arena)
+    private val mousePressed = arena.allocate(JAVA_BOOLEAN)
     private val pasteRequest = GhosttyPaste.allocate(arena)
     private val pasteReader = arena.allocate(GhosttyMimeReader.layout())
     private val mime = arena.allocate(GhosttyString.layout())
@@ -248,6 +260,16 @@ internal class GhosttyEngine(
         }
     }
 
+    /** Reports [event] to the running program, in the encoding it asked for; nothing when tracking is off. */
+    override fun mouse(event: TerminalMouseEvent) {
+        val replies =
+            synchronized(lock) {
+                checkOpen()
+                encodeMouse(event)
+            }
+        replies.forEach(writePty)
+    }
+
     /** Reads the whole visible screen. Complete state, so a client that missed one just takes the next. */
     override fun snapshot(running: Boolean, exitCode: Int?): TerminalSnapshot =
         synchronized(lock) {
@@ -261,6 +283,12 @@ internal class GhosttyEngine(
             val visible = GhosttyTerminalScrollbar.len(bar)
             val offset = GhosttyTerminalScrollbar.offset(bar)
             val scrollOffset = (total - visible - offset).coerceAtLeast(0)
+            val alternateScreen =
+                readTerminalNumber(ghostty_vt_h.GHOSTTY_TERMINAL_DATA_ACTIVE_SCREEN()) ==
+                    ghostty_vt_h.GHOSTTY_TERMINAL_SCREEN_ALTERNATE().toLong()
+            val mouseTracking =
+                readTerminalNumber(ghostty_vt_h.GHOSTTY_TERMINAL_DATA_MOUSE_TRACKING()) !=
+                    ghostty_vt_h.GHOSTTY_MOUSE_TRACKING_NONE().toLong()
             TerminalSnapshot(
                 columns = width,
                 rows = height,
@@ -271,6 +299,8 @@ internal class GhosttyEngine(
                 title = readTitle(),
                 totalRows = readTotalRows(),
                 scrollOffset = scrollOffset,
+                alternateScreen = alternateScreen,
+                mouseTracking = mouseTracking,
                 running = running,
                 exitCode = exitCode,
                 lines = Arena.ofConfined().use { scratch -> readLines(width, scratch) },
@@ -286,6 +316,8 @@ internal class GhosttyEngine(
             ghostty_vt_h.ghostty_render_state_row_cells_free(rowCells)
             ghostty_vt_h.ghostty_key_encoder_free(keyEncoder)
             ghostty_vt_h.ghostty_key_event_free(keyEvent)
+            ghostty_vt_h.ghostty_mouse_encoder_free(mouseEncoder)
+            ghostty_vt_h.ghostty_mouse_event_free(mouseEvent)
             ghostty_vt_h.ghostty_terminal_free(terminal)
             arena.close()
         }
@@ -381,6 +413,89 @@ internal class GhosttyEngine(
         check(ghostty_vt_h.ghostty_key_encoder_encode(keyEncoder, keyEvent, output, needed, numberSlot), "key")
         return EncodedKey(copyBytes(output, numberSlot.get(JAVA_LONG, 0)), drainResponses())
     }
+
+    // Must hold the lock. The encoder takes the pointer in pixels and carries the cell size, the tracking mode
+    // and the report format the program set: it writes nothing when the program disabled mouse tracking.
+    private fun encodeMouse(event: TerminalMouseEvent): List<ByteArray> {
+        configureMouseEncoder(anyButtonPressed(event))
+        GhosttyMousePosition.x(mousePosition, pixelOf(event.column, columns, cellWidth))
+        GhosttyMousePosition.y(mousePosition, pixelOf(event.row, rows, cellHeight))
+        ghostty_vt_h.ghostty_mouse_event_set_action(mouseEvent, GhosttyMouse.action(event))
+        ghostty_vt_h.ghostty_mouse_event_set_mods(mouseEvent, GhosttyMouse.mods(event).toShort())
+        val button = event.button
+        if (button == null) {
+            ghostty_vt_h.ghostty_mouse_event_clear_button(mouseEvent)
+        } else {
+            ghostty_vt_h.ghostty_mouse_event_set_button(mouseEvent, GhosttyMouse.button(button))
+        }
+        ghostty_vt_h.ghostty_mouse_event_set_position(mouseEvent, mousePosition)
+        numberSlot.set(JAVA_LONG, 0, 0)
+        val first =
+            ghostty_vt_h.ghostty_mouse_encoder_encode(
+                mouseEncoder,
+                mouseEvent,
+                keyOutput,
+                keyOutput.byteSize(),
+                numberSlot,
+            )
+        val output: MemorySegment
+        val length: Long
+        when {
+            first == ghostty_vt_h.GHOSTTY_SUCCESS() -> {
+                output = keyOutput
+                length = numberSlot.get(JAVA_LONG, 0)
+            }
+
+            first == ghostty_vt_h.GHOSTTY_OUT_OF_SPACE() -> {
+                val needed = numberSlot.get(JAVA_LONG, 0)
+                output = arena.allocate(needed)
+                check(
+                    ghostty_vt_h.ghostty_mouse_encoder_encode(mouseEncoder, mouseEvent, output, needed, numberSlot),
+                    "mouse",
+                )
+                length = numberSlot.get(JAVA_LONG, 0)
+            }
+
+            else -> {
+                error("libghostty-vt: mouse encode failed ($first)")
+            }
+        }
+        if (length == 0L) return drainResponses()
+        return drainResponses() + listOf(copyBytes(output, length))
+    }
+
+    // Must hold the lock. Gives the encoder the pixel size of the grid and whether a button is held down, which
+    // decides whether a program that tracks the mouse while a button is down hears about the moves.
+    private fun configureMouseEncoder(anyPressed: Boolean) {
+        ghostty_vt_h.ghostty_mouse_encoder_setopt_from_terminal(mouseEncoder, terminal)
+        GhosttyMouseEncoderSize.size(mouseSize, GhosttyMouseEncoderSize.sizeof())
+        GhosttyMouseEncoderSize.screen_width(mouseSize, columns * cellWidth)
+        GhosttyMouseEncoderSize.screen_height(mouseSize, rows * cellHeight)
+        GhosttyMouseEncoderSize.cell_width(mouseSize, cellWidth)
+        GhosttyMouseEncoderSize.cell_height(mouseSize, cellHeight)
+        ghostty_vt_h.ghostty_mouse_encoder_setopt(
+            mouseEncoder,
+            ghostty_vt_h.GHOSTTY_MOUSE_ENCODER_OPT_SIZE(),
+            mouseSize,
+        )
+        mousePressed.set(JAVA_BOOLEAN, 0, anyPressed)
+        ghostty_vt_h.ghostty_mouse_encoder_setopt(
+            mouseEncoder,
+            ghostty_vt_h.GHOSTTY_MOUSE_ENCODER_OPT_ANY_BUTTON_PRESSED(),
+            mousePressed,
+        )
+    }
+
+    // Center of the cell the pointer is on, in pixels; the encoder turns it back into a cell for the report.
+    private fun pixelOf(cell: Int, cells: Int, cellPixels: Int): Float {
+        val center = (cell + 0.5f) * cellPixels
+        val last = (cells * cellPixels - 1).coerceAtLeast(0).toFloat()
+        return center.coerceIn(0f, last)
+    }
+
+    // Whether a button is held down for [event]: always for a move with a held button, never after a release.
+    private fun anyButtonPressed(event: TerminalMouseEvent): Boolean =
+        event.button != null && event.action != TerminalMouseAction.Release
 
     private fun readLines(width: Int, scratch: Arena): List<List<TerminalCell>> {
         check(

@@ -55,6 +55,7 @@ import org.example.kotlineditor.model.SessionStore
 import org.example.kotlineditor.model.TelemetrySettings
 import org.example.kotlineditor.model.TerminalKeyEvent
 import org.example.kotlineditor.model.TerminalLauncher
+import org.example.kotlineditor.model.TerminalMouseEvent
 import org.example.kotlineditor.model.TerminalProcess
 import org.example.kotlineditor.model.TerminalSnapshot
 import org.example.kotlineditor.model.TextMatch
@@ -654,6 +655,10 @@ class RemoteTerminalLauncher(private val client: RpcClient) : TerminalLauncher {
 
             override fun sendKey(event: TerminalKeyEvent) {
                 command(Method.TerminalKey) { put("event", event.toJson()) }
+            }
+
+            override fun mouse(event: TerminalMouseEvent) {
+                command(Method.TerminalMouse) { put("event", event.toJson()) }
             }
 
             override fun paste(text: String) {

@@ -430,6 +430,9 @@ enum class Method(
     /** Scrolls the terminal viewport. */
     TerminalScroll("terminal/scroll", mutating = true),
 
+    /** Reports a mouse event to a terminal, encoded there. */
+    TerminalMouse("terminal/mouse", mutating = true),
+
     /** Replays the last screen of a terminal after a reconnection. */
     TerminalResume("terminal/resume", mutating = false),
 

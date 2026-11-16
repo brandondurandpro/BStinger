@@ -43,6 +43,7 @@ private val TERMINAL_METHODS =
         Method.TerminalPaste,
         Method.TerminalResize,
         Method.TerminalScroll,
+        Method.TerminalMouse,
         Method.TerminalClear,
         Method.TerminalResume,
         Method.TerminalDestroy,

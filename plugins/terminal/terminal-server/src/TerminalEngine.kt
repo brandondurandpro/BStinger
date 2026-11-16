@@ -1,6 +1,7 @@
 package org.example.kotlineditor.terminal.server
 
 import org.example.kotlineditor.model.TerminalKeyEvent
+import org.example.kotlineditor.model.TerminalMouseEvent
 import org.example.kotlineditor.model.TerminalSnapshot
 import java.net.URL
 import java.net.URLClassLoader
@@ -27,6 +28,9 @@ internal interface TerminalEngine : AutoCloseable {
 
     /** Scrolls the viewport: positive goes up into the scrollback. */
     fun scroll(delta: Int)
+
+    /** Reports a mouse event; encoded the way the running program expects, nothing when tracking is off. */
+    fun mouse(event: TerminalMouseEvent)
 
     /** Clears the screen and the scrollback; `false` when a full-screen program must redraw itself instead. */
     fun clear(): Boolean
