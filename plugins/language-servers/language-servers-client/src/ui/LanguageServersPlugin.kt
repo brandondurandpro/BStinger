@@ -3,7 +3,7 @@ package org.example.kotlineditor.ui
 import org.example.kotlineditor.plugin.StripGroup
 import org.example.kotlineditor.plugin.ToolWindowContribution
 import org.example.kotlineditor.state.Dock
-import org.example.kotlineditor.state.LanguageServersHost
+import org.example.kotlineditor.state.LanguageServersProjectView
 import org.example.kotlineditor.state.ToolWindow
 import org.example.kotlineditor.state.ToolWindowDefaults
 
@@ -13,6 +13,9 @@ fun languageServersToolWindow(): ToolWindowContribution =
         defaults = ToolWindowDefaults(ToolWindow.LanguageServers, Dock.Bottom),
         tag = LanguageServerTags.TOOL_BUTTON,
         group = StripGroup.Bottom,
+        rank = 7,
         icon = Lucide.Braces,
-        content = { host, drag, modifier -> LanguageServersPanel(host as LanguageServersHost, drag, modifier) },
+        content = { host, drag, modifier ->
+            LanguageServersPanel(LanguageServersProjectView(host), drag, modifier)
+        },
     )

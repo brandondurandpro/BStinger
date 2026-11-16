@@ -13,7 +13,11 @@ import org.example.kotlineditor.model.DeployDestination
 import org.example.kotlineditor.model.DeployFolder
 import org.example.kotlineditor.model.DeployItem
 import org.example.kotlineditor.model.DeployProfile
+import org.example.kotlineditor.model.DeployProfiles
 import org.example.kotlineditor.model.DeployResult
+import org.example.kotlineditor.model.Deployer
+import org.example.kotlineditor.model.FileEntry
+import org.example.kotlineditor.remote.SshConfigHost
 
 // JSON of a deployment, shared by client and server so both sides always agree.
 
@@ -21,6 +25,12 @@ private const val PATH = "path"
 private const val HOST = "host"
 private const val SOURCE = "source"
 private const val TARGET = "target"
+
+private const val PROJECT = "project"
+private const val ROOT = "root"
+private const val NAME = "name"
+private const val FOLDERS = "folders"
+private const val DESTINATION = "destination"
 
 /** A destination: its path, and the host when it is on another machine. */
 fun DeployDestination.toJson(): JsonObject =
@@ -53,9 +63,9 @@ fun List<DeployProfile>.toJson(): JsonArray =
     JsonArray(
         map {
             buildJsonObject {
-                put("name", it.name)
-                put("folders", it.folders.map(DeployFolder::toJson).let(::JsonArray))
-                put("destination", it.destination)
+                put(NAME, it.name)
+                put(FOLDERS, it.folders.map(DeployFolder::toJson).let(::JsonArray))
+                put(DESTINATION, it.destination)
                 put("auto", it.auto)
             }
         },
@@ -73,7 +83,7 @@ fun JsonElement.deployProfiles(): List<DeployProfile> =
         val fields = it.jsonObject
         // Saved before the automatic mode existed: manual.
         val auto = fields["auto"]?.let { _ -> fields.bool("auto") } ?: false
-        DeployProfile(fields.string("name"), fields.folders(), fields.string("destination"), auto)
+        DeployProfile(fields.string(NAME), fields.folders(), fields.string("destination"), auto)
     }
 
 // Saved before folders had a target: a list of paths, each landing at its own path.
@@ -109,3 +119,35 @@ fun JsonElement.deployItems(): List<DeployItem> =
             it.jsonObject.string(TARGET),
         )
     }
+
+/** [Deployer] of the server: the files are copied where the server runs, only the request and the count travel. */
+class RemoteDeployer(private val client: RpcClient) : Deployer {
+    override suspend fun deploy(
+        root: FileEntry,
+        items: List<DeployItem>,
+        destination: DeployDestination,
+    ): DeployResult {
+        val result =
+            client.call(Method.Deploy) {
+                put(ROOT, root.toJson())
+                put("items", items.itemsJson())
+                put(DESTINATION, destination.toJson())
+            }
+        return result.deployResult()
+    }
+
+    override suspend fun sshHosts(): List<SshConfigHost> = client.call(Method.DeploySshHosts).sshHosts()
+}
+
+/** [DeployProfiles] of the server. */
+class RemoteDeployProfiles(private val client: RpcClient) : DeployProfiles {
+    override suspend fun load(projectPath: String): List<DeployProfile> =
+        client.call(Method.DeployProfilesLoad) { put(PROJECT, projectPath) }.deployProfiles()
+
+    override suspend fun save(projectPath: String, profiles: List<DeployProfile>) {
+        client.call(Method.DeployProfilesSave) {
+            put(PROJECT, projectPath)
+            put("profiles", profiles.toJson())
+        }
+    }
+}

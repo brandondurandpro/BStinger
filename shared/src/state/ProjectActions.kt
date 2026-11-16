@@ -35,7 +35,8 @@ internal const val MAX_BACK_STEPS = 100
 fun ProjectState.openFileOfDiff(tab: EditorTab) {
     if (!tab.isDiff) return
     val lines = (tab.status as? TabStatus.Diff)?.lines.orEmpty()
-    navigate(tab.entry, TextPos(firstChangedLine(lines), 0))
+    val landing = TextPos(firstChangedLine(lines), 0)
+    navigate(tab.entry, landing, landing)
 }
 
 // Zero-based line of the first change in the new version: an added line, or where removed lines used to be.
@@ -89,7 +90,7 @@ internal suspend fun ProjectState.goToDeclarationByName(pos: TextPos): Boolean {
     val document = tab?.document
     val name = document?.identifierAt(pos)
     val found = name?.let { declarationOf(it, tab.entry, document, pos) }
-    found?.let { (entry, target) -> navigate(entry, target) }
+    found?.let { (entry, target) -> navigate(entry, target, target) }
     return found != null
 }
 
@@ -161,22 +162,22 @@ fun ProjectState.deploy(dialog: FileDialog.Deploy, text: String) {
     if (dialog.running || dialog.result != null) return
     val destination = DeployDestination.parse(text)
     if (destination == null) {
-        fileDialog = dialog.withError("Enter a folder, or host:folder for another machine")
+        treeDialogs.fileDialog = dialog.withError("Enter a folder, or host:folder for another machine")
         return
     }
-    deployDestination = text.trim()
+    deployments.destination = text.trim()
     val running = dialog.copy(running = true, result = null, error = null)
-    fileDialog = running
+    treeDialogs.fileDialog = running
     scope.launch {
         try {
             val items = dialog.entries.map { DeployItem(it, relativeToRoot(it.path, root.path)) }
             val result = services.deployer.deploy(root, items, destination)
             val summary = deploySummary(result, destination)
             val done = running.copy(running = false, result = summary, destination = text.trim())
-            if (fileDialog === running) fileDialog = done
+            if (treeDialogs.fileDialog === running) treeDialogs.fileDialog = done
         } catch (e: IOException) {
             val failed = running.withError(e.message ?: e::class.simpleName.orEmpty())
-            if (fileDialog === running) fileDialog = failed
+            if (treeDialogs.fileDialog === running) treeDialogs.fileDialog = failed
         }
     }
 }
@@ -270,11 +271,11 @@ private fun ProjectState.fileOperation(block: suspend () -> Unit) {
             // From the confirmation to the frame that shows the tree changed; a failure is shown, and measured.
             ClientTelemetry.measureToFrame(Operation.TreeFileOperation) {
                 block()
-                fileDialog = null
+                treeDialogs.fileDialog = null
                 fileIndex.invalidate()
             }
         } catch (e: IOException) {
-            fileDialog = fileDialog?.withError(e.message ?: e::class.simpleName.orEmpty())
+            treeDialogs.fileDialog = treeDialogs.fileDialog?.withError(e.message ?: e::class.simpleName.orEmpty())
             // The server restarted before saying whether it was done: the tree shows what the disk now holds.
             if (e is OutcomeUnknownException) tree.refresh()
         }

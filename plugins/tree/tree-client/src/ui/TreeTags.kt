@@ -22,28 +22,6 @@ object TreeTags {
     const val GOTO_FILE = "gotoFile"
     const val RECENT_FILES = "recentFiles"
     const val GOTO_FILE_INPUT = "gotoFile.input"
-    const val FIND_IN_FILES = "findInFiles"
-    const val SEARCH_TOOL_BUTTON = "tool.search"
-    const val SEARCH_PANEL = "searchPanel"
-    const val FIND_IN_FILES_INPUT = "findInFiles.input"
-    const val FIND_IN_FILES_COUNT = "findInFiles.count"
-    const val FIND_IN_FILES_ENGINE = "findInFiles.engine"
-    const val FIND_IN_FILES_CASE = "findInFiles.case"
-    const val FIND_IN_FILES_WHOLE_WORD = "findInFiles.wholeWord"
-    const val FIND_IN_FILES_REGEX = "findInFiles.regex"
-    const val FIND_IN_FILES_GLOB_BUTTON = "findInFiles.glob"
-    const val FIND_IN_FILES_GLOB_INPUT = "findInFiles.globInput"
-    const val FIND_IN_FILES_INCLUDE_IGNORED = "findInFiles.includeIgnored"
-    const val FIND_IN_FILES_SCOPE_BUTTON = "findInFiles.scope"
-    const val FIND_IN_FILES_SCOPE_MENU = "findInFiles.scopeMenu"
-    const val FIND_IN_FILES_SCOPE_FILTER = "findInFiles.scopeFilter"
-    const val FIND_IN_FILES_GLOB_CLEAR = "findInFiles.globClear"
-    const val FIND_IN_FILES_CLEAR = "findInFiles.clear"
-    const val FIND_IN_FILES_SCOPE_CLEAR = "findInFiles.scopeClear"
-    const val FIND_IN_FILES_SCOPE_FILTER_CLEAR = "findInFiles.scopeFilterClear"
-    const val FIND_IN_FILES_SCOPE_ALL = "findInFiles.scopeAll"
-    const val FIND_IN_FILES_SCOPE_NONE = "findInFiles.scopeNone"
-    const val FIND_IN_FILES_ERROR = "findInFiles.error"
     const val GOTO_SYMBOL = "gotoSymbol"
     const val GOTO_SYMBOL_INPUT = "gotoSymbol.input"
     const val STRUCTURE = "structure"
@@ -60,17 +38,6 @@ object TreeTags {
     fun treeGitStatus(relativePath: String, status: String) = "tree.git:$relativePath:$status"
 
     fun gotoFileItem(relativePath: String) = "gotoFile.item:$relativePath"
-
-    /** The row of a file in the grouped results, by its path relative to the project. */
-    fun findInFilesFile(relativePath: String) = "findInFiles.file:$relativePath"
-
-    fun findInFilesItem(relativePath: String, line: Int) = "findInFiles.item:$relativePath:$line"
-
-    /** A suggestion chip of the glob field of Find in Files: its glob (`*.kt`, `!*.xml`, `!build/`). */
-    fun findInFilesGlobSuggestion(glob: String) = "findInFiles.glob:$glob"
-
-    /** A row of the scope dropdown of Find in Files: its choice (`.` for the whole project root). */
-    fun findInFilesScopeRow(scope: String) = "findInFiles.scope:$scope"
 
     fun gotoSymbolItem(name: String, relativePath: String) = "gotoSymbol.item:$name:$relativePath"
 

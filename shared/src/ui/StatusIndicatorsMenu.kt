@@ -19,7 +19,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import org.example.kotlineditor.state.StatusIndicator
 import org.example.kotlineditor.state.StatusIndicators
 
 private val CHECK_SIZE = 16.dp
@@ -41,14 +40,14 @@ internal fun StatusIndicatorsMenu(indicators: StatusIndicators) {
             Chevron(expanded = menuOpen)
         }
         IdeDropdownMenu(menuOpen, onDismissRequest = { menuOpen = false }) {
-            for (indicator in StatusIndicator.entries) {
-                val shown = indicators.isShown(indicator)
+            for (indicator in IdeRegistries.statusIndicators.contributions) {
+                val shown = indicators.isShown(indicator.key)
                 // The menu stays open: several indicators are often changed at once.
                 IdeMenuItem(
                     text = { Text(indicator.label, fontSize = 13.sp) },
-                    onClick = { indicators.setShown(indicator, !shown) },
+                    onClick = { indicators.setShown(indicator.key, !shown) },
                     leadingIcon = { if (shown) CheckIcon() else Spacer(Modifier.size(CHECK_SIZE)) },
-                    modifier = Modifier.testTag(AppTags.statusIndicator(indicator.name)),
+                    modifier = Modifier.testTag(AppTags.statusIndicator(indicator.key)),
                 )
             }
         }

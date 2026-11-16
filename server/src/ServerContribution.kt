@@ -1,6 +1,8 @@
 package org.example.kotlineditor.server
 
+import org.example.kotlineditor.rpc.MethodRegistry
 import org.example.kotlineditor.rpc.MethodSpec
+import org.example.kotlineditor.rpc.PluginMethod
 
 /**
  * What a feature (a built-in one, later a plugin) adds to the server: the handlers of its methods. Nothing else
@@ -42,6 +44,12 @@ internal fun requestHandlers(
         for ((method, handler) in contribution.handlers(services)) {
             require(handlers.put(method, handler) == null) { "${method.rpcName} has two handlers" }
         }
+    }
+    // The methods of the bundled plugins are declared in the registry too: a frame is only dispatched when the
+    // registry names it (see `JsonRpc`), and a plugin's client calls by name. Idempotent: several servers live in
+    // one JVM (the tests) and build the same handlers, and a method declared again is the same method.
+    for (method in handlers.keys.filterIsInstance<PluginMethod>()) {
+        if (MethodRegistry.resolve(method.rpcName) == null) MethodRegistry.register(listOf(method))
     }
     return handlers
 }

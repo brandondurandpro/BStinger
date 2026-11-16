@@ -8,6 +8,9 @@ dependencies:
   - //plugins/language-servers/language-servers-server
   - //plugins/run/run-server
   - //plugins/terminal/terminal-server
+  - //plugins/todo/todo-server
+  - //plugins/editorconfig/editorconfig-server
+  - //plugins/scratchpad/scratchpad-server
   - $libs.kotlinx.coroutines.core
 
 settings:

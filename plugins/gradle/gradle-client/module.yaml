@@ -1,0 +1,6 @@
+# The Gradle and Amper run configurations a project suggests from the wrappers at its root.
+product:
+  type: jvm/lib
+
+dependencies:
+  - //plugins/run/run-client

@@ -4,6 +4,7 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import org.example.kotlineditor.plugin.core.PLUGIN_MANIFEST
 import org.example.kotlineditor.plugin.core.PluginManifest
 import org.example.kotlineditor.plugin.core.UnloadOutcome
 import org.example.kotlineditor.plugin.host.LoadResult
@@ -15,8 +16,6 @@ import java.io.File
 import java.io.IOException
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
-
-private const val MANIFEST = "plugin.yaml"
 
 /** A plugin of the plugins folder, as the Plugins settings list it. */
 class PluginEntry(
@@ -102,7 +101,7 @@ class ClientPlugins(
         val halves =
             withServer.map { (id, manifest) ->
                 val folder = File(directory, id)
-                ServerHalfToSend(id, File(folder, MANIFEST).readText(), File(folder, "server.jar"))
+                ServerHalfToSend(id, File(folder, PLUGIN_MANIFEST).readText(), File(folder, "server.jar"))
             }
         val failures = syncServerHalves(client, halves)
         for ((id, reason) in failures) {
@@ -153,7 +152,7 @@ class ClientPlugins(
     }
 
     private fun entryOf(folder: File): PluginEntry {
-        val manifest = runCatching { PluginManifest.parse(File(folder, MANIFEST).readText()) }.getOrNull()
+        val manifest = runCatching { PluginManifest.parse(File(folder, PLUGIN_MANIFEST).readText()) }.getOrNull()
         val running = folder.name in host.loadedIds
         val problem = problems[folder.name]
         val reason = if (running || problem == null) "" else describe(problem)
@@ -168,7 +167,7 @@ class ClientPlugins(
 private fun readManifest(archive: File): PluginManifest? =
     runCatching {
         ZipFile(archive).use { zip ->
-            val entry = zip.getEntry(MANIFEST) ?: return null
+            val entry = zip.getEntry(PLUGIN_MANIFEST) ?: return null
             PluginManifest.parse(zip.getInputStream(entry).readBytes().decodeToString())
         }
     }.getOrNull()

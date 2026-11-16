@@ -40,10 +40,13 @@ import org.example.kotlineditor.state.Document
 import org.example.kotlineditor.state.EditorPane
 import org.example.kotlineditor.state.EditorTab
 import org.example.kotlineditor.state.FindState
+import org.example.kotlineditor.state.GitProjectView
+import org.example.kotlineditor.state.LanguageServersProjectView
 import org.example.kotlineditor.state.PopupKind
 import org.example.kotlineditor.state.ProjectState
 import org.example.kotlineditor.state.TabStatus
 import org.example.kotlineditor.state.TextPos
+import org.example.kotlineditor.state.TreeProjectView
 import org.example.kotlineditor.state.findAll
 import org.example.kotlineditor.state.firstChangedLine
 import org.example.kotlineditor.state.gotoDeclaration
@@ -73,9 +76,9 @@ fun ProjectScreen(app: AppState, project: ProjectState) {
         Box(Modifier.weight(1f)) {
             ProjectBody(app, project, findFocus)
             ProjectPopups(project) { closePopup(project) }
-            if (project.git.branchPickerOpen) BranchPicker(project)
+            if (project.git.branchPickerOpen) BranchPicker(GitProjectView(project))
             ProjectDialogs(project)
-            LanguageServerChoiceDialog(project)
+            LanguageServerChoiceDialog(LanguageServersProjectView(project))
         }
         StatusBar(app, project)
     }
@@ -111,7 +114,7 @@ private fun ProjectBody(app: AppState, project: ProjectState, findFocus: FocusRe
                 Row(Modifier.weight(1f).fillMaxWidth()) {
                     if (!project.toolWindows.leftColumnHidden) ToolDock(project, Dock.Left, drag)
                     Column(Modifier.weight(1f)) {
-                        LanguageServerChoiceBanner(project)
+                        LanguageServerChoiceBanner(LanguageServersProjectView(project))
                         EditorArea(app, project, findFocus, Modifier.weight(1f))
                     }
                     ToolDock(project, Dock.Right, drag)
@@ -128,11 +131,11 @@ internal fun ProjectPopups(project: ProjectState, onClose: () -> Unit) {
     val document = project.editor.activeTab?.document
     when (project.popup) {
         PopupKind.GotoFile -> {
-            GotoFilePopup(project, onClose = onClose)
+            GotoFilePopup(TreeProjectView(project), onClose = onClose)
         }
 
         PopupKind.RecentFiles -> {
-            GotoFilePopup(project, onClose = onClose, recentOnly = true)
+            GotoFilePopup(TreeProjectView(project), onClose = onClose, recentOnly = true)
         }
 
         PopupKind.GotoLine -> {
@@ -140,7 +143,7 @@ internal fun ProjectPopups(project: ProjectState, onClose: () -> Unit) {
         }
 
         PopupKind.GotoSymbol -> {
-            GotoSymbolPopup(project, onClose = onClose)
+            GotoSymbolPopup(TreeProjectView(project), onClose = onClose)
         }
 
         PopupKind.FileStructure -> {
@@ -258,7 +261,10 @@ private fun TabContent(
                 spansOf = { name, lines -> project.grammars?.highlightDiff(name, lines) },
                 sideBySide = project.diffSideBySide,
                 onToggleSideBySide = { project.diffSideBySide = !project.diffSideBySide },
-                onOpenFile = { entry, lines -> project.navigate(entry, TextPos(firstChangedLine(lines), 0)) },
+                onOpenFile = { entry, lines ->
+                    val landing = TextPos(firstChangedLine(lines), 0)
+                    project.navigate(entry, landing, landing)
+                },
                 modifier = Modifier.fillMaxSize(),
             )
         }

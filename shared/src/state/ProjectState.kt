@@ -32,6 +32,7 @@ import org.example.kotlineditor.syntax.treesitter.GrammarStore
 import org.example.kotlineditor.ui.IdeRegistries
 import org.example.kotlineditor.ui.RUN_SERVICE
 import org.example.kotlineditor.ui.TERMINAL_SERVICE
+import java.util.ServiceLoader
 
 private val INDEXED_POPUPS = setOf(PopupKind.GotoFile, PopupKind.GotoSymbol)
 private val DOCUMENT_POPUPS = setOf(PopupKind.GotoLine, PopupKind.FileStructure)
@@ -50,7 +51,7 @@ class ProjectState(
     /** Tree-sitter grammars, shared with the worktrees agent mode opens from this project. */
     internal val grammars: GrammarStore? = null,
     /** Language servers of the IDE, shared by every project; none for the worktrees of agent mode. */
-    override val languageServers: LanguageServersState? = null,
+    val languageServers: LanguageServersState? = null,
     /** The command line of the agent of agent mode, as set in the settings. */
     private val agentCommand: () -> AgentCommand = { agentCommandOf("") },
     /** The layout of the diffs, saved; a worktree of agent mode shares the one of its project. */
@@ -61,15 +62,12 @@ class ProjectState(
     val installedPlugins: () -> ClientPlugins? = { null },
     /** Where agent mode can start a conversation in another project; null where no window can be added. */
     private val windows: ProjectWindows? = null,
-) : GitHost,
-    FindInFilesHost,
-    LanguageServersHost,
-    AgentHost,
-    DeployHost {
+) : ProjectHost,
+    AgentHost {
     /** Cancelled when the project is closed, so no background work outlives it. */
     override val scope = CoroutineScope(parentScope.coroutineContext + SupervisorJob(parentScope.coroutineContext[Job]))
     val name: String get() = root.name
-    override val tree = FileTreeState(root, services.fileSystem, scope)
+    val tree = FileTreeState(root, services.fileSystem, scope)
     override val editor: EditorState =
         EditorState(
             services.fileSystem,
@@ -89,7 +87,7 @@ class ProjectState(
             grammars = grammars,
         )
     override val fileIndex = FileIndex(root, services.search, scope)
-    override val findInFiles =
+    val findInFiles =
         FindInFilesSearch(
             root,
             services.search,
@@ -147,7 +145,7 @@ class ProjectState(
         )
 
     /** Git: branch, status, commit, branches of the toolbar, and the Branches tool window's history. */
-    override val git =
+    val git =
         GitState(
             root,
             services.git,
@@ -192,15 +190,14 @@ class ProjectState(
 
     override val checkedOutBranch: String? get() = git.currentBranch
     var popup: PopupKind? by mutableStateOf(null)
-    override var fileDialog: FileDialog? by mutableStateOf(null)
+
+    /** The dialogs the tree and the file actions open, shown by the popups of the window (see `TreeDialogs`). */
+    internal val treeDialogs = TreeDialogs()
 
     override val selectedPath: String? get() = tree.selectedPath
 
     /** The deployments saved for this project (which folders go where), and their popup. */
     val deployments = DeploymentsState(this)
-
-    /** The destination of the last deployment, offered again by the next one. */
-    override var deployDestination: String by mutableStateOf("")
 
     /** "Always Select Opened File": the active file is selected and revealed in the project tree. */
     override var autoSelectOpenedFile by mutableStateOf(autoSelectOf(preferences))
@@ -229,6 +226,30 @@ class ProjectState(
     /** Positions left by navigation actions, for Ctrl+Alt+Left (Back). */
     internal val backStack = ArrayDeque<Pair<FileEntry, TextPos>>()
 
+    // The registry the states of the features are published under, one per key their modules declare.
+    private val projectServices = ProjectServices()
+
+    // The features that suggest run configurations, found like the other bundled contributions.
+    private val runSources: List<RunConfigurationsSource> by lazy {
+        ServiceLoader.load(RunConfigurationsSource::class.java).toList()
+    }
+
+    init {
+        // The states of the features of this project, each under the key its module publishes; a feature reaches
+        // them through `service`, never through the project itself.
+        provide(EDITOR_SERVICE) { editor }
+        provide(TREE_SERVICE) { tree }
+        provide(FILE_INDEX_SERVICE) { fileIndex }
+        provide(FIND_SERVICE) { findInFiles }
+        provide(TREE_DIALOGS_SERVICE) { treeDialogs }
+        provide(GIT_SERVICE) { git }
+        provide(RUN_SERVICE) { run }
+        provide(TERMINAL_SERVICE) { terminal }
+        provide(DEPLOY_SERVICE) { deployments }
+        languageServers?.let { servers -> provide(LANGUAGE_SERVERS_SERVICE) { servers } }
+        provide(PROJECT_STATE_SERVICE) { this }
+    }
+
     init {
         git.refresh()
         scope.launch { followDisk() }
@@ -251,12 +272,16 @@ class ProjectState(
     /** What to save of agent mode; nothing while it was never used in this project (the saved values stay). */
     fun agentPreferences(): Map<String, String> = if (agentState.isInitialized()) agent.toPreferences() else emptyMap()
 
-    // What the project offers to run: the wrappers of Amper and Gradle at its root, and the scripts of each of its
-    // composer.json files (a project may hold several PHP projects), and of each of its package.json files.
+    // What the project offers to run: the configurations its features suggest from the files at its root (the
+    // Gradle and Amper wrappers, contributed by their plugins), and the scripts of each of its composer.json files
+    // (a project may hold several PHP projects), and of each of its package.json files.
     private suspend fun discoverRunConfigurations(): List<RunConfiguration> {
         val entries = runCatching { services.fileSystem.list(root) }.getOrDefault(emptyList())
         val windows = !root.path.startsWith("/")
-        val wrappers = suggestedConfigurations(entries.map { it.name }.toSet(), windows)
+        val wrappers =
+            runSources.flatMap { source ->
+                runCatching { source.configurations(entries, windows) }.getOrDefault(emptyList())
+            }
         return wrappers + discoverManifestScripts(windows)
     }
 
@@ -320,15 +345,16 @@ class ProjectState(
 
     /** The state the features keep in the project, by the key they publish it under (see [service]). */
     override fun <T : Any> service(key: ServiceKey<T>): T {
-        val found =
-            when {
-                key === RUN_SERVICE -> run
-                key === TERMINAL_SERVICE -> terminal
-                else -> null
-            }
-        @Suppress("UNCHECKED_CAST")
-        return checkNotNull(found as T?) { "No ${key.name} in this project" }
+        val found = projectServices[key]
+        return checkNotNull(found) { "No ${key.name} in this project" }
     }
+
+    /** The state a feature keeps in the project, or null when the feature is not loaded in this project. */
+    override fun <T : Any> serviceOrNull(key: ServiceKey<T>): T? = projectServices[key]
+
+    /** Publishes the state built by [state] under [key] for this project; closing the result takes it away. */
+    override fun <T : Any> provide(key: ServiceKey<T>, state: () -> T): AutoCloseable =
+        projectServices.provide(key, state)
 
     /** Shows or hides a tool window (Alt+1, Alt+9, Alt+F12, Ctrl+Alt+Shift+D or its button in the left strip). */
     override fun toggleToolWindow(window: ToolWindow) {

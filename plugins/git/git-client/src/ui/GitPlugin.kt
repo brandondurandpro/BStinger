@@ -5,7 +5,7 @@ import org.example.kotlineditor.plugin.ActionContext
 import org.example.kotlineditor.plugin.StripGroup
 import org.example.kotlineditor.plugin.ToolWindowContribution
 import org.example.kotlineditor.state.Dock
-import org.example.kotlineditor.state.GitHost
+import org.example.kotlineditor.state.GitProjectView
 import org.example.kotlineditor.state.ToolWindow
 import org.example.kotlineditor.state.ToolWindowDefaults
 
@@ -15,9 +15,10 @@ fun gitToolWindow(): ToolWindowContribution =
         defaults = ToolWindowDefaults(ToolWindow.Git, Dock.Left),
         tag = GitTags.TOOL_GIT,
         group = StripGroup.Top,
-        onShown = { host -> (host as GitHost).git.refreshStatus() },
+        rank = 1,
+        onShown = { host -> GitProjectView(host).git.refreshStatus() },
         icon = Lucide.History,
-        content = { host, drag, modifier -> GitPanel(host as GitHost, drag, modifier) },
+        content = { host, drag, modifier -> GitPanel(GitProjectView(host), drag, modifier) },
     )
 
 /** The Branches tool window (history): loads the branches and the selected history when it appears. */
@@ -26,15 +27,16 @@ fun branchesToolWindow(): ToolWindowContribution =
         defaults = ToolWindowDefaults(ToolWindow.Branches, Dock.Bottom),
         tag = GitTags.TOOL_BRANCHES,
         group = StripGroup.Last,
+        rank = 3,
         // Shown again: the branches and the history may have changed meanwhile. The first time, the panel itself
         // selects the current branch once it is known (`BranchesPanel`).
         onShown = { host ->
-            val git = (host as GitHost).git
+            val git = GitProjectView(host).git
             git.refreshBranches()
             if (git.history.selectedRef != null) git.history.reload()
         },
         icon = Lucide.GitBranch,
-        content = { host, drag, modifier -> BranchesPanel(host as GitHost, drag, modifier) },
+        content = { host, drag, modifier -> BranchesPanel(GitProjectView(host), drag, modifier) },
     )
 
 /** Alt+9 toggles the Git window. */

@@ -21,17 +21,18 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 private const val BUTTON = "plugin.todo.button"
-private val SCAN = PluginMethod("todo", "scan", mutating = false)
+private val SCAN = PluginMethod("scanner", "scan", mutating = false)
 
 private val CLIENT_HALF =
     """
     c.toolWindow(new org.example.kotlineditor.plugin.ToolWindowContribution(
         new org.example.kotlineditor.state.ToolWindowDefaults(
-            new org.example.kotlineditor.state.ToolWindow("plugin.todo"),
+            new org.example.kotlineditor.state.ToolWindow("plugin.scanner"),
             org.example.kotlineditor.state.Dock.Bottom,
             false),
         "$BUTTON",
         org.example.kotlineditor.plugin.StripGroup.Bottom,
+        0,
         false,
         host -> kotlin.Unit.INSTANCE,
         org.example.kotlineditor.ui.Lucide.INSTANCE.getFolder(),
@@ -41,7 +42,7 @@ private val CLIENT_HALF =
 private fun serverHalf(answer: String) =
     """
     c.handle(
-        new org.example.kotlineditor.rpc.PluginMethod("todo", "scan", false),
+        new org.example.kotlineditor.rpc.PluginMethod("scanner", "scan", false),
         (request, continuation) -> kotlinx.serialization.json.JsonElementKt.JsonPrimitive("$answer"));
     """.trimIndent()
 
@@ -77,50 +78,50 @@ class ServerPluginE2eTest {
     @Test
     fun `the server half of a plugin is installed on the server and answers its methods`() =
         runComposeUiTest {
-            PluginFixture.createWithServer(plugins, "todo", API_VERSION, CLIENT_HALF, serverHalf("todo-list"))
+            PluginFixture.createWithServer(plugins, "scanner", API_VERSION, CLIENT_HALF, serverHalf("scanner-list"))
             val app = launchWithProject(project, pluginsDirectory = plugins)
 
-            awaitCondition { app.listedOnServer() == listOf("todo") }
-            assertEquals("todo-list", app.scan())
+            awaitCondition { app.listedOnServer() == listOf("scanner") }
+            assertEquals("scanner-list", app.scan())
             awaitTag(BUTTON)
         }
 
     @Test
     fun `a server restarted with its installed halves still answers`() =
         runComposeUiTest {
-            PluginFixture.createWithServer(plugins, "todo", API_VERSION, CLIENT_HALF, serverHalf("todo-list"))
+            PluginFixture.createWithServer(plugins, "scanner", API_VERSION, CLIENT_HALF, serverHalf("scanner-list"))
             val app = launchWithProject(project, pluginsDirectory = plugins)
-            awaitCondition { app.listedOnServer() == listOf("todo") }
+            awaitCondition { app.listedOnServer() == listOf("scanner") }
 
             app.process.restart()
 
-            awaitCondition { runCatching { app.scan() }.getOrNull() == "todo-list" }
+            awaitCondition { runCatching { app.scan() }.getOrNull() == "scanner-list" }
         }
 
     @Test
     fun `a server that lost its halves gets them again when the client reconnects`() =
         runComposeUiTest {
-            PluginFixture.createWithServer(plugins, "todo", API_VERSION, CLIENT_HALF, serverHalf("todo-list"))
+            PluginFixture.createWithServer(plugins, "scanner", API_VERSION, CLIENT_HALF, serverHalf("scanner-list"))
             val app = launchWithProject(project, pluginsDirectory = plugins)
-            awaitCondition { app.listedOnServer() == listOf("todo") }
+            awaitCondition { app.listedOnServer() == listOf("scanner") }
 
             app.process.stop()
             app.process.serverPlugins.deleteRecursively()
             app.process.start()
 
-            awaitCondition { runCatching { app.scan() }.getOrNull() == "todo-list" }
+            awaitCondition { runCatching { app.scan() }.getOrNull() == "scanner-list" }
         }
 
     @Test
     fun `a plugin whose server half fails to load is off on both sides`() =
         runComposeUiTest {
             val broken = "throw new IllegalStateException(\"no disk\");"
-            PluginFixture.createWithServer(plugins, "todo", API_VERSION, CLIENT_HALF, broken)
+            PluginFixture.createWithServer(plugins, "scanner", API_VERSION, CLIENT_HALF, broken)
             val app = launchWithProject(project, pluginsDirectory = plugins)
             val installed = checkNotNull(app.installedPlugins)
 
-            awaitCondition { installed.offBecause["todo"] != null }
-            assertIs<PluginProblem.ServerUnavailable>(installed.offBecause["todo"])
+            awaitCondition { installed.offBecause["scanner"] != null }
+            assertIs<PluginProblem.ServerUnavailable>(installed.offBecause["scanner"])
             assertEquals(emptyList(), installed.loaded)
             awaitNoTag(BUTTON)
             assertEquals(emptyList(), app.listedOnServer())

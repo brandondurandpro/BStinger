@@ -7,9 +7,12 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import org.example.kotlineditor.model.DiskChanges
 import org.example.kotlineditor.model.DiskCursor
+import org.example.kotlineditor.model.DiskWatch
 import org.example.kotlineditor.model.FileVersion
 
 // JSON of the changes on disk (`fs/changes`), shared by client and server.
+
+private const val ROOT = "root"
 
 /** A position in the changes of a project. */
 fun DiskCursor.toJson(): JsonObject =
@@ -54,3 +57,16 @@ fun Map<String, FileVersion>.toJson(): JsonElement =
     buildJsonObject {
         for ((path, version) in this@toJson) put(path, version.toJson())
     }
+
+/** [DiskWatch] of the server. */
+class RemoteDiskWatch(private val client: RpcClient) : DiskWatch {
+    override suspend fun changes(root: String, since: DiskCursor, open: List<String>): DiskChanges {
+        val result =
+            client.call(Method.DiskChanges) {
+                put(ROOT, root)
+                put("since", since.toJson())
+                if (open.isNotEmpty()) put("open", open.toJson())
+            }
+        return result.diskChanges()
+    }
+}

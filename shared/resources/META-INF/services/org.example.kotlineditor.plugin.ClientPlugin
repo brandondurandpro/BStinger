@@ -1,0 +1,3 @@
+org.example.kotlineditor.ui.ExtensionsClientPlugin
+org.example.kotlineditor.ui.NetworkClientPlugin
+org.example.kotlineditor.ui.StatusIndicatorsClientPlugin

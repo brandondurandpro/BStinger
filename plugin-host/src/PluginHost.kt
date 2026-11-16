@@ -2,6 +2,12 @@ package org.example.kotlineditor.plugin.host
 
 import org.example.kotlineditor.plugin.core.CLIENT_VISIBLE
 import org.example.kotlineditor.plugin.core.PluginClassLoader
+import org.example.kotlineditor.plugin.core.PluginHalves
+import org.example.kotlineditor.plugin.core.PLUGIN_DISABLED_MARKER
+import org.example.kotlineditor.plugin.core.PLUGIN_LOADING_MARKER
+import org.example.kotlineditor.plugin.core.PLUGIN_MANIFEST
+import org.example.kotlineditor.plugin.core.outcomeOf
+import org.example.kotlineditor.plugin.core.shutDownHalf
 import org.example.kotlineditor.plugin.core.PluginManifest
 import org.example.kotlineditor.plugin.core.UnloadOutcome
 import org.example.kotlineditor.plugin.core.API_VERSION
@@ -12,11 +18,11 @@ import org.example.kotlineditor.plugin.IdePlugin
 import java.io.File
 import java.lang.ref.WeakReference
 
-private const val MANIFEST = "plugin.yaml"
+private const val MANIFEST = PLUGIN_MANIFEST
 private const val CLIENT_JAR = "client.jar"
 private const val SHARED_JAR = "shared.jar"
-private const val LOADING_MARKER = ".loading"
-private const val DISABLED_MARKER = ".disabled"
+private const val LOADING_MARKER = PLUGIN_LOADING_MARKER
+private const val DISABLED_MARKER = PLUGIN_DISABLED_MARKER
 
 /** Why a plugin is not running. */
 sealed interface PluginProblem {
@@ -73,6 +79,7 @@ class PluginHost(
      */
     private val beforeCollect: () -> Unit = {},
 ) {
+    private val halves = PluginHalves(beforeCollect)
     private val running = linkedMapOf<String, LoadedPlugin>()
 
     /** The ids of the running plugins, in load order. */
@@ -88,43 +95,39 @@ class PluginHost(
                 .getOrElse { return refused(PluginProblem.InvalidManifest(it.message.orEmpty())) }
         val problem = problemOf(folder, manifest)
         if (problem != null) return refused(problem)
-        val marker = File(folder, LOADING_MARKER)
-        marker.writeText(manifest.version)
-        val result = start(folder, manifest)
-        // A start that threw or hung leaves the marker, and the next IDE start keeps the plugin off.
-        if (result.loaded != null) marker.delete()
-        return result
+        var attempt = refused(PluginProblem.Failed("not started"))
+        // A start that failed to mount leaves the marker behind, and the next start keeps the plugin off.
+        halves.guardedStart(folder, manifest.version) {
+            attempt = start(folder, manifest)
+            attempt.loaded
+        }
+        return attempt
     }
 
     /** Loads every plugin of [directory] (dependencies first is the caller's order: sorted by id). */
-    fun loadAll(directory: File): Map<String, LoadResult> {
-        val folders = directory.listFiles { file -> file.isDirectory }.orEmpty().sortedBy { it.name }
-        return folders.associate { it.name to load(it) }
-    }
+    fun loadAll(directory: File): Map<String, LoadResult> =
+        halves.foldersOf(directory).associate { it.name to load(it) }
 
     /**
      * Unloads [id]: its contributions go, its cleanups run, its class loader is dropped and checked. Waits a moment
      * for the garbage collector, so call it off the UI thread.
      */
-    fun unload(id: String): UnloadOutcome {
-        val reference = shutDown(id)
-        return outcomeOf(reference, beforeCollect)
-    }
-
-    /** Unloads every plugin without checking that its code is gone: the IDE is closing, or the UI already is. */
-    fun unloadAll() {
-        loadedIds.reversed().forEach { shutDown(it) }
-    }
+    fun unload(id: String): UnloadOutcome = outcomeOf(shutDown(id), beforeCollect)
 
     // Nothing of the plugin stays referenced by this frame once it returns, or its class loader could not be collected.
     private fun shutDown(id: String): WeakReference<PluginClassLoader> {
         val plugin = checkNotNull(running.remove(id)) { "$id is not loaded" }
-        plugin.registration.close()
-        plugin.cleanups.forEach { runCatching { it.close() } }
-        val reference = WeakReference(plugin.loader)
-        plugin.loader.close()
-        return reference
+        return shutDownHalf(plugin.registration, plugin.cleanups, plugin.loader)
     }
+
+    /** Unloads every plugin without checking that its code is gone: the IDE is closing, or the UI already is. */
+    fun unloadAll() {
+        loadedIds.reversed().forEach { id ->
+            val plugin = running.remove(id)
+            if (plugin != null) halves.shutDown(plugin.registration, plugin.cleanups, plugin.loader)
+        }
+    }
+
 
     /** Keeps [folder]'s plugin off at the next starts; unloads it if it runs. */
     fun disable(folder: File) {
@@ -163,8 +166,7 @@ class PluginHost(
 
     private fun register(manifest: PluginManifest, loader: PluginClassLoader): LoadedPlugin {
         val className = requireNotNull(manifest.client) { "${manifest.id} has no client half" }
-        val entry = loader.loadClass(className).getDeclaredConstructor().newInstance()
-        val clientPlugin = entry as ClientPlugin
+        val clientPlugin = halves.instantiate(loader, className) as ClientPlugin
         val contributions = ClientContributions()
         clientPlugin.register(contributions)
         val plugin = contributions.toPlugin(manifest.id)

@@ -29,13 +29,17 @@ private const val TEXT = "text"
 private const val DATA = "data"
 private const val GRAPHEME = "g"
 private const val FOREGROUND = "f"
+private const val COLUMNS = "columns"
 private const val BACKGROUND = "b"
 private const val ATTRIBUTES = "a"
+
+private const val DIRECTORY = "directory"
+private const val TERMINAL = "terminal"
 
 /** A complete snapshot. */
 fun TerminalSnapshot.toJson(): JsonObject =
     buildJsonObject {
-        put("columns", columns)
+        put(COLUMNS, columns)
         put("rows", rows)
         put("cursorColumn", cursorColumn)
         put("cursorRow", cursorRow)
@@ -102,7 +106,7 @@ private fun runJson(key: String, text: String, style: TerminalCell): JsonElement
 fun JsonElement.snapshot(): TerminalSnapshot {
     val s = jsonObject
     return TerminalSnapshot(
-        columns = s.int("columns"),
+        columns = s.int(COLUMNS),
         rows = s.int("rows"),
         cursorColumn = s.int("cursorColumn"),
         cursorRow = s.int("cursorRow"),

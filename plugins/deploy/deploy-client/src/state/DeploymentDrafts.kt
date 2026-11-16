@@ -16,8 +16,8 @@ fun DeploymentsState.startNew() {
             original = null,
             name = "",
             folders = listOf(DraftFolder(selected)),
-            destination = project.deployDestination,
-            remote = DeployDestination.parse(project.deployDestination)?.isRemote == true,
+            destination = destination,
+            remote = DeployDestination.parse(destination)?.isRemote == true,
         )
     loadSshHosts()
 }

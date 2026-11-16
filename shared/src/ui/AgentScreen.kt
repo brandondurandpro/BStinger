@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import org.example.kotlineditor.state.AgentState
 import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.Dock
+import org.example.kotlineditor.state.GitProjectView
 import org.example.kotlineditor.state.ProjectState
 import org.example.kotlineditor.state.ToolWindow
 import org.example.kotlineditor.state.workspaceProject
@@ -138,9 +139,9 @@ private fun AgentBody(
 @Composable
 private fun WorkspacePopups(workspace: ProjectState) {
     ProjectPopups(workspace) { closePopup(workspace) }
-    if (workspace.git.branchPickerOpen) BranchPicker(workspace)
-    workspace.fileDialog?.let { dialog ->
-        FileDialogPopup(workspace, dialog, onClose = { workspace.fileDialog = null })
+    if (workspace.git.branchPickerOpen) BranchPicker(GitProjectView(workspace))
+    workspace.treeDialogs.fileDialog?.let { dialog ->
+        FileDialogPopup(workspace, dialog, onClose = { workspace.treeDialogs.fileDialog = null })
     }
 }
 

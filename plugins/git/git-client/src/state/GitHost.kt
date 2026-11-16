@@ -1,25 +1,7 @@
 package org.example.kotlineditor.state
 
-import org.example.kotlineditor.model.GitCommit
-import org.example.kotlineditor.model.GitCommitFile
-
-/** The project as seen by the Git UI. */
+/** The project as seen by the Git UI: the state Git keeps, and the editor it opens files in. */
 interface GitHost : ProjectHost {
     val git: GitState
     val editor: EditorState
-
-    /** Opens the Branches tool window on the history of [ref], or of the current branch. */
-    fun showHistory(ref: String? = null)
-
-    /** Opens the diff of the working tree file at [relativePath] against HEAD. */
-    fun openDiff(relativePath: String)
-
-    /** Opens the three-way merge of the conflicted working tree file at [relativePath]. */
-    fun openMerge(relativePath: String)
-
-    /** Opens a review tab, led by hand, of the working tree files at [relativePaths]. */
-    fun openManualReview(relativePaths: List<String>)
-
-    /** Opens the diff of [file] in [commit]. */
-    fun openCommitDiff(commit: GitCommit, file: GitCommitFile)
 }

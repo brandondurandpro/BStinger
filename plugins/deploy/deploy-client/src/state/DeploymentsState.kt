@@ -47,8 +47,11 @@ data class DeployDraft(
  * The deployments saved for the project (which folders go where), kept by the server, and the popup that lists and
  * runs them. Editing is in `DeploymentDrafts.kt`, the automatic mode in [AutoDeploy].
  */
-class DeploymentsState(internal val project: DeployHost) {
+class DeploymentsState(internal val project: ProjectHost) {
     private val auto = AutoDeploy(this, project)
+
+    /** The destination of the last deployment, offered again by the next one. */
+    var destination: String by mutableStateOf("")
 
     /** Whether the popup is shown. */
     var open by mutableStateOf(false)
@@ -183,13 +186,13 @@ class DeploymentsState(internal val project: DeployHost) {
     }
 }
 
-private fun itemsOf(project: DeployHost, profile: DeployProfile): List<DeployItem> {
+private fun itemsOf(project: ProjectHost, profile: DeployProfile): List<DeployItem> {
     if (profile.folders.isEmpty()) return listOf(DeployItem(project.root, ""))
     return profile.folders.map { DeployItem(entryOf(project, it.source), it.target) }
 }
 
 // The project itself for the empty path.
-private fun entryOf(project: DeployHost, source: String): FileEntry =
+private fun entryOf(project: ProjectHost, source: String): FileEntry =
     if (source.isEmpty()) project.root else project.entryAt(source)
 
 /** What a finished deployment says: how many files and bytes went where. */

@@ -96,6 +96,9 @@ class ExtensionsChaosE2eTest {
             onNodeWithTag(AppTags.settingsServerToggle("php")).assertIsEnabled()
         }
 
+    private fun ComposeUiTest.isEnabled(tag: String): Boolean =
+        SemanticsProperties.Disabled !in onNodeWithTag(tag).fetchSemanticsNode().config
+
     private fun ComposeUiTest.onAllNodesWithTagExists(tag: String): Boolean =
         onAllNodes(hasTestTag(tag)).fetchSemanticsNodes().isNotEmpty()
 
@@ -114,14 +117,14 @@ class ExtensionsChaosE2eTest {
             app.network.dropFromServer = false
             awaitReconnected()
 
-            // Turning it on again after the reconnection brings back the server chosen, once.
+            // The request sent again on the new connection is answered: the window knows the server is off, and the
+            // button works again. Until then it still reads "Disable", which says nothing of what was saved.
             awaitCondition(timeout = SERVER_START_MS) {
-                val label = textOf(AppTags.settingsServerToggle("php"))
-                label == "Enable" || label == "Disable"
+                val toggle = AppTags.settingsServerToggle("php")
+                textOf(toggle) == "Enable" && isEnabled(toggle)
             }
-            if (textOf(AppTags.settingsServerToggle("php")) == "Enable") {
-                onNodeWithTag(AppTags.settingsServerToggle("php")).performClick()
-            }
+            // Turning it on again after the reconnection brings back the server chosen, once.
+            onNodeWithTag(AppTags.settingsServerToggle("php")).performClick()
             awaitCondition(timeout = SERVER_START_MS) { textOf(AppTags.settingsServerToggle("php")) == "Disable" }
             val saved = servers.saved()
             assertTrue("disabled" !in saved, saved)

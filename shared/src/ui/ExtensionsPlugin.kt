@@ -29,6 +29,7 @@ import org.example.kotlineditor.plugin.StripGroup
 import org.example.kotlineditor.plugin.ToolWindowContribution
 import org.example.kotlineditor.state.BUILT_IN_TOOL_WINDOWS
 import org.example.kotlineditor.state.ExtensionTarget
+import org.example.kotlineditor.state.PROJECT_STATE_SERVICE
 import org.example.kotlineditor.state.ProjectState
 import org.example.kotlineditor.state.SettingsState
 import org.example.kotlineditor.state.ToolWindow
@@ -41,9 +42,10 @@ internal fun extensionsToolWindow(): ToolWindowContribution {
         defaults = defaults,
         tag = AppTags.TOOL_EXTENSIONS,
         group = StripGroup.Top,
+        rank = 4,
         icon = Lucide.Puzzle,
-        // Every project of the IDE is a ProjectState.
-        content = { host, drag, modifier -> ExtensionsPanel(host as ProjectState, drag, modifier) },
+        // Every project of the IDE publishes itself under PROJECT_STATE_SERVICE.
+        content = { host, drag, modifier -> ExtensionsPanel(host.service(PROJECT_STATE_SERVICE), drag, modifier) },
     )
 }
 

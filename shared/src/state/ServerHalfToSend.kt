@@ -5,10 +5,10 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import org.example.kotlineditor.plugin.core.sha256Of
 import org.example.kotlineditor.rpc.Method
 import org.example.kotlineditor.rpc.RpcClient
 import java.io.File
-import java.security.MessageDigest
 import java.util.Base64
 
 /** One plugin whose server half is on the disk of the client, to be present on the server. */
@@ -46,6 +46,3 @@ private suspend fun installedOnServer(client: RpcClient): Map<String, String> {
         fields.getValue("id").jsonPrimitive.content to fields.getValue("sha256").jsonPrimitive.content
     }
 }
-
-private fun sha256Of(bytes: ByteArray): String =
-    MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }

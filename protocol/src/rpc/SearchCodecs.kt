@@ -1,5 +1,7 @@
 package org.example.kotlineditor.rpc
 
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -10,11 +12,16 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import org.example.kotlineditor.model.FileEntry
+import org.example.kotlineditor.model.FileSymbol
 import org.example.kotlineditor.model.FindOptions
+import org.example.kotlineditor.model.ProjectSearch
 import org.example.kotlineditor.model.SearchBatch
 import org.example.kotlineditor.model.SearchEngine
 import org.example.kotlineditor.model.SearchFacets
+import org.example.kotlineditor.model.SearchStream
 import org.example.kotlineditor.model.TextMatch
+import java.io.IOException
 
 // JSON of Find in Files: its options and limit, its results, and the batches of a streamed search. The basic
 // search fields keep the names an earlier version of the protocol sends, so an older client or server keeps
@@ -35,6 +42,9 @@ private const val INCLUDE_IGNORED = "includeIgnored"
 private const val ENGINE = "engine"
 private const val ERROR = "error"
 private const val LIMIT = "limit"
+
+private const val ROOT = "root"
+private const val STREAM = "stream"
 
 /** The directories and extensions the filters of Find in Files offer. */
 fun SearchFacets.toJson(): JsonObject =
@@ -129,4 +139,64 @@ fun JsonElement.searchBatch(): SearchBatch {
         engine?.let { SearchEngine.valueOf(it) },
         batch.stringOrNull(ERROR),
     )
+}
+
+/** [ProjectSearch] of the server: only the results travel. */
+class RemoteSearch(private val client: RpcClient) : ProjectSearch {
+    override suspend fun walkFiles(root: FileEntry, limit: Int): List<FileEntry> {
+        val result =
+            client.call(Method.WalkFiles) {
+                put(ROOT, root.toJson())
+                put(LIMIT, limit)
+            }
+        return result.entries()
+    }
+
+    override suspend fun facets(root: FileEntry): SearchFacets =
+        client.call(Method.Facets) { put(ROOT, root.toJson()) }.searchFacets()
+
+    override suspend fun findInFiles(root: FileEntry, query: String, ignoreCase: Boolean, limit: Int): List<TextMatch> =
+        findInFiles(root, FindOptions(query, ignoreCase), limit)
+
+    override suspend fun findInFiles(root: FileEntry, options: FindOptions, limit: Int): List<TextMatch> {
+        val result =
+            client.call(Method.FindInFiles) {
+                put(ROOT, root.toJson())
+                putParams(options, limit)
+            }
+        return result.matches()
+    }
+
+    /**
+     * Find in Files running as a stream of batches on the server. The request id of a FindInFilesStream is the
+     * id of its batch stream, registered before the request is sent so no batch can arrive unlistened; the
+     * stream resumes by itself after a reconnection, without a new call from the caller.
+     */
+    override fun findInFilesStream(root: FileEntry, options: FindOptions, limit: Int): SearchStream {
+        val id = client.newId()
+        val batches = client.openSearchStream(id)
+        client.scope.launch {
+            try {
+                client.call(Method.FindInFilesStream, id = id) {
+                    put(ROOT, root.toJson())
+                    putParams(options, limit)
+                }
+            } catch (_: IOException) {
+                // The client closed, or the server (restart? no session any more): end the stream cleanly.
+                client.closeStream(id)
+            }
+        }
+        return SearchStream(id, flow { for (batch in batches) emit(batch) })
+    }
+
+    /** Asks the server for the batches of the stream [streamId] received after [lastSeq], after a reconnection. */
+    suspend fun resumeSearch(streamId: Long, lastSeq: Long) {
+        client.call(Method.FindInFilesResume) {
+            put(STREAM, streamId)
+            put("lastSeq", lastSeq)
+        }
+    }
+
+    override suspend fun symbols(root: FileEntry): List<FileSymbol> =
+        client.call(Method.Symbols) { put(ROOT, root.toJson()) }.symbols()
 }

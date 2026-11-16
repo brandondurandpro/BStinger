@@ -12,6 +12,9 @@ dependencies:
   - //plugins/language-servers/language-servers-server
   - //plugins/run/run-server
   - //plugins/terminal/terminal-server
+  - //plugins/todo/todo-server
+  - //plugins/editorconfig/editorconfig-server
+  - //plugins/scratchpad/scratchpad-server
   # The real export of the measures, to a fake collector, for the telemetry chaos tests.
   - //telemetry-otel: exported
   - //lsp: exported

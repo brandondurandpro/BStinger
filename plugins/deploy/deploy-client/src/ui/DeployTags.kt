@@ -4,6 +4,7 @@ package org.example.kotlineditor.ui
 @Suppress("TooManyFunctions")
 object DeployTags {
     const val DEPLOYMENTS = "deployments"
+    const val BUTTON = "toolbar.deploy"
     const val DEPLOYMENTS_NEW = "deployments.new"
     const val DEPLOYMENTS_CLOSE = "deployments.close"
     const val DEPLOYMENTS_ERROR = "deployments.error"

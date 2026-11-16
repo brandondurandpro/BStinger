@@ -5,5 +5,7 @@ product:
 dependencies:
   # The fake language server reads and writes JSON-RPC messages.
   - $libs.kotlinx.serialization.json
+  # The API_VERSION the fixture manifests must match, from the plugin core.
+  - //plugin-core
   # The loopback Maven repository of grammars (TestGrammars) for the syntax and e2e tests.
   - //syntax

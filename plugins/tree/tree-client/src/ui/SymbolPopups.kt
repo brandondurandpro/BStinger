@@ -144,7 +144,8 @@ fun GotoSymbolPopup(project: TreeHost, onClose: () -> Unit) {
     val open = { match: SymbolMatch? ->
         match?.let {
             onClose()
-            project.navigate(it.entry, TextPos(it.declaration.line, it.declaration.column))
+            val landing = TextPos(it.declaration.line, it.declaration.column)
+            project.navigate(it.entry, landing, landing)
         }
         Unit
     }

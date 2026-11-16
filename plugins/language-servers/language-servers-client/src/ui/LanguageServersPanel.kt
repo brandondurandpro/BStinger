@@ -53,14 +53,9 @@ private val LEAKS = setOf("SuspectedLeak", "OverLimit")
  * group only when the user keeps it shown.
  */
 @Composable
-fun LanguageServerStatusItems(
-    project: LanguageServersHost,
-    showServers: Boolean = true,
-    showMemory: Boolean = true,
-    showCpu: Boolean = true,
-) {
+fun LanguageServerStatusItems(project: LanguageServersHost) {
     val state = project.languageServers ?: return
-    val servers = if (showServers) state.serversOf(project.root.path) else emptyList()
+    val servers = state.serversOf(project.root.path)
     for (server in servers) {
         StatusItem(
             text = statusText(server),
@@ -71,8 +66,6 @@ fun LanguageServerStatusItems(
             tooltipTag = LanguageServerTags.statusLanguageServerTooltip(server.id),
         ) { project.showToolWindow(ToolWindow.LanguageServers) }
     }
-    if (showMemory) IdeMemoryStatusItems(project, state)
-    if (showCpu) IdeCpuStatusItem(project, state)
 }
 
 @OptIn(ExperimentalFoundationApi::class)

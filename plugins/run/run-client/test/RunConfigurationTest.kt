@@ -57,23 +57,4 @@ class RunConfigurationTest {
         assertTrue(decodeConfigurations(null).isEmpty())
         assertTrue(decodeConfigurations("").isEmpty())
     }
-
-    @Test
-    fun `an Amper project and a Gradle project each suggest tests and a run`() {
-        val suggestions = suggestedConfigurations(setOf("kotlin", "gradlew", "README.md"), windows = false)
-        val commands = suggestions.map { it.commandLine }
-        assertEquals(listOf("./kotlin test", "./kotlin run", "./gradlew test", "./gradlew run"), commands)
-        assertEquals(listOf(RunKind.Tests, RunKind.Run, RunKind.Tests, RunKind.Run), suggestions.map { it.kind })
-    }
-
-    @Test
-    fun `a Windows server gets the bat wrappers`() {
-        val commands = suggestedConfigurations(setOf("kotlin"), windows = true).map { it.commandLine }
-        assertEquals(listOf(".\\kotlin.bat test", ".\\kotlin.bat run"), commands)
-    }
-
-    @Test
-    fun `a project without wrapper suggests nothing`() {
-        assertTrue(suggestedConfigurations(setOf("README.md"), windows = false).isEmpty())
-    }
 }
