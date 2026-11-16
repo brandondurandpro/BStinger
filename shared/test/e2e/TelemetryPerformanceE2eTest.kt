@@ -13,6 +13,7 @@ import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.test.withKeyDown
 import org.example.kotlineditor.telemetry.Operation
 import org.example.kotlineditor.ui.EditorTags
+import org.example.kotlineditor.ui.SearchTags
 import org.example.kotlineditor.ui.TreeTags
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -54,13 +55,13 @@ class TelemetryPerformanceE2eTest {
         onNodeWithTag(EditorTags.EDITOR).performKeyInput {
             withKeyDown(Key.CtrlLeft) { withKeyDown(Key.ShiftLeft) { pressKey(Key.F) } }
         }
-        awaitTag(TreeTags.FIND_IN_FILES_INPUT).performTextInput("needle")
+        awaitTag(SearchTags.FIND_IN_FILES_INPUT).performTextInput("needle")
         awaitCondition {
-            runCatching { onNodeWithTag(TreeTags.FIND_IN_FILES_COUNT).assertTextContains("files", substring = true) }
+            runCatching { onNodeWithTag(SearchTags.FIND_IN_FILES_COUNT).assertTextContains("files", substring = true) }
                 .isSuccess
         }
-        onNodeWithTag(TreeTags.FIND_IN_FILES_INPUT).performKeyInput { pressKey(Key.Escape) }
-        awaitNoTag(TreeTags.SEARCH_PANEL)
+        onNodeWithTag(SearchTags.FIND_IN_FILES_INPUT).performKeyInput { pressKey(Key.Escape) }
+        awaitNoTag(SearchTags.PANEL)
         // The Search window hid the Project one: the next run opens its file from the tree, as a user would.
         onNodeWithTag(TreeTags.TOOL_BUTTON).performClick()
         awaitTag(TreeTags.TREE)

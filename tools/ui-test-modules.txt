@@ -1,11 +1,17 @@
 # Modules whose tests drive the UI (end-to-end and performance tests). `run-tests` and `run-tests.bat` run them one at
 # a time, after the other modules.
 agent-client
+docstats-client
 editor
 git-client
 language-servers-client
+outline-client
+search-client
 remote
 run-client
 terminal-client
+todo-client
 tree-client
+editorconfig-client
+scratchpad-client
 shared

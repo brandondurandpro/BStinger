@@ -19,6 +19,7 @@ fun terminalToolWindow(): ToolWindowContribution =
         defaults = ToolWindowDefaults(ToolWindow.Terminal, Dock.Bottom),
         tag = TerminalTags.TOOL_BUTTON,
         group = StripGroup.Bottom,
+        rank = 8,
         onShown = { host -> host.service(TERMINAL_SERVICE).ensureStarted() },
         icon = Lucide.SquareTerminal,
         content = { host, drag, modifier ->

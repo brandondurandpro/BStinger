@@ -26,15 +26,6 @@ import java.io.IOException
 data class FileMatch(val entry: FileEntry, val relativePath: String, val score: Int, val matchedIndices: List<Int>)
 
 @Immutable
-data class SymbolMatch(
-    val entry: FileEntry,
-    val relativePath: String,
-    val declaration: Declaration,
-    val score: Int,
-    val matchedIndices: List<Int>,
-)
-
-@Immutable
 data class SearchHit(
     val entry: FileEntry,
     val relativePath: String,
@@ -44,7 +35,9 @@ data class SearchHit(
 )
 
 private const val DEFAULT_RESULTS = 50
-internal const val DEFAULT_TEXT_HITS = 1000
+
+/** The hits a Find in Files searches at most, on the server as in the file index. */
+const val DEFAULT_TEXT_HITS = 1000
 private val BEST_FILE_FIRST =
     compareByDescending<FileMatch> {
         it.score

@@ -71,11 +71,13 @@ The features that ship with the IDE live in `plugins/<id>/`, one module per half
 module name is the last directory (`run-client`, `run-server`):
 
 - `plugins/run/{run-client,run-server}`, `plugins/terminal/{terminal-client,terminal-server}`,
-  `plugins/git/{git-client,git-server}`, `plugins/tree/tree-client`,
+  `plugins/git/{git-client,git-server}`, `plugins/tree/tree-client`, `plugins/search/search-client`,
   `plugins/language-servers/{language-servers-client,language-servers-server}`, `plugins/agent/{agent-client,agent-server}`,
-  `plugins/deploy/{deploy-client,deploy-server}`: the client
-  half contributes its tool window and shortcuts (`runToolWindow()`, `runShortcuts()`...) to the registries of
-  `shared`. The Network (devtools) window is contributed the same way by `shared/src/ui/NetworkPlugin.kt`.
+  `plugins/deploy/{deploy-client,deploy-server}`, `plugins/todo/{todo-client,todo-server}`, `plugins/outline/outline-client`,
+  `plugins/docstats/docstats-client`, `plugins/gradle/gradle-client`: the client
+  half contributes its tool windows, toolbar buttons, dialogs, status indicators and shortcuts to the registries of
+  `shared` — the client halves bundled with the IDE are `ClientPlugin`s found with `ServiceLoader`, like the server
+  finds its halves with `ServiceLoader` below, and an external plugin loads through the same `ClientContributions`.
 - A server half implements `ServerContribution` (public in `server`) and is listed in
   `META-INF/services/org.example.kotlineditor.server.ServerContribution`; the server finds it with `ServiceLoader`,
   next to the contributions that stay in `server/`. The state it keeps for a session (the runs, the terminals) is a
@@ -84,6 +86,14 @@ module name is the last directory (`run-client`, `run-server`):
 
 These are linked statically, with no class loader and no jar: only the plugins installed in
 `~/.kotlin-editor/plugins/` go through `PluginHost`.
+
+## The state a feature keeps in a project
+
+The states live behind `ProjectHost` (in `core`), the one seam of the IDE client: each feature publishes its state
+under a `ServiceKey` of its own (`GIT_SERVICE` in git-client, `RUN_SERVICE` in run-client...) and reaches it back
+with `service`. A feature whose panels receive a bare `ProjectHost` wraps it in a view of its own (`GitProjectView`,
+`TreeProjectView`, `FindProjectView`...): its state comes from the registry, never from a cast. What several
+features share (opening a file, a diff, navigating, the disk changes) is declared on `ProjectHost` itself.
 
 A server half that follows the files (the language servers) implements `DiskObserver` and registers it with
 `LocalServices.observe`: it is told the changes of the disk and the IDE's operations on files, and the end of the

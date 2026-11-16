@@ -69,7 +69,7 @@ class DeployE2eTest {
             deployFromTree("docs", target.toString())
             onNodeWithText("Close").performClick()
             awaitNoTag(AppTags.FILE_DIALOG)
-            assertEquals(target.toString(), app.project.deployDestination)
+            assertEquals(target.toString(), app.project.deployments.destination)
             openDeployDialog("src")
             onNodeWithTag(AppTags.FILE_DIALOG_INPUT).assertTextContains(target.toString(), substring = true)
         }

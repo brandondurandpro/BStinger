@@ -10,8 +10,15 @@ dependencies:
   - //plugins/language-servers/language-servers-client: exported
   - //features/remote: exported
   - //plugins/run/run-client: exported
+  - //plugins/search/search-client: exported
+  - //plugins/gradle/gradle-client: exported
   - //plugins/terminal/terminal-client: exported
   - //plugins/tree/tree-client: exported
+  - //plugins/todo/todo-client: exported
+  - //plugins/editorconfig/editorconfig-client: exported
+  - //plugins/scratchpad/scratchpad-client: exported
+  - //plugins/outline/outline-client: exported
+  - //plugins/docstats/docstats-client: exported
   - $libs.androidx.lifecycle.viewmodel.compose
   - $libs.androidx.lifecycle.runtime.compose
 

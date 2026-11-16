@@ -17,6 +17,7 @@ import org.example.kotlineditor.telemetry.Operation
 import org.example.kotlineditor.telemetry.Outcome
 import org.example.kotlineditor.ui.AppTags
 import org.example.kotlineditor.ui.EditorTags
+import org.example.kotlineditor.ui.SearchTags
 import org.example.kotlineditor.ui.TerminalTags
 import org.example.kotlineditor.ui.TreeTags
 import kotlin.test.AfterTest
@@ -144,12 +145,12 @@ class TelemetryE2eTest {
             onNodeWithTag(EditorTags.EDITOR).performKeyInput {
                 withKeyDown(Key.CtrlLeft) { withKeyDown(Key.ShiftLeft) { pressKey(Key.F) } }
             }
-            awaitTag(TreeTags.FIND_IN_FILES_INPUT).performTextInput("guide")
+            awaitTag(SearchTags.FIND_IN_FILES_INPUT).performTextInput("guide")
             awaitCondition {
                 val searches = capture.clientSpansOf(Operation.SearchFindInFiles)
                 searches.any { it.attributes[Attribute.Result] == "found" }
             }
-            onNodeWithTag(TreeTags.FIND_IN_FILES_INPUT).performKeyInput { pressKey(Key.Escape) }
+            onNodeWithTag(SearchTags.FIND_IN_FILES_INPUT).performKeyInput { pressKey(Key.Escape) }
             // The terminal.
             onNodeWithTag(AppTags.TOOL_TERMINAL).performClick()
             awaitTag(TerminalTags.TERMINAL_INPUT)
@@ -167,7 +168,7 @@ class TelemetryE2eTest {
             onNodeWithTag(EditorTags.EDITOR).performKeyInput {
                 withKeyDown(Key.CtrlLeft) { withKeyDown(Key.ShiftLeft) { pressKey(Key.F) } }
             }
-            awaitTag(TreeTags.FIND_IN_FILES_INPUT).performTextInput("secretQuery")
+            awaitTag(SearchTags.FIND_IN_FILES_INPUT).performTextInput("secretQuery")
             awaitSpan(capture, Operation.SearchFindInFiles)
             awaitServerSpans(capture)
             val values = capture.all.flatMap { span -> Attribute.entries.mapNotNull { span.attributes[it] } }

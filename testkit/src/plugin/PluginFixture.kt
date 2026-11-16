@@ -1,5 +1,6 @@
 package org.example.kotlineditor.testkit
 
+import org.example.kotlineditor.plugin.core.API_VERSION
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.file.Files
@@ -43,7 +44,7 @@ object PluginFixture {
     }
 
     /** The server half of plugin [id]; [body] is the body of `register(ServerContributions c)`. */
-    fun serverHalf(id: String, body: String, version: String = "1.0", apiVersion: Int = 1): ServerHalf {
+    fun serverHalf(id: String, body: String, version: String = "1.0", apiVersion: Int = API_VERSION): ServerHalf {
         val manifest = "id: $id\nversion: $version\napiVersion: $apiVersion\nserver: $SERVER_CLASS\n"
         return ServerHalf(manifest, jarOf("fixture/TodoServerPlugin", serverSource(body)))
     }

@@ -5,11 +5,16 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import org.example.kotlineditor.plugin.core.PLUGIN_LOADING_MARKER
+import org.example.kotlineditor.plugin.core.PLUGIN_MANIFEST
 import org.example.kotlineditor.plugin.core.PluginClassLoader
+import org.example.kotlineditor.plugin.core.PluginHalves
 import org.example.kotlineditor.plugin.core.PluginManifest
 import org.example.kotlineditor.plugin.core.SERVER_VISIBLE
 import org.example.kotlineditor.plugin.core.UnloadOutcome
 import org.example.kotlineditor.plugin.core.outcomeOf
+import org.example.kotlineditor.plugin.core.sha256Of
+import org.example.kotlineditor.plugin.core.shutDownHalf
 import org.example.kotlineditor.plugin.server.PluginRequest
 import org.example.kotlineditor.plugin.server.ServerContributions
 import org.example.kotlineditor.plugin.server.ServerPlugin
@@ -19,13 +24,10 @@ import org.example.kotlineditor.rpc.MethodSpec
 import org.example.kotlineditor.rpc.string
 import java.io.File
 import java.lang.ref.WeakReference
-import java.security.MessageDigest
 import java.util.Base64
 
-private const val MANIFEST = "plugin.yaml"
 private const val SERVER_JAR = "server.jar"
 private const val DIGEST = "server.sha256"
-private const val LOADING_MARKER = ".loading"
 private const val ID = "id"
 private const val VERSION = "version"
 private const val SHA256 = "sha256"
@@ -47,18 +49,15 @@ private class RunningHalf(
  * handlers of their methods are put in [handlers], the map the sessions read.
  */
 internal class ServerPluginHost(private val directory: File, private val handlers: MutableMap<MethodSpec, Handler>) {
+    private val halves = PluginHalves()
     private val running = linkedMapOf<String, RunningHalf>()
 
     /** Loads what is installed; a half whose last start did not finish stays off. */
     @Synchronized
     fun loadInstalled() {
-        val folders = directory.listFiles { file -> file.isDirectory }.orEmpty().sortedBy { it.name }
-        for (folder in folders) {
-            val marker = File(folder, LOADING_MARKER)
-            if (marker.exists() || !File(folder, SERVER_JAR).isFile) continue
-            marker.writeText("")
-            val started = runCatching { start(folder) }.isSuccess
-            if (started) marker.delete()
+        for (folder in halves.foldersOf(directory)) {
+            if (File(folder, PLUGIN_LOADING_MARKER).exists() || !File(folder, SERVER_JAR).isFile) continue
+            halves.guardedStart(folder, null) { runCatching { start(folder) }.isSuccess }
         }
     }
 
@@ -89,7 +88,7 @@ internal class ServerPluginHost(private val directory: File, private val handler
         require(manifest.server != null) { "${manifest.id} has no server half" }
         if (manifest.id in running) unloadLocked(manifest.id)
         val folder = File(directory, manifest.id).apply { mkdirs() }
-        File(folder, MANIFEST).writeText(manifestText)
+        File(folder, PLUGIN_MANIFEST).writeText(manifestText)
         File(folder, SERVER_JAR).writeBytes(jar)
         File(folder, DIGEST).writeText(actual)
         start(folder)
@@ -114,19 +113,15 @@ internal class ServerPluginHost(private val directory: File, private val handler
         return outcomeOf(reference)
     }
 
-    // Nothing of the plugin stays referenced by this frame once it returns, or its class loader could not be collected.
+    // Nothing of the half stays referenced by this frame once it returns, or its class loader could not be collected.
     private fun shutDown(id: String): WeakReference<PluginClassLoader> {
         val half = checkNotNull(running.remove(id)) { "$id is not installed" }
         half.methods.forEach { handlers.remove(it) }
-        half.registration.close()
-        half.cleanups.forEach { runCatching { it.close() } }
-        val reference = WeakReference(half.loader)
-        half.loader.close()
-        return reference
+        return shutDownHalf(half.registration, half.cleanups, half.loader)
     }
 
     private fun start(folder: File) {
-        val manifest = PluginManifest.parse(File(folder, MANIFEST).readText())
+        val manifest = PluginManifest.parse(File(folder, PLUGIN_MANIFEST).readText())
         val jar = File(folder, SERVER_JAR)
         val loader = PluginClassLoader(listOf(jar), ServerPluginHost::class.java.classLoader, SERVER_VISIBLE)
         try {
@@ -139,7 +134,7 @@ internal class ServerPluginHost(private val directory: File, private val handler
 
     private fun register(manifest: PluginManifest, loader: PluginClassLoader, sha256: String): RunningHalf {
         val className = requireNotNull(manifest.server) { "${manifest.id} has no server half" }
-        val plugin = loader.loadClass(className).getDeclaredConstructor().newInstance() as ServerPlugin
+        val plugin = halves.instantiate(loader, className) as ServerPlugin
         val contributions = ServerContributions()
         plugin.register(contributions)
         val declared = contributions.handlers()
@@ -163,9 +158,6 @@ internal class ServerPluginHost(private val directory: File, private val handler
     private fun adapted(handler: suspend (PluginRequest) -> JsonElement): Handler =
         { handler(PluginRequest(params, session)) }
 }
-
-private fun sha256Of(bytes: ByteArray): String =
-    MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
 
 /** The methods `plugin/list`, `plugin/install` and `plugin/unload`. */
 internal fun pluginHandlers(host: ServerPluginHost): Map<MethodSpec, Handler> =

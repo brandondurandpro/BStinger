@@ -33,6 +33,7 @@ private val TODO_PLUGIN =
             false),
         "$BUTTON",
         org.example.kotlineditor.plugin.StripGroup.Bottom,
+        0,
         false,
         host -> kotlin.Unit.INSTANCE,
         org.example.kotlineditor.ui.Lucide.INSTANCE.getFolder(),

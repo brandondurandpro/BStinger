@@ -156,7 +156,7 @@ private fun isDone(dialog: FileDialog): Boolean = (dialog as? FileDialog.Deploy)
 private fun initialText(project: ProjectState, dialog: FileDialog): String =
     when (dialog) {
         is FileDialog.Rename -> dialog.entry.name
-        is FileDialog.Deploy -> project.deployDestination
+        is FileDialog.Deploy -> project.deployments.destination
         else -> ""
     }
 
@@ -182,11 +182,11 @@ private fun submit(project: ProjectState, dialog: FileDialog, name: String) =
         is FileDialog.Deploy -> project.deploy(dialog, name)
     }
 
-// The dialogs over the project: the tree's file dialogs, and the saved deployments.
+// The dialogs over the project: the tree's file dialogs, and those the features show (the saved deployments).
 @Composable
 internal fun ProjectDialogs(project: ProjectState) {
-    project.fileDialog?.let { dialog ->
-        FileDialogPopup(project, dialog, onClose = { project.fileDialog = null })
+    project.treeDialogs.fileDialog?.let { dialog ->
+        FileDialogPopup(project, dialog, onClose = { project.treeDialogs.fileDialog = null })
     }
-    if (project.deployments.open) DeploymentsPopup(project.deployments)
+    IdeRegistries.dialogs.contributions.forEach { it.content(project) }
 }

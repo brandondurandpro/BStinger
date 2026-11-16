@@ -89,7 +89,7 @@ object AppTags {
     const val FILE_DIALOG_ERROR = "fileDialog.error"
     const val FILE_DIALOG_RESULT = "fileDialog.result"
     const val DEPLOY_REMEMBER = "fileDialog.deployRemember"
-    const val DEPLOY_BUTTON = "toolbar.deploy"
+    const val DEPLOY_BUTTON = DeployTags.BUTTON
     const val DEPLOYMENTS = DeployTags.DEPLOYMENTS
     const val DEPLOYMENTS_NEW = DeployTags.DEPLOYMENTS_NEW
     const val DEPLOYMENTS_CLOSE = DeployTags.DEPLOYMENTS_CLOSE

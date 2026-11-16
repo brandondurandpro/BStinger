@@ -10,7 +10,10 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import org.example.kotlineditor.model.FileSymbol
 import org.example.kotlineditor.model.ProjectSession
+import org.example.kotlineditor.model.RecentProjectsStore
+import org.example.kotlineditor.model.ServerPlaces
 import org.example.kotlineditor.model.SessionFile
+import org.example.kotlineditor.model.SessionStore
 import org.example.kotlineditor.syntax.Declaration
 import org.example.kotlineditor.syntax.DeclarationKind
 
@@ -19,6 +22,9 @@ import org.example.kotlineditor.syntax.DeclarationKind
 private const val FILE = "file"
 private const val LINE = "line"
 private const val COLUMN = "column"
+
+private const val PATHS = "paths"
+private const val PROJECT = "project"
 
 /** One declaration. */
 fun Declaration.toJson(): JsonObject =
@@ -92,4 +98,31 @@ fun JsonElement.session(): ProjectSession? {
             SessionFile(file.string("path"), file.int(LINE), file.int(COLUMN))
         }
     return ProjectSession(files, session.stringOrNull("activeFile"))
+}
+
+/** [ServerPlaces] of the server. */
+class RemotePlaces(private val client: RpcClient) : ServerPlaces {
+    override suspend fun home(): String? = client.call(Method.UserHome).stringOrNull()
+}
+
+/** [RecentProjectsStore] of the server. */
+class RemoteRecentProjects(private val client: RpcClient) : RecentProjectsStore {
+    override suspend fun load(): List<String> = client.call(Method.RecentLoad).strings()
+
+    override suspend fun save(paths: List<String>) {
+        client.call(Method.RecentSave) { put(PATHS, paths.toJson()) }
+    }
+}
+
+/** [SessionStore] of the server. */
+class RemoteSessions(private val client: RpcClient) : SessionStore {
+    override suspend fun load(projectPath: String): ProjectSession? =
+        client.call(Method.SessionLoad) { put(PROJECT, projectPath) }.session()
+
+    override suspend fun save(projectPath: String, session: ProjectSession) {
+        client.call(Method.SessionSave) {
+            put(PROJECT, projectPath)
+            put("session", session.toJson())
+        }
+    }
 }

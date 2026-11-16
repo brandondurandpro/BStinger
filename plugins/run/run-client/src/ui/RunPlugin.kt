@@ -4,6 +4,7 @@ import androidx.compose.ui.input.key.Key
 import org.example.kotlineditor.plugin.ActionContext
 import org.example.kotlineditor.plugin.StripGroup
 import org.example.kotlineditor.plugin.ToolWindowContribution
+import org.example.kotlineditor.plugin.ToolbarContribution
 import org.example.kotlineditor.state.Dock
 import org.example.kotlineditor.state.RunState
 import org.example.kotlineditor.state.ServiceKey
@@ -19,12 +20,19 @@ fun runToolWindow(): ToolWindowContribution =
         defaults = ToolWindowDefaults(ToolWindow.Run, Dock.Bottom),
         tag = RunTags.TOOL_BUTTON,
         group = StripGroup.Bottom,
+        rank = 5,
         onShown = { host -> host.service(RUN_SERVICE).ensureLoaded() },
         icon = Lucide.Play,
         content = { host, drag, modifier ->
             RunPanel(host.service(RUN_SERVICE), host.toolWindows, drag, modifier)
         },
     )
+
+/** The widget of the toolbar: the selected configuration, to run or stop. */
+fun runToolbarButton(): ToolbarContribution =
+    ToolbarContribution(rank = 0) { project ->
+        RunWidget(project.service(RUN_SERVICE), { project.showToolWindow(ToolWindow.Run) })
+    }
 
 /** Alt+4 toggles the window, Shift+F10 runs the selected configuration, Ctrl+F2 stops it. */
 fun runShortcuts(): List<KeyBinding<ActionContext>> =

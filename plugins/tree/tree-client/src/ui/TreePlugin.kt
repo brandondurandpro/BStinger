@@ -7,7 +7,7 @@ import org.example.kotlineditor.plugin.ToolWindowContribution
 import org.example.kotlineditor.state.Dock
 import org.example.kotlineditor.state.ToolWindow
 import org.example.kotlineditor.state.ToolWindowDefaults
-import org.example.kotlineditor.state.TreeHost
+import org.example.kotlineditor.state.TreeProjectView
 
 /** The Project tool window: the file tree, shown at the start in the left dock. */
 fun projectToolWindow(): ToolWindowContribution =
@@ -15,8 +15,9 @@ fun projectToolWindow(): ToolWindowContribution =
         defaults = ToolWindowDefaults(ToolWindow.Project, Dock.Left, shown = true),
         tag = TreeTags.TOOL_BUTTON,
         group = StripGroup.Top,
+        rank = 0,
         icon = Lucide.Folder,
-        content = { host, drag, modifier -> ProjectPanel(host as TreeHost, drag, modifier) },
+        content = { host, drag, modifier -> ProjectPanel(TreeProjectView(host), drag, modifier) },
     )
 
 /** Alt+1 toggles the Project window. */

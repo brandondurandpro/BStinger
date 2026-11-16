@@ -25,6 +25,16 @@ modules:
   - plugins/language-servers/language-servers-server
   - plugins/run/run-server
   - plugins/terminal/terminal-server
+  - plugins/search/search-client
+  - plugins/gradle/gradle-client
+  - plugins/todo/todo-client
+  - plugins/todo/todo-server
+  - plugins/editorconfig/editorconfig-server
+  - plugins/scratchpad/scratchpad-server
+  - plugins/editorconfig/editorconfig-client
+  - plugins/scratchpad/scratchpad-client
+  - plugins/outline/outline-client
+  - plugins/docstats/docstats-client
   - packaging
   - protocol
   - server

@@ -10,4 +10,10 @@ class IdePlugin(
     val toolWindows: List<ToolWindowContribution> = emptyList(),
     /** Its shortcuts of the normal workspace. */
     val shortcuts: List<KeyBinding<ActionContext>> = emptyList(),
+    /** Its buttons of the toolbar of the window. */
+    val toolbarButtons: List<ToolbarContribution> = emptyList(),
+    /** Its dialogs shown over the project. */
+    val dialogs: List<DialogContribution> = emptyList(),
+    /** Its indicators of the status bar. */
+    val statusIndicators: List<StatusIndicatorContribution> = emptyList(),
 )

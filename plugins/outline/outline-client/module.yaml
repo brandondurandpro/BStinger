@@ -1,0 +1,20 @@
+# Outline
+product:
+  type: jvm/lib
+
+dependencies:
+  - //features/editor: exported
+  - //syntax: exported
+  - //plugin-api: exported
+
+settings:
+  compose: enabled
+
+test-dependencies:
+  - //e2e
+
+test-settings:
+  jvm:
+    test:
+      freeJvmArgs:
+        - --enable-native-access=ALL-UNNAMED

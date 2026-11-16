@@ -25,6 +25,8 @@ class ToolWindowContribution(
     val tag: String,
     /** Where the button sits in the strip. */
     val group: StripGroup,
+    /** Where the button sits among the group's, before the ones ranked after it. */
+    val rank: Int = 0,
     /** Whether the button only shows once the devtools are on. */
     val devtools: Boolean = false,
     /** Runs when the window is shown, to start what it needs (load the configurations, start a shell...). */

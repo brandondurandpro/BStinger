@@ -11,33 +11,64 @@ class org.example.kotlineditor.plugin.ActionScope
 class org.example.kotlineditor.plugin.ClientContributions
   <init>()
   cleanups(): List
+  dialog(DialogContribution): void
   onUnload(AutoCloseable): void
   shortcut(KeyBinding): void
+  statusIndicator(StatusIndicatorContribution): void
   toPlugin(String): IdePlugin
   toolWindow(ToolWindowContribution): void
+  toolbarButton(ToolbarContribution): void
 class org.example.kotlineditor.plugin.ClientPlugin
   register(ClientContributions): void
+class org.example.kotlineditor.plugin.DialogContribution
+  <init>(Function3)
+  getContent(): Function3
+class org.example.kotlineditor.plugin.DialogRegistry
+  <init>()
+  getContributions(): List
+  register(List): AutoCloseable
 class org.example.kotlineditor.plugin.IdePlugin
-  <init>(String,List,List)
+  <init>(String,List,List,List,List,List)
+  getDialogs(): List
   getId(): String
   getShortcuts(): List
+  getStatusIndicators(): List
   getToolWindows(): List
+  getToolbarButtons(): List
+class org.example.kotlineditor.plugin.StatusIndicatorContribution
+  <init>(String,String,Function3)
+  getContent(): Function3
+  getKey(): String
+  getLabel(): String
+class org.example.kotlineditor.plugin.StatusIndicatorRegistry
+  <init>()
+  getContributions(): List
+  register(List): AutoCloseable
 class org.example.kotlineditor.plugin.StripGroup
   getEntries(): EnumEntries
   valueOf(String): StripGroup
   values(): StripGroup[]
 class org.example.kotlineditor.plugin.ToolWindowContribution
-  <init>(ToolWindowDefaults,String,StripGroup,boolean,Function1,LucideIcon,Function5)
+  <init>(ToolWindowDefaults,String,StripGroup,int,boolean,Function1,LucideIcon,Function5)
   getContent(): Function5
   getDefaults(): ToolWindowDefaults
   getDevtools(): boolean
   getGroup(): StripGroup
   getIcon(): LucideIcon
   getOnShown(): Function1
+  getRank(): int
   getTag(): String
   getWindow(): ToolWindow
 class org.example.kotlineditor.plugin.ToolWindowRegistry
   <init>()
   find(ToolWindow): ToolWindowContribution
+  getContributions(): List
+  register(List): AutoCloseable
+class org.example.kotlineditor.plugin.ToolbarContribution
+  <init>(int,Function3)
+  getContent(): Function3
+  getRank(): int
+class org.example.kotlineditor.plugin.ToolbarRegistry
+  <init>()
   getContributions(): List
   register(List): AutoCloseable

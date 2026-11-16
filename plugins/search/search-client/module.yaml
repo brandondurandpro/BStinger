@@ -1,0 +1,21 @@
+# Find in Files: the streamed content search of the IDE, its side panel and its options.
+# State in src/state, UI in src/ui, end-to-end tests in test/.
+product:
+  type: jvm/lib
+
+dependencies:
+  - //features/editor: exported
+  - //plugins/tree/tree-client
+  - //plugin-api: exported
+
+settings:
+  compose: enabled
+
+test-dependencies:
+  - //e2e
+
+test-settings:
+  jvm:
+    test:
+      freeJvmArgs:
+        - --enable-native-access=ALL-UNNAMED

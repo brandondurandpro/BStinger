@@ -12,6 +12,9 @@ interface ClientPlugin {
 class ClientContributions {
     private val windows = mutableListOf<ToolWindowContribution>()
     private val keys = mutableListOf<KeyBinding<ActionContext>>()
+    private val toolbar = mutableListOf<ToolbarContribution>()
+    private val dialogs = mutableListOf<DialogContribution>()
+    private val indicators = mutableListOf<StatusIndicatorContribution>()
     private val cleanups = mutableListOf<AutoCloseable>()
 
     /** Adds a tool window. */
@@ -24,13 +27,36 @@ class ClientContributions {
         keys += binding
     }
 
+    /** Adds a button of the toolbar of the window. */
+    fun toolbarButton(button: ToolbarContribution) {
+        toolbar += button
+    }
+
+    /** Adds a dialog shown over the project while the feature wants it. */
+    fun dialog(dialog: DialogContribution) {
+        dialogs += dialog
+    }
+
+    /** Adds an indicator of the status bar. */
+    fun statusIndicator(indicator: StatusIndicatorContribution) {
+        indicators += indicator
+    }
+
     /** Runs [cleanup] when the plugin unloads, after its contributions are removed (cancel a scope, close a file). */
     fun onUnload(cleanup: AutoCloseable) {
         cleanups += cleanup
     }
 
     /** The contributions as the data [IdePlugin] the IDE loads. */
-    fun toPlugin(id: String): IdePlugin = IdePlugin(id, windows.toList(), keys.toList())
+    fun toPlugin(id: String): IdePlugin =
+        IdePlugin(
+            id,
+            windows.toList(),
+            keys.toList(),
+            toolbar.toList(),
+            dialogs.toList(),
+            indicators.toList(),
+        )
 
     /** The cleanups, last registered first. */
     fun cleanups(): List<AutoCloseable> = cleanups.reversed()
