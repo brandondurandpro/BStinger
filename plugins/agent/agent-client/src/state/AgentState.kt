@@ -255,7 +255,9 @@ class Conversation(val id: Int, title: String, val branch: String) {
     val shownItems: List<AgentItem>
         get() {
             val from = probeFrom ?: return items
-            return items.take(from)
+            // A prompt the user sent meanwhile waits for the answer: it shows at once.
+            val sentMeanwhile = items.drop(from).filter(::isUserPrompt)
+            return items.take(from) + sentMeanwhile
         }
 
     /** Ids of the first tool call of each run of tool calls the user opened: the others stay folded behind a link. */
@@ -340,6 +342,18 @@ class Conversation(val id: Int, title: String, val branch: String) {
         }
     }
 
+    /**
+     * Forgets the silent question about the quota and its answer, from [from] on; the prompts the user sent meanwhile
+     * stay. Their ids are remembered: the server sends them again with the next snapshot.
+     */
+    internal fun forgetProbe(from: Int) {
+        val probe = items.drop(from).filterNot(::isUserPrompt)
+        val ids = probe.mapTo(HashSet()) { it.id }
+        hidden.addAll(ids)
+        items.removeAll { it.id in ids }
+        reindex()
+    }
+
     /** Replaces what the conversation shows by the history the agent replayed; the prompts not sent yet stay. */
     internal fun replaceByHistory() {
         val unsent = items.filter { it is AgentItem.UserText && it.version == 0L }
@@ -375,6 +389,12 @@ class AgentState(
     private val git get() = project.services.git
     private val agents get() = project.services.agents
     val conversations = mutableStateListOf<Conversation>()
+
+    /**
+     * The tool windows of the agent window, saved under their own keys: opening one here never opens it in the IDE
+     * window, and the worktrees the conversations open share it, so the panels follow from one place to another.
+     */
+    val toolWindows = ToolWindowLayout(prefix = PreferenceKeys.AGENT_LAYOUT_PREFIX).apply { restore(saved) }
 
     /** Conversations opened in the tabs of agent mode. */
     val tabs = AgentTabs()
@@ -450,6 +470,12 @@ class AgentState(
 
     /** The quota last read for each agent (by its label): shared by its conversations. */
     internal val quotaOfAgents = HashMap<String, List<QuotaLimit>>()
+
+    /** When the quota of each agent (by its label) was last asked for, in milliseconds since the epoch. */
+    internal val quotaAskedAt = HashMap<String, Long>()
+
+    /** How long the quota shown stays before it is read again while the agent is free; shorter in the tests. */
+    internal var quotaRefreshMillis = QUOTA_REFRESH_MILLIS
 
     internal var nextId = 1
 
@@ -643,7 +669,7 @@ class AgentState(
         conversation.showsChat = true
         conversation.workspaceError = null
         if (mode == WorkMode.Direct) {
-            conversation.show(project, project)
+            conversation.show(project.agentWorkspace(), project)
             return
         }
         // The tool windows keep showing the project until the worktree is loaded, then switch at once.
@@ -692,7 +718,7 @@ class AgentState(
         if (text.isEmpty()) return
         conversation.draft = ""
         if (!conversation.started) conversation.title = titleOf(text)
-        val itemId = "prompt-${UUID.randomUUID()}"
+        val itemId = "$USER_PROMPT_PREFIX${UUID.randomUUID()}"
         val attachments = conversation.context.take()
         // Shown at once; the server's copy of the prompt replaces it, under the same id.
         conversation.upsert(AgentItem.UserText(itemId, 0, text, attachments.map { it.label }))
@@ -710,8 +736,8 @@ class AgentState(
 
     /**
      * Asks the agent for its quota the way the user would (`/usage`, `/status`), without showing the question or the
-     * answer: the bars stay current. Once per finished turn, and once when a started conversation is shown whose
-     * quota is not known yet; only when the agent lists such a command.
+     * answer: the bars stay current. Once per finished turn, every [quotaRefreshMillis] while the agent is free, and
+     * once when a started conversation is shown whose quota is not known yet; only when the agent lists such a command.
      */
     internal fun refreshQuota(conversation: Conversation) {
         // Not while the history replays (no item yet): the question would wait behind it, and slow the opening.
@@ -725,11 +751,15 @@ class AgentState(
         conversation.quotaStale = false
         conversation.quotaProbed = true
         conversation.probeFrom = conversation.items.size
-        val itemId = "probe-${UUID.randomUUID()}"
-        // Sending a prompt clears the mark of the finished turn; this one is not a turn of the user.
+        quotaAskedAt[agentLabelOf(conversation)] = System.currentTimeMillis()
+        val itemId = "$PROBE_PREFIX${UUID.randomUUID()}"
+        // Sending a prompt clears the mark of the finished turn and dates the last message; this one is not a turn of
+        // the user.
         val wasFinished = conversation.finished
+        val lastMessage = conversation.lastMessageAt
         launchDelivery(conversation, OutgoingPrompt(itemId, "/$command", emptyList()))
         conversation.finished = wasFinished
+        conversation.lastMessageAt = lastMessage
     }
 
     /**
@@ -737,7 +767,7 @@ class AgentState(
      * queued while it answers. Returns the id of the prompt, to wait for its answer.
      */
     internal fun deliverText(conversation: Conversation, text: String): String {
-        val itemId = "prompt-${UUID.randomUUID()}"
+        val itemId = "$USER_PROMPT_PREFIX${UUID.randomUUID()}"
         conversation.upsert(AgentItem.UserText(itemId, 0, text))
         val prompt = OutgoingPrompt(itemId, text, emptyList())
         if (conversation.busy) conversation.queued.addLast(prompt) else launchDelivery(conversation, prompt)
@@ -773,6 +803,8 @@ class AgentState(
                 return
             }
             workspace.editor.flush()
+            // The files modified in the IDE window are saved too: the agent reads what the user sees, in both windows.
+            project.editor.flush()
             options.beforePrompt(conversation)
             project.followTranscript(conversation)
             val directory = workspace.root.path
@@ -886,3 +918,12 @@ class BasePicker {
 
     internal var loading: Job? = null
 }
+
+/** The start of the ids of the prompts this window sends for the user. */
+internal const val USER_PROMPT_PREFIX = "prompt-"
+
+/** The start of the ids of the silent questions about the quota. */
+internal const val PROBE_PREFIX = "probe-"
+
+// A prompt of the user (or relayed for them), not the silent question about the quota.
+private fun isUserPrompt(item: AgentItem): Boolean = item is AgentItem.UserText && !item.id.startsWith(PROBE_PREFIX)

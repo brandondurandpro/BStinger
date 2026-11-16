@@ -17,6 +17,10 @@ import java.io.IOException
 /** The languages whose server the Settings dialog chooses, in the order it lists them. */
 val SERVER_LANGUAGES = listOf("php", "typescript", "vue", "tailwind")
 
+/** The categories that are the IDE's only, which the dialog of the agent window does not list. */
+val IDE_ONLY_CATEGORIES: Set<SettingsCategory> =
+    setOf(SettingsCategory.LanguageServers, SettingsCategory.RemoteDevelopment, SettingsCategory.Plugins)
+
 /** The categories of the Settings dialog, in the order of its list. */
 enum class SettingsCategory(val title: String) {
     Appearance("Appearance"),
@@ -88,20 +92,20 @@ enum class Setting(val category: SettingsCategory, val title: String, val descri
     ),
     AgentMode(
         SettingsCategory.Experimental,
-        "Agent mode",
-        "The IDE | Agent switch of the toolbar, where agents work in their own worktrees.",
+        "Agent window",
+        "The Agent button of the toolbar, which opens the agent in a window of its own, beside the IDE one.",
         "ai agents conversations",
     ),
     AgentModeByDefault(
         SettingsCategory.Experimental,
-        "Open in agent mode",
-        "Agent mode is the default: the IDE reopens the last project in it at launch, without the welcome screen.",
+        "Open the agent window at launch",
+        "The agent window is the default: the IDE reopens the last project with it at launch, with no welcome screen.",
         "default start launch startup ide welcome projects",
     ),
     Agent(
         SettingsCategory.Experimental,
         "Agent",
-        "The agent of agent mode, from the ACP registry: the server installs it. Claude when none is chosen.",
+        "The agent of the agent window, from the ACP registry: the server installs it. Claude when none is chosen.",
         "acp registry claude codex gemini opencode goose",
     ),
     AgentCommand(
@@ -126,9 +130,17 @@ enum class Setting(val category: SettingsCategory, val title: String, val descri
 /**
  * The Settings dialog (Ctrl+Alt+S, the project menu, the welcome screen): the category shown, the search, and the
  * language servers offered, asked to the server each time it opens. A change applies at once.
+ *
+ * @param languageServers The servers of the server shown, asked when the dialog opens.
+ * @param parentScope The scope cancelled when the IDE leaves its server.
+ * @param hidden The categories the dialog does not list: the agent window's dialog hides the IDE's.
  */
 @Stable
-class SettingsState(private val languageServers: () -> LanguageServersState, parentScope: CoroutineScope) {
+class SettingsState(
+    private val languageServers: () -> LanguageServersState,
+    parentScope: CoroutineScope,
+    private val hidden: Set<SettingsCategory> = emptySet(),
+) {
     private val scope = parentScope + SupervisorJob(parentScope.coroutineContext[Job])
 
     /** The category shown when there is no search. */
@@ -157,11 +169,20 @@ class SettingsState(private val languageServers: () -> LanguageServersState, par
     var switchingTo: String? by mutableStateOf(null)
         private set
 
+    /** The categories the dialog lists, in order: every one, but the hidden ones. */
+    val categories: List<SettingsCategory> get() = SettingsCategory.entries.filter { it !in hidden }
+
     /** The settings shown: those of [category], or those a non-blank [query] finds, in the order of the dialog. */
     val shown: List<Setting>
         get() {
             val searching = query.isNotBlank()
-            return Setting.entries.filter { if (searching) it.matches(query) else it.category == category }
+            return Setting.entries.filter {
+                when {
+                    it.category in hidden -> false
+                    searching -> it.matches(query)
+                    else -> it.category == category
+                }
+            }
         }
 
     /** The servers offered for [language], null until the server answered. */
@@ -176,8 +197,10 @@ class SettingsState(private val languageServers: () -> LanguageServersState, par
     /**
      * Asks the server which servers it offers for each language, and which one is used. Asked again for the same
      * [connection] (a window shown again), it keeps what it has; a new connection (a restarted server) asks anew.
+     * Never asked by the dialog of the agent window, which does not list the servers.
      */
     fun loadServers(connection: Long? = null) {
+        if (SettingsCategory.LanguageServers in hidden) return
         val listedAlready = connection != null && connection == listedOn
         if (listedAlready && loaded) return
         scope.launch {

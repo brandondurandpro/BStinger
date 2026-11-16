@@ -38,11 +38,15 @@ import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.Dock
 import org.example.kotlineditor.state.GitProjectView
 import org.example.kotlineditor.state.ProjectState
+import org.example.kotlineditor.state.ToolWindow
 import org.example.kotlineditor.state.workspaceProject
 
 private const val PANEL_HEIGHT = 560f
 private val THIN_SCROLLBAR = 4.dp
 private const val LIST_KEY = "conversations"
+
+// The tool windows the agent window does not offer: the extensions and the language servers are the IDE's.
+private val NOT_FOR_THE_AGENT = setOf(ToolWindow.Extensions, ToolWindow.LanguageServers)
 
 /**
  * Agent mode: the strip of buttons on the far left (Conversations, then the tool windows), the conversation list,
@@ -56,11 +60,11 @@ internal fun AgentWorkspace(app: AppState, project: ProjectState) {
     val drag = remember { ToolWindowDrag() }
     val heights = remember { PanelHeights(PANEL_HEIGHT) }
     val findFocus = remember(workspace) { FocusRequester() }
-    val shortcuts =
-        remember(workspace) { workspace?.let { GlobalShortcuts(IdeContext(app, it, findFocus), ideOnly = true) } }
-    // The project itself is already saved and synchronized by its screen; a worktree is synchronized here.
+    val shortcuts = remember(workspace) { workspace?.let { GlobalShortcuts(IdeContext(app, it, findFocus)) } }
+    // The project itself is saved and synchronized by the window of the agent; a worktree is synchronized here.
     workspace?.takeIf { it !== project }?.let { SyncOnWindowFocus(it) }
-    // The IDE shortcuts (Ctrl+S, Ctrl+Shift+N, Alt+1…) act where the agent works; agent mode handles its own first.
+    // The IDE shortcuts (Ctrl+S, Ctrl+Shift+N, Alt+1…) act where the agent works; the agent's own come first, in
+    // AgentWindowContent.
     NotifyWhenFinished(project)
     val keys = Modifier.onPreviewKeyEvent { event -> shortcuts?.handle(event) == true }
     Box(
@@ -71,7 +75,14 @@ internal fun AgentWorkspace(app: AppState, project: ProjectState) {
             .onGloballyPositioned { drag.workspace = it.boundsInRoot() },
     ) {
         Row(Modifier.fillMaxSize()) {
-            ToolStrip(workspace, app.devtools, onSettings = app.settings::open) { ConversationsButton(agent) }
+            ToolStrip(
+                workspace,
+                app.devtools,
+                onSettings = { app.settings.dialogs.openAgent() },
+                hidden = NOT_FOR_THE_AGENT,
+            ) {
+                ConversationsButton(agent)
+            }
             if (agent.conversationsVisible) {
                 // The tree and the Git panel sit under the list; the column scrolls, each panel keeping its height.
                 val column = Modifier.width(agent.conversationsWidth.dp).fillMaxHeight().padding(bottom = ISLAND_GAP)

@@ -1,7 +1,6 @@
 package org.example.kotlineditor.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
@@ -23,8 +22,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -66,37 +63,22 @@ import org.example.kotlineditor.telemetry.sizeOf
 fun ProjectScreen(app: AppState, project: ProjectState) {
     val findFocus = remember { FocusRequester() }
     val shortcuts = remember(project) { GlobalShortcuts(IdeContext(app, project, findFocus)) }
-    val rootFocus = remember { FocusRequester() }
-    var hasFocus by remember { mutableStateOf(false) }
     SyncOnWindowFocus(project)
-    // Shortcuts only reach a focused component: with no file open nothing else holds the focus, so the screen takes it.
-    val windowFocused = LocalWindowInfo.current.isWindowFocused
-    // With the Open Project or the Settings dialog open, its own field keeps the keyboard.
-    val screenFocusFree = project.popup == null && !project.git.branchPickerOpen && !app.dialogOpen
-    LaunchedEffect(hasFocus, screenFocusFree, windowFocused) {
-        if (!hasFocus && screenFocusFree) runCatching { rootFocus.requestFocus() }
-    }
     Column(
         Modifier
             .fillMaxSize()
             .background(IdeColors.Frame)
             .testTag(AppTags.PROJECT)
             .onPreviewKeyEvent(shortcuts::handle)
-            .focusRequester(rootFocus)
-            .onFocusChanged { hasFocus = it.hasFocus }
-            .focusable(),
+            .rootKeyboardFocus(app, project),
     ) {
         Toolbar(app, project)
         Box(Modifier.weight(1f)) {
-            if (project.agentMode) {
-                AgentWorkspace(app, project)
-            } else {
-                ProjectBody(app, project, findFocus)
-                ProjectPopups(project) { closePopup(project) }
-                if (project.git.branchPickerOpen) BranchPicker(GitProjectView(project))
-            }
+            ProjectBody(app, project, findFocus)
+            ProjectPopups(project) { closePopup(project) }
+            if (project.git.branchPickerOpen) BranchPicker(GitProjectView(project))
             ProjectDialogs(project)
-            if (!project.agentMode) LanguageServerChoiceDialog(LanguageServersProjectView(project))
+            LanguageServerChoiceDialog(LanguageServersProjectView(project))
         }
         StatusBar(app, project)
     }
@@ -127,7 +109,7 @@ private fun ProjectBody(app: AppState, project: ProjectState, findFocus: FocusRe
             .onGloballyPositioned { drag.workspace = it.boundsInRoot() },
     ) {
         Row(Modifier.fillMaxSize()) {
-            ToolStrip(project, app.devtools, onSettings = app.settings::open)
+            ToolStrip(project, app.devtools, onSettings = { app.settings.dialogs.openIde() })
             Column(Modifier.weight(1f).fillMaxHeight().padding(end = ISLAND_GAP, bottom = ISLAND_GAP)) {
                 Row(Modifier.weight(1f).fillMaxWidth()) {
                     if (!project.toolWindows.leftColumnHidden) ToolDock(project, Dock.Left, drag)

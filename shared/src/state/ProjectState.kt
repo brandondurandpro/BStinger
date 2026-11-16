@@ -2,6 +2,7 @@ package org.example.kotlineditor.state
 
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -43,8 +44,9 @@ class ProjectState(
     override val root: FileEntry,
     override val services: AppServices,
     parentScope: CoroutineScope,
-    preferences: Map<String, String> = emptyMap(),
-    /** Open tool windows and their docks; a worktree of agent mode shares the one of its project. */
+    /** The preferences saved by the last run, read by the states that keep their own. */
+    private val preferences: Map<String, String> = emptyMap(),
+    /** Open tool windows and their docks; the agent window and its worktrees share the agent's own, saved apart. */
     override val toolWindows: ToolWindowLayout = ToolWindowLayout().apply { restore(preferences) },
     /** Tree-sitter grammars, shared with the worktrees agent mode opens from this project. */
     internal val grammars: GrammarStore? = null,
@@ -157,13 +159,35 @@ class ProjectState(
     // Created on first use: the worktrees of the conversations are projects too, without agent mode of their own.
     private val agentState = lazy { AgentState(this, agentCommand, preferences) }
 
-    /** Conversations of agent mode, in memory, each on the current branch or in a worktree of its own. */
+    /** Conversations of agent mode, in memory, each on its own workspace: the agent's, or a worktree of its branch. */
     val agent by agentState
+
+    // The agent's own state on the same directory: the panels and editors of the agent window are never the state of
+    // the IDE window, so that opening a panel or a file there leaves the IDE window as it is.
+    private val agentView by lazy {
+        ProjectState(
+            root,
+            services,
+            scope,
+            preferences = preferences,
+            toolWindows = agent.toolWindows,
+            grammars = grammars,
+            languageServers = languageServers,
+            diffLayout = diffLayout,
+            statusIndicators = statusIndicators,
+            installedPlugins = installedPlugins,
+            windows = windows,
+        )
+    }
 
     override val gitStatus: Map<String, GitFileStatus> get() = git.status
 
-    /** True when the window shows agent mode instead of the editors (toolbar switch, Ctrl+Alt+A). */
+    /** True while the agent window is open (toolbar Agent button, Ctrl+Alt+A); the IDE window shows the IDE anyway. */
     override var agentMode by mutableStateOf(false)
+
+    /** Counts the requests to focus the agent window again when it is already open. */
+    var agentFocusRequests by mutableIntStateOf(0)
+
     override val checkedOutBranch: String? get() = git.currentBranch
     var popup: PopupKind? by mutableStateOf(null)
 
@@ -231,6 +255,11 @@ class ProjectState(
         scope.launch { followDisk() }
         followActiveFile()
         followInsight()
+    }
+
+    /** Opens the agent window, or brings it back to the front when it is already open. */
+    fun openAgentWindow() {
+        if (agentMode) agentFocusRequests++ else agentMode = true
     }
 
     override fun entryAt(relativePath: String): FileEntry =
@@ -459,7 +488,10 @@ class ProjectState(
         }
     }
 
-    override suspend fun openWorktree(branch: String, base: String?): AgentWorkspace = openWorktreeProject(branch, base)
+    override suspend fun openWorktree(branch: String, base: String?): AgentWorkspace =
+        openWorktreeProject(branch, base, agent.toolWindows)
+
+    override fun agentWorkspace(): AgentWorkspace = agentView
 
     override suspend fun branchChoices(fetch: Boolean): BranchChoices? = branchChoicesOf(fetch)
 

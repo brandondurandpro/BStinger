@@ -173,11 +173,11 @@ internal fun ProjectMenuItems(app: AppState, home: Boolean = false, close: () ->
     if (!home) HomepageMenuItem(app, close)
     RemoteMenuItem(app, close)
     SettingsMenuItem(app, close)
-    // Feature flag of the experimental agent mode, saved with the preferences.
+    // Feature flag of the experimental agent window, saved with the preferences.
     IdeMenuItem(
         text = {
             val check = if (app.settings.agentModeEnabled) "✓  " else "     "
-            Text("${check}Agent Mode (Experimental)", fontSize = 13.sp)
+            Text("${check}Agent Window (Experimental)", fontSize = 13.sp)
         },
         onClick = {
             close()
@@ -288,15 +288,7 @@ internal fun StatusBar(app: AppState, project: ProjectState) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        val path =
-            if (project.agentMode) {
-                val active = project.agent.current
-                val editor = active?.workspace?.editor
-                val file = editor?.activeTab?.takeUnless { active.showsChat }
-                listOfNotNull(project.name, "Agent", active?.title) + file?.relativePath?.split('/').orEmpty()
-            } else {
-                listOf(project.name) + tab?.relativePath?.split('/').orEmpty()
-            }
+        val path = listOf(project.name) + tab?.relativePath?.split('/').orEmpty()
         Label(
             path.joinToString("  ›  "),
             Modifier.weight(1f).testTag(AppTags.STATUS_PATH),

@@ -35,7 +35,7 @@ class AgentRegistryE2eTest {
     fun `an agent chosen from the registry is installed by the server and answers`() =
         runComposeUiTest {
             val app = launchWithProject(project, agentPreferences(), agents = agentSettings(registry.url, data))
-            app.state.settings.open()
+            app.state.settings.dialogs.openIde()
             awaitTag(AppTags.settingsCategory("Experimental")).performClick()
             awaitTag(AgentTags.settingsAgent("fake-agent")).performClick()
             // A command line would win over the agent chosen: choosing one clears it.
@@ -52,7 +52,7 @@ class AgentRegistryE2eTest {
     fun `an agent the server cannot run says why, and cannot be chosen`() =
         runComposeUiTest {
             val app = launchWithProject(project, agentPreferences(), agents = agentSettings(registry.url, data))
-            app.state.settings.open()
+            app.state.settings.dialogs.openIde()
             awaitTag(AppTags.settingsCategory("Experimental")).performClick()
             val row = awaitTag(AgentTags.settingsAgent("unsigned-agent"))
             assertContains(textOf(AgentTags.settingsAgent("unsigned-agent")), "no checksum")

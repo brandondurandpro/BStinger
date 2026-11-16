@@ -81,7 +81,7 @@ private fun HomePage(state: AppState) {
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .clickable { state.settings.open() }
+                    .clickable { state.settings.dialogs.openIde() }
                     .testTag(AppTags.WELCOME_SETTINGS)
                     .padding(horizontal = 10.dp, vertical = 6.dp),
             ) {

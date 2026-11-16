@@ -2,10 +2,13 @@ package org.example.kotlineditor
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
@@ -24,6 +27,7 @@ import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.ClientPlugins
 import org.example.kotlineditor.state.CommandLineTool
 import org.example.kotlineditor.state.FilePreferenceStore
+import org.example.kotlineditor.state.ProjectState
 import org.example.kotlineditor.syntax.treesitter.GrammarStore
 import org.example.kotlineditor.telemetry.ClientTelemetry
 import org.example.kotlineditor.telemetry.HookedTelemetry
@@ -32,6 +36,8 @@ import org.example.kotlineditor.telemetry.Side
 import org.example.kotlineditor.telemetry.Telemetry
 import org.example.kotlineditor.telemetry.otel.ExportConfig
 import org.example.kotlineditor.telemetry.otel.OtelHook
+import org.example.kotlineditor.ui.AgentWindowContent
+import org.example.kotlineditor.ui.agentWindowTitle
 import org.slf4j.LoggerFactory
 import java.io.File
 import java.io.IOException
@@ -138,12 +144,46 @@ private fun IdeWindow(
                 it.onNewWindow = onNewWindow
             }
         }
+    // The window that starts for the agent opens on its agent window alone; closing it shows the IDE window, which
+    // then stays shown (its Agent button opens the window beside it). While the launch is under way (the project
+    // opening), neither window of the IDE shows.
+    var ideShown by remember { mutableStateOf(!state.startsForTheAgent) }
+    val agentProject = state.session.project?.takeIf { it.agentMode }
+    val settled = !state.launching && state.session.opening == null
+    LaunchedEffect(agentProject, settled) {
+        if (agentProject == null && settled) ideShown = true
+    }
+    if (ideShown) {
+        Window(
+            onCloseRequest = { state.exit(onClosed) },
+            title = state.title,
+            state = rememberWindowState(size = WINDOW_SIZE),
+        ) {
+            App(state)
+        }
+    }
+    // The agent of the project, while its window is open: it goes away with the IDE window that owns it.
+    if (agentProject != null) key(agentProject) { AgentWindow(state, agentProject) }
+}
+
+private val WINDOW_SIZE = DpSize(1280.dp, 820.dp)
+
+// The agent window: a window of its own beside the IDE one. Closing it only hides the agent; its conversations stay.
+@Composable
+private fun AgentWindow(state: AppState, project: ProjectState) {
+    val windowState = rememberWindowState(size = WINDOW_SIZE)
     Window(
-        onCloseRequest = { state.exit(onClosed) },
-        title = state.title,
-        state = rememberWindowState(size = DpSize(1280.dp, 820.dp)),
+        onCloseRequest = { project.agentMode = false },
+        title = agentWindowTitle(project),
+        state = windowState,
     ) {
-        App(state)
+        // Asked again while it is open (Ctrl+Alt+A, a selection sent to the agent): the window comes to the front.
+        LaunchedEffect(project.agentFocusRequests) {
+            windowState.isMinimized = false
+            window.toFront()
+            window.requestFocus()
+        }
+        AgentWindowContent(state, project)
     }
 }
 

@@ -27,25 +27,20 @@ import androidx.compose.ui.unit.dp
 import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.GitProjectView
 import org.example.kotlineditor.state.ProjectState
-import org.example.kotlineditor.state.workspaceProject
 
 // The left third: the project, the remote it runs on, its branch, and the button of the left column.
 @Composable
 internal fun ToolbarStart(app: AppState, project: ProjectState, modifier: Modifier) {
-    // In agent mode, the branch of the project the agent of the active conversation works on.
-    val branchProject = if (project.agentMode) project.agent.current?.workspaceProject else project
     Layout(
         content = {
             Box(Modifier.layoutId(StartSlot.Project)) { ProjectWidget(app, project) }
             if (app.session.isRemote) {
                 Box(Modifier.layoutId(StartSlot.Remote)) { RemoteBadge(app) }
             }
-            if (branchProject != null && branchProject.git.currentBranch != null) {
-                BranchWidget(GitProjectView(branchProject), Modifier.layoutId(StartSlot.Branch).padding(start = 12.dp))
+            if (project.git.currentBranch != null) {
+                BranchWidget(GitProjectView(project), Modifier.layoutId(StartSlot.Branch).padding(start = 12.dp))
             }
-            if (!project.agentMode) {
-                Box(Modifier.layoutId(StartSlot.LeftColumn).padding(start = 8.dp)) { LeftColumnButton(project) }
-            }
+            Box(Modifier.layoutId(StartSlot.LeftColumn).padding(start = 8.dp)) { LeftColumnButton(project) }
         },
         modifier = modifier,
         measurePolicy = ToolbarStartPolicy,
@@ -91,8 +86,8 @@ private object ToolbarStartPolicy : MeasurePolicy {
     }
 }
 
-// The right third: what runs and ships, contributed by their features, then, at the far right, the switch between
-// the IDE and the agent mode.
+// The right third: what runs and ships, contributed by their features, then, at the far right, the Agent button
+// that opens the agent window.
 @Composable
 internal fun ToolbarEnd(app: AppState, project: ProjectState, modifier: Modifier) {
     Row(modifier, horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
@@ -103,7 +98,7 @@ internal fun ToolbarEnd(app: AppState, project: ProjectState, modifier: Modifier
         }
         if (app.settings.agentModeEnabled) {
             Spacer(Modifier.width(14.dp))
-            ModeSwitch(project.agentMode) { project.agentMode = it }
+            AgentButton(project.agentMode) { project.openAgentWindow() }
         }
     }
 }

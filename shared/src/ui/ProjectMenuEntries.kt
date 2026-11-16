@@ -27,7 +27,7 @@ internal fun SettingsMenuItem(app: AppState, close: () -> Unit) {
         trailingIcon = { Text("Ctrl+Alt+S", fontSize = 12.sp, color = IdeColors.TextSecondary) },
         onClick = {
             close()
-            app.settings.open()
+            app.settings.dialogs.openIde()
         },
         modifier = Modifier.testTag(AppTags.PROJECT_SETTINGS),
     )
