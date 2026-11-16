@@ -39,13 +39,15 @@ private val BUTTON_GAP = 4.dp
 
 /**
  * Fixed left strip: one button per tool window, wherever the panel itself is docked; [top] adds buttons above them
- * (the conversation list of agent mode).
+ * (the conversation list of agent mode). The windows of [hidden] get no button: the agent window does not offer the
+ * extensions and the language servers, which are the IDE's.
  */
 @Composable
 internal fun ToolStrip(
     project: ProjectState?,
     devtools: Boolean,
     onSettings: () -> Unit,
+    hidden: Set<ToolWindow> = emptySet(),
     registry: ToolWindowRegistry = IdeRegistries.toolWindows,
     top: @Composable ColumnScope.() -> Unit = {},
 ) {
@@ -56,17 +58,24 @@ internal fun ToolStrip(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         top()
-        if (project != null) ToolButtons(project, devtools, registry) else Spacer(Modifier.weight(1f))
+        if (project != null) ToolButtons(project, devtools, hidden, registry) else Spacer(Modifier.weight(1f))
         SettingsButton(onSettings)
     }
 }
 
 @Composable
-private fun ColumnScope.ToolButtons(project: ProjectState, devtools: Boolean, registry: ToolWindowRegistry) {
+private fun ColumnScope.ToolButtons(
+    project: ProjectState,
+    devtools: Boolean,
+    hidden: Set<ToolWindow>,
+    registry: ToolWindowRegistry,
+) {
     val contributions = registry.contributions
     // A window a plugin just registered is unknown to the layout until it is added.
-    LaunchedEffect(contributions.toList()) { contributions.forEach { project.toolWindows.add(it.defaults) } }
-    val shown = contributions.filter { devtools || !it.devtools }
+    LaunchedEffect(contributions.toList()) {
+        contributions.filter { it.window !in hidden }.forEach { project.toolWindows.add(it.defaults) }
+    }
+    val shown = contributions.filter { it.window !in hidden && (devtools || !it.devtools) }
     shown.filter { it.group == StripGroup.Top }.forEach { ToolButton(project, it.window, it.tag, it.icon) }
     Spacer(Modifier.weight(1f))
     // Bottom tool windows sit at the bottom of the strip.

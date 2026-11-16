@@ -77,6 +77,9 @@ object PreferenceKeys {
     const val DIFF_SIDE_BY_SIDE = "editor.diffSideBySide"
     const val LAYOUT_PREFIX = "layout."
 
+    /** The prefix of the preferences of the tool windows of the agent window, saved beside the IDE's. */
+    const val AGENT_LAYOUT_PREFIX = "agentLayout."
+
     /** Branches pinned in the toolbar, per project: the key ends with the project's path (`GitState`). */
     const val PINNED_BRANCHES_PREFIX = "git.pinnedBranches."
 

@@ -58,14 +58,21 @@ private val RowShape = IdeShapes.Large
  */
 @Composable
 fun SettingsDialog(app: AppState) {
-    val settings = app.settings.dialog ?: return
+    val dialogs = app.settings.dialogs
+    SettingsDialog(app, dialogs.ide) { dialogs.closeIde() }
+}
+
+/** The dialog of a window of its own: the agent window opens its settings, which it closes here. */
+@Composable
+fun SettingsDialog(app: AppState, dialog: SettingsState?, onClose: () -> Unit) {
+    val settings = dialog ?: return
     val search = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { search.requestFocus() } }
     Box(
         Modifier
             .fillMaxSize()
             .background(Backdrop)
-            .pointerInput(Unit) { detectTapGestures { app.settings.close() } },
+            .pointerInput(Unit) { detectTapGestures { onClose() } },
         contentAlignment = Alignment.Center,
     ) {
         Column(
@@ -75,10 +82,10 @@ fun SettingsDialog(app: AppState) {
                 .background(IdeColors.Panel, DialogShape)
                 .border(1.dp, IdeColors.Separator, DialogShape)
                 .pointerInput(Unit) { awaitEachGesture { awaitFirstDown().consume() } }
-                .closesOnEscape(app)
+                .closesOnEscape(onClose)
                 .testTag(AppTags.SETTINGS),
         ) {
-            SettingsTitle(app)
+            SettingsTitle(onClose)
             Row(Modifier.weight(1f).fillMaxWidth()) {
                 CategoryList(settings, search)
                 Box(Modifier.width(1.dp).fillMaxHeight().background(IdeColors.Separator))
@@ -88,21 +95,21 @@ fun SettingsDialog(app: AppState) {
     }
 }
 
-private fun Modifier.closesOnEscape(app: AppState): Modifier =
+private fun Modifier.closesOnEscape(onClose: () -> Unit): Modifier =
     onPreviewKeyEvent { event ->
         val closes = event.type == KeyEventType.KeyDown && event.key == Key.Escape
-        if (closes) app.settings.close()
+        if (closes) onClose()
         closes
     }
 
 @Composable
-private fun SettingsTitle(app: AppState) {
+private fun SettingsTitle(onClose: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().padding(start = 20.dp, end = 10.dp, top = 12.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Label("Settings", Modifier.weight(1f), fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-        IconButton({ app.settings.close() }, Modifier.testTag(AppTags.SETTINGS_CLOSE)) { CloseIcon() }
+        IconButton(onClose, Modifier.testTag(AppTags.SETTINGS_CLOSE)) { CloseIcon() }
     }
     Box(Modifier.fillMaxWidth().height(1.dp).background(IdeColors.Separator))
 }
@@ -125,7 +132,7 @@ private fun CategoryList(settings: SettingsState, search: FocusRequester) {
             leading = { SearchIcon() },
         )
         val searching = settings.query.isNotBlank()
-        for (category in SettingsCategory.entries) {
+        for (category in settings.categories) {
             CategoryRow(category, chosen = !searching && settings.category == category) { settings.select(category) }
         }
     }

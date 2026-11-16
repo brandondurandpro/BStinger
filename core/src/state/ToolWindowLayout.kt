@@ -90,10 +90,17 @@ enum class Pane(val defaultWidth: Float) {
 /**
  * Layout of the tool windows: dock, order inside the dock, visibility and sizes. By default the Project and Git
  * panels share the left column (Project above Git) and the terminal is at the bottom.
+ *
+ * @param defaults The windows the layout knows before the plugins add theirs.
+ * @param prefix The prefix of the preferences this layout is saved under: the windows of the agent save their own,
+ *   beside the ones of the IDE.
  */
 @Stable
 @Suppress("TooManyFunctions")
-class ToolWindowLayout(defaults: List<ToolWindowDefaults> = BUILT_IN_TOOL_WINDOWS) {
+class ToolWindowLayout(
+    defaults: List<ToolWindowDefaults> = BUILT_IN_TOOL_WINDOWS,
+    private val prefix: String = PreferenceKeys.LAYOUT_PREFIX,
+) {
     private val docks = mutableStateMapOf<ToolWindow, Dock>()
     private val order = mutableStateListOf<ToolWindow>()
     private val shown = mutableStateMapOf<ToolWindow, Boolean>()
@@ -180,49 +187,40 @@ class ToolWindowLayout(defaults: List<ToolWindowDefaults> = BUILT_IN_TOOL_WINDOW
         weights[after] = total - newBefore
     }
 
-    /** The layout as [PreferenceKeys.LAYOUT_PREFIX] preferences. */
+    /** The layout as preferences under [prefix]. */
     fun toPreferences(): Map<String, String> =
         buildMap {
-            put(ORDER_KEY, order.joinToString(",") { it.name })
+            put("${prefix}order", order.joinToString(",") { it.name })
             order.toList().forEach { window ->
-                put("$DOCK_KEY.${window.name}", dockOf(window).name)
-                put("$VISIBLE_KEY.${window.name}", isVisible(window).toString())
-                weights[window]?.let { put("$WEIGHT_KEY.${window.name}", it.toString()) }
+                put("${prefix}dock.${window.name}", dockOf(window).name)
+                put("${prefix}visible.${window.name}", isVisible(window).toString())
+                weights[window]?.let { put("${prefix}weight.${window.name}", it.toString()) }
             }
-            Dock.entries.forEach { put("$SIZE_KEY.${it.name}", sizeOf(it).toString()) }
-            panes.forEach { (pane, width) -> put("$PANE_KEY.${pane.name}", width.toString()) }
+            Dock.entries.forEach { put("${prefix}size.${it.name}", sizeOf(it).toString()) }
+            panes.forEach { (pane, width) -> put("${prefix}pane.${pane.name}", width.toString()) }
         }
 
     /** Applies what [toPreferences] saved; absent or invalid entries keep the current value. */
     fun restore(preferences: Map<String, String>) {
         order.toList().forEach { window ->
             val name = window.name
-            Dock.entries.find { it.name == preferences["$DOCK_KEY.$name"] }?.let { docks[window] = it }
-            preferences["$VISIBLE_KEY.$name"]?.toBooleanStrictOrNull()?.let { shown[window] = it }
-            val weight = preferences["$WEIGHT_KEY.$name"]?.toFloatOrNull()?.takeIf { it.isFinite() && it > 0f }
+            Dock.entries.find { it.name == preferences["${prefix}dock.$name"] }?.let { docks[window] = it }
+            preferences["${prefix}visible.$name"]?.toBooleanStrictOrNull()?.let { shown[window] = it }
+            val weight = preferences["${prefix}weight.$name"]?.toFloatOrNull()?.takeIf { it.isFinite() && it > 0f }
             if (weight != null) weights[window] = weight
         }
         Dock.entries.forEach { dock ->
-            val size = preferences["$SIZE_KEY.${dock.name}"]?.toFloatOrNull()
+            val size = preferences["${prefix}size.${dock.name}"]?.toFloatOrNull()
             if (size != null && size.isFinite()) sizes[dock] = size.coerceIn(MIN_DOCK, MAX_DOCK)
         }
         Pane.entries.forEach { pane ->
-            val width = preferences["$PANE_KEY.${pane.name}"]?.toFloatOrNull()
+            val width = preferences["${prefix}pane.${pane.name}"]?.toFloatOrNull()
             if (width != null && width.isFinite()) panes[pane] = width.coerceIn(MIN_PANE, MAX_PANE)
         }
-        val names = preferences[ORDER_KEY].orEmpty().split(',')
+        val names = preferences["${prefix}order"].orEmpty().split(',')
         val saved = names.mapNotNull { name -> windows.find { it.name == name } }
         val restored = (saved + order).distinct()
         order.clear()
         order.addAll(restored)
-    }
-
-    private companion object {
-        const val ORDER_KEY = "${PreferenceKeys.LAYOUT_PREFIX}order"
-        const val DOCK_KEY = "${PreferenceKeys.LAYOUT_PREFIX}dock"
-        const val VISIBLE_KEY = "${PreferenceKeys.LAYOUT_PREFIX}visible"
-        const val WEIGHT_KEY = "${PreferenceKeys.LAYOUT_PREFIX}weight"
-        const val SIZE_KEY = "${PreferenceKeys.LAYOUT_PREFIX}size"
-        const val PANE_KEY = "${PreferenceKeys.LAYOUT_PREFIX}pane"
     }
 }

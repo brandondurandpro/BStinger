@@ -28,8 +28,8 @@ class SettingsController(
     telemetryOf: ((instanceId: String) -> Telemetry)? = null,
 ) {
     /**
-     * Feature flag of agent mode (experimental, off by default): shows the IDE | Agent switch of the toolbar and its
-     * shortcuts. Turning it off brings the open project back to the editors.
+     * Feature flag of the agent (experimental, off by default): shows the Agent button of the toolbar, which opens
+     * the agent window, and its shortcuts. Turning it off closes the agent window of the open project.
      */
     var agentModeEnabled by mutableStateOf(preferences[PreferenceKeys.AGENT_MODE]?.toBooleanStrictOrNull() ?: false)
         private set
@@ -61,9 +61,8 @@ class SettingsController(
     /** The theme of the IDE: dark, light, or the operating system's. */
     var theme by mutableStateOf(ThemeChoice.fromSaved(preferences[PreferenceKeys.THEME]))
 
-    /** The Settings dialog, null while it is closed. */
-    var dialog: SettingsState? by mutableStateOf(null)
-        private set
+    /** The dialogs of the settings, one per window: the IDE window's, and the agent window's, opened apart. */
+    val dialogs = SettingsDialogs(languageServers, scope)
 
     /** How the inlay hints show: those of the open project, else the saved ones. */
     var inlayHintsMode: InlayHintsMode
@@ -105,21 +104,6 @@ class SettingsController(
         if (!enabled) openProject()?.agentMode = false
     }
 
-    /** Opens the Settings dialog on [category], or on its first one. */
-    fun open(category: SettingsCategory = SettingsCategory.Editor) {
-        dialog?.close()
-        dialog =
-            SettingsState(languageServers, scope).apply {
-                select(category)
-                loadServers()
-            }
-    }
-
-    fun close() {
-        dialog?.close()
-        dialog = null
-    }
-
     /** The preferences these settings keep. */
     fun toPreferences(): Map<String, String> {
         val fontSize = PreferenceKeys.EDITOR_FONT_SIZE to editorFontSize.toString()
@@ -146,5 +130,58 @@ class SettingsController(
     companion object {
         const val MIN_EDITOR_FONT_SIZE = 8f
         const val MAX_EDITOR_FONT_SIZE = 40f
+    }
+}
+
+/**
+ * The Settings dialogs, one per window: the IDE window's ([ide]), and the agent window's ([agent]), which are the
+ * two products' own. Both read and change the same settings; each window shows and closes its own.
+ */
+@Stable
+class SettingsDialogs(
+    /** The language servers of the server shown, for the dialog of the servers. */
+    private val languageServers: () -> LanguageServersState,
+    private val scope: CoroutineScope,
+) {
+    /** The dialog of the IDE window, null while it is closed. */
+    var ide: SettingsState? by mutableStateOf(null)
+        private set
+
+    /** The dialog of the agent window, null while it is closed. */
+    var agent: SettingsState? by mutableStateOf(null)
+        private set
+
+    /** Opens the dialog of the IDE window on [category], or on its first one. */
+    fun openIde(category: SettingsCategory = SettingsCategory.Editor) {
+        ide = opened(ide, category, emptySet())
+    }
+
+    /** Opens the dialog of the agent window, its own, on [category]: it does not list the IDE's categories. */
+    fun openAgent(category: SettingsCategory = SettingsCategory.Editor) {
+        agent = opened(agent, category, IDE_ONLY_CATEGORIES)
+    }
+
+    fun closeIde() {
+        ide?.close()
+        ide = null
+    }
+
+    fun closeAgent() {
+        agent?.close()
+        agent = null
+    }
+
+    // A dialog opened on [category] without the [hidden] categories, the one shown before closed first (it watches
+    // the servers).
+    private fun opened(
+        current: SettingsState?,
+        category: SettingsCategory,
+        hidden: Set<SettingsCategory>,
+    ): SettingsState {
+        current?.close()
+        return SettingsState(languageServers, scope, hidden).apply {
+            select(category)
+            loadServers()
+        }
     }
 }

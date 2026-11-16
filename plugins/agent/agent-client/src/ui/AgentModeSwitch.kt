@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -13,18 +12,17 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/** IDE | Agent switch of the toolbar: [agentMode] when Agent is selected; [select] switches. */
+/** The Agent button of the toolbar: highlighted while the agent window is [open]; [onClick] opens it. */
 @Composable
-fun ModeSwitch(agentMode: Boolean, select: (Boolean) -> Unit) {
-    Row(
+fun AgentButton(open: Boolean, onClick: () -> Unit) {
+    Box(
         Modifier
             .background(IdeColors.Editor, IdeShapes.Large)
             .border(1.dp, IdeColors.Separator, IdeShapes.Large)
             .padding(2.dp)
             .testTag(AgentTags.MODE_SWITCH),
     ) {
-        ModeButton("IDE", !agentMode, AgentTags.MODE_IDE) { select(false) }
-        ModeButton("Agent", agentMode, AgentTags.MODE_AGENT) { select(true) }
+        ModeButton("Agent", open, AgentTags.MODE_AGENT, onClick)
     }
 }
 

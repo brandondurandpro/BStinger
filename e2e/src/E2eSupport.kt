@@ -1,8 +1,13 @@
 package org.example.kotlineditor.e2e
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
@@ -53,6 +58,7 @@ import org.example.kotlineditor.telemetry.InMemoryHook
 import org.example.kotlineditor.telemetry.Telemetry
 import org.example.kotlineditor.telemetry.TelemetryHook
 import org.example.kotlineditor.testkit.ChaosProxy
+import org.example.kotlineditor.ui.AgentWindowContent
 import org.example.kotlineditor.ui.AppTags
 import org.example.kotlineditor.ui.EditorTags
 import org.example.kotlineditor.ui.RemoteTags
@@ -273,6 +279,19 @@ private fun appStateOf(
         startProject = startProject,
     )
 
+// The app, with the agent window of its open project above it while that window is open. The desktop app hosts the
+// window beside the IDE one; here both share the one composition, the IDE staying composed underneath.
+@Composable
+private fun AppWithAgentWindow(state: AppState) {
+    Box(Modifier.fillMaxSize()) {
+        App(state)
+        val agentProject = state.session.project?.takeIf { it.agentMode }
+        if (agentProject != null) {
+            key(agentProject) { Box(Modifier.fillMaxSize()) { AgentWindowContent(state, agentProject) } }
+        }
+    }
+}
+
 /**
  * Starts the app as in production: a real [EditorServer] (data in a temporary directory) and the UI talking to
  * it through the network client. Everything the e2e tests do therefore goes through the protocol.
@@ -343,7 +362,7 @@ fun ComposeUiTest.launchApp(
                 process.close()
             }
         }
-        App(state)
+        AppWithAgentWindow(state)
     }
     waitForIdle()
     if (recent.isNotEmpty()) waitUntil(timeoutMillis = TIMEOUT) { created!!.session.recentProjects.size == recent.size }

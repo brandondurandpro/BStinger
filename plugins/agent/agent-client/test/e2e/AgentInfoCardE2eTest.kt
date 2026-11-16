@@ -8,6 +8,7 @@ import androidx.compose.ui.test.v2.runComposeUiTest
 import org.example.kotlineditor.model.AgentItem
 import org.example.kotlineditor.state.Conversation
 import org.example.kotlineditor.state.GitAction
+import org.example.kotlineditor.state.ProjectState
 import org.example.kotlineditor.state.ToolWindow
 import org.example.kotlineditor.state.refreshChanges
 import org.example.kotlineditor.ui.AgentTags
@@ -121,12 +122,13 @@ class AgentInfoCardE2eTest {
         runComposeUiTest {
             repository()
             val app = launchWithProject(project, agentPreferences())
-            worktreeConversation(app)
-            app.project.toolWindows.setVisible(ToolWindow.Project, false)
+            val conversation = worktreeConversation(app)
+            val panels = checkNotNull(conversation.workspace as ProjectState).toolWindows
+            panels.setVisible(ToolWindow.Project, false)
             awaitTag(AgentTags.AGENT_INFO_FILES).performClick()
-            awaitCondition { app.project.toolWindows.isVisible(ToolWindow.Project) }
+            awaitCondition { panels.isVisible(ToolWindow.Project) }
             awaitTag(AgentTags.AGENT_INFO_TERMINAL).performClick()
-            awaitCondition { app.project.toolWindows.isVisible(ToolWindow.Terminal) }
+            awaitCondition { panels.isVisible(ToolWindow.Terminal) }
         }
 
     @Test

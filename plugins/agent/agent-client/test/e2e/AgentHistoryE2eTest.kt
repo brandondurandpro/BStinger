@@ -60,9 +60,9 @@ class AgentHistoryE2eTest {
             assertEquals(3, conversation.itemsOf<AgentItem.UserText>().size)
         }
 
-    // Shows agent mode again, which lists the sessions of the agent.
-    private fun ComposeUiTest.listHistoryAgain() {
-        awaitTag(AgentTags.MODE_IDE).performClick()
+    // Closes the agent window and shows it again, which lists the sessions of the agent.
+    private fun ComposeUiTest.listHistoryAgain(app: E2eApp) {
+        closeAgentWindow(app)
         awaitTag(AgentTags.MODE_AGENT).performClick()
     }
 
@@ -77,9 +77,9 @@ class AgentHistoryE2eTest {
             // once it exists, or the session of the conversation may be made before it and take its number.
             awaitCondition(AGENT_TIMEOUT) { store.resolve("session-1.json").exists() }
             sendPrompt("echo only once")
-            listHistoryAgain()
+            listHistoryAgain(app)
             awaitCondition(AGENT_TIMEOUT) { store.resolve("session-2.json").exists() }
-            listHistoryAgain()
+            listHistoryAgain(app)
             awaitAnswer(conversation, "only once")
             awaitIdle(conversation)
             awaitCondition(AGENT_TIMEOUT) { conversations.size == 1 }

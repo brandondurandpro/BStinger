@@ -141,7 +141,7 @@ class AgentContextE2eTest {
             pressInPrompt(Key.Enter)
             awaitShown(conversation, "Context: lines App.kt#L5-L6 (2 lines).")
             awaitIdle(conversation)
-            awaitTag(AgentTags.MODE_IDE).performClick()
+            closeAgentWindow(launched)
             awaitTag(AgentTags.MODE_AGENT)
             editorKeys { pressKey(Key.DirectionRight) }
             sendSelectionToAgent()
@@ -154,14 +154,14 @@ class AgentContextE2eTest {
         runComposeUiTest {
             val launched = launchWithProject(project, agentPreferences())
             val conversation = startConversation(launched)
-            if (!isShown(TreeTags.treeRow("src"))) awaitTag(AppTags.TOOL_PROJECT).performClick()
-            awaitTag(TreeTags.treeChevron("src")).performClick()
-            awaitTag(TreeTags.treeChevron("src/main/kotlin")).performClick()
-            awaitTag(TreeTags.treeRow(app)).performDoubleClick()
+            if (!isAgentShown(TreeTags.treeRow("src"))) awaitAgentTag(AppTags.TOOL_PROJECT).performClick()
+            awaitAgentTag(TreeTags.treeChevron("src")).performClick()
+            awaitAgentTag(TreeTags.treeChevron("src/main/kotlin")).performClick()
+            awaitAgentTag(TreeTags.treeRow(app)).performDoubleClick()
             awaitCondition { !conversation.showsChat }
-            awaitEditorReady()
-            editorKeys { withKeyDown(Key.ShiftLeft) { pressKey(Key.DirectionDown) } }
-            sendSelectionToAgent()
+            awaitAgentEditorReady()
+            agentEditorKeys { withKeyDown(Key.ShiftLeft) { pressKey(Key.DirectionDown) } }
+            sendSelectionToAgentInAgentWindow()
             awaitTag(AgentTags.agentAttachment("App.kt:1"))
             assertTrue(conversation.showsChat)
             assertEquals(conversation, launched.project.agent.current)

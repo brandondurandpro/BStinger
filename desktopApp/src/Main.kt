@@ -24,6 +24,7 @@ import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.ClientPlugins
 import org.example.kotlineditor.state.CommandLineTool
 import org.example.kotlineditor.state.FilePreferenceStore
+import org.example.kotlineditor.state.ProjectState
 import org.example.kotlineditor.syntax.treesitter.GrammarStore
 import org.example.kotlineditor.telemetry.ClientTelemetry
 import org.example.kotlineditor.telemetry.HookedTelemetry
@@ -32,6 +33,8 @@ import org.example.kotlineditor.telemetry.Side
 import org.example.kotlineditor.telemetry.Telemetry
 import org.example.kotlineditor.telemetry.otel.ExportConfig
 import org.example.kotlineditor.telemetry.otel.OtelHook
+import org.example.kotlineditor.ui.AgentWindowContent
+import org.example.kotlineditor.ui.agentWindowTitle
 import org.slf4j.LoggerFactory
 import java.io.File
 import java.io.IOException
@@ -141,9 +144,33 @@ private fun IdeWindow(
     Window(
         onCloseRequest = { state.exit(onClosed) },
         title = state.title,
-        state = rememberWindowState(size = DpSize(1280.dp, 820.dp)),
+        state = rememberWindowState(size = WINDOW_SIZE),
     ) {
         App(state)
+    }
+    // The agent of the project, while its window is open: it goes away with the IDE window that owns it.
+    val agentProject = state.session.project?.takeIf { it.agentMode }
+    if (agentProject != null) key(agentProject) { AgentWindow(state, agentProject) }
+}
+
+private val WINDOW_SIZE = DpSize(1280.dp, 820.dp)
+
+// The agent window: a window of its own beside the IDE one. Closing it only hides the agent; its conversations stay.
+@Composable
+private fun AgentWindow(state: AppState, project: ProjectState) {
+    val windowState = rememberWindowState(size = WINDOW_SIZE)
+    Window(
+        onCloseRequest = { project.agentMode = false },
+        title = agentWindowTitle(project),
+        state = windowState,
+    ) {
+        // Asked again while it is open (Ctrl+Alt+A, a selection sent to the agent): the window comes to the front.
+        LaunchedEffect(project.agentFocusRequests) {
+            windowState.isMinimized = false
+            window.toFront()
+            window.requestFocus()
+        }
+        AgentWindowContent(state, project)
     }
 }
 

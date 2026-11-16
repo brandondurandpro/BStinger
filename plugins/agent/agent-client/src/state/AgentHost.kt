@@ -44,6 +44,12 @@ interface AgentHost : AgentWorkspace {
     suspend fun openWorktree(branch: String, base: String? = null): AgentWorkspace
 
     /**
+     * A workspace of the agent's own, on the same directory: the panels and editors of the agent window are never
+     * the state of the IDE window, so that opening a panel or a file here leaves the IDE window as it is.
+     */
+    fun agentWorkspace(): AgentWorkspace
+
+    /**
      * The branches a conversation can start from, null when the project is not a Git repository. With [fetch] the
      * remote branches are fetched first; a fetch that fails (offline) leaves the ones already known and says why in
      * [BranchChoices.fetchError].

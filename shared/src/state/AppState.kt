@@ -79,7 +79,8 @@ class AppState(
     val exiting = AppExit(scope, { session.project }, ::finishExit)
 
     /** Whether a dialog of the whole window is open (Open Project, Settings): it keeps the keyboard. */
-    val dialogOpen: Boolean get() = session.projectPickerOpen || settings.dialog != null
+    val dialogOpen: Boolean
+        get() = session.projectPickerOpen || settings.dialogs.ide != null || settings.dialogs.agent != null
 
     val title: String
         get() =
@@ -124,8 +125,8 @@ class AppState(
         }
     }
 
-    // An added window of a conversation started in another project: the project opens in agent mode, on the question
-    // of the branch the conversation starts from.
+    // An added window of a conversation started in another project: the project opens with its agent window, on the
+    // question of the branch the conversation starts from.
     private suspend fun openForNewConversation(path: String) {
         val shown = session
         shown.loadRecents()
@@ -136,7 +137,8 @@ class AppState(
         opened.agent.requestNewConversation()
     }
 
-    // The user prefers agent mode: the last project opens straight in it; the welcome screen only when there is none.
+    // The user prefers the agent: the last project opens straight with its agent window; the welcome screen only
+    // when there is none.
     private suspend fun launchInAgentMode() {
         val shown = session
         try {
