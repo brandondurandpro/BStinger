@@ -46,6 +46,12 @@ object PreferenceKeys {
     /** Per project (the key ends with its path): its prompt templates, in the format of [AGENT_TEMPLATES]. */
     const val AGENT_TEMPLATES_PREFIX = "agent.templates."
 
+    /** The agent teams of the user, for every project: a JSON array of teams (see `teamsToText`). */
+    const val AGENT_TEAMS = "agent.teams"
+
+    /** Per project (the key ends with its path): its agent teams, in the format of [AGENT_TEAMS]. */
+    const val AGENT_TEAMS_PREFIX = "agent.teams."
+
     /** Per project (the key ends with its path): the sessions open in tabs of agent mode, one per line, in order. */
     const val AGENT_OPEN_PREFIX = "agent.open."
 

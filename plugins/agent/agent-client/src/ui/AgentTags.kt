@@ -48,6 +48,45 @@ object AgentTags {
     const val AGENT_TEMPLATE_GLOBAL = "agent.template.global"
     const val AGENT_TEMPLATE_PROJECT = "agent.template.project"
 
+    /** The button beside the templates button that opens the teams of agents. */
+    const val AGENT_TEAMS = "agent.teams"
+    const val AGENT_TEAMS_DIALOG = "agent.teams.dialog"
+    const val AGENT_TEAMS_LIST = "agent.teams.list"
+    const val AGENT_TEAMS_EMPTY = "agent.teams.empty"
+    const val AGENT_TEAMS_CLOSE = "agent.teams.close"
+    const val AGENT_TEAM_NEW = "agent.team.new"
+    const val AGENT_TEAM_FORM = "agent.team.form"
+    const val AGENT_TEAM_NAME = "agent.team.name"
+    const val AGENT_TEAM_GLOBAL = "agent.team.global"
+    const val AGENT_TEAM_PROJECT = "agent.team.project"
+    const val AGENT_TEAM_ADD_MEMBER = "agent.team.addMember"
+    const val AGENT_TEAM_SAVE = "agent.team.save"
+    const val AGENT_TEAM_CANCEL = "agent.team.cancel"
+
+    /** Why the form of a team cannot be saved yet. */
+    const val AGENT_TEAM_PROBLEM = "agent.team.problem"
+
+    /** The role of the manager in the tags of the fields of a team. */
+    const val TEAM_MANAGER = "manager"
+
+    /** The role of the member at [index] in the tags of the fields of a team. */
+    fun teamMember(index: Int) = "member.$index"
+
+    /** A team of the list, by its id. */
+    fun agentTeam(id: String) = "agent.team.row.$id"
+
+    fun agentTeamEdit(id: String) = "agent.team.edit.$id"
+
+    fun agentTeamDuplicate(id: String) = "agent.team.duplicate.$id"
+
+    fun agentTeamDelete(id: String) = "agent.team.delete.$id"
+
+    /** A field of the agent of [role] (`manager`, `member.0`): `name`, `description`, `provider`, `model`, `effort`, `skills`, `prompt`, `remove`. */
+    fun agentTeamField(role: String, field: String) = "agent.team.$role.$field"
+
+    /** A value of the menu of a field of the agent of [role], by its value (a model, a skill's path, a provider's id). */
+    fun agentTeamValue(role: String, field: String, value: String) = "agent.team.$role.$field:$value"
+
     fun agentQuotaLimit(index: Int) = "agent.quota.$index"
 
     fun agentCommand(name: String) = "agent.command.$name"

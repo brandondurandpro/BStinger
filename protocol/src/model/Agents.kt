@@ -429,9 +429,14 @@ interface AgentChoices {
 
     /**
      * The settings a session of [agent] working in [directory] offers (its model…), before a conversation started one;
-     * empty when the agent offers none. The agent may start for it.
+     * empty when the agent offers none. The agent may start for it. With [choices] (option id to value), the settings
+     * a session has once they are made: a model changes the efforts it offers.
      */
-    suspend fun options(agent: AgentCommand, directory: String): List<AgentOption>
+    suspend fun options(
+        agent: AgentCommand,
+        directory: String,
+        choices: Map<String, String> = emptyMap(),
+    ): List<AgentOption>
 
     /**
      * Sets the setting [option] of the session of [conversation] to [value]: at once when the session runs, as soon
@@ -456,6 +461,12 @@ interface AgentChoices {
      * whose id is returned. Fails when the agent cannot fork.
      */
     suspend fun fork(agent: AgentCommand, session: String, directory: String): String
+
+    /**
+     * The skills an agent of a team can be given for the project at [root]: the folders holding a `SKILL.md` in the
+     * project and in the data directory of the server. Reads, changes nothing.
+     */
+    suspend fun skills(root: String): List<AgentSkill>
 }
 
 /** Conversations with agents, run by the server. Every call returns at once except [transcript], a long poll. */
@@ -536,7 +547,13 @@ interface Agents : AgentChoices {
 private object NoChoices : AgentChoices {
     override suspend fun registry(): List<AgentRegistryEntry> = emptyList()
 
-    override suspend fun options(agent: AgentCommand, directory: String): List<AgentOption> = emptyList()
+    override suspend fun options(
+        agent: AgentCommand,
+        directory: String,
+        choices: Map<String, String>,
+    ): List<AgentOption> = emptyList()
+
+    override suspend fun skills(root: String): List<AgentSkill> = emptyList()
 
     override suspend fun setOption(conversation: String, agent: AgentCommand, option: String, value: String): Unit =
         throw java.io.IOException(NO_SERVER)

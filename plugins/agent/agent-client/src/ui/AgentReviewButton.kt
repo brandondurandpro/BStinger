@@ -226,26 +226,7 @@ private fun ReviewerModelPicker(models: AgentOption?, chosen: String?, choose: (
 
 @Composable
 private fun AspectRow(aspect: ReviewAspect, checked: Boolean, onToggle: () -> Unit) {
-    val shape = IdeShapes.Small
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .toggleable(checked, role = Role.Checkbox, onValueChange = { onToggle() })
-            .testTag(AgentTags.agentReviewAspect(aspect.name))
-            .padding(vertical = 3.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            Modifier
-                .size(14.dp)
-                .background(if (checked) IdeColors.Accent else Color.Transparent, shape)
-                .border(1.dp, if (checked) IdeColors.Accent else IdeColors.InputBorder, shape),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (checked) CheckIcon(Modifier.size(9.dp), color = IdeColors.OnAccent)
-        }
-        Label(aspect.label, Modifier.padding(start = 8.dp))
-    }
+    CheckRow(aspect.label, checked, AgentTags.agentReviewAspect(aspect.name), onToggle = onToggle)
 }
 
 /**
@@ -262,56 +243,5 @@ fun DiscussButton(agent: AgentState, conversation: Conversation) {
         val request = conversation.draft.trim()
         conversation.draft = ""
         agent.discussWith(conversation, entry, request)
-    }
-}
-
-/** What a button that lists the agents of the registry shows: its [label], its tooltip, its tag and those of its menu. */
-private class RegistryButton(
-    val label: String,
-    val tooltip: String,
-    val tag: String,
-    val tags: RegistryTags,
-    /** The agent marked as chosen in its menu, and what the button says given the registry (its name, once read). */
-    val chosenId: String? = null,
-    val text: (List<AgentRegistryEntry>?) -> String = { label },
-)
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun RegistryAgentButton(agent: AgentState, button: RegistryButton, enabled: Boolean, choose: (String?) -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    var entries by remember { mutableStateOf<List<AgentRegistryEntry>?>(null) }
-    var failure by remember { mutableStateOf<String?>(null) }
-    val agents = agent.project.services.agents
-    LaunchedEffect(agents) {
-        try {
-            entries = agents.registry()
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (refused: IOException) {
-            failure = refused.message ?: "unknown error"
-        }
-    }
-    Box {
-        TooltipArea(tooltip = { Tooltip(button.tooltip) }) {
-            Label(
-                "${button.text(entries)} ▾",
-                Modifier
-                    .background(if (open) IdeColors.Selection else Color.Transparent, IdeShapes.Medium)
-                    .clickable(enabled = enabled) { open = true }
-                    .testTag(button.tag)
-                    .padding(horizontal = 6.dp, vertical = 2.dp),
-                color = if (enabled) IdeColors.TextSecondary else IdeColors.LineNumber,
-                fontSize = 12.sp,
-            )
-        }
-        val picked: (String?) -> Unit = { entry ->
-            open = false
-            choose(entry)
-        }
-        IdeDropdownMenu(open, onDismissRequest = { open = false }, Modifier.widthIn(max = MENU_WIDTH).closesOnEscape { open = false }) {
-            val menu = RegistryMenu(agent.settingsAgentLabel, chosenId = button.chosenId, tags = button.tags)
-            AgentRegistryMenu(menu, entries, failure, picked)
-        }
     }
 }

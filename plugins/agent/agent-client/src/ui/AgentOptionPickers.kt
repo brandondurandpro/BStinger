@@ -44,31 +44,37 @@ private val MENU_HEIGHT = 300.dp
 @Composable
 fun ModelPicker(agent: AgentState, conversation: Conversation) {
     val model = conversation.model ?: return
-    OptionPicker(agent, conversation, model, AgentTags.AGENT_MODEL, AgentTags::agentModel)
+    val choose = { value: String -> agent.options.choose(conversation, model.id, value) }
+    OptionPicker(model, AgentTags.AGENT_MODEL, AgentTags::agentModel, choose)
 }
 
 /** The mode of permissions of the session of [conversation] (ask before editing, accept edits, plan…). */
 @Composable
 fun PermissionsPicker(agent: AgentState, conversation: Conversation) {
     val permissions = conversation.permissions ?: return
-    OptionPicker(agent, conversation, permissions, AgentTags.AGENT_PERMISSIONS, AgentTags::agentPermissionMode)
+    val choose = { value: String -> agent.options.choose(conversation, permissions.id, value) }
+    OptionPicker(permissions, AgentTags.AGENT_PERMISSIONS, AgentTags::agentPermissionMode, choose)
 }
 
 /** The effort of the session of [conversation]: how hard the agent thinks, when its model lets the user choose. */
 @Composable
 fun EffortPicker(agent: AgentState, conversation: Conversation) {
     val effort = conversation.effort ?: return
-    OptionPicker(agent, conversation, effort, AgentTags.AGENT_EFFORT, AgentTags::agentEffort)
+    val choose = { value: String -> agent.options.choose(conversation, effort.id, value) }
+    OptionPicker(effort, AgentTags.AGENT_EFFORT, AgentTags::agentEffort, choose)
 }
 
+/**
+ * A setting the agent offers, as a button that lists its values: the one chosen is marked, a click on another one calls
+ * [choose] with it. [tag] is the tag of the button and [valueTag] those of the values.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun OptionPicker(
-    agent: AgentState,
-    conversation: Conversation,
+internal fun OptionPicker(
     option: AgentOption,
     tag: String,
     valueTag: (String) -> String,
+    choose: (String) -> Unit,
 ) {
     var open by remember { mutableStateOf(false) }
     val current = option.values.firstOrNull { it.value == option.current }
@@ -109,7 +115,7 @@ private fun OptionPicker(
                 for (value in shown) {
                     OptionItem(option, value, valueTag(value.value)) {
                         open = false
-                        agent.options.choose(conversation, option.id, value.value)
+                        choose(value.value)
                     }
                 }
             }

@@ -732,6 +732,9 @@ enum class Method(
 
     /** Logs in to an agent with one of its methods. */
     AgentAuthenticate("agent/authenticate", mutating = true),
+
+    /** The skills (folders with a `SKILL.md`) an agent of a team can be given, in a project and the data directory. */
+    TeamSkills("team/skills", mutating = false),
 }
 
 /** A JSON-RPC error object `{"code": ..., "message": ...}`. */

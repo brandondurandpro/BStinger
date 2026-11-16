@@ -59,6 +59,7 @@ internal fun QuotaBar(agent: AgentState, conversation: Conversation, modifier: M
     Row(modifier.testTag(AgentTags.AGENT_QUOTA), verticalAlignment = Alignment.CenterVertically) {
         CommandsButton(conversation, commands)
         TemplatesButton(agent, conversation)
+        TeamsButton(agent)
         // The limits sit on the right, the commands button on the left.
         // In a window wide enough the limits are in the card beside the conversation, not here.
         val inCard = LocalQuotaCard.current

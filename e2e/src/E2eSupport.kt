@@ -168,6 +168,9 @@ class ServerProcess(
     val port: Int = server.port
     private var running = true
 
+    /** The data directory of the server, where a test checks that nothing was written. */
+    val dataDirectory: java.io.File get() = data
+
     /** Where the server halves of plugins are installed on the server. */
     val serverPlugins: java.io.File get() = java.io.File(data, "server-plugins")
 

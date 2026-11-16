@@ -32,10 +32,17 @@ class AgentProcesses internal constructor(
     /** Deletes the agent's [session] and its history; false when the agent cannot. */
     suspend fun delete(agent: AgentCommand, session: String): Boolean = processFor(agent).deleteSession(session)
 
-    /** The settings (model…) a session of [agent] in [directory] offers; the agent starts for it when needed. */
-    suspend fun options(agent: AgentCommand, directory: String): List<AgentOption> {
+    /**
+     * The settings (model…) a session of [agent] in [directory] offers; the agent starts for it when needed. With
+     * [choices] (option id to value), the settings a session has once they are made, read in a session started for it.
+     */
+    suspend fun options(
+        agent: AgentCommand,
+        directory: String,
+        choices: Map<String, String> = emptyMap(),
+    ): List<AgentOption> {
         val process = withContext(Dispatchers.IO) { processFor(agent) }
-        return process.offeredOptions(directory)
+        return process.offeredOptions(directory, choices)
     }
 
     /**

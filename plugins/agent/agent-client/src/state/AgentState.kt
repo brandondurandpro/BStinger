@@ -464,6 +464,9 @@ class AgentState(
         templates.removeAll { it.name == name }
     }
 
+    /** The teams of agents the user made, for every project or this one. */
+    val teams = AgentTeams(saved, project.root.path)
+
     /** The agents of the registry the user worked with: the history lists the sessions of each, not only the settings'. */
     internal val usedAgents =
         saved[PreferenceKeys.AGENT_USED].orEmpty().lines().filter { it.isNotBlank() }.toMutableList()

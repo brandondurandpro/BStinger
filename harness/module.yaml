@@ -1,0 +1,13 @@
+# The coordination of agent teams, run by the server: a team keeps working when the IDE closes or the link drops.
+# For now only the discovery of the skills (folders with a `SKILL.md`) an agent of a team can be given; the run loop
+# of a team comes here too. Runs in the server, never in the UI; tested on its own (`./kotlin test -m harness`).
+product:
+  type: jvm/lib
+
+dependencies:
+  - //protocol: exported
+  - $libs.kotlinx.coroutines.core
+  - $libs.kotlinx.serialization.json
+
+test-dependencies:
+  - //testkit
