@@ -12,6 +12,7 @@ private fun AgentItem.searchable(): String =
         is AgentItem.Plan -> ""
         is AgentItem.Permission -> title
         is AgentItem.Notice -> text
+        is AgentItem.Delegation -> "$member $task $result"
     }
 
 /** True when [query] (blank matches all) is in the title of the conversation or in one of its messages. */

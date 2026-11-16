@@ -23,6 +23,9 @@ internal class TranscriptWriter(
     // Journal item of the tool call that shows each terminal, by terminal id.
     private val terminalItems = ConcurrentHashMap<String, String>()
 
+    /** What the current turn answered and reported. */
+    val turn = TurnLog(journal)
+
     // Message the latest chunk belonged to, when the agent numbers its messages: a new one starts a new item.
     @Volatile
     private var messageId: String? = null
@@ -92,6 +95,7 @@ internal class TranscriptWriter(
     /** A notice of the IDE about the conversation. */
     fun notice(text: String, error: Boolean = false) {
         val id = journal.newId()
+        if (error) turn.failed(text)
         journal.add { AgentItem.Notice(id, it, text, error) }
     }
 
@@ -106,16 +110,20 @@ internal class TranscriptWriter(
         val message = update.text("messageId")
         val sameMessage = message == null || message == messageId
         messageId = message
-        val continued = journal.last()?.takeIf { sameMessage && kind.continues(it) }
+        val live = mode == Mode.Live
+        val separate = turn.separates(live)
+        val continued = journal.last()?.takeIf { sameMessage && !separate && kind.continues(it) }
         // A thought that already holds all it shows does not change: nothing to send again.
         val full = continued is AgentItem.Thought && continued.text.length >= MAX_THOUGHT
         if (continued != null) {
             if (!full) journal.update(continued.id) { item, version -> appended(item, chunk, version, context) }
+            turn.record(continued.id, live, agent = kind == Text.Agent)
             return
         }
         val id = journal.newId()
         val text = if (kind == Text.Thought) shownThought("", chunk) else chunk
         journal.add { version -> kind.item(id, version, text, context) }
+        turn.record(id, live, agent = kind == Text.Agent)
     }
 
     // The agent titled the session (`title` absent: unchanged; null: cleared).
@@ -161,7 +169,8 @@ internal class TranscriptWriter(
     // The plan of the prompt: the latest plan item is replaced while it is the plan of the current prompt.
     private fun plan(update: JsonObject) {
         val entries = update.planEntries()
-        val promptStart = journal.filter { it as? AgentItem.UserText }.lastOrNull()?.version ?: 0L
+        val shownPrompt = journal.filter { it as? AgentItem.UserText }.lastOrNull()?.version ?: 0L
+        val promptStart = maxOf(shownPrompt, turn.startVersion)
         val current = journal.filter { it as? AgentItem.Plan }.lastOrNull()?.takeIf { it.version > promptStart }
         if (current != null) {
             journal.update(current.id) { item, version ->

@@ -25,6 +25,7 @@ import org.example.kotlineditor.model.AgentDiff
 import org.example.kotlineditor.model.AgentItem
 import org.example.kotlineditor.model.AgentTerminalOutput
 import org.example.kotlineditor.model.AgentToolStatus
+import org.example.kotlineditor.model.DelegationStatus
 import org.example.kotlineditor.state.Conversation
 
 // The items of a conversation: the prompts, thoughts, tool calls with their diffs, plans, permission requests and
@@ -75,6 +76,18 @@ internal fun NoticeView(notice: AgentItem.Notice) {
             color = if (notice.error) IdeColors.Error else IdeColors.TextSecondary,
             fontSize = 12.sp,
         ),
+    )
+}
+
+/** A task given to a member, on one line: who, what, and how far the member got. */
+@Composable
+internal fun DelegationRow(delegation: AgentItem.Delegation) {
+    val failed = delegation.status == DelegationStatus.Failed
+    BasicText(
+        "${delegation.member}: ${delegation.task} (${delegation.status.name.lowercase()})",
+        Modifier.fillMaxWidth(),
+        style = bodyStyle.copy(color = if (failed) IdeColors.Error else IdeColors.TextSecondary, fontSize = 12.sp),
+        maxLines = 1,
     )
 }
 

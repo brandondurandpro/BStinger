@@ -302,6 +302,7 @@ class Conversation(val id: Int, title: String, val branch: String) {
                 is AgentItem.Plan -> "Plan"
                 is AgentItem.Permission -> "Asks: ${last.title}"
                 is AgentItem.Notice -> last.text
+                is AgentItem.Delegation -> "${last.member}: ${last.task}"
                 null -> forgottenPreview ?: if (session != null) "From the history of the agent" else "No messages yet"
             }.lineSequence().firstOrNull().orEmpty()
 

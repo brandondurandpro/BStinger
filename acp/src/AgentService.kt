@@ -10,6 +10,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import org.example.kotlineditor.lsp.provision.ToolDownloader
 import org.example.kotlineditor.model.AgentAttachment
 import org.example.kotlineditor.model.AgentCommand
+import org.example.kotlineditor.model.AgentItem
 import org.example.kotlineditor.model.AgentTranscript
 import org.example.kotlineditor.model.AgentTurnState
 import java.io.Closeable
@@ -70,6 +71,7 @@ data class AgentSettings(
  * process (one process per command line, shared by its conversations) and a [Journal] the IDE follows with
  * [transcript]: a client that reconnects asks for what it missed, and a prompt or an answer sent twice runs once.
  */
+@Suppress("TooManyFunctions") // the conversations of agent mode: prompt, follow, cancel, answer, and what a team needs
 class AgentService(
     private val files: FileAccess = FileAccess.Disk,
     private val settings: AgentSettings = AgentSettings(),
@@ -87,6 +89,12 @@ class AgentService(
     /**
      * Sends [text] to the agent of [conversation], started with [agent] in [directory] when needed; a conversation
      * this service does not know continues the agent's [session]; [attachments] go with the text.
+     *
+     * The transcript shows [shown] as the user's message [itemId]: the text sent by default, another one when the
+     * agent receives more than the user typed (a preamble), none at all when [shown] is null (a relay the user did
+     * not write). [itemId] identifies the prompt either way: sent twice, it runs once, and [awaitTurn] finds it.
+     * The holder of a [lease] on [conversation] passes it, so that its prompts do not wait behind the ones others
+     * sent during the lease.
      */
     fun prompt(
         conversation: String,
@@ -96,10 +104,50 @@ class AgentService(
         text: String,
         session: String? = null,
         attachments: List<AgentAttachment> = emptyList(),
+        shown: String? = text,
+        lease: ConversationLease? = null,
     ) {
-        val prompt = UserPrompt(itemId, text, attachments)
-        conversation(conversation).prompt(prompt, agent, directory, session) { processes.processFor(agent) }
+        val prompt = UserPrompt(itemId, text, attachments, shown)
+        val target = conversation(conversation)
+        target.prompt(prompt, agent, directory, session, { processes.processFor(agent) }, lease)
     }
+
+    /**
+     * Waits for the end of the turn the prompt [itemId] started in [conversation] (after it left the queue, when it
+     * waited there), and tells how it ended and what the agent answered. A conversation closed meanwhile (or already
+     * forgotten) ends cancelled. Fails for an [itemId] [prompt] never accepted in [conversation].
+     */
+    suspend fun awaitTurn(conversation: String, itemId: String): TurnOutcome {
+        val target = conversations[conversation]
+        return target?.awaitTurn(itemId) ?: TurnOutcome(TurnEnding.Cancelled, "", "Unknown conversation.")
+    }
+
+    /**
+     * Adds to the transcript of [conversation] the item [create] builds from its new id (its version is the journal's,
+     * whatever [create] puts there); the clients following it receive the item like any other. Returns the item.
+     */
+    fun addItem(conversation: String, create: (id: String) -> AgentItem): AgentItem {
+        val journal = conversation(conversation).journal
+        val id = journal.newId()
+        return journal.add { version -> create(id).withVersion(version) }
+    }
+
+    /**
+     * Replaces the item [id] of [conversation] by what [change] makes of it, as a new version the clients receive;
+     * false when there is no such item.
+     */
+    fun updateItem(conversation: String, id: String, change: (AgentItem) -> AgentItem): Boolean {
+        val journal = conversations[conversation]?.journal ?: return false
+        return journal.update(id) { item, version -> change(item).withVersion(version) }
+    }
+
+    /**
+     * Keeps [conversation] busy from now until the returned lease is released, also between its turns: its transcript
+     * never says idle meanwhile, so that a client keeps showing one run, however long only other conversations work.
+     * Cancelling or closing the conversation completes [ConversationLease.stopped]. Prompts of others during the lease
+     * wait in the queue of the conversation.
+     */
+    fun keepBusy(conversation: String): ConversationLease = conversation(conversation).keepBusy()
 
     /** Opens the agent's [session] as [conversation]: the agent replays its history into the transcript. */
     fun open(conversation: String, agent: AgentCommand, directory: String, session: String) {

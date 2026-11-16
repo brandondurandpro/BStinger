@@ -205,6 +205,7 @@ private fun ItemView(agent: AgentState, conversation: Conversation, item: AgentI
         is AgentItem.Plan -> PlanView(item)
         is AgentItem.Permission -> PermissionCard(item) { option -> agent.answer(conversation, item, option) }
         is AgentItem.Notice -> NoticeWithLogin(agent, conversation, item)
+        is AgentItem.Delegation -> DelegationRow(item)
     }
 }
 

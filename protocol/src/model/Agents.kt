@@ -246,6 +246,37 @@ sealed interface AgentItem {
         /** Whether it went wrong (shown in red). */
         val error: Boolean,
     ) : AgentItem
+
+    /** A task a conversation gave to another one (a member of a team); [conversation] is the key of its transcript. */
+    data class Delegation(
+        override val id: String,
+        override val version: Long,
+        /** Name of whom the task was given to. */
+        val member: String,
+        /** Key of the transcript of the member, to follow with `agent/transcript`. */
+        val conversation: String,
+        /** What was asked. */
+        val task: String,
+        /** How far the member got. */
+        val status: DelegationStatus,
+        /** The report of the member, once it is done; why it failed or was cancelled otherwise, when known. */
+        val result: String = "",
+    ) : AgentItem
+}
+
+/** Progress of a [AgentItem.Delegation]. */
+enum class DelegationStatus {
+    /** The member works on it. */
+    Running,
+
+    /** The member reported. */
+    Done,
+
+    /** The member failed: [AgentItem.Delegation.result] says why when it is known. */
+    Failed,
+
+    /** Stopped before the member reported. */
+    Cancelled,
 }
 
 private const val NO_SERVER = "No server runs the agents"
