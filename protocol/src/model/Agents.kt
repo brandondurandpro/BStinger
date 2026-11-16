@@ -518,6 +518,24 @@ interface Agents : AgentChoices {
     )
 
     /**
+     * Sends [text] to the manager of [team] in [conversation], working in [directory]: the team runs, the manager
+     * handing tasks to its members, whose own conversations are `<conversation>#<member id>`. The first prompt of a
+     * conversation locks its [team] and [directory]. The prompt shows as item [itemId] of [conversation]. A
+     * conversation the server does not know continues the manager's agent [session], when it can reopen it.
+     * [attachments] go with the text. A request sent twice is run once; a prompt sent during a run waits for it, and
+     * is refused with [AGENT_BUSY_MESSAGE] when too many wait (the IDE sends it again later, as for [prompt]).
+     */
+    suspend fun teamPrompt(
+        conversation: String,
+        team: Team,
+        directory: String,
+        itemId: String,
+        text: String,
+        session: String? = null,
+        attachments: List<AgentAttachment> = emptyList(),
+    )
+
+    /**
      * Opens the agent's [session] (from [sessions]) as [conversation], working in [directory]: its transcript replays
      * the history the agent kept. A request sent twice is run once.
      */
@@ -549,6 +567,16 @@ interface Agents : AgentChoices {
         override suspend fun prompt(
             conversation: String,
             agent: AgentCommand,
+            directory: String,
+            itemId: String,
+            text: String,
+            session: String?,
+            attachments: List<AgentAttachment>,
+        ): Unit = throw java.io.IOException(NO_SERVER)
+
+        override suspend fun teamPrompt(
+            conversation: String,
+            team: Team,
             directory: String,
             itemId: String,
             text: String,

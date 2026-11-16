@@ -1,11 +1,14 @@
 # The coordination of agent teams, run by the server: a team keeps working when the IDE closes or the link drops.
-# For now only the discovery of the skills (folders with a `SKILL.md`) an agent of a team can be given; the run loop
-# of a team comes here too. Runs in the server, never in the UI; tested on its own (`./kotlin test -m harness`).
+# The run loop of a team (the manager delegates, the members work in parallel, the reports go back to the manager),
+# its prompts and the delegation protocol, and the discovery of the skills (folders with a `SKILL.md`) an agent of a
+# team can be given. Built on the public surface of `acp` only. Runs in the server, never in the UI; tested on its own
+# (`./kotlin test -m harness`).
 product:
   type: jvm/lib
 
 dependencies:
   - //protocol: exported
+  - //acp
   - $libs.kotlinx.coroutines.core
   - $libs.kotlinx.serialization.json
 

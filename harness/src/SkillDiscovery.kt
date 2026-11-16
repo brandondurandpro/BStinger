@@ -33,6 +33,16 @@ class SkillDiscovery(private val dataDirectory: File) {
         return unique.values.sortedWith(byName.thenBy { it.id })
     }
 
+    /**
+     * The skill whose folder is [id] (an [AgentSkill.id]), read again; null when the folder or its `SKILL.md` is gone.
+     * Its `project` flag is [project]: the id alone does not say where the skill comes from.
+     */
+    fun describe(id: String, project: Boolean = false): AgentSkill? {
+        val folder = File(id)
+        val skillFile = File(folder, SKILL_FILE)
+        return if (skillFile.isFile) skillOf(folder, skillFile, project) else null
+    }
+
     private fun skillsUnder(base: File, project: Boolean): List<AgentSkill> {
         val found = ArrayList<AgentSkill>()
         if (base.isDirectory) collect(base, 1, project, found)

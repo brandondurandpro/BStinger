@@ -19,6 +19,8 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 private const val TIMEOUT_MS = 30_000L
+private const val PROMPTS_SENT = 40
+private const val KEPT_AT_LEAST = 30
 
 /**
  * What an outside module (the coordination of a team) needs of a conversation: a prompt shown differently or not shown,
@@ -151,6 +153,20 @@ class ConversationControlTest {
         send("echo hi")
         assertFailsWith<IllegalArgumentException> { outcome("never-sent") }
         assertEquals(TurnEnding.Cancelled, outcome("u1", "nobody").ending)
+    }
+
+    @Test
+    fun `a long conversation keeps the outcome of its recent prompts only`() {
+        val ids = (1..PROMPTS_SENT).map { number -> send("echo answer$number", shown = null).also(::outcome) }
+        val lastId = ids.last()
+        assertEquals("answer$PROMPTS_SENT", outcome(lastId).text)
+        val oldestKept = ids[PROMPTS_SENT - KEPT_AT_LEAST]
+        assertEquals("answer${PROMPTS_SENT - KEPT_AT_LEAST + 1}", outcome(oldestKept).text)
+        assertFailsWith<IllegalArgumentException> { outcome(ids.first()) }
+        // Sent again, a forgotten prompt is still a prompt already run: it does not run twice.
+        service.prompt("c1", agent, directory, ids.first(), "echo again", shown = null)
+        val items = service.idle("c1").items
+        assertEquals(PROMPTS_SENT, items.count { it is AgentItem.AgentText })
     }
 
     @Test

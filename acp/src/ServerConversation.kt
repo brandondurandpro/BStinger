@@ -23,6 +23,10 @@ import java.util.concurrent.ConcurrentHashMap
 // the prompt again once the turn is over.
 private const val QUEUED_PROMPTS = 4
 
+// How many finished prompts keep their outcome (with the full answer): enough for a holder that awaits the turns it
+// started; the older ones are forgotten, so that a long conversation does not keep every answer twice.
+private const val KEPT_OUTCOMES = 32
+
 private const val CLOSED = "The conversation was closed."
 
 private const val UNANSWERED = "The agent stopped without answering."
@@ -60,6 +64,10 @@ internal class ServerConversation(
     // The leases held (lock held to change them), and the outcome of each prompt accepted, by item id.
     private val leases = ArrayList<ConversationLease>()
     private val outcomes = ConcurrentHashMap<String, CompletableDeferred<TurnOutcome>>()
+
+    // The prompts whose outcome is known, oldest first (lock held to change it): beyond [KEPT_OUTCOMES] the oldest
+    // outcome is dropped. A prompt still running or waiting always keeps its own.
+    private val finished = ArrayDeque<String>()
 
     // The prompts that arrived while the agent answered: run in turn, each once the one before it ended. Bounded
     // by [QUEUED_PROMPTS]: beyond it the caller is refused, and the IDE sends its prompt again once the turn is over.
@@ -108,7 +116,7 @@ internal class ServerConversation(
     /** The outcome of the turn the prompt [itemId] started, once it ended; fails for a prompt this one never got. */
     suspend fun awaitTurn(itemId: String): TurnOutcome {
         val outcome = outcomes[itemId]
-        requireNotNull(outcome) { "No prompt $itemId in this conversation" }
+        requireNotNull(outcome) { "No prompt $itemId in this conversation, or its outcome is no longer kept" }
         return outcome.await()
     }
 
@@ -254,6 +262,18 @@ internal class ServerConversation(
         }
         // After the conversation is free: a holder that sends its next prompt as soon as it knows goes first.
         outcomes[itemId]?.complete(outcome)
+        forgetOldOutcomes(itemId)
+    }
+
+    // [itemId] ended: it is the newest outcome kept, and the oldest ones beyond the limit are dropped.
+    private fun forgetOldOutcomes(itemId: String) {
+        synchronized(lock) {
+            finished.addLast(itemId)
+            while (finished.size > KEPT_OUTCOMES) {
+                val oldest = finished.removeFirst()
+                outcomes.remove(oldest)
+            }
+        }
     }
 
     // Lock held. Makes [prompt] the turn running: [agent] starts (or continues in [session]) and answers it.

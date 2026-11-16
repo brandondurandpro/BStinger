@@ -8,7 +8,6 @@ import kotlinx.serialization.json.jsonObject
 import org.example.kotlineditor.acp.authMethods
 import org.example.kotlineditor.acp.authenticate
 import org.example.kotlineditor.acp.fork
-import org.example.kotlineditor.harness.SkillDiscovery
 import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.model.AgentSessions
 import org.example.kotlineditor.rpc.Method
@@ -22,6 +21,7 @@ import org.example.kotlineditor.rpc.read
 import org.example.kotlineditor.rpc.skillsToJson
 import org.example.kotlineditor.rpc.string
 import org.example.kotlineditor.rpc.stringOrNull
+import org.example.kotlineditor.rpc.team
 import org.example.kotlineditor.rpc.toJson
 import org.example.kotlineditor.server.Handler
 import org.example.kotlineditor.server.LocalServices
@@ -42,7 +42,7 @@ class AgentServerContribution : ServerContribution {
 /** Agent mode: conversations with the agents, run by [AgentsComponent]. */
 internal fun agentHandlers(services: LocalServices): Map<MethodSpec, Handler> {
     val component = services.agentsComponent()
-    return conversationHandlers(component) + optionHandlers(component) + teamHandlers(services)
+    return conversationHandlers(component) + optionHandlers(component) + teamHandlers(component)
 }
 
 // The conversations: prompts, answers, transcripts, history.
@@ -81,7 +81,8 @@ private fun conversationHandlers(component: AgentsComponent): Map<MethodSpec, Ha
             JsonPrimitive(deleted)
         },
         Method.AgentCancel to {
-            component.agents.cancel(params.string(CONVERSATION))
+            // A team conversation stops its members too.
+            component.harness.cancel(params.string(CONVERSATION))
             JsonNull
         },
         Method.AgentAnswer to {
@@ -94,7 +95,8 @@ private fun conversationHandlers(component: AgentsComponent): Map<MethodSpec, Ha
                 .toJson()
         },
         Method.AgentClose to {
-            component.agents.close(params.string(CONVERSATION))
+            // A team conversation closes its members' conversations too.
+            component.harness.close(params.string(CONVERSATION))
             JsonNull
         },
     )
@@ -111,7 +113,8 @@ private fun optionHandlers(component: AgentsComponent): Map<MethodSpec, Handler>
         Method.AgentSetOption to {
             val agent = params.read(AGENT) { it.agentCommand() }
             val conversation = params.string(CONVERSATION)
-            component.agents.setOption(conversation, agent, params.string("option"), params.string("value"))
+            // The permission mode of a team conversation reaches its members.
+            component.harness.setOption(conversation, agent, params.string("option"), params.string("value"))
             JsonNull
         },
         Method.AgentAuthMethods to {
@@ -136,17 +139,27 @@ private fun optionHandlers(component: AgentsComponent): Map<MethodSpec, Handler>
         },
     )
 
-// The teams of agents: the skills their agents can be given.
-private fun teamHandlers(services: LocalServices): Map<MethodSpec, Handler> {
-    val discovery = SkillDiscovery(services.dataDirectory)
-    return mapOf(
+// The teams of agents: the skills their agents can be given, and the prompts of their users.
+private fun teamHandlers(component: AgentsComponent): Map<MethodSpec, Handler> =
+    mapOf(
         Method.TeamSkills to {
             val root = File(params.string("root"))
-            val skills = withContext(Dispatchers.IO) { discovery.discover(root) }
+            val skills = withContext(Dispatchers.IO) { component.skills.discover(root) }
             skills.skillsToJson()
         },
+        Method.TeamPrompt to {
+            component.harness.prompt(
+                params.string(CONVERSATION),
+                params.read("team") { it.team() },
+                params.string(DIRECTORY),
+                params.string(ITEM),
+                params.string("text"),
+                params.stringOrNull(SESSION),
+                params["attachments"]?.agentAttachments().orEmpty(),
+            )
+            JsonNull
+        },
     )
-}
 
 // The sessions of the project at [root] and of its worktrees of agent mode, each one with the branch it works on.
 private suspend fun sessions(component: AgentsComponent, agent: AgentCommand, root: String): AgentSessions {

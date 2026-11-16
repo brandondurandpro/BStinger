@@ -9,6 +9,7 @@ import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.model.AgentSessions
 import org.example.kotlineditor.model.AgentTranscript
 import org.example.kotlineditor.model.Agents
+import org.example.kotlineditor.model.Team
 
 private const val CONVERSATION = "conversation"
 private const val AGENT = "agent"
@@ -31,6 +32,26 @@ class RemoteAgents(private val client: RpcClient) :
         client.call(Method.AgentPrompt) {
             put(CONVERSATION, conversation)
             put(AGENT, agent.toJson())
+            put(DIRECTORY, directory)
+            put("item", itemId)
+            put("text", text)
+            put(SESSION, session.orNull())
+            if (attachments.isNotEmpty()) put("attachments", attachments.attachmentsToJson())
+        }
+    }
+
+    override suspend fun teamPrompt(
+        conversation: String,
+        team: Team,
+        directory: String,
+        itemId: String,
+        text: String,
+        session: String?,
+        attachments: List<AgentAttachment>,
+    ) {
+        client.call(Method.TeamPrompt) {
+            put(CONVERSATION, conversation)
+            put("team", team.toJson())
             put(DIRECTORY, directory)
             put("item", itemId)
             put("text", text)

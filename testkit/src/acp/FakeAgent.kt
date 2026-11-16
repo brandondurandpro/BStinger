@@ -322,10 +322,7 @@ class FakeAgent(
         val count = kept?.turns?.size ?: 1
         if (kept != null && kept.title == null) titled(kept, directive)
         try {
-            // A session whose first prompt starts with `discuss` leads a discussion: a question, then its plan.
-            val first = kept?.turns?.firstOrNull()?.prompt?.let(FakeDirective::of)
-            val leads = first?.startsWith("discuss") == true
-            val stopReason = if (leads) discussing(session, count) else answer(session, directive, count)
+            val stopReason = answer(session, directive, count)
             usage(session, count)
             return buildJsonObject { put("stopReason", stopReason) }
         } finally {
@@ -394,11 +391,6 @@ class FakeAgent(
         if (started != null || manager.hasRound()) return manager.delegate()
         managers.remove(session)
         return manager.finalAnswer(directive)
-    }
-
-    private fun discussing(session: String, count: Int): String {
-        val move = if (count == 1) "ASK: which storage do we use?" else "FINAL: use sqlite"
-        return chunks(session, listOf("I read the code.\n$move"))
     }
 
     private fun chunks(session: String, texts: List<String>): String {

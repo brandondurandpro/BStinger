@@ -735,6 +735,9 @@ enum class Method(
 
     /** The skills (folders with a `SKILL.md`) an agent of a team can be given, in a project and the data directory. */
     TeamSkills("team/skills", mutating = false),
+
+    /** Sends a prompt of the user to the manager of a team: the run of the team starts, or the prompt waits for it. */
+    TeamPrompt("team/prompt", mutating = true),
 }
 
 /** A JSON-RPC error object `{"code": ..., "message": ...}`. */
