@@ -247,6 +247,7 @@ private fun Prompt(agent: AgentState, conversation: Conversation) {
         SearchesFiles(files, completion.completing as? Completing.File, index, context)
         CompletionList(completion, width.padding(bottom = 6.dp))
         WorkspaceStatus(agent, conversation, width.padding(horizontal = 4.dp, vertical = 6.dp))
+        if (conversation.teamMissing) TeamMissingNotice(width.padding(horizontal = 4.dp, vertical = 2.dp))
         // Above the input, not in its row of buttons: a narrow window must never push Stop and Send out of sight.
         Row(width.padding(horizontal = 4.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
             val usage = conversation.usage
@@ -308,11 +309,15 @@ private fun sendsOnEnter(event: KeyEvent, send: () -> Unit): Boolean {
 @Composable
 private fun PromptActions(agent: AgentState, conversation: Conversation) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        // The agent first (an id, not a whole command line), then the settings of its session.
-        AgentPicker(agent, conversation)
-        ModelPicker(agent, conversation)
-        EffortPicker(agent, conversation)
+        // The agent first (an id, not a whole command line), then the settings of its session. A team fixes the
+        // agent, the model and the effort of its members: with one chosen, only the permissions stay.
+        if (conversation.teamId == null) {
+            AgentPicker(agent, conversation)
+            ModelPicker(agent, conversation)
+            EffortPicker(agent, conversation)
+        }
         PermissionsPicker(agent, conversation)
+        TeamPicker(agent, conversation)
         Spacer(Modifier.width(8.dp))
         // The picker already says which agent answers: no label for it, only the room that keeps Stop and Send right.
         Spacer(Modifier.weight(1f))

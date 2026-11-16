@@ -48,9 +48,13 @@ class AgentTeams internal constructor(saved: Map<String, String>, private val ro
         if (index >= 0) teams[index] = saved else teams.add(saved)
     }
 
+    /** Called with the id of a team once it is forgotten: the conversations that chose it settle what that means. */
+    internal var onRemoved: (String) -> Unit = {}
+
     /** Forgets the team [id]. */
     fun remove(id: String) {
-        teams.removeAll { it.team.id == id }
+        val removed = teams.removeAll { it.team.id == id }
+        if (removed) onRemoved(id)
     }
 
     /** A copy of the team [id] with new ids, named `"<name> copy"`, listed after it; null when there is no such team. */

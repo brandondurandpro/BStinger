@@ -40,6 +40,7 @@ internal fun AgentState.restoreSaved(root: String) {
         kept?.workedMillis = fields.getOrNull(1)?.toLongOrNull() ?: 0L
         kept?.savedCost = fields.getOrNull(2)?.toDoubleOrNull()
     }
+    restoreTeams(preferences[PreferenceKeys.AGENT_CONVERSATION_TEAMS_PREFIX + root])
     val active = preferences[PreferenceKeys.AGENT_ACTIVE_PREFIX + root].orEmpty()
     for (session in linesOf(preferences[PreferenceKeys.AGENT_OPEN_PREFIX + root])) {
         val reopened = conversations.firstOrNull { it.session == session }
@@ -75,6 +76,7 @@ fun AgentState.toPreferences(): Map<String, String> {
             .mapNotNull { c -> c.session?.let { "$it\t${c.workedMillis}\t${c.costKnown ?: ""}" } }
             .joinToString("\n")
     return mapOf(
+        PreferenceKeys.AGENT_CONVERSATION_TEAMS_PREFIX + root to conversationTeamsText(conversations),
         PreferenceKeys.AGENT_STATS_PREFIX + root to stats,
         width,
         last,
@@ -87,6 +89,43 @@ fun AgentState.toPreferences(): Map<String, String> {
         PreferenceKeys.AGENT_ACTIVE_PREFIX + root to active,
         PreferenceKeys.AGENT_TITLES_PREFIX + root to titles,
     ) + layout + teamsSaved
+}
+
+/**
+ * The team of each conversation as saved: one `session<TAB>teamId` line per conversation that has both a session and a
+ * team. A team is fixed at the first prompt, so only a started conversation, which has a session, is worth saving.
+ */
+internal fun conversationTeamsText(conversations: List<Conversation>): String {
+    val lines =
+        conversations.mapNotNull { conversation ->
+            val session = conversation.session
+            val teamId = conversation.teamId
+            if (session == null || teamId == null) null else "$session\t$teamId"
+        }
+    return lines.joinToString("\n")
+}
+
+/**
+ * The team id of each session in [text] (the format of [conversationTeamsText]). A line without a tab, a session or a
+ * team id is ignored; the last line of a session wins.
+ */
+internal fun teamsOfSessions(text: String?): Map<String, String> {
+    val teams = LinkedHashMap<String, String>()
+    for (line in linesOf(text)) {
+        val session = line.substringBefore('\t', "").trim()
+        val teamId = line.substringAfter('\t', "").trim()
+        if (session.isNotEmpty() && teamId.isNotEmpty()) teams[session] = teamId
+    }
+    return teams
+}
+
+// The conversation of each session of [text] chooses its team again; a session no conversation has is ignored, and a
+// team that no longer exists stays chosen, so that the conversation says it is gone.
+private fun AgentState.restoreTeams(text: String?) {
+    for ((session, teamId) in teamsOfSessions(text)) {
+        val conversation = conversations.firstOrNull { it.session == session }
+        if (conversation != null) conversation.teamId = teamId
+    }
 }
 
 private fun oneLine(title: String): String = title.replace('\n', ' ').replace('\t', ' ')

@@ -62,7 +62,7 @@ internal fun TeamsButton(agent: AgentState) {
 
 // The modal: the teams on the left, the form of the one being made or edited on the right.
 @Composable
-private fun TeamsDialog(agent: AgentState, close: () -> Unit) {
+internal fun TeamsDialog(agent: AgentState, close: () -> Unit) {
     // The form of the team being edited or made; null while none is.
     var draft by remember { mutableStateOf<TeamDraft?>(null) }
     val teams = agent.teams

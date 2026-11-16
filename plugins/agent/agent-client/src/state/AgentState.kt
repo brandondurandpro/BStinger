@@ -278,6 +278,26 @@ class Conversation(val id: Int, title: String, val branch: String) {
     /** Branch checked out where the agent works: it follows a checkout made from the Git panel or the terminal. */
     val currentBranch: String? get() = workspace?.checkedOutBranch ?: branch.takeIf { mode == WorkMode.Worktree }
 
+    /** Id of the team the conversation sends its prompts through; null for none. Fixed once the conversation started. */
+    var teamId: String? by mutableStateOf(null)
+        internal set
+
+    // How the team of an id is found: the teams of the project, wired where the conversation is made.
+    internal var teamLookup: (String) -> SavedTeam? = { null }
+
+    /** The team the conversation chose, as it is now (edited, renamed); null for none, or when it was deleted. */
+    val team: SavedTeam?
+        get() {
+            val id = teamId ?: return null
+            return teamLookup(id)
+        }
+
+    /**
+     * True when the conversation chose a team that no longer exists. Only a started conversation can be in that state
+     * (one that did not start falls back to no team): sending must not go on silently with another agent.
+     */
+    val teamMissing: Boolean get() = teamId != null && team == null
+
     /** Whether the agent already works somewhere: its place can no longer change. */
     val started: Boolean get() = items.isNotEmpty() || session != null
 
@@ -459,7 +479,32 @@ class AgentState(
     }
 
     /** The teams of agents the user made, for every project or this one. */
-    val teams = AgentTeams(saved, project.root.path)
+    val teams = AgentTeams(saved, project.root.path).also { it.onRemoved = ::teamRemoved }
+
+    /**
+     * The team [conversation] sends its prompts through, and null when it sends to its own agent: no team chosen, or
+     * the team was deleted (then [Conversation.teamMissing] says so, and the sending must refuse rather than fall back).
+     * The one place where sending learns whether a team answers.
+     */
+    fun sendingTeam(conversation: Conversation): SavedTeam? = conversation.team
+
+    /**
+     * Chooses the team of [conversation], or none when [id] is null. Only before the first prompt: the team is fixed
+     * from then on. An unknown id is ignored.
+     */
+    fun chooseTeam(conversation: Conversation, id: String?) {
+        if (conversation.started || conversation.busy) return
+        if (id != null && teams.find(id) == null) return
+        conversation.teamId = id
+    }
+
+    // A team was deleted: a conversation not started that chose it goes back to no team; a started one keeps the id,
+    // and shows (teamMissing) that its team is gone.
+    private fun teamRemoved(id: String) {
+        for (conversation in conversations) {
+            if (conversation.teamId == id && !conversation.started) conversation.teamId = null
+        }
+    }
 
     /** The agents of the registry the user worked with: the history lists the sessions of each, not only the settings'. */
     internal val usedAgents =
@@ -603,6 +648,7 @@ class AgentState(
     fun newConversation(): Conversation {
         val id = nextId++
         val conversation = Conversation(id, "New conversation", "agent/conversation-$id")
+        conversation.teamLookup = teams::find
         // The state delivers the prompts queued while the agent answered: only it has the command, the scope
         // and the transcript machinery held together (the transcript only says the turn is over).
         conversation.onTurnIdle = { deliverQueued(conversation) }

@@ -52,6 +52,9 @@ object PreferenceKeys {
     /** Per project (the key ends with its path): its agent teams, in the format of [AGENT_TEAMS]. */
     const val AGENT_TEAMS_PREFIX = "agent.teams."
 
+    /** Per project (the key ends with its path): the team of each conversation, one `session<TAB>teamId` per line. */
+    const val AGENT_CONVERSATION_TEAMS_PREFIX = "agent.conversationTeams."
+
     /** Per project (the key ends with its path): the sessions open in tabs of agent mode, one per line, in order. */
     const val AGENT_OPEN_PREFIX = "agent.open."
 

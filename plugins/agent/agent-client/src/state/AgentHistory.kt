@@ -62,6 +62,7 @@ private fun AgentState.addHistory(sessions: List<AgentSession>, root: String, ag
         // The state delivers the prompts queued while the agent answered (the transcript only says the turn is over).
         conversation.onTurnIdle = { deliverQueued(conversation) }
         conversation.agent = agent
+        conversation.teamLookup = teams::find
         conversations.add(conversation)
     }
 }
