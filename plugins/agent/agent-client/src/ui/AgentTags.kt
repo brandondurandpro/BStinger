@@ -51,6 +51,7 @@ object AgentTags {
     const val AGENT_TEAMS_EMPTY = "agent.teams.empty"
     const val AGENT_TEAMS_CLOSE = "agent.teams.close"
     const val AGENT_TEAM_NEW = "agent.team.new"
+    const val AGENT_TEAM_STARTER = "agent.team.starter"
     const val AGENT_TEAM_FORM = "agent.team.form"
     const val AGENT_TEAM_NAME = "agent.team.name"
     const val AGENT_TEAM_GLOBAL = "agent.team.global"
