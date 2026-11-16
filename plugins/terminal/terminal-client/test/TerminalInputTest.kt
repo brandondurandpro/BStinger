@@ -22,6 +22,7 @@ import org.example.kotlineditor.model.TerminalSnapshot
 import org.example.kotlineditor.state.TerminalState
 import org.example.kotlineditor.state.TerminalTab
 import org.example.kotlineditor.ui.CellPos
+import org.example.kotlineditor.ui.DeadKeys
 import org.example.kotlineditor.ui.TerminalSelection
 import org.example.kotlineditor.ui.TextClipboard
 import org.example.kotlineditor.ui.handleTerminalKey
@@ -40,6 +41,7 @@ private class FakeProcess(screen: TerminalSnapshot?) : TerminalProcess {
     val keys = mutableListOf<TerminalKeyEvent>()
     val mouseEvents = mutableListOf<TerminalMouseEvent>()
     val scrolls = mutableListOf<Int>()
+    val written = mutableListOf<String>()
     val pastes = mutableListOf<String>()
     var destroyed = false
 
@@ -49,7 +51,9 @@ private class FakeProcess(screen: TerminalSnapshot?) : TerminalProcess {
             awaitCancellation()
         }
 
-    override fun write(bytes: ByteArray) = Unit
+    override fun write(bytes: ByteArray) {
+        written += bytes.decodeToString()
+    }
 
     override fun sendKey(event: TerminalKeyEvent) {
         keys += event
@@ -87,6 +91,9 @@ class TerminalInputTest {
     // The screen the next started shell shows.
     private var screen: TerminalSnapshot? = null
 
+    // The dead keys of the keyboard, held across the presses of one test.
+    private var deadKeys = DeadKeys()
+
     @BeforeTest
     fun setUp() {
         systemClipboard = TextClipboard.useSystem
@@ -94,6 +101,7 @@ class TerminalInputTest {
         TextClipboard.set("")
         // Unconfined: a tab collects its first screen before newTab returns.
         scope = CoroutineScope(Dispatchers.Unconfined)
+        deadKeys = DeadKeys()
     }
 
     @AfterTest
@@ -137,8 +145,12 @@ class TerminalInputTest {
         selection: TerminalSelection = TerminalSelection(),
     ): Boolean {
         val tab: TerminalTab = checkNotNull(state.active) { "no active tab" }
-        return handleTerminalKey(event, state, tab, selection)
+        return handleTerminalKey(event, state, tab, selection, deadKeys)
     }
+
+    // The event the platform reports for a dead key: its spacing character (a dead ˆ key types U+02C6, never
+    // the ASCII `^` of a real key).
+    private fun deadKeyDown(spacing: Char) = keyDown(Key.Unknown, codePoint = spacing.code)
 
     // The keys the shell of the active tab received after pressing [event].
     private fun sentFor(event: KeyEvent): List<TerminalKeyEvent> {
@@ -392,6 +404,150 @@ class TerminalInputTest {
     fun `Alt on a punctuation key sends its US text`() {
         val sent = sentFor(keyDown(Key.Period, codePoint = '…'.code, alt = true))
         assertEquals(listOf(TerminalKeyEvent(TerminalKey.Period, text = ".", alt = true)), sent)
+    }
+
+    // ----- Dead keys --------------------------------------------------------------------------------------------
+
+    // The platform reports a dead key as an event that types its spacing character (ˆ, U+02C6): the terminal
+    // holds it and composes it with the next key, the way the input method of a text field does.
+    @Test
+    fun `a dead key composes with the next letter`() {
+        val state = terminal()
+        assertTrue(press(deadKeyDown('ˆ'), state), "the terminal ignored the dead key")
+        val shell = activeProcess(state)
+        assertEquals(emptyList(), shell.keys)
+        assertEquals(emptyList(), shell.written)
+        assertTrue(press(keyDown(Key.E, codePoint = 'e'.code), state))
+        assertEquals(listOf("ê"), shell.written)
+        assertEquals(emptyList(), shell.keys)
+    }
+
+    @Test
+    fun `the dead keys of the layout compose their accents`() {
+        val state = terminal()
+        val shell = activeProcess(state)
+        val cases =
+            listOf(
+                Triple('ˆ', 'e', "ê"),
+                Triple('¨', 'e', "ë"),
+                Triple('ˋ', 'a', "à"),
+                Triple('ˊ', 'e', "é"),
+                Triple('˜', 'n', "ñ"),
+                Triple('¸', 'c', "ç"),
+            )
+        for ((dead, base, expected) in cases) {
+            assertTrue(press(deadKeyDown(dead), state), "dead key $dead")
+            assertTrue(press(keyDown(Key.E, codePoint = base.code), state), "base $base")
+            assertEquals(expected, shell.written.last(), "$dead$base")
+        }
+        assertEquals(listOf("ê", "ë", "à", "é", "ñ", "ç"), shell.written)
+    }
+
+    @Test
+    fun `a dead key composes with Shift for the capital`() {
+        val state = terminal()
+        assertTrue(press(deadKeyDown('ˆ'), state))
+        assertTrue(press(keyDown(Key.E, codePoint = 'E'.code, shift = true), state))
+        assertEquals(listOf("Ê"), activeProcess(state).written)
+    }
+
+    @Test
+    fun `space delivers the dead character alone`() {
+        val state = terminal()
+        assertTrue(press(deadKeyDown('ˆ'), state))
+        assertTrue(press(keyDown(Key.Spacebar, codePoint = ' '.code), state))
+        val shell = activeProcess(state)
+        assertEquals(listOf("^"), shell.written)
+        assertEquals(emptyList(), shell.keys)
+    }
+
+    @Test
+    fun `a dead key composes the letters Unicode knows, and falls back for the others`() {
+        val state = terminal()
+        assertTrue(press(deadKeyDown('ˆ'), state))
+        assertTrue(press(keyDown(Key.W, codePoint = 'w'.code), state))
+        assertEquals(listOf("ŵ"), activeProcess(state).written)
+        assertTrue(press(deadKeyDown('ˆ'), state))
+        assertTrue(press(keyDown(Key.Q, codePoint = 'q'.code), state))
+        assertEquals(listOf("ŵ", "^q"), activeProcess(state).written)
+    }
+
+    @Test
+    fun `Enter and Tab commit the dead character and are not sent`() {
+        val state = terminal()
+        assertTrue(press(deadKeyDown('ˆ'), state))
+        assertTrue(press(keyDown(Key.Enter, codePoint = '\r'.code), state))
+        assertTrue(press(deadKeyDown('ˆ'), state))
+        assertTrue(press(keyDown(Key.Tab, codePoint = '\t'.code), state))
+        val shell = activeProcess(state)
+        assertEquals(listOf("^", "^"), shell.written)
+        assertEquals(emptyList(), shell.keys)
+    }
+
+    @Test
+    fun `a command combo commits the dead character first and still runs`() {
+        val state = terminal()
+        assertTrue(press(deadKeyDown('ˆ'), state))
+        assertTrue(press(keyDown(Key.C, codePoint = 3, ctrl = true), state))
+        val shell = activeProcess(state)
+        assertEquals(listOf("^"), shell.written)
+        assertEquals(listOf(TerminalKeyEvent(TerminalKey.C, control = true)), shell.keys)
+    }
+
+    @Test
+    fun `Escape cancels the dead key and reaches the shell`() {
+        val state = terminal()
+        assertTrue(press(deadKeyDown('ˆ'), state))
+        assertTrue(press(keyDown(Key.Escape, codePoint = 0x1b), state))
+        val shell = activeProcess(state)
+        assertEquals(emptyList(), shell.written)
+        assertEquals(listOf(TerminalKeyEvent(TerminalKey.Escape)), shell.keys)
+    }
+
+    @Test
+    fun `a key that types nothing commits the dead character first`() {
+        val state = terminal()
+        assertTrue(press(deadKeyDown('ˆ'), state))
+        assertTrue(press(keyDown(Key.DirectionUp), state))
+        val shell = activeProcess(state)
+        assertEquals(listOf("^"), shell.written)
+        assertEquals(listOf(TerminalKeyEvent(TerminalKey.ArrowUp)), shell.keys)
+    }
+
+    @Test
+    fun `a second dead key commits the first and holds the second`() {
+        val state = terminal()
+        assertTrue(press(deadKeyDown('ˆ'), state))
+        assertTrue(press(deadKeyDown('¨'), state))
+        assertEquals(listOf("^"), activeProcess(state).written)
+        assertTrue(press(keyDown(Key.E, codePoint = 'e'.code), state))
+        assertEquals(listOf("^", "ë"), activeProcess(state).written)
+    }
+
+    @Test
+    fun `a repeated dead key is held, not typed`() {
+        val state = terminal()
+        assertTrue(press(deadKeyDown('ˆ'), state))
+        assertTrue(press(deadKeyDown('ˆ'), state))
+        assertTrue(press(deadKeyDown('ˆ'), state))
+        assertEquals(emptyList(), activeProcess(state).written)
+        assertTrue(press(keyDown(Key.E, codePoint = 'e'.code), state))
+        assertEquals(listOf("ê"), activeProcess(state).written)
+    }
+
+    @Test
+    fun `a real circumflex key types at once, it is no dead key`() {
+        val state = terminal()
+        assertTrue(press(keyDown(Key.Six, codePoint = '^'.code, shift = true), state))
+        assertTrue(press(keyDown(Key.E, codePoint = 'e'.code), state))
+        val shell = activeProcess(state)
+        val expected =
+            listOf(
+                TerminalKeyEvent(TerminalKey.Digit6, text = "^", shift = true),
+                TerminalKeyEvent(TerminalKey.E, text = "e"),
+            )
+        assertEquals(expected, shell.keys)
+        assertEquals(emptyList(), shell.written)
     }
 
     @Test

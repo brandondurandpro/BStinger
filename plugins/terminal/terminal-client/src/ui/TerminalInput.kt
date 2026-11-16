@@ -46,9 +46,10 @@ internal fun handleTerminalKey(
     terminal: TerminalState,
     tab: TerminalTab,
     selection: TerminalSelection,
+    deadKeys: DeadKeys,
 ): Boolean {
     if (event.type != KeyEventType.KeyDown) return false
-    return terminalShortcut(event, terminal, tab, selection) || sendKeyFrom(event, tab)
+    return deadKeys.feed(event, tab) || terminalShortcut(event, terminal, tab, selection) || sendKeyFrom(event, tab)
 }
 
 private fun sendKeyFrom(event: KeyEvent, tab: TerminalTab): Boolean {
@@ -145,7 +146,7 @@ private fun typedText(event: KeyEvent, key: TerminalKey?, ctrl: Boolean): String
 
 // A typed character, or null for a control character and for the undefined one that a modifier, a lock or a
 // function key reports (AWT's CHAR_UNDEFINED, U+FFFF).
-private fun printable(codePoint: Int): String? {
+internal fun printable(codePoint: Int): String? {
     val control = codePoint < FIRST_PRINTABLE_CODE_POINT || codePoint == DELETE_CODE_POINT
     return if (!control && codePoint != UNDEFINED_CHAR) {
         String(Character.toChars(codePoint))

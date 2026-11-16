@@ -241,6 +241,7 @@ private fun TerminalView(terminal: TerminalState, modifier: Modifier) {
     val focus = remember { FocusRequester() }
     var size by remember { mutableStateOf(IntSize.Zero) }
     val selection = remember(tab) { TerminalSelection() }
+    val deadKeys = remember(tab) { DeadKeys() }
     val rows = metrics.rows(size)
 
     TerminalLifecycle(tab, terminal, focus, metrics, size)
@@ -251,7 +252,7 @@ private fun TerminalView(terminal: TerminalState, modifier: Modifier) {
             .focusRequester(focus)
             .onFocusChanged { terminal.focused = it.isFocused }
             .focusable()
-            .onPreviewKeyEvent { event -> handleTerminalKey(event, terminal, tab, selection) }
+            .onPreviewKeyEvent { event -> handleTerminalKey(event, terminal, tab, selection, deadKeys) }
             .terminalPointerInput(tab, focus, metrics, selection)
             .terminalTextInput(tab)
             .testTag(TerminalTags.TERMINAL_INPUT),
