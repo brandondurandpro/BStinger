@@ -46,6 +46,10 @@ class AgentStatsE2eTest {
             sendPrompt("echo hello")
             awaitShown(conversation, "hello")
             awaitTag(AgentTags.AGENT_QUOTA_CARD)
+            // The context and the cost come with the end of the turn, in rows above the link: a click while they
+            // arrive would be released beside the link they push down.
+            awaitIdle(conversation)
+            awaitTag(AgentTags.AGENT_CARD_COST)
             awaitTag(AgentTags.AGENT_STATS).performClick()
             awaitTag(AgentTags.AGENT_STATS_DIALOG)
         }
