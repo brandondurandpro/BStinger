@@ -70,12 +70,13 @@ class TodoScanTest {
 
     @Test
     fun `the walk stops once its budget of bytes is spent`() {
-        file("src/Big.kt", "// TODO: scanned despite the spent budget\n" + "x".repeat(400_000))
-        file("src/After.kt", "// TODO: never reached\n")
+        // Both files cost more than the budget: whichever one the walk reads first (the directory lists them in no
+        // given order, and not the same order on every platform) spends it, and the other one is not read at all.
+        file("src/First.kt", "// TODO: scanned despite the spent budget\n" + "x".repeat(400_000))
+        file("src/Second.kt", "// TODO: never reached\n" + "x".repeat(400_000))
 
-        assertEquals(
-            listOf(TodoMarker("src/Big.kt", 1, "// TODO: scanned despite the spent budget")),
-            todoScan(root.toString(), maxTotalBytes = 1_000),
-        )
+        val found = todoScan(root.toString(), maxTotalBytes = 1_000)
+        assertEquals(1, found.size, "the walk stops after the file that spent the budget: $found")
+        assertEquals("// TODO: scanned despite the spent budget", found.single().text)
     }
 }
