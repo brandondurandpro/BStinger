@@ -7,6 +7,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.example.kotlineditor.lsp.supervisor.OrphanReaper
 import org.example.kotlineditor.model.TerminalKeyEvent
+import org.example.kotlineditor.model.TerminalMouseEvent
 import org.example.kotlineditor.model.TerminalSnapshot
 import org.example.kotlineditor.rpc.Frame
 import org.example.kotlineditor.rpc.FrameKind
@@ -150,6 +151,13 @@ internal class ServerTerminal(
     fun scroll(delta: Int) {
         ensureRunning()
         engine.scroll(delta)
+        refresh()
+    }
+
+    /** Reports [event] to the running program, encoded the way it asked for. */
+    fun mouse(event: TerminalMouseEvent) {
+        ensureRunning()
+        engine.mouse(event)
         refresh()
     }
 

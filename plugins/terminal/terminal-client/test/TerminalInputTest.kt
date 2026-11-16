@@ -14,6 +14,9 @@ import kotlinx.coroutines.flow.flow
 import org.example.kotlineditor.model.TerminalCell
 import org.example.kotlineditor.model.TerminalKey
 import org.example.kotlineditor.model.TerminalKeyEvent
+import org.example.kotlineditor.model.TerminalMouseAction
+import org.example.kotlineditor.model.TerminalMouseButton
+import org.example.kotlineditor.model.TerminalMouseEvent
 import org.example.kotlineditor.model.TerminalProcess
 import org.example.kotlineditor.model.TerminalSnapshot
 import org.example.kotlineditor.state.TerminalState
@@ -35,6 +38,8 @@ private const val NO_CHARACTER = 0xFFFF
 /** A shell that records what the terminal sends it, and shows [screen] once started. */
 private class FakeProcess(screen: TerminalSnapshot?) : TerminalProcess {
     val keys = mutableListOf<TerminalKeyEvent>()
+    val mouseEvents = mutableListOf<TerminalMouseEvent>()
+    val scrolls = mutableListOf<Int>()
     val pastes = mutableListOf<String>()
     var destroyed = false
 
@@ -50,13 +55,19 @@ private class FakeProcess(screen: TerminalSnapshot?) : TerminalProcess {
         keys += event
     }
 
+    override fun mouse(event: TerminalMouseEvent) {
+        mouseEvents += event
+    }
+
     override fun paste(text: String) {
         pastes += text
     }
 
     override fun resize(columns: Int, rows: Int, cellWidthPx: Int, cellHeightPx: Int) = Unit
 
-    override fun scroll(delta: Int) = Unit
+    override fun scroll(delta: Int) {
+        scrolls += delta
+    }
 
     override fun clear() = Unit
 
@@ -143,6 +154,91 @@ class TerminalInputTest {
     }
 
     private fun cells(text: String): List<TerminalCell> = text.map { TerminalCell(it.toString()) }
+
+    // The active tab, after a wheel notch of [rows] rows with the pointer at [column]/[row].
+    private fun wheel(rows: Int, column: Int = 10, row: Int = 5): FakeProcess {
+        val state = terminal()
+        val tab: TerminalTab = checkNotNull(state.active) { "no active tab" }
+        tab.wheel(rows, column, row)
+        return activeProcess(state)
+    }
+
+    @Test
+    fun `the wheel of a program without tracking nor full screen scrolls the viewport`() {
+        val process = wheel(rows = 3)
+        assertEquals(listOf(3), process.scrolls)
+        assertEquals(emptyList(), process.keys)
+        assertEquals(emptyList(), process.mouseEvents)
+    }
+
+    @Test
+    fun `the wheel down scrolls the viewport the other way`() {
+        val process = wheel(rows = -3)
+        assertEquals(listOf(-3), process.scrolls)
+    }
+
+    @Test
+    fun `the wheel of a full-screen program sends cursor keys, not a scroll`() {
+        screen = TerminalSnapshot(columns = 8, rows = 2, alternateScreen = true, lines = listOf(cells("hi")))
+        val process = wheel(rows = 3)
+        val arrows = List(3) { TerminalKeyEvent(TerminalKey.ArrowUp) }
+        assertEquals(arrows, process.keys)
+        assertEquals(emptyList(), process.scrolls)
+        assertEquals(emptyList(), process.mouseEvents)
+    }
+
+    @Test
+    fun `the wheel down of a full-screen program sends cursor keys down`() {
+        screen = TerminalSnapshot(columns = 8, rows = 2, alternateScreen = true, lines = listOf(cells("hi")))
+        val process = wheel(rows = -3)
+        val arrows = List(3) { TerminalKeyEvent(TerminalKey.ArrowDown) }
+        assertEquals(arrows, process.keys)
+    }
+
+    @Test
+    fun `the wheel of a program with mouse tracking sends one wheel button`() {
+        screen = TerminalSnapshot(columns = 8, rows = 24, mouseTracking = true, lines = listOf(cells("hi")))
+        val process = wheel(rows = 3, column = 10, row = 5)
+        val wheelUp =
+            TerminalMouseEvent(
+                action = TerminalMouseAction.Press,
+                button = TerminalMouseButton.WheelUp,
+                column = 10,
+                row = 5,
+            )
+        assertEquals(listOf(wheelUp), process.mouseEvents)
+        assertEquals(emptyList(), process.keys)
+        assertEquals(emptyList(), process.scrolls)
+    }
+
+    @Test
+    fun `the wheel down of a program with mouse tracking sends the down button`() {
+        screen = TerminalSnapshot(columns = 8, rows = 24, mouseTracking = true, lines = listOf(cells("hi")))
+        val process = wheel(rows = -3, column = 0, row = 0)
+        val wheelDown =
+            TerminalMouseEvent(
+                action = TerminalMouseAction.Press,
+                button = TerminalMouseButton.WheelDown,
+                column = 0,
+                row = 0,
+            )
+        assertEquals(listOf(wheelDown), process.mouseEvents)
+    }
+
+    @Test
+    fun `a mouse event reaches the program of the tab`() {
+        val state = terminal()
+        val tab: TerminalTab = checkNotNull(state.active) { "no active tab" }
+        val press =
+            TerminalMouseEvent(
+                action = TerminalMouseAction.Press,
+                button = TerminalMouseButton.Left,
+                column = 1,
+                row = 2,
+            )
+        tab.mouse(press)
+        assertEquals(listOf(press), activeProcess(state).mouseEvents)
+    }
 
     @Test
     fun `key up is ignored`() {

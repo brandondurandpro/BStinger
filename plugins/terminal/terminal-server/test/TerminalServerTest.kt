@@ -64,6 +64,17 @@ class TerminalServerTest {
             terminal.destroy()
         }
 
+    @Test
+    fun `the terminal reports the alternate screen of full-screen programs`() =
+        runBlocking {
+            val terminal = RemoteTerminalLauncher(client).start(project.toString(), 80, 24, 8, 16)
+            terminal.write("printf '\\033[?1049h'\r".toByteArray())
+            withTimeout(10_000) { terminal.output.first { it.alternateScreen } }
+            terminal.write("printf '\\033[?1049l'\r".toByteArray())
+            withTimeout(10_000) { terminal.output.first { !it.alternateScreen } }
+            terminal.destroy()
+        }
+
     // What the commands printed, without the shell's prompt. Commands are written before the shell is ready, so the
     // terminal echoes them early and the output lands after a prompt (`$ hello`, `C:\project>hello`); lines echoing
     // a command are skipped. Commands end with `\r`, the Enter key: a Unix PTY turns it into `\n`, ConPTY needs it.

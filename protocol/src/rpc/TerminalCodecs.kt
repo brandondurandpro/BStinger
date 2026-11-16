@@ -12,8 +12,6 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.example.kotlineditor.model.TerminalCell
-import org.example.kotlineditor.model.TerminalKey
-import org.example.kotlineditor.model.TerminalKeyEvent
 import org.example.kotlineditor.model.TerminalSnapshot
 import java.nio.ByteBuffer
 import java.nio.charset.CharacterCodingException
@@ -47,6 +45,8 @@ fun TerminalSnapshot.toJson(): JsonObject =
         put("exitCode", exitCode)
         put("totalRows", totalRows)
         put("scrollOffset", scrollOffset)
+        put("alternateScreen", alternateScreen)
+        put("mouseTracking", mouseTracking)
         put("title", title)
         put("lines", JsonArray(lines.map(::lineJson)))
     }
@@ -111,6 +111,8 @@ fun JsonElement.snapshot(): TerminalSnapshot {
         title = s.string("title"),
         totalRows = s.long("totalRows"),
         scrollOffset = s.long("scrollOffset"),
+        alternateScreen = s.bool("alternateScreen"),
+        mouseTracking = s.bool("mouseTracking"),
         running = s.bool("running"),
         exitCode = s.field("exitCode").stringOrNull()?.toInt(),
         lines = s.field("lines").jsonArray.map { it.cells() },
@@ -136,39 +138,6 @@ private fun JsonElement.cells(): List<TerminalCell> {
         }
     }
     return cells
-}
-
-/** A key event, encoded by the terminal on the server; modifiers that are not held are left out. */
-fun TerminalKeyEvent.toJson(): JsonObject =
-    buildJsonObject {
-        put("key", key.name)
-        put(TEXT, text)
-        flag("shift", shift)
-        flag("control", control)
-        flag("alt", alt)
-        flag("meta", meta)
-        flag("repeat", repeat)
-    }
-
-private fun JsonObjectBuilder.flag(name: String, value: Boolean) {
-    if (value) put(name, true)
-}
-
-/** Reads a key event written by [toJson]. */
-fun JsonElement.keyEvent(): TerminalKeyEvent {
-    val e = jsonObject
-    val key = TerminalKey.entries.firstOrNull { it.name == e.string("key") } ?: error("Unknown terminal key")
-
-    fun flag(name: String) = e[name]?.let { e.bool(name) } ?: false
-    return TerminalKeyEvent(
-        key = key,
-        text = e.string(TEXT),
-        shift = flag("shift"),
-        control = flag("control"),
-        alt = flag("alt"),
-        meta = flag("meta"),
-        repeat = flag("repeat"),
-    )
 }
 
 /** Bytes written to a terminal: typed text is valid UTF-8 and travels as a JSON string, other bytes as base64. */

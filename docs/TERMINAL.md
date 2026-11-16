@@ -316,6 +316,9 @@ le serveur les écrit dans le process. C'est un point à ne pas oublier, sinon `
 - clavier : traduire les événements Compose en octets via le moteur (Kitty keyboard / `modifyOtherKeys` si
   libghostty), gérer Ctrl/Alt/Shift, IME, collage bracketed ;
 - souris : modes X10/SGR, molette, sélection, clic sur les liens ;
+  la molette est faite : rapport souris (X10/SGR via l'encodeur libghostty) quand le programme a activé le
+  suivi (`opencode`, `htop`, `tmux`…), touches fléchées sur l'écran alternatif sinon (mode « alternate scroll »
+  de xterm), viewport sinon ; restent les clics et le déplacement (drag), et la coopération avec la sélection ;
 - onglets : `Ctrl+T`, `Ctrl+W`, `Ctrl+Tab`, titre = OSC 0/2 ou nom du shell, cwd = OSC 7 ;
 - accessibilité : exposer le texte de la grille, pas seulement un Canvas.
 

@@ -8,8 +8,12 @@ import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import org.example.kotlineditor.model.TerminalKey
 import org.example.kotlineditor.model.TerminalKeyEvent
 import org.example.kotlineditor.model.TerminalLauncher
+import org.example.kotlineditor.model.TerminalMouseAction
+import org.example.kotlineditor.model.TerminalMouseButton
+import org.example.kotlineditor.model.TerminalMouseEvent
 import org.example.kotlineditor.model.TerminalProcess
 import org.example.kotlineditor.model.TerminalSnapshot
 import org.example.kotlineditor.telemetry.ClientTelemetry
@@ -17,6 +21,7 @@ import org.example.kotlineditor.telemetry.Operation
 import org.example.kotlineditor.telemetry.Outcome
 import org.example.kotlineditor.telemetry.Span
 import org.example.kotlineditor.telemetry.endAtFrame
+import kotlin.math.abs
 
 // Grid used until the panel has been measured, so the shell has a sane size when it starts.
 private const val DEFAULT_COLUMNS = 80
@@ -102,6 +107,9 @@ class TerminalTab(
     /** Sends a key, encoded by the terminal so that the running program gets what it expects. */
     fun sendKey(event: TerminalKeyEvent) = process.sendKey(event)
 
+    /** Reports a mouse event to the program, encoded the way it asked for. */
+    fun mouse(event: TerminalMouseEvent) = process.mouse(event)
+
     /** Pastes [text], wrapped in bracketed-paste markers when the program asked for them. */
     fun paste(text: String) {
         if (text.isNotEmpty()) process.paste(text)
@@ -126,6 +134,41 @@ class TerminalTab(
     /** Scrolls the viewport by [delta] rows, positive going up into the scrollback. */
     fun scroll(delta: Int) {
         if (delta != 0) process.scroll(delta)
+    }
+
+    /**
+     * Applies a notch of the wheel of [rows] rows, positive going up, with the pointer on the cell at
+     * [column]/[row].
+     *
+     * A program that enabled mouse tracking (`opencode`, `htop`, `tmux`…) gets a wheel button report, whatever
+     * screen it owns, encoded by the server the way it asked. A full-screen program without it (`nano`, `vim`…)
+     * owns the alternate screen and there is no scrollback: the wheel moves the program itself, the way xterm's
+     * alternate scroll mode does, with the cursor keys it already reads. Otherwise the wheel scrolls the viewport.
+     */
+    fun wheel(rows: Int, column: Int, row: Int) {
+        val screen = snapshot
+        when {
+            screen?.mouseTracking == true -> {
+                val button = if (rows > 0) TerminalMouseButton.WheelUp else TerminalMouseButton.WheelDown
+                process.mouse(
+                    TerminalMouseEvent(
+                        action = TerminalMouseAction.Press,
+                        button = button,
+                        column = column,
+                        row = row,
+                    ),
+                )
+            }
+
+            screen?.alternateScreen == true -> {
+                val key = if (rows > 0) TerminalKey.ArrowUp else TerminalKey.ArrowDown
+                repeat(abs(rows)) { sendKey(TerminalKeyEvent(key = key)) }
+            }
+
+            else -> {
+                scroll(rows)
+            }
+        }
     }
 
     /** Stops the shell and the collector. */
