@@ -25,17 +25,28 @@ class AgentProcesses internal constructor(
     suspend fun sessions(agent: AgentCommand, directories: List<String>): AgentSessions {
         val process = processFor(agent)
         if (!process.ready().sessions.list) return AgentSessions(false, emptyList())
-        val found = directories.distinct().flatMap { process.listSessions(it) }
+        val roots = directories.distinct()
+        val inRoots = roots.flatMap { process.listSessions(it) }
+        // A conversation can work in a folder of the project or of its worktree.
+        val inFolders = process.listSessionsBelow(roots)
+        val found = (inRoots + inFolders).distinctBy { it.id }
         return AgentSessions(true, found.sortedByDescending { it.updatedAt.orEmpty() })
     }
 
     /** Deletes the agent's [session] and its history; false when the agent cannot. */
     suspend fun delete(agent: AgentCommand, session: String): Boolean = processFor(agent).deleteSession(session)
 
-    /** The settings (model…) a session of [agent] in [directory] offers; the agent starts for it when needed. */
-    suspend fun options(agent: AgentCommand, directory: String): List<AgentOption> {
+    /**
+     * The settings (model…) a session of [agent] in [directory] offers; the agent starts for it when needed. With
+     * [choices] (option id to value), the settings a session has once they are made, read in a session started for it.
+     */
+    suspend fun options(
+        agent: AgentCommand,
+        directory: String,
+        choices: Map<String, String> = emptyMap(),
+    ): List<AgentOption> {
         val process = withContext(Dispatchers.IO) { processFor(agent) }
-        return process.offeredOptions(directory)
+        return process.offeredOptions(directory, choices)
     }
 
     /**

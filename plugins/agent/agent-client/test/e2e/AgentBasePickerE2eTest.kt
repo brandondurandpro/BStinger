@@ -45,9 +45,8 @@ class AgentBasePickerE2eTest {
 
     private fun ComposeUiTest.openPicker(app: E2eApp) {
         awaitTag(AgentTags.MODE_AGENT).performClick()
-        awaitTag(AgentTags.AGENT_NEW).performClick()
-        awaitTag(AgentTags.AGENT_BASE_PICKER)
-        assertEquals(0, app.project.agent.conversations.size, "nothing starts before the answer")
+        val conversation = askBranchOfProject(app)
+        assertTrue(!conversation.scratch, "the conversation moved to the project, which asks the branch")
     }
 
     private fun workspaceFile(conversation: Conversation, name: String): Boolean {
@@ -62,7 +61,7 @@ class AgentBasePickerE2eTest {
             val app = launchWithProject(project, agentPreferences())
             openPicker(app)
             awaitTag(AgentTags.agentBase("other")).performClick()
-            awaitTag(AgentTags.AGENT_PROMPT)
+            awaitNoTag(AgentTags.AGENT_BASE_PICKER)
             val conversation = checkNotNull(app.project.agent.current)
             assertEquals(WorkMode.Worktree, conversation.mode)
             awaitCondition { workspaceFile(conversation, "only-on-other.txt") }
@@ -76,7 +75,7 @@ class AgentBasePickerE2eTest {
             val app = launchWithProject(project, agentPreferences())
             openPicker(app)
             awaitTag(AgentTags.agentBase("origin/feature")).performClick()
-            awaitTag(AgentTags.AGENT_PROMPT)
+            awaitNoTag(AgentTags.AGENT_BASE_PICKER)
             val conversation = checkNotNull(app.project.agent.current)
             assertEquals(WorkMode.Worktree, conversation.mode)
             awaitCondition { workspaceFile(conversation, "only-on-other.txt") }
@@ -89,7 +88,7 @@ class AgentBasePickerE2eTest {
             val app = launchWithProject(project, agentPreferences())
             openPicker(app)
             awaitTag(AgentTags.AGENT_BASE_PROJECT).performClick()
-            awaitTag(AgentTags.AGENT_PROMPT)
+            awaitNoTag(AgentTags.AGENT_BASE_PICKER)
             val conversation = checkNotNull(app.project.agent.current)
             assertEquals(WorkMode.Direct, conversation.mode)
             assertNull(conversation.base)
@@ -114,7 +113,7 @@ class AgentBasePickerE2eTest {
             val app = launchWithProject(project, agentPreferences())
             openPicker(app)
             awaitTag(AgentTags.AGENT_BASE_SEARCH).performKeyInput { pressKey(Key.Enter) }
-            awaitTag(AgentTags.AGENT_PROMPT)
+            awaitNoTag(AgentTags.AGENT_BASE_PICKER)
             assertEquals("origin/feature", assertNotNull(app.project.agent.current).base)
         }
 
@@ -132,15 +131,17 @@ class AgentBasePickerE2eTest {
         }
 
     @Test
-    fun `Escape closes the picker and no conversation starts`() =
+    fun `Escape closes the picker, and the conversation stays on the project's own branch`() =
         runComposeUiTest {
             repositoryWithBranches()
             val app = launchWithProject(project, agentPreferences())
             openPicker(app)
             awaitTag(AgentTags.AGENT_BASE_SEARCH).performKeyInput { pressKey(Key.Escape) }
             awaitNoTag(AgentTags.AGENT_BASE_PICKER)
-            assertTrue(app.project.agent.conversations.isEmpty())
-            assertNull(app.project.agent.current)
+            val conversation = checkNotNull(app.project.agent.current)
+            assertEquals(1, app.project.agent.conversations.size)
+            assertEquals(WorkMode.Direct, conversation.mode)
+            assertEquals(project.path, conversation.workspace?.root?.path)
         }
 
     @Test
@@ -156,7 +157,7 @@ class AgentBasePickerE2eTest {
                 pressKey(Key.DirectionDown)
                 pressKey(Key.Enter)
             }
-            awaitTag(AgentTags.AGENT_PROMPT)
+            awaitNoTag(AgentTags.AGENT_BASE_PICKER)
             assertEquals("origin/feature", assertNotNull(app.project.agent.current).base)
         }
 

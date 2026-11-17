@@ -14,6 +14,7 @@ modules:
   - plugins/run/run-client
   - plugins/terminal/terminal-client
   - plugins/tree/tree-client
+  - harness
   - lsp
   - plugin-api
   - plugin-core

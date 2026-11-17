@@ -32,7 +32,9 @@ private const val CLIENT_TIMEOUT_S = 60L
 
 /**
  * An ACP agent for tests, run in its own JVM by [FakeAgentCommand]: newline-delimited JSON-RPC on stdin and stdout,
- * no model. What it does depends on the first word of the prompt:
+ * no model. What it does depends on the first word of the directive of the prompt, which is the prompt itself unless
+ * a harness wrapped it in a preamble: the text after the last line `# User request` ([FakeDirective]) is the directive
+ * then.
  *
  * - `echo <text>`: answers `<text>` in chunks, one per word;
  * - `think <text>`: a thought, then the answer `Done thinking.`;
@@ -42,7 +44,9 @@ private const val CLIENT_TIMEOUT_S = 60L
  * - `plan`: a plan of two steps, updated as they complete;
  * - `slow`: chunks every 50 ms until it is cancelled (`stubborn`: the same, but it never stops);
  * - `stream <n>`: `n` chunks at once; `tools <n>`: `n` completed tool calls (`tools <n> <lines>`: each with an
- *   output of `lines` more lines, as a file read); `crash`: exits with code 3;
+ *   output of `lines` more lines, as a file read); `ask <question>=<choice>,<choice> ~ <question>`: its questions
+ *   for the user, in an `ask` block; `steps <n>`: a message then a tool call, `n` times; `crash`:
+ *   exits with code 3;
  * - `count`: the number of prompts of its session;
  * - `model`: `Model: <model>.`, the model of its session (`mode`: `Mode: <mode>.`, `write` asks nothing in
  *   `accept-edits`; `effort`: `Effort: <effort>.`); `fallback`: it moves to `fake-fast` itself and says so;
@@ -52,7 +56,14 @@ private const val CLIENT_TIMEOUT_S = 60L
  * - `run <n> <code>`: runs [FakeProgram] in a terminal of the client, which prints `n` lines and exits with `code`;
  *   `run forever`: one that never stops, killed when the prompt is cancelled; `run big <n>`: `n` lines, of which
  *   the client keeps 10,000 bytes;
- * - anything else: `You said: <prompt>`.
+ * - `delegate <member>: <task> | <member>: <task> ;; …` plays a team manager ([FakeManager]): it answers with a
+ *   fenced `team` block naming those tasks, and answers each later prompt of the session, the reports of the members,
+ *   with the next round or, once the rounds are used up, `Final answer. Reports received: <that prompt>`;
+ *   `delegate-malformed`: a `team` block that is not JSON;
+ * - `cwd`: answers `cwd: <the directory the session works in>`;
+ * - anything else: `You said: <directive>`.
+ *
+ * A member of a team is told what to do by the same directives (`echo`, `write`, `slow`, `crash`…).
  *
  * Its sessions keep their history (the prompts and the answers): it lists them (`session/list`), replays them
  * (`session/load`), resumes them (`session/resume`), closes and deletes them, and titles them after their first prompt.
@@ -85,6 +96,9 @@ class FakeAgent(
     private val writes = AtomicLong()
     private val answers = ConcurrentHashMap<Long, CompletableFuture<JsonElement>>()
     private val cancelled = ConcurrentHashMap.newKeySet<String>()
+
+    // The managers being played, by session.
+    private val managers = ConcurrentHashMap<String, FakeManager>()
 
     /** Reads the client's messages until stdin ends. */
     fun run() {
@@ -302,17 +316,16 @@ class FakeAgent(
         val blocks = (params["prompt"] as? JsonArray).orEmpty().map { it.jsonObject }
         // The text typed is the first block; the others are what the user joined to it.
         val prompt = blocks.firstOrNull()?.text("text").orEmpty()
+        val directive = FakeDirective.of(prompt)
         val context = blocks.drop(1)
         val kept = store[session]
         val turn = FakeTurn(prompt, context = context)
         kept?.turns?.add(turn)
         turns[session] = turn
         val count = kept?.turns?.size ?: 1
-        if (kept != null && kept.title == null) titled(kept, prompt)
+        if (kept != null && kept.title == null) titled(kept, directive)
         try {
-            // A session whose first prompt starts with `discuss` leads a discussion: a question, then its plan.
-            val leads = kept?.turns?.firstOrNull()?.prompt?.startsWith("discuss") == true
-            val stopReason = if (leads) discussing(session, count) else answer(session, prompt, count)
+            val stopReason = answer(session, directive, count)
             usage(session, count)
             return buildJsonObject { put("stopReason", stopReason) }
         } finally {
@@ -340,12 +353,15 @@ class FakeAgent(
     }
 
     private fun answer(session: String, prompt: String, count: Int): String {
+        val scripted = managed(session, prompt)
+        if (scripted != null) return chunks(session, listOf(scripted))
         // A slash command (`/echo hi`) is the same prompt as its name.
         val typed = prompt.trim().removePrefix("/")
         val words = typed.split(Regex("\\s+"))
         val rest = typed.substringAfter(' ', "")
         return when (words.firstOrNull()) {
             "echo" -> chunks(session, rest.split(' ').map { "$it " })
+            "cwd" -> chunks(session, listOf("cwd: ${store[session]?.cwd}"))
             "think" -> think(session, rest)
             "read" -> read(session, rest)
             "write" -> write(session, words.getOrNull(1).orEmpty(), rest.substringAfter(' ', ""))
@@ -356,6 +372,8 @@ class FakeAgent(
             "stubborn" -> slow(session, stubborn = true)
             "stream" -> chunks(session, List(words.getOrNull(1)?.toIntOrNull() ?: 1) { "chunk $it " })
             "tools" -> tools(session, words.getOrNull(1)?.toIntOrNull() ?: 1, words.getOrNull(2)?.toIntOrNull() ?: 0)
+            "ask" -> ask(session, rest)
+            "steps" -> steps(session, words.getOrNull(1)?.toIntOrNull() ?: 1)
             "crash" -> crash()
             "count" -> chunks(session, listOf("Prompt $count of $session."))
             "usage" -> chunks(session, listOf("5-hour limit — ${count * QUOTA_STEP}% · Resets 11pm"))
@@ -370,9 +388,15 @@ class FakeAgent(
         }
     }
 
-    private fun discussing(session: String, count: Int): String {
-        val move = if (count == 1) "ASK: which storage do we use?" else "FINAL: use sqlite"
-        return chunks(session, listOf("I read the code.\n$move"))
+    // What a manager answers to [directive]: a round of tasks, or its final answer to the reports; null when the session
+    // plays no manager and the directive does not make it one.
+    private fun managed(session: String, directive: String): String? {
+        val started = FakeManager.parse(directive)
+        if (started != null) managers[session] = started
+        val manager = managers[session] ?: return null
+        if (started != null || manager.hasRound()) return manager.delegate()
+        managers.remove(session)
+        return manager.finalAnswer(directive)
     }
 
     private fun chunks(session: String, texts: List<String>): String {
@@ -511,6 +535,34 @@ class FakeAgent(
             toolUpdate(session, "tool-$index", "completed", "$index matches$body")
         }
         message(session, "Searched $count times.")
+        return END_TURN
+    }
+
+    // Questions for the user, written as a member of a team does: `Which database?=SQLite,Postgres ~ Why?` (the
+    // choices follow `=`, a question without any is free), in a fenced `ask` block at the end of a message.
+    private fun ask(session: String, spec: String): String {
+        val questions =
+            spec.split('~').map { it.trim() }.filter { it.isNotEmpty() }.map { entry ->
+                val text = entry.substringBefore('=').trim()
+                val choices = entry.substringAfter('=', "").split(',').map { it.trim() }.filter { it.isNotEmpty() }
+                buildJsonObject {
+                    put("question", text)
+                    putJsonArray("options") { choices.forEach { add(JsonPrimitive(it)) } }
+                }
+            }
+        val block = buildJsonObject { put("questions", JsonArray(questions)) }
+        message(session, "I have questions.\n```ask\n$block\n```")
+        return END_TURN
+    }
+
+    // A long piece of work: a message then a tool call, [count] times, which a transcript shows as two rows each.
+    private fun steps(session: String, count: Int): String {
+        repeat(count) { index ->
+            message(session, "Step $index. ")
+            tool(session, "step-$index", "Work step $index", "search", "pending", "/step/$index")
+            toolUpdate(session, "step-$index", "completed", "done")
+        }
+        message(session, "Did $count steps.")
         return END_TURN
     }
 

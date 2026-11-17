@@ -4,6 +4,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
 import org.example.kotlineditor.acp.authMethods
 import org.example.kotlineditor.acp.authenticate
 import org.example.kotlineditor.acp.fork
@@ -13,16 +14,20 @@ import org.example.kotlineditor.rpc.Method
 import org.example.kotlineditor.rpc.MethodSpec
 import org.example.kotlineditor.rpc.agentAttachments
 import org.example.kotlineditor.rpc.agentCommand
+import org.example.kotlineditor.rpc.bool
 import org.example.kotlineditor.rpc.authMethodsToJson
 import org.example.kotlineditor.rpc.commandsToJson
 import org.example.kotlineditor.rpc.long
 import org.example.kotlineditor.rpc.read
+import org.example.kotlineditor.rpc.skillsToJson
 import org.example.kotlineditor.rpc.string
 import org.example.kotlineditor.rpc.stringOrNull
+import org.example.kotlineditor.rpc.team
 import org.example.kotlineditor.rpc.toJson
 import org.example.kotlineditor.server.Handler
 import org.example.kotlineditor.server.LocalServices
 import org.example.kotlineditor.server.ServerContribution
+import java.io.File
 
 private const val CONVERSATION = "conversation"
 private const val ITEM = "item"
@@ -38,7 +43,7 @@ class AgentServerContribution : ServerContribution {
 /** Agent mode: conversations with the agents, run by [AgentsComponent]. */
 internal fun agentHandlers(services: LocalServices): Map<MethodSpec, Handler> {
     val component = services.agentsComponent()
-    return conversationHandlers(component) + optionHandlers(component)
+    return conversationHandlers(component) + optionHandlers(component) + teamHandlers(component)
 }
 
 // The conversations: prompts, answers, transcripts, history.
@@ -77,7 +82,8 @@ private fun conversationHandlers(component: AgentsComponent): Map<MethodSpec, Ha
             JsonPrimitive(deleted)
         },
         Method.AgentCancel to {
-            component.agents.cancel(params.string(CONVERSATION))
+            // A team conversation stops its members too.
+            component.harness.cancel(params.string(CONVERSATION))
             JsonNull
         },
         Method.AgentAnswer to {
@@ -90,7 +96,8 @@ private fun conversationHandlers(component: AgentsComponent): Map<MethodSpec, Ha
                 .toJson()
         },
         Method.AgentClose to {
-            component.agents.close(params.string(CONVERSATION))
+            // A team conversation closes its members' conversations too.
+            component.harness.close(params.string(CONVERSATION))
             JsonNull
         },
     )
@@ -100,13 +107,15 @@ private fun optionHandlers(component: AgentsComponent): Map<MethodSpec, Handler>
     mapOf(
         Method.AgentOptions to {
             val agent = params.read(AGENT) { it.agentCommand() }
-            val options = component.agents.processes.options(agent, params.string(DIRECTORY))
+            val choices = params["choices"]?.jsonObject.orEmpty().mapValues { it.value.string() }
+            val options = component.agents.processes.options(agent, params.string(DIRECTORY), choices)
             options.toJson()
         },
         Method.AgentSetOption to {
             val agent = params.read(AGENT) { it.agentCommand() }
             val conversation = params.string(CONVERSATION)
-            component.agents.setOption(conversation, agent, params.string("option"), params.string("value"))
+            // The permission mode of a team conversation reaches its members.
+            component.harness.setOption(conversation, agent, params.string("option"), params.string("value"))
             JsonNull
         },
         Method.AgentAuthMethods to {
@@ -131,9 +140,57 @@ private fun optionHandlers(component: AgentsComponent): Map<MethodSpec, Handler>
         },
     )
 
+// The teams of agents: the skills their agents can be given, and the prompts of their users.
+private fun teamHandlers(component: AgentsComponent): Map<MethodSpec, Handler> =
+    mapOf(
+        Method.TeamSkills to {
+            val root = File(params.string("root"))
+            val skills = withContext(Dispatchers.IO) { component.skills.discover(root) }
+            skills.skillsToJson()
+        },
+        Method.TeamSkillCatalog to {
+            val refresh = params.bool("refresh")
+            component.skillCatalog.list(refresh).toJson()
+        },
+        Method.TeamInstallSkill to {
+            val source = params.string("source")
+            val path = params.string("path")
+            val installed = withContext(Dispatchers.IO) { component.skillCatalog.install(source, path) }
+            listOf(installed).skillsToJson()
+        },
+        Method.TeamPrompt to {
+            component.harness.prompt(
+                params.string(CONVERSATION),
+                params.read("team") { it.team() },
+                params.string(DIRECTORY),
+                params.string(ITEM),
+                params.string("text"),
+                params.stringOrNull(SESSION),
+                params["attachments"]?.agentAttachments().orEmpty(),
+            )
+            JsonNull
+        },
+    )
+
 // The sessions of the project at [root] and of its worktrees of agent mode, each one with the branch it works on.
 private suspend fun sessions(component: AgentsComponent, agent: AgentCommand, root: String): AgentSessions {
     val worktrees = withContext(Dispatchers.IO) { component.services.agentWorktrees(root) }
     val listed = component.agents.processes.sessions(agent, listOf(root) + worktrees.keys)
-    return listed.copy(sessions = listed.sessions.map { it.copy(branch = worktrees[it.directory]) })
+    return listed.copy(sessions = listed.sessions.map { it.copy(branch = branchOf(worktrees, it.directory)) })
+}
+
+// The branch of the worktree a session works in, or in a folder of; null for the project itself.
+private fun branchOf(worktrees: Map<String, String>, directory: String): String? {
+    val exact = worktrees[directory]
+    if (exact != null) return exact
+    val owner = worktrees.keys.filter { isInside(directory, it) }.maxByOrNull { it.length }
+    return owner?.let { worktrees[it] }
+}
+
+// Whether [path] is [directory] or a folder under it, compared by their folders.
+private fun isInside(path: String, directory: String): Boolean {
+    val folders = { text: String -> text.split('/', '\\').filter { it.isNotEmpty() } }
+    val own = folders(directory)
+    val other = folders(path)
+    return other.size >= own.size && own.indices.all { own[it] == other[it] }
 }

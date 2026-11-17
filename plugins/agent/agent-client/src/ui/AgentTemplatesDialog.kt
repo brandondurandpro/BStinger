@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -86,9 +87,9 @@ private fun TemplatesDialog(agent: AgentState, conversation: Conversation, close
             Label("Prompt templates", fontWeight = FontWeight.SemiBold)
             TemplateList(agent.templates, editing) { edit(it) }
             IdeTextField(name, { name = it }, Modifier.fillMaxWidth().testTag(AgentTags.AGENT_TEMPLATE_NAME), placeholder = "Name")
-            TemplateTextField(text, { text = it }, Modifier.testTag(AgentTags.AGENT_TEMPLATE_TEXT))
+            MultilineField(text, { text = it }, Modifier.testTag(AgentTags.AGENT_TEMPLATE_TEXT), "Prompt", TEXT_HEIGHT)
             VariableChips { variable -> text += "{$variable}" }
-            ScopeChoice(global) { global = it }
+            ScopeChoice(global, AgentTags.AGENT_TEMPLATE_GLOBAL, AgentTags.AGENT_TEMPLATE_PROJECT) { global = it }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                 IdeButton("New", { edit(null) }, Modifier.testTag(AgentTags.AGENT_TEMPLATE_NEW))
                 IdeButton(
@@ -145,12 +146,13 @@ private fun TemplateList(templates: List<PromptTemplate>, editing: String?, choo
     }
 }
 
+/** A text field of several lines, [height] tall, that shows [placeholder] while it is empty. */
 @Composable
-private fun TemplateTextField(text: String, change: (String) -> Unit, modifier: Modifier) {
+internal fun MultilineField(text: String, change: (String) -> Unit, modifier: Modifier, placeholder: String, height: Dp) {
     BasicTextField(
         value = text,
         onValueChange = change,
-        modifier = modifier.fillMaxWidth().height(TEXT_HEIGHT),
+        modifier = modifier.fillMaxWidth().height(height),
         cursorBrush = SolidColor(IdeColors.Caret),
         textStyle = TextStyle(fontFamily = IdeFonts.ui, color = IdeColors.Text, fontSize = 13.sp),
         decorationBox = { inner ->
@@ -161,20 +163,20 @@ private fun TemplateTextField(text: String, change: (String) -> Unit, modifier: 
                     .border(1.dp, IdeColors.InputBorder, IdeShapes.Medium)
                     .padding(8.dp),
             ) {
-                if (text.isEmpty()) Label("Prompt", color = IdeColors.TextSecondary)
+                if (text.isEmpty()) Label(placeholder, color = IdeColors.TextSecondary)
                 inner()
             }
         },
     )
 }
 
-// Where the template is kept: for every project, or for this one only.
+// Where a template or a team is kept: for every project, or for this one only.
 @Composable
-private fun ScopeChoice(global: Boolean, choose: (Boolean) -> Unit) {
+internal fun ScopeChoice(global: Boolean, globalTag: String, projectTag: String, choose: (Boolean) -> Unit) {
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
         Label("Available in", color = IdeColors.TextSecondary, fontSize = 12.sp)
-        ScopeButton("All projects", global, AgentTags.AGENT_TEMPLATE_GLOBAL) { choose(true) }
-        ScopeButton("This project", !global, AgentTags.AGENT_TEMPLATE_PROJECT) { choose(false) }
+        ScopeButton("All projects", global, globalTag) { choose(true) }
+        ScopeButton("This project", !global, projectTag) { choose(false) }
     }
 }
 

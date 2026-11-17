@@ -58,7 +58,15 @@ class FakeSessions(private val store: File?) {
 
     /** A new session working in [cwd]; its id is unique in the store. */
     fun create(cwd: String): FakeSession {
-        val id = synchronized(this) { "session-${++created}" }
+        // Another process of the same store may have made a session since this one started: never take its id.
+        val id =
+            synchronized(this) {
+                var next: String
+                do {
+                    next = "session-${++created}"
+                } while (sessions.containsKey(next) || store?.let { File(it, "$next.json").exists() } == true)
+                next
+            }
         return FakeSession(id, cwd).also {
             sessions[id] = it
             save(it)

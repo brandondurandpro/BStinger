@@ -28,7 +28,8 @@ private const val STOPPED_NOTICE = "Stopped."
 /** The [AgentOutcome] of this conversation, from its state and its latest items. */
 val Conversation.outcome: AgentOutcome
     get() {
-        val asking = items.any { it is AgentItem.Permission && it.pending }
+        val ownRequest = items.any { it is AgentItem.Permission && it.pending }
+        val asking = ownRequest || memberRequests.isNotEmpty()
         val last = items.lastOrNull()
         val notice = last as? AgentItem.Notice
         return when {

@@ -10,6 +10,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import org.example.kotlineditor.lsp.provision.ToolDownloader
 import org.example.kotlineditor.model.AgentAttachment
 import org.example.kotlineditor.model.AgentCommand
+import org.example.kotlineditor.model.AgentItem
 import org.example.kotlineditor.model.AgentTranscript
 import org.example.kotlineditor.model.AgentTurnState
 import java.io.Closeable
@@ -57,11 +58,21 @@ data class AgentSettings(
     val registryCacheMs: Long = 3_600_000,
     /** Where the agents of the registry are installed, shared with the other downloaded tools. */
     val toolsDirectory: Path = Paths.get(System.getProperty("user.home"), ".kotlin-editor", "tools"),
+    /** The repositories of skills the catalog lists, `owner/name`. */
+    val skillSources: List<String> = SKILL_SOURCES,
+    /** Where a repository of skills is downloaded as a `.tar.gz`: `{repo}` is its `owner/name`. */
+    val skillArchiveUrl: String = SKILL_ARCHIVE_URL,
 ) {
     /** The registry the server reads by default. */
     companion object {
         /** The registry of agentclientprotocol.com. */
         const val REGISTRY_URL = "https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json"
+
+        /** The popular repositories of skills: those of Matt Pocock, of Anthropic and the Superpowers of Jesse Vincent. */
+        val SKILL_SOURCES = listOf("mattpocock/skills", "anthropics/skills", "obra/superpowers")
+
+        /** The archive of the default branch of a repository on GitHub. */
+        const val SKILL_ARCHIVE_URL = "https://github.com/{repo}/archive/HEAD.tar.gz"
     }
 }
 
@@ -70,6 +81,7 @@ data class AgentSettings(
  * process (one process per command line, shared by its conversations) and a [Journal] the IDE follows with
  * [transcript]: a client that reconnects asks for what it missed, and a prompt or an answer sent twice runs once.
  */
+@Suppress("TooManyFunctions") // the conversations of agent mode: prompt, follow, cancel, answer, and what a team needs
 class AgentService(
     private val files: FileAccess = FileAccess.Disk,
     private val settings: AgentSettings = AgentSettings(),
@@ -87,6 +99,12 @@ class AgentService(
     /**
      * Sends [text] to the agent of [conversation], started with [agent] in [directory] when needed; a conversation
      * this service does not know continues the agent's [session]; [attachments] go with the text.
+     *
+     * The transcript shows [shown] as the user's message [itemId]: the text sent by default, another one when the
+     * agent receives more than the user typed (a preamble), none at all when [shown] is null (a relay the user did
+     * not write). [itemId] identifies the prompt either way: sent twice, it runs once, and [awaitTurn] finds it.
+     * The holder of a [lease] on [conversation] passes it, so that its prompts do not wait behind the ones others
+     * sent during the lease.
      */
     fun prompt(
         conversation: String,
@@ -96,10 +114,50 @@ class AgentService(
         text: String,
         session: String? = null,
         attachments: List<AgentAttachment> = emptyList(),
+        shown: String? = text,
+        lease: ConversationLease? = null,
     ) {
-        val prompt = UserPrompt(itemId, text, attachments)
-        conversation(conversation).prompt(prompt, agent, directory, session) { processes.processFor(agent) }
+        val prompt = UserPrompt(itemId, text, attachments, shown)
+        val target = conversation(conversation)
+        target.prompt(prompt, agent, directory, session, { processes.processFor(agent) }, lease)
     }
+
+    /**
+     * Waits for the end of the turn the prompt [itemId] started in [conversation] (after it left the queue, when it
+     * waited there), and tells how it ended and what the agent answered. A conversation closed meanwhile (or already
+     * forgotten) ends cancelled. Fails for an [itemId] [prompt] never accepted in [conversation].
+     */
+    suspend fun awaitTurn(conversation: String, itemId: String): TurnOutcome {
+        val target = conversations[conversation]
+        return target?.awaitTurn(itemId) ?: TurnOutcome(TurnEnding.Cancelled, "", "Unknown conversation.")
+    }
+
+    /**
+     * Adds to the transcript of [conversation] the item [create] builds from its new id (its version is the journal's,
+     * whatever [create] puts there); the clients following it receive the item like any other. Returns the item.
+     */
+    fun addItem(conversation: String, create: (id: String) -> AgentItem): AgentItem {
+        val journal = conversation(conversation).journal
+        val id = journal.newId()
+        return journal.add { version -> create(id).withVersion(version) }
+    }
+
+    /**
+     * Replaces the item [id] of [conversation] by what [change] makes of it, as a new version the clients receive;
+     * false when there is no such item.
+     */
+    fun updateItem(conversation: String, id: String, change: (AgentItem) -> AgentItem): Boolean {
+        val journal = conversations[conversation]?.journal ?: return false
+        return journal.update(id) { item, version -> change(item).withVersion(version) }
+    }
+
+    /**
+     * Keeps [conversation] busy from now until the returned lease is released, also between its turns: its transcript
+     * never says idle meanwhile, so that a client keeps showing one run, however long only other conversations work.
+     * Cancelling or closing the conversation completes [ConversationLease.stopped]. Prompts of others during the lease
+     * wait in the queue of the conversation.
+     */
+    fun keepBusy(conversation: String): ConversationLease = conversation(conversation).keepBusy()
 
     /** Opens the agent's [session] as [conversation]: the agent replays its history into the transcript. */
     fun open(conversation: String, agent: AgentCommand, directory: String, session: String) {
@@ -119,6 +177,14 @@ class AgentService(
     fun cancel(conversation: String) {
         conversations[conversation]?.cancel()
     }
+
+    /**
+     * Asks the user [question] in [conversation], with the [choices] proposed, and waits: the choice or the words of
+     * the user come back, null when the conversation is stopped or closed meanwhile. The question shows in the
+     * transcript like a permission request and is answered like one ([answer]); nothing of the agent runs meanwhile.
+     */
+    suspend fun ask(conversation: String, question: String, choices: List<String>): String? =
+        conversation(conversation).ask(question, choices)
 
     /** Answers the permission request [itemId] of [conversation]. */
     fun answer(conversation: String, itemId: String, option: String) {

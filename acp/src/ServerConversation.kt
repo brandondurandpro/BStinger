@@ -23,6 +23,17 @@ import java.util.concurrent.ConcurrentHashMap
 // the prompt again once the turn is over.
 private const val QUEUED_PROMPTS = 4
 
+// How many finished prompts keep their outcome (with the full answer): enough for a holder that awaits the turns it
+// started; the older ones are forgotten, so that a long conversation does not keep every answer twice.
+private const val KEPT_OUTCOMES = 32
+
+private const val CLOSED = "The conversation was closed."
+
+private const val UNANSWERED = "The agent stopped without answering."
+
+/** The kind of the options of a question to the user: choices, which none of the permission kinds names. */
+const val QUESTION_CHOICE = "question"
+
 /**
  * One conversation on the server: its [journal], the session of its agent, the prompt running and the permission
  * requests waiting for the user. The updates of the agent become items of the journal as they arrive.
@@ -50,6 +61,17 @@ internal class ServerConversation(
     @Volatile
     private var stopping = false
 
+    @Volatile
+    private var closed = false
+
+    // The leases held (lock held to change them), and the outcome of each prompt accepted, by item id.
+    private val leases = ArrayList<ConversationLease>()
+    private val outcomes = ConcurrentHashMap<String, CompletableDeferred<TurnOutcome>>()
+
+    // The prompts whose outcome is known, oldest first (lock held to change it): beyond [KEPT_OUTCOMES] the oldest
+    // outcome is dropped. A prompt still running or waiting always keeps its own.
+    private val finished = ArrayDeque<String>()
+
     // The prompts that arrived while the agent answered: run in turn, each once the one before it ended. Bounded
     // by [QUEUED_PROMPTS]: beyond it the caller is refused, and the IDE sends its prompt again once the turn is over.
     private val queued = ArrayDeque<Queued>()
@@ -57,7 +79,8 @@ internal class ServerConversation(
 
     /**
      * Starts answering [text], shown as item [itemId], by [agent] — in its [session] when the conversation has none
-     * yet, in a new session of [agent] when it runs another one. A prompt sent again (same item) is ignored.
+     * yet, in a new session of [agent] when it runs another one. A prompt sent again (same item) is ignored. A prompt
+     * of the holder of a [lease] does not wait for the other prompts queued during the lease.
      */
     fun prompt(
         prompt: UserPrompt,
@@ -65,19 +88,58 @@ internal class ServerConversation(
         directory: String,
         session: String?,
         process: () -> AgentProcess,
+        lease: ConversationLease? = null,
     ) {
         val itemId = prompt.itemId
+        require(lease == null || lease.belongsTo(this)) { "The lease is of another conversation" }
         synchronized(lock) {
             // A prompt sent again (the same item) is ignored, whether it runs, waits or has run.
             if (itemId in prompted) return
-            if (busy || queued.isNotEmpty()) {
+            if (mustWait(lease)) {
                 if (queued.size >= QUEUED_PROMPTS) check(false) { AGENT_BUSY_MESSAGE }
                 prompted.add(itemId)
+                outcomes[itemId] = CompletableDeferred()
                 queued.addLast(Queued(prompt, agent, session, directory, process))
                 return
             }
             prompted.add(itemId)
+            outcomes[itemId] = CompletableDeferred()
             start(prompt, agent, directory, session, process)
+        }
+    }
+
+    // Lock held. Whether a prompt of [lease] (null: of anyone else) goes to the queue: a turn runs, or, for the others,
+    // a lease is held or prompts already wait.
+    private fun mustWait(lease: ConversationLease?): Boolean {
+        if (busy) return true
+        val others = leases.isNotEmpty() || queued.isNotEmpty()
+        return others && lease == null
+    }
+
+    /** The outcome of the turn the prompt [itemId] started, once it ended; fails for a prompt this one never got. */
+    suspend fun awaitTurn(itemId: String): TurnOutcome {
+        val outcome = outcomes[itemId]
+        requireNotNull(outcome) { "No prompt $itemId in this conversation, or its outcome is no longer kept" }
+        return outcome.await()
+    }
+
+    /** Keeps the conversation busy until the lease is released. */
+    fun keepBusy(): ConversationLease {
+        val lease = ConversationLease(this)
+        synchronized(lock) {
+            leases.add(lease)
+            if (!busy) journal.setState(AgentTurnState.Running)
+        }
+        return lease
+    }
+
+    /** Ends [lease]: the conversation shows idle again when nothing else runs, and the prompts that waited start. */
+    fun release(lease: ConversationLease) {
+        synchronized(lock) {
+            if (!leases.remove(lease)) return
+            if (leases.isNotEmpty() || busy) return
+            journal.setState(AgentTurnState.Idle)
+            startQueued()
         }
     }
 
@@ -103,10 +165,13 @@ internal class ServerConversation(
 
     /** Stops the prompt: the agent is asked to stop, and abandoned if it does not within the grace delay. */
     fun cancel() {
+        val holders = synchronized(lock) { leases.toList() }
+        holders.forEach { it.stop(StopCause.Cancelled) }
+        // A question the user was asked between two turns of the agent waits with no prompt running.
+        permissions.cancelAll()
         val running = synchronized(lock) { job?.takeIf { it.isActive } } ?: return
         stopping = true
         keeper.current?.let { it.process.cancel(it.id) }
-        permissions.cancelAll()
         scope.launch {
             delay(settings.cancelGraceMs)
             running.cancel()
@@ -118,9 +183,21 @@ internal class ServerConversation(
         permissions.answer(itemId, option)
     }
 
+    /** Asks the user [question] in this conversation and waits for the answer; null when cancelled. */
+    suspend fun ask(question: String, choices: List<String>): String? = permissions.ask(question, choices)
+
     /** Stops the prompt and ends the session; the agent keeps its history. */
     suspend fun close() {
-        synchronized(lock) { job?.cancel() }
+        closed = true
+        val holders =
+            synchronized(lock) {
+                job?.cancel()
+                queued.clear()
+                leases.toList().also { leases.clear() }
+            }
+        holders.forEach { it.stop(StopCause.Closed) }
+        val forgotten = TurnOutcome(TurnEnding.Cancelled, "", CLOSED)
+        outcomes.values.forEach { it.complete(forgotten) }
         permissions.cancelAll()
         keeper.close()
     }
@@ -136,9 +213,13 @@ internal class ServerConversation(
     private suspend fun run(prompt: UserPrompt, agent: AgentCommand, directory: String, process: () -> AgentProcess) {
         var stopReason: String? = null
         val context = prompt.attachments.map { it.label }
-        // After the history the agent may replay, before what goes wrong.
+        val shownText = prompt.shown
+        writer.turn.begin()
+        // After the history the agent may replay, before what goes wrong; a hidden prompt shows nothing.
         val shown = {
-            if (prompt.itemId !in journal) journal.add { AgentItem.UserText(prompt.itemId, it, prompt.text, context) }
+            if (shownText != null && prompt.itemId !in journal) {
+                journal.add { AgentItem.UserText(prompt.itemId, it, shownText, context) }
+            }
         }
         try {
             failures(writer, keeper, shown) {
@@ -153,11 +234,24 @@ internal class ServerConversation(
             }
         } finally {
             shown()
-            finish(stopReason)
+            finish(prompt.itemId, stopReason)
         }
     }
 
-    private fun finish(stopReason: String?) {
+    // How the turn ended, from the notices it wrote.
+    private fun outcomeOf(stopReason: String?): TurnOutcome {
+        val cancelled = closed || stopping || stopReason == "cancelled"
+        val ending =
+            when {
+                cancelled -> TurnEnding.Cancelled
+                stopReason == "end_turn" -> TurnEnding.Completed
+                else -> TurnEnding.Failed
+            }
+        val reason = if (ending == TurnEnding.Failed) writer.turn.lastError ?: UNANSWERED else ""
+        return TurnOutcome(ending, writer.turn.answer(), reason)
+    }
+
+    private fun finish(itemId: String, stopReason: String?) {
         val ended = stopReason == "end_turn" && !stopping
         writer.closeRunningTools(if (ended) AgentToolStatus.Completed else AgentToolStatus.Failed)
         permissions.cancelAll()
@@ -167,10 +261,25 @@ internal class ServerConversation(
             stopReason == "max_turn_requests" -> writer.notice("The agent stopped: too many steps in one turn.", true)
             stopReason == "refusal" -> writer.notice("The agent refused to go on.", error = true)
         }
+        val outcome = outcomeOf(stopReason)
         synchronized(lock) {
             busy = false
-            journal.setState(AgentTurnState.Idle)
+            journal.setState(if (leases.isEmpty()) AgentTurnState.Idle else AgentTurnState.Running)
             startQueued()
+        }
+        // After the conversation is free: a holder that sends its next prompt as soon as it knows goes first.
+        outcomes[itemId]?.complete(outcome)
+        forgetOldOutcomes(itemId)
+    }
+
+    // [itemId] ended: it is the newest outcome kept, and the oldest ones beyond the limit are dropped.
+    private fun forgetOldOutcomes(itemId: String) {
+        synchronized(lock) {
+            finished.addLast(itemId)
+            while (finished.size > KEPT_OUTCOMES) {
+                val oldest = finished.removeFirst()
+                outcomes.remove(oldest)
+            }
         }
     }
 
@@ -191,6 +300,7 @@ internal class ServerConversation(
 
     // Lock held. Once the turn is over, the first prompt queued meanwhile goes.
     private fun startQueued() {
+        if (leases.isNotEmpty()) return
         val next = queued.firstOrNull() ?: return
         queued.removeFirst()
         start(next.prompt, next.agent, next.directory, next.session, next.process)
@@ -206,8 +316,16 @@ private class Queued(
     val process: () -> AgentProcess,
 )
 
-/** A prompt of the user: [text], shown as item [itemId], and what the user joined to it. */
-internal class UserPrompt(val itemId: String, val text: String, val attachments: List<AgentAttachment> = emptyList())
+/**
+ * A prompt: [text] goes to the agent, [shown] (null: nothing) is what the transcript shows as item [itemId], and
+ * [attachments] are what the user joined to it.
+ */
+internal class UserPrompt(
+    val itemId: String,
+    val text: String,
+    val attachments: List<AgentAttachment> = emptyList(),
+    val shown: String? = text,
+)
 
 /** The permission requests of a conversation waiting for the user, each one an item of its journal. */
 private class Permissions(private val journal: Journal, private val writer: TranscriptWriter) {
@@ -222,6 +340,23 @@ private class Permissions(private val journal: Journal, private val writer: Tran
         waiting[itemId] = answer
         journal.add { AgentItem.Permission(itemId, it, title, options) }
         if (cancelled) cancelAll()
+        val chosen = answer.await()
+        journal.update(itemId) { item, version ->
+            (item as AgentItem.Permission).copy(version = version, chosen = chosen, cancelled = chosen == null)
+        }
+        return chosen
+    }
+
+    /**
+     * Asks the user [question] with the [choices] proposed, and waits for the answer: the choice, or the words of the
+     * user; null when it is cancelled meanwhile.
+     */
+    suspend fun ask(question: String, choices: List<String>): String? {
+        val options = choices.map { AgentPermissionOption(it, it, QUESTION_CHOICE) }
+        val answer = CompletableDeferred<String?>()
+        val itemId = journal.newId()
+        waiting[itemId] = answer
+        journal.add { AgentItem.Permission(itemId, it, question, options, question = true) }
         val chosen = answer.await()
         journal.update(itemId) { item, version ->
             (item as AgentItem.Permission).copy(version = version, chosen = chosen, cancelled = chosen == null)

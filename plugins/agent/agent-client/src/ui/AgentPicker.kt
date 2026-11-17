@@ -222,6 +222,8 @@ internal fun AgentFilterField(
     filter: String,
     tag: String,
     placeholder: String = "Filter the agents…",
+    /** Called by Enter, which no other key of the field handles. */
+    onSubmit: (() -> Unit)? = null,
     onChange: (String) -> Unit,
 ) {
     val focus = remember { FocusRequester() }
@@ -240,6 +242,11 @@ internal fun AgentFilterField(
             Modifier
                 .fillMaxWidth()
                 .focusRequester(focus)
+                .onPreviewKeyEvent { event ->
+                    val submits = onSubmit != null && event.key == Key.Enter && event.type == KeyEventType.KeyDown
+                    if (submits) onSubmit?.invoke()
+                    submits
+                }
                 .testTag(tag),
             textStyle = TextStyle(fontFamily = IdeFonts.ui, color = IdeColors.Text, fontSize = 12.sp),
             singleLine = true,

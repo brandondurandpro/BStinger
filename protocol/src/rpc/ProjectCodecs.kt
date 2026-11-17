@@ -103,6 +103,8 @@ fun JsonElement.session(): ProjectSession? {
 /** [ServerPlaces] of the server. */
 class RemotePlaces(private val client: RpcClient) : ServerPlaces {
     override suspend fun home(): String? = client.call(Method.UserHome).stringOrNull()
+
+    override suspend fun newConversationFolder(): String? = client.call(Method.ConversationFolder).stringOrNull()
 }
 
 /** [RecentProjectsStore] of the server. */

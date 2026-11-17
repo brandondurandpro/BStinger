@@ -6,6 +6,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertSame
+import kotlin.test.assertTrue
 
 class MethodRegistryTest {
     private fun decode(rpcName: String): Frame {
@@ -24,6 +25,12 @@ class MethodRegistryTest {
     @Test
     fun `a built-in method resolves by its name`() {
         assertSame(Method.Read, MethodRegistry.resolve(Method.Read.rpcName))
+    }
+
+    @Test
+    fun `the prompt of a team is a mutating method that resolves by its name`() {
+        assertSame(Method.TeamPrompt, MethodRegistry.resolve("team/prompt"))
+        assertTrue(Method.TeamPrompt.mutating)
     }
 
     @Test

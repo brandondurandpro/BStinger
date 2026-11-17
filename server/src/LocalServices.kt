@@ -8,6 +8,8 @@ import org.example.kotlineditor.model.OperatedFile
 import org.example.kotlineditor.model.ServerPlaces
 import org.example.kotlineditor.server.ripgrep.RipgrepSettings
 import org.example.kotlineditor.telemetry.Telemetry
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
@@ -57,7 +59,7 @@ class LocalServices(
     val sessions = FileSessionStore(File(dataDirectory, "sessions"))
 
     /** Places of this machine, for the client's Open Project dialog. */
-    val places = LocalPlaces()
+    val places = LocalPlaces(File(dataDirectory, "conversations"))
 
     /** Whether an observer is active: the files of a directory are only listed before a rename when one is. */
     val observed: Boolean get() = observers.any { it.active }
@@ -120,7 +122,14 @@ interface DiskObserver {
     fun sessionEnded(session: String)
 }
 
-/** [ServerPlaces] on this machine: its home directory. */
-class LocalPlaces : ServerPlaces {
+/** [ServerPlaces] on this machine: its home directory, and the folders of the conversations that work in no project. */
+class LocalPlaces(private val conversations: File = File(System.getProperty("user.home"), ".kotlin-editor/conversations")) :
+    ServerPlaces {
     override suspend fun home(): String? = System.getProperty("user.home")
+
+    override suspend fun newConversationFolder(): String? =
+        withContext(Dispatchers.IO) {
+            val folder = File(conversations, "conversation-${java.util.UUID.randomUUID()}")
+            if (folder.mkdirs()) folder.canonicalPath else null
+        }
 }

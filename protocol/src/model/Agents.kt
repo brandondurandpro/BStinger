@@ -232,6 +232,11 @@ sealed interface AgentItem {
         val options: List<AgentPermissionOption>,
         val chosen: String? = null,
         val cancelled: Boolean = false,
+        /**
+         * True for a question a member of a team asks the user, not a permission: [title] is the question, [options]
+         * the choices proposed, and the user may also answer in their own words, which [chosen] then holds.
+         */
+        val question: Boolean = false,
     ) : AgentItem {
         /** Whether it still waits for the user. */
         val pending: Boolean get() = chosen == null && !cancelled
@@ -246,6 +251,37 @@ sealed interface AgentItem {
         /** Whether it went wrong (shown in red). */
         val error: Boolean,
     ) : AgentItem
+
+    /** A task a conversation gave to another one (a member of a team); [conversation] is the key of its transcript. */
+    data class Delegation(
+        override val id: String,
+        override val version: Long,
+        /** Name of whom the task was given to. */
+        val member: String,
+        /** Key of the transcript of the member, to follow with `agent/transcript`. */
+        val conversation: String,
+        /** What was asked. */
+        val task: String,
+        /** How far the member got. */
+        val status: DelegationStatus,
+        /** The report of the member, once it is done; why it failed or was cancelled otherwise, when known. */
+        val result: String = "",
+    ) : AgentItem
+}
+
+/** Progress of a [AgentItem.Delegation]. */
+enum class DelegationStatus {
+    /** The member works on it. */
+    Running,
+
+    /** The member reported. */
+    Done,
+
+    /** The member failed: [AgentItem.Delegation.result] says why when it is known. */
+    Failed,
+
+    /** Stopped before the member reported. */
+    Cancelled,
 }
 
 private const val NO_SERVER = "No server runs the agents"
@@ -429,9 +465,14 @@ interface AgentChoices {
 
     /**
      * The settings a session of [agent] working in [directory] offers (its model…), before a conversation started one;
-     * empty when the agent offers none. The agent may start for it.
+     * empty when the agent offers none. The agent may start for it. With [choices] (option id to value), the settings
+     * a session has once they are made: a model changes the efforts it offers.
      */
-    suspend fun options(agent: AgentCommand, directory: String): List<AgentOption>
+    suspend fun options(
+        agent: AgentCommand,
+        directory: String,
+        choices: Map<String, String> = emptyMap(),
+    ): List<AgentOption>
 
     /**
      * Sets the setting [option] of the session of [conversation] to [value]: at once when the session runs, as soon
@@ -456,6 +497,24 @@ interface AgentChoices {
      * whose id is returned. Fails when the agent cannot fork.
      */
     suspend fun fork(agent: AgentCommand, session: String, directory: String): String
+
+    /**
+     * The skills an agent of a team can be given for the project at [root]: the folders holding a `SKILL.md` in the
+     * project and in the data directory of the server. Reads, changes nothing.
+     */
+    suspend fun skills(root: String): List<AgentSkill>
+
+    /**
+     * The skills of the popular repositories of skills the server can install. The first call, and a call with
+     * [refresh], download the repositories; a repository that cannot be read is in the failures of the listing.
+     */
+    suspend fun skillCatalog(refresh: Boolean): SkillCatalogListing
+
+    /**
+     * Installs the skill of the catalog at [path] of the repository [source] in the data directory of the server, where
+     * agents find it; installed again it is replaced. Returns it. Fails when the repository has no such skill.
+     */
+    suspend fun installSkill(source: String, path: String): AgentSkill
 }
 
 /** Conversations with agents, run by the server. Every call returns at once except [transcript], a long poll. */
@@ -468,6 +527,24 @@ interface Agents : AgentChoices {
     suspend fun prompt(
         conversation: String,
         agent: AgentCommand,
+        directory: String,
+        itemId: String,
+        text: String,
+        session: String? = null,
+        attachments: List<AgentAttachment> = emptyList(),
+    )
+
+    /**
+     * Sends [text] to the manager of [team] in [conversation], working in [directory]: the team runs, the manager
+     * handing tasks to its members, whose own conversations are `<conversation>#<member id>`. The first prompt of a
+     * conversation locks its [team] and [directory]. The prompt shows as item [itemId] of [conversation]. A
+     * conversation the server does not know continues the manager's agent [session], when it can reopen it.
+     * [attachments] go with the text. A request sent twice is run once; a prompt sent during a run waits for it, and
+     * is refused with [AGENT_BUSY_MESSAGE] when too many wait (the IDE sends it again later, as for [prompt]).
+     */
+    suspend fun teamPrompt(
+        conversation: String,
+        team: Team,
         directory: String,
         itemId: String,
         text: String,
@@ -514,6 +591,16 @@ interface Agents : AgentChoices {
             attachments: List<AgentAttachment>,
         ): Unit = throw java.io.IOException(NO_SERVER)
 
+        override suspend fun teamPrompt(
+            conversation: String,
+            team: Team,
+            directory: String,
+            itemId: String,
+            text: String,
+            session: String?,
+            attachments: List<AgentAttachment>,
+        ): Unit = throw java.io.IOException(NO_SERVER)
+
         override suspend fun open(conversation: String, agent: AgentCommand, directory: String, session: String): Unit =
             throw java.io.IOException(NO_SERVER)
 
@@ -536,7 +623,17 @@ interface Agents : AgentChoices {
 private object NoChoices : AgentChoices {
     override suspend fun registry(): List<AgentRegistryEntry> = emptyList()
 
-    override suspend fun options(agent: AgentCommand, directory: String): List<AgentOption> = emptyList()
+    override suspend fun options(
+        agent: AgentCommand,
+        directory: String,
+        choices: Map<String, String>,
+    ): List<AgentOption> = emptyList()
+
+    override suspend fun skills(root: String): List<AgentSkill> = emptyList()
+
+    override suspend fun skillCatalog(refresh: Boolean): SkillCatalogListing = SkillCatalogListing(emptyList(), emptyMap())
+
+    override suspend fun installSkill(source: String, path: String): AgentSkill = throw java.io.IOException("No server to install $path from $source")
 
     override suspend fun setOption(conversation: String, agent: AgentCommand, option: String, value: String): Unit =
         throw java.io.IOException(NO_SERVER)

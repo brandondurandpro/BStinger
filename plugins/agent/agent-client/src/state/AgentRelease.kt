@@ -11,9 +11,8 @@ import java.io.IOException
 private val Conversation.releasable: Boolean
     get() {
         val resting = !busy && queued.isEmpty() && probeFrom == null && settingOptions == 0
-        val alone = discussion?.isActive != true
         val kept = session != null && replayable && items.isNotEmpty()
-        return resting && alone && kept
+        return resting && kept
     }
 
 /** Releases what [conversation], whose tab closed, holds in memory here and on the server, when nothing is lost. */
@@ -22,6 +21,7 @@ internal fun AgentState.release(conversation: Conversation) {
     if (directory == null || !conversation.releasable) return
     conversation.polling?.cancel()
     conversation.polling = null
+    conversation.stopFollowingMembers()
     conversation.forget(directory)
     val agents = project.services.agents
     conversation.releasing =

@@ -11,15 +11,20 @@ object AgentTags {
     const val AGENT_FILTER = "agent.filter"
     const val AGENT_DELETE = "agent.delete"
     const val AGENT_REVIEW = "agent.review"
-    const val AGENT_DISCUSS = "agent.discuss"
-    const val AGENT_DISCUSS_FILTER = "agent.discuss.filter"
-    const val AGENT_DISCUSS_DEFAULT = "agent.discuss.default"
     const val AGENT_LOGIN = "agent.login"
     const val AGENT_PIN = "agent.pin"
     const val AGENT_DUPLICATE = "agent.duplicate"
     const val AGENT_ARCHIVE = "agent.archive"
-    const val AGENT_REVIEW_FILTER = "agent.review.filter"
     const val AGENT_PROJECT_GROUP = "agent.group.project"
+
+    /** The group of the conversations that work in no project. */
+    const val AGENT_SCRATCH_GROUP = "agent.group.scratch"
+
+    /** The group of the conversations that work in the folder [path], which is not the project of the window. */
+    fun agentFolderGroup(path: String) = "agent.group.folder:$path"
+
+    /** The button that removes the group of the folder [path] from the list. */
+    fun agentFolderRemove(path: String) = "agent.group.folder.remove:$path"
     const val AGENT_ARCHIVED = "agent.archived"
     const val AGENT_USAGE = "agent.usage"
     const val AGENT_QUOTA = "agent.quota"
@@ -48,6 +53,189 @@ object AgentTags {
     const val AGENT_TEMPLATE_GLOBAL = "agent.template.global"
     const val AGENT_TEMPLATE_PROJECT = "agent.template.project"
 
+    /** The button beside the templates button that opens the teams of agents. */
+    const val AGENT_TEAMS = "agent.teams"
+    const val AGENT_TEAMS_DIALOG = "agent.teams.dialog"
+    const val AGENT_TEAMS_LIST = "agent.teams.list"
+    const val AGENT_TEAMS_EMPTY = "agent.teams.empty"
+    const val AGENT_TEAMS_CLOSE = "agent.teams.close"
+
+    /** The buttons that remove the group of the project, and the group without a project, from the list. */
+    const val AGENT_PROJECT_REMOVE = "agent.group.project.remove"
+    const val AGENT_SCRATCH_REMOVE = "agent.group.scratch.remove"
+
+    /** The button of the Teams window that opens the skill catalog, and the parts of the catalog window. */
+    const val AGENT_SKILL_CATALOG = "agent.catalog.open"
+    const val AGENT_CATALOG_DIALOG = "agent.catalog"
+    const val AGENT_CATALOG_CLOSE = "agent.catalog.close"
+    const val AGENT_CATALOG_REFRESH = "agent.catalog.refresh"
+    const val AGENT_CATALOG_FILTER = "agent.catalog.filter"
+    const val AGENT_CATALOG_LIST = "agent.catalog.list"
+    const val AGENT_CATALOG_LOADING = "agent.catalog.loading"
+    const val AGENT_CATALOG_ERROR = "agent.catalog.error"
+    const val AGENT_CATALOG_EMPTY = "agent.catalog.empty"
+
+    fun agentCatalogSource(source: String) = "agent.catalog.source:$source"
+
+    /** The click target of the header of a repository, which folds its skills away or shows them. */
+    fun agentCatalogSourceToggle(source: String) = "agent.catalog.sourceToggle:$source"
+
+    /** The scrollbar of the list of the catalog. */
+    const val AGENT_CATALOG_SCROLLBAR = "agent.catalog.scrollbar"
+
+    fun agentCatalogSourceError(source: String) = "agent.catalog.sourceError:$source"
+
+    fun agentCatalogSkill(source: String, path: String) = "agent.catalog.skill:$source:$path"
+
+    fun agentCatalogInstall(source: String, path: String) = "agent.catalog.install:$source:$path"
+
+    fun agentCatalogInstalled(source: String, path: String) = "agent.catalog.installed:$source:$path"
+
+    fun agentCatalogInstallError(source: String, path: String) = "agent.catalog.installError:$source:$path"
+
+    /** The Teams button at the top left of the list of conversations. */
+    const val AGENT_LIST_TEAMS = "agent.list.teams"
+
+    /** The cross at the top right of the Teams window. */
+    const val AGENT_TEAMS_CLOSE_CROSS = "agent.teams.closeCross"
+    const val AGENT_TEAM_NEW = "agent.team.new"
+    const val AGENT_TEAM_STARTER = "agent.team.starter"
+    const val AGENT_TEAM_FORM = "agent.team.form"
+    const val AGENT_TEAM_NAME = "agent.team.name"
+    const val AGENT_TEAM_GLOBAL = "agent.team.global"
+    const val AGENT_TEAM_PROJECT = "agent.team.project"
+    const val AGENT_TEAM_ADD_MEMBER = "agent.team.addMember"
+    const val AGENT_TEAM_SAVE = "agent.team.save"
+    const val AGENT_TEAM_CANCEL = "agent.team.cancel"
+
+    /** Why the form of a team cannot be saved yet. */
+    const val AGENT_TEAM_PROBLEM = "agent.team.problem"
+
+    /** The folder a conversation works in, in the prompt bar, and its menu. */
+    const val AGENT_FOLDER = "agent.folder"
+    const val AGENT_FOLDER_PATH = "agent.folder.path"
+    const val AGENT_FOLDER_ROOT = "agent.folder.root"
+    const val AGENT_FOLDER_APPLY = "agent.folder.apply"
+
+    /** In the menu of the folder of a conversation without a project: the project of this window, and the others. */
+    const val AGENT_FOLDER_THIS_PROJECT = "agent.folder.thisProject"
+
+    fun agentFolderProject(path: String) = "agent.folder.project:$path"
+    const val AGENT_FOLDER_BROWSE = "agent.folder.browse"
+    const val AGENT_FOLDER_ERROR = "agent.folder.error"
+    const val AGENT_FOLDER_LIST = "agent.folder.list"
+
+    fun agentFolderChoice(path: String) = "agent.folder.choice:$path"
+
+    /** The picker of the team of a conversation, in the prompt bar. */
+    const val AGENT_TEAM_PICKER = "agent.teamPicker"
+
+    /** Its entry "No team". */
+    const val AGENT_TEAM_PICKER_NONE = "agent.teamPicker.none"
+
+    /** Its entry "Manage teams…", which opens the Teams window. */
+    const val AGENT_TEAM_PICKER_MANAGE = "agent.teamPicker.manage"
+
+    /** Its list of teams, a lazy list: only the rows shown are composed. */
+    const val AGENT_TEAM_PICKER_LIST = "agent.teamPicker.list"
+
+    /** The notice of a started conversation whose team was deleted. */
+    const val AGENT_TEAM_MISSING = "agent.teamPicker.missing"
+
+    /** The view of a member of the team of a conversation, shown by its tab: its status and its transcript. */
+    const val AGENT_MEMBER_VIEW = "agent.member.view"
+
+    /** The status of the member shown, in words. */
+    const val AGENT_MEMBER_STATUS = "agent.member.status"
+
+    /** The transcript of the member shown, a lazy list. */
+    const val AGENT_MEMBER_TRANSCRIPT = "agent.member.transcript"
+
+    /** What the view of a member says while it has no transcript to show. */
+    const val AGENT_MEMBER_EMPTY = "agent.member.empty"
+
+    /** The card of the delegation [id]: a task the manager gave a member. */
+    fun agentDelegation(id: String) = "agent.delegation.$id"
+
+    /** Its header, which expands the card and folds it back. */
+    fun agentDelegationToggle(id: String) = "agent.delegation.toggle.$id"
+
+    /** Its status, in words. */
+    fun agentDelegationStatus(id: String) = "agent.delegation.status.$id"
+
+    /** The report of its member, once the task ended. */
+    fun agentDelegationReport(id: String) = "agent.delegation.report.$id"
+
+    /** The work of its member, a lazy list, shown while the card is expanded. */
+    fun agentDelegationWork(id: String) = "agent.delegation.work.$id"
+
+    /** What an expanded card says instead of the work: it loads, or there is none. */
+    fun agentDelegationNote(id: String) = "agent.delegation.note.$id"
+
+    /** The row [index] of the work of a member, in a card or in its tab. */
+    fun agentMemberRow(index: Int) = "agent.member.row.$index"
+
+    /** The question or permission text of the request [id] of [asker] ("Agent" for the conversation's own, else a member). */
+    fun agentRequestTitle(asker: String, id: String) = "agent.request.title.$asker.$id"
+
+    /** What the asker wrote before its question: the proposals the user decides on. */
+    fun agentRequestSaid(asker: String, id: String) = "agent.request.said.$asker.$id"
+
+    /** The answer a request [id] got, once it was answered. */
+    fun agentRequestAnswer(asker: String, id: String) = "agent.request.answer.$asker.$id"
+
+    /** The button of the choice [choice] a member proposes in its question [id]. */
+    fun agentQuestionChoice(asker: String, id: String, choice: String) = "agent.question.choice.$asker.$id.$choice"
+
+    /** The field where the user answers the question [id] in their own words. */
+    fun agentQuestionText(asker: String, id: String) = "agent.question.text.$asker.$id"
+
+    /** The button that sends the words typed in the field of the question [id]. */
+    fun agentQuestionSend(asker: String, id: String) = "agent.question.send.$asker.$id"
+
+    /** The permission request of the member named [member], at the end of the conversation of its team. */
+    fun agentMemberRequest(member: String) = "agent.member.request.$member"
+
+    /** The tab of the member [id] of the team, among the detail tabs of the conversation. */
+    fun agentMemberTab(id: String) = "agent.member.tab.$id"
+
+    /** The status this tab shows (`idle`, `working`, `failed`). */
+    fun agentMemberTabStatus(id: String) = "agent.member.tab.status.$id"
+
+    /** The role of the manager in the tags of the fields of a team. */
+    const val TEAM_MANAGER = "manager"
+
+    /** The role of the member at [index] in the tags of the fields of a team. */
+    fun teamMember(index: Int) = "member.$index"
+
+    /** A team in the menu of the picker, by its id. */
+    fun agentTeamChoice(id: String) = "agent.teamPicker.team.$id"
+
+    /** A team of the list, by its id. */
+    fun agentTeam(id: String) = "agent.team.row.$id"
+
+    fun agentTeamEdit(id: String) = "agent.team.edit.$id"
+
+    fun agentTeamDuplicate(id: String) = "agent.team.duplicate.$id"
+
+    fun agentTeamDelete(id: String) = "agent.team.delete.$id"
+
+    /** The tab of the agent of [role] (`manager`, `member.0`) in the form of a team: it shows the fields of that agent. */
+    fun agentTeamTab(role: String) = "agent.team.tab.$role"
+
+    /** A field of the agent of [role] (`manager`, `member.0`): `name`, `description`, `provider`, `model`, `effort`, `skills`, `prompt`, `remove`. */
+    fun agentTeamField(role: String, field: String) = "agent.team.$role.$field"
+
+    /** A value of the menu of a field of the agent of [role], by its value (a model, a skill's path, a provider's id). */
+    fun agentTeamValue(role: String, field: String, value: String) = "agent.team.$role.$field:$value"
+
+    /** In the menu of the skills of [role]: the header of an owner (its text), its click target, and the scrollbar. */
+    fun agentSkillOwner(role: String, owner: String) = "agent.team.$role.skills.owner:$owner"
+
+    fun agentSkillOwnerToggle(role: String, owner: String) = "agent.team.$role.skills.ownerToggle:$owner"
+
+    fun agentSkillsScrollbar(role: String) = "agent.team.$role.skills.scrollbar"
+
     fun agentQuotaLimit(index: Int) = "agent.quota.$index"
 
     fun agentCommand(name: String) = "agent.command.$name"
@@ -72,24 +260,7 @@ object AgentTags {
 
     fun agentChangeRevert(path: String) = "agent.change.revert:$path"
 
-    const val AGENT_REVIEW_MANUAL = "agent.review.manual"
-    const val AGENT_REVIEW_BY_AGENT = "agent.review.byAgent"
-    const val AGENT_REVIEW_DIALOG = "agent.review.dialog"
-    const val AGENT_REVIEW_CANCEL = "agent.review.cancel"
-    const val AGENT_REVIEW_SEND = "agent.review.send"
-    const val AGENT_REVIEW_START = "agent.review.start"
-    const val AGENT_REVIEW_AGENT = "agent.review.agent"
-    const val AGENT_REVIEW_MODEL = "agent.review.model"
 
-    fun agentReviewModel(value: String) = "agent.review.model:$value"
-
-    fun agentReviewAspect(name: String) = "agent.review.aspect.$name"
-
-    const val AGENT_REVIEW_DEFAULT = "agent.review.default"
-
-    fun agentReviewer(id: String) = "agent.review.$id"
-
-    fun agentDiscussPeer(id: String) = "agent.discuss.$id"
 
     const val AGENT_RENAME = "agent.rename"
     const val AGENT_RENAME_FIELD = "agent.renameField"
@@ -159,10 +330,7 @@ object AgentTags {
     const val AGENT_BASE_FETCH_ERROR = "agent.basePicker.fetchError"
 
     fun agentBase(branch: String) = "agent.basePicker.branch:$branch"
-    const val AGENT_BASE_OTHER_PROJECT = "agent.basePicker.otherProject"
-    const val AGENT_BASE_BROWSE = "agent.basePicker.browse"
 
-    fun agentBaseProject(path: String) = "agent.basePicker.projectChoice:$path"
     const val AGENT_LAST_MESSAGE = "agent.lastMessage"
 
     fun agentConversationAgent(id: Int) = "agent.conversation.$id.agent"

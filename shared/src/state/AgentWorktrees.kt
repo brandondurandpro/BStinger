@@ -3,6 +3,7 @@ package org.example.kotlineditor.state
 import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
+import org.example.kotlineditor.model.FileEntry
 import java.io.IOException
 
 private const val WORKTREE_LOAD_MILLIS = 2_000L
@@ -18,8 +19,20 @@ internal suspend fun ProjectState.openWorktreeProject(
 ): ProjectState {
     val path = services.git.worktree(root.path, branch, base)
     val directory = checkNotNull(services.fileSystem.resolveDirectory(path)) { "$path is missing" }
-    // The tool windows of the agent, the same open in the worktree as in the project it works on directly.
-    val worktree =
+    return openFolderProject(directory, toolWindows)
+}
+
+/**
+ * Opens [directory] as a project of this window, returned once its tree and branch are loaded so that the tool windows
+ * never flash empty: a worktree of this project, or another folder a conversation works in.
+ */
+internal suspend fun ProjectState.openFolderProject(
+    directory: FileEntry,
+    toolWindows: ToolWindowLayout,
+    awaitLoaded: Boolean = true,
+): ProjectState {
+    // The tool windows of the agent, the same open in the folder as in the project it works on directly.
+    val opened =
         ProjectState(
             directory,
             services,
@@ -30,10 +43,12 @@ internal suspend fun ProjectState.openWorktreeProject(
             statusIndicators = statusIndicators,
             installedPlugins = installedPlugins,
         )
-    withTimeoutOrNull(WORKTREE_LOAD_MILLIS) {
-        snapshotFlow { worktree.tree.rows.size > 1 && worktree.git.currentBranch != null }.first { it }
+    if (awaitLoaded) {
+        withTimeoutOrNull(WORKTREE_LOAD_MILLIS) {
+            snapshotFlow { opened.tree.rows.size > 1 && opened.git.currentBranch != null }.first { it }
+        }
     }
-    return worktree
+    return opened
 }
 
 /** The workspace of [Conversation.workspace] (the agent's own, or a worktree) as a project, if it is one. */

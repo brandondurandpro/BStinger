@@ -12,8 +12,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -25,6 +35,7 @@ import org.example.kotlineditor.model.AgentDiff
 import org.example.kotlineditor.model.AgentItem
 import org.example.kotlineditor.model.AgentTerminalOutput
 import org.example.kotlineditor.model.AgentToolStatus
+import org.example.kotlineditor.model.DelegationStatus
 import org.example.kotlineditor.state.Conversation
 
 // The items of a conversation: the prompts, thoughts, tool calls with their diffs, plans, permission requests and
@@ -78,6 +89,28 @@ internal fun NoticeView(notice: AgentItem.Notice) {
     )
 }
 
+/** Who asks, in the card of a permission request of the conversation's own agent. */
+internal const val AGENT_ASKER = "The agent"
+
+/**
+ * An item of a transcript that reads the same wherever it shows, in a conversation or in the work of a member of its
+ * team. [asker] names who asks for a permission; [onAnswer] answers one, null where it is answered elsewhere.
+ */
+@Composable
+internal fun PlainItemView(item: AgentItem, asker: String, onAnswer: ((AgentItem.Permission, String) -> Unit)?) {
+    when (item) {
+        is AgentItem.UserText -> UserBubble(item.text, item.context)
+        is AgentItem.AgentText -> MarkdownText(item.text.trimEnd(), Modifier.fillMaxWidth())
+        is AgentItem.Thought -> ThoughtView(item.text)
+        is AgentItem.ToolCall -> ToolCallCard(item)
+        is AgentItem.Plan -> PlanView(item)
+        is AgentItem.Permission -> PermissionCard(item, asker, onAnswer = onAnswer?.let { answer -> { option -> answer(item, option) } })
+        is AgentItem.Notice -> NoticeView(item)
+        // Only a team conversation has delegations, and it shows them as cards.
+        is AgentItem.Delegation -> Unit
+    }
+}
+
 // A row of the transcript: one item, or the tool calls the agent made one after the other.
 internal sealed interface TranscriptRow {
     val key: String
@@ -109,9 +142,9 @@ internal fun transcriptRows(items: List<AgentItem>): List<TranscriptRow> {
 
 // The commands of the agent are folded behind a link, with the last one beside it to follow what it does.
 @Composable
-internal fun ToolCallRun(conversation: Conversation, calls: List<AgentItem.ToolCall>) {
+internal fun ToolCallRun(openedRuns: MutableMap<String, Boolean>, calls: List<AgentItem.ToolCall>) {
     val first = calls.firstOrNull() ?: return
-    val opened = conversation.openedToolRuns[first.id] == true
+    val opened = openedRuns[first.id] == true
     val noun = if (calls.size == 1) "command" else "commands"
     val verb = if (opened) "Hide" else "Show"
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -119,7 +152,7 @@ internal fun ToolCallRun(conversation: Conversation, calls: List<AgentItem.ToolC
             Label(
                 "$verb ${calls.size} $noun",
                 Modifier
-                    .clickable { conversation.openedToolRuns[first.id] = !opened }
+                    .clickable { openedRuns[first.id] = !opened }
                     .testTag(AgentTags.AGENT_TOOLS_TOGGLE),
                 color = IdeColors.Accent,
                 fontSize = 12.sp,
@@ -261,9 +294,15 @@ internal fun PlanView(plan: AgentItem.Plan) {
     }
 }
 
-// The agent asks before it acts: one button per option while it waits, then the answer.
+// The agent (or [asker], a member of a team) asks before it acts: one button per option while it waits, then the
+// answer. Without [onAnswer] the request is answered elsewhere, and the card only says that it waits.
 @Composable
-internal fun PermissionCard(request: AgentItem.Permission, onAnswer: (String) -> Unit) {
+internal fun PermissionCard(
+    request: AgentItem.Permission,
+    asker: String = AGENT_ASKER,
+    said: String = "",
+    onAnswer: ((String) -> Unit)?,
+) {
     Column(
         Modifier
             .fillMaxWidth()
@@ -272,8 +311,14 @@ internal fun PermissionCard(request: AgentItem.Permission, onAnswer: (String) ->
             .padding(10.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Label("The agent asks to: ${request.title}", fontWeight = FontWeight.SemiBold, maxLines = 3)
-        if (request.pending) {
+        val heading = if (request.question) "$asker asks: ${request.title}" else "$asker asks to: ${request.title}"
+        Label(heading, Modifier.testTag(AgentTags.agentRequestTitle(asker, request.id)), fontWeight = FontWeight.SemiBold, maxLines = 6)
+        if (said.isNotBlank()) AskerSaid(said, Modifier.testTag(AgentTags.agentRequestSaid(asker, request.id)))
+        if (request.pending && onAnswer == null) {
+            Label("Waits for your answer, at the end of the conversation", color = IdeColors.TextSecondary, fontSize = 12.sp)
+        } else if (request.pending && onAnswer != null && request.question) {
+            QuestionAnswer(request, asker, onAnswer)
+        } else if (request.pending && onAnswer != null) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 for (option in request.options) {
                     IdeButton(
@@ -285,9 +330,46 @@ internal fun PermissionCard(request: AgentItem.Permission, onAnswer: (String) ->
                 }
             }
         } else {
-            val chosen = request.options.firstOrNull { it.id == request.chosen }?.name
+            // A question answered in the user's own words has no option of that name: the words are the answer.
+            val chosen = request.options.firstOrNull { it.id == request.chosen }?.name ?: request.chosen
             val answer = if (request.cancelled) "Cancelled" else "Answered: $chosen"
-            Label(answer, color = IdeColors.TextSecondary, fontSize = 12.sp)
+            Label(answer, Modifier.testTag(AgentTags.agentRequestAnswer(asker, request.id)), color = IdeColors.TextSecondary, fontSize = 12.sp)
         }
+    }
+}
+
+// What the asker wrote before its question: long proposals scroll in place, the card never takes the conversation.
+@Composable
+private fun AskerSaid(said: String, modifier: Modifier) {
+    val scroll = rememberScrollState()
+    SelectionContainer {
+        BasicText(
+            said,
+            modifier.fillMaxWidth().heightIn(max = 300.dp).verticalScroll(scroll),
+            style = bodyStyle.copy(color = IdeColors.Text),
+        )
+    }
+}
+
+// The choices a member proposes, one button each, and a field for the user's own words.
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun QuestionAnswer(request: AgentItem.Permission, asker: String, onAnswer: (String) -> Unit) {
+    var words by remember(request.id) { mutableStateOf("") }
+    val send = { if (words.isNotBlank()) onAnswer(words.trim()) }
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        for (option in request.options) {
+            IdeButton(option.name, { onAnswer(option.id) }, Modifier.testTag(AgentTags.agentQuestionChoice(asker, request.id, option.id)))
+        }
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        IdeTextField(
+            words,
+            { words = it },
+            Modifier.weight(1f).testTag(AgentTags.agentQuestionText(asker, request.id)),
+            placeholder = "Or answer in your own words",
+            onSubmit = send,
+        )
+        IdeButton("Answer", send, Modifier.testTag(AgentTags.agentQuestionSend(asker, request.id)), primary = true, enabled = words.isNotBlank())
     }
 }

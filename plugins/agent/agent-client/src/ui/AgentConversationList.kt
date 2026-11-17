@@ -9,6 +9,9 @@ import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import org.example.kotlineditor.state.removeFolder
+import androidx.compose.foundation.TooltipArea
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,6 +21,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.CircularProgressIndicator
@@ -61,6 +65,7 @@ import kotlinx.coroutines.delay
 import org.example.kotlineditor.state.AgentOutcome
 import org.example.kotlineditor.state.AgentState
 import org.example.kotlineditor.state.Conversation
+import org.example.kotlineditor.state.folderNameOf
 import org.example.kotlineditor.state.costSummary
 import org.example.kotlineditor.state.delete
 import org.example.kotlineditor.state.duplicate
@@ -68,6 +73,8 @@ import org.example.kotlineditor.state.matches
 import org.example.kotlineditor.state.outcome
 import org.example.kotlineditor.state.placeholder
 import org.example.kotlineditor.state.projectName
+import org.example.kotlineditor.state.removeProjectGroup
+import org.example.kotlineditor.state.removeScratchGroup
 
 // Left panel of agent mode: the conversations of the project, filtered by title.
 
@@ -80,7 +87,9 @@ fun ConversationList(agent: AgentState, modifier: Modifier) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             FoldChevron()
-            Label("Conversations", Modifier.weight(1f).foldOnClick(), fontWeight = FontWeight.SemiBold)
+            Label("Conversations", Modifier.foldOnClick(), fontWeight = FontWeight.SemiBold)
+            Box(Modifier.padding(start = 8.dp)) { TeamsButton(agent, AgentTags.AGENT_LIST_TEAMS) }
+            Spacer(Modifier.weight(1f))
             val cost = costSummary(agent.conversations.map { it.usage })
             if (cost != null) {
                 Label(cost, Modifier.testTag(AgentTags.AGENT_COST), color = IdeColors.TextSecondary, fontSize = 12.sp)
@@ -110,8 +119,17 @@ fun ConversationList(agent: AgentState, modifier: Modifier) {
                 color = IdeColors.TextSecondary,
             )
         }
-        LazyColumn(Modifier.fillMaxSize()) {
-            groupedConversations(agent, shown, searching, collapsed)
+        val listState = rememberLazyListState()
+        val current = agent.current
+        val plans = conversationGroups(agent, shown)
+        // The conversation that opens shows, whatever the list was scrolled to: a new one is never hidden by the others.
+        LaunchedEffect(current) {
+            val row = rowOf(current, plans, searching, collapsed)
+            // One row above it, so the header of its group shows when it is the first.
+            if (row != null) listState.animateScrollToItem((row - 1).coerceAtLeast(0))
+        }
+        LazyColumn(Modifier.fillMaxSize(), state = listState) {
+            groupedConversations(agent, plans, searching, collapsed)
             if (archived.isNotEmpty()) {
                 item(key = "archived-header") {
                     ArchivedHeader(archived.size, archivedOpen) { archivedOpen = !archivedOpen }
@@ -413,21 +431,80 @@ private fun TitleField(title: String, onDone: (String?) -> Unit) {
     )
 }
 
-// The conversations under their project, one flat list: no sub-group by folder or branch.
+// The conversations under the folder they work in: the project of the window first, then the other folders in the order
+// the conversations came; each group is one flat list, no sub-group by branch.
+// A group of the list: its key, how it shows and its conversations.
+private class GroupPlan(val key: String, val look: GroupLook, val members: List<Conversation>)
+
+// The groups in the order of the list: without a project first (where a new conversation starts), then the project of the
+// window, then the other folders.
+private fun conversationGroups(agent: AgentState, shown: List<Conversation>): List<GroupPlan> {
+    val plans = mutableListOf<GroupPlan>()
+    val scratch = shown.filter { it.scratch }
+    if (scratch.isNotEmpty()) {
+        val remove = { agent.removeScratchGroup() }
+        val group = GroupLook(NO_PROJECT, AgentTags.AGENT_SCRATCH_GROUP, remove, AgentTags.AGENT_SCRATCH_REMOVE)
+        plans.add(GroupPlan(SCRATCH_KEY, group, scratch))
+    }
+    val own = shown.filter { it.folder == null && !it.scratch }
+    if (own.isNotEmpty()) {
+        val remove = { agent.removeProjectGroup() }
+        val group = GroupLook(agent.projectName, AgentTags.AGENT_PROJECT_GROUP, remove, AgentTags.AGENT_PROJECT_REMOVE)
+        plans.add(GroupPlan(PROJECT_KEY, group, own))
+    }
+    val folders = shown.filter { !it.scratch }.mapNotNull { it.folder }.distinct()
+    for (folder in folders) {
+        val members = shown.filter { it.folder == folder && !it.scratch }
+        val remove = { agent.removeFolder(folder) }
+        val group = GroupLook(folderNameOf(folder), AgentTags.agentFolderGroup(folder), remove, AgentTags.agentFolderRemove(folder))
+        plans.add(GroupPlan("$FOLDER_KEY$folder", group, members))
+    }
+    return plans
+}
+
+// The index in the list of the row of [conversation], counting the headers; null when it is not shown (a folded group).
+private fun rowOf(conversation: Conversation?, plans: List<GroupPlan>, searching: Boolean, collapsed: List<String>): Int? {
+    var row = 0
+    for (plan in plans) {
+        row += 1
+        if (!searching && plan.key in collapsed) continue
+        val position = plan.members.indexOf(conversation)
+        if (position >= 0) return row + position
+        row += plan.members.size
+    }
+    return null
+}
+
 private fun LazyListScope.groupedConversations(
     agent: AgentState,
-    shown: List<Conversation>,
+    plans: List<GroupPlan>,
     searching: Boolean,
     collapsed: MutableList<String>,
 ) {
-    if (shown.isEmpty()) return
-    val projectKey = "project"
-    val projectOpen = searching || projectKey !in collapsed
-    item(key = "group-$projectKey") {
-        GroupHeader(agent.projectName, shown.size, projectOpen, AgentTags.AGENT_PROJECT_GROUP) { toggled(collapsed, projectKey) }
+    for (plan in plans) conversationGroup(agent, plan.key, plan.look, plan.members, searching, collapsed)
+}
+
+// How a group of the list shows: its name, the tag of its header, and its button to remove it with that button's tag.
+private class GroupLook(val name: String, val tag: String, val remove: () -> Unit, val removeTag: String)
+
+private const val PROJECT_KEY = "project"
+private const val FOLDER_KEY = "folder:"
+private const val SCRATCH_KEY = "scratch"
+
+private fun LazyListScope.conversationGroup(
+    agent: AgentState,
+    key: String,
+    group: GroupLook,
+    members: List<Conversation>,
+    searching: Boolean,
+    collapsed: MutableList<String>,
+) {
+    val open = searching || key !in collapsed
+    item(key = "group-$key") {
+        GroupHeader(group, members.size, open) { toggled(collapsed, key) }
     }
-    if (!projectOpen) return
-    items(shown, key = { it.id }) { conversation ->
+    if (!open) return
+    items(members, key = { it.id }) { conversation ->
         Box(Modifier.padding(start = 8.dp)) {
             ConversationRow(agent, conversation, selected = conversation == agent.current)
         }
@@ -440,18 +517,35 @@ private fun toggled(collapsed: MutableList<String>, key: String) {
 
 // "▾ project (3)": a click folds or unfolds the group.
 @Composable
-private fun GroupHeader(label: String, count: Int, open: Boolean, tag: String, toggle: () -> Unit) {
+private fun GroupHeader(group: GroupLook, count: Int, open: Boolean, toggle: () -> Unit) {
     val arrow = if (open) "▾" else "▸"
-    Label(
-        "$arrow $label ($count)",
-        Modifier
-            .fillMaxWidth()
-            .clickable(onClick = toggle)
-            .padding(start = 14.dp, end = 8.dp, top = 6.dp, bottom = 4.dp)
-            .testTag(tag),
-        color = IdeColors.Text,
-        fontSize = 12.sp,
-        fontWeight = FontWeight.SemiBold,
-        maxLines = 1,
-    )
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Label(
+            "$arrow ${group.name} ($count)",
+            Modifier
+                .weight(1f)
+                .clickable(onClick = toggle)
+                .padding(start = 14.dp, end = 8.dp, top = 6.dp, bottom = 4.dp)
+                .testTag(group.tag),
+            color = IdeColors.Text,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+        )
+        RemoveFolderButton(group.remove, group.removeTag)
+    }
+}
+
+// "Remove from the list": the conversations of the folder close, the agent keeps their sessions.
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun RemoveFolderButton(remove: () -> Unit, tag: String) {
+    TooltipArea(tooltip = { Tooltip("Remove this group from the list (the conversations stay in the agent's history)") }) {
+        Label(
+            "✕",
+            Modifier.clickable(onClick = remove).padding(horizontal = 8.dp, vertical = 4.dp).testTag(tag),
+            color = IdeColors.TextSecondary,
+            fontSize = 12.sp,
+        )
+    }
 }

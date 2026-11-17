@@ -46,6 +46,30 @@ object PreferenceKeys {
     /** Per project (the key ends with its path): its prompt templates, in the format of [AGENT_TEMPLATES]. */
     const val AGENT_TEMPLATES_PREFIX = "agent.templates."
 
+    /** The agent teams of the user, for every project: a JSON array of teams (see `teamsToText`). */
+    const val AGENT_TEAMS = "agent.teamList"
+
+    /** `true` once the ready-made team was added (it comes back only when the user asks for it, not once deleted). */
+    const val AGENT_TEAMS_SEEDED = "agent.teamsSeeded"
+
+    /** Per project (the key ends with its path): its agent teams, in the format of [AGENT_TEAMS]. */
+    const val AGENT_TEAMS_PREFIX = "agent.teamList."
+
+    /** Per project (the key ends with its path): the team of each conversation, one `session<TAB>teamId` per line. */
+    const val AGENT_CONVERSATION_TEAMS_PREFIX = "agent.conversationTeams."
+
+    /**
+     * Per project (the key ends with its path): the sessions the members of teams worked in, one per line. They are
+     * part of the conversation of their team, not conversations of the history.
+     */
+    const val AGENT_MEMBER_SESSIONS_PREFIX = "agent.memberSessions."
+
+    /** The other folders of the server this project's conversations work in, one per line (suffix: the project's path). */
+    const val AGENT_FOLDERS_PREFIX = "agent.folders."
+
+    /** The folders that hold the empty folders of the conversations without a project, one per line (suffix: the project's path). */
+    const val AGENT_SCRATCH_PREFIX = "agent.scratch."
+
     /** Per project (the key ends with its path): the sessions open in tabs of agent mode, one per line, in order. */
     const val AGENT_OPEN_PREFIX = "agent.open."
 

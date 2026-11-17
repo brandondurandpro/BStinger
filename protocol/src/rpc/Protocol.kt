@@ -317,6 +317,9 @@ enum class Method(
     /** Home directory of the user running the server, for the Open Project dialog. */
     UserHome("fs/userHome", mutating = false),
 
+    /** A new empty folder for a conversation of agent mode that works in no project. */
+    ConversationFolder("fs/conversationFolder", mutating = true),
+
     /** Children of a directory. */
     ListDirectory("fs/list", mutating = false),
 
@@ -732,6 +735,21 @@ enum class Method(
 
     /** Logs in to an agent with one of its methods. */
     AgentAuthenticate("agent/authenticate", mutating = true),
+
+    /** The skills (folders with a `SKILL.md`) an agent of a team can be given, in a project and the data directory. */
+    TeamSkills("team/skills", mutating = false),
+
+    /**
+     * The skills of the popular repositories of skills the server can install, after downloading each repository the
+     * first time or when `refresh` is set. A repository that cannot be read is reported, the others are listed.
+     */
+    TeamSkillCatalog("team/skillCatalog", mutating = false),
+
+    /** Installs a skill of the catalog in the data directory of the server (again: it is replaced) and returns it. */
+    TeamInstallSkill("team/installSkill", mutating = true),
+
+    /** Sends a prompt of the user to the manager of a team: the run of the team starts, or the prompt waits for it. */
+    TeamPrompt("team/prompt", mutating = true),
 }
 
 /** A JSON-RPC error object `{"code": ..., "message": ...}`. */

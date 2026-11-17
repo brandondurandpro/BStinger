@@ -43,6 +43,7 @@ internal fun fileHandlers(services: LocalServices): Map<MethodSpec, Handler> {
     return mapOf(
         Method.ResolveDirectory to { fs.resolveDirectory(params.string(PATH)).toJsonOrNull() },
         Method.UserHome to { JsonPrimitive(services.places.home()) },
+        Method.ConversationFolder to { JsonPrimitive(services.places.newConversationFolder()) },
         Method.ListDirectory to {
             val directory = entry(DIRECTORY)
             val fold = FOLD in params && params.bool(FOLD)

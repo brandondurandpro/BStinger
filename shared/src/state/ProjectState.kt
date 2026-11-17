@@ -60,7 +60,7 @@ class ProjectState(
     val statusIndicators: StatusIndicators = StatusIndicators(preferences),
     /** The plugins installed in the IDE, for the Extensions window; none in previews. */
     val installedPlugins: () -> ClientPlugins? = { null },
-    /** Where agent mode can start a conversation in another project; null where no window can be added. */
+    /** Where agent mode finds the other folders a conversation can work in; null in previews. */
     private val windows: ProjectWindows? = null,
 ) : ProjectHost,
     AgentHost {
@@ -125,7 +125,7 @@ class ProjectState(
         }
     }
 
-    override val canStartInOtherProject: Boolean get() = windows?.available?.invoke() == true
+    override val canStartInOtherProject: Boolean get() = windows != null
 
     override val otherProjects: List<String> get() = windows?.projects?.invoke().orEmpty()
 
@@ -495,12 +495,27 @@ class ProjectState(
 
     override suspend fun branchChoices(fetch: Boolean): BranchChoices? = branchChoicesOf(fetch)
 
-    override fun startConversationIn(path: String) {
-        windows?.open?.invoke(path)
+    // The folders of the conversations of this window, one project each, loaded when first asked for.
+    private val folders = HashMap<String, ProjectState>()
+
+    override suspend fun openFolder(path: String, awaitLoaded: Boolean): AgentHost? {
+        val directory = services.fileSystem.resolveDirectory(path) ?: return null
+        if (directory.path == root.path) return this
+        val known = folders[directory.path]
+        if (known != null) return known
+        val opened = openFolderProject(directory, agent.toolWindows, awaitLoaded)
+        // Two requests for the same folder: the first one is kept.
+        val kept = folders.getOrPut(directory.path) { opened }
+        if (kept !== opened) opened.dispose()
+        return kept
     }
 
-    override fun browseProjectForConversation() {
-        windows?.browse?.invoke()
+    override fun closeFolder(path: String) {
+        folders.remove(path)?.dispose()
+    }
+
+    override fun browseFolderForConversation(onChosen: (String) -> Unit) {
+        windows?.browse?.invoke(onChosen)
     }
 
     override fun agentAsking(title: String, question: String) {
@@ -514,6 +529,8 @@ class ProjectState(
     override fun synchronize() = synchronizeFiles()
 
     override fun dispose() {
+        folders.values.forEach { it.dispose() }
+        folders.clear()
         if (agentState.isInitialized()) agent.dispose()
         terminal.stop()
         run.dispose()

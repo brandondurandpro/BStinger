@@ -1,0 +1,100 @@
+package org.example.kotlineditor.harness
+
+import org.example.kotlineditor.model.AgentSkill
+import org.example.kotlineditor.model.Team
+import org.example.kotlineditor.model.TeamAgent
+import org.example.kotlineditor.model.TeamText
+
+private const val REPORT_TASK_CHARS = 120
+
+/** How a member's work ended, as the manager is told. */
+internal enum class ReportStatus(val word: String) {
+    Done("done"),
+    Failed("failed"),
+    Cancelled("cancelled"),
+}
+
+/** What a member came back with for the task [task]: its report, or why it failed. */
+internal class MemberReport(val member: String, val task: String, val status: ReportStatus, val text: String)
+
+/**
+ * The prompts the harness sends. Each one is a short introduction, then a last section headed
+ * [TeamText.REQUEST_HEADING] that holds what the agent has to act on (the text of the user, the task of a member, the
+ * reports of the members): an agent reads it as the request, and the scripted agent of the tests finds its directive
+ * there. The prompts the manager gets that the user did not write ([relay], [refusal]) start with the words
+ * [TeamText] names, by which the IDE tells them from the user's own in a replayed session.
+ */
+internal class TeamPrompts(private val protocol: DelegationProtocol) {
+    /** The first prompt of the manager: who it is, its team, how to delegate, its instructions, then [request]. */
+    fun managerFirst(team: Team, skills: List<AgentSkill>, request: String): String {
+        val manager = team.manager
+        val sections = ArrayList<String>()
+        val role = descriptionOf(manager)
+        sections.add("""You are ${manager.name}, the manager of the team "${team.name}".$role""")
+        sections.add(
+            "You coordinate the work of your team and the user only talks to you. Your members work in the same " +
+                "directory as you, at the same time: hand them the tasks they can do, and answer the user yourself " +
+                "once the work is done. What the user is to choose is theirs: when a member reports alternatives " +
+                "the user has not chosen between, put them to the user in your answer and wait for their choice " +
+                "rather than choosing for them.",
+        )
+        sections.add("# Your team\n" + team.members.joinToString("\n") { memberLine(it) })
+        sections.add("# How to delegate\n" + protocol.instructions(team))
+        sections.addAll(ownSections(manager, skills))
+        return wrap(sections.joinToString("\n\n"), request)
+    }
+
+    /** A later prompt of the manager: the user's [request]. */
+    fun managerNext(request: String): String = wrap("", request)
+
+    /** What the manager is told once its members ended a round: their [reports]. */
+    fun relay(reports: List<MemberReport>): String {
+        val intro =
+            "${TeamText.RELAY_OPENING} Their reports are in the last section of this " +
+                "message. If the work needs more, delegate it in a new `team` block; if it is done, answer the " +
+                "user without a `team` block."
+        return wrap(intro, reports.joinToString("\n\n") { reportText(it) })
+    }
+
+    /** What the manager is told when its answer could not be run as a delegation, for [problem]. */
+    fun refusal(problem: String): String {
+        val intro =
+            "${TeamText.REFUSAL_OPENING} The last section of this message says why. " +
+                "Send a corrected `team` block, or answer the user without one."
+        return wrap(intro, problem)
+    }
+
+    /** The first prompt of a member: its role in [team], how it works, its instructions, then the [task]. */
+    fun memberFirst(team: Team, member: TeamAgent, skills: List<AgentSkill>, task: String): String {
+        val manager = team.manager
+        val sections = ArrayList<String>()
+        sections.add("""You are ${member.name}, a member of the team "${team.name}".${descriptionOf(member)}""")
+        sections.add(
+            "Your manager, ${manager.name}, hands you tasks; your task is in the last section of this message. " +
+                "Other members work in the same directory as you, at the same time: touch only what your task " +
+                "covers. End with a short report of what you did and found: your manager receives it.",
+        )
+        sections.addAll(ownSections(member, skills))
+        if (member.canAsk) sections.add(askInstructions())
+        return wrap(sections.joinToString("\n\n"), task)
+    }
+
+    /** What a member is told once the user answered its questions: the [answers], to go on with its task. */
+    fun memberAnswers(answers: List<AnsweredQuestion>): String {
+        val intro = "${TeamText.ANSWERS_OPENING} They are in the last section of this message."
+        return wrap(intro, answersText(answers))
+    }
+
+    /** A later prompt of a member: a new [task] of its manager. */
+    fun memberNext(team: Team, task: String): String {
+        val intro = "${team.manager.name} gave you a new task. It is in the last section of this message."
+        return wrap(intro, task)
+    }
+
+    private fun reportText(report: MemberReport): String {
+        val task = oneLine(report.task).take(REPORT_TASK_CHARS)
+        val text = report.text.ifBlank { "(nothing reported)" }
+        val heading = "## ${report.member} (${report.status.word})"
+        return listOf(heading, "Task: $task", "", text).joinToString("\n")
+    }
+}

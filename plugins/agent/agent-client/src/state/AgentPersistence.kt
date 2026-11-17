@@ -10,7 +10,7 @@ internal fun savedWidth(preferences: Map<String, String>): Float? =
         ?.takeIf { it.isFinite() }
         ?.coerceIn(MIN_WIDTH, MAX_WIDTH)
 
-private fun linesOf(value: String?): List<String> = value.orEmpty().lines().filter { it.isNotBlank() }
+internal fun linesOf(value: String?): List<String> = value.orEmpty().lines().filter { it.isNotBlank() }
 
 /**
  * Puts back, once the history is listed, what the last run left of agent mode in the project at [root]: the titles
@@ -40,6 +40,7 @@ internal fun AgentState.restoreSaved(root: String) {
         kept?.workedMillis = fields.getOrNull(1)?.toLongOrNull() ?: 0L
         kept?.savedCost = fields.getOrNull(2)?.toDoubleOrNull()
     }
+    restoreTeams(preferences[PreferenceKeys.AGENT_CONVERSATION_TEAMS_PREFIX + root])
     val active = preferences[PreferenceKeys.AGENT_ACTIVE_PREFIX + root].orEmpty()
     for (session in linesOf(preferences[PreferenceKeys.AGENT_OPEN_PREFIX + root])) {
         val reopened = conversations.firstOrNull { it.session == session }
@@ -56,8 +57,10 @@ fun AgentState.toPreferences(): Map<String, String> {
     val saved = PreferenceKeys.AGENT_TEMPLATES to encodeTemplates(templates.filter { it.global })
     val own = PreferenceKeys.AGENT_TEMPLATES_PREFIX + project.root.path to encodeTemplates(templates.filter { !it.global })
     val layout = toolWindows.toPreferences()
+    val memberKey = PreferenceKeys.AGENT_MEMBER_SESSIONS_PREFIX + project.root.path
+    val teamsSaved = teams.toPreferences() + (memberKey to memberSessions.joinToString("\n"))
     // Nothing of the tabs is saved before the last ones were put back: it would erase them.
-    if (!restored) return mapOf(width, last, saved, own, used) + layout
+    if (!restored) return mapOf(width, last, saved, own, used) + layout + teamsSaved
     val root = project.root.path
     val open = tabs.open.mapNotNull { it.session }.joinToString("\n")
     val active = tabs.active?.session.orEmpty()
@@ -73,7 +76,14 @@ fun AgentState.toPreferences(): Map<String, String> {
             .filter { it.workedMillis > 0 || it.costKnown != null }
             .mapNotNull { c -> c.session?.let { "$it\t${c.workedMillis}\t${c.costKnown ?: ""}" } }
             .joinToString("\n")
+    val folders = conversations.filter { !it.scratch }.mapNotNull { it.folder }.distinct().joinToString("\n")
+    // The empty folders of the conversations without a project are many, one each: their parent is what is listed.
+    val scratch = conversations.filter { it.scratch }.mapNotNull { it.folder }.mapNotNull(::parentFolder)
+    val scratchParents = (scratchParentsSaved(root) + scratch).distinct().joinToString("\n")
     return mapOf(
+        PreferenceKeys.AGENT_FOLDERS_PREFIX + root to folders,
+        PreferenceKeys.AGENT_SCRATCH_PREFIX + root to scratchParents,
+        PreferenceKeys.AGENT_CONVERSATION_TEAMS_PREFIX + root to conversationTeamsText(conversations),
         PreferenceKeys.AGENT_STATS_PREFIX + root to stats,
         width,
         last,
@@ -85,7 +95,44 @@ fun AgentState.toPreferences(): Map<String, String> {
         PreferenceKeys.AGENT_OPEN_PREFIX + root to open,
         PreferenceKeys.AGENT_ACTIVE_PREFIX + root to active,
         PreferenceKeys.AGENT_TITLES_PREFIX + root to titles,
-    ) + toolWindows.toPreferences()
+    ) + layout + teamsSaved
+}
+
+/**
+ * The team of each conversation as saved: one `session<TAB>teamId` line per conversation that has both a session and a
+ * team. A team is fixed at the first prompt, so only a started conversation, which has a session, is worth saving.
+ */
+internal fun conversationTeamsText(conversations: List<Conversation>): String {
+    val lines =
+        conversations.mapNotNull { conversation ->
+            val session = conversation.session
+            val teamId = conversation.teamId
+            if (session == null || teamId == null) null else "$session\t$teamId"
+        }
+    return lines.joinToString("\n")
+}
+
+/**
+ * The team id of each session in [text] (the format of [conversationTeamsText]). A line without a tab, a session or a
+ * team id is ignored; the last line of a session wins.
+ */
+internal fun teamsOfSessions(text: String?): Map<String, String> {
+    val teams = LinkedHashMap<String, String>()
+    for (line in linesOf(text)) {
+        val session = line.substringBefore('\t', "").trim()
+        val teamId = line.substringAfter('\t', "").trim()
+        if (session.isNotEmpty() && teamId.isNotEmpty()) teams[session] = teamId
+    }
+    return teams
+}
+
+// The conversation of each session of [text] chooses its team again; a session no conversation has is ignored, and a
+// team that no longer exists stays chosen, so that the conversation says it is gone.
+private fun AgentState.restoreTeams(text: String?) {
+    for ((session, teamId) in teamsOfSessions(text)) {
+        val conversation = conversations.firstOrNull { it.session == session }
+        if (conversation != null) conversation.teamId = teamId
+    }
 }
 
 private fun oneLine(title: String): String = title.replace('\n', ' ').replace('\t', ' ')

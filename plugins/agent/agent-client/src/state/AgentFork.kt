@@ -15,15 +15,17 @@ fun AgentState.duplicate(conversation: Conversation) {
         conversation.note("There is nothing to duplicate yet: send a first message.")
         return
     }
-    val workspace = conversation.workspace ?: project
-    val directory = workspace.root.path
+    val workspace = conversation.workspace ?: conversation.host(project)
+    val directory = conversation.directoryIn(workspace.root.path)
     val agents = project.services.agents
     project.scope.launch {
         try {
             val forked = agents.fork(agentOf(conversation), session, directory)
             val worktree = conversation.mode == WorkMode.Worktree
             val copy = AgentSession(forked, directory, "${conversation.title} (copy)", Instant.now().toString())
-            val shown = conversationOf(copy.copy(branch = conversation.branch.takeIf { worktree }), nextId++, project.root.path)
+            val shown = conversationOf(copy.copy(branch = conversation.branch.takeIf { worktree }), nextId++, conversation.rootPath(project))
+            shown.folder = conversation.folder
+            shown.home = conversation.home
             shown.agent = conversation.agent
             // The agent forwards the title of the original: the copy keeps its own.
             shown.renamed = true

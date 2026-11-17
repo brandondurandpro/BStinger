@@ -9,6 +9,7 @@ dependencies:
   - $libs.kotlinx.coroutines.core
   - $libs.kotlinx.serialization.json
   - //acp
+  - //harness
   - //lsp
 
 test-dependencies:

@@ -1,5 +1,7 @@
 package org.example.kotlineditor.rpc
 
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.example.kotlineditor.model.AgentAuthMethod
@@ -7,23 +9,46 @@ import org.example.kotlineditor.model.AgentChoices
 import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.model.AgentOption
 import org.example.kotlineditor.model.AgentRegistryEntry
+import org.example.kotlineditor.model.AgentSkill
+import org.example.kotlineditor.model.SkillCatalogListing
 import org.example.kotlineditor.model.AgentSlashCommand
 
 private const val CONVERSATION = "conversation"
 private const val AGENT = "agent"
 private const val DIRECTORY = "directory"
+private const val CHOICES = "choices"
 
 /** [AgentChoices] made on the server: the agents to choose from, the settings and the commands they offer. */
 internal class RemoteAgentChoices(private val client: RpcClient) : AgentChoices {
     override suspend fun registry(): List<AgentRegistryEntry> = client.call(Method.AgentRegistry).agentRegistry()
 
-    override suspend fun options(agent: AgentCommand, directory: String): List<AgentOption> {
+    override suspend fun options(
+        agent: AgentCommand,
+        directory: String,
+        choices: Map<String, String>,
+    ): List<AgentOption> {
         val answer =
             client.call(Method.AgentOptions) {
                 put(AGENT, agent.toJson())
                 put(DIRECTORY, directory)
+                if (choices.isNotEmpty()) put(CHOICES, JsonObject(choices.mapValues { JsonPrimitive(it.value) }))
             }
         return answer.agentOptions()
+    }
+
+    override suspend fun skills(root: String): List<AgentSkill> =
+        client.call(Method.TeamSkills) { put("root", root) }.agentSkills()
+
+    override suspend fun skillCatalog(refresh: Boolean): SkillCatalogListing =
+        client.call(Method.TeamSkillCatalog) { put("refresh", refresh) }.skillCatalogListing()
+
+    override suspend fun installSkill(source: String, path: String): AgentSkill {
+        val answer =
+            client.call(Method.TeamInstallSkill) {
+                put("source", source)
+                put("path", path)
+            }
+        return answer.agentSkills().firstOrNull() ?: throw java.io.IOException("The server installed no skill")
     }
 
     override suspend fun setOption(conversation: String, agent: AgentCommand, option: String, value: String) {

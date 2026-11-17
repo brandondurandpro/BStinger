@@ -59,6 +59,21 @@ class AgentOptionsTest {
     }
 
     @Test
+    fun `the efforts offered follow the model asked for, and the probe leaves no session`() {
+        val server = server()
+        val agent = agent()
+        val efforts = { choices: Map<String, String> ->
+            val options = runBlocking { server.processes.options(agent, directory, choices) }
+            options.firstOrNull { it.id == "effort" }?.values?.map { it.value }
+        }
+        assertNull(efforts(emptyMap()), "Fast offers no effort")
+        assertEquals(listOf("default", "low", "medium", "high"), efforts(mapOf("model" to "fake-smart")))
+        assertEquals(listOf("default", "low", "medium", "high", "max"), efforts(mapOf("model" to "fake-max")))
+        val history = runBlocking { server.processes.sessions(agent, listOf(directory)) }
+        assertTrue(history.sessions.isEmpty(), "Probe kept: ${history.sessions}")
+    }
+
+    @Test
     fun `a model chosen before the first prompt is the model of the session`() {
         val server = server()
         val agent = agent()

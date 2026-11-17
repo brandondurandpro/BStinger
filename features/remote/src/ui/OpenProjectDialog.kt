@@ -144,7 +144,7 @@ private fun DirectoryHeader(
 private fun subtitle(browser: DirectoryBrowser): String {
     val remote = browser.remote
     return when {
-        browser.forNewWindow -> "Choose or create the project directory; it opens in a new window."
+        browser.forConversation -> "Choose or create the folder the conversation works in."
         remote != null -> "Choose a project directory on $remote."
         else -> "Choose a project directory on the server."
     }
@@ -444,8 +444,8 @@ private class DirectoryBrowser(private val app: ProjectPickerHost, private val s
     var loading: Boolean by mutableStateOf(true)
         private set
 
-    /** Whether the dialog picks the project of a new conversation, which opens in a new window. */
-    val forNewWindow: Boolean get() = app.projectPickerForNewWindow
+    /** Whether the dialog picks the folder of a conversation, which works in it in the same window. */
+    val forConversation: Boolean get() = app.projectPickerForConversation
 
     /** Whether the name of a new folder is being typed. */
     var creating: Boolean by mutableStateOf(false)

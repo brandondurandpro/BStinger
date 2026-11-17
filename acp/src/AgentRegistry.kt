@@ -54,7 +54,8 @@ internal class AgentRegistry(
     }
 }
 
-private fun httpGet(url: String): InputStream {
+/** The body of the answer to a GET of [url] (redirects followed); fails with an `IOException` unless it is 200. */
+fun httpGet(url: String): InputStream {
     val client =
         HttpClient
             .newBuilder()

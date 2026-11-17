@@ -72,7 +72,30 @@ internal suspend fun AgentProcess.reopenSession(
 }
 
 /** The sessions the agent keeps that work in [directory]; empty when it does not list them. */
-internal suspend fun AgentProcess.listSessions(directory: String): List<AgentSession> {
+internal suspend fun AgentProcess.listSessions(directory: String): List<AgentSession> = listedAgain(directory)
+
+/**
+ * The sessions the agent keeps that work in a folder under one of [directories], not in one of them ([listSessions]
+ * has those): a conversation started in a folder of the project. The agent lists every session it keeps, which may
+ * be more than it pages through: the newest are the ones found.
+ */
+internal suspend fun AgentProcess.listSessionsBelow(directories: List<String>): List<AgentSession> {
+    if (directories.isEmpty()) return emptyList()
+    val everywhere = listedAgain(null)
+    return everywhere.filter { session -> directories.any { isBelow(session.directory, it) } }
+}
+
+// Whether [path] is a folder under [directory] (not [directory] itself): compared by their folders, so that a sibling
+// whose name starts like it is not under it. The server writes its paths with `/` or with a backslash.
+private fun isBelow(path: String, directory: String): Boolean {
+    val folders = { text: String -> text.split('/', '\\').filter { it.isNotEmpty() } }
+    val own = folders(directory)
+    val other = folders(path)
+    return other.size > own.size && own.indices.all { own[it] == other[it] }
+}
+
+// The list of [directory] (every directory when null), taken again while a session started to read the settings was alive.
+private suspend fun AgentProcess.listedAgain(directory: String?): List<AgentSession> {
     if (!ready().sessions.list) return emptyList()
     var found = emptyList<AgentSession>()
     for (attempt in 1..MAX_LISTS) {
@@ -85,7 +108,7 @@ internal suspend fun AgentProcess.listSessions(directory: String): List<AgentSes
     return found.filter { !probes.isKept(it.id) }
 }
 
-private suspend fun AgentProcess.listedSessions(directory: String): List<AgentSession> {
+private suspend fun AgentProcess.listedSessions(directory: String?): List<AgentSession> {
     val found = mutableListOf<AgentSession>()
     var cursor: String? = null
     for (page in 1..MAX_PAGES) {
@@ -93,7 +116,7 @@ private suspend fun AgentProcess.listedSessions(directory: String): List<AgentSe
         found += answer?.get("sessions").array().mapNotNull { it.obj()?.agentSession() }
         cursor = answer?.text("nextCursor") ?: break
     }
-    return found.filter { it.directory == directory }
+    return if (directory == null) found else found.filter { it.directory == directory }
 }
 
 private fun JsonObject.agentSession(): AgentSession? {

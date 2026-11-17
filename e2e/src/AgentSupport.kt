@@ -4,6 +4,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ComposeUiTest
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.KeyInjectionScope
 import androidx.compose.ui.test.SemanticsNodeInteraction
@@ -127,13 +128,46 @@ fun ComposeUiTest.sendSelectionToAgentInAgentWindow() {
     }
 }
 
-/** Clicks + and, in a repository, answers the question "from which branch?" with the project's own branch. */
+/**
+ * Clicks + and waits for the conversation it starts: it works in no project ([Conversation.scratch]), in a new empty
+ * folder of the server. It stays there: the prompt bar's folder is where a project is chosen.
+ */
 @OptIn(ExperimentalTestApi::class)
-fun ComposeUiTest.clickNewConversation(app: E2eApp) {
+fun ComposeUiTest.clickNewConversationWithoutProject(app: E2eApp): Conversation {
     val known = app.project.agent.conversations.size
     awaitTag(AgentTags.AGENT_NEW).performClick()
-    awaitCondition { app.project.agent.conversations.size > known || isShown(AgentTags.AGENT_BASE_PICKER) }
+    awaitCondition { app.project.agent.conversations.size > known }
+    return checkNotNull(app.project.agent.current) { "No conversation open" }
+}
+
+/**
+ * Clicks + and chooses the project of the window for the new conversation: in a repository the question "from which
+ * branch?" comes, for the conversation that moved to the project; it is left open for the test to answer.
+ */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.askBranchOfProject(app: E2eApp): Conversation {
+    val conversation = clickNewConversationWithoutProject(app)
+    openFolderMenu()
+    awaitTag(AgentTags.AGENT_FOLDER_THIS_PROJECT).performClick()
+    awaitTag(AgentTags.AGENT_BASE_PICKER)
+    // The menu that chose the project closed meanwhile: the field of the picker is focused by a click, as a user would.
+    awaitTag(AgentTags.AGENT_BASE_SEARCH).performClick()
+    return conversation
+}
+
+/**
+ * Clicks + and works in the project of the window, as a user does who wants the agent on the code: the conversation
+ * starts without a project, then the project is chosen in the prompt bar and, in a repository, the question "from which
+ * branch?" is answered with the project's own branch.
+ */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.clickNewConversation(app: E2eApp) {
+    val conversation = clickNewConversationWithoutProject(app)
+    openFolderMenu()
+    awaitTag(AgentTags.AGENT_FOLDER_THIS_PROJECT).performClick()
+    awaitCondition { !conversation.scratch }
     if (isShown(AgentTags.AGENT_BASE_PICKER)) awaitTag(AgentTags.AGENT_BASE_PROJECT).performClick()
+    awaitNoTag(AgentTags.AGENT_BASE_PICKER)
 }
 
 /**
@@ -245,9 +279,25 @@ fun ComposeUiTest.awaitHistory(app: E2eApp, session: String): Conversation {
     return checkNotNull(conversations.firstOrNull { it.session == session })
 }
 
-/** The agents of a test server: [registry] as the ACP registry, installed into [data]. */
-fun agentSettings(registry: String, data: java.io.File): AgentSettings =
-    AgentSettings(registryUrl = registry, toolsDirectory = data.toPath().resolve("tools"))
+/** Where the skill catalog of a test server downloads from unless a test says: a closed port, nothing reaches GitHub. */
+const val OFFLINE_SKILL_ARCHIVE = "http://127.0.0.1:9/{repo}.tar.gz"
+
+/**
+ * The agents of a test server: [registry] as the ACP registry, installed into [data]; the skill catalog downloads
+ * from [skillArchiveUrl], and lists [skillSources].
+ */
+fun agentSettings(
+    registry: String,
+    data: java.io.File,
+    skillArchiveUrl: String = OFFLINE_SKILL_ARCHIVE,
+    skillSources: List<String> = AgentSettings.SKILL_SOURCES,
+): AgentSettings =
+    AgentSettings(
+        registryUrl = registry,
+        toolsDirectory = data.toPath().resolve("tools"),
+        skillSources = skillSources,
+        skillArchiveUrl = skillArchiveUrl,
+    )
 
 /** The agents of a test server that chose no registry: one on a closed port, so that nothing reaches the internet. */
 fun offlineAgents(data: java.io.File): AgentSettings = agentSettings("http://127.0.0.1:9/registry.json", data)
@@ -363,3 +413,40 @@ val ONE_PIXEL_PNG: ByteArray =
     java.util.Base64.getDecoder().decode(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
     )
+
+private const val OPEN_ATTEMPTS = 4
+private const val OPEN_WAIT = 3_000L
+
+// The prompt bar settles while the options of the agent arrive, and a click on a button that moves between its press and
+// its release is no click: it is made again until the menu is open.
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.openFolderMenu() {
+    val menuOpen = { onAllNodes(hasTestTag(AgentTags.AGENT_FOLDER_PATH)).fetchSemanticsNodes().isNotEmpty() }
+    repeat(OPEN_ATTEMPTS) {
+        if (menuOpen()) return
+        awaitTag(AgentTags.AGENT_FOLDER).performClick()
+        val opened = runCatching { waitUntil(timeoutMillis = OPEN_WAIT) { menuOpen() } }
+        if (opened.isSuccess) return
+    }
+    awaitTag(AgentTags.AGENT_FOLDER_PATH)
+}
+
+/** Replaces what the field of the folder says by [text]. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.typeFolder(text: String) {
+    awaitTag(AgentTags.AGENT_FOLDER_PATH).performTextReplacement(text)
+}
+
+/** Presses Enter in the field of the folder. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.submitFolder() {
+    awaitTag(AgentTags.AGENT_FOLDER_PATH).performKeyInput { pressKey(Key.Enter) }
+}
+
+/** Opens the menu of the folder, types [text] and presses Enter. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.chooseFolderTyped(text: String) {
+    openFolderMenu()
+    typeFolder(text)
+    submitFolder()
+}

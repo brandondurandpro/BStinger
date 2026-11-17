@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.sp
 import org.example.kotlineditor.state.AgentState
 import org.example.kotlineditor.state.Conversation
 import org.example.kotlineditor.state.GitAction
+import org.example.kotlineditor.state.directoryIn
 import org.example.kotlineditor.state.ToolWindow
 import org.example.kotlineditor.state.WorkMode
 import org.example.kotlineditor.state.ask
@@ -54,7 +55,7 @@ internal fun LocationCard(agent: AgentState, conversation: Conversation, modifie
                 BaseLine(conversation)
                 GitStateLine(conversation)
                 LastCommitLine(conversation)
-                InfoLine("Path", workspace.root.path, AgentTags.AGENT_INFO_PATH)
+                InfoLine("Path", conversation.directoryIn(workspace.root.path), AgentTags.AGENT_INFO_PATH)
             }
         }
         OpenButtons(conversation)

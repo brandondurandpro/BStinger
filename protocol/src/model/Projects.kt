@@ -27,6 +27,12 @@ interface ServerPlaces {
     /** The home directory of the user running the server, or `null` when unknown. */
     suspend fun home(): String?
 
+    /**
+     * A new empty folder, made by the server, for a conversation of agent mode that works in no project; `null` when the
+     * server cannot make one. Each call makes another, so that conversations never share a folder.
+     */
+    suspend fun newConversationFolder(): String? = null
+
     /** Knows nothing: the Open Project dialog falls back to its defaults. */
     object None : ServerPlaces {
         override suspend fun home(): String? = null
