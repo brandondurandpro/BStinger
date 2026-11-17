@@ -18,15 +18,16 @@ private const val BOM = '﻿'
 /**
  * Finds the skills an agent of a team can be given: the folders holding a `SKILL.md`, searched at most three levels
  * deep under `.claude/skills` and `skills` of a project, and under `skills` of [dataDirectory], the data directory of
- * the IDE. Read-only: nothing is created, not even a missing `skills` folder. Symbolic links to folders are followed
+ * the IDE. The skills the catalog installed there, under a folder per repository, say which one in their owner (the
+ * [sources] name the repositories to give back as `owner/repo`). Read-only: nothing is created, not even a missing `skills` folder. Symbolic links to folders are followed
  * (the search is bounded by its depth, so a loop ends), and a folder holding a `SKILL.md` is not searched further.
  */
-class SkillDiscovery(private val dataDirectory: File) {
+class SkillDiscovery(private val dataDirectory: File, private val sources: List<String> = emptyList()) {
     /** The skills of the project at [root] and of the data directory, by name; the project's first on a same name. */
     fun discover(root: File): List<AgentSkill> {
         val projectFolders = listOf(File(root, ".claude/skills"), File(root, "skills"))
         val project = projectFolders.flatMap { folder -> skillsUnder(folder, project = true) }
-        val own = skillsUnder(File(dataDirectory, "skills"), project = false)
+        val own = skillsUnder(File(dataDirectory, "skills"), project = false).map { it.withOwner() }
         val unique = LinkedHashMap<String, AgentSkill>()
         for (skill in project + own) unique.putIfAbsent(skill.id, skill)
         val byName = compareBy<AgentSkill, String>(String.CASE_INSENSITIVE_ORDER) { it.name }
@@ -40,7 +41,19 @@ class SkillDiscovery(private val dataDirectory: File) {
     fun describe(id: String, project: Boolean = false): AgentSkill? {
         val folder = File(id)
         val skillFile = File(folder, SKILL_FILE)
-        return if (skillFile.isFile) skillOf(folder, skillFile, project) else null
+        if (!skillFile.isFile) return null
+        val skill = skillOf(folder, skillFile, project)
+        return if (project) skill else skill.withOwner()
+    }
+
+    // The repository of a skill under a folder of the data directory's `skills` that is not the skill itself.
+    private fun AgentSkill.withOwner(): AgentSkill {
+        val base = File(dataDirectory, "skills").absoluteFile.toPath()
+        val relative = base.relativize(File(id).absoluteFile.toPath().normalize())
+        val first = relative.firstOrNull()?.toString()
+        val below = relative.nameCount > 1 && first != null && !first.startsWith("..")
+        val known = sources.firstOrNull { it.replace('/', '-') == first }
+        return if (below) copy(owner = known ?: first.orEmpty()) else this
     }
 
     private fun skillsUnder(base: File, project: Boolean): List<AgentSkill> {

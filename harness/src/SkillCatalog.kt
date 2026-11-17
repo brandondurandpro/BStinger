@@ -44,7 +44,7 @@ class SkillCatalog(
 ) {
     private val cache = File(dataDirectory, "skill-catalog")
     private val installedBase = File(dataDirectory, "skills")
-    private val discovery = SkillDiscovery(dataDirectory)
+    private val discovery = SkillDiscovery(dataDirectory, sources)
 
     // One download of a repository at a time: two requests for the same one share it.
     private val locks = ConcurrentHashMap<String, Any>()

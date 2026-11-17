@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -185,18 +186,21 @@ fun MemberView(agent: AgentState, conversation: Conversation, memberKey: String)
     val member = conversation.team?.team?.members?.firstOrNull { conversation.memberKey(it) == memberKey }
     val name = member?.name ?: nameInDelegations(conversation, memberKey)
     val transcript = conversation.members.transcripts[memberKey]
-    Column(Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 12.dp).testTag(AgentTags.AGENT_MEMBER_VIEW)) {
-        MemberHeader(name, member, conversation.statusOf(memberKey))
-        val rows by remember(transcript) { derivedStateOf { transcriptRows(transcript?.items.orEmpty()) } }
-        val note = memberNote(name, transcript, rows.isEmpty())
-        if (note != null) {
-            Label(note, Modifier.padding(top = 12.dp).testTag(AgentTags.AGENT_MEMBER_EMPTY), color = IdeColors.TextSecondary)
-        }
-        if (transcript != null && rows.isNotEmpty()) {
-            val modifier = Modifier.fillMaxSize().testTag(AgentTags.AGENT_MEMBER_TRANSCRIPT)
-            // Only this view shows while the tab is selected: the request of the member is answered here.
-            MemberRows(rows, transcript, name, transcript.listState, modifier) { request, option ->
-                agent.answer(conversation, request, option, memberKey)
+    // Centred and no wider than the text of a conversation, like the conversation of the team itself.
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+        Column(Modifier.widthIn(max = CONTENT_WIDTH).fillMaxSize().padding(horizontal = 20.dp, vertical = 12.dp).testTag(AgentTags.AGENT_MEMBER_VIEW)) {
+            MemberHeader(name, member, conversation.statusOf(memberKey))
+            val rows by remember(transcript) { derivedStateOf { transcriptRows(transcript?.items.orEmpty()) } }
+            val note = memberNote(name, transcript, rows.isEmpty())
+            if (note != null) {
+                Label(note, Modifier.padding(top = 12.dp).testTag(AgentTags.AGENT_MEMBER_EMPTY), color = IdeColors.TextSecondary)
+            }
+            if (transcript != null && rows.isNotEmpty()) {
+                val modifier = Modifier.fillMaxSize().testTag(AgentTags.AGENT_MEMBER_TRANSCRIPT)
+                // Only this view shows while the tab is selected: the request of the member is answered here.
+                MemberRows(rows, transcript, name, transcript.listState, modifier) { request, option ->
+                    agent.answer(conversation, request, option, memberKey)
+                }
             }
         }
     }

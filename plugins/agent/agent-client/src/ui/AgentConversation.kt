@@ -64,7 +64,8 @@ import org.example.kotlineditor.state.memberRequests
 import org.example.kotlineditor.state.recallPrompt
 import org.example.kotlineditor.state.usageText
 
-private val CONTENT_WIDTH = 760.dp
+/** The width of the column of text of a conversation, and of a member of its team: centred, as wide as this at most. */
+internal val CONTENT_WIDTH = 760.dp
 
 // Far enough to reach the end of the last item, however long it grew.
 private const val TO_THE_END = 100_000f

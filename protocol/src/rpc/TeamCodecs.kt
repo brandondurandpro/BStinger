@@ -24,6 +24,7 @@ private const val NAME = "name"
 private const val DESCRIPTION = "description"
 private const val SKILLS = "skills"
 private const val CAN_ASK = "canAsk"
+private const val OWNER = "owner"
 
 /** An agent of a team. */
 fun TeamAgent.toJson(): JsonObject =
@@ -80,6 +81,7 @@ fun List<AgentSkill>.skillsToJson(): JsonArray =
                 put(NAME, skill.name)
                 put(DESCRIPTION, skill.description)
                 put("project", skill.project)
+                put(OWNER, skill.owner)
             }
         },
     )
@@ -88,7 +90,7 @@ fun List<AgentSkill>.skillsToJson(): JsonArray =
 fun JsonElement.agentSkills(): List<AgentSkill> =
     jsonArray.map { element ->
         val json = element.jsonObject
-        AgentSkill(json.string(ID), json.string(NAME), json.string(DESCRIPTION), json.bool("project"))
+        AgentSkill(json.string(ID), json.string(NAME), json.string(DESCRIPTION), json.bool("project"), json.stringOrNull(OWNER).orEmpty())
     }
 
 /** The listing of the skill catalog. */

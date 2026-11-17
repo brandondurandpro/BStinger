@@ -1,21 +1,28 @@
 package org.example.kotlineditor.ui
 
+import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -38,6 +45,9 @@ import org.example.kotlineditor.state.keyOf
 
 // The share of the window the dialog takes, in width and in height.
 private const val WINDOW_SHARE = 0.8f
+
+// Room kept at the right of the list for its scrollbar, which must not hide the buttons.
+private val SCROLLBAR_ROOM = 14.dp
 
 /** "Skill catalog": opens the window of the skills to install. Beside the button of the ready-made team. */
 @Composable
@@ -102,7 +112,7 @@ private fun CatalogHeader(loading: Boolean, refresh: () -> Unit, close: () -> Un
 private sealed interface CatalogRow {
     val key: String
 
-    class Source(val source: String, val count: Int) : CatalogRow {
+    class Source(val source: String, val count: Int, val owner: Int, val folded: Boolean) : CatalogRow {
         override val key = "source:$source"
     }
 
@@ -110,7 +120,7 @@ private sealed interface CatalogRow {
         override val key = "failed:$source"
     }
 
-    class Skill(val skill: CatalogSkill) : CatalogRow {
+    class Skill(val skill: CatalogSkill, val owner: Int) : CatalogRow {
         override val key = keyOf(skill)
     }
 }
@@ -121,17 +131,20 @@ private fun CatalogSkill.matches(filter: String): Boolean {
     return words.all { text.contains(it, ignoreCase = true) }
 }
 
-// The rows of the catalog: per repository, its failure or its skills that match the filter; a repository with none is not shown.
-private fun rowsOf(skills: List<CatalogSkill>, failures: Map<String, String>, filter: String): List<CatalogRow> {
+// The rows of the catalog: per repository, its failure, its header and its skills that match the filter; a repository
+// with none is not shown. The skills of a folded repository are not, unless a filter looks for them.
+private fun rowsOf(skills: List<CatalogSkill>, failures: Map<String, String>, filter: String, folded: Set<String>): List<CatalogRow> {
     val rows = ArrayList<CatalogRow>()
     val matching = skills.filter { it.matches(filter) }.groupBy { it.source }
     val sources = (skills.map { it.source } + failures.keys).distinct()
-    for (source in sources) {
+    val searching = filter.isNotBlank()
+    for ((owner, source) in sources.withIndex()) {
         val failure = failures[source]
         val own = matching[source].orEmpty()
+        val hidden = source in folded && !searching
         if (failure != null) rows.add(CatalogRow.Failed(source, failure))
-        if (own.isNotEmpty()) rows.add(CatalogRow.Source(source, own.size))
-        own.forEach { rows.add(CatalogRow.Skill(it)) }
+        if (own.isNotEmpty()) rows.add(CatalogRow.Source(source, own.size, owner, hidden))
+        if (!hidden) own.forEach { rows.add(CatalogRow.Skill(it, owner)) }
     }
     return rows
 }
@@ -140,14 +153,18 @@ private fun rowsOf(skills: List<CatalogSkill>, failures: Map<String, String>, fi
 private fun CatalogBody(agent: AgentState, filter: String, modifier: Modifier) {
     val catalog = agent.teams.catalog
     val failure = catalog.failure
-    // The rows follow what the catalog and the filter say: recomputed when they change, not on every frame.
-    val rows = remember(catalog, filter) { derivedStateOf { rowsOf(catalog.skills.toList(), catalog.sourceFailures.toMap(), filter) } }
+    val folded = remember { mutableStateMapOf<String, Boolean>() }
+    // The rows follow what the catalog, the filter and the folded repositories say: recomputed when they change, not on every frame.
+    val rows =
+        remember(catalog, filter) {
+            derivedStateOf { rowsOf(catalog.skills.toList(), catalog.sourceFailures.toMap(), filter, folded.keys.toSet()) }
+        }
     Box(modifier.fillMaxWidth()) {
         when {
             failure != null && !catalog.loaded -> CatalogNote("The catalog could not be read: $failure", AgentTags.AGENT_CATALOG_ERROR, IdeColors.Error)
             catalog.loading && !catalog.loaded -> CatalogNote("Downloading the repositories…", AgentTags.AGENT_CATALOG_LOADING, IdeColors.TextSecondary)
             catalog.loaded && rows.value.isEmpty() -> CatalogNote("No skill found.", AgentTags.AGENT_CATALOG_EMPTY, IdeColors.TextSecondary)
-            else -> CatalogList(agent, rows.value)
+            else -> CatalogList(agent, rows.value, folded)
         }
     }
 }
@@ -157,28 +174,31 @@ private fun CatalogNote(text: String, tag: String, color: Color) {
     Label(text, Modifier.padding(vertical = 8.dp).testTag(tag), color = color, fontSize = 12.sp, maxLines = 4)
 }
 
-// A lazy list: thousands of skills compose only the rows shown.
+// A lazy list: thousands of skills compose only the rows shown. Its scrollbar is at its right edge.
 @Composable
-private fun CatalogList(agent: AgentState, rows: List<CatalogRow>) {
-    LazyColumn(Modifier.fillMaxWidth().testTag(AgentTags.AGENT_CATALOG_LIST)) {
-        items(rows, key = { it.key }) { row ->
-            when (row) {
-                is CatalogRow.Source -> SourceHeader(row)
-                is CatalogRow.Failed -> SourceFailure(row)
-                is CatalogRow.Skill -> SkillRow(agent, row.skill)
+private fun CatalogList(agent: AgentState, rows: List<CatalogRow>, folded: MutableMap<String, Boolean>) {
+    val state = rememberLazyListState()
+    Box(Modifier.fillMaxSize()) {
+        LazyColumn(Modifier.fillMaxSize().testTag(AgentTags.AGENT_CATALOG_LIST), state = state, contentPadding = PaddingValues(end = SCROLLBAR_ROOM)) {
+            items(rows, key = { it.key }) { row ->
+                when (row) {
+                    is CatalogRow.Source -> SourceHeader(row) { if (folded.remove(row.source) == null) folded[row.source] = true }
+                    is CatalogRow.Failed -> SourceFailure(row)
+                    is CatalogRow.Skill -> SkillRow(agent, row.skill, row.owner)
+                }
             }
         }
+        VerticalScrollbar(
+            rememberScrollbarAdapter(state),
+            Modifier.align(Alignment.CenterEnd).fillMaxHeight().testTag(AgentTags.AGENT_CATALOG_SCROLLBAR),
+        )
     }
 }
 
 @Composable
-private fun SourceHeader(row: CatalogRow.Source) {
-    Label(
-        "${row.source} (${row.count})",
-        Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 4.dp).testTag(AgentTags.agentCatalogSource(row.source)),
-        fontSize = 12.sp,
-        fontWeight = FontWeight.SemiBold,
-    )
+private fun SourceHeader(row: CatalogRow.Source, onToggle: () -> Unit) {
+    val source = row.source
+    OwnerHeader("$source (${row.count})", ownerColor(row.owner), row.folded, AgentTags.agentCatalogSource(source), AgentTags.agentCatalogSourceToggle(source), onToggle)
 }
 
 @Composable
@@ -193,15 +213,16 @@ private fun SourceFailure(row: CatalogRow.Failed) {
 }
 
 @Composable
-private fun SkillRow(agent: AgentState, skill: CatalogSkill) {
+private fun SkillRow(agent: AgentState, skill: CatalogSkill, owner: Int) {
     val catalog = agent.teams.catalog
     val choices = agent.project.services.agents
     val scope = rememberCoroutineScope()
     val key = keyOf(skill)
     val installing = catalog.installing[key] == true
     val failure = catalog.installFailures[key]
+    val stripe = Modifier.ownerStripe(ownerColor(owner))
     Row(
-        Modifier.fillMaxWidth().padding(vertical = 4.dp, horizontal = 6.dp).testTag(AgentTags.agentCatalogSkill(skill.source, skill.path)),
+        Modifier.fillMaxWidth().then(stripe).padding(vertical = 4.dp, horizontal = 10.dp).testTag(AgentTags.agentCatalogSkill(skill.source, skill.path)),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {

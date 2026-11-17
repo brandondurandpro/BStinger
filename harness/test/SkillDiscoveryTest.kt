@@ -140,4 +140,17 @@ class SkillDiscoveryTest {
         skill(File(root, "skills/long"), long)
         assertEquals(listOf("long"), names())
     }
+
+    @Test
+    fun `a skill under a folder of the data directory has that repository as its owner, one at its top has none`() {
+        val sources = SkillDiscovery(data, listOf("mattpocock/skills"))
+        skill(File(data, "skills/mattpocock-skills/engineering--tdd"))
+        skill(File(data, "skills/other-repo/pdf"))
+        skill(File(data, "skills/mine"))
+        skill(File(root, "skills/local"))
+        val owners = sources.discover(root).associate { it.name to it.owner }
+        assertEquals(mapOf("engineering--tdd" to "mattpocock/skills", "pdf" to "other-repo", "mine" to "", "local" to ""), owners)
+        val tdd = File(data, "skills/mattpocock-skills/engineering--tdd").absolutePath
+        assertEquals("mattpocock/skills", sources.describe(tdd)?.owner)
+    }
 }

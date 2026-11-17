@@ -19,6 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -257,6 +258,8 @@ private fun AgentOptionValue.namesDefault(): Boolean =
 @Composable
 private fun SkillsPicker(agent: AgentState, role: String, draft: AgentDraft) {
     var open by remember { mutableStateOf(false) }
+    // The owners whose skills are folded away; kept while the menu is closed.
+    val folded = remember { mutableStateMapOf<String, Boolean>() }
     val tag = AgentTags.agentTeamField(role, "skills")
     val count = draft.skills.size
     val label = if (count == 0) "Skills ▾" else "Skills ($count) ▾"
@@ -274,46 +277,92 @@ private fun SkillsPicker(agent: AgentState, role: String, draft: AgentDraft) {
             )
         }
         IdeDropdownMenu(open, onDismissRequest = { open = false }, Modifier.widthIn(max = MENU_WIDTH).closesOnEscape { open = false }) {
-            SkillsMenu(agent, role, draft)
+            SkillsMenu(agent, role, draft, folded)
         }
     }
 }
 
+// The owner of a skill, as the menu groups them: the project, the IDE, or the repository the catalog installed it from.
+private fun AgentSkill.ownerName(): String =
+    when {
+        owner.isNotEmpty() -> owner
+        project -> PROJECT_OWNER
+        else -> IDE_OWNER
+    }
+
+private const val PROJECT_OWNER = "Project"
+private const val IDE_OWNER = "IDE"
+
+// The owners in the order the menu shows them: the project, the IDE, then the repositories by name.
+private fun ownersOf(skills: List<AgentSkill>): List<String> {
+    val names = skills.map { it.ownerName() }.distinct()
+    val repositories = names.filter { it != PROJECT_OWNER && it != IDE_OWNER }.sortedBy { it.lowercase() }
+    return listOf(PROJECT_OWNER, IDE_OWNER).filter { it in names } + repositories
+}
+
 @Composable
-private fun SkillsMenu(agent: AgentState, role: String, draft: AgentDraft) {
+private fun SkillsMenu(agent: AgentState, role: String, draft: AgentDraft, folded: MutableMap<String, Boolean>) {
     val skills = agent.teams.skills
     val failure = agent.teams.skillsFailure
-    Column(Modifier.widthIn(max = MENU_WIDTH).heightIn(max = MENU_HEIGHT).verticalScroll(rememberScrollState()).padding(horizontal = 10.dp)) {
-        if (skills == null) {
-            val text = if (failure != null) "The skills could not be listed: $failure" else "Listing the skills…"
-            Label(text, Modifier.padding(vertical = 8.dp), color = IdeColors.TextSecondary, fontSize = 12.sp, maxLines = 3)
-        } else {
-            if (skills.isEmpty()) {
-                Label(
-                    "No skill found: a folder with a SKILL.md under .claude/skills or skills of the project, or skills of the IDE's data directory.",
-                    Modifier.padding(vertical = 8.dp),
-                    color = IdeColors.TextSecondary,
-                    fontSize = 12.sp,
-                    maxLines = 4,
-                )
+    val scroll = rememberScrollState()
+    Box(Modifier.widthIn(max = MENU_WIDTH).heightIn(max = MENU_HEIGHT)) {
+        Column(Modifier.verticalScroll(scroll).padding(start = 10.dp, end = SKILLS_SCROLLBAR_ROOM)) {
+            if (skills == null) {
+                val text = if (failure != null) "The skills could not be listed: $failure" else "Listing the skills…"
+                Label(text, Modifier.padding(vertical = 8.dp), color = IdeColors.TextSecondary, fontSize = 12.sp, maxLines = 3)
+            } else {
+                if (skills.isEmpty()) {
+                    Label(
+                        "No skill found: a folder with a SKILL.md under .claude/skills or skills of the project, or skills of the IDE's data directory.",
+                        Modifier.padding(vertical = 8.dp),
+                        color = IdeColors.TextSecondary,
+                        fontSize = 12.sp,
+                        maxLines = 4,
+                    )
+                }
+                OwnedSkills(role, draft, skills, folded)
+                val listed = skills.map { it.id }.toSet()
+                for (missing in draft.skills.filter { it !in listed }) {
+                    CheckRow("Not found: $missing", true, AgentTags.agentTeamValue(role, "skills", missing)) { draft.toggleSkill(missing) }
+                }
             }
-            for (skill in skills) SkillRow(role, draft, skill)
-            val listed = skills.map { it.id }.toSet()
-            for (missing in draft.skills.filter { it !in listed }) {
-                CheckRow("Not found: $missing", true, AgentTags.agentTeamValue(role, "skills", missing)) { draft.toggleSkill(missing) }
-            }
+        }
+        // In a box of the size of the column, at its right.
+        Box(Modifier.matchParentSize()) {
+            MenuScrollbar(scroll, AgentTags.agentSkillsScrollbar(role), Modifier.align(Alignment.CenterEnd))
+        }
+    }
+}
+
+// The skills under a header per owner, each header folding the skills of its owner away; a skill checked stays checked when folded.
+@Composable
+private fun OwnedSkills(role: String, draft: AgentDraft, skills: List<AgentSkill>, folded: MutableMap<String, Boolean>) {
+    val owners = ownersOf(skills)
+    for ((index, owner) in owners.withIndex()) {
+        val own = skills.filter { it.ownerName() == owner }
+        val hidden = owner in folded
+        val checked = own.count { it.id in draft.skills }
+        val title = if (checked == 0) "$owner (${own.size})" else "$owner (${own.size}, $checked checked)"
+        val color = ownerColor(index)
+        OwnerHeader(title, color, hidden, AgentTags.agentSkillOwner(role, owner), AgentTags.agentSkillOwnerToggle(role, owner)) {
+            if (folded.remove(owner) == null) folded[owner] = true
+        }
+        if (!hidden) {
+            for (skill in own) Box(Modifier.ownerStripe(color).padding(horizontal = 8.dp)) { SkillRow(role, draft, skill) }
         }
     }
 }
 
 @Composable
 private fun SkillRow(role: String, draft: AgentDraft, skill: AgentSkill) {
-    val where = if (skill.project) "Project" else "IDE"
     val text = skill.description.ifBlank { skill.id }
     CheckRow(
-        "${skill.name}  ·  $where",
+        skill.name,
         skill.id in draft.skills,
         AgentTags.agentTeamValue(role, "skills", skill.id),
         description = text,
     ) { draft.toggleSkill(skill.id) }
 }
+
+// Room kept at the right of the menu for its scrollbar.
+private val SKILLS_SCROLLBAR_ROOM = 14.dp

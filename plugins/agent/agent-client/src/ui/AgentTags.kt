@@ -77,6 +77,12 @@ object AgentTags {
 
     fun agentCatalogSource(source: String) = "agent.catalog.source:$source"
 
+    /** The click target of the header of a repository, which folds its skills away or shows them. */
+    fun agentCatalogSourceToggle(source: String) = "agent.catalog.sourceToggle:$source"
+
+    /** The scrollbar of the list of the catalog. */
+    const val AGENT_CATALOG_SCROLLBAR = "agent.catalog.scrollbar"
+
     fun agentCatalogSourceError(source: String) = "agent.catalog.sourceError:$source"
 
     fun agentCatalogSkill(source: String, path: String) = "agent.catalog.skill:$source:$path"
@@ -222,6 +228,13 @@ object AgentTags {
 
     /** A value of the menu of a field of the agent of [role], by its value (a model, a skill's path, a provider's id). */
     fun agentTeamValue(role: String, field: String, value: String) = "agent.team.$role.$field:$value"
+
+    /** In the menu of the skills of [role]: the header of an owner (its text), its click target, and the scrollbar. */
+    fun agentSkillOwner(role: String, owner: String) = "agent.team.$role.skills.owner:$owner"
+
+    fun agentSkillOwnerToggle(role: String, owner: String) = "agent.team.$role.skills.ownerToggle:$owner"
+
+    fun agentSkillsScrollbar(role: String) = "agent.team.$role.skills.scrollbar"
 
     fun agentQuotaLimit(index: Int) = "agent.quota.$index"
 

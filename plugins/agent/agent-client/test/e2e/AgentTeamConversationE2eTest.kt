@@ -7,6 +7,7 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.v2.runComposeUiTest
+import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import org.example.kotlineditor.model.AgentItem
 import org.example.kotlineditor.model.DelegationStatus
 import org.example.kotlineditor.model.Team
@@ -19,6 +20,7 @@ import org.example.kotlineditor.state.outcome
 import org.example.kotlineditor.state.toPreferences
 import org.example.kotlineditor.testkit.acp.FakeManager
 import org.example.kotlineditor.ui.AgentTags
+import org.example.kotlineditor.ui.CONTENT_WIDTH
 import java.nio.file.Files
 import kotlin.io.path.readText
 import kotlin.test.AfterTest
@@ -35,6 +37,8 @@ import kotlin.time.Duration.Companion.minutes
  * everyone, and the plumbing between the manager and the harness (the `team` block, the preamble, the reports relayed)
  * never shows, live or in a conversation reopened from the history.
  */
+private const val WIDE_WINDOW = 2000
+
 @OptIn(ExperimentalTestApi::class)
 class AgentTeamConversationE2eTest {
     private val project = SampleProject.standard()
@@ -291,6 +295,28 @@ class AgentTeamConversationE2eTest {
             assertTrue(final in 0 until later, "The second prompt ran before the end of the run: $texts")
             assertEquals(2, conversation.itemsOf<AgentItem.UserText>().size)
             assertEquals(1, conversation.delegations().size)
+        }
+
+    @Test
+    fun `the transcript of a member is centred in the window like the conversation, no wider than its text column`() =
+        // A wide window: the text column is narrower than the pane, which is what shows where the text is.
+        runDesktopComposeUiTest(width = WIDE_WINDOW, height = 900) {
+            val (_, conversation) = teamConversation(crew("Backend"))
+            val file = project.root.resolve("CENTRE.md")
+            sendPrompt("delegate Backend: write $file centre")
+            awaitTag(AgentTags.agentMemberRequest("Backend"), timeout = AGENT_TIMEOUT)
+            val pane = boundsOf(AgentTags.agentView(conversation.id))
+            awaitTag(AgentTags.agentMemberTab(memberId("Backend"))).performClick()
+            awaitTag(AgentTags.AGENT_MEMBER_TRANSCRIPT, timeout = AGENT_TIMEOUT)
+            val text = boundsOf(AgentTags.AGENT_MEMBER_TRANSCRIPT)
+            val widest = with(density) { CONTENT_WIDTH.toPx() }
+            assertTrue(pane.width > widest + 100, "the pane (${pane.width}px) is not wider than the text column (${widest}px)")
+            assertTrue(text.width <= widest + 1, "the transcript is ${text.width}px wide, more than the ${widest}px of a conversation")
+            val left = text.left - pane.left
+            val right = pane.right - text.right
+            assertTrue(kotlin.math.abs(left - right) <= 2f, "the transcript is not centred: $left px at its left, $right px at its right")
+            answerPermission("allow")
+            awaitCondition(AGENT_TIMEOUT) { textOf(AgentTags.AGENT_MEMBER_STATUS) == "idle" }
         }
 
     @Test

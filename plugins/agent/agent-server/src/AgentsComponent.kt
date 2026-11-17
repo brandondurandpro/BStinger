@@ -24,7 +24,7 @@ internal class AgentsComponent(val services: LocalServices) {
     val agents: AgentService by lazyAgents
 
     /** The skills agents of a team can be given: the project's and those of the data directory of the server. */
-    val skills = SkillDiscovery(services.dataDirectory)
+    val skills = SkillDiscovery(services.dataDirectory, services.agentSettings.skillSources)
 
     /** The popular repositories of skills, to install in the data directory of the server. */
     val skillCatalog = SkillCatalog(services.dataDirectory, services.agentSettings.skillSources, services.agentSettings.skillArchiveUrl)

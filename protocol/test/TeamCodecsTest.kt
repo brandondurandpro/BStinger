@@ -82,7 +82,7 @@ class TeamCodecsTest {
 
     @Test
     fun `skills survive the round trip`() {
-        val skills = listOf(AgentSkill("/p/skills/a", "A", "Does a", true), AgentSkill("/d/skills/b", "B", "", false))
+        val skills = listOf(AgentSkill("/p/skills/a", "A", "Does a", true), AgentSkill("/d/skills/b", "B", "", false), AgentSkill("/d/skills/o-r/c", "C", "", false, "o/r"))
         assertEquals(skills, skills.skillsToJson().agentSkills())
     }
 

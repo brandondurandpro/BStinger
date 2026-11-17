@@ -69,4 +69,6 @@ data class AgentSkill(
     val description: String,
     /** Whether it comes from the project (else from the data directory of the IDE). */
     val project: Boolean,
+    /** The repository it was installed from the catalog (`owner/repo`); empty for a skill of the project or one put there by hand. */
+    val owner: String = "",
 )
