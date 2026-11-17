@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.rememberScrollState
@@ -53,11 +54,13 @@ import androidx.compose.ui.unit.sp
 import org.example.kotlineditor.model.AgentItem
 import org.example.kotlineditor.model.AgentToolStatus
 import org.example.kotlineditor.model.AgentTurnState
+import org.example.kotlineditor.model.DelegationStatus
 import org.example.kotlineditor.state.AgentState
 import org.example.kotlineditor.state.Completing
 import org.example.kotlineditor.state.Conversation
 import org.example.kotlineditor.state.drop
 import org.example.kotlineditor.state.isLoginNotice
+import org.example.kotlineditor.state.memberRequests
 import org.example.kotlineditor.state.recallPrompt
 import org.example.kotlineditor.state.usageText
 
@@ -129,9 +132,12 @@ private fun FollowTheEnd(conversation: Conversation) {
     val items = conversation.shownItems
     val last = items.lastOrNull()
     val rows = transcriptRows(items)
-    LaunchedEffect(items.size, last?.version) {
-        if (rows.isNotEmpty()) {
-            listState.scrollToItem(rows.lastIndex)
+    // The permissions the members of its team ask for come after the items.
+    val requests = conversation.memberRequests.size
+    LaunchedEffect(items.size, last?.version, requests) {
+        val shown = rows.size + requests
+        if (shown > 0) {
+            listState.scrollToItem(shown - 1)
             listState.scrollBy(TO_THE_END)
         }
     }
@@ -149,17 +155,17 @@ private fun Transcript(agent: AgentState, conversation: Conversation) {
         contentPadding = PaddingValues(vertical = 16.dp),
     ) {
         itemsIndexed(rows, key = { _, row -> row.key }) { index, row ->
-            Box(
-                Modifier
-                    .widthIn(max = CONTENT_WIDTH)
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 6.dp)
-                    .testTag(AgentTags.agentMessage(index)),
-            ) {
+            Box(Modifier.transcriptRow().testTag(AgentTags.agentMessage(index))) {
                 when (row) {
                     is TranscriptRow.Single -> ItemView(agent, conversation, row.item)
-                    is TranscriptRow.Tools -> ToolCallRun(conversation, row.calls)
+                    is TranscriptRow.Tools -> ToolCallRun(conversation.openedToolRuns, row.calls)
                 }
+            }
+        }
+        // What the members of its team ask the user, where its own agent's requests show: at the end.
+        items(conversation.memberRequests, key = { "member-request:${it.key}:${it.request.id}" }) { asked ->
+            Box(Modifier.transcriptRow().testTag(AgentTags.agentMemberRequest(asked.member))) {
+                MemberRequestCard(agent, conversation, asked)
             }
         }
         if (thinking(conversation)) {
@@ -182,13 +188,19 @@ private fun ThinkingLabel(conversation: Conversation) {
     )
 }
 
-// Busy with nothing to show for it yet: no text streaming, no tool running, no question asked.
+// A row of a transcript: centred, as wide as the text column at most.
+internal fun Modifier.transcriptRow(): Modifier =
+    widthIn(max = CONTENT_WIDTH).fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp)
+
+// Busy with nothing to show for it yet: no text streaming, no tool running, no member at work, no question asked.
 private fun thinking(conversation: Conversation): Boolean {
     if (!conversation.busy || conversation.probeFrom != null) return false
+    if (conversation.memberRequests.isNotEmpty()) return false
     return when (val last = conversation.shownItems.lastOrNull()) {
         is AgentItem.AgentText -> false
         is AgentItem.ToolCall -> last.status != AgentToolStatus.Running
         is AgentItem.Permission -> !last.pending
+        is AgentItem.Delegation -> last.status != DelegationStatus.Running
         else -> true
     }
 }
@@ -198,14 +210,9 @@ internal val bodyStyle get() = TextStyle(fontFamily = IdeFonts.ui, color = IdeCo
 @Composable
 private fun ItemView(agent: AgentState, conversation: Conversation, item: AgentItem) {
     when (item) {
-        is AgentItem.UserText -> UserBubble(item.text, item.context)
-        is AgentItem.AgentText -> MarkdownText(item.text.trimEnd(), Modifier.fillMaxWidth())
-        is AgentItem.Thought -> ThoughtView(item.text)
-        is AgentItem.ToolCall -> ToolCallCard(item)
-        is AgentItem.Plan -> PlanView(item)
-        is AgentItem.Permission -> PermissionCard(item) { option -> agent.answer(conversation, item, option) }
         is AgentItem.Notice -> NoticeWithLogin(agent, conversation, item)
-        is AgentItem.Delegation -> DelegationRow(item)
+        is AgentItem.Delegation -> DelegationCard(agent, conversation, item)
+        else -> PlainItemView(item, AGENT_ASKER) { request, option -> agent.answer(conversation, request, option) }
     }
 }
 
@@ -331,7 +338,8 @@ private fun PromptActions(agent: AgentState, conversation: Conversation) {
                 { agent.send(conversation) },
                 Modifier.testTag(AgentTags.AGENT_SEND),
                 primary = true,
-                enabled = conversation.draft.isNotBlank(),
+                // A conversation whose team was deleted sends nothing: the notice above the prompt says why.
+                enabled = conversation.draft.isNotBlank() && !conversation.teamMissing,
             )
         }
     }

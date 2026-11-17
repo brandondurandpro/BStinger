@@ -57,7 +57,8 @@ fun AgentState.toPreferences(): Map<String, String> {
     val saved = PreferenceKeys.AGENT_TEMPLATES to encodeTemplates(templates.filter { it.global })
     val own = PreferenceKeys.AGENT_TEMPLATES_PREFIX + project.root.path to encodeTemplates(templates.filter { !it.global })
     val layout = toolWindows.toPreferences()
-    val teamsSaved = teams.toPreferences()
+    val memberKey = PreferenceKeys.AGENT_MEMBER_SESSIONS_PREFIX + project.root.path
+    val teamsSaved = teams.toPreferences() + (memberKey to memberSessions.joinToString("\n"))
     // Nothing of the tabs is saved before the last ones were put back: it would erase them.
     if (!restored) return mapOf(width, last, saved, own, used) + layout + teamsSaved
     val root = project.root.path

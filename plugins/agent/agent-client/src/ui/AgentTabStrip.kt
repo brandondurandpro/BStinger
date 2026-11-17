@@ -51,6 +51,9 @@ import org.example.kotlineditor.state.Conversation
 import org.example.kotlineditor.state.outcome
 import org.example.kotlineditor.state.EditorState
 import org.example.kotlineditor.state.EditorTab
+import org.example.kotlineditor.model.TeamAgent
+import org.example.kotlineditor.state.memberKey
+import org.example.kotlineditor.state.statusOf
 import org.example.kotlineditor.state.toggle
 
 // The tabs of agent mode, one per open conversation, and the button of the strip that shows the conversation list.
@@ -141,7 +144,8 @@ private fun TabRow(agent: AgentState, items: List<StripItem>, tag: String, heigh
             when (item) {
                 is StripItem.Chat -> AgentTabView(agent, item.conversation, item.isShown(active), openMenu, menu)
                 is StripItem.File -> FileTabView(item, openMenu, menu)
-                is StripItem.Back -> BackTabView(item)
+                is StripItem.Back -> BackTabView(agent, item)
+                is StripItem.Member -> MemberTabView(agent, item)
             }
         }
     }
@@ -183,41 +187,99 @@ private sealed interface StripItem {
 
         override val key = "back:${conversation.id}"
 
-        override fun isShown(active: Conversation?): Boolean = conversation == active && conversation.showsChat
+        override fun isShown(active: Conversation?): Boolean {
+            val chat = conversation.showsChat && conversation.members.shown == null
+            return conversation == active && chat
+        }
+    }
+
+    // The tab of a member of the team of the conversation: its status, and its transcript when selected. It is not
+    // closed: it is there as long as the team has the member.
+    class Member(val conversation: Conversation, val member: TeamAgent) : StripItem {
+        val memberKey = conversation.memberKey(member)
+
+        override fun close() = Unit
+
+        override val key = "member:${conversation.id}:${member.id}"
+
+        override fun isShown(active: Conversation?): Boolean = conversation == active && conversation.members.shown == memberKey
     }
 
     class File(val conversation: Conversation, val editor: EditorState, val tab: EditorTab) : StripItem {
         override fun close() {
             editor.close(tab)
-            if (editor.allTabs.isEmpty()) conversation.showsChat = true
+            val member = conversation.members.shown
+            val lastClosed = editor.allTabs.isEmpty()
+            // The tab of a member stays shown when the last file closes behind it.
+            if (lastClosed && member == null) conversation.showsChat = true
+            if (lastClosed && member != null) conversation.showChatBehind()
         }
 
         override val key = "file:${conversation.id}:${tab.key}"
 
-        override fun isShown(active: Conversation?): Boolean =
-            conversation == active && !conversation.showsChat && editor.activeTab == tab
+        override fun isShown(active: Conversation?): Boolean {
+            val file = !conversation.showsChat && conversation.members.shown == null
+            return conversation == active && file && editor.activeTab == tab
+        }
     }
 }
 
 private fun chatItems(agent: AgentState): List<StripItem> = agent.tabs.open.map { StripItem.Chat(agent, it) }
 
-// The conversation shown, then the files and diffs open in its worktree; none when nothing is open there.
+// The conversation shown, then the members of its team, then the files and diffs open in its worktree; none when it
+// has no team and nothing is open there.
 private fun detailItems(agent: AgentState): List<StripItem> {
     val conversation = agent.tabs.active ?: return emptyList()
+    val members = conversation.team?.team?.members.orEmpty().map { StripItem.Member(conversation, it) }
+    val files = fileItems(conversation)
+    if (members.isEmpty() && files.isEmpty()) return emptyList()
+    return listOf<StripItem>(StripItem.Back(conversation)) + members + files
+}
+
+// The files and diffs open in the worktree of [conversation]; none before it has one.
+private fun fileItems(conversation: Conversation): List<StripItem> {
     val editor = conversation.workspace?.editor ?: return emptyList()
-    if (editor.allTabs.isEmpty()) return emptyList()
-    return listOf<StripItem>(StripItem.Back(conversation)) + editor.allTabs.map { StripItem.File(conversation, editor, it) }
+    return editor.allTabs.map { StripItem.File(conversation, editor, it) }
+}
+
+// A member of the team: what it is doing, in a dot and a word, and its name; selected, its transcript shows.
+@Composable
+private fun MemberTabView(agent: AgentState, item: StripItem.Member) {
+    val conversation = item.conversation
+    val member = item.member
+    val status = conversation.statusOf(item.memberKey)
+    Row(
+        Modifier
+            .fillMaxHeight()
+            .activeUnderline(item.isShown(conversation))
+            .clickable { agent.showMember(conversation, item.memberKey) }
+            .padding(horizontal = 10.dp)
+            .testTag(AgentTags.agentMemberTab(member.id)),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(8.dp).background(colorOf(status), IdeShapes.ExtraLarge))
+        Label(member.name, Modifier.padding(start = 6.dp))
+        Label(
+            wordOf(status),
+            Modifier.padding(start = 6.dp).testTag(AgentTags.agentMemberTabStatus(member.id)),
+            color = IdeColors.TextSecondary,
+            fontSize = 11.sp,
+        )
+    }
 }
 
 @Composable
-private fun BackTabView(item: StripItem.Back) {
+private fun BackTabView(agent: AgentState, item: StripItem.Back) {
     val conversation = item.conversation
     val shown = item.isShown(conversation)
     Row(
         Modifier
             .fillMaxHeight()
             .activeUnderline(shown)
-            .clickable { conversation.showsChat = true }
+            .clickable {
+                agent.showMember(conversation, null)
+                conversation.showsChat = true
+            }
             .padding(horizontal = 10.dp)
             .testTag(AgentTags.agentDetailChat(conversation.id)),
         verticalAlignment = Alignment.CenterVertically,

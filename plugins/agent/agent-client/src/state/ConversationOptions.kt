@@ -22,6 +22,9 @@ private const val COMMAND_RETRY_MS = 400L
  * IDE keeps none of them: they are the session's, as the agent says. Each conversation runs its own agent — what
  * [agentCommand] says for it — so its settings are those this agent offers its session.
  */
+/** The settings shown and chosen for the own agent of a conversation, put aside while a team answers it. */
+internal class OwnSettings(val options: List<AgentOption>, val choices: Map<String, String>)
+
 @Stable
 class ConversationOptions internal constructor(
     private val project: AgentHost,
@@ -83,6 +86,42 @@ class ConversationOptions internal constructor(
                 } finally {
                     conversation.settingOptions -= 1
                     conversation.showServerOptions()
+                }
+            }
+        }
+    }
+
+    /**
+     * Another agent answers [conversation] from now on: the manager of the team it just chose ([hasTeam]), or its own
+     * agent again. The settings chosen for its own agent are put aside while a team answers (a team fixes its model
+     * and effort) and come back with it; the server forgets the choices it was sent, which were for the agent before.
+     */
+    internal fun answererChanged(conversation: Conversation, hadTeam: Boolean, hasTeam: Boolean) {
+        conversation.offering?.cancel()
+        val sent = conversation.choices.isNotEmpty()
+        if (!hadTeam) conversation.ownSettings = OwnSettings(conversation.options, conversation.choices.toMap())
+        conversation.choices.clear()
+        conversation.serverOptions = emptyList()
+        val own = conversation.ownSettings
+        if (hasTeam || own == null) {
+            conversation.options = emptyList()
+        } else {
+            conversation.options = own.options
+            conversation.choices.putAll(own.choices)
+            conversation.ownSettings = null
+        }
+        if (sent) forgetChoices(conversation)
+        offer(conversation)
+    }
+
+    // The server forgets what it was told of [conversation], which has not started: the choices of another agent.
+    private fun forgetChoices(conversation: Conversation) {
+        project.scope.launch {
+            conversation.optionsLock.withLock {
+                try {
+                    agents.close(conversation.key)
+                } catch (_: IOException) {
+                    // A server that cannot be reached forgets them when it restarts, or is told the new ones.
                 }
             }
         }

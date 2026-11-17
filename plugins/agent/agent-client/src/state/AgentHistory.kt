@@ -57,14 +57,26 @@ internal fun AgentState.usedAgentIds(): List<String> = (usedAgents + listOfNotNu
 // The sessions no conversation shows yet, after the conversations, newest first; [agent] is theirs when not the settings'.
 private fun AgentState.addHistory(sessions: List<AgentSession>, root: String, agent: AgentCommand?) {
     val shown = conversations.mapNotNull { it.session }.toSet()
-    for (session in sessions.filter { it.id !in shown }) {
+    // The session of a member of a team is no conversation: its work shows in the conversation of its team.
+    val listed = sessions.filter { it.id !in shown && it.id !in memberSessions }
+    for (session in listed) {
         val conversation = conversationOf(session, nextId++, root)
         // The state delivers the prompts queued while the agent answered (the transcript only says the turn is over).
         conversation.onTurnIdle = { deliverQueued(conversation) }
         conversation.agent = agent
         conversation.teamLookup = teams::find
+        conversation.onMemberSession = ::memberSessionKnown
         conversations.add(conversation)
     }
+}
+
+/**
+ * A member of a team works in [session]: it is remembered as such, and leaves the history when the agent listed it
+ * there before the IDE knew whose it was.
+ */
+internal fun AgentState.memberSessionKnown(session: String) {
+    if (!memberSessions.add(session)) return
+    conversations.removeAll { it.isHistoryEntry && it.session == session }
 }
 
 /** A conversation of the history: the session [session] of the agent, in the project at [root] or a worktree. */

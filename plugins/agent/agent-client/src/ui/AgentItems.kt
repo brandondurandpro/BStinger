@@ -79,16 +79,26 @@ internal fun NoticeView(notice: AgentItem.Notice) {
     )
 }
 
-/** A task given to a member, on one line: who, what, and how far the member got. */
+/** Who asks, in the card of a permission request of the conversation's own agent. */
+internal const val AGENT_ASKER = "The agent"
+
+/**
+ * An item of a transcript that reads the same wherever it shows, in a conversation or in the work of a member of its
+ * team. [asker] names who asks for a permission; [onAnswer] answers one, null where it is answered elsewhere.
+ */
 @Composable
-internal fun DelegationRow(delegation: AgentItem.Delegation) {
-    val failed = delegation.status == DelegationStatus.Failed
-    BasicText(
-        "${delegation.member}: ${delegation.task} (${delegation.status.name.lowercase()})",
-        Modifier.fillMaxWidth(),
-        style = bodyStyle.copy(color = if (failed) IdeColors.Error else IdeColors.TextSecondary, fontSize = 12.sp),
-        maxLines = 1,
-    )
+internal fun PlainItemView(item: AgentItem, asker: String, onAnswer: ((AgentItem.Permission, String) -> Unit)?) {
+    when (item) {
+        is AgentItem.UserText -> UserBubble(item.text, item.context)
+        is AgentItem.AgentText -> MarkdownText(item.text.trimEnd(), Modifier.fillMaxWidth())
+        is AgentItem.Thought -> ThoughtView(item.text)
+        is AgentItem.ToolCall -> ToolCallCard(item)
+        is AgentItem.Plan -> PlanView(item)
+        is AgentItem.Permission -> PermissionCard(item, asker, onAnswer?.let { answer -> { option -> answer(item, option) } })
+        is AgentItem.Notice -> NoticeView(item)
+        // Only a team conversation has delegations, and it shows them as cards.
+        is AgentItem.Delegation -> Unit
+    }
 }
 
 // A row of the transcript: one item, or the tool calls the agent made one after the other.
@@ -122,9 +132,9 @@ internal fun transcriptRows(items: List<AgentItem>): List<TranscriptRow> {
 
 // The commands of the agent are folded behind a link, with the last one beside it to follow what it does.
 @Composable
-internal fun ToolCallRun(conversation: Conversation, calls: List<AgentItem.ToolCall>) {
+internal fun ToolCallRun(openedRuns: MutableMap<String, Boolean>, calls: List<AgentItem.ToolCall>) {
     val first = calls.firstOrNull() ?: return
-    val opened = conversation.openedToolRuns[first.id] == true
+    val opened = openedRuns[first.id] == true
     val noun = if (calls.size == 1) "command" else "commands"
     val verb = if (opened) "Hide" else "Show"
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -132,7 +142,7 @@ internal fun ToolCallRun(conversation: Conversation, calls: List<AgentItem.ToolC
             Label(
                 "$verb ${calls.size} $noun",
                 Modifier
-                    .clickable { conversation.openedToolRuns[first.id] = !opened }
+                    .clickable { openedRuns[first.id] = !opened }
                     .testTag(AgentTags.AGENT_TOOLS_TOGGLE),
                 color = IdeColors.Accent,
                 fontSize = 12.sp,
@@ -274,9 +284,10 @@ internal fun PlanView(plan: AgentItem.Plan) {
     }
 }
 
-// The agent asks before it acts: one button per option while it waits, then the answer.
+// The agent (or [asker], a member of a team) asks before it acts: one button per option while it waits, then the
+// answer. Without [onAnswer] the request is answered elsewhere, and the card only says that it waits.
 @Composable
-internal fun PermissionCard(request: AgentItem.Permission, onAnswer: (String) -> Unit) {
+internal fun PermissionCard(request: AgentItem.Permission, asker: String = AGENT_ASKER, onAnswer: ((String) -> Unit)?) {
     Column(
         Modifier
             .fillMaxWidth()
@@ -285,8 +296,10 @@ internal fun PermissionCard(request: AgentItem.Permission, onAnswer: (String) ->
             .padding(10.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Label("The agent asks to: ${request.title}", fontWeight = FontWeight.SemiBold, maxLines = 3)
-        if (request.pending) {
+        Label("$asker asks to: ${request.title}", fontWeight = FontWeight.SemiBold, maxLines = 3)
+        if (request.pending && onAnswer == null) {
+            Label("Waits for your answer, at the end of the conversation", color = IdeColors.TextSecondary, fontSize = 12.sp)
+        } else if (request.pending && onAnswer != null) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 for (option in request.options) {
                     IdeButton(

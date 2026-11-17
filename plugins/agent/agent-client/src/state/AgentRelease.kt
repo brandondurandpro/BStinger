@@ -21,6 +21,7 @@ internal fun AgentState.release(conversation: Conversation) {
     if (directory == null || !conversation.releasable) return
     conversation.polling?.cancel()
     conversation.polling = null
+    conversation.stopFollowingMembers()
     conversation.forget(directory)
     val agents = project.services.agents
     conversation.releasing =

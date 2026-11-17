@@ -156,11 +156,21 @@ private fun AgentTabsArea(app: AppState, agent: AgentState, findFocus: FocusRequ
             Box(Modifier.fillMaxWidth().height(1.dp).background(IdeColors.Separator))
             AgentDetailStrip(agent)
             val workspace = conversation.workspaceProject
+            // The tab of a member of its team shows the member in place of the conversation and of its files.
+            val member = conversation.members.shown
             key(conversation.id) {
-                if (workspace == null || conversation.showsChat) {
-                    ConversationView(agent, conversation)
-                } else {
-                    EditorArea(app, workspace, findFocus, Modifier.fillMaxSize(), showTabs = false, islands = false)
+                when {
+                    member != null -> {
+                        MemberView(agent, conversation, member)
+                    }
+
+                    workspace == null || conversation.showsChat -> {
+                        ConversationView(agent, conversation)
+                    }
+
+                    else -> {
+                        EditorArea(app, workspace, findFocus, Modifier.fillMaxSize(), showTabs = false, islands = false)
+                    }
                 }
             }
         }

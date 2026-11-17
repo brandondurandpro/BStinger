@@ -43,6 +43,7 @@ private fun AgentHost.apply(conversation: Conversation, transcript: AgentTranscr
     conversation.since = transcript.version
     if (!transcript.known) {
         forgotten(conversation, restarted)
+        followMembers(conversation)
         return
     }
     val wasBusy = conversation.state != AgentTurnState.Idle
@@ -68,10 +69,18 @@ private fun AgentHost.apply(conversation: Conversation, transcript: AgentTranscr
     if (messaged) conversation.lastMessageAt = System.currentTimeMillis()
     var wrote = false
     var asked: String? = null
-    for (item in transcript.items) {
-        if (item.id in conversation.hidden) continue
-        asked = asked ?: newQuestion(conversation, item)
-        wrote = wrote || finishedWriting(conversation, item)
+    val inTeam = conversation.teamId != null
+    for (received in transcript.items) {
+        if (received.id in conversation.hidden) continue
+        val sentHere = received.id.startsWith(USER_PROMPT_PREFIX)
+        val item = if (inTeam) shownInTeam(received, transcript.replayed, sentHere) else received
+        if (item == null) {
+            // Nothing of it shows in a team conversation: a message that is only a delegation, a prompt of the harness.
+            conversation.drop(received.id)
+            continue
+        }
+        asked = asked ?: newQuestion(conversation.items, item)
+        wrote = wrote || finishedWriting(conversation.items, item)
         if (item is AgentItem.AgentText) quotaLimitsOf(item.text).takeIf { it.isNotEmpty() }?.let { conversation.quota = it }
         conversation.upsert(item)
     }
@@ -98,6 +107,7 @@ private fun AgentHost.apply(conversation: Conversation, transcript: AgentTranscr
     // The tree, the Git panel and the open editors pick the changes of the agent up; the quota read changed nothing.
     val probeAnswered = turnEnded && answeredFrom != null
     if (wrote || (turnEnded && !probeAnswered)) conversation.workspace?.synchronize()
+    followMembers(conversation)
 }
 
 /**
@@ -131,23 +141,28 @@ private fun forgotten(conversation: Conversation, restarted: Boolean) {
     conversation.onTurnIdle?.invoke()
     val shownByServer = conversation.items.any { it.version > 0 }
     val lost = shownByServer && conversation.session == null
+    // The run of a team went with the server: nothing will end the tasks its cards still show running.
+    val cancelled = conversation.cancelRunningDelegations()
     if (restarted && lost) {
         conversation.note("The server restarted: the agent no longer remembers this conversation.", error = false)
+    } else if (cancelled > 0) {
+        conversation.note("The server restarted: the team stopped, the tasks of its members are cancelled.")
     } else if (wasBusy) {
         conversation.note("The agent stopped.")
     }
 }
 
-private fun finishedWriting(conversation: Conversation, item: AgentItem): Boolean {
+// Whether [item] is a tool call that changes files and just ended, compared with the [shown] items.
+internal fun finishedWriting(shown: List<AgentItem>, item: AgentItem): Boolean {
     if (item !is AgentItem.ToolCall || item.kind !in WRITING_TOOLS) return false
     val done = item.status == AgentToolStatus.Completed || item.status == AgentToolStatus.Failed
-    val before = conversation.items.firstOrNull { it.id == item.id } as? AgentItem.ToolCall
+    val before = shown.firstOrNull { it.id == item.id } as? AgentItem.ToolCall
     return done && before?.status != item.status
 }
 
-// What a permission request that just appeared asks, null for any other item or a request already shown.
-private fun newQuestion(conversation: Conversation, item: AgentItem): String? {
+// What a permission request that just appeared asks, null for any other item or a request already [shown].
+internal fun newQuestion(shown: List<AgentItem>, item: AgentItem): String? {
     if (item !is AgentItem.Permission || !item.pending) return null
-    val before = conversation.items.firstOrNull { it.id == item.id } as? AgentItem.Permission
+    val before = shown.firstOrNull { it.id == item.id } as? AgentItem.Permission
     return item.title.takeIf { before?.pending != true }
 }

@@ -78,6 +78,48 @@ object AgentTags {
     /** The notice of a started conversation whose team was deleted. */
     const val AGENT_TEAM_MISSING = "agent.teamPicker.missing"
 
+    /** The view of a member of the team of a conversation, shown by its tab: its status and its transcript. */
+    const val AGENT_MEMBER_VIEW = "agent.member.view"
+
+    /** The status of the member shown, in words. */
+    const val AGENT_MEMBER_STATUS = "agent.member.status"
+
+    /** The transcript of the member shown, a lazy list. */
+    const val AGENT_MEMBER_TRANSCRIPT = "agent.member.transcript"
+
+    /** What the view of a member says while it has no transcript to show. */
+    const val AGENT_MEMBER_EMPTY = "agent.member.empty"
+
+    /** The card of the delegation [id]: a task the manager gave a member. */
+    fun agentDelegation(id: String) = "agent.delegation.$id"
+
+    /** Its header, which expands the card and folds it back. */
+    fun agentDelegationToggle(id: String) = "agent.delegation.toggle.$id"
+
+    /** Its status, in words. */
+    fun agentDelegationStatus(id: String) = "agent.delegation.status.$id"
+
+    /** The report of its member, once the task ended. */
+    fun agentDelegationReport(id: String) = "agent.delegation.report.$id"
+
+    /** The work of its member, a lazy list, shown while the card is expanded. */
+    fun agentDelegationWork(id: String) = "agent.delegation.work.$id"
+
+    /** What an expanded card says instead of the work: it loads, or there is none. */
+    fun agentDelegationNote(id: String) = "agent.delegation.note.$id"
+
+    /** The row [index] of the work of a member, in a card or in its tab. */
+    fun agentMemberRow(index: Int) = "agent.member.row.$index"
+
+    /** The permission request of the member named [member], at the end of the conversation of its team. */
+    fun agentMemberRequest(member: String) = "agent.member.request.$member"
+
+    /** The tab of the member [id] of the team, among the detail tabs of the conversation. */
+    fun agentMemberTab(id: String) = "agent.member.tab.$id"
+
+    /** The status this tab shows (`idle`, `working`, `failed`). */
+    fun agentMemberTabStatus(id: String) = "agent.member.tab.status.$id"
+
     /** The role of the manager in the tags of the fields of a team. */
     const val TEAM_MANAGER = "manager"
 

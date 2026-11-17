@@ -229,6 +229,9 @@ class Conversation(val id: Int, title: String, val branch: String) {
 
     // The choices of the user, sent again before the first prompt; how many are on their way; their order.
     internal val choices = LinkedHashMap<String, String>()
+
+    // The settings of its own agent, kept aside while a team answers the conversation.
+    internal var ownSettings: OwnSettings? = null
     internal var settingOptions = 0
 
     // The settings as the server last said, shown once no choice is on its way any more.
@@ -272,8 +275,23 @@ class Conversation(val id: Int, title: String, val branch: String) {
     var preparingWorktree by mutableStateOf(false)
         internal set
 
-    /** True when the conversation itself is shown; false for the files and diffs open in its worktree. */
-    var showsChat by mutableStateOf(true)
+    private var chatShown by mutableStateOf(true)
+
+    /** The last file of the conversation closed: the conversation is what shows behind the tab of a member. */
+    internal fun showChatBehind() {
+        chatShown = true
+    }
+
+    /**
+     * True when the conversation itself is shown; false for the files and diffs open in its worktree. Going to either
+     * leaves the tab of a member of its team.
+     */
+    var showsChat: Boolean
+        get() = chatShown
+        set(value) {
+            chatShown = value
+            members.shown = null
+        }
 
     /** Branch checked out where the agent works: it follows a checkout made from the Git panel or the terminal. */
     val currentBranch: String? get() = workspace?.checkedOutBranch ?: branch.takeIf { mode == WorkMode.Worktree }
@@ -284,6 +302,9 @@ class Conversation(val id: Int, title: String, val branch: String) {
 
     // How the team of an id is found: the teams of the project, wired where the conversation is made.
     internal var teamLookup: (String) -> SavedTeam? = { null }
+
+    // Called with the session a member of its team works in, once the server says it.
+    internal var onMemberSession: (String) -> Unit = {}
 
     /** The team the conversation chose, as it is now (edited, renamed); null for none, or when it was deleted. */
     val team: SavedTeam?
@@ -297,6 +318,9 @@ class Conversation(val id: Int, title: String, val branch: String) {
      * (one that did not start falls back to no team): sending must not go on silently with another agent.
      */
     val teamMissing: Boolean get() = teamId != null && team == null
+
+    /** The members of its team, as the conversation shows them: their transcripts, the cards and the tab opened. */
+    val members = TeamMembers()
 
     /** Whether the agent already works somewhere: its place can no longer change. */
     val started: Boolean get() = items.isNotEmpty() || session != null
@@ -376,6 +400,13 @@ class Conversation(val id: Int, title: String, val branch: String) {
         unsent.forEach(::upsert)
     }
 
+    /** Takes the item [id] out of the transcript, when it is there. */
+    internal fun drop(id: String) {
+        val position = positions[id] ?: return
+        items.removeAt(position)
+        reindex()
+    }
+
     private fun reindex() {
         positions.clear()
         items.forEachIndexed { index, item -> positions[item.id] = index }
@@ -416,8 +447,15 @@ class AgentState(
     /** Conversation of the active tab: the tool windows and the toolbar show its worktree and its branch. */
     val current: Conversation? get() = tabs.active
 
-    /** The agent of [conversation], as shown under the prompt before it introduced itself. */
-    fun agentOf(conversation: Conversation): AgentCommand = conversation.agent ?: agentCommand()
+    /**
+     * The agent that answers [conversation] on the server: the manager of its team when it sends through one, else
+     * the agent chosen in it, else the agent of the settings. Its settings (the mode of permissions), its history and
+     * its login are those of this agent.
+     */
+    fun agentOf(conversation: Conversation): AgentCommand {
+        val manager = sendingTeam(conversation)?.team?.manager?.agent
+        return manager ?: conversation.agent ?: agentCommand()
+    }
 
     /** The agent of [conversation], named: its registry id, or its command line. */
     fun agentLabelOf(conversation: Conversation): String = labelOf(agentOf(conversation))
@@ -495,16 +533,36 @@ class AgentState(
     fun chooseTeam(conversation: Conversation, id: String?) {
         if (conversation.started || conversation.busy) return
         if (id != null && teams.find(id) == null) return
+        setTeam(conversation, id)
+    }
+
+    // The team of [conversation] becomes [id]: another agent answers it (the manager, or its own agent again), so the
+    // settings shown are asked again.
+    private fun setTeam(conversation: Conversation, id: String?) {
+        val before = conversation.teamId
+        if (before == id) return
         conversation.teamId = id
+        options.answererChanged(conversation, hadTeam = before != null, hasTeam = id != null)
     }
 
     // A team was deleted: a conversation not started that chose it goes back to no team; a started one keeps the id,
     // and shows (teamMissing) that its team is gone.
     private fun teamRemoved(id: String) {
         for (conversation in conversations) {
-            if (conversation.teamId == id && !conversation.started) conversation.teamId = null
+            if (conversation.teamId == id && !conversation.started) setTeam(conversation, null)
         }
     }
+
+    /**
+     * The sessions the members of teams worked in, as far as this IDE saw them: the agent lists them with the others,
+     * but they belong to the conversation of their team and are no conversations of the history.
+     */
+    internal val memberSessions: MutableSet<String> =
+        saved[PreferenceKeys.AGENT_MEMBER_SESSIONS_PREFIX + project.root.path]
+            .orEmpty()
+            .lines()
+            .filter { it.isNotBlank() }
+            .toMutableSet()
 
     /** The agents of the registry the user worked with: the history lists the sessions of each, not only the settings'. */
     internal val usedAgents =
@@ -529,6 +587,7 @@ class AgentState(
         savedWidth(saved)?.let { conversationsWidth = it }
         followEditors()
         followSeen()
+        followShownMember()
         followChanges()
         followQuota()
         followHistory(project, agentCommand)
@@ -552,6 +611,11 @@ class AgentState(
     /** Ctrl+F4: closes the file or diff shown, or the conversation when it is the one shown. */
     fun closeActive() {
         val conversation = tabs.active ?: return
+        if (conversation.members.shown != null) {
+            // The tab of a member is left, not closed: the conversation shows again.
+            showMember(conversation, null)
+            return
+        }
         val editor = conversation.workspace?.editor
         val tab = editor?.activeTab
         if (conversation.showsChat || tab == null) {
@@ -568,7 +632,22 @@ class AgentState(
      */
     fun closeTab(conversation: Conversation) {
         tabs.close(conversation)
+        // Nobody looks at its cards and member tabs any more: only the members at work stay followed.
+        conversation.members.closeViews()
+        project.followMembers(conversation)
         release(conversation)
+    }
+
+    /** Expands the card of [delegation] in [conversation], or folds it back: expanded, it shows the member's work. */
+    fun toggleDelegation(conversation: Conversation, delegation: AgentItem.Delegation) {
+        conversation.members.toggle(delegation.id)
+        project.followMembers(conversation)
+    }
+
+    /** Shows the tab of the member whose conversation is [memberKey] in [conversation]; null goes back to it. */
+    fun showMember(conversation: Conversation, memberKey: String?) {
+        conversation.members.shown = memberKey
+        project.followMembers(conversation)
     }
 
     /** The question "from which branch?" of a new conversation, null while none is asked. */
@@ -649,6 +728,7 @@ class AgentState(
         val id = nextId++
         val conversation = Conversation(id, "New conversation", "agent/conversation-$id")
         conversation.teamLookup = teams::find
+        conversation.onMemberSession = ::memberSessionKnown
         // The state delivers the prompts queued while the agent answered: only it has the command, the scope
         // and the transcript machinery held together (the transcript only says the turn is over).
         conversation.onTurnIdle = { deliverQueued(conversation) }
@@ -680,6 +760,7 @@ class AgentState(
     fun delete(conversation: Conversation) {
         conversation.job?.cancel()
         conversation.polling?.cancel()
+        conversation.stopFollowingMembers()
         tabs.close(conversation)
         conversations.remove(conversation)
         val started = conversation.started
@@ -758,7 +839,8 @@ class AgentState(
      */
     fun send(conversation: Conversation) {
         val text = conversation.draft.trim()
-        if (text.isEmpty()) return
+        // A conversation whose team was deleted sends nothing, and keeps what was typed.
+        if (text.isEmpty() || conversation.teamMissing) return
         conversation.draft = ""
         if (!conversation.started) conversation.title = titleOf(text)
         val itemId = "$USER_PROMPT_PREFIX${UUID.randomUUID()}"
@@ -788,6 +870,8 @@ class AgentState(
         val unknown = conversation.quota.isEmpty() && loaded && readsQuotaAlone(agentOf(conversation))
         val outdated = conversation.quotaStale && conversation.quota.isNotEmpty()
         if (!(outdated || unknown) || conversation.busy || conversation.probeFrom != null) return
+        // A team conversation is not asked: the question would be a run of its team.
+        if (conversation.teamId != null) return
         if (conversation.quotaProbed && conversation.quota.isEmpty()) return
         val offered = conversation.commands.map { it.name }
         val command = QUOTA_COMMANDS.firstOrNull { it in offered } ?: return
@@ -837,6 +921,11 @@ class AgentState(
 
     private suspend fun deliver(conversation: Conversation, prompt: OutgoingPrompt) {
         try {
+            if (conversation.teamMissing) {
+                // Deleted while the prompt waited: it does not go to another agent.
+                conversation.note("The prompt was not sent: the team of this conversation was deleted.")
+                return
+            }
             conversation.prepareIn(project)
             conversation.preparing?.join()
             val workspace = conversation.workspace
@@ -852,7 +941,15 @@ class AgentState(
             project.followTranscript(conversation)
             val directory = workspace.root.path
             val (itemId, text, attachments) = prompt
-            agents.prompt(conversation.key, agentOf(conversation), directory, itemId, text, conversation.session, attachments)
+            val team = sendingTeam(conversation)
+            val session = conversation.session
+            if (team == null) {
+                agents.prompt(conversation.key, agentOf(conversation), directory, itemId, text, session, attachments)
+            } else {
+                // The team as it is now: the server fixes it at the first prompt of the conversation.
+                rememberAgent(team.team.manager.agent)
+                agents.teamPrompt(conversation.key, team.team, directory, itemId, text, session, attachments)
+            }
         } catch (refused: IOException) {
             if (refused.message == AGENT_BUSY_MESSAGE) {
                 // A server that arrived first (or filled its queue) says the agent answers: the prompt goes again
@@ -867,6 +964,12 @@ class AgentState(
         }
     }
 
+    // The history lists the sessions of every agent the user worked with: the manager of a team is one of them.
+    private fun rememberAgent(agent: AgentCommand) {
+        val id = agent.registry
+        if (id != null && id !in usedAgents) usedAgents.add(id)
+    }
+
     /** Stops the agent of [conversation]; its permission requests are cancelled. */
     fun stop(conversation: Conversation) {
         if (!conversation.busy) return
@@ -879,12 +982,15 @@ class AgentState(
         }
     }
 
-    /** Answers the permission request [request] of [conversation] with [option]. */
-    fun answer(conversation: Conversation, request: AgentItem.Permission, option: String) {
+    /**
+     * Answers the permission request [request] of [conversation] with [option]. A request of a member of its team is
+     * answered in the member's own conversation, [key].
+     */
+    fun answer(conversation: Conversation, request: AgentItem.Permission, option: String, key: String = conversation.key) {
         if (!request.pending) return
         project.scope.launch {
             try {
-                agents.answer(conversation.key, request.id, option)
+                agents.answer(key, request.id, option)
             } catch (failure: IOException) {
                 conversation.note("The answer could not be sent: ${failure.message}")
             }
@@ -895,7 +1001,17 @@ class AgentState(
     fun dispose() {
         conversations.forEach {
             it.polling?.cancel()
+            it.stopFollowingMembers()
             it.closeWorktree(project)
+        }
+    }
+
+    // The member whose tab shows is read, and let go of once another tab shows (a file, the conversation).
+    private fun followShownMember() {
+        project.scope.launch {
+            snapshotFlow { current?.let { it to it.members.shown } }
+                .filterNotNull()
+                .collect { (conversation, _) -> project.followMembers(conversation) }
         }
     }
 
