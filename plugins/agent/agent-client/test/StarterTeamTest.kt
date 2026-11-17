@@ -6,6 +6,7 @@ import org.example.kotlineditor.model.AgentOptionValue
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /** The ready-made team: its members, and the Haiku model found among what a provider offers. */
 class StarterTeamTest {
@@ -22,6 +23,14 @@ class StarterTeamTest {
         assertEquals(emptyList(), agents.filter { it.systemPrompt.isBlank() || it.description.isBlank() })
         assertEquals(agents.size, agents.map { it.id }.toSet().size)
         assertNull(teamProblem(team.name, team.manager, team.members))
+    }
+
+    @Test
+    fun `the Dev is told to write simple code, without needless fallbacks`() {
+        val dev = starterTeam(provider).members.firstOrNull { it.name == "Dev" }
+        val prompt = checkNotNull(dev).systemPrompt
+        assertTrue(prompt.contains("simple code"), prompt)
+        assertTrue(prompt.contains("no fallback"), prompt)
     }
 
     @Test

@@ -90,8 +90,30 @@ fun AgentState.browseFolder(conversation: Conversation) {
 fun AgentState.removeFolder(folder: String) {
     if (folder == project.root.path) return
     forgottenFolders.add(folder)
+    closeConversations(conversations.filter { it.folder == folder })
+    project.closeFolder(folder)
+}
+
+/**
+ * Removes the group of the project of this window from the list: its conversations close, the agent keeps their
+ * sessions. The project stays the window's own; a conversation started in it brings the group back.
+ */
+fun AgentState.removeProjectGroup() {
+    closeConversations(conversations.filter { it.folder == null && !it.scratch })
+}
+
+/**
+ * Removes the group without a project from the list: its conversations close, the agent keeps their sessions, and their
+ * empty folders stay on the server.
+ */
+fun AgentState.removeScratchGroup() {
+    closeConversations(conversations.filter { it.scratch })
+}
+
+// Closes [closing] in this window; nothing is deleted: the agent keeps the sessions, Git the worktrees and their changes.
+private fun AgentState.closeConversations(closing: List<Conversation>) {
     val agents = project.services.agents
-    for (conversation in conversations.filter { it.folder == folder }) {
+    for (conversation in closing) {
         conversation.job?.cancel()
         conversation.polling?.cancel()
         conversation.stopFollowingMembers()
@@ -99,10 +121,9 @@ fun AgentState.removeFolder(folder: String) {
         conversations.remove(conversation)
         val started = conversation.started
         project.scope.launch { if (started) runCatching { agents.close(conversation.key) } }
-        // Only this window's view of a worktree closes: Git keeps the worktree and its changes.
+        // Only this window's view of a worktree closes.
         conversation.closeWorktree(conversation.host(project))
     }
-    project.closeFolder(folder)
 }
 
 // A conversation works in [path]: a folder the user removed is listed again, with the sessions it still has.

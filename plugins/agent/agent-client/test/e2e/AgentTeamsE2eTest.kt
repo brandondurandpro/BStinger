@@ -346,6 +346,34 @@ class AgentTeamsE2eTest {
         }
 
     @Test
+    fun `the cross never covers the form of a team`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, teamPreferences(), agents = servers.settings())
+            startConversation(app)
+            openTeams()
+            newTeam("Overlap")
+            val cross = boundsOf(AgentTags.AGENT_TEAMS_CLOSE_CROSS)
+            val name = boundsOf(AgentTags.AGENT_TEAM_NAME)
+            assertTrue(!cross.overlaps(name), "the cross $cross covers the name field $name")
+            val form = boundsOf(AgentTags.AGENT_TEAM_FORM)
+            assertTrue(cross.bottom <= form.top, "the cross $cross is above the form $form")
+        }
+
+    @Test
+    fun `the Teams button at the top of the conversations opens the window, and the cross closes it`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, teamPreferences(), agents = servers.settings())
+            startConversation(app)
+            val button = boundsOf(AgentTags.AGENT_LIST_TEAMS)
+            val title = boundsOf(AgentTags.AGENT_LIST)
+            assertTrue(button.top < title.top + 40 && button.left < title.left + 200, "at the top left of the list: $button in $title")
+            awaitTag(AgentTags.AGENT_LIST_TEAMS).performClick()
+            awaitTag(AgentTags.AGENT_TEAMS_DIALOG)
+            awaitTag(AgentTags.AGENT_TEAMS_CLOSE_CROSS).performClick()
+            awaitNoTag(AgentTags.AGENT_TEAMS_DIALOG)
+        }
+
+    @Test
     fun `the model and the effort dropdowns follow the model chosen`() =
         runComposeUiTest {
             val app = launchWithProject(project, teamPreferences(), agents = servers.settings())

@@ -60,6 +60,13 @@ object AgentTags {
     const val AGENT_TEAMS_EMPTY = "agent.teams.empty"
     const val AGENT_TEAMS_CLOSE = "agent.teams.close"
 
+    /** The buttons that remove the group of the project, and the group without a project, from the list. */
+    const val AGENT_PROJECT_REMOVE = "agent.group.project.remove"
+    const val AGENT_SCRATCH_REMOVE = "agent.group.scratch.remove"
+
+    /** The Teams button at the top left of the list of conversations. */
+    const val AGENT_LIST_TEAMS = "agent.list.teams"
+
     /** The cross at the top right of the Teams window. */
     const val AGENT_TEAMS_CLOSE_CROSS = "agent.teams.closeCross"
     const val AGENT_TEAM_NEW = "agent.team.new"

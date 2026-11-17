@@ -229,13 +229,36 @@ class AgentOtherProjectE2eTest {
         }
 
     @Test
-    fun `the project of the window and the group without a project have no button to remove them`() =
+    fun `the group without a project comes first, so a new conversation shows above a long project group`() =
         runComposeUiTest {
             val app = launch(project.path)
+            repeat(8) { clickNewConversation(app) }
+            val fresh = clickNewConversationWithoutProject(app)
+            awaitTag(AgentTags.agentConversation(fresh.id))
+            awaitTag(AgentTags.AGENT_PROJECT_GROUP)
+            awaitTag(AgentTags.AGENT_SCRATCH_GROUP)
+            val scratch = boundsOf(AgentTags.AGENT_SCRATCH_GROUP)
+            val own = boundsOf(AgentTags.AGENT_PROJECT_GROUP)
+            assertTrue(scratch.top < own.top, "No project ($scratch) is above the project ($own)")
+        }
+
+    @Test
+    fun `the group of the project and the group without a project can be removed too, the window keeps its project`() =
+        runComposeUiTest {
+            val app = launch(project.path)
+            clickNewConversation(app)
+            val here = checkNotNull(app.project.agent.current)
+            val nowhere = clickNewConversationWithoutProject(app)
+            awaitTag(AgentTags.AGENT_PROJECT_REMOVE).performClick()
+            awaitNoTag(AgentTags.AGENT_PROJECT_GROUP)
+            assertTrue(app.project.agent.conversations.none { it === here })
+            awaitTag(AgentTags.AGENT_SCRATCH_REMOVE).performClick()
+            awaitNoTag(AgentTags.AGENT_SCRATCH_GROUP)
+            assertTrue(app.project.agent.conversations.none { it === nowhere })
+            assertEquals(project.path, app.project.root.path)
+            // The window is usable: a conversation starts again.
             clickNewConversationWithoutProject(app)
             awaitTag(AgentTags.AGENT_SCRATCH_GROUP)
-            assertTrue(onAllNodes(hasTestTagPrefix("agent.group.folder.remove:")).fetchSemanticsNodes().isEmpty())
-            assertNotNull(app.project.agent.current)
         }
 
     @Test

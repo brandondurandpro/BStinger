@@ -47,7 +47,7 @@ private val LIST_WIDTH = 260.dp
 
 /** "Teams": the teams of agents, to create, edit, duplicate and delete. Beside the button of the prompt templates. */
 @Composable
-internal fun TeamsButton(agent: AgentState) {
+internal fun TeamsButton(agent: AgentState, tag: String = AgentTags.AGENT_TEAMS) {
     var open by remember { mutableStateOf(false) }
     Label(
         "Teams",
@@ -55,7 +55,7 @@ internal fun TeamsButton(agent: AgentState) {
             .background(if (open) IdeColors.Selection else Color.Transparent, IdeShapes.Medium)
             .clickable { open = true }
             .padding(horizontal = 8.dp, vertical = 2.dp)
-            .testTag(AgentTags.AGENT_TEAMS),
+            .testTag(tag),
         color = IdeColors.TextSecondary,
         fontSize = 13.sp,
     )
@@ -97,14 +97,13 @@ private fun TeamsLayout(
             .testTag(AgentTags.AGENT_TEAMS_DIALOG),
     ) {
         TeamsColumns(agent, draft, open, closeForm, close)
-        CloseCross(close, Modifier.align(Alignment.TopEnd))
     }
 }
 
 // The cross at the top right of the window, where a window is closed from: the same as the Close button of the list.
 @Composable
-private fun CloseCross(close: () -> Unit, modifier: Modifier) {
-    IconButton(close, modifier.padding(6.dp).testTag(AgentTags.AGENT_TEAMS_CLOSE_CROSS)) {
+private fun CloseCross(close: () -> Unit) {
+    IconButton(close, Modifier.testTag(AgentTags.AGENT_TEAMS_CLOSE_CROSS)) {
         Label("✕", color = IdeColors.TextSecondary, fontSize = 14.sp)
     }
 }
@@ -126,13 +125,20 @@ private fun TeamsColumns(
             IdeButton("Close", close, Modifier.fillMaxWidth().testTag(AgentTags.AGENT_TEAMS_CLOSE))
         }
         Box(Modifier.width(1.dp).fillMaxHeight().background(IdeColors.Separator))
-        Column(Modifier.weight(1f).fillMaxHeight().padding(14.dp)) {
-            if (draft == null) {
-                Label("Choose a team, or make a new one.", color = IdeColors.TextSecondary, fontSize = 12.sp)
-            } else {
-                TeamForm(agent, draft, closeForm)
-            }
+        // The cross has its own row: it never covers the form under it.
+        Column(Modifier.weight(1f).fillMaxHeight().padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 14.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { CloseCross(close) }
+            Box(Modifier.weight(1f).fillMaxWidth().padding(end = 8.dp)) { TeamsPane(agent, draft, closeForm) }
         }
+    }
+}
+
+@Composable
+private fun TeamsPane(agent: AgentState, draft: TeamDraft?, closeForm: () -> Unit) {
+    if (draft == null) {
+        Label("Choose a team, or make a new one.", color = IdeColors.TextSecondary, fontSize = 12.sp)
+    } else {
+        TeamForm(agent, draft, closeForm)
     }
 }
 

@@ -39,8 +39,9 @@ private val STARTER_MEMBERS =
         StarterRole(
             "Dev",
             "Implements the tasks: writes and changes the code",
-            "You implement the task you are given, following the conventions of the code around. Keep the change " +
-                "small, and report the files you changed and what is left to do.",
+            "You implement the task you are given, following the conventions of the code around. Write simple code: " +
+                "the shortest that does the job, with no fallback, default or error handling for cases that cannot " +
+                "happen. Keep the change small, and report the files you changed and what is left to do.",
         ),
         StarterRole(
             "Designer",
