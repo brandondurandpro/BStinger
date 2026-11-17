@@ -16,7 +16,12 @@ const val STARTER_TEAM_NAME = "Haiku team"
 private const val STARTER_MODEL = "haiku"
 
 // A member of the ready-made team: its name, what the manager is told of it, and its system prompt.
-private class StarterRole(val name: String, val description: String, val systemPrompt: String)
+private class StarterRole(
+    val name: String,
+    val description: String,
+    val systemPrompt: String,
+    val canAsk: Boolean = false,
+)
 
 private val STARTER_MANAGER =
     StarterRole(
@@ -40,7 +45,11 @@ private val STARTER_MEMBERS =
             "Designer",
             "Designs the UI and the UX: layout, wording, states",
             "You design the user interface for the task you are given: layout, wording, empty, loading and error " +
-                "states, consistent with the existing screens. Describe the design precisely; change no code.",
+                "states, consistent with the existing screens. Describe the design precisely; change no code. " +
+                "Before you start, ask the user whether they want several designs to choose from or whether you " +
+                "should go ahead on your own judgment; when they want several, propose that many, each with its " +
+                "trade-offs.",
+            canAsk = true,
         ),
         StarterRole(
             "Tester",
@@ -58,7 +67,10 @@ private val STARTER_MEMBERS =
             "Spec writer",
             "Writes the specification of a request",
             "You turn the request you are given into a short specification: the behaviour expected, the edge cases, " +
-                "what is out of scope, and how to check it is done. Read the code as needed; change no file.",
+                "what is out of scope, and how to check it is done. Read the code as needed; change no file. Ask " +
+                "the user about the technical choices the request leaves open (libraries, storage, formats, " +
+                "compatibility) before you write the specification, with the options you see and their trade-offs.",
+            canAsk = true,
         ),
     )
 
@@ -68,7 +80,15 @@ private val STARTER_MEMBERS =
  */
 internal fun starterTeam(provider: AgentCommand, settings: Map<String, String> = emptyMap()): Team {
     fun agentOf(role: StarterRole) =
-        TeamAgent(newTeamId(), role.name, role.description, provider, settings, systemPrompt = role.systemPrompt)
+        TeamAgent(
+            newTeamId(),
+            role.name,
+            role.description,
+            provider,
+            settings,
+            systemPrompt = role.systemPrompt,
+            canAsk = role.canAsk,
+        )
     return Team(newTeamId(), STARTER_TEAM_NAME, agentOf(STARTER_MANAGER), STARTER_MEMBERS.map(::agentOf))
 }
 

@@ -73,7 +73,14 @@ internal class TeamPrompts(private val protocol: DelegationProtocol) {
                 "covers. End with a short report of what you did and found: your manager receives it.",
         )
         sections.addAll(ownSections(member, skills))
+        if (member.canAsk) sections.add(askInstructions())
         return wrap(sections.joinToString("\n\n"), task)
+    }
+
+    /** What a member is told once the user answered its questions: the [answers], to go on with its task. */
+    fun memberAnswers(answers: List<AnsweredQuestion>): String {
+        val intro = "${TeamText.ANSWERS_OPENING} They are in the last section of this message."
+        return wrap(intro, answersText(answers))
     }
 
     /** A later prompt of a member: a new [task] of its manager. */

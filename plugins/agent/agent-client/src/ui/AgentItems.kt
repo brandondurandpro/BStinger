@@ -13,7 +13,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -296,9 +302,12 @@ internal fun PermissionCard(request: AgentItem.Permission, asker: String = AGENT
             .padding(10.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Label("$asker asks to: ${request.title}", fontWeight = FontWeight.SemiBold, maxLines = 3)
+        val heading = if (request.question) "$asker asks: ${request.title}" else "$asker asks to: ${request.title}"
+        Label(heading, Modifier.testTag(AgentTags.agentRequestTitle(asker, request.id)), fontWeight = FontWeight.SemiBold, maxLines = 6)
         if (request.pending && onAnswer == null) {
             Label("Waits for your answer, at the end of the conversation", color = IdeColors.TextSecondary, fontSize = 12.sp)
+        } else if (request.pending && onAnswer != null && request.question) {
+            QuestionAnswer(request, asker, onAnswer)
         } else if (request.pending && onAnswer != null) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 for (option in request.options) {
@@ -311,9 +320,33 @@ internal fun PermissionCard(request: AgentItem.Permission, asker: String = AGENT
                 }
             }
         } else {
-            val chosen = request.options.firstOrNull { it.id == request.chosen }?.name
+            // A question answered in the user's own words has no option of that name: the words are the answer.
+            val chosen = request.options.firstOrNull { it.id == request.chosen }?.name ?: request.chosen
             val answer = if (request.cancelled) "Cancelled" else "Answered: $chosen"
-            Label(answer, color = IdeColors.TextSecondary, fontSize = 12.sp)
+            Label(answer, Modifier.testTag(AgentTags.agentRequestAnswer(asker, request.id)), color = IdeColors.TextSecondary, fontSize = 12.sp)
         }
+    }
+}
+
+// The choices a member proposes, one button each, and a field for the user's own words.
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun QuestionAnswer(request: AgentItem.Permission, asker: String, onAnswer: (String) -> Unit) {
+    var words by remember(request.id) { mutableStateOf("") }
+    val send = { if (words.isNotBlank()) onAnswer(words.trim()) }
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        for (option in request.options) {
+            IdeButton(option.name, { onAnswer(option.id) }, Modifier.testTag(AgentTags.agentQuestionChoice(asker, request.id, option.id)))
+        }
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        IdeTextField(
+            words,
+            { words = it },
+            Modifier.weight(1f).testTag(AgentTags.agentQuestionText(asker, request.id)),
+            placeholder = "Or answer in your own words",
+            onSubmit = send,
+        )
+        IdeButton("Answer", send, Modifier.testTag(AgentTags.agentQuestionSend(asker, request.id)), primary = true, enabled = words.isNotBlank())
     }
 }

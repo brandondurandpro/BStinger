@@ -111,6 +111,10 @@ class AgentTeamsE2eTest {
             assertEquals("Manager", saved.team.manager.name)
             assertEquals(listOf("Dev", "Designer", "Tester", "Code reviewer", "Spec writer"), saved.team.members.map { it.name })
             val providers = (saved.team.members + saved.team.manager).map { it.agent.registry }.toSet()
+            // The ones that settle what to build ask the user first; the others work from their task.
+            val asking = saved.team.members.filter { it.canAsk }.map { it.name }
+            assertEquals(listOf("Designer", "Spec writer"), asking)
+            assertFalse(saved.team.manager.canAsk)
             // On Claude, whatever agent the settings choose (here the fake agent).
             assertEquals(setOf<String?>(DEFAULT_AGENT), providers)
             // The fake agent offers no Haiku model: the team keeps the default one.

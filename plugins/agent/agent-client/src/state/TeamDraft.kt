@@ -29,6 +29,9 @@ class AgentDraft internal constructor(from: TeamAgent) {
     var description by mutableStateOf(from.description)
     var systemPrompt by mutableStateOf(from.systemPrompt)
 
+    /** Whether the agent may ask the user questions before it works (a member only; the user writes to the manager). */
+    var canAsk by mutableStateOf(from.canAsk)
+
     /** The provider: an agent of the ACP registry (a saved team may hold a command line, kept as it is). */
     var provider by mutableStateOf(from.agent)
         private set
@@ -84,6 +87,7 @@ class AgentDraft internal constructor(from: TeamAgent) {
             settings = settings.toMap(),
             skills = skills.toList(),
             systemPrompt = systemPrompt.trim(),
+            canAsk = canAsk,
         )
 
     /**

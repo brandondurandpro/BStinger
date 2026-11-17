@@ -31,6 +31,9 @@ private const val CLOSED = "The conversation was closed."
 
 private const val UNANSWERED = "The agent stopped without answering."
 
+/** The kind of the options of a question to the user: choices, which none of the permission kinds names. */
+const val QUESTION_CHOICE = "question"
+
 /**
  * One conversation on the server: its [journal], the session of its agent, the prompt running and the permission
  * requests waiting for the user. The updates of the agent become items of the journal as they arrive.
@@ -164,10 +167,11 @@ internal class ServerConversation(
     fun cancel() {
         val holders = synchronized(lock) { leases.toList() }
         holders.forEach { it.stop(StopCause.Cancelled) }
+        // A question the user was asked between two turns of the agent waits with no prompt running.
+        permissions.cancelAll()
         val running = synchronized(lock) { job?.takeIf { it.isActive } } ?: return
         stopping = true
         keeper.current?.let { it.process.cancel(it.id) }
-        permissions.cancelAll()
         scope.launch {
             delay(settings.cancelGraceMs)
             running.cancel()
@@ -178,6 +182,9 @@ internal class ServerConversation(
     fun answer(itemId: String, option: String) {
         permissions.answer(itemId, option)
     }
+
+    /** Asks the user [question] in this conversation and waits for the answer; null when cancelled. */
+    suspend fun ask(question: String, choices: List<String>): String? = permissions.ask(question, choices)
 
     /** Stops the prompt and ends the session; the agent keeps its history. */
     suspend fun close() {
@@ -333,6 +340,23 @@ private class Permissions(private val journal: Journal, private val writer: Tran
         waiting[itemId] = answer
         journal.add { AgentItem.Permission(itemId, it, title, options) }
         if (cancelled) cancelAll()
+        val chosen = answer.await()
+        journal.update(itemId) { item, version ->
+            (item as AgentItem.Permission).copy(version = version, chosen = chosen, cancelled = chosen == null)
+        }
+        return chosen
+    }
+
+    /**
+     * Asks the user [question] with the [choices] proposed, and waits for the answer: the choice, or the words of the
+     * user; null when it is cancelled meanwhile.
+     */
+    suspend fun ask(question: String, choices: List<String>): String? {
+        val options = choices.map { AgentPermissionOption(it, it, QUESTION_CHOICE) }
+        val answer = CompletableDeferred<String?>()
+        val itemId = journal.newId()
+        waiting[itemId] = answer
+        journal.add { AgentItem.Permission(itemId, it, question, options, question = true) }
         val chosen = answer.await()
         journal.update(itemId) { item, version ->
             (item as AgentItem.Permission).copy(version = version, chosen = chosen, cancelled = chosen == null)

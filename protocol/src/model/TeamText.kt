@@ -17,14 +17,23 @@ object TeamText {
     /** How the prompt that tells the manager its delegation could not be run starts. */
     const val REFUSAL_OPENING = "Your last message could not be run as a delegation."
 
+    /** How the prompt that gives a member the answers of the user to its questions starts. */
+    const val ANSWERS_OPENING = "The user answered your questions."
+
     /** The first words of the prompts the harness sends the manager on its own: no message of the user. */
     val HARNESS_OPENINGS = listOf(RELAY_OPENING, REFUSAL_OPENING)
 
     /** The line that opens the block a manager delegates with. */
     const val BLOCK_OPENING = "```team"
 
+    /** The line that opens the block a member asks the user its questions with. */
+    const val ASK_OPENING = "```ask"
+
     /** The line that closes it. */
     const val BLOCK_CLOSING = "```"
+
+    // The lines that open a block the IDE does not show: the manager's delegation, a member's questions.
+    private val OPENINGS = listOf(BLOCK_OPENING, ASK_OPENING)
 
     /** A prompt of the harness: [intro] (when there is one), then the last section, [request]. */
     fun wrap(intro: String, request: String): String {
@@ -48,7 +57,7 @@ object TeamText {
     }
 
     /**
-     * [answer], an answer of a manager, without its `team` blocks: what it says to the user. A block still being
+     * [answer], an answer of a manager or of a member, without its `team` and `ask` blocks: what it says to the user. A block still being
      * written (its closing line did not come yet, or its opening line is not complete) is left out too, so that an
      * answer that streams never shows a piece of one. An answer without a block is returned as it is.
      */
@@ -60,12 +69,12 @@ object TeamText {
             val text = line.trim()
             when {
                 inside -> inside = text != BLOCK_CLOSING
-                text == BLOCK_OPENING -> inside = true
+                text in OPENINGS -> inside = true
                 else -> kept.add(line)
             }
         }
         val last = kept.lastOrNull()?.trim().orEmpty()
-        val opening = last.length > BLOCK_CLOSING.length && BLOCK_OPENING.startsWith(last)
+        val opening = last.length > BLOCK_CLOSING.length && OPENINGS.any { it.startsWith(last) }
         if (opening) kept.removeLast()
         if (kept.size == lines.size) return answer
         return kept.joinToString("\n").trim()

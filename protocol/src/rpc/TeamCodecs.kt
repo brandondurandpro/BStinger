@@ -6,8 +6,10 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.example.kotlineditor.model.AgentSkill
 import org.example.kotlineditor.model.Team
@@ -19,6 +21,7 @@ private const val ID = "id"
 private const val NAME = "name"
 private const val DESCRIPTION = "description"
 private const val SKILLS = "skills"
+private const val CAN_ASK = "canAsk"
 
 /** An agent of a team. */
 fun TeamAgent.toJson(): JsonObject =
@@ -30,6 +33,7 @@ fun TeamAgent.toJson(): JsonObject =
         put("settings", JsonObject(settings.mapValues { JsonPrimitive(it.value) }))
         put(SKILLS, JsonArray(skills.map { JsonPrimitive(it) }))
         put("systemPrompt", systemPrompt)
+        put(CAN_ASK, canAsk)
     }
 
 /** Reads an agent of a team. */
@@ -45,6 +49,7 @@ fun JsonElement.teamAgent(): TeamAgent {
         settings = settings,
         skills = skills,
         systemPrompt = json.stringOrNull("systemPrompt").orEmpty(),
+        canAsk = json[CAN_ASK]?.jsonPrimitive?.booleanOrNull ?: false,
     )
 }
 

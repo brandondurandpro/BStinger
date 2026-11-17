@@ -95,6 +95,15 @@ class TeamTextTest {
     }
 
     @Test
+    fun `the ask block of a member is hidden like the team block, also while it streams`() {
+        val ask = lines("```ask", "{\"questions\": [{\"question\": \"Which?\"}]}", "```")
+        assertEquals("I have questions.", TeamText.withoutBlocks(lines("I have questions.", "", ask)))
+        assertEquals("", TeamText.withoutBlocks(ask))
+        assertEquals("Wait.", TeamText.withoutBlocks(lines("Wait.", "```ask", "{\"questions\": [")))
+        assertEquals("Wait.", TeamText.withoutBlocks(lines("Wait.", "```as")))
+    }
+
+    @Test
     fun `the conversation of a member is named after the team's and the member`() {
         assertEquals("K#id-Backend", TeamText.memberConversation("K", "id-Backend"))
     }

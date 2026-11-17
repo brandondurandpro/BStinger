@@ -19,6 +19,11 @@ data class TeamAgent(
     val skills: List<String> = emptyList(),
     /** What it is told before its first task, about its work and its way of working. */
     val systemPrompt: String = "",
+    /**
+     * Whether it may ask the user questions (the technical choices of a specification, the designs to propose) before
+     * it works, instead of going on with its own guesses. Off by default: it then reports its doubts to its manager.
+     */
+    val canAsk: Boolean = false,
 )
 
 /** A team: one [manager], who coordinates, and at least one of [members], who do the work. */

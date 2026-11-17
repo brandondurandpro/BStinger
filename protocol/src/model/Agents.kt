@@ -232,6 +232,11 @@ sealed interface AgentItem {
         val options: List<AgentPermissionOption>,
         val chosen: String? = null,
         val cancelled: Boolean = false,
+        /**
+         * True for a question a member of a team asks the user, not a permission: [title] is the question, [options]
+         * the choices proposed, and the user may also answer in their own words, which [chosen] then holds.
+         */
+        val question: Boolean = false,
     ) : AgentItem {
         /** Whether it still waits for the user. */
         val pending: Boolean get() = chosen == null && !cancelled

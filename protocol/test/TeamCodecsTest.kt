@@ -34,6 +34,16 @@ class TeamCodecsTest {
     }
 
     @Test
+    fun `an agent allowed to ask the user questions survives the round trip, and a saved team without it may not`() {
+        val asking = team.copy(members = listOf(agent("a", "Coder").copy(canAsk = true), agent("b", "Tester")))
+        val back = Json.parseToJsonElement(asking.toJson().toString()).team()
+        assertEquals(listOf(true, false), back.members.map { it.canAsk })
+        // A team saved before the setting existed has no such field.
+        val old = asking.toJson().toString().replace("\"canAsk\":true", "").replace(",,", ",").replace(",}", "}")
+        assertEquals(listOf(false, false), Json.parseToJsonElement(old).team().members.map { it.canAsk })
+    }
+
+    @Test
     fun `an agent with no setting, no skill and no prompt survives the round trip`() {
         val bare = TeamAgent("x", "Bare", "", AgentCommand(listOf("agent", "--acp"), mapOf("KEY" to "v")))
         val alone = Team("t", "Alone", bare, listOf(bare.copy(id = "y", name = "Other")))

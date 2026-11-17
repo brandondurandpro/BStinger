@@ -1,6 +1,7 @@
 package org.example.kotlineditor.harness
 
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.NonCancellable
@@ -25,6 +26,7 @@ import org.example.kotlineditor.model.AgentSkill
 import org.example.kotlineditor.model.DelegationStatus
 import org.example.kotlineditor.model.Team
 import org.example.kotlineditor.model.TeamAgent
+import org.example.kotlineditor.model.TeamText
 import java.io.Closeable
 import java.util.concurrent.ConcurrentHashMap
 
@@ -445,8 +447,30 @@ class TeamHarness(
             } else {
                 prompts.memberNext(state.team, task.task)
             }
+        var outcome = memberTurn(state, lease, session, text, task.task)
+        var asks = 0
+        while (member.canAsk && outcome.ending == TurnEnding.Completed && asks < MAX_ASKS) {
+            val ask = askOf(outcome.text) ?: break
+            val answered = askUser(state, lease, session, ask.questions) ?: return TurnOutcome(TurnEnding.Cancelled, "")
+            asks++
+            val answers = prompts.memberAnswers(answered)
+            outcome = memberTurn(state, lease, session, answers, answersText(answered))
+        }
+        // A member that asked too much, or wrote a block that cannot be read, reports without the block.
+        return outcome.copy(text = TeamText.withoutBlocks(outcome.text))
+    }
+
+    // One turn of the member of [session]: [text] is sent, [shown] is what its transcript shows of it.
+    private suspend fun memberTurn(
+        state: TeamConversation,
+        lease: ConversationLease,
+        session: MemberSession,
+        text: String,
+        shown: String,
+    ): TurnOutcome {
+        val member = session.member
         val promptId = state.nextId("task")
-        agents.prompt(session.key, member.agent, state.directory, promptId, text, shown = task.task)
+        agents.prompt(session.key, member.agent, state.directory, promptId, text, shown = shown)
         // A stop that came while the prompt was being sent did not see the member run.
         if (stopCause(lease) != null) agents.cancel(session.key)
         val outcome = agents.awaitTurn(session.key, promptId)
@@ -456,6 +480,30 @@ class TeamHarness(
             mirrorRefusals(state, session)
         }
         return outcome
+    }
+
+    // Asks the user the [questions] of a member, all at once in the member's conversation, and waits for every answer;
+    // null when the run was stopped (or the conversation closed) before they were all answered.
+    private suspend fun askUser(
+        state: TeamConversation,
+        lease: ConversationLease,
+        session: MemberSession,
+        questions: List<MemberQuestion>,
+    ): List<AnsweredQuestion>? {
+        if (stopCause(lease) != null) return null
+        // Each question is in the transcript, in the order written, before the next one starts.
+        val answers =
+            coroutineScope {
+                val asked =
+                    questions.map { question ->
+                        async(start = CoroutineStart.UNDISPATCHED) {
+                            agents.ask(session.key, question.text, question.choices)
+                        }
+                    }
+                asked.awaitAll()
+            }
+        if (answers.any { it == null } || stopCause(lease) != null) return null
+        return questions.indices.map { index -> AnsweredQuestion(questions[index], answers[index].orEmpty()) }
     }
 
     private suspend fun memberSession(state: TeamConversation, member: TeamAgent): MemberSession {

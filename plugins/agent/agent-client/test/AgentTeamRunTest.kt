@@ -69,6 +69,17 @@ class AgentTeamRunTest {
     }
 
     @Test
+    fun `a message of a member loses its ask block, and shows nothing when it was only one`() {
+        val ask = lines("```ask", "{\"questions\": [{\"question\": \"Which?\"}]}", "```")
+        assertEquals(answer("a", "I have questions."), shownInMember(answer("a", lines("I have questions.", ask))))
+        assertNull(shownInMember(answer("a", ask)))
+        val plain = answer("a", "Done.")
+        assertEquals(plain, shownInMember(plain))
+        val question = AgentItem.Permission("p", 1, "Which?", emptyList(), question = true)
+        assertEquals(question, shownInMember(question))
+    }
+
+    @Test
     fun `a member without a task is idle`() {
         assertEquals(MemberStatus.Idle, memberStatus(emptyList(), "K#Backend"))
         val others = listOf(task("d1", "Tester", "check", DelegationStatus.Running))

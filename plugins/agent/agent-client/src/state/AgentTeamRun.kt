@@ -52,6 +52,16 @@ internal fun shownInTeam(item: AgentItem, replayed: Boolean, sentHere: Boolean):
         }
     }
 
+/**
+ * What the transcript of a member shows of [item]: its messages without the `ask` block its questions came in (the
+ * questions show as cards), and nothing for a message that was only one.
+ */
+internal fun shownInMember(item: AgentItem): AgentItem? {
+    if (item !is AgentItem.AgentText) return item
+    val said = TeamText.withoutBlocks(item.text)
+    return if (said.isBlank()) null else item.copy(text = said)
+}
+
 /** The status of the member whose conversation is [memberKey], from the [items] of the conversation of its team. */
 internal fun memberStatus(items: List<AgentItem>, memberKey: String): MemberStatus {
     val tasks = items.filterIsInstance<AgentItem.Delegation>().filter { it.conversation == memberKey }

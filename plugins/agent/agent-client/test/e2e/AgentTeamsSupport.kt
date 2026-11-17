@@ -123,11 +123,14 @@ fun commandTeam(
     vararg members: String,
     separate: Boolean = false,
     id: String = "team-$name",
+    /** The names of the members allowed to ask the user questions. */
+    asking: Set<String> = emptySet(),
 ): Team {
     fun agent(agentName: String): TeamAgent {
         val sessions = if (separate) store.resolve(agentName) else store
         val command = org.example.kotlineditor.testkit.acp.FakeAgentCommand.command("--store", "$sessions")
-        return TeamAgent("$id-$agentName", agentName, "$agentName of $name", AgentCommand(command))
+        val canAsk = agentName in asking
+        return TeamAgent("$id-$agentName", agentName, "$agentName of $name", AgentCommand(command), canAsk = canAsk)
     }
     return Team(id, name, agent("Lead"), members.map { agent(it) })
 }
@@ -200,4 +203,39 @@ fun ComposeUiTest.awaitRuns(conversation: org.example.kotlineditor.state.Convers
         throw AssertionError("Run $count did not end; the conversation shows:\n${shownConversation(conversation)}", e)
     }
     awaitIdle(conversation, timeout)
+}
+
+/** The questions the member [member] of [conversation] asked and the user did not answer yet, as it follows them. */
+fun org.example.kotlineditor.state.Conversation.pendingQuestions(member: String): List<org.example.kotlineditor.model.AgentItem.Permission> {
+    val key = delegationOf(member).conversation
+    val items = members.transcripts[key]?.items.orEmpty()
+    return items.filterIsInstance<org.example.kotlineditor.model.AgentItem.Permission>().filter { it.question && it.pending }
+}
+
+/** Waits until [count] questions of the member [member] wait for the user, and returns them in the order asked. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.awaitQuestions(
+    conversation: org.example.kotlineditor.state.Conversation,
+    member: String,
+    count: Int,
+    timeout: Long = AGENT_TIMEOUT,
+): List<org.example.kotlineditor.model.AgentItem.Permission> {
+    awaitCondition(timeout) { conversation.delegations().any { it.member == member } }
+    awaitCondition(timeout) { conversation.pendingQuestions(member).size == count }
+    val asked = conversation.pendingQuestions(member)
+    for (question in asked) awaitTag(AgentTags.agentRequestTitle(member, question.id), timeout = timeout)
+    return asked
+}
+
+/** Answers [question] with the choice [choice] it proposed. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.answerChoice(member: String, question: org.example.kotlineditor.model.AgentItem.Permission, choice: String) {
+    awaitTag(AgentTags.agentQuestionChoice(member, question.id, choice), timeout = AGENT_TIMEOUT).performClick()
+}
+
+/** Answers [question] in the user's own words. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.answerWords(member: String, question: org.example.kotlineditor.model.AgentItem.Permission, words: String) {
+    awaitTag(AgentTags.agentQuestionText(member, question.id), timeout = AGENT_TIMEOUT).performTextInput(words)
+    awaitTag(AgentTags.agentQuestionSend(member, question.id)).performClick()
 }

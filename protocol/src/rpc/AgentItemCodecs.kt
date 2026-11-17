@@ -6,6 +6,7 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -47,6 +48,7 @@ internal fun JsonObjectBuilder.permission(item: AgentItem.Permission) {
     put("options", JsonArray(item.options.map { it.toJson() }))
     put("chosen", item.chosen?.let(::JsonPrimitive) ?: JsonNull)
     put("cancelled", item.cancelled)
+    put("question", item.question)
 }
 
 internal fun JsonObject.toolCall(id: String, version: Long) =
@@ -70,6 +72,7 @@ internal fun JsonObject.permission(id: String, version: Long) =
         options = field("options").jsonArray.map { it.permissionOption() },
         chosen = stringOrNull("chosen"),
         cancelled = bool("cancelled"),
+        question = get("question")?.jsonPrimitive?.booleanOrNull ?: false,
     )
 
 internal fun AgentDiff.toJson() =

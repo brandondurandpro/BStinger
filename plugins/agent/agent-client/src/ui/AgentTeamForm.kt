@@ -164,6 +164,15 @@ private fun AgentFields(agent: AgentState, role: String, draft: AgentDraft, onRe
             placeholder = "Role: what this agent is for",
         )
         AgentChoices(agent, role, draft)
+        // The manager is the one the user writes to: only a member can be allowed to ask the user questions.
+        if (onRemove != null) {
+            CheckRow(
+                "Can ask you questions",
+                draft.canAsk,
+                AgentTags.agentTeamField(role, "ask"),
+                description = "It asks before it works, when your answer changes what it does, instead of guessing.",
+            ) { draft.canAsk = !draft.canAsk }
+        }
         MultilineField(
             draft.systemPrompt,
             { draft.systemPrompt = it },

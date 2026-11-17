@@ -44,7 +44,8 @@ private const val CLIENT_TIMEOUT_S = 60L
  * - `plan`: a plan of two steps, updated as they complete;
  * - `slow`: chunks every 50 ms until it is cancelled (`stubborn`: the same, but it never stops);
  * - `stream <n>`: `n` chunks at once; `tools <n>`: `n` completed tool calls (`tools <n> <lines>`: each with an
- *   output of `lines` more lines, as a file read); `steps <n>`: a message then a tool call, `n` times; `crash`:
+ *   output of `lines` more lines, as a file read); `ask <question>=<choice>,<choice> ~ <question>`: its questions
+ *   for the user, in an `ask` block; `steps <n>`: a message then a tool call, `n` times; `crash`:
  *   exits with code 3;
  * - `count`: the number of prompts of its session;
  * - `model`: `Model: <model>.`, the model of its session (`mode`: `Mode: <mode>.`, `write` asks nothing in
@@ -369,6 +370,7 @@ class FakeAgent(
             "stubborn" -> slow(session, stubborn = true)
             "stream" -> chunks(session, List(words.getOrNull(1)?.toIntOrNull() ?: 1) { "chunk $it " })
             "tools" -> tools(session, words.getOrNull(1)?.toIntOrNull() ?: 1, words.getOrNull(2)?.toIntOrNull() ?: 0)
+            "ask" -> ask(session, rest)
             "steps" -> steps(session, words.getOrNull(1)?.toIntOrNull() ?: 1)
             "crash" -> crash()
             "count" -> chunks(session, listOf("Prompt $count of $session."))
@@ -531,6 +533,23 @@ class FakeAgent(
             toolUpdate(session, "tool-$index", "completed", "$index matches$body")
         }
         message(session, "Searched $count times.")
+        return END_TURN
+    }
+
+    // Questions for the user, written as a member of a team does: `Which database?=SQLite,Postgres ~ Why?` (the
+    // choices follow `=`, a question without any is free), in a fenced `ask` block at the end of a message.
+    private fun ask(session: String, spec: String): String {
+        val questions =
+            spec.split('~').map { it.trim() }.filter { it.isNotEmpty() }.map { entry ->
+                val text = entry.substringBefore('=').trim()
+                val choices = entry.substringAfter('=', "").split(',').map { it.trim() }.filter { it.isNotEmpty() }
+                buildJsonObject {
+                    put("question", text)
+                    putJsonArray("options") { choices.forEach { add(JsonPrimitive(it)) } }
+                }
+            }
+        val block = buildJsonObject { put("questions", JsonArray(questions)) }
+        message(session, "I have questions.\n```ask\n$block\n```")
         return END_TURN
     }
 

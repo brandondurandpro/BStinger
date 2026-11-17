@@ -168,6 +168,14 @@ class AgentService(
         conversations[conversation]?.cancel()
     }
 
+    /**
+     * Asks the user [question] in [conversation], with the [choices] proposed, and waits: the choice or the words of
+     * the user come back, null when the conversation is stopped or closed meanwhile. The question shows in the
+     * transcript like a permission request and is answered like one ([answer]); nothing of the agent runs meanwhile.
+     */
+    suspend fun ask(conversation: String, question: String, choices: List<String>): String? =
+        conversation(conversation).ask(question, choices)
+
     /** Answers the permission request [itemId] of [conversation]. */
     fun answer(conversation: String, itemId: String, option: String) {
         conversations[conversation]?.answer(itemId, option)

@@ -111,6 +111,21 @@ object AgentTags {
     /** The row [index] of the work of a member, in a card or in its tab. */
     fun agentMemberRow(index: Int) = "agent.member.row.$index"
 
+    /** The question or permission text of the request [id] of [asker] ("Agent" for the conversation's own, else a member). */
+    fun agentRequestTitle(asker: String, id: String) = "agent.request.title.$asker.$id"
+
+    /** The answer a request [id] got, once it was answered. */
+    fun agentRequestAnswer(asker: String, id: String) = "agent.request.answer.$asker.$id"
+
+    /** The button of the choice [choice] a member proposes in its question [id]. */
+    fun agentQuestionChoice(asker: String, id: String, choice: String) = "agent.question.choice.$asker.$id.$choice"
+
+    /** The field where the user answers the question [id] in their own words. */
+    fun agentQuestionText(asker: String, id: String) = "agent.question.text.$asker.$id"
+
+    /** The button that sends the words typed in the field of the question [id]. */
+    fun agentQuestionSend(asker: String, id: String) = "agent.question.send.$asker.$id"
+
     /** The permission request of the member named [member], at the end of the conversation of its team. */
     fun agentMemberRequest(member: String) = "agent.member.request.$member"
 

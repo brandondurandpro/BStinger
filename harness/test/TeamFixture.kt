@@ -116,10 +116,11 @@ class TeamFixture(
         systemPrompt: String = "",
         description: String = "does $name things",
         shared: Boolean = false,
+        canAsk: Boolean = false,
     ): TeamAgent {
         val own = FakeAgentCommand.command("--store", storeOf(name).toString())
         val command = AgentCommand(if (shared) FakeAgentCommand.command() else own)
-        return TeamAgent("id-$name", name, description, command, settings, skills, systemPrompt)
+        return TeamAgent("id-$name", name, description, command, settings, skills, systemPrompt, canAsk)
     }
 
     /** A team of a manager and its members. */

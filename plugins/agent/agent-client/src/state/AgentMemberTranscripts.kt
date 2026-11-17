@@ -83,7 +83,7 @@ private fun AgentHost.apply(conversation: Conversation, transcript: MemberTransc
     for (item in answer.items) {
         asked = asked ?: newQuestion(transcript.items, item)
         wrote = wrote || finishedWriting(transcript.items, item)
-        transcript.upsert(item)
+        shownInMember(item)?.let { shown -> transcript.upsert(shown) }
     }
     transcript.loaded = true
     asked?.let { question -> agentAsking(conversation.title, question) }
