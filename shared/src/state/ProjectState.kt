@@ -498,12 +498,12 @@ class ProjectState(
     // The folders of the conversations of this window, one project each, loaded when first asked for.
     private val folders = HashMap<String, ProjectState>()
 
-    override suspend fun openFolder(path: String): AgentHost? {
+    override suspend fun openFolder(path: String, awaitLoaded: Boolean): AgentHost? {
         val directory = services.fileSystem.resolveDirectory(path) ?: return null
         if (directory.path == root.path) return this
         val known = folders[directory.path]
         if (known != null) return known
-        val opened = openFolderProject(directory, agent.toolWindows)
+        val opened = openFolderProject(directory, agent.toolWindows, awaitLoaded)
         // Two requests for the same folder: the first one is kept.
         val kept = folders.getOrPut(directory.path) { opened }
         if (kept !== opened) opened.dispose()

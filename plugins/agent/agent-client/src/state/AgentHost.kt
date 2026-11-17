@@ -70,9 +70,10 @@ interface AgentHost : AgentWorkspace {
 
     /**
      * The folder [path] as a project of this window, loaded like a worktree is: a conversation works in it as in this
-     * project, in the same window. The same state for the same folder; null when it cannot be opened.
+     * project, in the same window. The same state for the same folder; null when it cannot be opened. [awaitLoaded] is
+     * false for a folder known to be empty (a new conversation's own): there is no tree to wait for.
      */
-    suspend fun openFolder(path: String): AgentHost? = null
+    suspend fun openFolder(path: String, awaitLoaded: Boolean = true): AgentHost? = null
 
     /** Releases the project [openFolder] opened for [path]: no conversation works in it any more. */
     fun closeFolder(path: String) = Unit

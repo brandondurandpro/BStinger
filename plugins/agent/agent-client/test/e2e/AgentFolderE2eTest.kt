@@ -256,6 +256,24 @@ class AgentFolderE2eTest {
         }
 
     @Test
+    fun `Browse from a conversation without a project moves it to the folder chosen in the dialog`() =
+        runComposeUiTest {
+            other.commitAll()
+            val app = launchWithProject(project, agentPreferences())
+            startConversation(app)
+            val conversation = clickNewConversationWithoutProject(app)
+            openFolderMenu()
+            awaitTag(AgentTags.AGENT_FOLDER_BROWSE).performClick()
+            awaitTag(RemoteTags.OPEN_PROJECT)
+            showDirectoryInProjectPicker(other.path)
+            awaitCondition { runCatching { onNodeWithTag(RemoteTags.OPEN_PROJECT_OPEN).assertIsEnabled() }.isSuccess }
+            onNodeWithTag(RemoteTags.OPEN_PROJECT_OPEN).performClick()
+            awaitNoTag(RemoteTags.OPEN_PROJECT)
+            awaitCondition(AGENT_TIMEOUT) { conversation.folder == other.path && !conversation.scratch }
+            awaitTag(AgentTags.AGENT_BASE_PICKER)
+        }
+
+    @Test
     fun `a conversation started in a subfolder is in the history after a restart, working in that folder`() =
         runComposeUiTest {
             foldersOfProject()

@@ -26,7 +26,11 @@ internal suspend fun ProjectState.openWorktreeProject(
  * Opens [directory] as a project of this window, returned once its tree and branch are loaded so that the tool windows
  * never flash empty: a worktree of this project, or another folder a conversation works in.
  */
-internal suspend fun ProjectState.openFolderProject(directory: FileEntry, toolWindows: ToolWindowLayout): ProjectState {
+internal suspend fun ProjectState.openFolderProject(
+    directory: FileEntry,
+    toolWindows: ToolWindowLayout,
+    awaitLoaded: Boolean = true,
+): ProjectState {
     // The tool windows of the agent, the same open in the folder as in the project it works on directly.
     val opened =
         ProjectState(
@@ -39,8 +43,10 @@ internal suspend fun ProjectState.openFolderProject(directory: FileEntry, toolWi
             statusIndicators = statusIndicators,
             installedPlugins = installedPlugins,
         )
-    withTimeoutOrNull(WORKTREE_LOAD_MILLIS) {
-        snapshotFlow { opened.tree.rows.size > 1 && opened.git.currentBranch != null }.first { it }
+    if (awaitLoaded) {
+        withTimeoutOrNull(WORKTREE_LOAD_MILLIS) {
+            snapshotFlow { opened.tree.rows.size > 1 && opened.git.currentBranch != null }.first { it }
+        }
     }
     return opened
 }

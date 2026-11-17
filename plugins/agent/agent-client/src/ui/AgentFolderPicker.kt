@@ -5,6 +5,9 @@ import androidx.compose.foundation.TooltipArea
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -45,12 +48,15 @@ import org.example.kotlineditor.state.separatorOf
 
 private val MENU_WIDTH = 380.dp
 
-// A menu shows a few folders at once, the rest comes scrolling in place.
-private val MENU_HEIGHT = 240.dp
+// A menu shows a few folders at once, the rest comes scrolling in place: short, so that its buttons always show.
+private val MENU_HEIGHT = 120.dp
 
 // Every row of the list has the same height: the menu asks for the height of its content, which a lazy list can only
 // answer when it has a size of its own.
 private val ROW_HEIGHT = 30.dp
+
+// The projects listed at most this high, three rows and a half: the half shows there are more.
+private val PROJECTS_HEIGHT = 105.dp
 
 // What is typed is listed once the user paused: a key does not read a folder of the server.
 private const val LISTING_DELAY_MS = 120L
@@ -136,17 +142,20 @@ private fun FolderMenu(agent: AgentState, conversation: Conversation, close: () 
 @Composable
 private fun ProjectChoices(agent: AgentState, choose: (String) -> Unit) {
     val own = agent.project.root.path
-    IdeMenuItem(
-        text = { Label("${agent.projectName} (this project)") },
-        onClick = { choose(own) },
-        modifier = Modifier.testTag(AgentTags.AGENT_FOLDER_THIS_PROJECT),
-    )
-    for (path in agent.project.otherProjects.filter { it != own }) {
+    // Many recent projects scroll in place: they never make the menu taller than a few rows.
+    Column(Modifier.heightIn(max = PROJECTS_HEIGHT).verticalScroll(rememberScrollState())) {
         IdeMenuItem(
-            text = { Label(folderNameOf(path)) },
-            onClick = { choose(path) },
-            modifier = Modifier.testTag(AgentTags.agentFolderProject(path)),
+            text = { Label("${agent.projectName} (this project)") },
+            onClick = { choose(own) },
+            modifier = Modifier.testTag(AgentTags.AGENT_FOLDER_THIS_PROJECT),
         )
+        for (path in agent.project.otherProjects.filter { it != own }) {
+            IdeMenuItem(
+                text = { Label(folderNameOf(path)) },
+                onClick = { choose(path) },
+                modifier = Modifier.testTag(AgentTags.agentFolderProject(path)),
+            )
+        }
     }
 }
 

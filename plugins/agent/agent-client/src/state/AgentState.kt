@@ -708,7 +708,8 @@ class AgentState(
     fun requestNewConversation() {
         project.scope.launch {
             val folder = runCatching { project.services.places.newConversationFolder() }.getOrNull()
-            val host = folder?.let { runCatching { project.openFolder(it) }.getOrNull() }
+            // The folder is new and empty: nothing to wait for before the conversation shows.
+            val host = folder?.let { runCatching { project.openFolder(it, awaitLoaded = false) }.getOrNull() }
             if (host == null) {
                 showBasePicker(null, null, null)
                 return@launch

@@ -23,6 +23,9 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.minutes
 
+// How high the menu of the folder is at most, from its field to its buttons.
+private const val MENU_MAX_PIXELS = 330
+
 /**
  * A new conversation works in no project: it starts at once in a new empty folder of the server, under the group "No
  * project". Choosing a project in the prompt bar moves it there, in the same window, and asks from which branch; the
@@ -226,6 +229,24 @@ class AgentOtherProjectE2eTest {
             assertTrue(app.project.agent.conversations.none { it.folder == other.path })
             assertEquals("", app.project.agent.toPreferences()[PreferenceKeys.AGENT_FOLDERS_PREFIX + project.path])
             assertTrue(FakeSessions(store.toFile()).list(other.path).any { it.id == session }, "the agent keeps the session")
+        }
+
+    @Test
+    fun `the menu stays short with many recent projects, and its Browse and Choose buttons show`() =
+        runComposeUiTest {
+            val recents = List(12) { Files.createTempDirectory("recent-$it").toString() }
+            try {
+                val app = launch(project.path, *recents.toTypedArray())
+                clickNewConversationWithoutProject(app)
+                openFolderMenu()
+                val field = boundsOf(AgentTags.AGENT_FOLDER_PATH)
+                val browse = boundsOf(AgentTags.AGENT_FOLDER_BROWSE)
+                val choose = boundsOf(AgentTags.AGENT_FOLDER_APPLY)
+                assertTrue(browse.bottom - field.top < MENU_MAX_PIXELS, "the menu is ${browse.bottom - field.top} high")
+                assertTrue(choose.bottom - field.top < MENU_MAX_PIXELS, "the menu is ${choose.bottom - field.top} high")
+            } finally {
+                recents.forEach { java.io.File(it).deleteRecursively() }
+            }
         }
 
     @Test
