@@ -14,6 +14,7 @@ const val STARTER_TEAM_NAME = "Haiku team"
 
 // The model the ready-made team runs on, as a provider names it: the cheapest one, to try teams with.
 private const val STARTER_MODEL = "haiku"
+private const val STARTER_EFFORT = "low"
 
 // A member of the ready-made team: its name, what the manager is told of it, and its system prompt.
 private class StarterRole(
@@ -101,6 +102,16 @@ internal fun starterSettings(options: List<AgentOption>): Map<String, String> {
     return mapOf(model.id to haiku.value)
 }
 
+/**
+ * The setting that chooses the lowest effort among [options] (those the provider offers for the model chosen), as option
+ * id to value: the ready-made team thinks little, to cost little. Empty when the model offers no effort or no `low`.
+ */
+internal fun starterEffort(options: List<AgentOption>): Map<String, String> {
+    val effort = options.firstOrNull { it.category == AgentOption.THOUGHT_LEVEL } ?: return emptyMap()
+    val low = effort.values.firstOrNull { it.value.equals(STARTER_EFFORT, true) || it.name.equals(STARTER_EFFORT, true) }
+    return if (low == null) emptyMap() else mapOf(effort.id to low.value)
+}
+
 private fun AgentOptionValue.namesStarterModel(): Boolean {
     val inName = name.contains(STARTER_MODEL, ignoreCase = true)
     val inValue = value.contains(STARTER_MODEL, ignoreCase = true)
@@ -120,7 +131,21 @@ suspend fun AgentTeams.addStarterTeam(choices: AgentChoices, provider: AgentComm
         } catch (_: IOException) {
             emptyList()
         }
-    val team = starterTeam(provider, starterSettings(offered))
+    val model = starterSettings(offered)
+    // The efforts depend on the model: they are read once the Haiku model is chosen.
+    val withModel =
+        if (model.isEmpty()) {
+            offered
+        } else {
+            try {
+                choices.options(provider, directory, model)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: IOException) {
+                emptyList()
+            }
+        }
+    val team = starterTeam(provider, model + starterEffort(withModel))
     save(team, global = true)
     return SavedTeam(team, global = true)
 }

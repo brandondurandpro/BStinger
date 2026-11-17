@@ -33,6 +33,22 @@ class StarterTeamTest {
     }
 
     @Test
+    fun `the lowest effort is chosen when the model offers one, whatever its case`() {
+        val efforts = AgentOption("effort", "Effort", AgentOption.THOUGHT_LEVEL, "high", listOf(AgentOptionValue("high", "High"), AgentOptionValue("low", "Low")))
+        assertEquals(mapOf("effort" to "low"), starterEffort(listOf(efforts)))
+        val shouting = AgentOption("e", "Effort", AgentOption.THOUGHT_LEVEL, "x", listOf(AgentOptionValue("l", "LOW")))
+        assertEquals(mapOf("e" to "l"), starterEffort(listOf(shouting)))
+    }
+
+    @Test
+    fun `no effort is set for a model that offers none, or none called low`() {
+        assertEquals(emptyMap(), starterEffort(emptyList()))
+        val noLow = AgentOption("effort", "Effort", AgentOption.THOUGHT_LEVEL, "high", listOf(AgentOptionValue("high", "High")))
+        assertEquals(emptyMap(), starterEffort(listOf(noLow)))
+        assertEquals(emptyMap(), starterEffort(listOf(models(AgentOptionValue("low", "Low")))))
+    }
+
+    @Test
     fun `a provider without a Haiku model, or without models, keeps its default`() {
         val others = models(AgentOptionValue("smart", "Smart"), AgentOptionValue("fast", "Fast"))
         assertEquals(emptyMap(), starterSettings(listOf(others)))

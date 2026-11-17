@@ -241,11 +241,16 @@ private fun SettingPicker(role: String, field: String, name: String, option: Age
         return
     }
     val chosen = draft.chosen(option) ?: DEFAULT_VALUE
-    val withDefault = listOf(AgentOptionValue(DEFAULT_VALUE, DEFAULT_NAME)) + option.values
+    // The provider may list its own "Default" (Claude does for the effort): ours already says it, once.
+    val offered = option.values.filter { !it.namesDefault() }
+    val withDefault = listOf(AgentOptionValue(DEFAULT_VALUE, DEFAULT_NAME)) + offered
     val shown = option.copy(name = name, current = chosen, values = withDefault)
     val valueTag = { value: String -> AgentTags.agentTeamValue(role, field, value.ifEmpty { DEFAULT_VALUE }) }
     OptionPicker(shown, tag, valueTag) { value -> draft.choose(option, value.ifEmpty { null }) }
 }
+
+private fun AgentOptionValue.namesDefault(): Boolean =
+    name.equals(DEFAULT_NAME, ignoreCase = true) || value.equals(DEFAULT_NAME, ignoreCase = true)
 
 // "Skills (2) ▾": a menu of the skills the server found, to check; it stays open while several are checked.
 @OptIn(ExperimentalFoundationApi::class)

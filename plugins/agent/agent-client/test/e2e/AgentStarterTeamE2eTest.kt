@@ -44,6 +44,9 @@ class AgentStarterTeamE2eTest {
             assertEquals(STARTER_TEAM_NAME, saved.team.name)
             val providers = (saved.team.members + saved.team.manager).map { it.agent.registry }.toSet()
             assertEquals(setOf<String?>(DEFAULT_AGENT), providers)
+            // The efforts of the model chosen are offered: the team thinks the least, "low".
+            val efforts = (saved.team.members + saved.team.manager).flatMap { it.settings.values }.filter { it == "low" }
+            assertTrue(efforts.isNotEmpty() || saved.team.manager.settings.isEmpty(), "low where the model offers an effort")
             // The team is listed in the Teams window, and chosen from the picker.
             openTeams()
             awaitTag(AgentTags.agentTeam(saved.team.id))

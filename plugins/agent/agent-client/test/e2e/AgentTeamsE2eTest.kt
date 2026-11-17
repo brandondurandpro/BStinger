@@ -315,6 +315,37 @@ class AgentTeamsE2eTest {
         }
 
     @Test
+    fun `the effort dropdown lists Default once, though the provider lists its own`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, teamPreferences(), agents = servers.settings())
+            startConversation(app)
+            openTeams()
+            newTeam("Efforts")
+            val manager = AgentTags.TEAM_MANAGER
+            awaitField(manager, "model", AGENT_TIMEOUT)
+            chooseInAgent(manager, "model", "fake-smart")
+            awaitField(manager, "effort", AGENT_TIMEOUT).performClick()
+            awaitTag(AgentTags.agentTeamValue(manager, "effort", "high"))
+            // The one of the window ("Default", leaving it to the agent), not also the one the provider lists.
+            assertEquals(1, onAllNodesWithTag(AgentTags.agentTeamValue(manager, "effort", "")).fetchSemanticsNodes().size)
+            assertEquals(0, onAllNodesWithTag(AgentTags.agentTeamValue(manager, "effort", "default")).fetchSemanticsNodes().size)
+        }
+
+    @Test
+    fun `the window has a cross at its top right that closes it, as the Close button does`() =
+        runComposeUiTest {
+            val app = launchWithProject(project, teamPreferences(), agents = servers.settings())
+            startConversation(app)
+            openTeams()
+            awaitTag(AgentTags.AGENT_TEAMS_CLOSE)
+            awaitTag(AgentTags.AGENT_TEAMS_CLOSE_CROSS).performClick()
+            awaitNoTag(AgentTags.AGENT_TEAMS_DIALOG)
+            openTeams()
+            awaitTag(AgentTags.AGENT_TEAMS_CLOSE).performClick()
+            awaitNoTag(AgentTags.AGENT_TEAMS_DIALOG)
+        }
+
+    @Test
     fun `the model and the effort dropdowns follow the model chosen`() =
         runComposeUiTest {
             val app = launchWithProject(project, teamPreferences(), agents = servers.settings())

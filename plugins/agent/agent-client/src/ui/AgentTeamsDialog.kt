@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -89,12 +90,34 @@ private fun TeamsLayout(
     closeForm: () -> Unit,
     close: () -> Unit,
 ) {
-    Row(
+    Box(
         modifier
             .background(IdeColors.Popup, IdeShapes.ExtraLarge)
             .border(1.dp, IdeColors.Separator, IdeShapes.ExtraLarge)
             .testTag(AgentTags.AGENT_TEAMS_DIALOG),
     ) {
+        TeamsColumns(agent, draft, open, closeForm, close)
+        CloseCross(close, Modifier.align(Alignment.TopEnd))
+    }
+}
+
+// The cross at the top right of the window, where a window is closed from: the same as the Close button of the list.
+@Composable
+private fun CloseCross(close: () -> Unit, modifier: Modifier) {
+    IconButton(close, modifier.padding(6.dp).testTag(AgentTags.AGENT_TEAMS_CLOSE_CROSS)) {
+        Label("✕", color = IdeColors.TextSecondary, fontSize = 14.sp)
+    }
+}
+
+@Composable
+private fun TeamsColumns(
+    agent: AgentState,
+    draft: TeamDraft?,
+    open: (SavedTeam?) -> Unit,
+    closeForm: () -> Unit,
+    close: () -> Unit,
+) {
+    Row(Modifier.fillMaxSize()) {
         Column(Modifier.width(LIST_WIDTH).fillMaxHeight().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Label("Agent teams", fontWeight = FontWeight.SemiBold)
             IdeButton("New team", { open(null) }, Modifier.fillMaxWidth().testTag(AgentTags.AGENT_TEAM_NEW), primary = true)

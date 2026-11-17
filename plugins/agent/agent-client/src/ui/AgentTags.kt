@@ -59,6 +59,9 @@ object AgentTags {
     const val AGENT_TEAMS_LIST = "agent.teams.list"
     const val AGENT_TEAMS_EMPTY = "agent.teams.empty"
     const val AGENT_TEAMS_CLOSE = "agent.teams.close"
+
+    /** The cross at the top right of the Teams window. */
+    const val AGENT_TEAMS_CLOSE_CROSS = "agent.teams.closeCross"
     const val AGENT_TEAM_NEW = "agent.team.new"
     const val AGENT_TEAM_STARTER = "agent.team.starter"
     const val AGENT_TEAM_FORM = "agent.team.form"
