@@ -54,7 +54,7 @@ fun TeamPicker(agent: AgentState, conversation: Conversation) {
     val locked = conversation.started || conversation.busy
     Box {
         TooltipArea(tooltip = { Tooltip(if (locked) LOCKED_REASON else "Team") }) {
-            TeamPickerButton(teamLabel(conversation), open, locked) { open = true }
+            PromptBarButton(teamLabel(conversation), open, locked, AgentTags.AGENT_TEAM_PICKER) { open = true }
         }
         val menuModifier = Modifier.widthIn(max = MENU_WIDTH).closesOnEscape { open = false }
         IdeDropdownMenu(open && !locked, onDismissRequest = { open = false }, menuModifier) {
@@ -78,15 +78,16 @@ private fun teamLabel(conversation: Conversation): String {
     return team.team.name
 }
 
+// A choice of the prompt bar that is fixed once the conversation started: its value, with an arrow while it can change.
 @Composable
-private fun TeamPickerButton(label: String, open: Boolean, locked: Boolean, onOpen: () -> Unit) {
+internal fun PromptBarButton(label: String, open: Boolean, locked: Boolean, tag: String, onOpen: () -> Unit) {
     val background = if (open) IdeColors.Selection else Color.Transparent
     Label(
         if (locked) label else "$label ▾",
         Modifier
             .background(background, IdeShapes.Medium)
             .clickable(enabled = !locked, onClick = onOpen)
-            .testTag(AgentTags.AGENT_TEAM_PICKER)
+            .testTag(tag)
             .padding(horizontal = 6.dp, vertical = 2.dp),
         color = IdeColors.TextSecondary,
         fontSize = 12.sp,

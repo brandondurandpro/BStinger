@@ -140,10 +140,10 @@ internal fun reopenParams(session: String, directory: String, mcp: McpCapabiliti
         put("mcpServers", McpServers.forAgent(mcp))
     }
 
-/** `session/list` of the sessions working in [directory], from [cursor] on. */
-internal fun listParams(directory: String, cursor: String?): JsonObject =
+/** `session/list` of the sessions working in [directory] (in any directory when null), from [cursor] on. */
+internal fun listParams(directory: String?, cursor: String?): JsonObject =
     buildJsonObject {
-        put("cwd", directory)
+        if (directory != null) put("cwd", directory)
         if (cursor != null) put("cursor", cursor)
     }
 

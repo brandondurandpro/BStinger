@@ -325,6 +325,7 @@ private fun PromptActions(agent: AgentState, conversation: Conversation) {
         }
         PermissionsPicker(agent, conversation)
         TeamPicker(agent, conversation)
+        FolderPicker(agent, conversation)
         Spacer(Modifier.width(8.dp))
         // The picker already says which agent answers: no label for it, only the room that keeps Stop and Send right.
         Spacer(Modifier.weight(1f))

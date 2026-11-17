@@ -25,7 +25,11 @@ class AgentProcesses internal constructor(
     suspend fun sessions(agent: AgentCommand, directories: List<String>): AgentSessions {
         val process = processFor(agent)
         if (!process.ready().sessions.list) return AgentSessions(false, emptyList())
-        val found = directories.distinct().flatMap { process.listSessions(it) }
+        val roots = directories.distinct()
+        val inRoots = roots.flatMap { process.listSessions(it) }
+        // A conversation can work in a folder of the project or of its worktree.
+        val inFolders = process.listSessionsBelow(roots)
+        val found = (inRoots + inFolders).distinctBy { it.id }
         return AgentSessions(true, found.sortedByDescending { it.updatedAt.orEmpty() })
     }
 

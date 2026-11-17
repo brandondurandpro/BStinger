@@ -54,7 +54,7 @@ class ConversationOptions internal constructor(
         if (conversation.options.isNotEmpty() || asking) return
         conversation.offering =
             project.scope.launch {
-                val offered = offeredTo(conversation, project.root.path)
+                val offered = offeredTo(conversation, conversation.rootPath(project))
                 if (conversation.options.isEmpty()) conversation.options = offered
                 // Known once a session of the agent started: the one that read its settings, at the latest. The
                 // agent lists them a while after, and a `/` typed while it was starting gave up asking before.

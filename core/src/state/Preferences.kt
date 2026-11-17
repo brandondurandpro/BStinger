@@ -64,6 +64,12 @@ object PreferenceKeys {
      */
     const val AGENT_MEMBER_SESSIONS_PREFIX = "agent.memberSessions."
 
+    /** The other folders of the server this project's conversations work in, one per line (suffix: the project's path). */
+    const val AGENT_FOLDERS_PREFIX = "agent.folders."
+
+    /** The folders that hold the empty folders of the conversations without a project, one per line (suffix: the project's path). */
+    const val AGENT_SCRATCH_PREFIX = "agent.scratch."
+
     /** Per project (the key ends with its path): the sessions open in tabs of agent mode, one per line, in order. */
     const val AGENT_OPEN_PREFIX = "agent.open."
 

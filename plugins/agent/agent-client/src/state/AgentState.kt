@@ -300,6 +300,31 @@ class Conversation(val id: Int, title: String, val branch: String) {
     var teamId: String? by mutableStateOf(null)
         internal set
 
+    /**
+     * The folder the agent works in, relative to the root of its workspace (the project, or its worktree) and written
+     * with `/`; empty for the root itself. Chosen before the first prompt, then fixed.
+     */
+    var subdirectory: String by mutableStateOf("")
+        internal set
+
+    /** True while the conversation works in no project: the empty folder the server made for it. */
+    var scratch: Boolean by mutableStateOf(false)
+        internal set
+
+    /**
+     * The folder of the server the conversation works in when it is not the project of the window (a folder chosen with
+     * the Open Project dialog); null for the project. Its worktrees and its subfolder are those of that folder.
+     */
+    var folder: String? by mutableStateOf(null)
+        internal set
+
+    // That folder as a project of the window: opened when the conversation starts in it, or when it is opened.
+    internal var home: AgentHost? = null
+
+    /** Why the folder typed could not be chosen; null when it was, or nothing was typed. */
+    var folderError: String? by mutableStateOf(null)
+        internal set
+
     // How the team of an id is found: the teams of the project, wired where the conversation is made.
     internal var teamLookup: (String) -> SavedTeam? = { null }
 
@@ -595,6 +620,13 @@ class AgentState(
 
     // Whether the tabs and titles of the last run were put back: until then, nothing of them is saved.
     internal var restored = false
+
+    // Lists the sessions of the project (null) or of another folder; set when the history is followed.
+    internal var historyOf: suspend (String?, Boolean) -> Unit = { _, _ -> }
+
+    // The folders the user removed from the list: their sessions stay in the agent, but are not listed again unless a
+    // conversation works in the folder anew.
+    internal val forgottenFolders = mutableSetOf<String>()
     internal val savedPreferences get() = saved
 
     init {
@@ -669,16 +701,40 @@ class AgentState(
         private set
 
     /**
-     * What the user does to start a conversation: in a Git repository the picker asks which branch the agent works
-     * from (the project's own, or a worktree of a local or remote branch); elsewhere the conversation just starts.
+     * What the user does to start a conversation: it starts at once, in a new empty folder the server makes, and works in
+     * no project until the user chooses one (the folder of the prompt bar). When the server cannot make a folder, the
+     * conversation starts in the project of this window, after the question "from which branch?" in a Git repository.
      */
     fun requestNewConversation() {
+        project.scope.launch {
+            val folder = runCatching { project.services.places.newConversationFolder() }.getOrNull()
+            val host = folder?.let { runCatching { project.openFolder(it) }.getOrNull() }
+            if (host == null) {
+                showBasePicker(null, null, null)
+                return@launch
+            }
+            val conversation = newConversation(host)
+            conversation.scratch = true
+        }
+    }
+
+    /**
+     * Starts a conversation in the project of this window, which is what a window opened on a project is for: in a Git
+     * repository the question "from which branch?" comes first, elsewhere the conversation starts at once.
+     */
+    fun startInProject() = showBasePicker(null, null, null)
+
+    // Asks which branch the agent works from in the repository of [host] (the project of this window when null): the
+    // answer starts a conversation there, or sets the branch of [target], a conversation already open that moved there.
+    // [loaded] are the branches when the caller read them already.
+    internal fun showBasePicker(host: AgentHost?, target: Conversation?, loaded: BranchChoices?) {
         if (basePicker != null) return
-        val picker = BasePicker()
+        val picker = BasePicker(host, target)
         basePicker = picker
+        val repository = host ?: project
         picker.loading =
             project.scope.launch {
-                val choices = runCatching { project.branchChoices(fetch = false) }
+                val choices = if (loaded != null) Result.success(loaded) else runCatching { repository.branchChoices(fetch = false) }
                 choices.onFailure { picker.failure = it.message ?: "The branches could not be read" }
                 choices.onSuccess { shown ->
                     if (shown == null) startWithoutAsking(picker) else picker.choices = shown
@@ -690,7 +746,7 @@ class AgentState(
 
     private suspend fun refreshRemotes(picker: BasePicker) {
         picker.fetching = true
-        runCatching { project.branchChoices(fetch = true) }.onSuccess { fetched ->
+        runCatching { (picker.host ?: project).branchChoices(fetch = true) }.onSuccess { fetched ->
             if (basePicker === picker && fetched != null) picker.choices = fetched
         }
         picker.fetching = false
@@ -698,7 +754,7 @@ class AgentState(
 
     private fun startWithoutAsking(picker: BasePicker) {
         if (basePicker === picker) basePicker = null
-        newConversation()
+        if (picker.target == null) newConversation(picker.host)
     }
 
     /** The user answered the picker: [base] is the branch to start from, null for the project's own branch. */
@@ -706,41 +762,28 @@ class AgentState(
         val picker = basePicker ?: return
         picker.loading?.cancel()
         basePicker = null
-        val conversation = newConversation()
-        if (base == null) return
+        val target = picker.target
+        // A conversation that moved to a project: its first prompt has not been sent, or the branch is no longer a choice.
+        val conversation = target ?: newConversation(picker.host)
+        val fixed = conversation.started || conversation.busy
+        if (base == null || fixed) return
         conversation.base = base
         setMode(conversation, WorkMode.Worktree)
     }
 
-    /**
-     * The user chose another project in the picker: it opens in another window, which asks its own question "from
-     * which branch?". No conversation starts in this one.
-     */
-    fun chooseProject(path: String) {
-        val picker = basePicker ?: return
-        picker.loading?.cancel()
-        basePicker = null
-        project.startConversationIn(path)
-    }
-
-    /** The user wants a directory that is no recent project: the Open Project dialog, which can create it. */
-    fun browseProject() {
-        val picker = basePicker ?: return
-        picker.loading?.cancel()
-        basePicker = null
-        project.browseProjectForConversation()
-    }
-
-    /** The user closed the picker: no conversation starts. */
+    /** The user closed the picker: no conversation starts, and one that moved to a project stays on its project's branch. */
     fun cancelBasePicker() {
         basePicker?.loading?.cancel()
         basePicker = null
     }
 
-    /** Starts a conversation on a branch of its own. */
-    fun newConversation(): Conversation {
+    /** Starts a conversation on a branch of its own, in the project of this window or in the folder [home]. */
+    fun newConversation(home: AgentHost? = null): Conversation {
         val id = nextId++
         val conversation = Conversation(id, "New conversation", "agent/conversation-$id")
+        conversation.home = home
+        conversation.folder = home?.root?.path
+        conversation.folder?.let(::rememberFolder)
         conversation.teamLookup = teams::find
         conversation.onMemberSession = ::memberSessionKnown
         // The state delivers the prompts queued while the agent answered: only it has the command, the scope
@@ -785,11 +828,12 @@ class AgentState(
             // The agent keeps the history: deleted there, or the conversation comes back with it.
             if (session != null) runCatching { agents.delete(agent, session) }
         }
-        conversation.closeWorktree(project)?.let { worktree ->
+        val repository = conversation.host(project)
+        conversation.closeWorktree(repository)?.let { worktree ->
             // Conversations may share a worktree: it goes with the last of them.
             val shared = conversations.any { it.workspace?.root?.path == worktree.root.path }
             if (!shared) {
-                project.scope.launch { runCatching { git.removeWorktree(project.root.path, worktree.root.path) } }
+                project.scope.launch { runCatching { git.removeWorktree(repository.root.path, worktree.root.path) } }
             }
         }
     }
@@ -806,16 +850,17 @@ class AgentState(
         conversation.mode = mode
         conversation.showsChat = true
         conversation.workspaceError = null
+        val repository = conversation.host(project)
         if (mode == WorkMode.Direct) {
-            conversation.show(project.agentWorkspace(), project)
+            conversation.show(repository.agentWorkspace(), repository)
             return
         }
         // The tool windows keep showing the project until the worktree is loaded, then switch at once.
         conversation.preparingWorktree = true
         conversation.preparing =
             project.scope.launch {
-                runCatching { project.openWorktree(conversation.branch, conversation.base) }
-                    .onSuccess { conversation.show(it, project) }
+                runCatching { repository.openWorktree(conversation.branch, conversation.base) }
+                    .onSuccess { conversation.show(it, repository) }
                     .onFailure {
                         conversation.mode = previous
                         conversation.workspaceError = it.message ?: "The worktree could not be created"
@@ -953,7 +998,7 @@ class AgentState(
             project.editor.flush()
             options.beforePrompt(conversation)
             project.followTranscript(conversation)
-            val directory = workspace.root.path
+            val directory = conversation.directoryIn(workspace.root.path)
             val (itemId, text, attachments) = prompt
             val team = sendingTeam(conversation)
             val session = conversation.session
@@ -1068,9 +1113,12 @@ private const val DEFAULT_CONVERSATIONS_WIDTH = 260f
 private const val MIN_CONVERSATIONS_WIDTH = 160f
 private const val MAX_CONVERSATIONS_WIDTH = 640f
 
-/** The state of the question "from which branch?" asked before a conversation starts. */
+/**
+ * The state of the question "from which branch?" asked before a conversation starts, in the repository of [host]: the
+ * folder the conversation works in, null for the project of the window.
+ */
 @Stable
-class BasePicker {
+class BasePicker(internal val host: AgentHost? = null, internal val target: Conversation? = null) {
     /** The branches to choose from, null while they are read. */
     var choices: BranchChoices? by mutableStateOf(null)
         internal set
@@ -1081,10 +1129,6 @@ class BasePicker {
 
     /** True while the remote branches are being fetched. */
     var fetching by mutableStateOf(false)
-        internal set
-
-    /** True while the picker lists the other projects instead of the branches. */
-    var choosingProject by mutableStateOf(false)
         internal set
 
     internal var loading: Job? = null

@@ -60,6 +60,7 @@ private const val CLIENT_TIMEOUT_S = 60L
  *   fenced `team` block naming those tasks, and answers each later prompt of the session, the reports of the members,
  *   with the next round or, once the rounds are used up, `Final answer. Reports received: <that prompt>`;
  *   `delegate-malformed`: a `team` block that is not JSON;
+ * - `cwd`: answers `cwd: <the directory the session works in>`;
  * - anything else: `You said: <directive>`.
  *
  * A member of a team is told what to do by the same directives (`echo`, `write`, `slow`, `crash`…).
@@ -360,6 +361,7 @@ class FakeAgent(
         val rest = typed.substringAfter(' ', "")
         return when (words.firstOrNull()) {
             "echo" -> chunks(session, rest.split(' ').map { "$it " })
+            "cwd" -> chunks(session, listOf("cwd: ${store[session]?.cwd}"))
             "think" -> think(session, rest)
             "read" -> read(session, rest)
             "write" -> write(session, words.getOrNull(1).orEmpty(), rest.substringAfter(' ', ""))

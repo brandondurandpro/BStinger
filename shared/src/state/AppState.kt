@@ -130,8 +130,8 @@ class AppState(
         }
     }
 
-    // An added window of a conversation started in another project: the project opens with its agent window, on the
-    // question of the branch the conversation starts from.
+    // An added window on a project: the project opens with its agent window, on the question of the branch the
+    // conversation starts from.
     private suspend fun openForNewConversation(path: String) {
         try {
             val shown = session
@@ -140,7 +140,7 @@ class AppState(
             snapshotFlow { shown.opening }.first { it == null }
             val opened = shown.project ?: return
             opened.agentMode = true
-            opened.agent.requestNewConversation()
+            opened.agent.startInProject()
         } finally {
             launching = false
         }
@@ -235,7 +235,6 @@ class AppState(
             consent = { settings.telemetry.shared },
             onRemoteProjectOpened = remote::recordWorkspace,
             installedPlugins = { plugins },
-            newWindow = { onNewWindow?.let { open -> { path: String -> open(path) } } },
         )
 
     // The preferences of every part of the IDE, the open project's last (on top of those last saved).

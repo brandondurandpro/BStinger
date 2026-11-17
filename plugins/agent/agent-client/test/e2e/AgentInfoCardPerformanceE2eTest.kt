@@ -83,9 +83,9 @@ class AgentInfoCardPerformanceE2eTest {
             history()
             val app = launchWithProject(project, agentPreferences())
             awaitTag(AgentTags.MODE_AGENT).performClick()
-            awaitTag(AgentTags.AGENT_NEW).performClick()
+            askBranchOfProject(app)
             awaitTag(AgentTags.agentBase("other")).performClick()
-            awaitTag(AgentTags.AGENT_PROMPT)
+            awaitNoTag(AgentTags.AGENT_BASE_PICKER)
             app.project.agent.conversationsVisible = false
             val conversation = checkNotNull(app.project.agent.current)
             awaitCardReady(conversation)

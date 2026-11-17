@@ -53,8 +53,6 @@ class ServerContext(
     private val onRemoteProjectOpened: (path: String) -> Unit,
     /** The plugins installed in the IDE, shown by the Extensions window of each project. */
     private val installedPlugins: () -> ClientPlugins? = { null },
-    /** How to open a project in another IDE window, asked each time as the desktop app sets it late; null: none. */
-    private val newWindow: () -> ((path: String) -> Unit)? = { null },
 ) : ProjectPickerHost {
     // Cancelled by close(): the loops, the requests and the projects of this server.
     private val jobs = SupervisorJob(appScope.coroutineContext[Job])
@@ -83,9 +81,12 @@ class ServerContext(
     var projectPickerOpen: Boolean by mutableStateOf(false)
         private set
 
-    /** Whether the Open Project dialog picks the project of a new conversation, opened in another window. */
-    override var projectPickerForNewWindow: Boolean by mutableStateOf(false)
-        private set
+    // What the Open Project dialog does with the folder chosen, when it picks the folder of a conversation of the open
+    // project instead of a project to open.
+    private var folderChosen: ((String) -> Unit)? by mutableStateOf(null)
+
+    /** Whether the Open Project dialog picks the folder of a conversation, which then works in it in this window. */
+    override val projectPickerForConversation: Boolean get() = folderChosen != null
 
     // Only the latest request opens its project: a late answer must not replace a project chosen after it.
     private var openRequest = 0
@@ -203,13 +204,9 @@ class ServerContext(
         screen = Screen.Project(opened)
     }
 
-    // A window added by the desktop app reaches the server it started with, not a remote one: paths mean nothing there.
-    private fun windowsForProjects(): ProjectWindows? {
-        if (isRemote) return null
-        val others = { if (newWindow() == null) emptyList() else otherProjects }
-        val available = { newWindow() != null }
-        return ProjectWindows(available, others, { path -> newWindow()?.invoke(path) }, ::browseForProjectInNewWindow)
-    }
+    // The folders of this server a conversation can work in, in the window of the project: its recent projects, and the
+    // dialog that browses its disk.
+    private fun windowsForProjects(): ProjectWindows = ProjectWindows({ otherProjects }, ::browseForFolder)
 
     fun removeRecent(path: String) {
         recentProjects.remove(path)
@@ -228,23 +225,23 @@ class ServerContext(
         projectPickerOpen = true
     }
 
-    /** Opens the Open Project dialog for a new conversation: the directory chosen opens in another window. */
-    fun browseForProjectInNewWindow() {
-        projectPickerForNewWindow = true
+    /** Opens the Open Project dialog for a conversation: the folder chosen goes to [onChosen], no project opens. */
+    fun browseForFolder(onChosen: (String) -> Unit) {
+        folderChosen = onChosen
         projectPickerOpen = true
     }
 
     /** Closes the Open Project dialog without opening anything (its Cancel, Escape or the backdrop). */
     override fun closeProjectPicker() {
         projectPickerOpen = false
-        projectPickerForNewWindow = false
+        folderChosen = null
     }
 
-    /** Opens [path] as the project of a confirmed Open Project dialog, in another window for a new conversation. */
+    /** Opens [path] as the project of a confirmed Open Project dialog, or gives it to the conversation that asked. */
     override fun openFromProjectPicker(path: String) {
-        val inNewWindow = projectPickerForNewWindow
+        val chosen = folderChosen
         closeProjectPicker()
-        if (inNewWindow) newWindow()?.invoke(path) else openProject(path)
+        if (chosen != null) chosen(path) else openProject(path)
     }
 
     /** Creates [name] in [parent] for the Open Project dialog. */

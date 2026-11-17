@@ -42,9 +42,9 @@ class AgentInfoCardE2eTest {
     // A conversation in a worktree started from `other`, the card open on a wide window.
     private fun ComposeUiTest.worktreeConversation(app: E2eApp): Conversation {
         awaitTag(AgentTags.MODE_AGENT).performClick()
-        awaitTag(AgentTags.AGENT_NEW).performClick()
+        askBranchOfProject(app)
         awaitTag(AgentTags.agentBase("other")).performClick()
-        awaitTag(AgentTags.AGENT_PROMPT)
+        awaitNoTag(AgentTags.AGENT_BASE_PICKER)
         app.project.agent.conversationsVisible = false
         val conversation = checkNotNull(app.project.agent.current)
         awaitCondition { conversation.workspace != null && !conversation.preparingWorktree }

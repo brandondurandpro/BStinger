@@ -4,10 +4,12 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.v2.runComposeUiTest
+import org.example.kotlineditor.state.WorkMode
 import org.example.kotlineditor.ui.AgentTags
 import kotlin.io.path.createDirectories
 import kotlin.io.path.writeText
 import kotlin.test.AfterTest
+import kotlin.test.assertEquals
 import kotlin.test.Test
 import kotlin.test.assertTrue
 
@@ -48,7 +50,7 @@ class AgentBasePickerPerformanceE2eTest {
             val app = launchWithProject(project, agentPreferences())
             awaitTag(AgentTags.MODE_AGENT).performClick()
             measure("open the picker on ${2 * BRANCHES} branches", budgetMillis = 8_000, budgetMegabytes = 300) {
-                awaitTag(AgentTags.AGENT_NEW).performClick()
+                askBranchOfProject(app)
                 awaitTag(AgentTags.agentBase("origin/perf/branch-0000"))
                 renderFrame()
             }
@@ -59,6 +61,7 @@ class AgentBasePickerPerformanceE2eTest {
                 awaitNoTag(AgentTags.agentBase("origin/perf/branch-0000"))
                 renderFrame()
             }
-            assertTrue(app.project.agent.conversations.isEmpty(), "browsing the branches starts nothing")
+            assertEquals(1, app.project.agent.conversations.size, "browsing the branches starts nothing more")
+            assertEquals(WorkMode.Direct, app.project.agent.conversations.first().mode)
         }
 }

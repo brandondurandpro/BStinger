@@ -10,7 +10,7 @@ internal fun savedWidth(preferences: Map<String, String>): Float? =
         ?.takeIf { it.isFinite() }
         ?.coerceIn(MIN_WIDTH, MAX_WIDTH)
 
-private fun linesOf(value: String?): List<String> = value.orEmpty().lines().filter { it.isNotBlank() }
+internal fun linesOf(value: String?): List<String> = value.orEmpty().lines().filter { it.isNotBlank() }
 
 /**
  * Puts back, once the history is listed, what the last run left of agent mode in the project at [root]: the titles
@@ -76,7 +76,13 @@ fun AgentState.toPreferences(): Map<String, String> {
             .filter { it.workedMillis > 0 || it.costKnown != null }
             .mapNotNull { c -> c.session?.let { "$it\t${c.workedMillis}\t${c.costKnown ?: ""}" } }
             .joinToString("\n")
+    val folders = conversations.filter { !it.scratch }.mapNotNull { it.folder }.distinct().joinToString("\n")
+    // The empty folders of the conversations without a project are many, one each: their parent is what is listed.
+    val scratch = conversations.filter { it.scratch }.mapNotNull { it.folder }.mapNotNull(::parentFolder)
+    val scratchParents = (scratchParentsSaved(root) + scratch).distinct().joinToString("\n")
     return mapOf(
+        PreferenceKeys.AGENT_FOLDERS_PREFIX + root to folders,
+        PreferenceKeys.AGENT_SCRATCH_PREFIX + root to scratchParents,
         PreferenceKeys.AGENT_CONVERSATION_TEAMS_PREFIX + root to conversationTeamsText(conversations),
         PreferenceKeys.AGENT_STATS_PREFIX + root to stats,
         width,

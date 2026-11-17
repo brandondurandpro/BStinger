@@ -16,6 +16,15 @@ object AgentTags {
     const val AGENT_DUPLICATE = "agent.duplicate"
     const val AGENT_ARCHIVE = "agent.archive"
     const val AGENT_PROJECT_GROUP = "agent.group.project"
+
+    /** The group of the conversations that work in no project. */
+    const val AGENT_SCRATCH_GROUP = "agent.group.scratch"
+
+    /** The group of the conversations that work in the folder [path], which is not the project of the window. */
+    fun agentFolderGroup(path: String) = "agent.group.folder:$path"
+
+    /** The button that removes the group of the folder [path] from the list. */
+    fun agentFolderRemove(path: String) = "agent.group.folder.remove:$path"
     const val AGENT_ARCHIVED = "agent.archived"
     const val AGENT_USAGE = "agent.usage"
     const val AGENT_QUOTA = "agent.quota"
@@ -68,6 +77,12 @@ object AgentTags {
     const val AGENT_FOLDER_PATH = "agent.folder.path"
     const val AGENT_FOLDER_ROOT = "agent.folder.root"
     const val AGENT_FOLDER_APPLY = "agent.folder.apply"
+
+    /** In the menu of the folder of a conversation without a project: the project of this window, and the others. */
+    const val AGENT_FOLDER_THIS_PROJECT = "agent.folder.thisProject"
+
+    fun agentFolderProject(path: String) = "agent.folder.project:$path"
+    const val AGENT_FOLDER_BROWSE = "agent.folder.browse"
     const val AGENT_FOLDER_ERROR = "agent.folder.error"
     const val AGENT_FOLDER_LIST = "agent.folder.list"
 
@@ -269,10 +284,7 @@ object AgentTags {
     const val AGENT_BASE_FETCH_ERROR = "agent.basePicker.fetchError"
 
     fun agentBase(branch: String) = "agent.basePicker.branch:$branch"
-    const val AGENT_BASE_OTHER_PROJECT = "agent.basePicker.otherProject"
-    const val AGENT_BASE_BROWSE = "agent.basePicker.browse"
 
-    fun agentBaseProject(path: String) = "agent.basePicker.projectChoice:$path"
     const val AGENT_LAST_MESSAGE = "agent.lastMessage"
 
     fun agentConversationAgent(id: Int) = "agent.conversation.$id.agent"

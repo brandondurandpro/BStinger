@@ -45,8 +45,8 @@ interface ProjectPickerHost {
     /** `user@host` of the remote session, or null when the server is local. */
     val remoteLabel: String?
 
-    /** Whether the dialog picks the project of a new conversation, which opens in a new window. */
-    val projectPickerForNewWindow: Boolean get() = false
+    /** Whether the dialog picks the folder of a conversation, which works in it in the same window. */
+    val projectPickerForConversation: Boolean get() = false
 
     /** Directory the dialog starts in. */
     fun projectPickerStart(): String

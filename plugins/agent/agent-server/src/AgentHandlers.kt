@@ -165,5 +165,21 @@ private fun teamHandlers(component: AgentsComponent): Map<MethodSpec, Handler> =
 private suspend fun sessions(component: AgentsComponent, agent: AgentCommand, root: String): AgentSessions {
     val worktrees = withContext(Dispatchers.IO) { component.services.agentWorktrees(root) }
     val listed = component.agents.processes.sessions(agent, listOf(root) + worktrees.keys)
-    return listed.copy(sessions = listed.sessions.map { it.copy(branch = worktrees[it.directory]) })
+    return listed.copy(sessions = listed.sessions.map { it.copy(branch = branchOf(worktrees, it.directory)) })
+}
+
+// The branch of the worktree a session works in, or in a folder of; null for the project itself.
+private fun branchOf(worktrees: Map<String, String>, directory: String): String? {
+    val exact = worktrees[directory]
+    if (exact != null) return exact
+    val owner = worktrees.keys.filter { isInside(directory, it) }.maxByOrNull { it.length }
+    return owner?.let { worktrees[it] }
+}
+
+// Whether [path] is [directory] or a folder under it, compared by their folders.
+private fun isInside(path: String, directory: String): Boolean {
+    val folders = { text: String -> text.split('/', '\\').filter { it.isNotEmpty() } }
+    val own = folders(directory)
+    val other = folders(path)
+    return other.size >= own.size && own.indices.all { own[it] == other[it] }
 }

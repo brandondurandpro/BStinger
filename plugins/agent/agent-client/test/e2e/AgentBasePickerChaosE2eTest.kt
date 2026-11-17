@@ -25,7 +25,7 @@ class AgentBasePickerChaosE2eTest {
     }
 
     @Test
-    fun `the branches come once the network is back, and the conversation starts once`() =
+    fun `the conversation starts once the network is back, and the branches come after the project is chosen`() =
         runComposeUiTest {
             repositoryWithBranch()
             val app = launchWithProject(project, agentPreferences(), chaos = true)
@@ -33,11 +33,14 @@ class AgentBasePickerChaosE2eTest {
             app.network.goDown()
             awaitReconnecting()
             awaitTag(AgentTags.AGENT_NEW).performClick()
-            assertEquals(0, app.project.agent.conversations.size, "nothing starts while the branches are unknown")
+            assertEquals(0, app.project.agent.conversations.size, "nothing starts while the server is out of reach")
             app.network.comeBack()
             awaitReconnected()
+            awaitCondition(AGENT_TIMEOUT) { app.project.agent.conversations.size == 1 }
+            openFolderMenu()
+            awaitTag(AgentTags.AGENT_FOLDER_THIS_PROJECT).performClick()
             awaitTag(AgentTags.agentBase("other"), timeout = AGENT_TIMEOUT).performClick()
-            awaitTag(AgentTags.AGENT_PROMPT)
+            awaitNoTag(AgentTags.AGENT_BASE_PICKER)
             assertEquals(1, app.project.agent.conversations.size, "one conversation, however many retries")
             assertEquals(WorkMode.Worktree, app.project.agent.conversations.first().mode)
         }
@@ -48,12 +51,12 @@ class AgentBasePickerChaosE2eTest {
             repositoryWithBranch()
             val app = launchWithProject(project, agentPreferences(), chaos = true)
             awaitTag(AgentTags.MODE_AGENT).performClick()
-            awaitTag(AgentTags.AGENT_NEW).performClick()
+            askBranchOfProject(app)
             awaitTag(AgentTags.agentBase("other"))
             app.process.restart()
             awaitReconnected()
             awaitTag(AgentTags.AGENT_BASE_PROJECT).performClick()
-            awaitTag(AgentTags.AGENT_PROMPT)
+            awaitNoTag(AgentTags.AGENT_BASE_PICKER)
             assertEquals(1, app.project.agent.conversations.size)
             assertEquals(WorkMode.Direct, app.project.agent.conversations.first().mode)
         }

@@ -317,6 +317,9 @@ enum class Method(
     /** Home directory of the user running the server, for the Open Project dialog. */
     UserHome("fs/userHome", mutating = false),
 
+    /** A new empty folder for a conversation of agent mode that works in no project. */
+    ConversationFolder("fs/conversationFolder", mutating = true),
+
     /** Children of a directory. */
     ListDirectory("fs/list", mutating = false),
 

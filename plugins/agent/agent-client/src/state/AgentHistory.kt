@@ -16,17 +16,36 @@ private const val DATE = 10
 
 /** Lists the sessions of the agent each time agent mode shows: those of the project and of its worktrees. */
 internal fun AgentState.followHistory(project: AgentHost, agent: () -> AgentCommand) {
+    historyOf = { folder, scratch -> listHistoryOf(project, agent, folder, scratch) }
     project.scope.launch {
         snapshotFlow { project.agentMode }.filter { it }.collect {
-            val agents = project.services.agents
-            // Every agent the user worked with keeps a history: the one of the settings, and those chosen in the picker.
-            for (listed in historyAgents(agent())) {
-                val answer = runCatching { agents.sessions(listed, project.root.path) }.getOrNull()
-                if (answer != null && answer.supported) addHistory(answer.sessions, project.root.path, listed.takeIf { it != agent() })
-            }
+            // The project, then the other folders its conversations worked in (null stands for the project).
+            val places = listOf<String?>(null) + knownFolders(project.root.path)
+            for (folder in places) historyOf(folder, false)
+            // The conversations without a project, under the folders the server makes theirs.
+            for (parent in scratchParentsSaved(project.root.path)) historyOf(parent, true)
             restoreSaved(project.root.path)
         }
     }
+}
+
+// The sessions of the project (null) or of its other [folder], for every agent the user worked with: the one of the
+// settings, and those chosen in the picker.
+private suspend fun AgentState.listHistoryOf(project: AgentHost, agent: () -> AgentCommand, folder: String?, scratch: Boolean) {
+    val agents = project.services.agents
+    val root = folder ?: project.root.path
+    for (listed in historyAgents(agent())) {
+        val answer = runCatching { agents.sessions(listed, root) }.getOrNull()
+        if (answer != null && answer.supported) {
+            addHistory(answer.sessions, root, listed.takeIf { it != agent() }, folder, scratch)
+        }
+    }
+}
+
+/** The folders that hold the empty folders of the conversations without a project, as this project saved them. */
+internal fun AgentState.scratchParentsSaved(root: String): List<String> {
+    val saved = linesOf(savedPreferences[PreferenceKeys.AGENT_SCRATCH_PREFIX + root])
+    return (saved + conversations.filter { it.scratch }.mapNotNull { it.folder }.mapNotNull(::parentFolder)).distinct()
 }
 
 /**
@@ -45,6 +64,18 @@ internal fun AgentState.dropHistoryTwins(project: AgentHost) {
 // A session of the history nobody opened yet: [restore] has not run.
 private val Conversation.isHistoryEntry: Boolean get() = sessionDirectory != null
 
+// The other folders the conversations of the project worked in: those saved, and those of the conversations shown.
+private fun AgentState.knownFolders(root: String): List<String> {
+    val saved = linesOf(savedPreferences[PreferenceKeys.AGENT_FOLDERS_PREFIX + root])
+    return (saved + conversations.mapNotNull { it.folder }).distinct().filter { it != root && it !in forgottenFolders }
+}
+
+// The empty folder of the conversation, the first folder under [parent] on the way to [directory].
+private fun scratchFolderOf(parent: String, directory: String): String {
+    val first = relativeFolder(parent, directory)?.substringBefore('/').orEmpty()
+    return if (first.isEmpty()) directory else folderIn(parent, first)
+}
+
 // The agent of the settings first, then those of the registry the user chose.
 private fun AgentState.historyAgents(settings: AgentCommand): List<AgentCommand> {
     val chosen = usedAgentIds().map { AgentCommand(emptyList(), registry = it) }
@@ -55,12 +86,16 @@ private fun AgentState.historyAgents(settings: AgentCommand): List<AgentCommand>
 internal fun AgentState.usedAgentIds(): List<String> = (usedAgents + listOfNotNull(lastAgent)).distinct()
 
 // The sessions no conversation shows yet, after the conversations, newest first; [agent] is theirs when not the settings'.
-private fun AgentState.addHistory(sessions: List<AgentSession>, root: String, agent: AgentCommand?) {
+private fun AgentState.addHistory(sessions: List<AgentSession>, root: String, agent: AgentCommand?, folder: String?, scratch: Boolean) {
     val shown = conversations.mapNotNull { it.session }.toSet()
     // The session of a member of a team is no conversation: its work shows in the conversation of its team.
     val listed = sessions.filter { it.id !in shown && it.id !in memberSessions }
     for (session in listed) {
-        val conversation = conversationOf(session, nextId++, root)
+        // A conversation without a project works in the empty folder under [root] that holds its session.
+        val own = if (scratch) scratchFolderOf(root, session.directory) else root
+        val conversation = conversationOf(session, nextId++, own)
+        conversation.folder = if (scratch) own else folder
+        conversation.scratch = scratch
         // The state delivers the prompts queued while the agent answered (the transcript only says the turn is over).
         conversation.onTurnIdle = { deliverQueued(conversation) }
         conversation.agent = agent
@@ -89,6 +124,8 @@ internal fun conversationOf(session: AgentSession, id: Int, root: String): Conve
     conversation.lastMessageAt = updated.getOrNull()
     conversation.sessionDirectory = session.directory
     conversation.mode = if (branch == null || session.directory == root) WorkMode.Direct else WorkMode.Worktree
+    // A session that worked in a folder of the project goes on there.
+    if (conversation.mode == WorkMode.Direct) conversation.subdirectory = relativeFolder(root, session.directory).orEmpty()
     return conversation
 }
 

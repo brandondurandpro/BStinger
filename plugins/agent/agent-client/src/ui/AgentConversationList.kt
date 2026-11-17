@@ -9,6 +9,9 @@ import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import org.example.kotlineditor.state.removeFolder
+import androidx.compose.foundation.TooltipArea
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -61,6 +64,7 @@ import kotlinx.coroutines.delay
 import org.example.kotlineditor.state.AgentOutcome
 import org.example.kotlineditor.state.AgentState
 import org.example.kotlineditor.state.Conversation
+import org.example.kotlineditor.state.folderNameOf
 import org.example.kotlineditor.state.costSummary
 import org.example.kotlineditor.state.delete
 import org.example.kotlineditor.state.duplicate
@@ -413,7 +417,8 @@ private fun TitleField(title: String, onDone: (String?) -> Unit) {
     )
 }
 
-// The conversations under their project, one flat list: no sub-group by folder or branch.
+// The conversations under the folder they work in: the project of the window first, then the other folders in the order
+// the conversations came; each group is one flat list, no sub-group by branch.
 private fun LazyListScope.groupedConversations(
     agent: AgentState,
     shown: List<Conversation>,
@@ -421,13 +426,46 @@ private fun LazyListScope.groupedConversations(
     collapsed: MutableList<String>,
 ) {
     if (shown.isEmpty()) return
-    val projectKey = "project"
-    val projectOpen = searching || projectKey !in collapsed
-    item(key = "group-$projectKey") {
-        GroupHeader(agent.projectName, shown.size, projectOpen, AgentTags.AGENT_PROJECT_GROUP) { toggled(collapsed, projectKey) }
+    val folders = shown.filter { !it.scratch }.mapNotNull { it.folder }.distinct()
+    val own = shown.filter { it.folder == null && !it.scratch }
+    val scratch = shown.filter { it.scratch }
+    if (own.isNotEmpty()) {
+        val tag = AgentTags.AGENT_PROJECT_GROUP
+        conversationGroup(agent, PROJECT_KEY, agent.projectName, tag, own, searching, collapsed)
     }
-    if (!projectOpen) return
-    items(shown, key = { it.id }) { conversation ->
+    if (scratch.isNotEmpty()) {
+        conversationGroup(agent, SCRATCH_KEY, NO_PROJECT, AgentTags.AGENT_SCRATCH_GROUP, scratch, searching, collapsed)
+    }
+    for (folder in folders) {
+        val members = shown.filter { it.folder == folder && !it.scratch }
+        val tag = AgentTags.agentFolderGroup(folder)
+        val remove = { agent.removeFolder(folder) }
+        conversationGroup(agent, "$FOLDER_KEY$folder", folderNameOf(folder), tag, members, searching, collapsed, remove)
+    }
+}
+
+private const val PROJECT_KEY = "project"
+private const val FOLDER_KEY = "folder:"
+private const val SCRATCH_KEY = "scratch"
+
+private fun LazyListScope.conversationGroup(
+    agent: AgentState,
+    key: String,
+    name: String,
+    tag: String,
+    members: List<Conversation>,
+    searching: Boolean,
+    collapsed: MutableList<String>,
+    remove: (() -> Unit)? = null,
+) {
+    val open = searching || key !in collapsed
+    item(key = "group-$key") {
+        GroupHeader(name, members.size, open, tag, remove, removeTag = AgentTags.agentFolderRemove(key.removePrefix(FOLDER_KEY))) {
+            toggled(collapsed, key)
+        }
+    }
+    if (!open) return
+    items(members, key = { it.id }) { conversation ->
         Box(Modifier.padding(start = 8.dp)) {
             ConversationRow(agent, conversation, selected = conversation == agent.current)
         }
@@ -440,18 +478,44 @@ private fun toggled(collapsed: MutableList<String>, key: String) {
 
 // "▾ project (3)": a click folds or unfolds the group.
 @Composable
-private fun GroupHeader(label: String, count: Int, open: Boolean, tag: String, toggle: () -> Unit) {
+private fun GroupHeader(
+    label: String,
+    count: Int,
+    open: Boolean,
+    tag: String,
+    remove: (() -> Unit)?,
+    removeTag: String,
+    toggle: () -> Unit,
+) {
     val arrow = if (open) "▾" else "▸"
-    Label(
-        "$arrow $label ($count)",
-        Modifier
-            .fillMaxWidth()
-            .clickable(onClick = toggle)
-            .padding(start = 14.dp, end = 8.dp, top = 6.dp, bottom = 4.dp)
-            .testTag(tag),
-        color = IdeColors.Text,
-        fontSize = 12.sp,
-        fontWeight = FontWeight.SemiBold,
-        maxLines = 1,
-    )
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Label(
+            "$arrow $label ($count)",
+            Modifier
+                .weight(1f)
+                .clickable(onClick = toggle)
+                .padding(start = 14.dp, end = 8.dp, top = 6.dp, bottom = 4.dp)
+                .testTag(tag),
+            color = IdeColors.Text,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+        )
+        // Only the other folders can go: the project is the window's own.
+        if (remove != null) RemoveFolderButton(remove, removeTag)
+    }
+}
+
+// "Remove from the list": the conversations of the folder close, the agent keeps their sessions.
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun RemoveFolderButton(remove: () -> Unit, tag: String) {
+    TooltipArea(tooltip = { Tooltip("Remove this folder from the list (the conversations stay in the agent's history)") }) {
+        Label(
+            "✕",
+            Modifier.clickable(onClick = remove).padding(horizontal = 8.dp, vertical = 4.dp).testTag(tag),
+            color = IdeColors.TextSecondary,
+            fontSize = 12.sp,
+        )
+    }
 }
