@@ -49,6 +49,9 @@ object PreferenceKeys {
     /** The agent teams of the user, for every project: a JSON array of teams (see `teamsToText`). */
     const val AGENT_TEAMS = "agent.teamList"
 
+    /** `true` once the ready-made team was added (it comes back only when the user asks for it, not once deleted). */
+    const val AGENT_TEAMS_SEEDED = "agent.teamsSeeded"
+
     /** Per project (the key ends with its path): its agent teams, in the format of [AGENT_TEAMS]. */
     const val AGENT_TEAMS_PREFIX = "agent.teamList."
 

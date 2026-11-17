@@ -519,6 +519,20 @@ class AgentState(
     /** The teams of agents the user made, for every project or this one. */
     val teams = AgentTeams(saved, project.root.path).also { it.onRemoved = ::teamRemoved }
 
+    init {
+        seedStarterTeam()
+    }
+
+    // A user with no team starts with the ready-made one, on Claude and its Haiku model: added once, then it is theirs
+    // (deleting it does not bring it back; the Teams window can add it again).
+    private fun seedStarterTeam() {
+        if (teams.seeded) return
+        teams.seeding()
+        val choices = project.services.agents
+        val directory = project.root.path
+        project.scope.launch { teams.addStarterTeam(choices, registryProvider(DEFAULT_AGENT), directory) }
+    }
+
     /**
      * The team [conversation] sends its prompts through, and null when it sends to its own agent: no team chosen, or
      * the team was deleted (then [Conversation.teamMissing] says so, and the sending must refuse rather than fall back).

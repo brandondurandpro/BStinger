@@ -49,6 +49,7 @@ import org.example.kotlineditor.state.AppState
 import org.example.kotlineditor.state.ClientPlugins
 import org.example.kotlineditor.state.CommandLineTool
 import org.example.kotlineditor.state.InMemoryPreferenceStore
+import org.example.kotlineditor.state.PreferenceKeys
 import org.example.kotlineditor.state.PreferenceStore
 import org.example.kotlineditor.state.ProjectState
 import org.example.kotlineditor.state.Screen
@@ -323,6 +324,10 @@ fun ComposeUiTest.launchApp(
     commandLineTool: CommandLineTool? = null,
 ): E2eApp {
     TextClipboard.useSystem = false
+    // The ready-made team is not added to the teams of a test, unless it asks for it (the key is set to anything else).
+    val seededKey = PreferenceKeys.AGENT_TEAMS_SEEDED
+    val before = preferences.load()
+    if (seededKey !in before) preferences.save(before + (seededKey to "true"))
     val pluginSetup = PluginSetup(plugins.map(::loadPlugin), pluginsDirectory?.let { startPlugins(it) })
     val data = Files.createTempDirectory("kotlin-editor-server").toFile()
     val process = ServerProcess(data, languageServers, telemetry?.serverHook ?: InMemoryHook(), agents, ripgrep, ssh)

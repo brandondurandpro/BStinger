@@ -33,6 +33,15 @@ class AgentTeams internal constructor(saved: Map<String, String>, private val ro
             addAll(teamsOfText(saved[PreferenceKeys.AGENT_TEAMS_PREFIX + root]).map { SavedTeam(it, global = false) })
         }
 
+    /** True once the ready-made team was added, or the user already had teams: it is not added again. */
+    internal var seeded: Boolean = saved[PreferenceKeys.AGENT_TEAMS_SEEDED] == "true" || teams.isNotEmpty()
+        private set
+
+    /** Records that the ready-made team was added, or is not wanted. */
+    internal fun seeding() {
+        seeded = true
+    }
+
     /** The skills agents can be given, as the server listed them; null until it did (or when it could not). */
     var skills: List<AgentSkill>? by mutableStateOf(null)
         private set
@@ -78,6 +87,7 @@ class AgentTeams internal constructor(saved: Map<String, String>, private val ro
         return mapOf(
             PreferenceKeys.AGENT_TEAMS to everywhere.teamsToText(),
             PreferenceKeys.AGENT_TEAMS_PREFIX + root to here.teamsToText(),
+            PreferenceKeys.AGENT_TEAMS_SEEDED to seeded.toString(),
         )
     }
 
