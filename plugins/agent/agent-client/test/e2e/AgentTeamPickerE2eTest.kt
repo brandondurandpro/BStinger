@@ -43,6 +43,10 @@ class AgentTeamPickerE2eTest {
     private fun preferences(vararg more: Pair<String, String>) =
         InMemoryPreferenceStore(agentPreferences("--store", "$store").load() + more)
 
+    // A team whose agents are the fake agent of the settings: its prompts are answered by its manager, through the
+    // harness of the server, and its manager offers the same modes of permissions as the agent of the settings.
+    private fun backend() = commandTeam("Backend", store, "Member 1")
+
     // The pickers the agent offers appear one after the other and move the team picker: wait for the last of them.
     private fun ComposeUiTest.openPickerMenu() {
         awaitTag(AgentTags.AGENT_PERMISSIONS, timeout = AGENT_TIMEOUT)
@@ -96,7 +100,7 @@ class AgentTeamPickerE2eTest {
     @Test
     fun `choosing a team hides the agent, model and effort pickers and keeps the permissions, no team brings them back`() =
         runComposeUiTest {
-            val team = sampleTeam("Backend")
+            val team = backend()
             val app = launchWithProject(project, preferences(globalTeams(team)))
             val conversation = startConversation(app)
             awaitModel("Fast")
@@ -142,7 +146,7 @@ class AgentTeamPickerE2eTest {
     @Test
     fun `Manage teams opens the Teams window`() =
         runComposeUiTest {
-            val team = sampleTeam("Backend")
+            val team = backend()
             val app = launchWithProject(project, preferences(globalTeams(team)))
             startConversation(app)
             openPickerMenu()
@@ -186,7 +190,7 @@ class AgentTeamPickerE2eTest {
     @Test
     fun `the picker is locked at the first prompt, without a team`() =
         runComposeUiTest {
-            val team = sampleTeam("Backend")
+            val team = backend()
             val app = launchWithProject(project, preferences(globalTeams(team)))
             val conversation = startedWith(app, "echo hi")
             awaitPicker("No team")
@@ -201,7 +205,7 @@ class AgentTeamPickerE2eTest {
     @Test
     fun `the picker is locked at the first prompt, with a team, and shows its name`() =
         runComposeUiTest {
-            val team = sampleTeam("Backend")
+            val team = backend()
             val app = launchWithProject(project, preferences(globalTeams(team)))
             val conversation = startConversation(app)
             awaitTag(AgentTags.AGENT_TEAM_PICKER).assertIsEnabled()
@@ -216,13 +220,15 @@ class AgentTeamPickerE2eTest {
             assertTrue(isGone(AgentTags.AGENT_TEAM_PICKER_NONE))
             app.project.agent.chooseTeam(conversation, null)
             assertEquals(team.id, conversation.teamId)
-            // Today a prompt still goes to the agent of the conversation: the answer came.
+            // The prompt went through the team: its manager answered, nothing was delegated.
             assertFalse(conversation.teamMissing)
+            assertEquals(team.id, app.project.agent.sendingTeam(conversation)?.team?.id)
+            assertEquals(team.manager.agent, app.project.agent.agentOf(conversation))
         }
 
     @Test
     fun `the team of a started conversation is back after a restart`() {
-        val team = sampleTeam("Backend")
+        val team = backend()
         var saved: Map<String, String> = emptyMap()
         var session = ""
         runComposeUiTest {
@@ -253,7 +259,7 @@ class AgentTeamPickerE2eTest {
     @Test
     fun `an edited team shows its new name`() =
         runComposeUiTest {
-            val team = sampleTeam("Backend")
+            val team = backend()
             val app = launchWithProject(project, preferences(globalTeams(team)))
             val conversation = startConversation(app)
             chooseTeam(team.id)
@@ -279,7 +285,7 @@ class AgentTeamPickerE2eTest {
     @Test
     fun `a team deleted before the conversation started falls back to no team`() =
         runComposeUiTest {
-            val team = sampleTeam("Backend")
+            val team = backend()
             val app = launchWithProject(project, preferences(globalTeams(team)))
             val conversation = startConversation(app)
             awaitModel("Fast")
@@ -296,7 +302,7 @@ class AgentTeamPickerE2eTest {
     @Test
     fun `a team deleted after the conversation started shows a notice and the missing state`() =
         runComposeUiTest {
-            val team = sampleTeam("Backend")
+            val team = backend()
             val app = launchWithProject(project, preferences(globalTeams(team)))
             val conversation = startConversation(app)
             chooseTeam(team.id)

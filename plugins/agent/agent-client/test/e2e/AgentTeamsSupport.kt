@@ -103,3 +103,93 @@ class TeamRegistry : AutoCloseable {
         data.toFile().deleteRecursively()
     }
 }
+
+/**
+ * A team whose agents are the fake agent started from a command line, which keeps its sessions under [store]: a
+ * manager `Lead` and the [members]. They share one process and one store, unless [separate]: then each agent has a
+ * store (a folder of its name under [store]) and a process of its own, so that one that crashes takes no other down.
+ */
+fun commandTeam(
+    name: String,
+    store: java.nio.file.Path,
+    vararg members: String,
+    separate: Boolean = false,
+    id: String = "team-$name",
+): Team {
+    fun agent(agentName: String): TeamAgent {
+        val sessions = if (separate) store.resolve(agentName) else store
+        val command = org.example.kotlineditor.testkit.acp.FakeAgentCommand.command("--store", "$sessions")
+        return TeamAgent("$id-$agentName", agentName, "$agentName of $name", AgentCommand(command))
+    }
+    return Team(id, name, agent("Lead"), members.map { agent(it) })
+}
+
+/** Chooses the team [id] in the picker of the prompt bar, once the settings of the agent show. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.pickTeam(id: String) {
+    awaitTag(AgentTags.AGENT_PERMISSIONS, timeout = AGENT_TIMEOUT)
+    awaitTag(AgentTags.AGENT_TEAM_PICKER).performClick()
+    awaitTag(AgentTags.agentTeamChoice(id)).performClick()
+    awaitNoTag(AgentTags.AGENT_TEAM_PICKER_NONE)
+}
+
+/** The tasks the manager of [this] team conversation delegated, in order. */
+fun org.example.kotlineditor.state.Conversation.delegations(): List<org.example.kotlineditor.model.AgentItem.Delegation> =
+    items.filterIsInstance<org.example.kotlineditor.model.AgentItem.Delegation>()
+
+/** The latest task given to the member named [member], as the conversation shows it now. */
+fun org.example.kotlineditor.state.Conversation.delegationOf(member: String): org.example.kotlineditor.model.AgentItem.Delegation =
+    checkNotNull(delegations().lastOrNull { it.member == member }) { "No task for $member in ${delegations()}" }
+
+/** Waits until the manager of [conversation] delegated [count] tasks. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.awaitDelegations(conversation: org.example.kotlineditor.state.Conversation, count: Int) {
+    awaitCondition(AGENT_TIMEOUT) { conversation.delegations().size >= count }
+}
+
+/** Waits until the card of [delegation] says [status] (`running…`, `done`, `failed`, `cancelled`). */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.awaitDelegationStatus(delegation: org.example.kotlineditor.model.AgentItem.Delegation, status: String) {
+    val tag = AgentTags.agentDelegationStatus(delegation.id)
+    // In the header of the card, which is one button: its parts are nodes of the unmerged tree only.
+    awaitTag(tag, timeout = AGENT_TIMEOUT, unmerged = true)
+    try {
+        awaitCondition(AGENT_TIMEOUT) { textOf(tag) == status }
+    } catch (e: androidx.compose.ui.test.ComposeTimeoutException) {
+        throw AssertionError("The card of ${delegation.member} says '${textOf(tag)}', not '$status'", e)
+    }
+}
+
+/**
+ * Waits until the manager of [conversation] gave its final answer and the run is over. Not [awaitIdle] alone: the
+ * conversation is not busy yet between the prompt sent and the first news of the run.
+ */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.awaitFinalAnswer(conversation: org.example.kotlineditor.state.Conversation, timeout: Long = AGENT_TIMEOUT) {
+    awaitAnswer(conversation, org.example.kotlineditor.testkit.acp.FakeManager.FINAL_PREFIX, timeout)
+    awaitIdle(conversation, timeout)
+}
+
+/** Clicks the option [option] of the permission the member named [member] asks for, at the end of the conversation. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.answerMember(member: String, option: String) {
+    val request = androidx.compose.ui.test.hasTestTag(AgentTags.agentMemberRequest(member))
+    val button = androidx.compose.ui.test.hasTestTag(AgentTags.agentPermission(option))
+    awaitTag(AgentTags.agentMemberRequest(member), timeout = AGENT_TIMEOUT)
+    onNode(button.and(androidx.compose.ui.test.hasAnyAncestor(request))).performClick()
+}
+
+/** Waits until the manager of [conversation] gave [count] final answers (one per run) and the last run is over. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.awaitRuns(conversation: org.example.kotlineditor.state.Conversation, count: Int, timeout: Long = AGENT_TIMEOUT) {
+    val prefix = org.example.kotlineditor.testkit.acp.FakeManager.FINAL_PREFIX
+    try {
+        awaitCondition(timeout) {
+            val answers = conversation.items.filterIsInstance<org.example.kotlineditor.model.AgentItem.AgentText>()
+            answers.count { it.text.startsWith(prefix) } >= count
+        }
+    } catch (e: androidx.compose.ui.test.ComposeTimeoutException) {
+        throw AssertionError("Run $count did not end; the conversation shows:\n${shownConversation(conversation)}", e)
+    }
+    awaitIdle(conversation, timeout)
+}
