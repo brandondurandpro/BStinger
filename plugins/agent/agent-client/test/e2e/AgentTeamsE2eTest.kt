@@ -117,6 +117,38 @@ class AgentTeamsE2eTest {
         }
 
     @Test
+    fun `the agents of a team are tabs, one shown at a time, named after the agent`() =
+        runComposeUiTest {
+            val team = sampleTeam("Backend", members = 2)
+            val app = launchWithProject(project, teamPreferences(globalTeams(team)), agents = servers.settings())
+            startConversation(app)
+            openTeams()
+            awaitTag(AgentTags.agentTeamEdit(team.id)).performClick()
+            val manager = AgentTags.TEAM_MANAGER
+            val second = AgentTags.teamMember(1)
+            // The manager shows first, and only it.
+            awaitTag(AgentTags.agentTeamField(manager, "name"))
+            awaitNoTag(AgentTags.agentTeamField(second, "name"))
+            assertEquals("Lead", textOf(AgentTags.agentTeamTab(manager)))
+            assertEquals("Member 2", textOf(AgentTags.agentTeamTab(second)))
+            showAgent(second)
+            awaitTag(AgentTags.agentTeamField(second, "name"))
+            awaitNoTag(AgentTags.agentTeamField(manager, "name"))
+            // A tab follows the name typed; a new member gets a tab and shows at once.
+            fillAgent(second, "name", "Reviewer")
+            awaitCondition { textOf(AgentTags.agentTeamTab(second)) == "Reviewer" }
+            awaitTag(AgentTags.AGENT_TEAM_ADD_MEMBER).performScrollTo().performClick()
+            val third = AgentTags.teamMember(2)
+            awaitTag(AgentTags.agentTeamField(third, "name"))
+            awaitNoTag(AgentTags.agentTeamField(second, "name"))
+            // Removing the member shown shows the one before it.
+            awaitTag(AgentTags.agentTeamField(third, "remove")).performClick()
+            awaitNoTag(AgentTags.agentTeamTab(third))
+            awaitTag(AgentTags.agentTeamField(second, "name"))
+            assertEquals(2, app.project.agent.teams.teams.firstOrNull()?.team?.members?.size)
+        }
+
+    @Test
     fun `a team is edited in place, and keeps its id`() =
         runComposeUiTest {
             val team = sampleTeam("Backend", members = 2)
@@ -127,7 +159,7 @@ class AgentTeamsE2eTest {
             awaitTag(AgentTags.AGENT_TEAM_NAME).performScrollTo()
             fillAgent(AgentTags.TEAM_MANAGER, "name", "Chief")
             awaitTag(AgentTags.AGENT_TEAM_PROJECT).performClick()
-            awaitTag(AgentTags.agentTeamField(AgentTags.teamMember(1), "remove")).performScrollTo().performClick()
+            awaitField(AgentTags.teamMember(1), "remove").performClick()
             saveTeam()
             awaitCondition { onlyTeam(app).team.manager.name == "Chief" }
             val saved = onlyTeam(app)
@@ -326,6 +358,7 @@ class AgentTeamsE2eTest {
             val saved = onlyTeam(app)
             assertEquals(mapOf("model" to "fake-smart", "effort" to "low"), saved.team.members.firstOrNull()?.settings)
             awaitTag(AgentTags.agentTeamEdit(saved.team.id)).performClick()
+            showAgent(member)
             awaitShownChoice(member, "model", "Smart")
             awaitShownChoice(member, "effort", "Low")
         }

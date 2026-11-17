@@ -56,7 +56,7 @@ class AgentTeamsPerformanceE2eTest {
             }
             measure("open the form of a team among $TEAMS", budgetMillis = 2_000, budgetMegabytes = 60) {
                 awaitTag(AgentTags.agentTeamEdit(far.id)).performClick()
-                awaitTag(AgentTags.agentTeamField(AgentTags.teamMember(0), "name"))
+                awaitTag(AgentTags.agentTeamField(AgentTags.TEAM_MANAGER, "name"))
                 renderFrame()
             }
             val composedAfter = onAllNodes(hasTestTagPrefix(TEAM_ROWS)).fetchSemanticsNodes().size
