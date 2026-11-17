@@ -4,6 +4,7 @@ import org.example.kotlineditor.model.AgentAttachment
 import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.model.Team
 import org.example.kotlineditor.model.TeamAgent
+import org.example.kotlineditor.model.TeamText
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
@@ -78,5 +79,5 @@ internal class TeamConversation(val key: String, val team: Team, val directory: 
     fun nextId(kind: String): String = "team-$kind-${counter.incrementAndGet()}"
 
     /** The key of the conversation of [member]. */
-    fun memberKey(member: TeamAgent): String = "$key#${member.id}"
+    fun memberKey(member: TeamAgent): String = TeamText.memberConversation(key, member.id)
 }

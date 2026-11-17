@@ -7,6 +7,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.example.kotlineditor.model.Team
 import org.example.kotlineditor.model.TeamAgent
+import org.example.kotlineditor.model.TeamText
 
 /** One task a manager gave: what [member] must do. */
 data class MemberTask(
@@ -146,8 +147,8 @@ class TextDelegationProtocol : DelegationProtocol {
     private class Block(val lines: Set<Int>, val text: String, val closed: Boolean)
 
     private companion object {
-        const val OPENING = "```team"
-        const val CLOSING = "```"
+        const val OPENING = TeamText.BLOCK_OPENING
+        const val CLOSING = TeamText.BLOCK_CLOSING
         const val DELEGATE = "delegate"
         const val MEMBER = "member"
         const val TASK = "task"

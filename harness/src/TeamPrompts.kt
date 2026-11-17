@@ -3,6 +3,7 @@ package org.example.kotlineditor.harness
 import org.example.kotlineditor.model.AgentSkill
 import org.example.kotlineditor.model.Team
 import org.example.kotlineditor.model.TeamAgent
+import org.example.kotlineditor.model.TeamText
 
 private const val REPORT_TASK_CHARS = 120
 
@@ -17,9 +18,11 @@ internal enum class ReportStatus(val word: String) {
 internal class MemberReport(val member: String, val task: String, val status: ReportStatus, val text: String)
 
 /**
- * The prompts the harness sends. Each one is a short introduction, then a last section headed [REQUEST_HEADING] that
- * holds what the agent has to act on (the text of the user, the task of a member, the reports of the members): an
- * agent reads it as the request, and the scripted agent of the tests finds its directive there.
+ * The prompts the harness sends. Each one is a short introduction, then a last section headed
+ * [TeamText.REQUEST_HEADING] that holds what the agent has to act on (the text of the user, the task of a member, the
+ * reports of the members): an agent reads it as the request, and the scripted agent of the tests finds its directive
+ * there. The prompts the manager gets that the user did not write ([relay], [refusal]) start with the words
+ * [TeamText] names, by which the IDE tells them from the user's own in a replayed session.
  */
 internal class TeamPrompts(private val protocol: DelegationProtocol) {
     /** The first prompt of the manager: who it is, its team, how to delegate, its instructions, then [request]. */
@@ -45,7 +48,7 @@ internal class TeamPrompts(private val protocol: DelegationProtocol) {
     /** What the manager is told once its members ended a round: their [reports]. */
     fun relay(reports: List<MemberReport>): String {
         val intro =
-            "Your members finished the tasks of this round. Their reports are in the last section of this " +
+            "${TeamText.RELAY_OPENING} Their reports are in the last section of this " +
                 "message. If the work needs more, delegate it in a new `team` block; if it is done, answer the " +
                 "user without a `team` block."
         return wrap(intro, reports.joinToString("\n\n") { reportText(it) })
@@ -54,7 +57,7 @@ internal class TeamPrompts(private val protocol: DelegationProtocol) {
     /** What the manager is told when its answer could not be run as a delegation, for [problem]. */
     fun refusal(problem: String): String {
         val intro =
-            "Your last message could not be run as a delegation. The last section of this message says why. " +
+            "${TeamText.REFUSAL_OPENING} The last section of this message says why. " +
                 "Send a corrected `team` block, or answer the user without one."
         return wrap(intro, problem)
     }

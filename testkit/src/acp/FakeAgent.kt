@@ -44,7 +44,8 @@ private const val CLIENT_TIMEOUT_S = 60L
  * - `plan`: a plan of two steps, updated as they complete;
  * - `slow`: chunks every 50 ms until it is cancelled (`stubborn`: the same, but it never stops);
  * - `stream <n>`: `n` chunks at once; `tools <n>`: `n` completed tool calls (`tools <n> <lines>`: each with an
- *   output of `lines` more lines, as a file read); `crash`: exits with code 3;
+ *   output of `lines` more lines, as a file read); `steps <n>`: a message then a tool call, `n` times; `crash`:
+ *   exits with code 3;
  * - `count`: the number of prompts of its session;
  * - `model`: `Model: <model>.`, the model of its session (`mode`: `Mode: <mode>.`, `write` asks nothing in
  *   `accept-edits`; `effort`: `Effort: <effort>.`); `fallback`: it moves to `fake-fast` itself and says so;
@@ -368,6 +369,7 @@ class FakeAgent(
             "stubborn" -> slow(session, stubborn = true)
             "stream" -> chunks(session, List(words.getOrNull(1)?.toIntOrNull() ?: 1) { "chunk $it " })
             "tools" -> tools(session, words.getOrNull(1)?.toIntOrNull() ?: 1, words.getOrNull(2)?.toIntOrNull() ?: 0)
+            "steps" -> steps(session, words.getOrNull(1)?.toIntOrNull() ?: 1)
             "crash" -> crash()
             "count" -> chunks(session, listOf("Prompt $count of $session."))
             "usage" -> chunks(session, listOf("5-hour limit — ${count * QUOTA_STEP}% · Resets 11pm"))
@@ -529,6 +531,17 @@ class FakeAgent(
             toolUpdate(session, "tool-$index", "completed", "$index matches$body")
         }
         message(session, "Searched $count times.")
+        return END_TURN
+    }
+
+    // A long piece of work: a message then a tool call, [count] times, which a transcript shows as two rows each.
+    private fun steps(session: String, count: Int): String {
+        repeat(count) { index ->
+            message(session, "Step $index. ")
+            tool(session, "step-$index", "Work step $index", "search", "pending", "/step/$index")
+            toolUpdate(session, "step-$index", "completed", "done")
+        }
+        message(session, "Did $count steps.")
         return END_TURN
     }
 

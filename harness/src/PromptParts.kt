@@ -2,9 +2,7 @@ package org.example.kotlineditor.harness
 
 import org.example.kotlineditor.model.AgentSkill
 import org.example.kotlineditor.model.TeamAgent
-
-/** The heading of the last section of every prompt the harness sends: the text the agent is asked to act on. */
-const val REQUEST_HEADING = "# User request"
+import org.example.kotlineditor.model.TeamText
 
 // " <description>" of an agent, empty when it has none.
 internal fun descriptionOf(agent: TeamAgent): String {
@@ -45,8 +43,6 @@ internal fun oneLine(text: String): String =
         .joinToString(" ") { it.trim() }
         .trim()
 
-// [intro] (when there is one), then the last section: [request].
-internal fun wrap(intro: String, request: String): String {
-    val head = if (intro.isBlank()) "" else "$intro\n\n"
-    return "$head$REQUEST_HEADING\n\n$request"
-}
+// [intro] (when there is one), then the last section: [request]. The IDE reads these prompts back when an agent
+// replays its session, so their shape is the one [TeamText] defines.
+internal fun wrap(intro: String, request: String): String = TeamText.wrap(intro, request)

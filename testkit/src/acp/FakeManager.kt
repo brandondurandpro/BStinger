@@ -3,6 +3,7 @@ package org.example.kotlineditor.testkit.acp
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import org.example.kotlineditor.model.TeamText
 
 /**
  * How a [FakeAgent] finds what it is asked to do when the prompt is wrapped: a harness that puts a preamble in front of
@@ -11,8 +12,11 @@ import kotlinx.serialization.json.put
  * written before wrapping existed means what it meant.
  */
 object FakeDirective {
-    /** The line that ends the preamble of a wrapped prompt, alone on its line (surrounding spaces ignored). */
-    const val MARKER = "# User request"
+    /**
+     * The line that ends the preamble of a wrapped prompt, alone on its line (surrounding spaces ignored): the
+     * heading the harness of the teams puts before the request.
+     */
+    const val MARKER = TeamText.REQUEST_HEADING
 
     /** The directive of [prompt]. */
     fun of(prompt: String): String {
