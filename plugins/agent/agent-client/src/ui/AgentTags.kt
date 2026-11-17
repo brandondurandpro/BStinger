@@ -64,6 +64,29 @@ object AgentTags {
     const val AGENT_PROJECT_REMOVE = "agent.group.project.remove"
     const val AGENT_SCRATCH_REMOVE = "agent.group.scratch.remove"
 
+    /** The button of the Teams window that opens the skill catalog, and the parts of the catalog window. */
+    const val AGENT_SKILL_CATALOG = "agent.catalog.open"
+    const val AGENT_CATALOG_DIALOG = "agent.catalog"
+    const val AGENT_CATALOG_CLOSE = "agent.catalog.close"
+    const val AGENT_CATALOG_REFRESH = "agent.catalog.refresh"
+    const val AGENT_CATALOG_FILTER = "agent.catalog.filter"
+    const val AGENT_CATALOG_LIST = "agent.catalog.list"
+    const val AGENT_CATALOG_LOADING = "agent.catalog.loading"
+    const val AGENT_CATALOG_ERROR = "agent.catalog.error"
+    const val AGENT_CATALOG_EMPTY = "agent.catalog.empty"
+
+    fun agentCatalogSource(source: String) = "agent.catalog.source:$source"
+
+    fun agentCatalogSourceError(source: String) = "agent.catalog.sourceError:$source"
+
+    fun agentCatalogSkill(source: String, path: String) = "agent.catalog.skill:$source:$path"
+
+    fun agentCatalogInstall(source: String, path: String) = "agent.catalog.install:$source:$path"
+
+    fun agentCatalogInstalled(source: String, path: String) = "agent.catalog.installed:$source:$path"
+
+    fun agentCatalogInstallError(source: String, path: String) = "agent.catalog.installError:$source:$path"
+
     /** The Teams button at the top left of the list of conversations. */
     const val AGENT_LIST_TEAMS = "agent.list.teams"
 

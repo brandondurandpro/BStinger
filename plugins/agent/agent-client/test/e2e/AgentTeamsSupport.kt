@@ -106,6 +106,10 @@ class TeamRegistry : AutoCloseable {
 
     fun settings() = agentSettings(registry.url, data.toFile())
 
+    /** The same, the skill catalog downloading from [repositories], listing [sources]. */
+    fun settings(repositories: org.example.kotlineditor.testkit.skills.SkillRepositories, sources: List<String>) =
+        agentSettings(registry.url, data.toFile(), repositories.archiveUrl, sources)
+
     override fun close() {
         registry.close()
         data.toFile().deleteRecursively()
@@ -238,4 +242,12 @@ fun ComposeUiTest.answerChoice(member: String, question: org.example.kotlinedito
 fun ComposeUiTest.answerWords(member: String, question: org.example.kotlineditor.model.AgentItem.Permission, words: String) {
     awaitTag(AgentTags.agentQuestionText(member, question.id), timeout = AGENT_TIMEOUT).performTextInput(words)
     awaitTag(AgentTags.agentQuestionSend(member, question.id)).performClick()
+}
+
+/** Opens the skill catalog from the Teams window, opening that one first. */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.openCatalog() {
+    openTeams()
+    awaitTag(AgentTags.AGENT_SKILL_CATALOG).performClick()
+    awaitTag(AgentTags.AGENT_CATALOG_DIALOG)
 }

@@ -2,6 +2,7 @@ package org.example.kotlineditor.agent.server
 
 import org.example.kotlineditor.acp.AgentService
 import org.example.kotlineditor.acp.FileAccess
+import org.example.kotlineditor.harness.SkillCatalog
 import org.example.kotlineditor.harness.SkillDiscovery
 import org.example.kotlineditor.harness.TeamHarness
 import org.example.kotlineditor.lsp.DiskChange
@@ -24,6 +25,9 @@ internal class AgentsComponent(val services: LocalServices) {
 
     /** The skills agents of a team can be given: the project's and those of the data directory of the server. */
     val skills = SkillDiscovery(services.dataDirectory)
+
+    /** The popular repositories of skills, to install in the data directory of the server. */
+    val skillCatalog = SkillCatalog(services.dataDirectory, services.agentSettings.skillSources, services.agentSettings.skillArchiveUrl)
 
     private val lazyHarness = lazy { TeamHarness(agents, skills) }
 

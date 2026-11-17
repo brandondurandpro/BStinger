@@ -121,6 +121,7 @@ private fun TeamsColumns(
             Label("Agent teams", fontWeight = FontWeight.SemiBold)
             IdeButton("New team", { open(null) }, Modifier.fillMaxWidth().testTag(AgentTags.AGENT_TEAM_NEW), primary = true)
             StarterTeamButton(agent)
+            SkillCatalogButton(agent)
             TeamList(agent, draft, open, closeForm, Modifier.weight(1f))
             IdeButton("Close", close, Modifier.fillMaxWidth().testTag(AgentTags.AGENT_TEAMS_CLOSE))
         }

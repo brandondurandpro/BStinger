@@ -12,6 +12,8 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.example.kotlineditor.model.AgentSkill
+import org.example.kotlineditor.model.CatalogSkill
+import org.example.kotlineditor.model.SkillCatalogListing
 import org.example.kotlineditor.model.Team
 import org.example.kotlineditor.model.TeamAgent
 
@@ -88,6 +90,38 @@ fun JsonElement.agentSkills(): List<AgentSkill> =
         val json = element.jsonObject
         AgentSkill(json.string(ID), json.string(NAME), json.string(DESCRIPTION), json.bool("project"))
     }
+
+/** The listing of the skill catalog. */
+fun SkillCatalogListing.toJson(): JsonObject =
+    buildJsonObject {
+        put(
+            "skills",
+            JsonArray(
+                skills.map { skill ->
+                    buildJsonObject {
+                        put("source", skill.source)
+                        put("path", skill.path)
+                        put(NAME, skill.name)
+                        put(DESCRIPTION, skill.description)
+                        put("installed", skill.installed)
+                    }
+                },
+            ),
+        )
+        put("failures", JsonObject(failures.mapValues { JsonPrimitive(it.value) }))
+    }
+
+/** Reads the listing of the skill catalog. */
+fun JsonElement.skillCatalogListing(): SkillCatalogListing {
+    val json = jsonObject
+    val skills =
+        json.field("skills").jsonArray.map { element ->
+            val skill = element.jsonObject
+            CatalogSkill(skill.string("source"), skill.string("path"), skill.string(NAME), skill.string(DESCRIPTION), skill.bool("installed"))
+        }
+    val failures = json.field("failures").jsonObject.mapValues { it.value.jsonPrimitive.content }
+    return SkillCatalogListing(skills, failures)
+}
 
 /** The teams written as JSON, for the preferences. */
 fun List<Team>.teamsToText(): String = JsonArray(map { it.toJson() }).toString()

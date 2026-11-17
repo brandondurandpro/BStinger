@@ -503,6 +503,18 @@ interface AgentChoices {
      * project and in the data directory of the server. Reads, changes nothing.
      */
     suspend fun skills(root: String): List<AgentSkill>
+
+    /**
+     * The skills of the popular repositories of skills the server can install. The first call, and a call with
+     * [refresh], download the repositories; a repository that cannot be read is in the failures of the listing.
+     */
+    suspend fun skillCatalog(refresh: Boolean): SkillCatalogListing
+
+    /**
+     * Installs the skill of the catalog at [path] of the repository [source] in the data directory of the server, where
+     * agents find it; installed again it is replaced. Returns it. Fails when the repository has no such skill.
+     */
+    suspend fun installSkill(source: String, path: String): AgentSkill
 }
 
 /** Conversations with agents, run by the server. Every call returns at once except [transcript], a long poll. */
@@ -618,6 +630,10 @@ private object NoChoices : AgentChoices {
     ): List<AgentOption> = emptyList()
 
     override suspend fun skills(root: String): List<AgentSkill> = emptyList()
+
+    override suspend fun skillCatalog(refresh: Boolean): SkillCatalogListing = SkillCatalogListing(emptyList(), emptyMap())
+
+    override suspend fun installSkill(source: String, path: String): AgentSkill = throw java.io.IOException("No server to install $path from $source")
 
     override suspend fun setOption(conversation: String, agent: AgentCommand, option: String, value: String): Unit =
         throw java.io.IOException(NO_SERVER)

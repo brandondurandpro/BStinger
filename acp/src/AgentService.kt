@@ -58,11 +58,21 @@ data class AgentSettings(
     val registryCacheMs: Long = 3_600_000,
     /** Where the agents of the registry are installed, shared with the other downloaded tools. */
     val toolsDirectory: Path = Paths.get(System.getProperty("user.home"), ".kotlin-editor", "tools"),
+    /** The repositories of skills the catalog lists, `owner/name`. */
+    val skillSources: List<String> = SKILL_SOURCES,
+    /** Where a repository of skills is downloaded as a `.tar.gz`: `{repo}` is its `owner/name`. */
+    val skillArchiveUrl: String = SKILL_ARCHIVE_URL,
 ) {
     /** The registry the server reads by default. */
     companion object {
         /** The registry of agentclientprotocol.com. */
         const val REGISTRY_URL = "https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json"
+
+        /** The popular repositories of skills: those of Matt Pocock, of Anthropic and the Superpowers of Jesse Vincent. */
+        val SKILL_SOURCES = listOf("mattpocock/skills", "anthropics/skills", "obra/superpowers")
+
+        /** The archive of the default branch of a repository on GitHub. */
+        const val SKILL_ARCHIVE_URL = "https://github.com/{repo}/archive/HEAD.tar.gz"
     }
 }
 

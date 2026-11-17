@@ -10,6 +10,7 @@ import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.model.AgentOption
 import org.example.kotlineditor.model.AgentRegistryEntry
 import org.example.kotlineditor.model.AgentSkill
+import org.example.kotlineditor.model.SkillCatalogListing
 import org.example.kotlineditor.model.AgentSlashCommand
 
 private const val CONVERSATION = "conversation"
@@ -37,6 +38,18 @@ internal class RemoteAgentChoices(private val client: RpcClient) : AgentChoices 
 
     override suspend fun skills(root: String): List<AgentSkill> =
         client.call(Method.TeamSkills) { put("root", root) }.agentSkills()
+
+    override suspend fun skillCatalog(refresh: Boolean): SkillCatalogListing =
+        client.call(Method.TeamSkillCatalog) { put("refresh", refresh) }.skillCatalogListing()
+
+    override suspend fun installSkill(source: String, path: String): AgentSkill {
+        val answer =
+            client.call(Method.TeamInstallSkill) {
+                put("source", source)
+                put("path", path)
+            }
+        return answer.agentSkills().firstOrNull() ?: throw java.io.IOException("The server installed no skill")
+    }
 
     override suspend fun setOption(conversation: String, agent: AgentCommand, option: String, value: String) {
         client.call(Method.AgentSetOption) {

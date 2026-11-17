@@ -9,6 +9,8 @@ product:
 dependencies:
   - //protocol: exported
   - //acp
+  # The tar reader that unpacks a repository of skills.
+  - //lsp
   - $libs.kotlinx.coroutines.core
   - $libs.kotlinx.serialization.json
 

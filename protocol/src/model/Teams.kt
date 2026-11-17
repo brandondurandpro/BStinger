@@ -38,6 +38,27 @@ data class Team(
     val members: List<TeamAgent>,
 )
 
+/** A skill of a repository of skills the server offers to install: [path] is the folder of its `SKILL.md` in [source]. */
+data class CatalogSkill(
+    /** The repository, `owner/name`. */
+    val source: String,
+    /** The folder of the skill in the repository, with `/`. */
+    val path: String,
+    /** Its name: the `name` of the front matter of its `SKILL.md`, else the name of its folder. */
+    val name: String,
+    /** What it is for: the `description` of the front matter; empty when it has none. */
+    val description: String,
+    /** Whether it is installed in the data directory of the server, where agents find it. */
+    val installed: Boolean,
+)
+
+/** What the catalog lists: the skills of the repositories that answered, and why each of the others did not. */
+data class SkillCatalogListing(
+    val skills: List<CatalogSkill>,
+    /** The reason a repository could not be read, by repository. */
+    val failures: Map<String, String>,
+)
+
 /** A folder holding a `SKILL.md` that an agent of a team can be given. */
 data class AgentSkill(
     /** The absolute path of its folder. */

@@ -374,7 +374,7 @@ class AgentTeamConversationE2eTest {
         val team = crew("Backend")
         var saved: Map<String, String> = emptyMap()
         var session = ""
-        runComposeUiTest {
+        runComposeUiTest(testTimeout = 3.minutes) {
             val (app, conversation) = teamConversation(team)
             sendPrompt("delegate Backend: echo built")
             awaitFinalAnswer(conversation)
@@ -383,7 +383,10 @@ class AgentTeamConversationE2eTest {
             awaitIdle(conversation)
             val key = PreferenceKeys.AGENT_CONVERSATION_TEAMS_PREFIX + app.project.root.path
             awaitCondition(AGENT_TIMEOUT) { app.project.agent.toPreferences()[key].orEmpty().isNotBlank() }
-            // The session the member worked in is learned when its transcript is read: it is saved with the rest.
+            // The session the member worked in is learned when its transcript is read, which a task that ended between
+            // two reads of the conversation did not cause: the card is opened, as a user does, to read it.
+            val delegation = checkNotNull(conversation.items.filterIsInstance<AgentItem.Delegation>().firstOrNull())
+            if (app.project.agent.memberSessions.isEmpty()) awaitTag(AgentTags.agentDelegationToggle(delegation.id)).performClick()
             awaitCondition(AGENT_TIMEOUT) { app.project.agent.memberSessions.isNotEmpty() }
             saved = app.project.agent.toPreferences()
             session = checkNotNull(conversation.session) { "No session" }

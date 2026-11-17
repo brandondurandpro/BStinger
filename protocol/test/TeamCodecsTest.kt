@@ -3,9 +3,12 @@ package org.example.kotlineditor.unit
 import kotlinx.serialization.json.Json
 import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.model.AgentSkill
+import org.example.kotlineditor.model.CatalogSkill
+import org.example.kotlineditor.model.SkillCatalogListing
 import org.example.kotlineditor.model.Team
 import org.example.kotlineditor.model.TeamAgent
 import org.example.kotlineditor.rpc.agentSkills
+import org.example.kotlineditor.rpc.skillCatalogListing
 import org.example.kotlineditor.rpc.skillsToJson
 import org.example.kotlineditor.rpc.team
 import org.example.kotlineditor.rpc.teamsOfText
@@ -81,5 +84,12 @@ class TeamCodecsTest {
     fun `skills survive the round trip`() {
         val skills = listOf(AgentSkill("/p/skills/a", "A", "Does a", true), AgentSkill("/d/skills/b", "B", "", false))
         assertEquals(skills, skills.skillsToJson().agentSkills())
+    }
+
+    @Test
+    fun `the listing of the skill catalog survives the round trip, with its failures`() {
+        val skills = listOf(CatalogSkill("o/r", "skills/a/b", "B", "Does \"b\"\nover two lines", true), CatalogSkill("o/r", "skills/c", "C", "", false))
+        val listing = SkillCatalogListing(skills, mapOf("x/y" to "Cannot download x/y: HTTP 404"))
+        assertEquals(listing, Json.parseToJsonElement(listing.toJson().toString()).skillCatalogListing())
     }
 }

@@ -279,9 +279,25 @@ fun ComposeUiTest.awaitHistory(app: E2eApp, session: String): Conversation {
     return checkNotNull(conversations.firstOrNull { it.session == session })
 }
 
-/** The agents of a test server: [registry] as the ACP registry, installed into [data]. */
-fun agentSettings(registry: String, data: java.io.File): AgentSettings =
-    AgentSettings(registryUrl = registry, toolsDirectory = data.toPath().resolve("tools"))
+/** Where the skill catalog of a test server downloads from unless a test says: a closed port, nothing reaches GitHub. */
+const val OFFLINE_SKILL_ARCHIVE = "http://127.0.0.1:9/{repo}.tar.gz"
+
+/**
+ * The agents of a test server: [registry] as the ACP registry, installed into [data]; the skill catalog downloads
+ * from [skillArchiveUrl], and lists [skillSources].
+ */
+fun agentSettings(
+    registry: String,
+    data: java.io.File,
+    skillArchiveUrl: String = OFFLINE_SKILL_ARCHIVE,
+    skillSources: List<String> = AgentSettings.SKILL_SOURCES,
+): AgentSettings =
+    AgentSettings(
+        registryUrl = registry,
+        toolsDirectory = data.toPath().resolve("tools"),
+        skillSources = skillSources,
+        skillArchiveUrl = skillArchiveUrl,
+    )
 
 /** The agents of a test server that chose no registry: one on a closed port, so that nothing reaches the internet. */
 fun offlineAgents(data: java.io.File): AgentSettings = agentSettings("http://127.0.0.1:9/registry.json", data)

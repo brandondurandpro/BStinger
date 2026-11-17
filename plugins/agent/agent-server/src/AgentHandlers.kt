@@ -14,6 +14,7 @@ import org.example.kotlineditor.rpc.Method
 import org.example.kotlineditor.rpc.MethodSpec
 import org.example.kotlineditor.rpc.agentAttachments
 import org.example.kotlineditor.rpc.agentCommand
+import org.example.kotlineditor.rpc.bool
 import org.example.kotlineditor.rpc.authMethodsToJson
 import org.example.kotlineditor.rpc.commandsToJson
 import org.example.kotlineditor.rpc.long
@@ -146,6 +147,16 @@ private fun teamHandlers(component: AgentsComponent): Map<MethodSpec, Handler> =
             val root = File(params.string("root"))
             val skills = withContext(Dispatchers.IO) { component.skills.discover(root) }
             skills.skillsToJson()
+        },
+        Method.TeamSkillCatalog to {
+            val refresh = params.bool("refresh")
+            component.skillCatalog.list(refresh).toJson()
+        },
+        Method.TeamInstallSkill to {
+            val source = params.string("source")
+            val path = params.string("path")
+            val installed = withContext(Dispatchers.IO) { component.skillCatalog.install(source, path) }
+            listOf(installed).skillsToJson()
         },
         Method.TeamPrompt to {
             component.harness.prompt(

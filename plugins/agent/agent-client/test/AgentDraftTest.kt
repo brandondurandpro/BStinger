@@ -8,6 +8,7 @@ import org.example.kotlineditor.model.AgentOption
 import org.example.kotlineditor.model.AgentOptionValue
 import org.example.kotlineditor.model.AgentRegistryEntry
 import org.example.kotlineditor.model.AgentSkill
+import org.example.kotlineditor.model.SkillCatalogListing
 import org.example.kotlineditor.model.AgentSlashCommand
 import org.example.kotlineditor.model.TeamAgent
 import java.io.IOException
@@ -47,6 +48,10 @@ class AgentDraftTest {
         }
 
         override suspend fun skills(root: String): List<AgentSkill> = emptyList()
+
+        override suspend fun skillCatalog(refresh: Boolean) = SkillCatalogListing(emptyList(), emptyMap())
+
+        override suspend fun installSkill(source: String, path: String): AgentSkill = throw IOException("not offered")
 
         override suspend fun registry(): List<AgentRegistryEntry> = emptyList()
 

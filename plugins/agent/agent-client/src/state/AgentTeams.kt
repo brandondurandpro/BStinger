@@ -8,6 +8,7 @@ import androidx.compose.runtime.setValue
 import org.example.kotlineditor.model.AgentChoices
 import org.example.kotlineditor.model.AgentCommand
 import org.example.kotlineditor.model.AgentSkill
+import org.example.kotlineditor.model.CatalogSkill
 import org.example.kotlineditor.model.Team
 import org.example.kotlineditor.model.TeamAgent
 import org.example.kotlineditor.rpc.teamsOfText
@@ -49,6 +50,14 @@ class AgentTeams internal constructor(saved: Map<String, String>, private val ro
     /** Why the skills could not be listed; null when they were, or are being. */
     var skillsFailure: String? by mutableStateOf(null)
         private set
+
+    /** The skills of the popular repositories, to install. */
+    val catalog = SkillCatalogState()
+
+    /** Installs [skill] of the catalog, and lists the skills again: the agents of a team can be given it at once. */
+    suspend fun installFromCatalog(choices: AgentChoices, skill: CatalogSkill) {
+        if (catalog.install(choices, skill)) loadSkills(choices)
+    }
 
     /** Saves [team] (a new one, or the one of the same id, replaced in place), for every project or this one. */
     fun save(team: Team, global: Boolean) {

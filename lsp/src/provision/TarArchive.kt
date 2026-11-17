@@ -35,9 +35,14 @@ object TarArchive {
     private const val PAX_ENTRY = 'x'.code.toByte()
     private const val PAX_GLOBAL = 'g'.code.toByte()
     private const val GNU_LONG_NAME = 'L'.code.toByte()
+    private const val HARD_LINK = '1'.code.toByte()
+    private const val SYMBOLIC_LINK = '2'.code.toByte()
 
-    /** Expands every entry of [tar] (the uncompressed tar stream) into [into], which is created if needed. */
-    fun extract(tar: InputStream, into: Path) {
+    /**
+     * Expands every entry of [tar] (the uncompressed tar stream) into [into], which is created if needed. With
+     * [skipLinks] the symbolic and hard links of a source repository are left out instead of refused.
+     */
+    fun extract(tar: InputStream, into: Path, skipLinks: Boolean = false) {
         val root = into.toAbsolutePath().normalize()
         Files.createDirectories(root)
         val header = ByteArray(BLOCK)
@@ -46,13 +51,18 @@ object TarArchive {
             val size = entrySize(header)
             val name = longName ?: headerName(header)
             longName = null
-            when (header[TYPE_OFFSET]) {
+            val type = header[TYPE_OFFSET]
+            if (skipLinks && (type == HARD_LINK || type == SYMBOLIC_LINK)) {
+                skipPadded(tar, size)
+                continue
+            }
+            when (type) {
                 REGULAR, REGULAR_OLD -> copyEntry(tar, size, target(root, name), isExecutable(header))
                 DIRECTORY -> Files.createDirectories(target(root, name)).also { skipPadded(tar, size) }
                 PAX_ENTRY -> longName = paxPath(readRecord(tar, size))
                 GNU_LONG_NAME -> longName = String(readRecord(tar, size), Charsets.UTF_8).trimEnd('\u0000')
                 PAX_GLOBAL -> skipPadded(tar, size)
-                else -> throw IOException("Unsupported tar entry type '${header[TYPE_OFFSET].toInt().toChar()}': $name")
+                else -> throw IOException("Unsupported tar entry type '${type.toInt().toChar()}': $name")
             }
         }
     }
