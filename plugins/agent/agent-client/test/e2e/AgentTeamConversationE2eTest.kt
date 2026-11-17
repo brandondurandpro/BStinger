@@ -383,6 +383,8 @@ class AgentTeamConversationE2eTest {
             awaitIdle(conversation)
             val key = PreferenceKeys.AGENT_CONVERSATION_TEAMS_PREFIX + app.project.root.path
             awaitCondition(AGENT_TIMEOUT) { app.project.agent.toPreferences()[key].orEmpty().isNotBlank() }
+            // The session the member worked in is learned when its transcript is read: it is saved with the rest.
+            awaitCondition(AGENT_TIMEOUT) { app.project.agent.memberSessions.isNotEmpty() }
             saved = app.project.agent.toPreferences()
             session = checkNotNull(conversation.session) { "No session" }
         }
