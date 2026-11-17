@@ -155,6 +155,11 @@ class MemberRequest(
     /** The key of its conversation, where the answer goes. */
     val key: String,
     val request: AgentItem.Permission,
+    /**
+     * What the member wrote just before it asked (the designs it proposes, the options it weighs): the question and its
+     * choices are short, this is what the user decides on. Only on the first question of a message; empty otherwise.
+     */
+    val said: String = "",
 )
 
 /**
@@ -208,10 +213,24 @@ val Conversation.memberRequests: List<MemberRequest>
         val asking = running.distinctBy { it.conversation }
         return asking.flatMap { delegation ->
             val transcript = members.transcripts[delegation.conversation]
-            val pending = transcript?.items.orEmpty().filterIsInstance<AgentItem.Permission>().filter { it.pending }
-            pending.map { MemberRequest(delegation.member, delegation.conversation, it) }
+            val items = transcript?.items.orEmpty()
+            val pending = items.filterIsInstance<AgentItem.Permission>().filter { it.pending }
+            val first = pending.firstOrNull()
+            pending.map { request ->
+                val said = if (request === first) saidBefore(items, request) else ""
+                MemberRequest(delegation.member, delegation.conversation, request, said)
+            }
         }
     }
+
+// The messages a member wrote in a row just before [request], without the blocks of the protocol; empty when it wrote none.
+private fun saidBefore(items: List<AgentItem>, request: AgentItem.Permission): String {
+    val position = items.indexOfFirst { it.id == request.id }
+    if (position <= 0) return ""
+    val before = items.subList(0, position).takeLastWhile { it is AgentItem.AgentText }
+    val text = before.filterIsInstance<AgentItem.AgentText>().joinToString("") { it.text }
+    return TeamText.withoutBlocks(text).trim()
+}
 
 /** The work of [delegation] in the transcript of its member, as far as it was read; empty before. */
 fun Conversation.workOf(delegation: AgentItem.Delegation): List<AgentItem> {

@@ -12,7 +12,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.runtime.Composable
@@ -100,7 +104,7 @@ internal fun PlainItemView(item: AgentItem, asker: String, onAnswer: ((AgentItem
         is AgentItem.Thought -> ThoughtView(item.text)
         is AgentItem.ToolCall -> ToolCallCard(item)
         is AgentItem.Plan -> PlanView(item)
-        is AgentItem.Permission -> PermissionCard(item, asker, onAnswer?.let { answer -> { option -> answer(item, option) } })
+        is AgentItem.Permission -> PermissionCard(item, asker, onAnswer = onAnswer?.let { answer -> { option -> answer(item, option) } })
         is AgentItem.Notice -> NoticeView(item)
         // Only a team conversation has delegations, and it shows them as cards.
         is AgentItem.Delegation -> Unit
@@ -293,7 +297,12 @@ internal fun PlanView(plan: AgentItem.Plan) {
 // The agent (or [asker], a member of a team) asks before it acts: one button per option while it waits, then the
 // answer. Without [onAnswer] the request is answered elsewhere, and the card only says that it waits.
 @Composable
-internal fun PermissionCard(request: AgentItem.Permission, asker: String = AGENT_ASKER, onAnswer: ((String) -> Unit)?) {
+internal fun PermissionCard(
+    request: AgentItem.Permission,
+    asker: String = AGENT_ASKER,
+    said: String = "",
+    onAnswer: ((String) -> Unit)?,
+) {
     Column(
         Modifier
             .fillMaxWidth()
@@ -304,6 +313,7 @@ internal fun PermissionCard(request: AgentItem.Permission, asker: String = AGENT
     ) {
         val heading = if (request.question) "$asker asks: ${request.title}" else "$asker asks to: ${request.title}"
         Label(heading, Modifier.testTag(AgentTags.agentRequestTitle(asker, request.id)), fontWeight = FontWeight.SemiBold, maxLines = 6)
+        if (said.isNotBlank()) AskerSaid(said, Modifier.testTag(AgentTags.agentRequestSaid(asker, request.id)))
         if (request.pending && onAnswer == null) {
             Label("Waits for your answer, at the end of the conversation", color = IdeColors.TextSecondary, fontSize = 12.sp)
         } else if (request.pending && onAnswer != null && request.question) {
@@ -325,6 +335,19 @@ internal fun PermissionCard(request: AgentItem.Permission, asker: String = AGENT
             val answer = if (request.cancelled) "Cancelled" else "Answered: $chosen"
             Label(answer, Modifier.testTag(AgentTags.agentRequestAnswer(asker, request.id)), color = IdeColors.TextSecondary, fontSize = 12.sp)
         }
+    }
+}
+
+// What the asker wrote before its question: long proposals scroll in place, the card never takes the conversation.
+@Composable
+private fun AskerSaid(said: String, modifier: Modifier) {
+    val scroll = rememberScrollState()
+    SelectionContainer {
+        BasicText(
+            said,
+            modifier.fillMaxWidth().heightIn(max = 300.dp).verticalScroll(scroll),
+            style = bodyStyle.copy(color = IdeColors.Text),
+        )
     }
 }
 

@@ -90,6 +90,24 @@ class AgentTeamQuestionsE2eTest {
         }
 
     @Test
+    fun `the first question shows what the member wrote before asking, the proposals the user decides on`() =
+        runComposeUiTest {
+            val (_, conversation) = teamConversation(crew("Designer"))
+            sendPrompt("delegate Designer: $ASKS")
+            val asked = awaitQuestions(conversation, "Designer", 2)
+            val said = AgentTags.agentRequestSaid("Designer", asked.first().id)
+            awaitTag(said)
+            assertContains(textOf(said), "I have questions.")
+            assertFalse(TeamText.ASK_OPENING in textOf(said))
+            // The second question of the same message does not repeat it.
+            assertTrue(isGone(AgentTags.agentRequestSaid("Designer", asked.last().id)))
+            answerChoice("Designer", asked.first(), "SQLite")
+            answerWords("Designer", asked.last(), "small")
+            awaitFinalAnswer(conversation)
+            assertTrue(isGone(said), "an answered question no longer shows it")
+        }
+
+    @Test
     fun `an answer is applied once, and the cards then say what was answered`() =
         runComposeUiTest {
             val (_, conversation) = teamConversation(crew("Spec"))

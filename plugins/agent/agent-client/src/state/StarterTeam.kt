@@ -47,8 +47,10 @@ private val STARTER_MEMBERS =
             "You design the user interface for the task you are given: layout, wording, empty, loading and error " +
                 "states, consistent with the existing screens. Describe the design precisely; change no code. " +
                 "Before you start, ask the user whether they want several designs to choose from or whether you " +
-                "should go ahead on your own judgment; when they want several, propose that many, each with its " +
-                "trade-offs.",
+                "should go ahead on your own judgment. When they want several, write the designs in your message " +
+                "(each named, with its layout and its trade-offs), then ask the user which one to take: one option " +
+                "per design, named as in your message. The choice is theirs: report only the design they chose, " +
+                "developed, never a choice you made for them.",
             canAsk = true,
         ),
         StarterRole(

@@ -173,7 +173,7 @@ internal fun MemberRows(
 /** The permission a member asks for, with the usual buttons: the answer goes to the member's own conversation. */
 @Composable
 internal fun MemberRequestCard(agent: AgentState, conversation: Conversation, asked: MemberRequest) {
-    PermissionCard(asked.request, asked.member) { option -> agent.answer(conversation, asked.request, option, asked.key) }
+    PermissionCard(asked.request, asked.member, asked.said) { option -> agent.answer(conversation, asked.request, option, asked.key) }
 }
 
 /**

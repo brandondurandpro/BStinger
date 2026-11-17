@@ -34,7 +34,9 @@ internal class TeamPrompts(private val protocol: DelegationProtocol) {
         sections.add(
             "You coordinate the work of your team and the user only talks to you. Your members work in the same " +
                 "directory as you, at the same time: hand them the tasks they can do, and answer the user yourself " +
-                "once the work is done.",
+                "once the work is done. What the user is to choose is theirs: when a member reports alternatives " +
+                "the user has not chosen between, put them to the user in your answer and wait for their choice " +
+                "rather than choosing for them.",
         )
         sections.add("# Your team\n" + team.members.joinToString("\n") { memberLine(it) })
         sections.add("# How to delegate\n" + protocol.instructions(team))

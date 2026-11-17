@@ -1,12 +1,21 @@
 package org.example.kotlineditor.harness
 
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 /** The `ask` block a member ends its message with: what it asks, and what is not a question. */
 class MemberQuestionsTest {
     private fun block(json: String) = "I need to know.\n```ask\n$json\n```"
+
+    @Test
+    fun `a member is told that the user sees its message, and that a choice of theirs is made`() {
+        val told = askInstructions()
+        assertContains(told, "sees your message above your questions")
+        assertContains(told, "one option per proposal")
+        assertContains(told, "do not choose again for them")
+    }
 
     @Test
     fun `the questions of the block and the text around it are read`() {

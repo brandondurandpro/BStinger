@@ -63,6 +63,16 @@ object AgentTags {
     /** Why the form of a team cannot be saved yet. */
     const val AGENT_TEAM_PROBLEM = "agent.team.problem"
 
+    /** The folder a conversation works in, in the prompt bar, and its menu. */
+    const val AGENT_FOLDER = "agent.folder"
+    const val AGENT_FOLDER_PATH = "agent.folder.path"
+    const val AGENT_FOLDER_ROOT = "agent.folder.root"
+    const val AGENT_FOLDER_APPLY = "agent.folder.apply"
+    const val AGENT_FOLDER_ERROR = "agent.folder.error"
+    const val AGENT_FOLDER_LIST = "agent.folder.list"
+
+    fun agentFolderChoice(path: String) = "agent.folder.choice:$path"
+
     /** The picker of the team of a conversation, in the prompt bar. */
     const val AGENT_TEAM_PICKER = "agent.teamPicker"
 
@@ -113,6 +123,9 @@ object AgentTags {
 
     /** The question or permission text of the request [id] of [asker] ("Agent" for the conversation's own, else a member). */
     fun agentRequestTitle(asker: String, id: String) = "agent.request.title.$asker.$id"
+
+    /** What the asker wrote before its question: the proposals the user decides on. */
+    fun agentRequestSaid(asker: String, id: String) = "agent.request.said.$asker.$id"
 
     /** The answer a request [id] got, once it was answered. */
     fun agentRequestAnswer(asker: String, id: String) = "agent.request.answer.$asker.$id"

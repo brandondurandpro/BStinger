@@ -79,6 +79,9 @@ internal fun askInstructions(): String =
         "",
         "- At most $MAX_QUESTIONS questions per message. `options` are the choices you propose (leave it out or empty",
         "  when the answer is free); the user may always answer in their own words.",
+        "- The user sees your message above your questions: when they are to decide between proposals, write them in",
+        "  that message, then ask which one to take, with one option per proposal. What the user chose is decided:",
+        "  do not choose again for them.",
         "- When you need nothing from the user, do your task and end with your report, without an `ask` block.",
     ).joinToString("\n")
 
