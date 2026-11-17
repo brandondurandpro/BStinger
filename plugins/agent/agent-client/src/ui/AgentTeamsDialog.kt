@@ -113,15 +113,15 @@ private fun TeamsLayout(
     }
 }
 
-// "Add Haiku team": a ready-made team to try teams with, on the cheapest model of the agent of the settings.
+// "Add Haiku team": a ready-made team to try teams with, on Claude and its cheapest model, whatever agent the settings
+// choose: the same team as the one every user starts with.
 @Composable
 private fun StarterTeamButton(agent: AgentState) {
     val scope = rememberCoroutineScope()
     val choices = agent.project.services.agents
-    val providerId = agent.settingsAgentId ?: DEFAULT_AGENT
     val directory = agent.project.root.path
     val add: () -> Unit = {
-        scope.launch { agent.teams.addStarterTeam(choices, registryProvider(providerId), directory) }
+        scope.launch { agent.teams.addStarterTeam(choices, registryProvider(DEFAULT_AGENT), directory) }
     }
     IdeButton("Add Haiku team", add, Modifier.fillMaxWidth().testTag(AgentTags.AGENT_TEAM_STARTER))
 }

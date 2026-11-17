@@ -15,6 +15,7 @@ import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.v2.runComposeUiTest
+import org.example.kotlineditor.state.DEFAULT_AGENT
 import org.example.kotlineditor.state.InMemoryPreferenceStore
 import org.example.kotlineditor.state.PreferenceKeys
 import org.example.kotlineditor.state.STARTER_TEAM_NAME
@@ -110,7 +111,8 @@ class AgentTeamsE2eTest {
             assertEquals("Manager", saved.team.manager.name)
             assertEquals(listOf("Dev", "Designer", "Tester", "Code reviewer", "Spec writer"), saved.team.members.map { it.name })
             val providers = (saved.team.members + saved.team.manager).map { it.agent.registry }.toSet()
-            assertEquals(setOf<String?>(TEAM_PROVIDER), providers)
+            // On Claude, whatever agent the settings choose (here the fake agent).
+            assertEquals(setOf<String?>(DEFAULT_AGENT), providers)
             // The fake agent offers no Haiku model: the team keeps the default one.
             assertEquals(emptyMap(), saved.team.manager.settings)
             awaitTag(AgentTags.agentTeam(saved.team.id))
